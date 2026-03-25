@@ -1,9 +1,12 @@
-import 'dart:math' as math;
 import 'dart:convert';
+import 'dart:math' as math;
+import 'dart:typed_data';
 
 enum ReaderDocumentType { sample, plainText, html, epub, pdf, unsupported }
 
 enum ReaderAttachmentType { image, audio, video, other }
+
+enum ReaderDocumentPresentation { html, pdf }
 
 class ReaderAttachment {
   const ReaderAttachment({
@@ -30,14 +33,22 @@ class ReaderDocument {
     required this.type,
     required this.displayHtml,
     required this.speakableText,
+    this.presentation = ReaderDocumentPresentation.html,
+    this.pdfData,
     this.sourceDescription,
     this.attachments = const <ReaderAttachment>[],
-  }) : wordSpans = _buildWordSpans(speakableText);
+  }) : assert(
+         presentation != ReaderDocumentPresentation.pdf || pdfData != null,
+         'PDF presentation requires pdfData.',
+       ),
+       wordSpans = _buildWordSpans(speakableText);
 
   final String title;
   final ReaderDocumentType type;
   final String displayHtml;
   final String speakableText;
+  final ReaderDocumentPresentation presentation;
+  final Uint8List? pdfData;
   final String? sourceDescription;
   final List<ReaderAttachment> attachments;
   final List<WordSpan> wordSpans;

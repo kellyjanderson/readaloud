@@ -295,7 +295,9 @@ class ReaderController extends ChangeNotifier {
     _wordsPerSecond = 2.6;
     _isPlaying = false;
     _isFadingOut = false;
-    _statusMessage = 'Loaded ${document.title}.';
+    _statusMessage = document.wordCount == 0
+        ? 'Loaded ${document.title}, but no readable text was extracted yet.'
+        : 'Loaded ${document.title}.';
     notifyListeners();
   }
 

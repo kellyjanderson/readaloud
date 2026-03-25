@@ -3,6 +3,7 @@ import 'dart:typed_data';
 
 import 'package:archive/archive.dart';
 import 'package:html/parser.dart' as html_parser;
+import 'package:pdfrx/pdfrx.dart';
 import 'package:xml/xml.dart';
 
 import '../models/reader_document.dart';
@@ -24,7 +25,7 @@ class DocumentImportService {
       case 'epub':
         return _importEpub(fileName, bytes);
       case 'pdf':
-        return _importPdfPlaceholder(fileName);
+        return _importPdf(fileName, bytes);
       default:
         return _unsupportedDocument(fileName);
     }
@@ -66,28 +67,60 @@ class DocumentImportService {
     );
   }
 
-  ReaderDocument _importPdfPlaceholder(String fileName) {
-    const html = '''
+  Future<ReaderDocument> _importPdf(String fileName, Uint8List bytes) async {
+    PdfDocument? document;
+
+    try {
+      document = await PdfDocument.openData(bytes, sourceName: fileName);
+      final speakablePages = <String>[];
+
+      for (final page in document.pages) {
+        final pageText = await page.loadStructuredText();
+        final normalized = pageText.fullText.trim();
+        if (normalized.isNotEmpty) {
+          speakablePages.add(normalized);
+        }
+      }
+
+      final pageCount = document.pages.length;
+      final speakableText = speakablePages.join('\n\n').trim();
+      final extractionNote = speakableText.isEmpty
+          ? 'No extractable text was found for text-to-speech yet.'
+          : 'Readable text was extracted for playback.';
+
+      return ReaderDocument(
+        title: fileName,
+        type: ReaderDocumentType.pdf,
+        displayHtml:
+            '''
 <article>
-  <h1>PDF Import Is Not Wired Yet</h1>
-  <p>
-    The app shell accepts PDF files so the importer pipeline is in place, but the PDF text extraction
-    path is not implemented in this first pass. The next build should replace this placeholder with a
-    real PDF adapter that can extract speakable text and preserve a useful reading surface.
-  </p>
+  <h1>${const HtmlEscape().convert(fileName)}</h1>
+  <p>$extractionNote</p>
 </article>
-''';
-    const speakable = '''
-This PDF importer is not implemented yet. The file was accepted into the pipeline, but text
-extraction and rich display still need to be added.
-''';
-    return ReaderDocument(
-      title: fileName,
-      type: ReaderDocumentType.pdf,
-      displayHtml: html,
-      speakableText: speakable,
-      sourceDescription: 'PDF placeholder import',
-    );
+''',
+        speakableText: speakableText,
+        presentation: ReaderDocumentPresentation.pdf,
+        pdfData: bytes,
+        sourceDescription:
+            'PDF import, $pageCount page${pageCount == 1 ? '' : 's'}',
+      );
+    } catch (error) {
+      return ReaderDocument(
+        title: fileName,
+        type: ReaderDocumentType.pdf,
+        displayHtml:
+            '''
+<article>
+  <h1>PDF Import Failed</h1>
+  <p>${const HtmlEscape().convert(error.toString())}</p>
+</article>
+''',
+        speakableText: '',
+        sourceDescription: 'PDF import failed',
+      );
+    } finally {
+      await document?.dispose();
+    }
   }
 
   ReaderDocument _unsupportedDocument(String fileName) {

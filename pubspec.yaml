@@ -38,6 +38,7 @@ dependencies:
   flutter_tts: ^4.2.5
   html: ^0.15.6
   xml: ^6.5.0
+  pdfrx: ^2.2.24
 
 dev_dependencies:
   flutter_test:

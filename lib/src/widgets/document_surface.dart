@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_html/flutter_html.dart';
+import 'package:pdfrx/pdfrx.dart';
 
 import '../models/reader_document.dart';
 
@@ -36,6 +37,18 @@ class _DocumentSurfaceState extends State<DocumentSurface> {
 
   @override
   Widget build(BuildContext context) {
+    if (widget.document.presentation == ReaderDocumentPresentation.pdf &&
+        widget.document.pdfData != null) {
+      return ClipRRect(
+        borderRadius: BorderRadius.circular(24),
+        child: PdfViewer.data(
+          widget.document.pdfData!,
+          sourceName: widget.document.title,
+          params: const PdfViewerParams(),
+        ),
+      );
+    }
+
     final baseSize = 18.0 * widget.fontScale;
 
     return Scrollbar(
