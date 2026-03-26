@@ -66,5 +66,17 @@
 		<string>UIInterfaceOrientationLandscapeLeft</string>
 		<string>UIInterfaceOrientationLandscapeRight</string>
 	</array>
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleURLName</key>
+			<string>com.kellyjanderson.readAloud</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>SharingMedia-com.kellyjanderson.readAloud</string>
+			</array>
+		</dict>
+	</array>	<key>AppGroupId</key>
+	<string>group.com.kellyjanderson.readAloud</string>
 </dict>
 </plist>

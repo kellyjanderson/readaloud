@@ -1,7 +1,9 @@
 import 'dart:async';
 import 'dart:math' as math;
 
+import 'package:cross_file/cross_file.dart';
 import 'package:file_picker/file_picker.dart';
+import 'package:file_open/file_open.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 
@@ -9,6 +11,7 @@ import '../models/reader_document.dart';
 import '../models/voice_profile.dart';
 import '../services/document_import_service.dart';
 import '../services/flutter_tts_engine.dart';
+import '../services/share_intake_service.dart';
 import '../services/tts_engine.dart';
 
 class ReaderController extends ChangeNotifier {
@@ -19,6 +22,7 @@ class ReaderController extends ChangeNotifier {
 
   final DocumentImportService _importer;
   final TtsEngine _ttsEngine;
+  final ShareIntakeService _shareIntake = createShareIntakeService();
 
   ReaderDocument _document;
   List<VoiceProfile> _voices = const <VoiceProfile>[];
@@ -42,6 +46,8 @@ class ReaderController extends ChangeNotifier {
   Duration? _sleepTimerDuration;
   DateTime? _sleepTimerEndsAt;
   Timer? _sleepTicker;
+  StreamSubscription<List<Uri>>? _fileOpenSubscription;
+  StreamSubscription<SharedIntake>? _shareSubscription;
 
   ReaderDocument get document => _document;
   List<VoiceProfile> get voices => _voices;
@@ -92,6 +98,7 @@ class ReaderController extends ChangeNotifier {
     };
     _ttsEngine.onProgress = _handleProgress;
 
+    await _initializeIntakeChannels();
     await _ttsEngine.initialize();
 
     try {
@@ -122,15 +129,7 @@ class ReaderController extends ChangeNotifier {
       final result = await FilePicker.platform.pickFiles(
         type: FileType.custom,
         withData: true,
-        allowedExtensions: const [
-          'txt',
-          'text',
-          'md',
-          'html',
-          'htm',
-          'epub',
-          'pdf',
-        ],
+        allowedExtensions: DocumentImportService.supportedExtensions,
       );
 
       if (result == null || result.files.isEmpty) {
@@ -144,13 +143,19 @@ class ReaderController extends ChangeNotifier {
         return;
       }
 
-      await _replaceDocument(
-        await _importer.importBytes(fileName: file.name, bytes: bytes),
+      await _loadImportedBytes(
+        fileName: file.name,
+        bytes: bytes,
+        successMessage: 'Loaded ${file.name}.',
       );
     } finally {
       _isImporting = false;
       notifyListeners();
     }
+  }
+
+  Future<void> importDroppedFiles(List<XFile> files) async {
+    await _importXFiles(files, sourceLabel: 'Dropped');
   }
 
   Future<void> importPastedText(String text) async {
@@ -288,6 +293,128 @@ class ReaderController extends ChangeNotifier {
     notifyListeners();
   }
 
+  Future<void> _initializeIntakeChannels() async {
+    if (!kIsWeb && defaultTargetPlatform == TargetPlatform.macOS) {
+      _fileOpenSubscription = FileOpen.onOpened.listen((uris) {
+        unawaited(importOpenedUris(uris));
+      });
+    }
+
+    if (!kIsWeb &&
+        (defaultTargetPlatform == TargetPlatform.android ||
+            defaultTargetPlatform == TargetPlatform.iOS)) {
+      try {
+        final initialShare = await _shareIntake.getInitialShare();
+        if (initialShare != null && initialShare.hasContent) {
+          await _handleSharedData(
+            initialShare,
+            sourceLabel: 'Shared',
+            clearAfterHandling: true,
+          );
+        }
+
+        _shareSubscription = _shareIntake.getMediaStream().listen((sharedData) {
+          unawaited(_handleSharedData(sharedData, sourceLabel: 'Shared'));
+        });
+      } on MissingPluginException {
+        // Plugin is not wired for the current platform test harness.
+      } catch (_) {
+        // Leave share ingestion unavailable until native wiring exists.
+      }
+    }
+  }
+
+  Future<void> importOpenedUris(List<Uri> uris) async {
+    final files = uris
+        .where((uri) => uri.scheme.isEmpty || uri.scheme == 'file')
+        .map((uri) => XFile(uri.toFilePath()))
+        .toList(growable: false);
+
+    if (files.isEmpty) {
+      return;
+    }
+
+    await _importXFiles(files, sourceLabel: 'Opened');
+  }
+
+  Future<void> _handleSharedData(
+    SharedIntake sharedData, {
+    required String sourceLabel,
+    bool clearAfterHandling = false,
+  }) async {
+    if (!sharedData.hasContent) {
+      return;
+    }
+
+    if (sharedData.filePaths.isNotEmpty) {
+      final files = sharedData.filePaths.map(XFile.new).toList(growable: false);
+      await _importXFiles(files, sourceLabel: sourceLabel);
+    } else if (sharedData.text?.trim().isNotEmpty ?? false) {
+      await _replaceDocument(_importer.importSharedText(sharedData.text!));
+      _statusMessage = 'Loaded shared text.';
+      notifyListeners();
+    }
+
+    if (clearAfterHandling) {
+      await _shareIntake.clearSharedData();
+    }
+  }
+
+  Future<void> _importXFiles(
+    List<XFile> files, {
+    required String sourceLabel,
+  }) async {
+    if (files.isEmpty) {
+      return;
+    }
+
+    _isImporting = true;
+    _statusMessage = null;
+    notifyListeners();
+
+    try {
+      final firstFile = files.first;
+      final bytes = await firstFile.readAsBytes();
+      final fileName = firstFile.name.isNotEmpty
+          ? firstFile.name
+          : _fallbackFileName(firstFile.path);
+
+      final message = files.length == 1
+          ? '$sourceLabel $fileName.'
+          : '$sourceLabel ${files.length} files; loaded $fileName.';
+
+      await _loadImportedBytes(
+        fileName: fileName,
+        bytes: Uint8List.fromList(bytes),
+        successMessage: message,
+      );
+    } catch (error) {
+      _statusMessage = 'Failed to import $sourceLabel content: $error';
+      notifyListeners();
+    } finally {
+      _isImporting = false;
+      notifyListeners();
+    }
+  }
+
+  Future<void> _loadImportedBytes({
+    required String fileName,
+    required Uint8List bytes,
+    String? successMessage,
+  }) async {
+    final imported = await _importer.importBytes(
+      fileName: fileName,
+      bytes: bytes,
+    );
+    await _replaceDocument(imported);
+    if (successMessage != null) {
+      _statusMessage = imported.wordCount == 0
+          ? '$successMessage No readable text was extracted yet.'
+          : successMessage;
+      notifyListeners();
+    }
+  }
+
   Future<void> _replaceDocument(ReaderDocument document) async {
     await _ttsEngine.stop();
     _document = document;
@@ -342,7 +469,17 @@ class ReaderController extends ChangeNotifier {
   @override
   void dispose() {
     _sleepTicker?.cancel();
+    _fileOpenSubscription?.cancel();
+    _shareSubscription?.cancel();
     _ttsEngine.dispose();
     super.dispose();
   }
+}
+
+String _fallbackFileName(String path) {
+  final normalized = path.replaceAll('\\', '/');
+  if (!normalized.contains('/')) {
+    return normalized;
+  }
+  return normalized.substring(normalized.lastIndexOf('/') + 1);
 }

@@ -1,5 +1,6 @@
 import 'dart:math' as math;
 
+import 'package:desktop_drop/desktop_drop.dart';
 import 'package:flutter/material.dart';
 
 import '../controllers/reader_controller.dart';
@@ -17,6 +18,7 @@ class _ReadAloudScreenState extends State<ReadAloudScreen> {
   late final ReaderController _controller;
   String _fontFamily = 'serif';
   double _fontScale = 1.0;
+  bool _isDraggingFiles = false;
 
   @override
   void initState() {
@@ -106,6 +108,21 @@ class _ReadAloudScreenState extends State<ReadAloudScreen> {
                           ),
                         ],
                       );
+                final intakeSurface = DropTarget(
+                  onDragEntered: (_) => setState(() => _isDraggingFiles = true),
+                  onDragExited: (_) => setState(() => _isDraggingFiles = false),
+                  onDragDone: (detail) {
+                    setState(() => _isDraggingFiles = false);
+                    _controller.importDroppedFiles(detail.files);
+                  },
+                  child: Stack(
+                    children: [
+                      Positioned.fill(child: bodyContent),
+                      if (_isDraggingFiles)
+                        const Positioned.fill(child: _DropOverlay()),
+                    ],
+                  ),
+                );
 
                 return Padding(
                   padding: const EdgeInsets.fromLTRB(20, 8, 20, 20),
@@ -129,7 +146,7 @@ class _ReadAloudScreenState extends State<ReadAloudScreen> {
                         ),
                       ],
                       const SizedBox(height: 12),
-                      Expanded(child: bodyContent),
+                      Expanded(child: intakeSurface),
                     ],
                   ),
                 );
@@ -386,7 +403,7 @@ class _ReadAloudScreenState extends State<ReadAloudScreen> {
             ),
             const SizedBox(height: 8),
             Text(
-              'Rich document surface with room for images, video, audio, and future semantic overlays.',
+              'Rich document surface with room for images, video, audio, and future semantic overlays. You can also drop supported files here.',
               style: Theme.of(context).textTheme.bodyMedium,
             ),
             const SizedBox(height: 16),
@@ -443,6 +460,47 @@ class _ReadAloudScreenState extends State<ReadAloudScreen> {
           ],
         );
       },
+    );
+  }
+}
+
+class _DropOverlay extends StatelessWidget {
+  const _DropOverlay();
+
+  @override
+  Widget build(BuildContext context) {
+    return IgnorePointer(
+      child: Container(
+        decoration: BoxDecoration(
+          color: const Color(0xCCFFF7E0),
+          borderRadius: BorderRadius.circular(32),
+          border: Border.all(color: const Color(0xFFCA6702), width: 3),
+        ),
+        margin: const EdgeInsets.all(6),
+        child: Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 360),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(Icons.file_download_outlined, size: 44),
+                const SizedBox(height: 12),
+                Text(
+                  'Drop Files To Import',
+                  style: Theme.of(context).textTheme.titleLarge,
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'Read Aloud will open the first supported document and keep the same reading pipeline as picker and share intake.',
+                  style: Theme.of(context).textTheme.bodyMedium,
+                  textAlign: TextAlign.center,
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
     );
   }
 }

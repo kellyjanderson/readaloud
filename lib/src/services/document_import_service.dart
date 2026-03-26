@@ -9,6 +9,19 @@ import 'package:xml/xml.dart';
 import '../models/reader_document.dart';
 
 class DocumentImportService {
+  static const supportedExtensions = <String>[
+    'txt',
+    'text',
+    'md',
+    'markdown',
+    'html',
+    'htm',
+    'epub',
+    'pdf',
+    'docx',
+    'rtf',
+  ];
+
   Future<ReaderDocument> importBytes({
     required String fileName,
     required Uint8List bytes,
@@ -18,6 +31,7 @@ class DocumentImportService {
       case 'txt':
       case 'text':
       case 'md':
+      case 'markdown':
         return _importPlainText(fileName, bytes);
       case 'html':
       case 'htm':
@@ -26,6 +40,10 @@ class DocumentImportService {
         return _importEpub(fileName, bytes);
       case 'pdf':
         return _importPdf(fileName, bytes);
+      case 'docx':
+        return _importDocx(fileName, bytes);
+      case 'rtf':
+        return _importRtf(fileName, bytes);
       default:
         return _unsupportedDocument(fileName);
     }
@@ -39,6 +57,17 @@ class DocumentImportService {
       displayHtml: plainTextToHtml(normalized),
       speakableText: normalized,
       sourceDescription: 'Pasted into Read Aloud',
+    );
+  }
+
+  ReaderDocument importSharedText(String text) {
+    final normalized = text.trim();
+    return ReaderDocument(
+      title: 'Shared Text',
+      type: ReaderDocumentType.plainText,
+      displayHtml: plainTextToHtml(normalized),
+      speakableText: normalized,
+      sourceDescription: 'Shared into Read Aloud',
     );
   }
 
@@ -121,6 +150,90 @@ class DocumentImportService {
     } finally {
       await document?.dispose();
     }
+  }
+
+  ReaderDocument _importDocx(String fileName, Uint8List bytes) {
+    final archive = ZipDecoder().decodeBytes(bytes);
+    final entries = <String, ArchiveFile>{};
+    for (final entry in archive.files) {
+      entries[_normalizeArchivePath(entry.name)] = entry;
+    }
+
+    final documentEntry = entries['word/document.xml'];
+    if (documentEntry == null) {
+      return _unsupportedDocument(fileName);
+    }
+
+    final documentXml = XmlDocument.parse(
+      utf8.decode(_entryBytes(documentEntry), allowMalformed: true),
+    );
+    final blocks = <String>[];
+    final speakableText = StringBuffer();
+    final attachments = <ReaderAttachment>[];
+
+    for (final paragraph
+        in documentXml.descendants.whereType<XmlElement>().where(
+          (element) => element.name.local == 'p',
+        )) {
+      final paragraphContent = _extractDocxParagraph(paragraph);
+      if (paragraphContent == null) {
+        continue;
+      }
+
+      if (paragraphContent.hasImage) {
+        attachments.add(
+          const ReaderAttachment(
+            label: 'Inline DOCX media',
+            type: ReaderAttachmentType.image,
+          ),
+        );
+      }
+
+      if (paragraphContent.speakableText.isEmpty) {
+        continue;
+      }
+
+      blocks.add(
+        '<${paragraphContent.htmlTag}>${paragraphContent.htmlText}</${paragraphContent.htmlTag}>',
+      );
+
+      if (speakableText.isNotEmpty) {
+        speakableText.writeln();
+        speakableText.writeln();
+      }
+      speakableText.write(paragraphContent.speakableText);
+    }
+
+    final title = _docxTitle(entries) ?? fileName;
+    final displayHtml = blocks.isEmpty
+        ? '''
+<article>
+  <h1>${const HtmlEscape().convert(title)}</h1>
+  <p>No readable text was extracted from this DOCX document yet.</p>
+</article>
+'''
+        : '<article>${blocks.join('\n')}</article>';
+
+    return ReaderDocument(
+      title: title,
+      type: ReaderDocumentType.html,
+      displayHtml: displayHtml,
+      speakableText: speakableText.toString().trim(),
+      sourceDescription: 'DOCX import',
+      attachments: attachments,
+    );
+  }
+
+  ReaderDocument _importRtf(String fileName, Uint8List bytes) {
+    final raw = utf8.decode(bytes, allowMalformed: true);
+    final text = _decodeRtf(raw).trim();
+    return ReaderDocument(
+      title: fileName,
+      type: ReaderDocumentType.plainText,
+      displayHtml: plainTextToHtml(text),
+      speakableText: text,
+      sourceDescription: 'RTF import',
+    );
   }
 
   ReaderDocument _unsupportedDocument(String fileName) {
@@ -271,6 +384,20 @@ class _EpubAsset {
   final String mediaType;
 }
 
+class _DocxParagraphContent {
+  const _DocxParagraphContent({
+    required this.htmlTag,
+    required this.htmlText,
+    required this.speakableText,
+    required this.hasImage,
+  });
+
+  final String htmlTag;
+  final String htmlText;
+  final String speakableText;
+  final bool hasImage;
+}
+
 String _extensionOf(String fileName) {
   final dotIndex = fileName.lastIndexOf('.');
   if (dotIndex == -1) return '';
@@ -305,4 +432,126 @@ String _guessMimeType(String path) {
     default:
       return 'application/octet-stream';
   }
+}
+
+String? _docxTitle(Map<String, ArchiveFile> entries) {
+  final coreEntry = entries['docProps/core.xml'];
+  if (coreEntry == null) {
+    return null;
+  }
+
+  try {
+    final coreXml = XmlDocument.parse(
+      utf8.decode(coreEntry.content, allowMalformed: true),
+    );
+    final title = coreXml.descendants
+        .whereType<XmlElement>()
+        .firstWhere(
+          (element) => element.name.local == 'title',
+          orElse: () => XmlElement(XmlName('title')),
+        )
+        .innerText
+        .trim();
+    return title.isEmpty ? null : title;
+  } catch (_) {
+    return null;
+  }
+}
+
+_DocxParagraphContent? _extractDocxParagraph(XmlElement paragraph) {
+  final styleElement = paragraph.descendants.whereType<XmlElement>().firstWhere(
+    (element) => element.name.local == 'pStyle',
+    orElse: () => XmlElement(XmlName('pStyle')),
+  );
+  final styleValue = styleElement.attributes
+      .firstWhere(
+        (attribute) => attribute.name.local == 'val',
+        orElse: () => XmlAttribute(XmlName('val'), ''),
+      )
+      .value;
+  final htmlTag = switch (styleValue) {
+    'Heading1' => 'h1',
+    'Heading2' => 'h2',
+    'Heading3' => 'h3',
+    _ => 'p',
+  };
+
+  final htmlBuffer = StringBuffer();
+  final speakableBuffer = StringBuffer();
+  var hasImage = false;
+
+  for (final node in paragraph.descendants) {
+    if (node is! XmlElement) {
+      continue;
+    }
+
+    switch (node.name.local) {
+      case 't':
+        final text = node.innerText;
+        if (text.isEmpty) {
+          break;
+        }
+        htmlBuffer.write(const HtmlEscape().convert(text));
+        speakableBuffer.write(text);
+        break;
+      case 'tab':
+        htmlBuffer.write(' ');
+        speakableBuffer.write(' ');
+        break;
+      case 'br':
+      case 'cr':
+        htmlBuffer.write('<br />');
+        speakableBuffer.write('\n');
+        break;
+      case 'drawing':
+      case 'pict':
+        hasImage = true;
+        break;
+      default:
+        break;
+    }
+  }
+
+  final speakableText = _normalizeImportedText(speakableBuffer.toString());
+  final htmlText = htmlBuffer.toString().trim();
+  if (speakableText.isEmpty && htmlText.isEmpty && !hasImage) {
+    return null;
+  }
+
+  return _DocxParagraphContent(
+    htmlTag: htmlTag,
+    htmlText: htmlText.isEmpty ? '&nbsp;' : htmlText,
+    speakableText: speakableText,
+    hasImage: hasImage,
+  );
+}
+
+String _decodeRtf(String raw) {
+  var text = raw;
+  text = text.replaceAllMapped(RegExp(r"\\'([0-9a-fA-F]{2})"), (match) {
+    final value = int.parse(match.group(1)!, radix: 16);
+    return latin1.decode([value]);
+  });
+  text = text.replaceAllMapped(RegExp(r'\\u(-?\d+)\??'), (match) {
+    final value = int.tryParse(match.group(1)!);
+    if (value == null) {
+      return '';
+    }
+    final normalized = value < 0 ? value + 65536 : value;
+    return String.fromCharCode(normalized);
+  });
+  text = text.replaceAll(r'\par', '\n\n');
+  text = text.replaceAll(r'\line', '\n');
+  text = text.replaceAll(r'\tab', '\t');
+  text = text.replaceAll(RegExp(r'\\[a-zA-Z]+\d* ?'), '');
+  text = text.replaceAll(RegExp(r'[{}]'), '');
+  return _normalizeImportedText(text);
+}
+
+String _normalizeImportedText(String text) {
+  return text
+      .replaceAll('\r', '')
+      .replaceAll(RegExp(r'[ \t]+'), ' ')
+      .replaceAll(RegExp(r'\n{3,}'), '\n\n')
+      .trim();
 }
