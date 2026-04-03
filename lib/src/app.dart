@@ -1,9 +1,15 @@
 import 'package:flutter/material.dart';
 
+import 'services/app_launch_options.dart';
 import 'screens/read_aloud_screen.dart';
 
 class ReadAloudApp extends StatelessWidget {
-  const ReadAloudApp({super.key});
+  const ReadAloudApp({
+    super.key,
+    this.launchOptions = const AppLaunchOptions(),
+  });
+
+  final AppLaunchOptions launchOptions;
 
   @override
   Widget build(BuildContext context) {
@@ -24,7 +30,7 @@ class ReadAloudApp extends StatelessWidget {
       debugShowCheckedModeBanner: false,
       title: 'Read Aloud',
       theme: theme,
-      home: const ReadAloudScreen(),
+      home: ReadAloudScreen(initialInputPaths: launchOptions.inputPaths),
     );
   }
 }

@@ -3,6 +3,7 @@ import 'package:flutter_html/flutter_html.dart';
 import 'package:pdfrx/pdfrx.dart';
 
 import '../models/reader_document.dart';
+import '../services/display_document_html_renderer.dart';
 
 class DocumentSurface extends StatefulWidget {
   const DocumentSurface({
@@ -50,6 +51,9 @@ class _DocumentSurfaceState extends State<DocumentSurface> {
     }
 
     final baseSize = 18.0 * widget.fontScale;
+    final renderedHtml = renderDisplayDocumentToHtml(
+      widget.document.displayDocument,
+    );
 
     return Scrollbar(
       controller: _scrollController,
@@ -58,75 +62,86 @@ class _DocumentSurfaceState extends State<DocumentSurface> {
         controller: _scrollController,
         primary: false,
         padding: const EdgeInsets.only(right: 8),
-        child: Html(
-          data: widget.document.displayHtml,
-          shrinkWrap: true,
-          extensions: [
-            TagExtension(
-              tagsToExtend: const {'audio'},
-              builder: (context) {
-                final src = context.attributes['src'] ?? 'embedded audio';
-                return _EmbeddedContextCard(
-                  icon: Icons.audiotrack,
-                  title: 'Embedded audio',
-                  subtitle: src,
-                );
-              },
-            ),
-            TagExtension(
-              tagsToExtend: const {'video'},
-              builder: (context) {
-                final src = context.attributes['src'] ?? 'embedded video';
-                return _EmbeddedContextCard(
-                  icon: Icons.play_circle_outline,
-                  title: 'Embedded video',
-                  subtitle: src,
-                );
-              },
-            ),
-            TagExtension(
-              tagsToExtend: const {'iframe'},
-              builder: (context) {
-                final src = context.attributes['src'] ?? 'embedded frame';
-                return _EmbeddedContextCard(
-                  icon: Icons.web_asset_outlined,
-                  title: 'Embedded context',
-                  subtitle: src,
-                );
-              },
-            ),
-          ],
-          style: {
-            'html': Style(
-              margin: Margins.zero,
-              padding: HtmlPaddings.zero,
-              backgroundColor: Colors.transparent,
-              fontFamily: widget.fontFamily,
-            ),
-            'body': Style(
-              margin: Margins.zero,
-              padding: HtmlPaddings.zero,
-              lineHeight: LineHeight.number(1.55),
-              fontSize: FontSize(baseSize),
-              fontFamily: widget.fontFamily,
-            ),
-            'article': Style(margin: Margins.zero, padding: HtmlPaddings.zero),
-            'h1': Style(
-              fontSize: FontSize(baseSize * 1.8),
-              fontWeight: FontWeight.w700,
-              margin: Margins.only(bottom: 18, top: 0),
-            ),
-            'h2': Style(
-              fontSize: FontSize(baseSize * 1.35),
-              fontWeight: FontWeight.w700,
-              margin: Margins.only(top: 22, bottom: 12),
-            ),
-            'p': Style(margin: Margins.only(bottom: 16)),
-            'img': Style(
-              width: Width(100, Unit.percent),
-              margin: Margins.symmetric(vertical: 18),
-            ),
-          },
+        child: SelectionArea(
+          child: Html(
+            data: renderedHtml,
+            shrinkWrap: true,
+            extensions: [
+              TagExtension(
+                tagsToExtend: const {'audio'},
+                builder: (context) {
+                  final src = context.attributes['src'] ?? 'embedded audio';
+                  return _EmbeddedContextCard(
+                    icon: Icons.audiotrack,
+                    title: 'Embedded audio',
+                    subtitle: src,
+                  );
+                },
+              ),
+              TagExtension(
+                tagsToExtend: const {'video'},
+                builder: (context) {
+                  final src = context.attributes['src'] ?? 'embedded video';
+                  return _EmbeddedContextCard(
+                    icon: Icons.play_circle_outline,
+                    title: 'Embedded video',
+                    subtitle: src,
+                  );
+                },
+              ),
+              TagExtension(
+                tagsToExtend: const {'iframe'},
+                builder: (context) {
+                  final src = context.attributes['src'] ?? 'embedded frame';
+                  return _EmbeddedContextCard(
+                    icon: Icons.web_asset_outlined,
+                    title: 'Embedded context',
+                    subtitle: src,
+                  );
+                },
+              ),
+            ],
+            style: {
+              'html': Style(
+                margin: Margins.zero,
+                padding: HtmlPaddings.zero,
+                backgroundColor: Colors.transparent,
+                fontFamily: widget.fontFamily,
+              ),
+              'body': Style(
+                margin: Margins.zero,
+                padding: HtmlPaddings.zero,
+                lineHeight: LineHeight.number(1.55),
+                fontSize: FontSize(baseSize),
+                fontFamily: widget.fontFamily,
+              ),
+              'article': Style(margin: Margins.zero, padding: HtmlPaddings.zero),
+              'h1': Style(
+                fontSize: FontSize(baseSize * 1.8),
+                fontWeight: FontWeight.w700,
+                margin: Margins.only(bottom: 18, top: 0),
+              ),
+              'h2': Style(
+                fontSize: FontSize(baseSize * 1.35),
+                fontWeight: FontWeight.w700,
+                margin: Margins.only(top: 22, bottom: 12),
+              ),
+              'p': Style(margin: Margins.only(bottom: 16)),
+              'img': Style(
+                width: Width(100, Unit.percent),
+                margin: Margins.symmetric(vertical: 18),
+              ),
+              '.page-break': Style(
+                border: Border(
+                  top: BorderSide(
+                    color: const Color(0x22000000),
+                    width: 1,
+                  ),
+                ),
+                margin: Margins.symmetric(vertical: 18),
+              ),
+            },
+          ),
         ),
       ),
     );

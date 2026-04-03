@@ -11,12 +11,18 @@ class FlutterTtsEngine implements TtsEngine {
   final FlutterTts _tts;
 
   void Function()? _onStart;
+  void Function(String? message)? _onStatus;
   void Function(TtsProgressUpdate update)? _onProgress;
   void Function()? _onComplete;
   void Function(String message)? _onError;
+  void Function(TtsPlaybackActivity activity)? _onActivity;
 
   @override
   set onStart(void Function()? callback) => _onStart = callback;
+
+  @override
+  set onStatus(void Function(String? message)? callback) =>
+      _onStatus = callback;
 
   @override
   set onProgress(void Function(TtsProgressUpdate update)? callback) =>
@@ -29,11 +35,34 @@ class FlutterTtsEngine implements TtsEngine {
   set onError(void Function(String message)? callback) => _onError = callback;
 
   @override
+  set onActivity(void Function(TtsPlaybackActivity activity)? callback) =>
+      _onActivity = callback;
+
+  @override
+  set onDebugTrace(void Function(TtsDebugTraceSnapshot trace)? callback) {}
+
+  @override
   Future<void> initialize() async {
-    _tts.setStartHandler(() => _onStart?.call());
-    _tts.setCompletionHandler(() => _onComplete?.call());
-    _tts.setCancelHandler(() => _onComplete?.call());
-    _tts.setErrorHandler((message) => _onError?.call(message));
+    _onStatus?.call(null);
+    _onActivity?.call(const TtsPlaybackActivity.idle());
+    _tts.setStartHandler(() {
+      _onActivity?.call(
+        const TtsPlaybackActivity(phase: TtsPlaybackPhase.playing),
+      );
+      _onStart?.call();
+    });
+    _tts.setCompletionHandler(() {
+      _onActivity?.call(const TtsPlaybackActivity.idle());
+      _onComplete?.call();
+    });
+    _tts.setCancelHandler(() {
+      _onActivity?.call(const TtsPlaybackActivity.idle());
+      _onComplete?.call();
+    });
+    _tts.setErrorHandler((message) {
+      _onActivity?.call(const TtsPlaybackActivity.idle());
+      _onError?.call(message);
+    });
     _tts.setProgressHandler((_, startOffset, endOffset, word) {
       _onProgress?.call(
         TtsProgressUpdate(
@@ -103,10 +132,14 @@ class FlutterTtsEngine implements TtsEngine {
   }
 
   @override
-  Future<void> speak(String text) async {
+  Future<void> speak(TtsSpeakRequest request) async {
     try {
-      await _tts.speak(text);
+      _onActivity?.call(
+        const TtsPlaybackActivity(phase: TtsPlaybackPhase.buffering),
+      );
+      await _tts.speak(request.text);
     } on MissingPluginException {
+      _onActivity?.call(const TtsPlaybackActivity.idle());
       _onError?.call('Text to speech is unavailable on this platform.');
     }
   }
@@ -114,6 +147,7 @@ class FlutterTtsEngine implements TtsEngine {
   @override
   Future<void> pause() async {
     try {
+      _onActivity?.call(const TtsPlaybackActivity.idle());
       if (kIsWeb ||
           defaultTargetPlatform == TargetPlatform.android ||
           defaultTargetPlatform == TargetPlatform.iOS ||
@@ -131,7 +165,9 @@ class FlutterTtsEngine implements TtsEngine {
   Future<void> stop() async {
     try {
       await _tts.stop();
+      _onActivity?.call(const TtsPlaybackActivity.idle());
     } on MissingPluginException {
+      _onActivity?.call(const TtsPlaybackActivity.idle());
       _onError?.call('Text to speech is unavailable on this platform.');
     }
   }

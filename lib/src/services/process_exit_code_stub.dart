@@ -1,0 +1,1 @@
+void setProcessExitCodeInternal(int code) {}

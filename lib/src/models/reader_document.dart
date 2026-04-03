@@ -2,6 +2,20 @@ import 'dart:convert';
 import 'dart:math' as math;
 import 'dart:typed_data';
 
+import 'display_document.dart';
+import 'import_diagnostic.dart';
+import 'normalized_import_result.dart';
+import 'position_map.dart';
+import 'pronunciation_artifact.dart';
+import 'speech_annotation.dart';
+import 'speech_document.dart';
+import '../services/base_speech_annotation_inference_service.dart';
+import '../services/document_time_pronunciation_planner_service.dart';
+import '../services/display_document_html_renderer.dart';
+import '../services/english_pronunciation_profile_selector.dart';
+import '../services/english_suffix_allomorph_module.dart';
+import '../services/pronunciation_resource_layering_service.dart';
+
 enum ReaderDocumentType { sample, plainText, html, epub, pdf, unsupported }
 
 enum ReaderAttachmentType { image, audio, video, other }
@@ -28,11 +42,14 @@ class WordSpan {
 }
 
 class ReaderDocument {
-  ReaderDocument({
+  ReaderDocument._({
     required this.title,
     required this.type,
     required this.displayHtml,
     required this.speakableText,
+    required this.normalizedImportResult,
+    required this.baseSpeechAnnotations,
+    required this.basePronunciationArtifacts,
     this.presentation = ReaderDocumentPresentation.html,
     this.pdfData,
     this.sourceDescription,
@@ -43,10 +60,49 @@ class ReaderDocument {
        ),
        wordSpans = _buildWordSpans(speakableText);
 
+  factory ReaderDocument.fromNormalized({
+    required String title,
+    required ReaderDocumentType type,
+    required NormalizedImportResult normalizedImportResult,
+    required BaseSpeechAnnotationSet baseSpeechAnnotations,
+    required BasePronunciationArtifactSet basePronunciationArtifacts,
+    ReaderDocumentPresentation presentation = ReaderDocumentPresentation.html,
+    Uint8List? pdfData,
+    String? sourceDescription,
+    List<ReaderAttachment> attachments = const <ReaderAttachment>[],
+  }) {
+    final displayHtml = renderDisplayDocumentToHtml(
+      normalizedImportResult.displayDocument,
+    );
+    final speakableText = _flattenSpeechDocument(
+      normalizedImportResult.speechDocument,
+    );
+    return ReaderDocument._(
+      title: title,
+      type: type,
+      displayHtml: displayHtml,
+      speakableText: speakableText,
+      normalizedImportResult: normalizedImportResult,
+      baseSpeechAnnotations: baseSpeechAnnotations,
+      basePronunciationArtifacts: basePronunciationArtifacts,
+      presentation: presentation,
+      pdfData: pdfData,
+      sourceDescription: sourceDescription,
+      attachments: attachments,
+    );
+  }
+
   final String title;
   final ReaderDocumentType type;
   final String displayHtml;
   final String speakableText;
+  final NormalizedImportResult normalizedImportResult;
+  DisplayDocument get displayDocument => normalizedImportResult.displayDocument;
+  SpeechDocument get speechDocument => normalizedImportResult.speechDocument;
+  PositionMap get positionMap => normalizedImportResult.positionMap;
+  List<ImportDiagnostic> get diagnostics => normalizedImportResult.diagnostics;
+  final BaseSpeechAnnotationSet baseSpeechAnnotations;
+  final BasePronunciationArtifactSet basePronunciationArtifacts;
   final ReaderDocumentPresentation presentation;
   final Uint8List? pdfData;
   final String? sourceDescription;
@@ -79,63 +135,212 @@ class ReaderDocument {
     return math.max(0, math.min(low, wordSpans.length - 1));
   }
 
+  SpeechSegment? segmentForWordIndex(int wordIndex) {
+    if (speechDocument.segments.isEmpty) {
+      return null;
+    }
+    var runningWordCount = 0;
+    for (final segment in speechDocument.segments) {
+      final nextCount = runningWordCount + segment.wordCount;
+      if (wordIndex < nextCount) {
+        return segment;
+      }
+      runningWordCount = nextCount;
+    }
+    return speechDocument.segments.last;
+  }
+
+  int startWordIndexForSegmentId(String segmentId) {
+    var runningWordCount = 0;
+    for (final segment in speechDocument.segments) {
+      if (segment.segmentId == segmentId) {
+        return runningWordCount;
+      }
+      runningWordCount += segment.wordCount;
+    }
+    return math.max(0, wordCount - 1);
+  }
+
+  int startWordIndexForSegment(SpeechSegment segment) {
+    return startWordIndexForSegmentId(segment.segmentId);
+  }
+
   static ReaderDocument sample() {
-    const body = '''
-<article>
-  <h1>Read Aloud</h1>
-  <p>
-    This is the first build shell for Read Aloud. It is structured around a rich document surface
-    instead of a plain text widget, so the app can grow into EPUB, PDF, and mixed-media documents
-    without starting over.
-  </p>
-  <p>
-    The reading view is HTML-based for now. That gives us styled text, headings, lists, images, and
-    custom placeholders for embedded media while the importer and playback layers mature.
-  </p>
-  <img alt="A decorative shelf of books." src="data:image/svg+xml;utf8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='960' height='280' viewBox='0 0 960 280'%3E%3Crect width='960' height='280' rx='32' fill='%23E9D8A6'/%3E%3Crect x='72' y='58' width='76' height='156' rx='10' fill='%23005F73'/%3E%3Crect x='166' y='42' width='92' height='172' rx='10' fill='%23AE2012'/%3E%3Crect x='276' y='76' width='68' height='138' rx='10' fill='%23CA6702'/%3E%3Crect x='362' y='52' width='84' height='162' rx='10' fill='%239B2226'/%3E%3Crect x='464' y='90' width='64' height='124' rx='10' fill='%230A9396'/%3E%3Crect x='546' y='38' width='98' height='176' rx='10' fill='%23BB3E03'/%3E%3Crect x='662' y='62' width='78' height='152' rx='10' fill='%2300564D'/%3E%3Crect x='758' y='80' width='74' height='134' rx='10' fill='%23B56576'/%3E%3Crect x='850' y='48' width='56' height='166' rx='10' fill='%236A994E'/%3E%3Crect x='52' y='214' width='856' height='18' rx='9' fill='%231F2933' fill-opacity='0.15'/%3E%3C/svg%3E" />
-  <p>
-    The playback model tracks observed timing as words are spoken. That timing estimate is then used
-    to approximate thirty-second jumps through the text instead of relying on a blind fixed offset.
-  </p>
-  <h2>Embedded Context</h2>
-  <p>
-    Audio, video, and other embedded content are modeled as first-class content, even before the app
-    starts doing anything intelligent with them.
-  </p>
-  <audio controls src="sample-audio.mp3"></audio>
-  <video controls src="sample-video.mp4" poster="sample-poster.png"></video>
-</article>
-''';
-
-    const speakable = '''
-Read Aloud is the first build shell for a cross-platform document reader. The reading view is
-structured for rich content instead of plain text. The playback model tracks observed timing while
-text is spoken and uses that timing to approximate thirty-second jumps. Audio, video, and other
-embedded content are treated as first-class content so the app can grow without a major rewrite.
-''';
-
-    return ReaderDocument(
-      title: 'Sample Document',
-      type: ReaderDocumentType.sample,
-      displayHtml: body,
-      speakableText: speakable,
-      sourceDescription: 'Bundled project sample',
-      attachments: const [
-        ReaderAttachment(
-          label: 'Sample inline illustration',
-          type: ReaderAttachmentType.image,
-        ),
-        ReaderAttachment(
-          label: 'Embedded audio placeholder',
-          type: ReaderAttachmentType.audio,
-        ),
-        ReaderAttachment(
-          label: 'Embedded video placeholder',
-          type: ReaderAttachmentType.video,
-        ),
+    const sampleTitle = 'For Probe';
+    const sampleParagraphs = <String>[
+      'Short phrases for tracing how "for" is realized by the TTS pipeline.',
+      'for the road.',
+      'I waited for them.',
+      'I am sorry for taking your starting position on the football team.',
+      'my feelings for John are undeniable.',
+      'for better or worse.',
+      'for now.',
+    ];
+    const documentId = 'doc_sample';
+    const normalizationVersion = 'read-aloud-normalization-v1';
+    final displayDocument = DisplayDocument(
+      documentId: documentId,
+      sourceType: ReaderDocumentType.sample.name,
+      sourceUri: null,
+      title: sampleTitle,
+      normalizationVersion: normalizationVersion,
+      metadata: const <String, String>{
+        'sample': 'true',
+        'source': 'For pronunciation probe',
+      },
+      assets: const <String, DisplayAsset>{},
+      blocks: [
+        for (var i = 0; i < sampleParagraphs.length; i += 1)
+          DisplayBlock(
+            blockId: 'b_$i',
+            kind: DisplayBlockKind.paragraph,
+            inlines: [
+              DisplayInline(
+                kind: DisplayInlineKind.text,
+                text: sampleParagraphs[i],
+                attributes: const <String, String>{},
+              ),
+            ],
+            attributes: const <String, String>{},
+            assetId: null,
+            parentBlockId: null,
+            ordinal: i,
+          ),
       ],
     );
+    final sampleSegments = <SpeechSegment>[
+      for (var i = 0; i < sampleParagraphs.length; i += 1)
+        _segmentForSample(
+          segmentId: 's_$i',
+          blockId: 'b_$i',
+          paragraphIndex: i,
+          sentenceIndex: 0,
+          ordinal: i,
+          text: sampleParagraphs[i],
+        ),
+    ];
+    final speechDocument = SpeechDocument(
+      documentId: documentId,
+      sourceType: ReaderDocumentType.sample.name,
+      languageTag: 'en-US',
+      segments: sampleSegments,
+      segmentIndexById: {
+        for (var i = 0; i < sampleSegments.length; i += 1)
+          sampleSegments[i].segmentId: i,
+      },
+      totalWordCount: sampleSegments.fold<int>(
+        0,
+        (sum, segment) => sum + segment.wordCount,
+      ),
+      normalizationVersion: normalizationVersion,
+    );
+    final positionMap = PositionMap(
+      documentId: documentId,
+      mappingVersion: normalizationVersion,
+      entries: sampleSegments
+          .map(
+            (segment) => PositionMapEntry(
+              entryId: 'pm_${segment.ordinal}',
+              displayBlockId: segment.blockId,
+              speechSegmentId: segment.segmentId,
+              displayStart: 0,
+              displayEnd: segment.normalizedText.length,
+              speechStartWord: 0,
+              speechEndWord: segment.wordCount,
+              confidence: 0.8,
+              recoveryAnchor: RecoveryAnchor(exact: segment.normalizedText),
+            ),
+          )
+          .toList(growable: false),
+    );
+
+    final normalizedImportResult = NormalizedImportResult(
+      documentId: documentId,
+      sourceType: ReaderDocumentType.sample.name,
+      bestAvailableTitle: sampleTitle,
+      sourceUri: null,
+      sourceFingerprint: 'sample-document',
+      normalizationVersion: normalizationVersion,
+      mappingVersion: normalizationVersion,
+      displayDocument: displayDocument,
+      speechDocument: speechDocument,
+      positionMap: positionMap,
+    );
+    const annotationInferenceService = BaseSpeechAnnotationInferenceService();
+    const pronunciationProfileSelector = EnglishPronunciationProfileSelector();
+    const pronunciationResourceLayeringService =
+        PronunciationResourceLayeringService();
+    const pronunciationPlannerService = DocumentTimePronunciationPlannerService();
+
+    final baseSpeechAnnotations = annotationInferenceService.infer(
+      speechDocument: speechDocument,
+      displayDocument: displayDocument,
+    );
+    final selectedProfile = pronunciationProfileSelector.select(
+      const EnglishPronunciationProfileSelectionInput(engineId: 'kokoro'),
+    );
+    final mergedPronunciationResources = pronunciationResourceLayeringService
+        .merge(PronunciationResourceLayeringInput(profile: selectedProfile));
+    final basePronunciationArtifacts = pronunciationPlannerService.plan(
+      DocumentTimePronunciationPlannerInput(
+        speechDocument: speechDocument,
+        baseAnnotations: baseSpeechAnnotations,
+        positionMap: positionMap,
+        normalizationVersion: normalizationVersion,
+        selectedProfile: selectedProfile,
+        mergedPronunciationResources: mergedPronunciationResources,
+        enabledDocumentTimeRuleModules: const <EnglishSuffixAllomorphModule>[
+          EnglishSuffixAllomorphModule(),
+        ],
+        diagnostics: normalizedImportResult.diagnostics,
+      ),
+    );
+
+    return ReaderDocument.fromNormalized(
+      title: sampleTitle,
+      type: ReaderDocumentType.sample,
+      normalizedImportResult: normalizedImportResult,
+      baseSpeechAnnotations: baseSpeechAnnotations,
+      basePronunciationArtifacts: basePronunciationArtifacts,
+      sourceDescription: 'Bundled project sample',
+      attachments: const <ReaderAttachment>[],
+    );
   }
+}
+
+SpeechSegment _segmentForSample({
+  required String segmentId,
+  required String blockId,
+  required int paragraphIndex,
+  required int sentenceIndex,
+  required int ordinal,
+  required String text,
+}) {
+  final words = RegExp(r'\S+').allMatches(text).toList(growable: false);
+  return SpeechSegment(
+    segmentId: segmentId,
+    blockId: blockId,
+    ordinal: ordinal,
+    paragraphIndex: paragraphIndex,
+    sentenceIndex: sentenceIndex,
+    normalizedText: text,
+    wordCount: words.length,
+    sourceRange: null,
+    displayAnchor: DisplayAnchor(
+      blockId: blockId,
+      startInlineOffset: 0,
+      endInlineOffset: text.length,
+    ),
+    wordSpans: [
+      for (var i = 0; i < words.length; i += 1)
+        SpeechWordSpan(
+          wordIndexWithinSegment: i,
+          startUtf16: words[i].start,
+          endUtf16: words[i].end,
+          text: words[i].group(0)!,
+        ),
+    ],
+  );
 }
 
 List<WordSpan> _buildWordSpans(String text) {
@@ -145,17 +350,38 @@ List<WordSpan> _buildWordSpans(String text) {
       .toList(growable: false);
 }
 
-String plainTextToHtml(String text) {
-  final paragraphs = text
-      .trim()
-      .split(RegExp(r'\n\s*\n'))
-      .map((block) => block.trim())
-      .where((block) => block.isNotEmpty)
-      .map(
-        (block) =>
-            '<p>${const HtmlEscape().convert(block).replaceAll('\n', '<br />')}</p>',
-      )
-      .join('\n');
+String _flattenSpeechDocument(SpeechDocument document) {
+  if (document.segments.isEmpty) {
+    return '';
+  }
 
-  return '<article>$paragraphs</article>';
+  final buffer = StringBuffer();
+  int? lastParagraphIndex;
+  for (final segment in document.segments) {
+    if (buffer.isNotEmpty) {
+      if (lastParagraphIndex != null &&
+          segment.paragraphIndex != lastParagraphIndex) {
+        buffer.write('\n\n');
+      } else {
+        buffer.write(' ');
+      }
+    }
+    buffer.write(segment.normalizedText.trim());
+    lastParagraphIndex = segment.paragraphIndex;
+  }
+  return buffer.toString().trim();
+}
+
+String plainTextToHtml(String text) {
+  final paragraphs = text.trim().isEmpty
+      ? const <String>[]
+      : text
+            .trim()
+            .split(RegExp(r'\n\s*\n'))
+            .map((block) => block.trim())
+            .where((block) => block.isNotEmpty)
+            .map((block) => '<p>${const HtmlEscape().convert(block)}</p>')
+            .toList(growable: false);
+
+  return '<article>${paragraphs.join('\n')}</article>';
 }

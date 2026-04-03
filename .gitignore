@@ -34,8 +34,20 @@ migrate_working_dir/
 /build/
 /coverage/
 
+# Project-specific generated artifacts
+/project/test-artifacts/*
+!/project/test-artifacts/README.md
+
+# External model dependencies
+/assets/kokoro/model/*.onnx
+
 # Nested project repos
 /kokoro-voice-sampler/
+
+# Local-only workspace files
+/.local/
+/.vscode/
+/tmp/
 
 # Symbolication related
 app.*.symbols

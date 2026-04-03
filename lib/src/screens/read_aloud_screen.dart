@@ -1,6 +1,8 @@
+import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:desktop_drop/desktop_drop.dart';
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 
 import '../controllers/reader_controller.dart';
@@ -8,7 +10,12 @@ import '../models/reader_document.dart';
 import '../widgets/document_surface.dart';
 
 class ReadAloudScreen extends StatefulWidget {
-  const ReadAloudScreen({super.key});
+  const ReadAloudScreen({
+    super.key,
+    this.initialInputPaths = const <String>[],
+  });
+
+  final List<String> initialInputPaths;
 
   @override
   State<ReadAloudScreen> createState() => _ReadAloudScreenState();
@@ -16,19 +23,20 @@ class ReadAloudScreen extends StatefulWidget {
 
 class _ReadAloudScreenState extends State<ReadAloudScreen> {
   late final ReaderController _controller;
-  String _fontFamily = 'serif';
-  double _fontScale = 1.0;
+  late final ScrollController _ttsTraceScrollController;
   bool _isDraggingFiles = false;
 
   @override
   void initState() {
     super.initState();
     _controller = ReaderController();
-    _controller.initialize();
+    _ttsTraceScrollController = ScrollController();
+    unawaited(_initializeController());
   }
 
   @override
   void dispose() {
+    _ttsTraceScrollController.dispose();
     _controller.dispose();
     super.dispose();
   }
@@ -41,6 +49,9 @@ class _ReadAloudScreenState extends State<ReadAloudScreen> {
         final status = _controller.statusMessage;
         final voice = _controller.selectedVoice;
         final voiceLabel = voice?.displayName ?? 'No voice selected';
+        final isBuffering = _controller.isBufferingPlayback;
+        final transportEnabled =
+            _controller.document.wordCount > 0 && !isBuffering;
         final reader = _buildReader(context);
         final controls = _buildControls(context);
 
@@ -72,9 +83,29 @@ class _ReadAloudScreenState extends State<ReadAloudScreen> {
                 label: const Text('Paste'),
               ),
               TextButton.icon(
+                onPressed: _controller.isLiveReadEnabled
+                    ? () => _controller.stopLiveRead()
+                    : _controller.pickAndStartLiveRead,
+                icon: Icon(
+                  _controller.isLiveReadEnabled
+                      ? Icons.stop_circle_outlined
+                      : Icons.sync,
+                ),
+                label: Text(
+                  _controller.isLiveReadEnabled ? 'Stop Live' : 'Live Feed',
+                ),
+              ),
+              TextButton.icon(
                 onPressed: _controller.loadSampleDocument,
                 icon: const Icon(Icons.auto_stories),
                 label: const Text('Sample'),
+              ),
+              TextButton.icon(
+                onPressed: _controller.isExporting || !_controller.canExportAudio
+                    ? null
+                    : _saveAudio,
+                icon: const Icon(Icons.download),
+                label: Text(_controller.isExporting ? 'Saving...' : 'Save Audio'),
               ),
             ],
           ),
@@ -82,7 +113,11 @@ class _ReadAloudScreenState extends State<ReadAloudScreen> {
             child: LayoutBuilder(
               builder: (context, constraints) {
                 final wide = constraints.maxWidth >= 980;
-                final mobileControlsHeight = constraints.maxHeight.isFinite
+                final useScrollableStackedLayout =
+                    !wide &&
+                    constraints.maxHeight.isFinite &&
+                    constraints.maxHeight < 640;
+                final mobileControlsMaxHeight = constraints.maxHeight.isFinite
                     ? math.min(
                         260.0,
                         math.max(180.0, constraints.maxHeight * 0.30),
@@ -97,14 +132,37 @@ class _ReadAloudScreenState extends State<ReadAloudScreen> {
                           Expanded(child: reader),
                         ],
                       )
+                    : useScrollableStackedLayout
+                    ? ListView(
+                        primary: false,
+                        padding: EdgeInsets.zero,
+                        children: [
+                          SizedBox(
+                            height: math.max(
+                              280.0,
+                              constraints.maxHeight * 0.58,
+                            ),
+                            child: reader,
+                          ),
+                          const SizedBox(height: 16),
+                          SizedBox(
+                            height: mobileControlsMaxHeight,
+                            child: controls,
+                          ),
+                        ],
+                      )
                     : Column(
                         crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
                           Expanded(child: reader),
                           const SizedBox(height: 16),
-                          SizedBox(
-                            height: mobileControlsHeight,
-                            child: controls,
+                          Flexible(
+                            child: ConstrainedBox(
+                              constraints: BoxConstraints(
+                                maxHeight: mobileControlsMaxHeight,
+                              ),
+                              child: controls,
+                            ),
                           ),
                         ],
                       );
@@ -181,32 +239,47 @@ class _ReadAloudScreenState extends State<ReadAloudScreen> {
                     Row(
                       children: [
                         IconButton.filledTonal(
-                          onPressed: _controller.document.wordCount == 0
-                              ? null
-                              : () => _controller.jumpBySeconds(-30),
+                          onPressed: transportEnabled
+                              ? () => _controller.jumpBySeconds(-30)
+                              : null,
                           icon: const Icon(Icons.replay_30),
                         ),
                         const SizedBox(width: 8),
                         Expanded(
-                          child: FilledButton.icon(
-                            onPressed: _controller.document.wordCount == 0
-                                ? null
-                                : _controller.togglePlayback,
-                            icon: Icon(
-                              _controller.isPlaying
-                                  ? Icons.pause
-                                  : Icons.play_arrow,
-                            ),
-                            label: Text(
-                              _controller.isPlaying ? 'Pause' : 'Play',
+                          child: FilledButton(
+                            style: isBuffering
+                                ? FilledButton.styleFrom(
+                                    disabledBackgroundColor: Theme.of(
+                                      context,
+                                    ).colorScheme.primary,
+                                    disabledForegroundColor: Theme.of(
+                                      context,
+                                    ).colorScheme.onPrimary,
+                                  )
+                                : null,
+                            onPressed: transportEnabled
+                                ? _controller.togglePlayback
+                                : null,
+                            child: AnimatedSwitcher(
+                              duration: const Duration(milliseconds: 180),
+                              child: isBuffering
+                                  ? const _LoadingDots(
+                                      key: ValueKey('buffering'),
+                                    )
+                                  : Icon(
+                                      _controller.isPlaying
+                                          ? Icons.pause
+                                          : Icons.play_arrow,
+                                      key: ValueKey(_controller.isPlaying),
+                                    ),
                             ),
                           ),
                         ),
                         const SizedBox(width: 8),
                         IconButton.filledTonal(
-                          onPressed: _controller.document.wordCount == 0
-                              ? null
-                              : () => _controller.jumpBySeconds(30),
+                          onPressed: transportEnabled
+                              ? () => _controller.jumpBySeconds(30)
+                              : null,
                           icon: const Icon(Icons.forward_30),
                         ),
                       ],
@@ -219,6 +292,40 @@ class _ReadAloudScreenState extends State<ReadAloudScreen> {
         );
       },
     );
+  }
+
+  Future<void> _initializeController() async {
+    await _controller.initialize();
+    if (widget.initialInputPaths.isNotEmpty) {
+      await _controller.importFilePaths(widget.initialInputPaths);
+      return;
+    }
+    await _controller.restoreLastOpenedDocument();
+  }
+
+  Future<void> _saveAudio() async {
+    try {
+      final pickedPath = await FilePicker.platform.saveFile(
+        dialogTitle: 'Save Audio',
+        fileName: _controller.suggestedAudioExportFileName,
+        type: FileType.custom,
+        allowedExtensions: const <String>['wav'],
+      );
+      if (pickedPath == null || pickedPath.trim().isEmpty) {
+        return;
+      }
+      final outputPath = pickedPath.toLowerCase().endsWith('.wav')
+          ? pickedPath
+          : '$pickedPath.wav';
+      await _controller.exportAudioToPath(outputPath);
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Could not start Save Audio: $error')),
+      );
+    }
   }
 
   Widget _buildControls(BuildContext context) {
@@ -268,6 +375,21 @@ class _ReadAloudScreenState extends State<ReadAloudScreen> {
                 ? null
                 : _controller.selectVoiceById,
           ),
+          if (_controller.canManageVoices) ...[
+            const SizedBox(height: 8),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: TextButton.icon(
+                onPressed: _showVoiceManagerDialog,
+                icon: const Icon(Icons.library_music),
+                label: const Text('Manage Voices'),
+              ),
+            ),
+            Text(
+              'Bundled voices work offline. Downloaded voices stay cached locally until you remove the app.',
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
+          ],
           const SizedBox(height: 16),
           _LabeledSlider(
             label: 'Voice Speed',
@@ -281,8 +403,8 @@ class _ReadAloudScreenState extends State<ReadAloudScreen> {
           ),
           const SizedBox(height: 16),
           DropdownButtonFormField<String>(
-            key: ValueKey(_fontFamily),
-            initialValue: _fontFamily,
+            key: ValueKey(_controller.fontFamily),
+            initialValue: _controller.fontFamily,
             decoration: const InputDecoration(
               labelText: 'Reading Font',
               border: OutlineInputBorder(),
@@ -294,17 +416,17 @@ class _ReadAloudScreenState extends State<ReadAloudScreen> {
             ],
             onChanged: (value) {
               if (value == null) return;
-              setState(() => _fontFamily = value);
+              _controller.setFontFamily(value);
             },
           ),
           const SizedBox(height: 16),
           _LabeledSlider(
             label: 'Font Scale',
-            valueLabel: '${_fontScale.toStringAsFixed(2)}x',
-            value: _fontScale,
+            valueLabel: '${_controller.fontScale.toStringAsFixed(2)}x',
+            value: _controller.fontScale,
             min: 0.9,
             max: 1.6,
-            onChanged: (value) => setState(() => _fontScale = value),
+            onChanged: _controller.setFontScale,
           ),
           const SizedBox(height: 16),
           DropdownButtonFormField<Duration?>(
@@ -353,6 +475,109 @@ class _ReadAloudScreenState extends State<ReadAloudScreen> {
           Text(
             'Jump buttons use the observed timing from the current reading session.',
             style: Theme.of(context).textTheme.bodySmall,
+          ),
+          const Divider(height: 32),
+          Text('Live Read', style: Theme.of(context).textTheme.titleMedium),
+          const SizedBox(height: 8),
+          Text(
+            _controller.isLiveReadEnabled
+                ? 'Watching a file for changes and reloading only the current document inside the running app.'
+                : 'Attach a file to create a live text feed into the running app. When the file changes, Read Aloud reloads the document in place.',
+            style: Theme.of(context).textTheme.bodySmall,
+          ),
+          const SizedBox(height: 8),
+          if (_controller.liveReadFilePath != null) ...[
+            SelectableText(
+              _controller.liveReadFilePath!,
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
+            const SizedBox(height: 8),
+          ],
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              OutlinedButton.icon(
+                onPressed: _controller.pickAndStartLiveRead,
+                icon: const Icon(Icons.sync),
+                label: Text(
+                  _controller.isLiveReadEnabled
+                      ? 'Change Live File'
+                      : 'Choose Live File',
+                ),
+              ),
+              if (_controller.isLiveReadEnabled)
+                TextButton.icon(
+                  onPressed: () => _controller.stopLiveRead(),
+                  icon: const Icon(Icons.stop_circle_outlined),
+                  label: const Text('Stop Live Mode'),
+                ),
+            ],
+          ),
+          const Divider(height: 32),
+          Text(
+            'TTS Input Trace',
+            style: Theme.of(context).textTheme.titleMedium,
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'Live tail of the exact text, payload units, and phoneme strings being sent into the current TTS session.',
+            style: Theme.of(context).textTheme.bodySmall,
+          ),
+          const SizedBox(height: 8),
+          if (_controller.ttsDebugTraceLogPath != null) ...[
+            Text(
+              'Voice: ${_controller.ttsDebugTraceVoiceId ?? 'unknown'}',
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
+            if (_controller.ttsDebugTraceStartedAt != null)
+              Text(
+                'Started: ${_controller.ttsDebugTraceStartedAt!.toLocal().toIso8601String()}',
+                style: Theme.of(context).textTheme.bodySmall,
+              ),
+            const SizedBox(height: 4),
+            SelectableText(
+              _controller.ttsDebugTraceLogPath!,
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
+            const SizedBox(height: 8),
+          ] else ...[
+            Text(
+              'No TTS trace has been captured yet. Start playback to create a session log.',
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
+            const SizedBox(height: 8),
+          ],
+          DecoratedBox(
+            decoration: BoxDecoration(
+              color: const Color(0xFF111827),
+              borderRadius: BorderRadius.circular(16),
+            ),
+            child: SizedBox(
+              height: 220,
+              child: Padding(
+                padding: const EdgeInsets.all(12),
+                child: Scrollbar(
+                  controller: _ttsTraceScrollController,
+                  child: SingleChildScrollView(
+                    controller: _ttsTraceScrollController,
+                    reverse: true,
+                    child: SelectionArea(
+                      child: SelectableText(
+                        _controller.ttsDebugTraceLines.isEmpty
+                            ? 'Waiting for a TTS trace...'
+                            : _controller.ttsDebugTraceLines.join('\n'),
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          fontFamily: 'monospace',
+                          color: const Color(0xFFF9FAFB),
+                          height: 1.35,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
           ),
           const Divider(height: 32),
           Text(
@@ -410,8 +635,8 @@ class _ReadAloudScreenState extends State<ReadAloudScreen> {
             Expanded(
               child: DocumentSurface(
                 document: _controller.document,
-                fontFamily: _fontFamily,
-                fontScale: _fontScale,
+                fontFamily: _controller.fontFamily,
+                fontScale: _controller.fontScale,
               ),
             ),
           ],
@@ -458,6 +683,128 @@ class _ReadAloudScreenState extends State<ReadAloudScreen> {
               ),
             ),
           ],
+        );
+      },
+    );
+  }
+
+  Future<void> _showVoiceManagerDialog() async {
+    await showDialog<void>(
+      context: context,
+      builder: (context) {
+        return Dialog(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 760, maxHeight: 640),
+            child: AnimatedBuilder(
+              animation: _controller,
+              builder: (context, _) {
+                final entries = _controller.voiceLibrary;
+
+                return Padding(
+                  padding: const EdgeInsets.all(20),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Text(
+                            'Voice Library',
+                            style: Theme.of(context).textTheme.headlineSmall,
+                          ),
+                          const Spacer(),
+                          IconButton(
+                            onPressed: Navigator.of(context).pop,
+                            icon: const Icon(Icons.close),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        'Starter voices are bundled with the app. Optional voices download once and remain installed locally.',
+                        style: Theme.of(context).textTheme.bodyMedium,
+                      ),
+                      const SizedBox(height: 16),
+                      Expanded(
+                        child: ListView.separated(
+                          itemCount: entries.length,
+                          separatorBuilder: (_, separatorIndex) =>
+                              const Divider(height: 1),
+                          itemBuilder: (context, index) {
+                            final entry = entries[index];
+                            final isSelected =
+                                entry.voice.id == _controller.selectedVoice?.id;
+                            final progress = entry.progress;
+                            final progressPercent = progress == null
+                                ? null
+                                : '${(progress * 100).round()}%';
+
+                            Widget trailing;
+                            if (entry.isDownloading) {
+                              trailing = SizedBox(
+                                width: 150,
+                                child: Column(
+                                  mainAxisSize: MainAxisSize.min,
+                                  crossAxisAlignment: CrossAxisAlignment.end,
+                                  children: [
+                                    LinearProgressIndicator(value: progress),
+                                    const SizedBox(height: 6),
+                                    Text(progressPercent ?? 'Working...'),
+                                  ],
+                                ),
+                              );
+                            } else if (entry.isInstalled) {
+                              trailing = Wrap(
+                                spacing: 8,
+                                crossAxisAlignment: WrapCrossAlignment.center,
+                                children: [
+                                  if (entry.isBundled)
+                                    const Chip(label: Text('Included')),
+                                  if (isSelected)
+                                    const Chip(label: Text('Selected')),
+                                  if (!isSelected)
+                                    FilledButton.tonal(
+                                      onPressed: () async {
+                                        await _controller.selectVoiceById(
+                                          entry.voice.id,
+                                        );
+                                      },
+                                      child: const Text('Use'),
+                                    ),
+                                ],
+                              );
+                            } else {
+                              trailing = OutlinedButton.icon(
+                                onPressed: () async {
+                                  await _controller.installVoice(
+                                    entry.voice.id,
+                                  );
+                                },
+                                icon: const Icon(Icons.download),
+                                label: const Text('Download'),
+                              );
+                            }
+
+                            return ListTile(
+                              contentPadding: const EdgeInsets.symmetric(
+                                vertical: 8,
+                                horizontal: 4,
+                              ),
+                              title: Text(entry.voice.displayName),
+                              subtitle: Text(
+                                entry.statusMessage ??
+                                    'Download on demand and keep locally',
+                              ),
+                              trailing: trailing,
+                            );
+                          },
+                        ),
+                      ),
+                    ],
+                  ),
+                );
+              },
+            ),
+          ),
         );
       },
     );
@@ -540,6 +887,46 @@ class _LabeledSlider extends StatelessWidget {
           onChanged: onChanged,
         ),
       ],
+    );
+  }
+}
+
+class _LoadingDots extends StatefulWidget {
+  const _LoadingDots({super.key});
+
+  @override
+  State<_LoadingDots> createState() => _LoadingDotsState();
+}
+
+class _LoadingDotsState extends State<_LoadingDots>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 900),
+  )..repeat();
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: _controller,
+      builder: (context, _) {
+        final phase = (_controller.value * 3).floor() % 3;
+        final dots = List<String>.generate(3, (index) {
+          return index <= phase ? '•' : '·';
+        }).join(' ');
+        return Text(
+          dots,
+          style: Theme.of(
+            context,
+          ).textTheme.titleMedium?.copyWith(color: Colors.white),
+        );
+      },
     );
   }
 }

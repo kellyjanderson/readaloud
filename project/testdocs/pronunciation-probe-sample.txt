@@ -1,0 +1,11 @@
+# Pronunciation probe cases
+# Format:
+#   <id><tab><phrase>
+# or just a phrase by itself for an auto-generated id.
+
+possessive_john	John's hand.
+possessive_elliot	Elliot's hand.
+plural_dogs	Dogs bark.
+contraction_cant	Can't stay.
+contraction_theyre	They're here.
+function_word_for	for the road.

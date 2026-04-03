@@ -1,3 +1,4 @@
+import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:read_aloud/src/app.dart';
@@ -9,7 +10,30 @@ void main() {
 
     expect(find.text('Read Aloud'), findsWidgets);
     expect(find.text('Reader Controls'), findsOneWidget);
-    expect(find.text('Sample Document'), findsWidgets);
-    expect(find.text('Play'), findsOneWidget);
+    expect(find.text('For Probe'), findsWidgets);
+    expect(find.text('TTS Input Trace'), findsOneWidget);
+    expect(
+      find.textContaining(
+        'Short phrases for tracing how "for" is realized by the TTS pipeline.',
+      ),
+      findsWidgets,
+    );
+    expect(find.byIcon(Icons.play_arrow), findsOneWidget);
+    expect(find.text('Play'), findsNothing);
+    expect(find.byType(SelectionArea), findsWidgets);
+  });
+
+  testWidgets('does not overflow on short desktop-sized windows', (
+    WidgetTester tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(800, 420));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    await tester.pumpWidget(const ReadAloudApp());
+    await tester.pump(const Duration(milliseconds: 300));
+
+    expect(tester.takeException(), isNull);
+    expect(find.byIcon(Icons.play_arrow), findsOneWidget);
+    expect(find.text('Play'), findsNothing);
   });
 }

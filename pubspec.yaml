@@ -31,7 +31,9 @@ dependencies:
   flutter:
     sdk: flutter
 
+  args: ^2.7.0
   archive: ^4.0.7
+  crypto: ^3.0.7
   cupertino_icons: ^1.0.8
   file_picker: ^10.3.10
   flutter_html: ^3.0.0
@@ -43,6 +45,12 @@ dependencies:
   desktop_drop: ^0.7.0
   file_open: ^0.1.0
   share_intent_package: ^1.0.29
+  just_audio: ^0.10.5
+  path_provider: ^2.1.5
+  path: ^1.9.1
+  shared_preferences: ^2.5.5
+  kokoro_tts_flutter: ^0.2.0+1
+  flutter_onnxruntime: ^1.6.3
 
 dev_dependencies:
   flutter_test:
@@ -55,6 +63,10 @@ dev_dependencies:
   # rules and activating additional ones.
   flutter_lints: ^6.0.0
 
+dependency_overrides:
+  flutter_onnxruntime:
+    path: third_party/flutter_onnxruntime
+
 # For information on the generic Dart part of this file, see the
 # following page: https://dart.dev/tools/pub/pubspec
 
@@ -66,10 +78,16 @@ flutter:
   # the material Icons class.
   uses-material-design: true
 
-  # To add assets to your application, add an assets section, like this:
-  # assets:
-  #   - images/a_dot_burr.jpeg
-  #   - images/a_dot_ham.jpeg
+  assets:
+    - assets/cmudict.dict
+    - assets/tokenizer_vocab.json
+    - assets/lexicon.json
+    - assets/us_gold.json
+    - assets/us_silver.json
+    - assets/gb_gold.json
+    - assets/gb_silver.json
+    - assets/kokoro/model/
+    - assets/kokoro/voices/
 
   # An image asset can refer to one or more resolution-specific "variants", see
   # https://flutter.dev/to/resolution-aware-images
