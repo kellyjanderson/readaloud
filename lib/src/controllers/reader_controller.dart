@@ -708,6 +708,24 @@ class ReaderController extends ChangeNotifier {
     notifyListeners();
   }
 
+  Future<void> clearCastVoiceOverride(String castId) async {
+    if (!_castVoiceOverrides.containsKey(castId)) {
+      return;
+    }
+
+    _castVoiceOverrides.remove(castId);
+    _refreshChunkPlan();
+
+    if (_isPlaying) {
+      await _ttsEngine.stop();
+      _isPlaying = false;
+      await startPlayback();
+      return;
+    }
+
+    notifyListeners();
+  }
+
   Future<void> setFontFamily(String fontFamily) async {
     if (_fontFamily == fontFamily) {
       return;

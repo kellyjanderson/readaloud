@@ -18,6 +18,7 @@ class VoiceManagementDialog extends StatelessWidget {
     required this.onSelectLibraryVoice,
     required this.onInstallVoice,
     required this.onAssignCastVoice,
+    required this.onClearCastVoiceOverride,
   });
 
   final List<VoiceLibraryEntry> voiceLibrary;
@@ -29,6 +30,7 @@ class VoiceManagementDialog extends StatelessWidget {
   final ValueChanged<String> onSelectLibraryVoice;
   final ValueChanged<String> onInstallVoice;
   final void Function(String castId, String voiceId) onAssignCastVoice;
+  final ValueChanged<String> onClearCastVoiceOverride;
 
   @override
   Widget build(BuildContext context) {
@@ -81,6 +83,9 @@ class VoiceManagementDialog extends StatelessWidget {
                         characterCastRegistry.narratorEntry.castId,
                         voiceId,
                       ),
+                      onResetToAutomatic: () => onClearCastVoiceOverride(
+                        characterCastRegistry.narratorEntry.castId,
+                      ),
                     ),
                     if (characterEntries.isNotEmpty) ...[
                       const SizedBox(height: 16),
@@ -98,6 +103,8 @@ class VoiceManagementDialog extends StatelessWidget {
                           voices: availableVoices,
                           onChanged: (voiceId) =>
                               onAssignCastVoice(entry.castId, voiceId),
+                          onResetToAutomatic: () =>
+                              onClearCastVoiceOverride(entry.castId),
                         ),
                         const SizedBox(height: 12),
                       ],
@@ -186,12 +193,14 @@ class _VoiceAssignmentCard extends StatelessWidget {
     required this.assignment,
     required this.voices,
     required this.onChanged,
+    required this.onResetToAutomatic,
   });
 
   final String label;
   final CastVoiceAssignment? assignment;
   final List<VoiceProfile> voices;
   final ValueChanged<String> onChanged;
+  final VoidCallback onResetToAutomatic;
 
   @override
   Widget build(BuildContext context) {
@@ -200,8 +209,15 @@ class _VoiceAssignmentCard extends StatelessWidget {
         : voices
               .where((voice) => voice.id == assignment!.effectiveVoiceId)
               .firstOrNull;
+    final automaticVoice = assignment?.automaticVoiceId == null
+        ? null
+        : voices
+              .where((voice) => voice.id == assignment!.automaticVoiceId)
+              .firstOrNull;
     final qualityLabel =
         selectedVoice?.qualityGrade ?? selectedVoice?.targetQuality;
+    final hasExplicitOverride =
+        assignment?.decisionKind == VoiceAssignmentDecisionKind.userOverride;
 
     return DecoratedBox(
       decoration: BoxDecoration(
@@ -227,6 +243,15 @@ class _VoiceAssignmentCard extends StatelessWidget {
               ],
             ),
             const SizedBox(height: 12),
+            if (automaticVoice != null) ...[
+              Text(
+                hasExplicitOverride
+                    ? 'Automatic voice: ${automaticVoice.displayName}'
+                    : 'Using automatic voice selection.',
+                style: Theme.of(context).textTheme.bodySmall,
+              ),
+              const SizedBox(height: 12),
+            ],
             Row(
               crossAxisAlignment: CrossAxisAlignment.center,
               children: [
@@ -278,6 +303,17 @@ class _VoiceAssignmentCard extends StatelessWidget {
               Text(
                 selectedVoice.locale,
                 style: Theme.of(context).textTheme.bodySmall,
+              ),
+            ],
+            if (hasExplicitOverride) ...[
+              const SizedBox(height: 12),
+              Align(
+                alignment: Alignment.centerLeft,
+                child: TextButton.icon(
+                  onPressed: onResetToAutomatic,
+                  icon: const Icon(Icons.restart_alt),
+                  label: const Text('Use Automatic Assignment'),
+                ),
               ),
             ],
           ],

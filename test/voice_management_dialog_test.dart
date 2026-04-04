@@ -10,8 +10,12 @@ void main() {
   testWidgets('groups narrator and character assignments with override state', (
     WidgetTester tester,
   ) async {
+    await tester.binding.setSurfaceSize(const Size(900, 900));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
     String? changedCastId;
     String? changedVoiceId;
+    String? clearedCastId;
 
     await tester.pumpWidget(
       MaterialApp(
@@ -73,6 +77,9 @@ void main() {
               changedCastId = castId;
               changedVoiceId = voiceId;
             },
+            onClearCastVoiceOverride: (castId) {
+              clearedCastId = castId;
+            },
           ),
         ),
       ),
@@ -84,6 +91,8 @@ void main() {
     expect(find.text('Jennifer'), findsOneWidget);
     expect(find.text('Automatic'), findsOneWidget);
     expect(find.text('Overridden'), findsOneWidget);
+    expect(find.text('Automatic voice: Bella (en-US)'), findsOneWidget);
+    expect(find.text('Use Automatic Assignment'), findsOneWidget);
 
     await tester.tap(find.byType(DropdownButtonFormField<String>).at(1));
     await tester.pumpAndSettle();
@@ -92,6 +101,13 @@ void main() {
 
     expect(changedCastId, 'cast_character_jennifer');
     expect(changedVoiceId, 'af_bella');
+
+    await tester.tap(
+      find.widgetWithText(TextButton, 'Use Automatic Assignment'),
+    );
+    await tester.pumpAndSettle();
+
+    expect(clearedCastId, 'cast_character_jennifer');
   });
 
   testWidgets('reduces to narrator management when no characters exist', (
@@ -129,6 +145,7 @@ void main() {
             onSelectLibraryVoice: (_) {},
             onInstallVoice: (_) {},
             onAssignCastVoice: (_, _) {},
+            onClearCastVoiceOverride: (_) {},
           ),
         ),
       ),

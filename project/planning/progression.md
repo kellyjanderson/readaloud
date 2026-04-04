@@ -98,7 +98,7 @@ For user-facing branches, the unchecked surfaced leaves remain the feature-compl
 - [x] [Automatic Voice Casting and Override Resolution](../specifications/automatic-voice-casting-and-override-resolution.md)
 - [x] [Cast-Aware Speech Range Routing](../specifications/cast-aware-speech-range-routing.md)
 - [x] [Voice-Routed Progress and Diagnostics](../specifications/voice-routed-progress-and-diagnostics.md)
-- [ ] [Cast Voice Override Workflow](../specifications/cast-voice-override-workflow.md)
+- [x] [Cast Voice Override Workflow](../specifications/cast-voice-override-workflow.md)
 - [ ] [Running-App Multi-Voice Playback Switching](../specifications/running-app-multi-voice-playback-switching.md)
 
 ### Speech Runtime Boundary
