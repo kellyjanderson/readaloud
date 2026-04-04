@@ -20,6 +20,8 @@ The system requires a speech enrichment layer that:
 
 This layer is responsible for turning well-formed speech text into speech input that can sound natural and coherent over long-form reading.
 
+It is also the natural home for future dialogue attribution and narrator-versus-character speech identity, because those are structural speech concerns rather than engine-private runtime guesses.
+
 ## Components
 
 ### Speech Normalization Output
@@ -104,6 +106,17 @@ Responsibilities:
 - preserve continuation-versus-closure state at recent boundaries
 - avoid sentence-by-sentence reset behavior
 
+### Dialogue Attribution and Character Casting
+
+This is a future structural extension of the enrichment layer.
+
+Responsibilities:
+
+- detect dialogue spans
+- infer likely speakers
+- preserve narrator-versus-character identity
+- provide cast-aware inputs to later voice/session routing
+
 ### Enriched Planner Input
 
 This is the output contract consumed by chunk planning.
@@ -118,6 +131,7 @@ Responsibilities:
 - `BaseSpeechAnnotationSet` depends on `SpeechDocument`.
 - voice/session realization depends on `BaseSpeechAnnotationSet`, the active voice, the active rate, and recent narration context.
 - `NarrationState` depends on playback history and current enriched context.
+- dialogue attribution and character casting depend on `SpeechDocument`, existing enrichment context, and document-level structural analysis.
 - pronunciation planning depends on `SpeechDocument`, `BaseSpeechAnnotationSet`, current voice/session context, and existing lexical resources.
 - Chunk planning consumes enriched speech input, not raw normalized text alone.
 - the TTS layer consumes pronunciation-aware TTS artifacts, not only raw speech text.
@@ -216,6 +230,7 @@ Reason:
 - Narration state persists across chunk boundaries within one playback session.
 - Narration state is small and symbolic; it does not attempt to mirror model-internal acoustic state.
 - Enrichment output must remain traceable to normalized segment ids and word ranges.
+- Future dialogue attribution and cast identity must remain traceable to normalized segment ids and document-scoped character ids.
 - Pronunciation artifacts must remain traceable to normalized segment ids, token ranges, and `PositionMap` anchors.
 - Base document-time enrichment is cacheable per document.
 - Voice/session-time realization is recalculated only for the active playback situation, not for every possible voice up front.
@@ -230,6 +245,7 @@ The current codebase now contains an initial implementation of this layer, but t
 At present:
 
 - base speech annotations, narration state, and profile-aware pronunciation realization all exist, but pause/emphasis richness is still limited
+- discourse-role inference exists, but explicit speaker attribution and character casting do not yet exist
 - chunk planning consumes speech-side structures, but long-form narration continuity is still relatively light
 - profile-aware pronunciation realization exists, but the active rule-module set is still intentionally narrow
 - more advanced prosody and emphasis behavior remains largely future work
@@ -238,6 +254,8 @@ At present:
 
 - [Speech Document](../specifications/speech-document.md)
 - [Speech Annotation Set](../specifications/speech-annotation-set.md)
+- [Dialogue Span and Speaker Attribution](../specifications/dialogue-span-and-speaker-attribution.md)
+- [Character Cast Registry and Voice Assignment](../specifications/character-cast-registry-and-voice-assignment.md)
 - [Voice and Session Realization](../specifications/voice-session-realization.md)
 - [Narration State](../specifications/narration-state.md)
 - [Chunk Planning](../specifications/chunk-planning.md)

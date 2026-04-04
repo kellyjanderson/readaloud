@@ -14,6 +14,8 @@ Work progresses through three phases:
 
 Research supports all phases and is used to store durable information.
 
+Release definitions provide version-level cohesion across stabilized UI, architecture, and specification work.
+
 Project-specific agent rules are stored separately in:
 
 ```text
@@ -30,6 +32,11 @@ agents/git-and-github.md
 
 Agents should satisfy those branch and PR requirements before making code changes.
 
+Implementation work must not begin without a durable planning anchor:
+
+* an issue for bug-fix work, or
+* a specification for feature work
+
 UI definition guidance is defined in:
 
 ```text
@@ -40,6 +47,18 @@ Project UI definition documents should live in:
 
 ```text
 project/ui/
+```
+
+Release definition guidance is defined in:
+
+```text
+agents/release-definitions.md
+```
+
+Project release definition documents should live in:
+
+```text
+project/release-x.y.z/
 ```
 
 ---
@@ -88,6 +107,28 @@ The goal is to define the visible structure and interaction semantics of the sur
 
 ---
 
+### Release Definitions ↔ Stabilized Project Branches
+
+Release definitions are refined once the relevant product, UI, and architecture branches are stable enough to be grouped into a version intent.
+
+Primary release documents live in:
+
+```text
+project/release-x.y.z/README.md
+```
+
+* identify the intended outcome of the version
+* link the relevant UI definitions
+* link the relevant architecture
+* link the planned specifications for that version
+* keep version planning coherent as work branches multiply
+
+Release definitions are not a substitute for progression.
+
+They exist to keep a version understandable as one coherent project step.
+
+---
+
 ### Architecture ↔ Research
 
 Architecture is refined through research.
@@ -114,6 +155,7 @@ At some point:
 * product definition becomes stable enough to guide development
 * UI definitions become stable enough to guide interface work
 * architecture becomes stable enough to define system structure
+* release definitions become stable enough to define version intent
 
 For architecture, "stable enough" means the relevant architecture documents for the area of work have been completed breadth first.
 
@@ -130,6 +172,8 @@ These do not need to be perfect, but must be stable enough that implementation c
 
 Once stabilized, the exploration loops should diminish and specification work becomes primary.
 
+When the work is versioned, release definitions should also be updated so the version scope remains explicit.
+
 ---
 
 ## Specification Refinement Loop
@@ -140,6 +184,8 @@ After stabilization:
 * evaluate each specification for implementability
 
 Specifications are written only after the relevant architecture and UI definition documents are complete enough to describe the whole system area being refined.
+
+When the work is part of a planned version, release definitions should point at the resulting specifications rather than leaving version scope implicit.
 
 Architecture and UI definitions come first for their respective concerns.
 
@@ -191,6 +237,8 @@ project/planning/progression.md
 * arrange those references according to dependency order
 * apply secondary ordering where needed
 
+If a release definition exists for the active version, the progression document should remain consistent with that release scope.
+
 The progression document must contain only final leaf specifications.
 
 Parent or umbrella specifications do not belong in progression and must not be tracked there.
@@ -215,6 +263,17 @@ Implementation should also proceed only from the correct git branch context:
 
 Code changes should not be made directly on `main`.
 
+Issue-driven code changes must also be back-referenced into the architecture/specification tree.
+
+That means a bug fix should update the durable project documents that define the affected behavior, rather than living only as:
+
+* an issue
+* a branch
+* a pull request
+* and code changes
+
+If the relevant architecture or specification does not exist yet, the correct step is to add or refine it before or alongside implementation.
+
 ---
 
 ## Progression Audit
@@ -238,12 +297,14 @@ If implementation reveals issues that affect:
 * product definition, or
 * UI definition, or
 * system structure
+* release intent or release scope
 
 return to the appropriate loop:
 
 * product ↔ research
 * UI definitions ↔ research
 * architecture ↔ research
+* release definitions ↔ stabilized project branches
 
 Update documents before continuing.
 

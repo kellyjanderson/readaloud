@@ -18,6 +18,8 @@ They define:
 - [UI System Overview](ui-system-overview.md)
 - [Primary Surface and Complexity Layering](primary-surface-and-complexity-layering.md)
 - [Control State Semantics](control-state-semantics.md)
+- [Voice Library and Cast Management](voice-library-and-cast-management.md)
+- [Follow-Along Reading Surface](follow-along-reading-surface.md)
 - [Theme and Appearance Modes](theme-and-appearance-modes.md)
 - [Live Input and File Menu Behavior](live-input-and-file-menu-behavior.md)
 

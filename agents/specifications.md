@@ -5,6 +5,7 @@ Specification documents define how architecture is refined into actionable imple
 A specification represents a unit of work derived from either:
 
 * an architecture document, or
+* a UI definition document, or
 * another specification document
 
 Each specification must have exactly one backlink to its parent document.
@@ -12,6 +13,7 @@ Each specification must have exactly one backlink to its parent document.
 This parent may be:
 
 * an architecture document, or
+* a UI definition document, or
 * a specification document
 
 A specification should not have multiple parents.
@@ -21,6 +23,8 @@ A specification should not have multiple parents.
 ## Purpose
 
 Specifications translate architecture into implementable form.
+
+For UI-specific work, specifications may also translate stabilized UI definitions into implementable form.
 
 They isolate individual implementation concerns and refine them until they can be acted on directly.
 
@@ -176,3 +180,9 @@ Architecture defines the system-level solution.
 Specifications refine that solution into implementable units.
 
 Specifications should remain aligned to the parent document they refine.
+
+For UI-specific branches, specifications may also refine stabilized UI definitions into implementable UI behavior.
+
+Issue-driven fixes must also remain aligned to this tree.
+
+If a bug fix changes durable system behavior, the affected specification or architecture document should be updated so the fix is represented in project truth rather than only in issue history and code.

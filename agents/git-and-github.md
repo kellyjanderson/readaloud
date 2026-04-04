@@ -8,6 +8,11 @@ This document defines the repository branching and pull request rules for implem
 
 No code changes should be made directly on `main`.
 
+No implementation changes should be made without one of these durable planning anchors:
+
+* an issue, or
+* a specification
+
 Implementation work must happen on one of these branch types:
 
 * a bug-fix branch
@@ -40,6 +45,16 @@ Example:
 ```text
 bugfix/42-fix-for-pronunciation
 ```
+
+Bug-fix work must also be back-referenced into the architecture/specification tree.
+
+That means the issue-driven fix must update at least one of these, as appropriate:
+
+* the affected architecture document
+* the affected specification document
+* a new specification if the bug exposed missing durable behavior definition
+
+Issue work must not remain only in GitHub issue text and code history.
 
 ---
 
@@ -89,8 +104,10 @@ Before making code changes, agents should ensure that:
 
 1. the current branch is not `main`
 2. the branch is clearly a bug-fix branch or a feature branch
-3. bug-fix work links to an issue
-4. feature work links to a specification
+3. the work is anchored by either an issue or a specification
+4. bug-fix work links to an issue
+5. feature work links to a specification
+6. issue-driven work is back-referenced into the architecture/specification tree
 
 If those conditions are not met, agents should stop and create or switch to the correct branching context before proceeding with code changes.
 
@@ -102,4 +119,5 @@ Use branches and pull requests to keep implementation intent visible.
 
 Issues define fixes.
 Specifications define features.
+Architecture/specification documents preserve durable project truth.
 Pull requests define merge boundaries.

@@ -14,6 +14,9 @@ Start here before taking action.
 * **ui-definitions.md**
   Defines the interface-structure layer that captures durable visible behavior and interaction semantics.
 
+* **release-definitions.md**
+  Defines holistic version-level planning documents that connect release intent to UI, architecture, and specifications.
+
 * **specifications.md**
   Defines how architecture is refined into implementable specification units.
 
@@ -43,6 +46,7 @@ project/
   architecture/
   specifications/
   planning/
+  release-x.y.z/
   research/
 ```
 
@@ -65,9 +69,10 @@ When beginning work:
 1. review `project/product-definition.md` (if present)
 2. review `project/agents/` for project-specific operating rules
 3. review `git-and-github.md` before implementation work
-4. review relevant UI definitions
-5. review relevant architecture
-6. follow the workflow defined in `workflow.md`
+4. review relevant release definitions
+5. review relevant UI definitions
+6. review relevant architecture
+7. follow the workflow defined in `workflow.md`
 
 ---
 
