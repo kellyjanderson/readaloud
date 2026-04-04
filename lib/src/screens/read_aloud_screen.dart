@@ -8,6 +8,7 @@ import 'package:flutter/material.dart';
 import '../controllers/reader_controller.dart';
 import '../models/reader_document.dart';
 import '../widgets/document_surface.dart';
+import '../widgets/voice_library_row.dart';
 
 class ReadAloudScreen extends StatefulWidget {
   const ReadAloudScreen({
@@ -789,16 +790,8 @@ class _ReadAloudScreenState extends State<ReadAloudScreen> {
                               );
                             }
 
-                            return ListTile(
-                              contentPadding: const EdgeInsets.symmetric(
-                                vertical: 8,
-                                horizontal: 4,
-                              ),
-                              title: Text(entry.voice.displayName),
-                              subtitle: Text(
-                                entry.statusMessage ??
-                                    'Download on demand and keep locally',
-                              ),
+                            return VoiceLibraryRow(
+                              entry: entry,
                               trailing: trailing,
                             );
                           },
