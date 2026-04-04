@@ -8,7 +8,7 @@ import 'package:flutter/material.dart';
 import '../controllers/reader_controller.dart';
 import '../models/reader_document.dart';
 import '../widgets/document_surface.dart';
-import '../widgets/voice_library_row.dart';
+import '../widgets/voice_management_dialog.dart';
 
 class ReadAloudScreen extends StatefulWidget {
   const ReadAloudScreen({
@@ -698,111 +698,27 @@ class _ReadAloudScreenState extends State<ReadAloudScreen> {
     await showDialog<void>(
       context: context,
       builder: (context) {
-        return Dialog(
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 760, maxHeight: 640),
-            child: AnimatedBuilder(
-              animation: _controller,
-              builder: (context, _) {
-                final entries = _controller.voiceLibrary;
-
-                return Padding(
-                  padding: const EdgeInsets.all(20),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        children: [
-                          Text(
-                            'Voice Library',
-                            style: Theme.of(context).textTheme.headlineSmall,
-                          ),
-                          const Spacer(),
-                          IconButton(
-                            onPressed: Navigator.of(context).pop,
-                            icon: const Icon(Icons.close),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 8),
-                      Text(
-                        'Starter voices are bundled with the app. Optional voices download once and remain installed locally.',
-                        style: Theme.of(context).textTheme.bodyMedium,
-                      ),
-                      const SizedBox(height: 16),
-                      Expanded(
-                        child: ListView.separated(
-                          itemCount: entries.length,
-                          separatorBuilder: (_, separatorIndex) =>
-                              const Divider(height: 1),
-                          itemBuilder: (context, index) {
-                            final entry = entries[index];
-                            final isSelected =
-                                entry.voice.id == _controller.selectedVoice?.id;
-                            final progress = entry.progress;
-                            final progressPercent = progress == null
-                                ? null
-                                : '${(progress * 100).round()}%';
-
-                            Widget trailing;
-                            if (entry.isDownloading) {
-                              trailing = SizedBox(
-                                width: 150,
-                                child: Column(
-                                  mainAxisSize: MainAxisSize.min,
-                                  crossAxisAlignment: CrossAxisAlignment.end,
-                                  children: [
-                                    LinearProgressIndicator(value: progress),
-                                    const SizedBox(height: 6),
-                                    Text(progressPercent ?? 'Working...'),
-                                  ],
-                                ),
-                              );
-                            } else if (entry.isInstalled) {
-                              trailing = Wrap(
-                                spacing: 8,
-                                crossAxisAlignment: WrapCrossAlignment.center,
-                                children: [
-                                  if (entry.isBundled)
-                                    const Chip(label: Text('Included')),
-                                  if (isSelected)
-                                    const Chip(label: Text('Selected')),
-                                  if (!isSelected)
-                                    FilledButton.tonal(
-                                      onPressed: () async {
-                                        await _controller.selectVoiceById(
-                                          entry.voice.id,
-                                        );
-                                      },
-                                      child: const Text('Use'),
-                                    ),
-                                ],
-                              );
-                            } else {
-                              trailing = OutlinedButton.icon(
-                                onPressed: () async {
-                                  await _controller.installVoice(
-                                    entry.voice.id,
-                                  );
-                                },
-                                icon: const Icon(Icons.download),
-                                label: const Text('Download'),
-                              );
-                            }
-
-                            return VoiceLibraryRow(
-                              entry: entry,
-                              trailing: trailing,
-                            );
-                          },
-                        ),
-                      ),
-                    ],
-                  ),
-                );
+        return AnimatedBuilder(
+          animation: _controller,
+          builder: (context, _) {
+            return VoiceManagementDialog(
+              voiceLibrary: _controller.voiceLibrary,
+              availableVoices: _controller.voices,
+              characterCastRegistry: _controller.document.characterCastRegistry,
+              castVoiceAssignments: _controller.castVoiceAssignments,
+              selectedVoiceId: _controller.selectedVoice?.id,
+              onClose: Navigator.of(context).pop,
+              onSelectLibraryVoice: (voiceId) {
+                unawaited(_controller.selectVoiceById(voiceId));
               },
-            ),
-          ),
+              onInstallVoice: (voiceId) {
+                unawaited(_controller.installVoice(voiceId));
+              },
+              onAssignCastVoice: (castId, voiceId) {
+                unawaited(_controller.assignVoiceToCast(castId, voiceId));
+              },
+            );
+          },
         );
       },
     );

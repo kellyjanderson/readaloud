@@ -127,7 +127,7 @@ It includes only leaf specifications that are marked final.
 ### Reader Surface and Voice Management UI
 
 - [x] [Voice Library Row and Information Affordance](../specifications/voice-library-row-and-information-affordance.md)
-- [ ] [Cast Management Dialog Structure](../specifications/cast-management-dialog-structure.md)
+- [x] [Cast Management Dialog Structure](../specifications/cast-management-dialog-structure.md)
 - [ ] [Spoken Highlight Visual Presentation](../specifications/spoken-highlight-visual-presentation.md)
 - [ ] [Follow-Along User Scroll Interaction](../specifications/follow-along-user-scroll-interaction.md)
 

@@ -101,6 +101,7 @@ class ReaderController extends ChangeNotifier {
   ChunkPlan? _currentChunkPlan;
   final Map<String, SpokenChunkRecord> _spokenChunkRecords =
       <String, SpokenChunkRecord>{};
+  final Map<String, String> _castVoiceOverrides = <String, String>{};
   String? _activeSpokenChunkId;
   String? _ttsDebugTraceLogPath;
   DateTime? _ttsDebugTraceStartedAt;
@@ -153,6 +154,13 @@ class ReaderController extends ChangeNotifier {
   List<String> get ttsDebugTraceLines => _ttsDebugTraceLines;
   SpokenSelection get spokenSelection => _spokenSelection;
   ReadingFocusState get readingFocusState => _readingFocusState;
+  CastVoiceAssignmentSet? get castVoiceAssignments {
+    final voiceId = _selectedVoiceId;
+    if (voiceId == null) {
+      return null;
+    }
+    return _resolveCastVoiceAssignments(preferredNarratorVoiceId: voiceId);
+  }
   Duration? get sleepTimerDuration => _sleepTimerDuration;
   String get fontFamily => _fontFamily;
   double get fontScale => _fontScale;
@@ -656,6 +664,38 @@ class ReaderController extends ChangeNotifier {
     notifyListeners();
   }
 
+  Future<void> assignVoiceToCast(String castId, String voiceId) async {
+    if (_selectedVoiceId == null || _voices.every((voice) => voice.id != voiceId)) {
+      return;
+    }
+
+    final automaticAssignments = _castVoiceAssignmentService.resolve(
+      CastVoiceAssignmentInput(
+        characterCastRegistry: _document.characterCastRegistry,
+        availableVoices: _voices,
+        fallbackVoiceId: _selectedVoiceId!,
+        preferredNarratorVoiceId: _selectedVoiceId,
+      ),
+    );
+    final automaticAssignment = automaticAssignments.forCastId(castId);
+    if (automaticAssignment?.effectiveVoiceId == voiceId) {
+      _castVoiceOverrides.remove(castId);
+    } else {
+      _castVoiceOverrides[castId] = voiceId;
+    }
+
+    _refreshChunkPlan();
+
+    if (_isPlaying) {
+      await _ttsEngine.stop();
+      _isPlaying = false;
+      await startPlayback();
+      return;
+    }
+
+    notifyListeners();
+  }
+
   Future<void> setFontFamily(String fontFamily) async {
     if (_fontFamily == fontFamily) {
       return;
@@ -914,6 +954,7 @@ class ReaderController extends ChangeNotifier {
     _spokenChunkRecords.clear();
     _activeSpokenChunkId = null;
     _spokenSelection = const SpokenSelection.none();
+    _castVoiceOverrides.clear();
     _readingFocusState = const ReadingFocusState();
     _playbackRequestedAt = null;
     _latencyRecordedSessions.clear();
@@ -1402,6 +1443,7 @@ class ReaderController extends ChangeNotifier {
         availableVoices: _voices,
         fallbackVoiceId: preferredNarratorVoiceId,
         preferredNarratorVoiceId: preferredNarratorVoiceId,
+        userOverrides: _castVoiceOverrides,
       ),
     );
   }

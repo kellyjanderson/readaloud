@@ -36,11 +36,11 @@ class VoiceLibraryRow extends StatelessWidget {
           ),
           if (qualityLabel != null) ...[
             const SizedBox(width: 8),
-            _VoiceMetadataBadge(label: qualityLabel),
+            VoiceMetadataBadge(label: qualityLabel),
           ],
           if (hasMetadataDetails) ...[
             const SizedBox(width: 4),
-            _VoiceMetadataInfoButton(voice: voice),
+            VoiceMetadataInfoButton(voice: voice),
           ],
         ],
       ),
@@ -59,8 +59,8 @@ class VoiceLibraryRow extends StatelessWidget {
                   voice.locale,
                   style: Theme.of(context).textTheme.bodySmall,
                 ),
-              _VoiceMetadataPill(label: installStateLabel),
-              if (entry.isBundled) const _VoiceMetadataPill(label: 'Included'),
+              VoiceMetadataPill(label: installStateLabel),
+              if (entry.isBundled) const VoiceMetadataPill(label: 'Included'),
             ],
           ),
           if (entry.statusMessage != null) ...[
@@ -91,8 +91,8 @@ class VoiceLibraryRow extends StatelessWidget {
   }
 }
 
-class _VoiceMetadataInfoButton extends StatelessWidget {
-  const _VoiceMetadataInfoButton({required this.voice});
+class VoiceMetadataInfoButton extends StatelessWidget {
+  const VoiceMetadataInfoButton({super.key, required this.voice});
 
   final VoiceProfile voice;
 
@@ -150,7 +150,7 @@ class _VoiceMetadataInfoButton extends StatelessWidget {
                     spacing: 8,
                     runSpacing: 8,
                     children: voice.traits
-                        .map((trait) => _VoiceMetadataPill(label: trait))
+                        .map((trait) => VoiceMetadataPill(label: trait))
                         .toList(growable: false),
                   ),
                 ],
@@ -177,8 +177,8 @@ class _VoiceMetadataInfoButton extends StatelessWidget {
   }
 }
 
-class _VoiceMetadataBadge extends StatelessWidget {
-  const _VoiceMetadataBadge({required this.label});
+class VoiceMetadataBadge extends StatelessWidget {
+  const VoiceMetadataBadge({super.key, required this.label});
 
   final String label;
 
@@ -204,8 +204,8 @@ class _VoiceMetadataBadge extends StatelessWidget {
   }
 }
 
-class _VoiceMetadataPill extends StatelessWidget {
-  const _VoiceMetadataPill({required this.label});
+class VoiceMetadataPill extends StatelessWidget {
+  const VoiceMetadataPill({super.key, required this.label});
 
   final String label;
 
