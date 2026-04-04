@@ -1,6 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:read_aloud/src/controllers/reader_controller.dart';
 import 'package:read_aloud/src/models/spoken_chunk_record.dart';
+import 'package:read_aloud/src/models/spoken_selection.dart';
 import 'package:read_aloud/src/models/voice_profile.dart';
 import 'package:read_aloud/src/services/playback_instrumentation_service.dart';
 import 'dart:io';
@@ -122,6 +123,10 @@ void main() {
       expect(dialogueRecord.routeId, 'route_dialogue_jennifer');
       expect(dialogueRecord.castId, 'cast_character_jennifer');
       expect(dialogueRecord.dialogueSpanId, 'dlg_s_1');
+      expect(controller.spokenSelection.precision, SpokenSelectionPrecision.word);
+      expect(controller.spokenSelection.routeId, 'route_dialogue_jennifer');
+      expect(controller.spokenSelection.castId, 'cast_character_jennifer');
+      expect(controller.spokenSelection.dialogueSpanId, 'dlg_s_1');
 
       await controller.jumpBySeconds(-1);
 
