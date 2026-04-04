@@ -82,6 +82,7 @@ class ReaderController extends ChangeNotifier {
   double _fontScale = ReaderPreferences.defaultFontScale;
   String? _lastOpenedDocumentPath;
   String? _lastOpenedDirectoryPath;
+  String? _currentDocumentPath;
   String? _liveReadFilePath;
   StreamSubscription<FileSystemEvent>? _liveReadSubscription;
   Timer? _liveReadReloadDebounce;
@@ -169,6 +170,15 @@ class ReaderController extends ChangeNotifier {
   bool get canExportAudio => _ttsEngine is AudioExportCapable;
   String get suggestedAudioExportFileName =>
       _defaultAudioExportFileName(_document.title, _selectedVoiceId);
+  String get currentDocumentWindowLabel {
+    final currentPath = _currentDocumentPath;
+    if (currentPath != null && currentPath.trim().isNotEmpty) {
+      return p.basename(currentPath);
+    }
+    final title = _document.title.trim();
+    return title.isEmpty ? 'Untitled' : title;
+  }
+  String get windowTitle => 'Read Aloud - $currentDocumentWindowLabel';
 
   Duration? get sleepTimerRemaining {
     if (_sleepTimerEndsAt == null) return null;
@@ -906,6 +916,7 @@ class ReaderController extends ChangeNotifier {
       await _loadImportedBytes(
         fileName: fileName,
         bytes: Uint8List.fromList(bytes),
+        sourcePath: firstFile.path,
         successMessage: message,
       );
     } catch (error) {
@@ -930,7 +941,7 @@ class ReaderController extends ChangeNotifier {
       fileName: fileName,
       bytes: bytes,
     );
-    await _replaceDocument(imported);
+    await _replaceDocument(imported, sourcePath: sourcePath);
     await _rememberOpenedDocumentPath(sourcePath);
     if (successMessage != null) {
       _statusMessage = imported.wordCount == 0
@@ -943,9 +954,13 @@ class ReaderController extends ChangeNotifier {
   Future<void> _replaceDocument(
     ReaderDocument document, {
     String? statusMessage,
+    String? sourcePath,
   }) async {
     await _ttsEngine.stop();
     _document = document;
+    _currentDocumentPath = (sourcePath == null || sourcePath.trim().isEmpty)
+        ? null
+        : p.normalize(sourcePath.trim());
     _currentWordIndex = 0;
     _wordsPerSecond = 2.8;
     _isPlaying = false;
@@ -1178,6 +1193,7 @@ class ReaderController extends ChangeNotifier {
       );
       await _replaceDocument(
         imported,
+        sourcePath: sourcePath,
         statusMessage: initialLoad
             ? 'Live read connected to ${p.basename(sourcePath)}.'
             : 'Live read updated ${p.basename(sourcePath)}.',

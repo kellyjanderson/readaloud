@@ -57,20 +57,14 @@ class _ReadAloudScreenState extends State<ReadAloudScreen> {
         final reader = _buildReader(context);
         final controls = _buildControls(context);
 
-        return Scaffold(
-          appBar: AppBar(
-            backgroundColor: Colors.transparent,
-            surfaceTintColor: Colors.transparent,
-            title: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text('Read Aloud'),
-                Text(
-                  _controller.document.title,
-                  style: Theme.of(context).textTheme.bodySmall,
-                ),
-              ],
-            ),
+        return Title(
+          title: _controller.windowTitle,
+          color: Theme.of(context).colorScheme.primary,
+          child: Scaffold(
+            appBar: AppBar(
+              backgroundColor: Colors.transparent,
+              surfaceTintColor: Colors.transparent,
+              title: const Text('Read Aloud'),
             actions: [
               TextButton.icon(
                 onPressed: _controller.isImporting
@@ -111,9 +105,9 @@ class _ReadAloudScreenState extends State<ReadAloudScreen> {
               ),
             ],
           ),
-          body: SafeArea(
-            child: LayoutBuilder(
-              builder: (context, constraints) {
+            body: SafeArea(
+              child: LayoutBuilder(
+                builder: (context, constraints) {
                 final wide = constraints.maxWidth >= 980;
                 final useScrollableStackedLayout =
                     !wide &&
@@ -184,109 +178,110 @@ class _ReadAloudScreenState extends State<ReadAloudScreen> {
                   ),
                 );
 
-                return Padding(
-                  padding: const EdgeInsets.fromLTRB(20, 8, 20, 20),
-                  child: Column(
-                    children: [
-                      if (_controller.isInitializing)
-                        const LinearProgressIndicator(minHeight: 2),
-                      if (status != null) ...[
-                        const SizedBox(height: 12),
-                        Material(
-                          color: const Color(0xFFFFF4D6),
-                          borderRadius: BorderRadius.circular(16),
-                          child: ListTile(
-                            leading: const Icon(Icons.info_outline),
-                            title: Text(status),
-                            trailing: IconButton(
-                              onPressed: _controller.clearStatus,
-                              icon: const Icon(Icons.close),
+                  return Padding(
+                    padding: const EdgeInsets.fromLTRB(20, 8, 20, 20),
+                    child: Column(
+                      children: [
+                        if (_controller.isInitializing)
+                          const LinearProgressIndicator(minHeight: 2),
+                        if (status != null) ...[
+                          const SizedBox(height: 12),
+                          Material(
+                            color: const Color(0xFFFFF4D6),
+                            borderRadius: BorderRadius.circular(16),
+                            child: ListTile(
+                              leading: const Icon(Icons.info_outline),
+                              title: Text(status),
+                              trailing: IconButton(
+                                onPressed: _controller.clearStatus,
+                                icon: const Icon(Icons.close),
+                              ),
                             ),
                           ),
-                        ),
+                        ],
+                        const SizedBox(height: 12),
+                        Expanded(child: intakeSurface),
                       ],
-                      const SizedBox(height: 12),
-                      Expanded(child: intakeSurface),
+                    ),
+                  );
+                },
+              ),
+            ),
+            bottomNavigationBar: Material(
+              color: const Color(0xFFF7F5EF),
+              elevation: 12,
+              child: SafeArea(
+                top: false,
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 10, 16, 10),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              voiceLabel,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                          Text(
+                            '${_controller.currentWordIndex} / ${_controller.document.wordCount} words',
+                            style: Theme.of(context).textTheme.bodySmall,
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+                      Row(
+                        children: [
+                          IconButton.filledTonal(
+                            onPressed: transportEnabled
+                                ? () => _controller.jumpBySeconds(-30)
+                                : null,
+                            icon: const Icon(Icons.replay_30),
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: FilledButton(
+                              style: isBuffering
+                                  ? FilledButton.styleFrom(
+                                      disabledBackgroundColor: Theme.of(
+                                        context,
+                                      ).colorScheme.primary,
+                                      disabledForegroundColor: Theme.of(
+                                        context,
+                                      ).colorScheme.onPrimary,
+                                    )
+                                  : null,
+                              onPressed: transportEnabled
+                                  ? _controller.togglePlayback
+                                  : null,
+                              child: AnimatedSwitcher(
+                                duration: const Duration(milliseconds: 180),
+                                child: isBuffering
+                                    ? const _LoadingDots(
+                                        key: ValueKey('buffering'),
+                                      )
+                                    : Icon(
+                                        _controller.isPlaying
+                                            ? Icons.pause
+                                            : Icons.play_arrow,
+                                        key: ValueKey(_controller.isPlaying),
+                                      ),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          IconButton.filledTonal(
+                            onPressed: transportEnabled
+                                ? () => _controller.jumpBySeconds(30)
+                                : null,
+                            icon: const Icon(Icons.forward_30),
+                          ),
+                        ],
+                      ),
                     ],
                   ),
-                );
-              },
-            ),
-          ),
-          bottomNavigationBar: Material(
-            color: const Color(0xFFF7F5EF),
-            elevation: 12,
-            child: SafeArea(
-              top: false,
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(16, 10, 16, 10),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Row(
-                      children: [
-                        Expanded(
-                          child: Text(
-                            voiceLabel,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ),
-                        Text(
-                          '${_controller.currentWordIndex} / ${_controller.document.wordCount} words',
-                          style: Theme.of(context).textTheme.bodySmall,
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 8),
-                    Row(
-                      children: [
-                        IconButton.filledTonal(
-                          onPressed: transportEnabled
-                              ? () => _controller.jumpBySeconds(-30)
-                              : null,
-                          icon: const Icon(Icons.replay_30),
-                        ),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: FilledButton(
-                            style: isBuffering
-                                ? FilledButton.styleFrom(
-                                    disabledBackgroundColor: Theme.of(
-                                      context,
-                                    ).colorScheme.primary,
-                                    disabledForegroundColor: Theme.of(
-                                      context,
-                                    ).colorScheme.onPrimary,
-                                  )
-                                : null,
-                            onPressed: transportEnabled
-                                ? _controller.togglePlayback
-                                : null,
-                            child: AnimatedSwitcher(
-                              duration: const Duration(milliseconds: 180),
-                              child: isBuffering
-                                  ? const _LoadingDots(
-                                      key: ValueKey('buffering'),
-                                    )
-                                  : Icon(
-                                      _controller.isPlaying
-                                          ? Icons.pause
-                                          : Icons.play_arrow,
-                                      key: ValueKey(_controller.isPlaying),
-                                    ),
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                        IconButton.filledTonal(
-                          onPressed: transportEnabled
-                              ? () => _controller.jumpBySeconds(30)
-                              : null,
-                          icon: const Icon(Icons.forward_30),
-                        ),
-                      ],
-                    ),
-                  ],
                 ),
               ),
             ),
@@ -621,49 +616,32 @@ class _ReadAloudScreenState extends State<ReadAloudScreen> {
       ),
       child: Padding(
         padding: const EdgeInsets.all(24),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+        child: Stack(
           children: [
-            Text(
-              _controller.document.title,
-              style: Theme.of(context).textTheme.headlineSmall,
-            ),
-            const SizedBox(height: 8),
-            Text(
-              'Rich document surface with room for images, video, audio, and future semantic overlays. You can also drop supported files here.',
-              style: Theme.of(context).textTheme.bodyMedium,
-            ),
-            const SizedBox(height: 16),
-            Expanded(
-              child: Stack(
-                children: [
-                  Positioned.fill(
-                    child: DocumentSurface(
-                      document: _controller.document,
-                      fontFamily: _controller.fontFamily,
-                      fontScale: _controller.fontScale,
-                      spokenSelection: _controller.spokenSelection,
-                      focusedDisplayBlockId:
-                          _controller.readingFocusState.activeDisplayBlockId,
-                      autoFollowActive:
-                          _controller.readingFocusState.shouldAutoFollow,
-                      followRequestTick:
-                          _controller.readingFocusState.recenterRequestTick,
-                      onManualScrollWhileFollowing:
-                          _controller.suspendReaderFollow,
-                    ),
-                  ),
-                  if (_controller.readingFocusState.canRecenter)
-                    Positioned(
-                      right: 12,
-                      bottom: 12,
-                      child: ReadingFocusRecenterButton(
-                        onPressed: _controller.resumeReaderFollow,
-                      ),
-                    ),
-                ],
+            Positioned.fill(
+              child: DocumentSurface(
+                document: _controller.document,
+                fontFamily: _controller.fontFamily,
+                fontScale: _controller.fontScale,
+                spokenSelection: _controller.spokenSelection,
+                focusedDisplayBlockId:
+                    _controller.readingFocusState.activeDisplayBlockId,
+                autoFollowActive:
+                    _controller.readingFocusState.shouldAutoFollow,
+                followRequestTick:
+                    _controller.readingFocusState.recenterRequestTick,
+                onManualScrollWhileFollowing:
+                    _controller.suspendReaderFollow,
               ),
             ),
+            if (_controller.readingFocusState.canRecenter)
+              Positioned(
+                right: 12,
+                bottom: 12,
+                child: ReadingFocusRecenterButton(
+                  onPressed: _controller.resumeReaderFollow,
+                ),
+              ),
           ],
         ),
       ),

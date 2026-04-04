@@ -1,6 +1,6 @@
 # Progression
 
-Last updated: April 3, 2026
+Last updated: April 4, 2026
 Status: Active progression
 
 ## Purpose
@@ -8,6 +8,10 @@ Status: Active progression
 This document is the execution sequence for implementation of the current final leaf specifications.
 
 It includes only leaf specifications that are marked final.
+
+Checked support leaves do not, by themselves, mean a user-facing feature is surfaced in the running app.
+
+For user-facing branches, the unchecked surfaced leaves remain the feature-completion gates.
 
 ## Ordering Rule
 
@@ -94,6 +98,8 @@ It includes only leaf specifications that are marked final.
 - [x] [Automatic Voice Casting and Override Resolution](../specifications/automatic-voice-casting-and-override-resolution.md)
 - [x] [Cast-Aware Speech Range Routing](../specifications/cast-aware-speech-range-routing.md)
 - [x] [Voice-Routed Progress and Diagnostics](../specifications/voice-routed-progress-and-diagnostics.md)
+- [ ] [Cast Voice Override Workflow](../specifications/cast-voice-override-workflow.md)
+- [ ] [Running-App Multi-Voice Playback Switching](../specifications/running-app-multi-voice-playback-switching.md)
 
 ### Speech Runtime Boundary
 
@@ -126,14 +132,21 @@ It includes only leaf specifications that are marked final.
 
 ### Reader Surface and Voice Management UI
 
+- [ ] [Primary Reader Control Set](../specifications/primary-reader-control-set.md)
+- [x] [Document Identity Outside Reading Surface](../specifications/document-identity-outside-reading-surface.md)
+- [ ] [Integrated Secondary Voice Access](../specifications/integrated-secondary-voice-access.md)
 - [x] [Voice Library Row and Information Affordance](../specifications/voice-library-row-and-information-affordance.md)
 - [x] [Cast Management Dialog Structure](../specifications/cast-management-dialog-structure.md)
+- [ ] [Appearance Mode Selection And System Following](../specifications/appearance-mode-selection-and-system-following.md)
 - [x] [Spoken Highlight Visual Presentation](../specifications/spoken-highlight-visual-presentation.md)
 - [x] [Follow-Along User Scroll Interaction](../specifications/follow-along-user-scroll-interaction.md)
 
 ### Reader Session and Live Input
 
-- [x] [Reader Session Continuity and Live Input](../specifications/reader-session-continuity-and-live-input.md)
+- [x] [File-Backed Document Restore And Directory Continuity](../specifications/file-backed-document-restore-and-directory-continuity.md)
+- [ ] [Remembered Reading Position And Startup Resume](../specifications/remembered-reading-position-and-startup-resume.md)
+- [x] [Watched-File Session Refresh](../specifications/watched-file-session-refresh.md)
+- [ ] [Live Input Menu Placement And Playing-State Continuation](../specifications/live-input-menu-placement-and-playing-state-continuation.md)
 
 ## Obligate Specifications
 

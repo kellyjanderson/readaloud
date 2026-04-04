@@ -191,6 +191,7 @@ void main() {
 
       expect(restored, isTrue);
       expect(controller.document.title, 'remembered.txt');
+      expect(controller.windowTitle, 'Read Aloud - remembered.txt');
       expect(
         controller.document.speakableText,
         contains('Restored documents should open by default.'),
@@ -247,6 +248,7 @@ void main() {
       expect(controller.isLiveReadEnabled, isTrue);
       expect(controller.liveReadFilePath, file.path);
       expect(controller.document.title, 'live.txt');
+      expect(controller.windowTitle, 'Read Aloud - live.txt');
       expect(controller.document.speakableText, contains('Alpha beta.'));
 
       await file.writeAsString('Gamma delta.');
@@ -260,6 +262,20 @@ void main() {
 
       expect(controller.document.speakableText, contains('Gamma delta.'));
       expect(controller.statusMessage, contains('Live read updated'));
+    });
+
+    test('uses document title as the window title fallback for non-file content', () async {
+      final engine = _FakeTtsEngine();
+      final controller = ReaderController(ttsEngine: engine);
+      addTearDown(controller.dispose);
+
+      await controller.initialize();
+
+      expect(controller.windowTitle, 'Read Aloud - For Probe');
+
+      await controller.importPastedText('Alpha beta.');
+
+      expect(controller.windowTitle, 'Read Aloud - Pasted Text');
     });
 
     test('maintains reading focus state across progress, pause, and user yield', () async {
