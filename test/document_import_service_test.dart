@@ -25,6 +25,10 @@ Second paragraph here.
       expect(document.speechDocument.segments, isNotEmpty);
       expect(document.positionMap.entries, isNotEmpty);
       expect(document.baseSpeechAnnotations.annotations, isNotEmpty);
+      expect(
+        document.dialogueAttributions.documentId,
+        document.normalizedImportResult.documentId,
+      );
       expect(document.basePronunciationArtifacts.artifacts, isNotEmpty);
       expect(document.speakableText, contains('paragraph'));
       expect(document.speakableText, isNot(contains('para-\ngraph')));
@@ -79,6 +83,10 @@ Second paragraph here.
       expect(document.speechDocument.totalWordCount, greaterThan(0));
       expect(document.positionMap.entries, isNotEmpty);
       expect(document.baseSpeechAnnotations.annotations, isNotEmpty);
+      expect(
+        document.dialogueAttributions.documentId,
+        document.normalizedImportResult.documentId,
+      );
       expect(document.basePronunciationArtifacts.artifacts, isNotEmpty);
       expect(
         document.basePronunciationArtifacts.artifacts.any(
@@ -86,14 +94,8 @@ Second paragraph here.
         ),
         isTrue,
       );
-      expect(
-        document.speakableText,
-        contains('I waited for them.'),
-      );
-      expect(
-        document.normalizedImportResult.bestAvailableTitle,
-        'For Probe',
-      );
+      expect(document.speakableText, contains('I waited for them.'));
+      expect(document.normalizedImportResult.bestAvailableTitle, 'For Probe');
     });
 
     test('imports Love.txt without crashing on dialogue punctuation', () async {
@@ -106,10 +108,7 @@ Second paragraph here.
 
       expect(document.title, 'Love.txt');
       expect(document.speechDocument.segments, isNotEmpty);
-      expect(
-        document.speakableText,
-        contains('John and Elliot were fighting'),
-      );
+      expect(document.speakableText, contains('John and Elliot were fighting'));
     });
 
     test(
