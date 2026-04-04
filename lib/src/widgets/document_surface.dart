@@ -19,6 +19,7 @@ class DocumentSurface extends StatefulWidget {
     this.onManualScrollWhileFollowing,
     this.scrollController,
     this.spokenSelection = const SpokenSelection.none(),
+    this.followRequestTick = 0,
   });
 
   final ReaderDocument document;
@@ -29,6 +30,7 @@ class DocumentSurface extends StatefulWidget {
   final VoidCallback? onManualScrollWhileFollowing;
   final ScrollController? scrollController;
   final SpokenSelection spokenSelection;
+  final int followRequestTick;
 
   @override
   State<DocumentSurface> createState() => _DocumentSurfaceState();
@@ -60,11 +62,14 @@ class _DocumentSurfaceState extends State<DocumentSurface> {
     final focusChanged =
         oldWidget.focusedDisplayBlockId != widget.focusedDisplayBlockId ||
         oldWidget.autoFollowActive != widget.autoFollowActive ||
+        oldWidget.followRequestTick != widget.followRequestTick ||
         oldWidget.document.displayDocument.documentId !=
             widget.document.displayDocument.documentId;
     if (focusChanged) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        _syncReadingFocus();
+        _syncReadingFocus(
+          force: oldWidget.followRequestTick != widget.followRequestTick,
+        );
       });
     }
   }
@@ -232,11 +237,13 @@ class _DocumentSurfaceState extends State<DocumentSurface> {
     _ownsScrollController = true;
   }
 
-  void _syncReadingFocus() {
+  void _syncReadingFocus({bool force = false}) {
     if (!mounted ||
-        !widget.autoFollowActive ||
         widget.focusedDisplayBlockId == null ||
         !_scrollController.hasClients) {
+      return;
+    }
+    if (!force && !widget.autoFollowActive) {
       return;
     }
 

@@ -71,4 +71,40 @@ void main() {
 
     expect(manualScrollCallbacks, greaterThan(0));
   });
+
+  testWidgets('follow request tick recenters even when auto-follow is idle', (
+    WidgetTester tester,
+  ) async {
+    final scrollController = ScrollController();
+    addTearDown(scrollController.dispose);
+
+    Widget buildSurface({required int followRequestTick}) {
+      return MaterialApp(
+        home: Scaffold(
+          body: SizedBox(
+            width: 420,
+            height: 180,
+            child: DocumentSurface(
+              document: ReaderDocument.sample(),
+              fontFamily: 'serif',
+              fontScale: 1.6,
+              focusedDisplayBlockId: 'b_6',
+              autoFollowActive: false,
+              followRequestTick: followRequestTick,
+              scrollController: scrollController,
+            ),
+          ),
+        ),
+      );
+    }
+
+    await tester.pumpWidget(buildSurface(followRequestTick: 0));
+    await tester.pumpAndSettle(const Duration(milliseconds: 500));
+    expect(scrollController.offset, 0);
+
+    await tester.pumpWidget(buildSurface(followRequestTick: 1));
+    await tester.pumpAndSettle(const Duration(milliseconds: 500));
+
+    expect(scrollController.offset, greaterThan(0));
+  });
 }
