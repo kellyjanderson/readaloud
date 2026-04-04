@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:math' as math;
 import 'dart:typed_data';
 
+import 'dialogue_attribution.dart';
 import 'display_document.dart';
 import 'import_diagnostic.dart';
 import 'normalized_import_result.dart';
@@ -15,6 +16,7 @@ import '../services/display_document_html_renderer.dart';
 import '../services/english_pronunciation_profile_selector.dart';
 import '../services/english_suffix_allomorph_module.dart';
 import '../services/pronunciation_resource_layering_service.dart';
+import '../services/speaker_attribution_service.dart';
 
 enum ReaderDocumentType { sample, plainText, html, epub, pdf, unsupported }
 
@@ -49,6 +51,7 @@ class ReaderDocument {
     required this.speakableText,
     required this.normalizedImportResult,
     required this.baseSpeechAnnotations,
+    required this.dialogueAttributions,
     required this.basePronunciationArtifacts,
     this.presentation = ReaderDocumentPresentation.html,
     this.pdfData,
@@ -65,6 +68,7 @@ class ReaderDocument {
     required ReaderDocumentType type,
     required NormalizedImportResult normalizedImportResult,
     required BaseSpeechAnnotationSet baseSpeechAnnotations,
+    required DialogueAttributionSet dialogueAttributions,
     required BasePronunciationArtifactSet basePronunciationArtifacts,
     ReaderDocumentPresentation presentation = ReaderDocumentPresentation.html,
     Uint8List? pdfData,
@@ -84,6 +88,7 @@ class ReaderDocument {
       speakableText: speakableText,
       normalizedImportResult: normalizedImportResult,
       baseSpeechAnnotations: baseSpeechAnnotations,
+      dialogueAttributions: dialogueAttributions,
       basePronunciationArtifacts: basePronunciationArtifacts,
       presentation: presentation,
       pdfData: pdfData,
@@ -102,6 +107,7 @@ class ReaderDocument {
   PositionMap get positionMap => normalizedImportResult.positionMap;
   List<ImportDiagnostic> get diagnostics => normalizedImportResult.diagnostics;
   final BaseSpeechAnnotationSet baseSpeechAnnotations;
+  final DialogueAttributionSet dialogueAttributions;
   final BasePronunciationArtifactSet basePronunciationArtifacts;
   final ReaderDocumentPresentation presentation;
   final Uint8List? pdfData;
@@ -267,14 +273,20 @@ class ReaderDocument {
       positionMap: positionMap,
     );
     const annotationInferenceService = BaseSpeechAnnotationInferenceService();
+    const speakerAttributionService = SpeakerAttributionService();
     const pronunciationProfileSelector = EnglishPronunciationProfileSelector();
     const pronunciationResourceLayeringService =
         PronunciationResourceLayeringService();
-    const pronunciationPlannerService = DocumentTimePronunciationPlannerService();
+    const pronunciationPlannerService =
+        DocumentTimePronunciationPlannerService();
 
     final baseSpeechAnnotations = annotationInferenceService.infer(
       speechDocument: speechDocument,
       displayDocument: displayDocument,
+    );
+    final dialogueAttributions = speakerAttributionService.attribute(
+      speechDocument: speechDocument,
+      baseAnnotations: baseSpeechAnnotations,
     );
     final selectedProfile = pronunciationProfileSelector.select(
       const EnglishPronunciationProfileSelectionInput(engineId: 'kokoro'),
@@ -301,6 +313,7 @@ class ReaderDocument {
       type: ReaderDocumentType.sample,
       normalizedImportResult: normalizedImportResult,
       baseSpeechAnnotations: baseSpeechAnnotations,
+      dialogueAttributions: dialogueAttributions,
       basePronunciationArtifacts: basePronunciationArtifacts,
       sourceDescription: 'Bundled project sample',
       attachments: const <ReaderAttachment>[],

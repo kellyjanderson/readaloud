@@ -22,6 +22,7 @@ import 'english_pronunciation_profile_selector.dart';
 import 'english_suffix_allomorph_module.dart';
 import 'english_speech_preprocessor.dart';
 import 'pronunciation_resource_layering_service.dart';
+import 'speaker_attribution_service.dart';
 
 abstract class PdfTextExtractor {
   Future<PdfTextExtractionResult> extract({
@@ -83,6 +84,7 @@ class PdfrxPdfTextExtractor implements PdfTextExtractor {
 class DocumentImportService {
   DocumentImportService({
     BaseSpeechAnnotationInferenceService? annotationInferenceService,
+    SpeakerAttributionService? speakerAttributionService,
     DocumentTimePronunciationPlannerService? pronunciationPlannerService,
     EnglishPronunciationProfileSelector? pronunciationProfileSelector,
     PronunciationResourceLayeringService? pronunciationResourceLayeringService,
@@ -90,6 +92,8 @@ class DocumentImportService {
   }) : _annotationInferenceService =
            annotationInferenceService ??
            const BaseSpeechAnnotationInferenceService(),
+       _speakerAttributionService =
+           speakerAttributionService ?? const SpeakerAttributionService(),
        _pronunciationPlannerService =
            pronunciationPlannerService ??
            const DocumentTimePronunciationPlannerService(),
@@ -116,6 +120,7 @@ class DocumentImportService {
   ];
 
   final BaseSpeechAnnotationInferenceService _annotationInferenceService;
+  final SpeakerAttributionService _speakerAttributionService;
   final DocumentTimePronunciationPlannerService _pronunciationPlannerService;
   final EnglishPronunciationProfileSelector _pronunciationProfileSelector;
   final PronunciationResourceLayeringService
@@ -736,6 +741,10 @@ class DocumentImportService {
       speechDocument: normalized.speechDocument,
       displayDocument: normalized.displayDocument,
     );
+    final dialogueAttributions = _speakerAttributionService.attribute(
+      speechDocument: normalized.speechDocument,
+      baseAnnotations: baseSpeechAnnotations,
+    );
     final selectedProfile = _pronunciationProfileSelector.select(
       const EnglishPronunciationProfileSelectionInput(engineId: 'kokoro'),
     );
@@ -761,6 +770,7 @@ class DocumentImportService {
       type: type,
       normalizedImportResult: normalized,
       baseSpeechAnnotations: baseSpeechAnnotations,
+      dialogueAttributions: dialogueAttributions,
       basePronunciationArtifacts: basePronunciationArtifacts,
       presentation: presentation,
       pdfData: pdfData,
