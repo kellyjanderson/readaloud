@@ -58,7 +58,7 @@ class KokoroVoiceRepository {
       name: voiceProfile.label,
       styleVectors: _parseStyleVectors(bytes),
       languageCode: KokoroVoiceCatalog.languageTagForVoice(voiceId),
-      gender: KokoroVoiceCatalog.genderForVoice(voiceId),
+      gender: (voiceProfile.gender ?? VoiceGender.neutral).name,
     );
     _voiceCache[voiceId] = voice;
     return voice;

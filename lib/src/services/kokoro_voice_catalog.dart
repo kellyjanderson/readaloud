@@ -87,6 +87,7 @@ class KokoroVoiceCatalog {
   static VoiceProfile profileForId(String voiceId) {
     final label = _voiceLabel(voiceId);
     final locale = _voiceLocale(voiceId);
+    final metadata = _metadataForVoice(voiceId);
     return VoiceProfile(
       id: voiceId,
       label: label,
@@ -97,6 +98,13 @@ class KokoroVoiceCatalog {
         'name': label,
         'locale': locale,
       },
+      gender: metadata.gender,
+      qualityGrade: metadata.qualityGrade,
+      targetQuality: metadata.targetQuality,
+      trainingDurationLabel: metadata.trainingDurationLabel,
+      traits: metadata.traits,
+      description: metadata.description,
+      metadataSource: VoiceMetadataSource.engineCatalog,
     );
   }
 
@@ -121,15 +129,15 @@ class KokoroVoiceCatalog {
     };
   }
 
-  static String genderForVoice(String voiceId) {
+  static VoiceGender genderForVoice(String voiceId) {
     if (voiceId.length >= 2) {
       return switch (voiceId[1]) {
-        'f' => 'female',
-        'm' => 'male',
-        _ => 'neutral',
+        'f' => VoiceGender.female,
+        'm' => VoiceGender.male,
+        _ => VoiceGender.neutral,
       };
     }
-    return 'neutral';
+    return VoiceGender.neutral;
   }
 
   static String _voiceLabel(String voiceId) {
@@ -169,4 +177,59 @@ class KokoroVoiceCatalog {
     }
     return voiceId[0].toLowerCase();
   }
+
+  static _KokoroVoiceMetadata _metadataForVoice(String voiceId) {
+    return _metadataByVoiceId[voiceId] ??
+        _KokoroVoiceMetadata(gender: genderForVoice(voiceId));
+  }
+
+  static const Map<String, _KokoroVoiceMetadata> _metadataByVoiceId =
+      <String, _KokoroVoiceMetadata>{
+        'af_heart': _KokoroVoiceMetadata(
+          gender: VoiceGender.female,
+          qualityGrade: 'A',
+          targetQuality: null,
+          trainingDurationLabel: null,
+          traits: <String>[],
+          description: null,
+        ),
+        'af_bella': _KokoroVoiceMetadata(
+          gender: VoiceGender.female,
+          qualityGrade: 'A-',
+        ),
+        'af_nicole': _KokoroVoiceMetadata(
+          gender: VoiceGender.female,
+          qualityGrade: 'B-',
+        ),
+        'am_michael': _KokoroVoiceMetadata(
+          gender: VoiceGender.male,
+          qualityGrade: 'C+',
+        ),
+        'bf_emma': _KokoroVoiceMetadata(
+          gender: VoiceGender.female,
+          qualityGrade: 'B-',
+        ),
+        'bm_fable': _KokoroVoiceMetadata(
+          gender: VoiceGender.male,
+          qualityGrade: 'C',
+        ),
+      };
+}
+
+class _KokoroVoiceMetadata {
+  const _KokoroVoiceMetadata({
+    required this.gender,
+    this.qualityGrade,
+    this.targetQuality,
+    this.trainingDurationLabel,
+    this.traits = const <String>[],
+    this.description,
+  });
+
+  final VoiceGender gender;
+  final String? qualityGrade;
+  final String? targetQuality;
+  final String? trainingDurationLabel;
+  final List<String> traits;
+  final String? description;
 }
