@@ -34,9 +34,10 @@ class CastVoiceAssignmentService {
         _validVoiceId(input.preferredNarratorVoiceId, availableVoiceIds) ??
         (sortedVoices.isNotEmpty ? sortedVoices.first.id : null);
 
-    final characterVoicePool = sortedVoices
-        .where((voice) => voice.id != narratorAutomaticVoiceId)
-        .toList(growable: false);
+    final characterVoicePool = _prioritizedCharacterVoices(
+      sortedVoices,
+      narratorAutomaticVoiceId,
+    );
     final automaticAssignments = <String, String?>{
       input.characterCastRegistry.narratorEntry.castId:
           narratorAutomaticVoiceId,
@@ -106,6 +107,47 @@ class CastVoiceAssignmentService {
       return null;
     }
     return availableVoiceIds.contains(voiceId) ? voiceId : null;
+  }
+
+  List<VoiceProfile> _prioritizedCharacterVoices(
+    List<VoiceProfile> sortedVoices,
+    String? narratorVoiceId,
+  ) {
+    final nonNarratorVoices = sortedVoices
+        .where((voice) => voice.id != narratorVoiceId)
+        .toList(growable: false);
+    if (narratorVoiceId == null) {
+      return nonNarratorVoices;
+    }
+
+    final narratorVoice = sortedVoices
+        .where((voice) => voice.id == narratorVoiceId)
+        .firstOrNull;
+    final narratorGender = narratorVoice?.gender;
+    if (narratorGender == null) {
+      return nonNarratorVoices;
+    }
+
+    final contrasting = <VoiceProfile>[];
+    final unknown = <VoiceProfile>[];
+    final similar = <VoiceProfile>[];
+
+    for (final voice in nonNarratorVoices) {
+      final gender = voice.gender;
+      if (gender == null || gender == VoiceGender.neutral) {
+        unknown.add(voice);
+      } else if (gender != narratorGender) {
+        contrasting.add(voice);
+      } else {
+        similar.add(voice);
+      }
+    }
+
+    return <VoiceProfile>[
+      ...contrasting,
+      ...unknown,
+      ...similar,
+    ];
   }
 
   int _compareVoices(VoiceProfile left, VoiceProfile right) {

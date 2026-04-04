@@ -351,18 +351,63 @@ void main() {
         ReadingFocusFollowMode.following,
       );
     });
+
+    test('builds a multi-voice playback plan for attributed dialogue', () async {
+      final engine = _FakeTtsEngine(
+        voices: const <VoiceProfile>[
+          VoiceProfile(
+            id: 'af_bella',
+            label: 'Bella',
+            locale: 'en-US',
+            rawValue: <String, dynamic>{'name': 'Bella', 'locale': 'en-US'},
+            gender: VoiceGender.female,
+          ),
+          VoiceProfile(
+            id: 'am_michael',
+            label: 'Michael',
+            locale: 'en-US',
+            rawValue: <String, dynamic>{'name': 'Michael', 'locale': 'en-US'},
+            gender: VoiceGender.male,
+          ),
+        ],
+      );
+      final controller = ReaderController(ttsEngine: engine);
+      addTearDown(controller.dispose);
+
+      await controller.initialize();
+      await controller.importPastedText(
+        '"Go now," Jennifer said. The room was silent.',
+      );
+
+      await controller.startPlayback();
+
+      final request = engine.lastSpeakRequest;
+      expect(request, isNotNull);
+      final chunkPlan = request!.chunkPlan;
+      expect(chunkPlan, isNotNull);
+
+      final routedVoiceIds = chunkPlan!.chunks
+          .map((chunk) => chunk.voiceId)
+          .toSet();
+      expect(routedVoiceIds, contains('af_bella'));
+      expect(routedVoiceIds, contains('am_michael'));
+    });
   });
 }
 
 class _FakeTtsEngine implements TtsEngine {
-  final List<VoiceProfile> _voices = const <VoiceProfile>[
-    VoiceProfile(
-      id: 'af_bella',
-      label: 'Bella',
-      locale: 'en-US',
-      rawValue: <String, dynamic>{'name': 'Bella', 'locale': 'en-US'},
-    ),
-  ];
+  _FakeTtsEngine({
+    List<VoiceProfile> voices = const <VoiceProfile>[
+      VoiceProfile(
+        id: 'af_bella',
+        label: 'Bella',
+        locale: 'en-US',
+        rawValue: <String, dynamic>{'name': 'Bella', 'locale': 'en-US'},
+      ),
+    ],
+  }) : _voices = voices;
+
+  final List<VoiceProfile> _voices;
 
   void Function()? _onStart;
   void Function(String? message)? _onStatus;
@@ -371,6 +416,7 @@ class _FakeTtsEngine implements TtsEngine {
   void Function(String message)? _onError;
   void Function(TtsPlaybackActivity activity)? _onActivity;
   void Function(TtsDebugTraceSnapshot trace)? _onDebugTrace;
+  TtsSpeakRequest? lastSpeakRequest;
 
   @override
   set onStart(void Function()? callback) => _onStart = callback;
@@ -416,6 +462,7 @@ class _FakeTtsEngine implements TtsEngine {
 
   @override
   Future<void> speak(TtsSpeakRequest request) async {
+    lastSpeakRequest = request;
     _onActivity?.call(
       const TtsPlaybackActivity(phase: TtsPlaybackPhase.buffering),
     );
