@@ -1,4 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:read_aloud/src/models/cast_aware_speech_route.dart';
 import 'package:read_aloud/src/models/chunk_plan.dart';
 import 'package:read_aloud/src/models/narration_state.dart';
 import 'package:read_aloud/src/models/speech_annotation.dart';
@@ -156,6 +157,94 @@ Sentence nine. Sentence ten. Sentence eleven. Sentence twelve.
 
       expect(plan.chunks.length, greaterThan(1));
       expect(plan.chunks[1].boundaryClass, BreakClass.section);
+    });
+
+    test('splits chunk plans at cast-aware voice route boundaries', () {
+      final document = DocumentImportService().importPastedText(
+        'Narration starts here. "Go now," Jennifer said. Narration ends here.',
+      );
+      final service = ChunkPlannerService();
+      final realization = const VoiceSessionRealizationService().realize(
+        VoiceSessionRealizationInput(
+          speechDocument: document.speechDocument,
+          baseAnnotations: document.baseSpeechAnnotations,
+          basePronunciationArtifacts: document.basePronunciationArtifacts,
+          startSegmentId: document.speechDocument.segments.first.segmentId,
+          voiceId: 'af_bella',
+          engineId: 'kokoro',
+          rate: 1.0,
+          narrationState: NarrationState.initial(),
+        ),
+      );
+
+      final plan = service.plan(
+        ChunkPlannerInput(
+          speechDocument: document.speechDocument,
+          baseAnnotations: document.baseSpeechAnnotations,
+          ttsArtifactSet: realization.ttsArtifactSet,
+          startSegmentId: document.speechDocument.segments.first.segmentId,
+          voiceId: 'af_bella',
+          rate: 1.0,
+          engineId: 'kokoro',
+          engineVersion: '1',
+          castAwareSpeechRoutes: CastAwareSpeechRouteSet(
+            documentId: document.speechDocument.documentId,
+            routingVersion: 'routes-v1',
+            ranges: <CastAwareSpeechRange>[
+              CastAwareSpeechRange(
+                routeId: 'route_narration_open',
+                segmentIds: <String>[
+                  document.speechDocument.segments[0].segmentId,
+                ],
+                startSegmentId: document.speechDocument.segments[0].segmentId,
+                endSegmentId: document.speechDocument.segments[0].segmentId,
+                startWordIndex: 0,
+                endWordIndex: document.speechDocument.segments[0].wordCount,
+                castId: 'cast_narrator',
+                voiceId: 'af_bella',
+              ),
+              CastAwareSpeechRange(
+                routeId: 'route_dialogue_jennifer',
+                segmentIds: <String>[
+                  document.speechDocument.segments[1].segmentId,
+                ],
+                startSegmentId: document.speechDocument.segments[1].segmentId,
+                endSegmentId: document.speechDocument.segments[1].segmentId,
+                startWordIndex: document.speechDocument.segments[0].wordCount,
+                endWordIndex:
+                    document.speechDocument.segments[0].wordCount +
+                    document.speechDocument.segments[1].wordCount,
+                castId: 'cast_character_jennifer',
+                voiceId: 'bf_emma',
+                dialogueSpanId: 'dlg_s_1',
+              ),
+              CastAwareSpeechRange(
+                routeId: 'route_narration_close',
+                segmentIds: <String>[
+                  document.speechDocument.segments[2].segmentId,
+                ],
+                startSegmentId: document.speechDocument.segments[2].segmentId,
+                endSegmentId: document.speechDocument.segments[2].segmentId,
+                startWordIndex:
+                    document.speechDocument.segments[0].wordCount +
+                    document.speechDocument.segments[1].wordCount,
+                endWordIndex: document.speechDocument.totalWordCount,
+                castId: 'cast_narrator',
+                voiceId: 'af_bella',
+              ),
+            ],
+          ),
+        ),
+      );
+
+      expect(plan.chunks, hasLength(3));
+      expect(plan.chunks[0].voiceId, 'af_bella');
+      expect(plan.chunks[0].routeId, 'route_narration_open');
+      expect(plan.chunks[1].voiceId, 'bf_emma');
+      expect(plan.chunks[1].castId, 'cast_character_jennifer');
+      expect(plan.chunks[1].dialogueSpanId, 'dlg_s_1');
+      expect(plan.chunks[2].voiceId, 'af_bella');
+      expect(plan.chunks[2].routeId, 'route_narration_close');
     });
   });
 }

@@ -1,6 +1,7 @@
 import 'speech_annotation.dart';
 import 'speech_document.dart';
 import 'tts_artifact.dart';
+import 'cast_aware_speech_route.dart';
 
 class ChunkPlannerInput {
   const ChunkPlannerInput({
@@ -12,6 +13,7 @@ class ChunkPlannerInput {
     required this.rate,
     required this.engineId,
     required this.engineVersion,
+    this.castAwareSpeechRoutes,
   });
 
   final SpeechDocument speechDocument;
@@ -22,6 +24,7 @@ class ChunkPlannerInput {
   final double rate;
   final String engineId;
   final String engineVersion;
+  final CastAwareSpeechRouteSet? castAwareSpeechRoutes;
 }
 
 class ChunkPlan {
@@ -36,6 +39,7 @@ class ChunkSpec {
     required this.chunkId,
     required this.segmentIds,
     required this.speakText,
+    required this.voiceId,
     required this.boundaryClass,
     required this.startSegmentIndex,
     required this.endSegmentIndex,
@@ -44,11 +48,15 @@ class ChunkSpec {
     required this.startWordIndex,
     required this.endWordIndex,
     required this.ttsSegments,
+    this.routeId,
+    this.castId,
+    this.dialogueSpanId,
   });
 
   final String chunkId;
   final List<String> segmentIds;
   final String speakText;
+  final String voiceId;
   final BreakClass boundaryClass;
   final int startSegmentIndex;
   final int endSegmentIndex;
@@ -57,4 +65,7 @@ class ChunkSpec {
   final int startWordIndex;
   final int endWordIndex;
   final List<TtsArtifactSegment> ttsSegments;
+  final String? routeId;
+  final String? castId;
+  final String? dialogueSpanId;
 }

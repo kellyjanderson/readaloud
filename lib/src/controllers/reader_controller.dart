@@ -10,6 +10,7 @@ import 'package:flutter/services.dart';
 import 'package:path/path.dart' as p;
 
 import '../models/document_import_exception.dart';
+import '../models/cast_voice_assignment.dart';
 import '../models/narration_state.dart';
 import '../models/reader_document.dart';
 import '../models/display_document.dart';
@@ -20,6 +21,8 @@ import '../models/speech_document.dart';
 import '../models/tts_artifact.dart';
 import '../models/voice_session_realization.dart';
 import '../models/voice_profile.dart';
+import '../services/cast_aware_speech_route_service.dart';
+import '../services/cast_voice_assignment_service.dart';
 import '../services/chunk_planner_service.dart';
 import '../services/default_tts_engine.dart';
 import '../services/document_import_service.dart';
@@ -51,6 +54,10 @@ class ReaderController extends ChangeNotifier {
   final bool _enablePlatformIntakeChannels;
   final VoiceSessionRealizationService _realizationService;
   final ChunkPlannerService _chunkPlannerService;
+  final CastVoiceAssignmentService _castVoiceAssignmentService =
+      const CastVoiceAssignmentService();
+  final CastAwareSpeechRouteService _castAwareSpeechRouteService =
+      const CastAwareSpeechRouteService();
   final EnglishPronunciationProfileSelector _pronunciationProfileSelector =
       const EnglishPronunciationProfileSelector();
   final PronunciationResourceLayeringService
@@ -1172,6 +1179,21 @@ class ReaderController extends ChangeNotifier {
       return;
     }
 
+    final castVoiceAssignments = _resolveCastVoiceAssignments(
+      preferredNarratorVoiceId: voiceId,
+    );
+    final castAwareSpeechRoutes = castVoiceAssignments == null
+        ? null
+        : _castAwareSpeechRouteService.build(
+            CastAwareSpeechRouteInput(
+              speechDocument: _document.speechDocument,
+              baseAnnotations: _document.baseSpeechAnnotations,
+              dialogueAttributions: _document.dialogueAttributions,
+              characterCastRegistry: _document.characterCastRegistry,
+              castVoiceAssignments: castVoiceAssignments,
+            ),
+          );
+
     _currentChunkPlan = _chunkPlannerService.plan(
       ChunkPlannerInput(
         speechDocument: _document.speechDocument,
@@ -1196,6 +1218,7 @@ class ReaderController extends ChangeNotifier {
         rate: currentSpeed,
         engineId: _engineId(),
         engineVersion: _engineVersion(),
+        castAwareSpeechRoutes: castAwareSpeechRoutes,
       ),
     );
   }
@@ -1265,6 +1288,20 @@ class ReaderController extends ChangeNotifier {
               mergedPronunciationResources: exportResources,
             ),
           );
+    final castVoiceAssignments = voiceId == null
+        ? null
+        : _resolveCastVoiceAssignments(preferredNarratorVoiceId: voiceId);
+    final castAwareSpeechRoutes = castVoiceAssignments == null
+        ? null
+        : _castAwareSpeechRouteService.build(
+            CastAwareSpeechRouteInput(
+              speechDocument: _document.speechDocument,
+              baseAnnotations: _document.baseSpeechAnnotations,
+              dialogueAttributions: _document.dialogueAttributions,
+              characterCastRegistry: _document.characterCastRegistry,
+              castVoiceAssignments: castVoiceAssignments,
+            ),
+          );
     final chunkPlan = firstSegment == null || voiceId == null
         ? null
         : _chunkPlannerService.plan(
@@ -1277,6 +1314,7 @@ class ReaderController extends ChangeNotifier {
               rate: currentSpeed,
               engineId: _engineId(),
               engineVersion: _engineVersion(),
+              castAwareSpeechRoutes: castAwareSpeechRoutes,
             ),
           );
 
@@ -1291,6 +1329,23 @@ class ReaderController extends ChangeNotifier {
       chunkPlan: chunkPlan,
       speechDocument: _document.speechDocument,
       ttsArtifactSet: exportRealization?.ttsArtifactSet,
+    );
+  }
+
+  CastVoiceAssignmentSet? _resolveCastVoiceAssignments({
+    required String preferredNarratorVoiceId,
+  }) {
+    if (_voices.isEmpty) {
+      return null;
+    }
+
+    return _castVoiceAssignmentService.resolve(
+      CastVoiceAssignmentInput(
+        characterCastRegistry: _document.characterCastRegistry,
+        availableVoices: _voices,
+        fallbackVoiceId: preferredNarratorVoiceId,
+        preferredNarratorVoiceId: preferredNarratorVoiceId,
+      ),
     );
   }
 
@@ -1418,6 +1473,9 @@ class ReaderController extends ChangeNotifier {
       voiceId: voiceId,
       rate: rate,
       completed: false,
+      routeId: update.routeId,
+      castId: update.castId,
+      dialogueSpanId: update.dialogueSpanId,
     );
     _activeSpokenChunkId = chunkId;
     _wordsPerSecond = _estimateWordsPerSecond(voiceId: voiceId, rate: rate);

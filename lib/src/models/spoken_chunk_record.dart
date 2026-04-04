@@ -20,6 +20,9 @@ class SpokenChunkRecord {
     required this.voiceId,
     required this.rate,
     required this.completed,
+    this.routeId,
+    this.castId,
+    this.dialogueSpanId,
   });
 
   final String chunkId;
@@ -33,6 +36,9 @@ class SpokenChunkRecord {
   final String voiceId;
   final double rate;
   final bool completed;
+  final String? routeId;
+  final String? castId;
+  final String? dialogueSpanId;
 
   SpokenChunkRecord copyWith({
     Duration? playbackOffset,
@@ -51,6 +57,9 @@ class SpokenChunkRecord {
       voiceId: voiceId,
       rate: rate,
       completed: completed ?? this.completed,
+      routeId: routeId,
+      castId: castId,
+      dialogueSpanId: dialogueSpanId,
     );
   }
 }

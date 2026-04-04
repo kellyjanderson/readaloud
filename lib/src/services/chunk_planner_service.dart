@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import 'package:crypto/crypto.dart' as crypto;
 
+import '../models/cast_aware_speech_route.dart';
 import '../models/chunk_plan.dart';
 import '../models/speech_annotation.dart';
 import '../models/speech_document.dart';
@@ -20,6 +21,9 @@ class ChunkPlannerService {
         speechDocument.segmentIndexById[input.startSegmentId] ?? 0;
     final chunks = <ChunkSpec>[];
     final globalWordOffsets = _globalWordOffsets(speechDocument);
+    final routingContextBySegmentId = _routingContextBySegmentId(
+      input.castAwareSpeechRoutes,
+    );
 
     var cursor = startSegmentIndex;
     while (cursor < speechDocument.segments.length) {
@@ -34,6 +38,8 @@ class ChunkPlannerService {
         startSegmentIndex: cursor,
         globalWordOffsets: globalWordOffsets,
         softTarget: softTarget,
+        fallbackVoiceId: input.voiceId,
+        routingContextBySegmentId: routingContextBySegmentId,
       );
       chunks.add(
         _finalizeChunk(
@@ -72,14 +78,30 @@ _BuiltChunk _buildChunk({
   required int startSegmentIndex,
   required List<int> globalWordOffsets,
   required int softTarget,
+  required String fallbackVoiceId,
+  required Map<String, _ChunkRoutingContext> routingContextBySegmentId,
 }) {
   final collectedSegments = <SpeechSegment>[];
   final collectedTexts = <String>[];
   var wordCount = 0;
   var cursor = startSegmentIndex;
+  _ChunkRoutingContext? routingContext;
 
   while (cursor < speechDocument.segments.length) {
     final segment = speechDocument.segments[cursor];
+    final segmentRoutingContext =
+        routingContextBySegmentId[segment.segmentId] ??
+        _ChunkRoutingContext(
+          voiceId: fallbackVoiceId,
+          routeId: null,
+          castId: null,
+          dialogueSpanId: null,
+        );
+    if (collectedSegments.isNotEmpty &&
+        !_canShareChunkRoute(routingContext!, segmentRoutingContext)) {
+      break;
+    }
+
     final ttsSegment = _ttsSegmentFor(
       speechSegment: segment,
       ttsArtifactSet: ttsArtifactSet,
@@ -95,6 +117,7 @@ _BuiltChunk _buildChunk({
     collectedSegments.add(segment);
     collectedTexts.add(ttsSegment.speakText);
     wordCount = candidateWordCount;
+    routingContext ??= segmentRoutingContext;
     cursor += 1;
 
     final nextSegment = cursor < speechDocument.segments.length
@@ -112,10 +135,19 @@ _BuiltChunk _buildChunk({
 
   if (collectedSegments.isEmpty) {
     final oversizeSegment = speechDocument.segments[startSegmentIndex];
+    final routingContext =
+        routingContextBySegmentId[oversizeSegment.segmentId] ??
+        _ChunkRoutingContext(
+          voiceId: fallbackVoiceId,
+          routeId: null,
+          castId: null,
+          dialogueSpanId: null,
+        );
     return _splitOversizeSegment(
       segment: oversizeSegment,
       globalWordOffset: globalWordOffsets[startSegmentIndex],
       softTarget: softTarget,
+      routingContext: routingContext,
     );
   }
 
@@ -127,12 +159,16 @@ _BuiltChunk _buildChunk({
         .map((segment) => segment.segmentId)
         .toList(growable: false),
     speakText: collectedTexts.join(' '),
+    voiceId: routingContext?.voiceId ?? fallbackVoiceId,
     startSegmentIndex: collectedSegments.first.ordinal,
     endSegmentIndex: collectedSegments.last.ordinal,
     estimatedWordCount: wordCount,
     startWordIndex: startWordIndex,
     endWordIndex: endWordIndex,
     nextSegmentIndex: cursor,
+    routeId: routingContext?.routeId,
+    castId: routingContext?.castId,
+    dialogueSpanId: routingContext?.dialogueSpanId,
   );
 }
 
@@ -140,6 +176,7 @@ _BuiltChunk _splitOversizeSegment({
   required SpeechSegment segment,
   required int globalWordOffset,
   required int softTarget,
+  required _ChunkRoutingContext routingContext,
 }) {
   final clauses = segment.normalizedText
       .split(RegExp(r'(?<=[,;:])\s+'))
@@ -154,12 +191,16 @@ _BuiltChunk _splitOversizeSegment({
       chunkId: '${segment.segmentId}_part_0',
       segmentIds: <String>[segment.segmentId],
       speakText: slice.join(' '),
+      voiceId: routingContext.voiceId,
       startSegmentIndex: segment.ordinal,
       endSegmentIndex: segment.ordinal,
       estimatedWordCount: slice.length,
       startWordIndex: globalWordOffset,
       endWordIndex: globalWordOffset + slice.length,
       nextSegmentIndex: segment.ordinal + 1,
+      routeId: routingContext.routeId,
+      castId: routingContext.castId,
+      dialogueSpanId: routingContext.dialogueSpanId,
     );
   }
 
@@ -182,12 +223,16 @@ _BuiltChunk _splitOversizeSegment({
     chunkId: '${segment.segmentId}_part_0',
     segmentIds: <String>[segment.segmentId],
     speakText: buffer.join(' '),
+    voiceId: routingContext.voiceId,
     startSegmentIndex: segment.ordinal,
     endSegmentIndex: segment.ordinal,
     estimatedWordCount: wordCount,
     startWordIndex: globalWordOffset,
     endWordIndex: globalWordOffset + wordCount,
     nextSegmentIndex: segment.ordinal + 1,
+    routeId: routingContext.routeId,
+    castId: routingContext.castId,
+    dialogueSpanId: routingContext.dialogueSpanId,
   );
 }
 
@@ -214,7 +259,7 @@ ChunkSpec _finalizeChunk({
   final cacheKey = [
     input.engineId,
     input.engineVersion,
-    input.voiceId,
+    built.voiceId,
     input.rate.toStringAsFixed(2),
     speechDocument.normalizationVersion,
     speakHash,
@@ -225,6 +270,7 @@ ChunkSpec _finalizeChunk({
     chunkId: built.chunkId.isEmpty ? 'chunk_$ordinal' : built.chunkId,
     segmentIds: built.segmentIds,
     speakText: built.speakText,
+    voiceId: built.voiceId.isEmpty ? input.voiceId : built.voiceId,
     boundaryClass: _boundaryClassForChunk(
       speechDocument: speechDocument,
       annotations: input.baseAnnotations,
@@ -239,6 +285,9 @@ ChunkSpec _finalizeChunk({
     startWordIndex: built.startWordIndex,
     endWordIndex: built.endWordIndex,
     ttsSegments: ttsSegments,
+    routeId: built.routeId,
+    castId: built.castId,
+    dialogueSpanId: built.dialogueSpanId,
   );
 }
 
@@ -311,23 +360,31 @@ class _BuiltChunk {
     required this.chunkId,
     required this.segmentIds,
     required this.speakText,
+    required this.voiceId,
     required this.startSegmentIndex,
     required this.endSegmentIndex,
     required this.estimatedWordCount,
     required this.startWordIndex,
     required this.endWordIndex,
     required this.nextSegmentIndex,
+    required this.routeId,
+    required this.castId,
+    required this.dialogueSpanId,
   });
 
   final String chunkId;
   final List<String> segmentIds;
   final String speakText;
+  final String voiceId;
   final int startSegmentIndex;
   final int endSegmentIndex;
   final int estimatedWordCount;
   final int startWordIndex;
   final int endWordIndex;
   final int nextSegmentIndex;
+  final String? routeId;
+  final String? castId;
+  final String? dialogueSpanId;
 }
 
 TtsArtifactSegment _ttsSegmentFor({
@@ -367,4 +424,50 @@ String _pronunciationFingerprint(List<TtsArtifactSegment> segments) {
       .convert(utf8.encode(serialized))
       .toString()
       .substring(0, 16);
+}
+
+Map<String, _ChunkRoutingContext> _routingContextBySegmentId(
+  CastAwareSpeechRouteSet? routeSet,
+) {
+  if (routeSet == null) {
+    return const <String, _ChunkRoutingContext>{};
+  }
+
+  final contexts = <String, _ChunkRoutingContext>{};
+  for (final range in routeSet.ranges) {
+    final context = _ChunkRoutingContext(
+      voiceId: range.voiceId,
+      routeId: range.routeId,
+      castId: range.castId,
+      dialogueSpanId: range.dialogueSpanId,
+    );
+    for (final segmentId in range.segmentIds) {
+      contexts[segmentId] = context;
+    }
+  }
+  return contexts;
+}
+
+bool _canShareChunkRoute(
+  _ChunkRoutingContext left,
+  _ChunkRoutingContext right,
+) {
+  return left.voiceId == right.voiceId &&
+      left.routeId == right.routeId &&
+      left.castId == right.castId &&
+      left.dialogueSpanId == right.dialogueSpanId;
+}
+
+class _ChunkRoutingContext {
+  const _ChunkRoutingContext({
+    required this.voiceId,
+    required this.routeId,
+    required this.castId,
+    required this.dialogueSpanId,
+  });
+
+  final String voiceId;
+  final String? routeId;
+  final String? castId;
+  final String? dialogueSpanId;
 }

@@ -40,22 +40,25 @@ void main() {
               segmentIds: const <String>['segment-a'],
               startWordIndex: 0,
               endWordIndex: 3,
-            capabilityProfileId: 'kokoro:macos:v1',
-            boundaryMetadata: const ExportedBoundaryMetadata(
-              boundaryClass: 'sentence',
-              correctionApplied: true,
-              leadingSilenceBefore: Duration(milliseconds: 120),
-              leadingSilenceAfter: Duration(milliseconds: 40),
-              trailingSilenceBefore: Duration(milliseconds: 60),
-              trailingSilenceAfter: Duration(milliseconds: 60),
-              joinSilenceBefore: Duration(milliseconds: 120),
-              joinSilenceAfter: Duration(milliseconds: 40),
-              isInitialChunk: true,
-              isResumedChunk: false,
-            ),
-            pronunciationArtifacts: const <ExportedPronunciationArtifact>[
-              ExportedPronunciationArtifact(
-                artifactId: 'art-a',
+              voiceId: 'af_bella',
+              routeId: 'route_narrator_open',
+              castId: 'cast_narrator',
+              capabilityProfileId: 'kokoro:macos:v1',
+              boundaryMetadata: const ExportedBoundaryMetadata(
+                boundaryClass: 'sentence',
+                correctionApplied: true,
+                leadingSilenceBefore: Duration(milliseconds: 120),
+                leadingSilenceAfter: Duration(milliseconds: 40),
+                trailingSilenceBefore: Duration(milliseconds: 60),
+                trailingSilenceAfter: Duration(milliseconds: 60),
+                joinSilenceBefore: Duration(milliseconds: 120),
+                joinSilenceAfter: Duration(milliseconds: 40),
+                isInitialChunk: true,
+                isResumedChunk: false,
+              ),
+              pronunciationArtifacts: const <ExportedPronunciationArtifact>[
+                ExportedPronunciationArtifact(
+                  artifactId: 'art-a',
                   segmentId: 'segment-a',
                   startWord: 0,
                   endWord: 1,
@@ -76,6 +79,10 @@ void main() {
               segmentIds: const <String>['segment-b'],
               startWordIndex: 3,
               endWordIndex: 5,
+              voiceId: 'bf_emma',
+              routeId: 'route_dialogue_jennifer',
+              castId: 'cast_character_jennifer',
+              dialogueSpanId: 'dlg_s_1',
               missingFallbackWordCount: 2,
             ),
           ],
@@ -107,6 +114,9 @@ void main() {
         2,
       );
       final firstChunk = (sidecar['chunks'] as List).first as Map;
+      expect(firstChunk['voiceId'], 'af_bella');
+      expect(firstChunk['routeId'], 'route_narrator_open');
+      expect(firstChunk['castId'], 'cast_narrator');
       expect(firstChunk['capabilityProfileId'], 'kokoro:macos:v1');
       expect(firstChunk['missingFallbackWordCount'], 0);
       final boundaryMetadata = firstChunk['boundaryMetadata'] as Map;
@@ -117,6 +127,9 @@ void main() {
       final firstArtifact =
           (firstChunk['pronunciationArtifacts'] as List).first as Map;
       expect(firstArtifact['translationOutcome'], 'deferred');
+      final secondChunk = (sidecar['chunks'] as List).last as Map;
+      expect(secondChunk['voiceId'], 'bf_emma');
+      expect(secondChunk['dialogueSpanId'], 'dlg_s_1');
       expect(await outputFile.length(), greaterThan(44));
     },
   );

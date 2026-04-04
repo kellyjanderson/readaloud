@@ -65,10 +65,14 @@ class ExportedAudioChunk {
     required this.segmentIds,
     required this.startWordIndex,
     required this.endWordIndex,
+    required this.voiceId,
     this.capabilityProfileId,
     this.missingFallbackWordCount = 0,
     this.pronunciationArtifacts = const <ExportedPronunciationArtifact>[],
     this.boundaryMetadata,
+    this.routeId,
+    this.castId,
+    this.dialogueSpanId,
   });
 
   final String chunkId;
@@ -78,10 +82,14 @@ class ExportedAudioChunk {
   final List<String> segmentIds;
   final int startWordIndex;
   final int endWordIndex;
+  final String voiceId;
   final String? capabilityProfileId;
   final int missingFallbackWordCount;
   final List<ExportedPronunciationArtifact> pronunciationArtifacts;
   final ExportedBoundaryMetadata? boundaryMetadata;
+  final String? routeId;
+  final String? castId;
+  final String? dialogueSpanId;
 }
 
 class ExportedAudioAssemblyRequest {
@@ -185,6 +193,10 @@ class ExportedAudioAssembler {
                 'segmentIds': chunk.segmentIds,
                 'startWordIndex': chunk.startWordIndex,
                 'endWordIndex': chunk.endWordIndex,
+                'voiceId': chunk.voiceId,
+                'routeId': chunk.routeId,
+                'castId': chunk.castId,
+                'dialogueSpanId': chunk.dialogueSpanId,
                 'capabilityProfileId': chunk.capabilityProfileId,
                 'missingFallbackWordCount': chunk.missingFallbackWordCount,
                 'boundaryMetadata': _boundaryMetadataToMap(

@@ -87,6 +87,8 @@ void main() {
           chunkAudioDuration: const Duration(seconds: 2),
           voiceId: voiceId,
           rate: controller.currentSpeed,
+          routeId: 'route_narration_open',
+          castId: 'cast_narrator',
         ),
       );
       engine.emitProgress(
@@ -103,6 +105,9 @@ void main() {
           chunkAudioDuration: const Duration(seconds: 2),
           voiceId: voiceId,
           rate: controller.currentSpeed,
+          routeId: 'route_dialogue_jennifer',
+          castId: 'cast_character_jennifer',
+          dialogueSpanId: 'dlg_s_1',
         ),
       );
 
@@ -111,6 +116,12 @@ void main() {
         controller.spokenChunkRecords.any((record) => record.chunkId == 'chunk-1' && record.completed),
         isTrue,
       );
+      final dialogueRecord = controller.spokenChunkRecords.firstWhere(
+        (record) => record.chunkId == 'chunk-2',
+      );
+      expect(dialogueRecord.routeId, 'route_dialogue_jennifer');
+      expect(dialogueRecord.castId, 'cast_character_jennifer');
+      expect(dialogueRecord.dialogueSpanId, 'dlg_s_1');
 
       await controller.jumpBySeconds(-1);
 
