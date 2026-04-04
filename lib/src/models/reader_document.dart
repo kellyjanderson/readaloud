@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:math' as math;
 import 'dart:typed_data';
 
+import 'character_cast_registry.dart';
 import 'dialogue_attribution.dart';
 import 'display_document.dart';
 import 'import_diagnostic.dart';
@@ -15,6 +16,7 @@ import '../services/document_time_pronunciation_planner_service.dart';
 import '../services/display_document_html_renderer.dart';
 import '../services/english_pronunciation_profile_selector.dart';
 import '../services/english_suffix_allomorph_module.dart';
+import '../services/character_cast_registry_service.dart';
 import '../services/pronunciation_resource_layering_service.dart';
 import '../services/speaker_attribution_service.dart';
 
@@ -52,6 +54,7 @@ class ReaderDocument {
     required this.normalizedImportResult,
     required this.baseSpeechAnnotations,
     required this.dialogueAttributions,
+    required this.characterCastRegistry,
     required this.basePronunciationArtifacts,
     this.presentation = ReaderDocumentPresentation.html,
     this.pdfData,
@@ -69,6 +72,7 @@ class ReaderDocument {
     required NormalizedImportResult normalizedImportResult,
     required BaseSpeechAnnotationSet baseSpeechAnnotations,
     required DialogueAttributionSet dialogueAttributions,
+    required CharacterCastRegistry characterCastRegistry,
     required BasePronunciationArtifactSet basePronunciationArtifacts,
     ReaderDocumentPresentation presentation = ReaderDocumentPresentation.html,
     Uint8List? pdfData,
@@ -89,6 +93,7 @@ class ReaderDocument {
       normalizedImportResult: normalizedImportResult,
       baseSpeechAnnotations: baseSpeechAnnotations,
       dialogueAttributions: dialogueAttributions,
+      characterCastRegistry: characterCastRegistry,
       basePronunciationArtifacts: basePronunciationArtifacts,
       presentation: presentation,
       pdfData: pdfData,
@@ -108,6 +113,7 @@ class ReaderDocument {
   List<ImportDiagnostic> get diagnostics => normalizedImportResult.diagnostics;
   final BaseSpeechAnnotationSet baseSpeechAnnotations;
   final DialogueAttributionSet dialogueAttributions;
+  final CharacterCastRegistry characterCastRegistry;
   final BasePronunciationArtifactSet basePronunciationArtifacts;
   final ReaderDocumentPresentation presentation;
   final Uint8List? pdfData;
@@ -274,6 +280,7 @@ class ReaderDocument {
     );
     const annotationInferenceService = BaseSpeechAnnotationInferenceService();
     const speakerAttributionService = SpeakerAttributionService();
+    const characterCastRegistryService = CharacterCastRegistryService();
     const pronunciationProfileSelector = EnglishPronunciationProfileSelector();
     const pronunciationResourceLayeringService =
         PronunciationResourceLayeringService();
@@ -287,6 +294,9 @@ class ReaderDocument {
     final dialogueAttributions = speakerAttributionService.attribute(
       speechDocument: speechDocument,
       baseAnnotations: baseSpeechAnnotations,
+    );
+    final characterCastRegistry = characterCastRegistryService.build(
+      dialogueAttributions: dialogueAttributions,
     );
     final selectedProfile = pronunciationProfileSelector.select(
       const EnglishPronunciationProfileSelectionInput(engineId: 'kokoro'),
@@ -314,6 +324,7 @@ class ReaderDocument {
       normalizedImportResult: normalizedImportResult,
       baseSpeechAnnotations: baseSpeechAnnotations,
       dialogueAttributions: dialogueAttributions,
+      characterCastRegistry: characterCastRegistry,
       basePronunciationArtifacts: basePronunciationArtifacts,
       sourceDescription: 'Bundled project sample',
       attachments: const <ReaderAttachment>[],

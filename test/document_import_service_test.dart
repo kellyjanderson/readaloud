@@ -29,6 +29,10 @@ Second paragraph here.
         document.dialogueAttributions.documentId,
         document.normalizedImportResult.documentId,
       );
+      expect(
+        document.characterCastRegistry.narratorEntry.displayLabel,
+        'Narrator',
+      );
       expect(document.basePronunciationArtifacts.artifacts, isNotEmpty);
       expect(document.speakableText, contains('paragraph'));
       expect(document.speakableText, isNot(contains('para-\ngraph')));
@@ -86,6 +90,10 @@ Second paragraph here.
       expect(
         document.dialogueAttributions.documentId,
         document.normalizedImportResult.documentId,
+      );
+      expect(
+        document.characterCastRegistry.narratorEntry.displayLabel,
+        'Narrator',
       );
       expect(document.basePronunciationArtifacts.artifacts, isNotEmpty);
       expect(
