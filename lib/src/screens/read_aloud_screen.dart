@@ -8,6 +8,7 @@ import 'package:flutter/material.dart';
 import '../controllers/reader_controller.dart';
 import '../models/reader_document.dart';
 import '../widgets/document_surface.dart';
+import '../widgets/reading_focus_recenter_button.dart';
 import '../widgets/voice_management_dialog.dart';
 
 class ReadAloudScreen extends StatefulWidget {
@@ -634,16 +635,33 @@ class _ReadAloudScreenState extends State<ReadAloudScreen> {
             ),
             const SizedBox(height: 16),
             Expanded(
-              child: DocumentSurface(
-                document: _controller.document,
-                fontFamily: _controller.fontFamily,
-                fontScale: _controller.fontScale,
-                spokenSelection: _controller.spokenSelection,
-                focusedDisplayBlockId:
-                    _controller.readingFocusState.activeDisplayBlockId,
-                autoFollowActive:
-                    _controller.readingFocusState.shouldAutoFollow,
-                onManualScrollWhileFollowing: _controller.suspendReaderFollow,
+              child: Stack(
+                children: [
+                  Positioned.fill(
+                    child: DocumentSurface(
+                      document: _controller.document,
+                      fontFamily: _controller.fontFamily,
+                      fontScale: _controller.fontScale,
+                      spokenSelection: _controller.spokenSelection,
+                      focusedDisplayBlockId:
+                          _controller.readingFocusState.activeDisplayBlockId,
+                      autoFollowActive:
+                          _controller.readingFocusState.shouldAutoFollow,
+                      followRequestTick:
+                          _controller.readingFocusState.recenterRequestTick,
+                      onManualScrollWhileFollowing:
+                          _controller.suspendReaderFollow,
+                    ),
+                  ),
+                  if (_controller.readingFocusState.canRecenter)
+                    Positioned(
+                      right: 12,
+                      bottom: 12,
+                      child: ReadingFocusRecenterButton(
+                        onPressed: _controller.resumeReaderFollow,
+                      ),
+                    ),
+                ],
               ),
             ),
           ],

@@ -590,7 +590,8 @@ class ReaderController extends ChangeNotifier {
 
   void resumeReaderFollow() {
     final activeDisplayBlockId =
-        _spokenSelection.displayBlockId ?? _readingFocusState.activeDisplayBlockId;
+        _spokenSelection.displayBlockId ??
+        _readingFocusState.activeDisplayBlockId;
     if (activeDisplayBlockId == null &&
         _readingFocusState.followMode == ReadingFocusFollowMode.following) {
       return;
@@ -598,6 +599,7 @@ class ReaderController extends ChangeNotifier {
     _readingFocusState = _readingFocusState.copyWith(
       followMode: ReadingFocusFollowMode.following,
       activeDisplayBlockId: activeDisplayBlockId,
+      recenterRequestTick: _readingFocusState.recenterRequestTick + 1,
     );
     notifyListeners();
   }
