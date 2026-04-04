@@ -122,7 +122,7 @@ It includes only leaf specifications that are marked final.
 - [x] [Playback Coordination](../specifications/playback-coordination.md)
 - [x] [Playback Progress and Jump Mapping](../specifications/playback-progress-and-jump-mapping.md)
 - [x] [Spoken Text Selection and Display Mapping](../specifications/spoken-text-selection-and-display-mapping.md)
-- [ ] [Reading Focus Follow Policy](../specifications/reading-focus-follow-policy.md)
+- [x] [Reading Focus Follow Policy](../specifications/reading-focus-follow-policy.md)
 
 ### Reader Surface and Voice Management UI
 

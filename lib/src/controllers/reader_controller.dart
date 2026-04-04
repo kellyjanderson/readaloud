@@ -12,6 +12,7 @@ import 'package:path/path.dart' as p;
 import '../models/document_import_exception.dart';
 import '../models/cast_voice_assignment.dart';
 import '../models/narration_state.dart';
+import '../models/reading_focus_state.dart';
 import '../models/reader_document.dart';
 import '../models/display_document.dart';
 import '../models/chunk_plan.dart';
@@ -106,6 +107,7 @@ class ReaderController extends ChangeNotifier {
   String? _ttsDebugTraceVoiceId;
   List<String> _ttsDebugTraceLines = const <String>[];
   SpokenSelection _spokenSelection = const SpokenSelection.none();
+  ReadingFocusState _readingFocusState = const ReadingFocusState();
 
   int _currentWordIndex = 0;
   double _wordsPerSecond = 2.8;
@@ -150,6 +152,7 @@ class ReaderController extends ChangeNotifier {
   String? get ttsDebugTraceVoiceId => _ttsDebugTraceVoiceId;
   List<String> get ttsDebugTraceLines => _ttsDebugTraceLines;
   SpokenSelection get spokenSelection => _spokenSelection;
+  ReadingFocusState get readingFocusState => _readingFocusState;
   Duration? get sleepTimerDuration => _sleepTimerDuration;
   String get fontFamily => _fontFamily;
   double get fontScale => _fontScale;
@@ -183,6 +186,7 @@ class ReaderController extends ChangeNotifier {
     _ttsEngine.onStart = () {
       _isPlaying = true;
       _playbackState = ReaderPlaybackPrimaryState.playing;
+      _readingFocusState = _readingFocusState.copyWith(playbackActive: true);
       _recordFirstAudioLatency();
       notifyListeners();
     };
@@ -201,6 +205,7 @@ class ReaderController extends ChangeNotifier {
       _playbackState = _playbackEndedAtDocumentEnd
           ? ReaderPlaybackPrimaryState.completed
           : ReaderPlaybackPrimaryState.paused;
+      _readingFocusState = _readingFocusState.copyWith(playbackActive: false);
       _narrationState = _narrationState.copyWith(
         recentBoundaryClass: _boundaryClassForCurrentPosition(),
         continuationPending: false,
@@ -216,6 +221,7 @@ class ReaderController extends ChangeNotifier {
       _playbackState = _playbackActivity.isPlaying
           ? ReaderPlaybackPrimaryState.playing
           : ReaderPlaybackPrimaryState.failed;
+      _readingFocusState = _readingFocusState.copyWith(playbackActive: false);
       notifyListeners();
     };
     _ttsEngine.onProgress = _handleProgress;
@@ -476,6 +482,7 @@ class ReaderController extends ChangeNotifier {
       _playbackEndedAtDocumentEnd = false;
       _activeSpokenChunkId = null;
       _spokenSelection = const SpokenSelection.none();
+      _readingFocusState = const ReadingFocusState();
       _narrationState = _narrationState.reset(recentRate: currentSpeed);
     }
 
@@ -522,6 +529,7 @@ class ReaderController extends ChangeNotifier {
     _finalizeActiveSpokenChunk();
     _isPlaying = false;
     _playbackState = ReaderPlaybackPrimaryState.paused;
+    _readingFocusState = _readingFocusState.copyWith(playbackActive: false);
     notifyListeners();
   }
 
@@ -537,6 +545,7 @@ class ReaderController extends ChangeNotifier {
     _playbackEndedAtDocumentEnd = false;
     _activeSpokenChunkId = null;
     _spokenSelection = const SpokenSelection.none();
+    _readingFocusState = const ReadingFocusState();
     _narrationState = _narrationState
         .reset(recentRate: currentSpeed)
         .copyWith(
@@ -557,6 +566,31 @@ class ReaderController extends ChangeNotifier {
 
     _playbackState = ReaderPlaybackPrimaryState.paused;
 
+    notifyListeners();
+  }
+
+  void suspendReaderFollow() {
+    if (_readingFocusState.followMode ==
+        ReadingFocusFollowMode.suspendedByUser) {
+      return;
+    }
+    _readingFocusState = _readingFocusState.copyWith(
+      followMode: ReadingFocusFollowMode.suspendedByUser,
+    );
+    notifyListeners();
+  }
+
+  void resumeReaderFollow() {
+    final activeDisplayBlockId =
+        _spokenSelection.displayBlockId ?? _readingFocusState.activeDisplayBlockId;
+    if (activeDisplayBlockId == null &&
+        _readingFocusState.followMode == ReadingFocusFollowMode.following) {
+      return;
+    }
+    _readingFocusState = _readingFocusState.copyWith(
+      followMode: ReadingFocusFollowMode.following,
+      activeDisplayBlockId: activeDisplayBlockId,
+    );
     notifyListeners();
   }
 
@@ -880,6 +914,7 @@ class ReaderController extends ChangeNotifier {
     _spokenChunkRecords.clear();
     _activeSpokenChunkId = null;
     _spokenSelection = const SpokenSelection.none();
+    _readingFocusState = const ReadingFocusState();
     _playbackRequestedAt = null;
     _latencyRecordedSessions.clear();
     _positionConfidenceRecordedSessions.clear();
@@ -979,6 +1014,11 @@ class ReaderController extends ChangeNotifier {
         positionMap: _document.positionMap,
         progress: update,
       ),
+    );
+    _readingFocusState = _readingFocusState.copyWith(
+      playbackActive: true,
+      activeDisplayBlockId: _spokenSelection.displayBlockId,
+      clearActiveDisplayBlockId: _spokenSelection.displayBlockId == null,
     );
     _playbackEndedAtDocumentEnd = false;
     _narrationState = _narrationState.copyWith(
