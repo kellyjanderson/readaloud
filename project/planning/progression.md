@@ -87,7 +87,7 @@ It includes only leaf specifications that are marked final.
 
 ### Narrative Casting and Multi-Voice Playback
 
-- [ ] [Dialogue Span Detection](../specifications/dialogue-span-detection.md)
+- [x] [Dialogue Span Detection](../specifications/dialogue-span-detection.md)
 - [ ] [Speaker Attribution Contract](../specifications/speaker-attribution-contract.md)
 - [ ] [Character Cast Registry Model](../specifications/character-cast-registry-model.md)
 - [ ] [Voice Metadata Model and Source Normalization](../specifications/voice-metadata-model-and-source-normalization.md)

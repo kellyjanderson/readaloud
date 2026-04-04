@@ -142,6 +142,56 @@ void main() {
       );
     });
 
+    test('requires dialogue span id and supported class vocabulary', () {
+      expect(
+        () => SpeechAnnotation(
+          annotationId: 'ann_dialogue_span',
+          segmentId: 's_0',
+          kind: SpeechAnnotationKind.dialogueSpan,
+          startWord: 0,
+          endWord: 2,
+          confidence: 0.8,
+          source: SpeechAnnotationSource.ruleBasedLinguisticInference,
+          dialogueSpanId: '',
+          dialogueSpanClass: 'dialogue',
+        ),
+        throwsArgumentError,
+      );
+
+      expect(
+        () => SpeechAnnotation(
+          annotationId: 'ann_dialogue_span',
+          segmentId: 's_0',
+          kind: SpeechAnnotationKind.dialogueSpan,
+          startWord: 0,
+          endWord: 2,
+          confidence: 0.8,
+          source: SpeechAnnotationSource.ruleBasedLinguisticInference,
+          dialogueSpanId: 'dlg_s_0',
+          dialogueSpanClass: 'aside',
+        ),
+        throwsArgumentError,
+      );
+    });
+
+    test('serializes dialogue span fields on dialogue-span annotations', () {
+      final annotation = SpeechAnnotation(
+        annotationId: 'ann_dialogue_span',
+        segmentId: 's_0',
+        kind: SpeechAnnotationKind.dialogueSpan,
+        startWord: 0,
+        endWord: 2,
+        confidence: 0.8,
+        source: SpeechAnnotationSource.ruleBasedLinguisticInference,
+        dialogueSpanId: 'dlg_s_0',
+        dialogueSpanClass: 'dialogue',
+      );
+
+      final json = annotation.toJson();
+      expect(json['dialogueSpanId'], 'dlg_s_0');
+      expect(json['dialogueSpanClass'], 'dialogue');
+    });
+
     test('requires supported say-as vocabulary', () {
       expect(
         () => SpeechAnnotation(
