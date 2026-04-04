@@ -329,6 +329,7 @@ class _ReadAloudScreenState extends State<ReadAloudScreen> {
   Widget _buildPrimaryVoiceSelector(BuildContext context) {
     final selectedVoiceId = _controller.selectedVoice?.id;
     final voices = _controller.voices;
+    final canManageVoices = _controller.canManageVoices;
 
     return DecoratedBox(
       decoration: BoxDecoration(
@@ -337,25 +338,44 @@ class _ReadAloudScreenState extends State<ReadAloudScreen> {
         border: Border.all(color: const Color(0x16000000)),
       ),
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-        child: DropdownButtonHideUnderline(
-          child: DropdownButton<String>(
-            isExpanded: true,
-            value: selectedVoiceId,
-            hint: const Text('Select voice'),
-            items: voices
-                .map(
-                  (voice) => DropdownMenuItem<String>(
-                    value: voice.id,
-                    child: Text(
-                      voice.displayName,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ),
-                )
-                .toList(growable: false),
-            onChanged: voices.isEmpty ? null : _controller.selectVoiceById,
-          ),
+        padding: const EdgeInsets.only(left: 12, right: 4, top: 4, bottom: 4),
+        child: Row(
+          children: [
+            Expanded(
+              child: DropdownButtonHideUnderline(
+                child: DropdownButton<String>(
+                  isExpanded: true,
+                  value: selectedVoiceId,
+                  hint: const Text('Select voice'),
+                  items: voices
+                      .map(
+                        (voice) => DropdownMenuItem<String>(
+                          value: voice.id,
+                          child: Text(
+                            voice.displayName,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      )
+                      .toList(growable: false),
+                  onChanged: voices.isEmpty ? null : _controller.selectVoiceById,
+                ),
+              ),
+            ),
+            if (canManageVoices) ...[
+              const SizedBox(width: 4),
+              VerticalDivider(
+                width: 1,
+                thickness: 1,
+                color: Theme.of(context).colorScheme.outlineVariant,
+              ),
+              IconButton(
+                tooltip: 'Voice options',
+                onPressed: _showVoiceManagerDialog,
+                icon: const Icon(Icons.tune),
+              ),
+            ],
+          ],
         ),
       ),
     );
@@ -410,16 +430,8 @@ class _ReadAloudScreenState extends State<ReadAloudScreen> {
           ),
           if (_controller.canManageVoices) ...[
             const SizedBox(height: 8),
-            Align(
-              alignment: Alignment.centerLeft,
-              child: TextButton.icon(
-                onPressed: _showVoiceManagerDialog,
-                icon: const Icon(Icons.library_music),
-                label: const Text('Manage Voices'),
-              ),
-            ),
             Text(
-              'Bundled voices work offline. Downloaded voices stay cached locally until you remove the app.',
+              'Use the integrated voice options control on the primary bar to manage narrator and cast voices.',
               style: Theme.of(context).textTheme.bodySmall,
             ),
           ],

@@ -23,6 +23,7 @@ void main() {
     );
     expect(find.byIcon(Icons.play_arrow), findsOneWidget);
     expect(find.byIcon(Icons.more_vert), findsOneWidget);
+    expect(find.byTooltip('Voice options'), findsOneWidget);
     expect(find.text('Play'), findsNothing);
     expect(find.byType(DropdownButton<String>), findsOneWidget);
     expect(find.byType(SelectionArea), findsWidgets);
@@ -40,7 +41,20 @@ void main() {
     expect(tester.takeException(), isNull);
     expect(find.byIcon(Icons.play_arrow), findsOneWidget);
     expect(find.byIcon(Icons.more_vert), findsOneWidget);
+    expect(find.byTooltip('Voice options'), findsOneWidget);
     expect(find.text('Play'), findsNothing);
     expect(find.text('For Probe'), findsNothing);
+  });
+
+  testWidgets('opens voice management from the integrated voice affordance', (
+    WidgetTester tester,
+  ) async {
+    await tester.pumpWidget(const ReadAloudApp());
+    await tester.pump(const Duration(milliseconds: 300));
+
+    await tester.tap(find.byTooltip('Voice options'));
+    await tester.pump(const Duration(milliseconds: 300));
+
+    expect(find.text('Voice Management'), findsOneWidget);
   });
 }
