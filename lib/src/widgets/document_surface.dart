@@ -5,6 +5,7 @@ import 'package:pdfrx/pdfrx.dart';
 
 import '../models/display_document.dart';
 import '../models/reader_document.dart';
+import '../models/spoken_selection.dart';
 import '../services/display_document_html_renderer.dart';
 
 class DocumentSurface extends StatefulWidget {
@@ -17,6 +18,7 @@ class DocumentSurface extends StatefulWidget {
     this.autoFollowActive = false,
     this.onManualScrollWhileFollowing,
     this.scrollController,
+    this.spokenSelection = const SpokenSelection.none(),
   });
 
   final ReaderDocument document;
@@ -26,6 +28,7 @@ class DocumentSurface extends StatefulWidget {
   final bool autoFollowActive;
   final VoidCallback? onManualScrollWhileFollowing;
   final ScrollController? scrollController;
+  final SpokenSelection spokenSelection;
 
   @override
   State<DocumentSurface> createState() => _DocumentSurfaceState();
@@ -91,6 +94,7 @@ class _DocumentSurfaceState extends State<DocumentSurface> {
     final baseSize = 18.0 * widget.fontScale;
     final renderedHtml = renderDisplayDocumentToHtml(
       widget.document.displayDocument,
+      spokenSelection: widget.spokenSelection,
     );
 
     return NotificationListener<UserScrollNotification>(
@@ -188,6 +192,26 @@ class _DocumentSurfaceState extends State<DocumentSurface> {
                     ),
                   ),
                   margin: Margins.symmetric(vertical: 18),
+                ),
+                '.active-reading-block': Style(
+                  backgroundColor: const Color(0x1FFFBE0B),
+                ),
+                '.spoken-word': Style(
+                  backgroundColor: const Color(0x66FFB703),
+                  fontWeight: FontWeight.w700,
+                ),
+                '.spoken-segment': Style(
+                  backgroundColor: const Color(0x40FFB703),
+                  fontWeight: FontWeight.w600,
+                ),
+                '.spoken-block': Style(
+                  backgroundColor: const Color(0x24FFB703),
+                  border: Border(
+                    left: BorderSide(
+                      color: const Color(0xD9F59E0B),
+                      width: 3,
+                    ),
+                  ),
                 ),
               },
             ),

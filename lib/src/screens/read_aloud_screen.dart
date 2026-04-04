@@ -638,6 +638,7 @@ class _ReadAloudScreenState extends State<ReadAloudScreen> {
                 document: _controller.document,
                 fontFamily: _controller.fontFamily,
                 fontScale: _controller.fontScale,
+                spokenSelection: _controller.spokenSelection,
                 focusedDisplayBlockId:
                     _controller.readingFocusState.activeDisplayBlockId,
                 autoFollowActive:
