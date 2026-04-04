@@ -85,6 +85,16 @@ It includes only leaf specifications that are marked final.
 - [x] [Pronunciation Realization Precedence](../specifications/pronunciation-realization-precedence.md)
 - [x] [Realization Window Policy](../specifications/realization-window-policy.md)
 
+### Narrative Casting and Multi-Voice Playback
+
+- [x] [Dialogue Span Detection](../specifications/dialogue-span-detection.md)
+- [ ] [Speaker Attribution Contract](../specifications/speaker-attribution-contract.md)
+- [ ] [Character Cast Registry Model](../specifications/character-cast-registry-model.md)
+- [ ] [Voice Metadata Model and Source Normalization](../specifications/voice-metadata-model-and-source-normalization.md)
+- [ ] [Automatic Voice Casting and Override Resolution](../specifications/automatic-voice-casting-and-override-resolution.md)
+- [ ] [Cast-Aware Speech Range Routing](../specifications/cast-aware-speech-range-routing.md)
+- [ ] [Voice-Routed Progress and Diagnostics](../specifications/voice-routed-progress-and-diagnostics.md)
+
 ### Speech Runtime Boundary
 
 - [x] [Platform Capability and Fallback Policy](../specifications/platform-capability-and-fallback-policy.md)
@@ -111,6 +121,15 @@ It includes only leaf specifications that are marked final.
 - [x] [Boundary-Corrected Chunk Output and Reuse](../specifications/boundary-corrected-chunk-output-and-reuse.md)
 - [x] [Playback Coordination](../specifications/playback-coordination.md)
 - [x] [Playback Progress and Jump Mapping](../specifications/playback-progress-and-jump-mapping.md)
+- [ ] [Spoken Text Selection and Display Mapping](../specifications/spoken-text-selection-and-display-mapping.md)
+- [ ] [Reading Focus Follow Policy](../specifications/reading-focus-follow-policy.md)
+
+### Reader Surface and Voice Management UI
+
+- [ ] [Voice Library Row and Information Affordance](../specifications/voice-library-row-and-information-affordance.md)
+- [ ] [Cast Management Dialog Structure](../specifications/cast-management-dialog-structure.md)
+- [ ] [Spoken Highlight Visual Presentation](../specifications/spoken-highlight-visual-presentation.md)
+- [ ] [Follow-Along User Scroll Interaction](../specifications/follow-along-user-scroll-interaction.md)
 
 ### Reader Session and Live Input
 

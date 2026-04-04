@@ -94,7 +94,7 @@ Responsibilities:
 Responsibilities:
 
 - translate active playback back into segment ids and word ranges
-- support future highlighting
+- support visible spoken-text highlighting
 - support 30-second jump estimation and recovery
 
 ## Relationships
@@ -217,6 +217,7 @@ Reason:
 - Boundary policy is applied before a chunk is treated as final cache content.
 - Boundary policy uses trim-and-cap joins by default and does not add blind player-level gaps.
 - Progress mapping stays tied to normalized content ids, not only elapsed audio time.
+- Highlighting and reading-focus behavior consume progress mapping output rather than reparsing display HTML.
 
 ## Current Implementation Gap
 
@@ -225,6 +226,7 @@ The current implementation now satisfies most of this architecture for the activ
 - first-chunk startup, background preparation, finalized chunk reuse, boundary correction, and playback instrumentation are all first-class in code
 - document-open priming and runtime scheduling now keep playback smooth, but long-form prosody richness remains narrower than the target architecture
 - queue, cache, and progress behavior are implemented for the current Kokoro/native path; broader cross-platform validation remains future work
+- the progress mapper is highlight-ready at the data-contract level, but the reader surface still does not render spoken-text highlighting or reading focus
 - current controller code still leans on compatibility text views in `ReaderDocument` while normalized mappings remain the underlying source of truth
 
 ## Governing Specifications
@@ -236,6 +238,7 @@ The current implementation now satisfies most of this architecture for the activ
 - [Synthesis Boundary Policy](../specifications/synthesis-boundary-policy.md)
 - [Playback Coordination](../specifications/playback-coordination.md)
 - [Playback Progress and Jump Mapping](../specifications/playback-progress-and-jump-mapping.md)
+- [Spoken Text Highlighting and Reading Focus](../specifications/spoken-text-highlighting-and-reading-focus.md)
 - [Playback Quality Instrumentation](../specifications/playback-quality-instrumentation.md)
 
 ## Change Log

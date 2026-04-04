@@ -5,6 +5,7 @@ enum SpeechAnnotationKind {
   pronunciationCandidate,
   sayAsCandidate,
   discourseRole,
+  dialogueSpan,
 }
 
 enum SpeechAnnotationSource {
@@ -23,6 +24,11 @@ const Set<String> supportedDiscourseRoles = <String>{
   'dialogue',
   'list_item',
   'caption',
+};
+
+const Set<String> supportedDialogueSpanClasses = <String>{
+  'dialogue',
+  'quotation',
 };
 
 const Set<String> supportedSayAsClasses = <String>{'letters', 'cardinal'};
@@ -79,6 +85,11 @@ class BaseSpeechAnnotationSet {
   Iterable<SpeechAnnotation> forSegment(String segmentId) =>
       annotations.where((annotation) => annotation.segmentId == segmentId);
 
+  Iterable<SpeechAnnotation> forDialogueSpan(String dialogueSpanId) =>
+      annotations.where(
+        (annotation) => annotation.dialogueSpanId == dialogueSpanId,
+      );
+
   Map<String, Object?> toJson() {
     return <String, Object?>{
       'documentId': documentId,
@@ -103,8 +114,12 @@ class SpeechAnnotation {
     PronunciationCandidatePayload? pronunciationCandidate,
     String? sayAsClass,
     String? discourseRole,
+    String? dialogueSpanId,
+    String? dialogueSpanClass,
   }) {
     final normalizedDiscourseRole = discourseRole?.trim();
+    final normalizedDialogueSpanId = dialogueSpanId?.trim();
+    final normalizedDialogueSpanClass = dialogueSpanClass?.trim();
     final normalizedSayAsClass = sayAsClass?.trim();
 
     if (annotationId.trim().isEmpty) {
@@ -204,6 +219,31 @@ class SpeechAnnotation {
         'discourseRole is only valid on discourse-role annotations.',
       );
     }
+    if (kind == SpeechAnnotationKind.dialogueSpan) {
+      if (normalizedDialogueSpanId == null ||
+          normalizedDialogueSpanId.isEmpty) {
+        throw ArgumentError.value(
+          dialogueSpanId,
+          'dialogueSpanId',
+          'Dialogue-span annotations must carry a dialogue span id.',
+        );
+      }
+      if (normalizedDialogueSpanClass == null ||
+          !supportedDialogueSpanClasses.contains(normalizedDialogueSpanClass)) {
+        throw ArgumentError.value(
+          dialogueSpanClass,
+          'dialogueSpanClass',
+          'Dialogue-span annotations must use a supported dialogue span class.',
+        );
+      }
+    } else if (normalizedDialogueSpanId != null ||
+        normalizedDialogueSpanClass != null) {
+      throw ArgumentError.value(
+        <String?>[dialogueSpanId, dialogueSpanClass],
+        'dialogueSpanId/dialogueSpanClass',
+        'Dialogue-span fields are only valid on dialogue-span annotations.',
+      );
+    }
 
     return SpeechAnnotation._(
       annotationId: annotationId,
@@ -217,6 +257,8 @@ class SpeechAnnotation {
       pronunciationCandidate: pronunciationCandidate,
       sayAsClass: normalizedSayAsClass,
       discourseRole: normalizedDiscourseRole,
+      dialogueSpanId: normalizedDialogueSpanId,
+      dialogueSpanClass: normalizedDialogueSpanClass,
     );
   }
 
@@ -232,6 +274,8 @@ class SpeechAnnotation {
     this.pronunciationCandidate,
     this.sayAsClass,
     this.discourseRole,
+    this.dialogueSpanId,
+    this.dialogueSpanClass,
   });
 
   final String annotationId;
@@ -245,6 +289,8 @@ class SpeechAnnotation {
   final PronunciationCandidatePayload? pronunciationCandidate;
   final String? sayAsClass;
   final String? discourseRole;
+  final String? dialogueSpanId;
+  final String? dialogueSpanClass;
 
   bool get isBoundaryAnnotation =>
       kind == SpeechAnnotationKind.phraseBoundary ||
@@ -263,6 +309,8 @@ class SpeechAnnotation {
       'pronunciationCandidate': pronunciationCandidate?.toJson(),
       'sayAsClass': sayAsClass,
       'discourseRole': discourseRole,
+      'dialogueSpanId': dialogueSpanId,
+      'dialogueSpanClass': dialogueSpanClass,
     };
   }
 }

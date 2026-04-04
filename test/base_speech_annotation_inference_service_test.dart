@@ -211,6 +211,135 @@ void main() {
         ),
       );
     });
+
+    test(
+      'emits stable dialogue span annotations for contiguous dialogue-like segments',
+      () {
+        final displayDocument = DisplayDocument(
+          documentId: 'doc_dialogue_spans',
+          sourceType: 'test',
+          sourceUri: null,
+          title: 'Dialogue spans',
+          normalizationVersion: 'norm-v1',
+          metadata: const <String, String>{},
+          assets: const <String, DisplayAsset>{},
+          blocks: <DisplayBlock>[
+            _block(
+              blockId: 'b_dialogue',
+              kind: DisplayBlockKind.paragraph,
+              ordinal: 0,
+              text: '"Hello there." "Stay here."',
+            ),
+            _block(
+              blockId: 'b_quote',
+              kind: DisplayBlockKind.blockquote,
+              ordinal: 1,
+              text: 'Quoted material. Still quoted.',
+            ),
+            _block(
+              blockId: 'b_narration',
+              kind: DisplayBlockKind.paragraph,
+              ordinal: 2,
+              text: 'Plain narration text.',
+            ),
+          ],
+        );
+
+        final speechDocument = _speechDocument(<SpeechSegment>[
+          _segment(
+            segmentId: 's_dialogue_0',
+            blockId: 'b_dialogue',
+            ordinal: 0,
+            paragraphIndex: 0,
+            sentenceIndex: 0,
+            text: '"Hello there."',
+          ),
+          _segment(
+            segmentId: 's_dialogue_1',
+            blockId: 'b_dialogue',
+            ordinal: 1,
+            paragraphIndex: 0,
+            sentenceIndex: 1,
+            text: '"Stay here."',
+          ),
+          _segment(
+            segmentId: 's_quote_0',
+            blockId: 'b_quote',
+            ordinal: 2,
+            paragraphIndex: 1,
+            sentenceIndex: 0,
+            text: 'Quoted material.',
+          ),
+          _segment(
+            segmentId: 's_quote_1',
+            blockId: 'b_quote',
+            ordinal: 3,
+            paragraphIndex: 1,
+            sentenceIndex: 1,
+            text: 'Still quoted.',
+          ),
+          _segment(
+            segmentId: 's_narration',
+            blockId: 'b_narration',
+            ordinal: 4,
+            paragraphIndex: 2,
+            sentenceIndex: 0,
+            text: 'Plain narration text.',
+          ),
+        ]);
+
+        final annotations = service.infer(
+          speechDocument: speechDocument,
+          displayDocument: displayDocument,
+        );
+
+        final dialogueSpans = annotations.annotations
+            .where(
+              (annotation) =>
+                  annotation.kind == SpeechAnnotationKind.dialogueSpan,
+            )
+            .toList(growable: false);
+
+        expect(
+          dialogueSpans.map((annotation) => annotation.segmentId),
+          containsAll(<String>[
+            's_dialogue_0',
+            's_dialogue_1',
+            's_quote_0',
+            's_quote_1',
+          ]),
+        );
+
+        final dialogueRange = annotations
+            .forDialogueSpan('dlg_s_dialogue_0')
+            .toList(growable: false);
+        expect(dialogueRange, hasLength(2));
+        expect(
+          dialogueRange.every(
+            (annotation) => annotation.dialogueSpanClass == 'dialogue',
+          ),
+          isTrue,
+        );
+
+        final quotationRange = annotations
+            .forDialogueSpan('dlg_s_quote_0')
+            .toList(growable: false);
+        expect(quotationRange, hasLength(2));
+        expect(
+          quotationRange.every(
+            (annotation) => annotation.dialogueSpanClass == 'quotation',
+          ),
+          isTrue,
+        );
+
+        expect(
+          dialogueSpans.where(
+            (annotation) => annotation.segmentId == 's_narration',
+          ),
+          isEmpty,
+        );
+      },
+    );
   });
 }
 

@@ -5,7 +5,7 @@ import '../models/speech_document.dart';
 class BaseSpeechAnnotationInferenceService {
   const BaseSpeechAnnotationInferenceService();
 
-  static const annotationVersion = 'read-aloud-annotations-v1';
+  static const annotationVersion = 'read-aloud-annotations-v2';
 
   BaseSpeechAnnotationSet infer({
     required SpeechDocument speechDocument,
@@ -16,6 +16,7 @@ class BaseSpeechAnnotationInferenceService {
     };
     final annotations = <SpeechAnnotation>[];
     var ordinal = 0;
+    _ActiveDialogueSpan? activeDialogueSpan;
 
     for (var index = 0; index < speechDocument.segments.length; index += 1) {
       final segment = speechDocument.segments[index];
@@ -84,6 +85,26 @@ class BaseSpeechAnnotationInferenceService {
       );
 
       final discourseRole = _discourseRole(segment, block);
+      final dialogueSpanClass = _dialogueSpanClassForDiscourseRole(
+        discourseRole,
+      );
+      if (dialogueSpanClass == null) {
+        activeDialogueSpan = null;
+      } else {
+        final continuesActiveSpan =
+            activeDialogueSpan != null &&
+            activeDialogueSpan.dialogueSpanClass == dialogueSpanClass &&
+            activeDialogueSpan.blockId == segment.blockId &&
+            activeDialogueSpan.paragraphIndex == segment.paragraphIndex;
+        if (!continuesActiveSpan) {
+          activeDialogueSpan = _ActiveDialogueSpan(
+            dialogueSpanId: 'dlg_${segment.segmentId}',
+            dialogueSpanClass: dialogueSpanClass,
+            blockId: segment.blockId,
+            paragraphIndex: segment.paragraphIndex,
+          );
+        }
+      }
       if (segment.wordCount > 0) {
         annotations.add(
           SpeechAnnotation(
@@ -97,6 +118,26 @@ class BaseSpeechAnnotationInferenceService {
             discourseRole: discourseRole,
           ),
         );
+        if (activeDialogueSpan != null) {
+          annotations.add(
+            SpeechAnnotation(
+              annotationId: 'ann_${ordinal++}',
+              segmentId: segment.segmentId,
+              kind: SpeechAnnotationKind.dialogueSpan,
+              startWord: 0,
+              endWord: segment.wordCount,
+              confidence: _dialogueSpanConfidence(
+                dialogueSpanClass: activeDialogueSpan.dialogueSpanClass,
+              ),
+              source: _dialogueSpanSource(
+                block: block,
+                dialogueSpanClass: activeDialogueSpan.dialogueSpanClass,
+              ),
+              dialogueSpanId: activeDialogueSpan.dialogueSpanId,
+              dialogueSpanClass: activeDialogueSpan.dialogueSpanClass,
+            ),
+          );
+        }
       }
 
       for (final candidate in _inferPronunciationCandidates(segment)) {
@@ -186,6 +227,33 @@ String _discourseRole(SpeechSegment segment, DisplayBlock? block) {
     return 'quotation';
   }
   return 'narration';
+}
+
+String? _dialogueSpanClassForDiscourseRole(String discourseRole) {
+  return switch (discourseRole) {
+    'dialogue' => 'dialogue',
+    'quotation' => 'quotation',
+    _ => null,
+  };
+}
+
+double _dialogueSpanConfidence({required String dialogueSpanClass}) {
+  return switch (dialogueSpanClass) {
+    'dialogue' => 0.84,
+    'quotation' => 0.76,
+    _ => 0.7,
+  };
+}
+
+SpeechAnnotationSource _dialogueSpanSource({
+  required DisplayBlock? block,
+  required String dialogueSpanClass,
+}) {
+  if (block?.kind == DisplayBlockKind.blockquote &&
+      dialogueSpanClass == 'quotation') {
+    return SpeechAnnotationSource.importerStructuralInference;
+  }
+  return SpeechAnnotationSource.ruleBasedLinguisticInference;
 }
 
 Iterable<_PronunciationCandidateMatch> _inferPronunciationCandidates(
@@ -328,6 +396,20 @@ bool _looksLikeDialogue(String text) {
 
 bool _containsQuotation(String text) {
   return RegExp(r'[\"“”]').hasMatch(text);
+}
+
+class _ActiveDialogueSpan {
+  const _ActiveDialogueSpan({
+    required this.dialogueSpanId,
+    required this.dialogueSpanClass,
+    required this.blockId,
+    required this.paragraphIndex,
+  });
+
+  final String dialogueSpanId;
+  final String dialogueSpanClass;
+  final String blockId;
+  final int paragraphIndex;
 }
 
 class _PronunciationCandidateMatch {

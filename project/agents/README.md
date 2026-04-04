@@ -36,6 +36,38 @@ When reporting work on pronunciation or TTS behavior, agents should state whethe
 
 Do not present a pronunciation fix as successful if audio change verification has not been performed or if the compared output remained identical.
 
+## Implementation Anchor Rule
+
+For this project, implementation changes must not happen without a durable planning anchor.
+
+Allowed anchors are:
+
+1. a specification for feature work
+2. an issue for bug-fix work
+
+This is a hard rule.
+
+Code changes should not begin from ad hoc discussion alone.
+
+## Issue Back-Reference Rule
+
+Issue-driven fixes must be back-referenced into the project architecture/specification tree.
+
+That means a bug fix must update the durable project documents that describe the affected behavior, such as:
+
+- an existing architecture document
+- an existing specification document
+- or a new specification when the tree does not yet cover the behavior that the issue exposed
+
+The goal is that issue work does not live only in:
+
+- GitHub issue text
+- branch history
+- pull request text
+- and code changes
+
+The architecture/specification tree must remain the durable source of truth for the resulting behavior.
+
 ## Relationship to `agents/`
 
 The root [`agents/`](../../agents/index.md) folder defines repository-wide agent process and workflow guidance.

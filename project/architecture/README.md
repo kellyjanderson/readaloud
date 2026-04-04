@@ -12,6 +12,8 @@ Architecture documents define the structural truth of `Read Aloud`.
   Defines how imported content becomes paired display and speech representations with stable mapping between them.
 - [Speech Enrichment and Narration](speech-enrichment-and-narration.md)
   Defines the structural layer that infers phrase, pause, emphasis, pronunciation, and long-form narration state before synthesis.
+- [Character Dialogue Attribution and Voice Casting](character-dialogue-attribution-and-voice-casting.md)
+  Defines how dialogue spans become attributed speakers, stable character identities, narrator/character cast assignments, and multi-voice playback routing.
 - [Pronunciation Planning and TTS Artifacts](pronunciation-planning-and-tts-artifacts.md)
   Defines how pronunciation is planned against the internal speech representation and passed into the TTS layer as durable, inspectable artifacts.
 - [English Pronunciation Profiles and Rule Modularity](english-pronunciation-profiles-and-rule-modularity.md)
@@ -22,5 +24,7 @@ Architecture documents define the structural truth of `Read Aloud`.
   Defines the official concurrency boundary between Flutter UI/control code and the long-lived speech runtime, including command/event ownership and native queue policy.
 - [Playback Orchestration and Synthesis Boundaries](playback-orchestration-and-synthesis-boundaries.md)
   Defines how enriched speech becomes generated chunks, how chunk boundaries are managed, and how playback sessions are coordinated.
+- [Spoken Text Highlighting and Reading Focus](spoken-text-highlighting-and-reading-focus.md)
+  Defines how playback progress maps back into visible highlighted text and how the reader surface follows playback.
 - [Audio Export and Headless Execution](audio-export-and-headless-execution.md)
   Defines how the app saves spoken audio and runs the same speech pipeline without the normal UI for command-line and automation workflows.

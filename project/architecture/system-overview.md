@@ -16,6 +16,7 @@ This document defines the major system layers and responsibility boundaries for 
 - renders a rich reading surface
 - converts normalized document content into speech
 - infers speech structure and narration hints from plain or lightly structured text
+- can grow into dialogue attribution and character casting without moving speaker inference into the live playback path
 - separates document-time speech enrichment from voice/session-time realization
 - carries pronunciation and TTS artifacts in the internal speech representation rather than inventing pronunciation policy in the live runtime
 - adapts app-owned pronunciation artifacts through explicit engine capability-aware expression
@@ -68,6 +69,7 @@ Responsibilities:
 - perform voice/session-specific realization only for the active playback window
 - preserve speech-side annotations separately from display structure
 - maintain a small symbolic narration state across sentences, chunks, and paragraphs
+- prepare future dialogue attribution, character identity, and narrator-versus-character casting inputs
 - prepare enriched speech input for chunk planning and synthesis
 
 This layer is where the system bridges the gap between well-formed text and natural long-form speech.
@@ -82,6 +84,17 @@ Responsibilities:
 - provide TTS artifacts that the runtime and engine adapter consume without re-deciding pronunciation from raw text alone
 
 This layer exists so pronunciation becomes an app-owned part of the speech model instead of an unstable side effect of live runtime tokenization.
+
+### Character Dialogue Attribution and Voice Casting
+
+Responsibilities:
+
+- detect direct-speech spans and likely speakers
+- maintain a stable narrator-plus-character cast model for one document
+- assign voices automatically and accept user overrides
+- route playback and export through resolved narrator/character voices
+
+This layer exists so multi-voice storytelling remains an app-owned structural behavior rather than a live playback guess.
 
 ### Engine Pronunciation Expression and Capability Adaptation
 
@@ -124,7 +137,17 @@ Responsibilities:
 - start playback once the first chunk is ready
 - generate later chunks behind playback
 - map progress back to normalized speech segments
-- support jump timing, replay, and future highlighting
+- support jump timing, replay, and visible spoken-text highlighting
+
+### Spoken Text Highlighting and Reading Focus
+
+Responsibilities:
+
+- derive visible spoken selection from progress and normalized mappings
+- paint the current spoken range on the reading surface
+- keep viewport-follow behavior separate from timing derivation
+
+This layer exists so follow-along reading can remain stable across formats and engines.
 
 ### Audio Export and Headless Execution
 
@@ -171,6 +194,7 @@ Headless execution reuses the same system layers but bypasses presentation.
 - Synthesis-boundary policy is centralized and must not be recreated independently in the player or the UI.
 - Synthesis-boundary policy uses trim-and-cap join handling by default, not blind overlap or player-added gaps.
 - Playback progress must remain traceable to stable normalized segment ids.
+- Speaker attribution and character casting must remain traceable to stable normalized segment ids and document-scoped cast ids.
 - Display structure and speech structure must be related but not collapsed into one raw string.
 
 ## Current Implementation Gap
@@ -180,8 +204,10 @@ The current codebase now follows most of this architecture, with a smaller set o
 - normalized importer output, display/speech documents, position mapping, speech annotations, pronunciation artifacts, runtime messaging, boundary correction, export, and speech QA tooling are all first-class in code
 - `ReaderDocument` still exposes compatibility views such as `displayHtml`, `speakableText`, and coarse word spans for current UI and export callers even though normalized models are the underlying source of truth
 - speech enrichment, narration continuity, and profile-aware pronunciation behavior are implemented, but prosody richness and long-form delivery variation remain narrower than the target architecture
+- dialogue attribution, narrator/character cast management, and multi-voice routing are still future work
 - engine capability modeling and adapter-boundary pronunciation expression are explicit for the current Kokoro path, including canonical IPA to Kokoro/Misaki inventory adaptation, but broader multi-engine support remains future work
 - runtime, export, and debugging flows are well represented on current native targets, while broader cross-platform verification still trails the architectural target
+- progress mapping is ready for follow-along reading, but spoken-text highlighting and reading-focus behavior are not yet surfaced in the reader UI
 
 ## Governing Specifications
 
@@ -251,10 +277,12 @@ The current codebase now follows most of this architecture, with a smaller set o
 
 - [Normalized Content and Position Mapping](normalized-content-and-position-mapping.md)
 - [Speech Enrichment and Narration](speech-enrichment-and-narration.md)
+- [Character Dialogue Attribution and Voice Casting](character-dialogue-attribution-and-voice-casting.md)
 - [Pronunciation Planning and TTS Artifacts](pronunciation-planning-and-tts-artifacts.md)
 - [Engine Pronunciation Expression and Capability Adaptation](engine-pronunciation-expression-and-capability-adaptation.md)
 - [Speech Runtime Messaging Boundary](speech-runtime-messaging-boundary.md)
 - [Playback Orchestration and Synthesis Boundaries](playback-orchestration-and-synthesis-boundaries.md)
+- [Spoken Text Highlighting and Reading Focus](spoken-text-highlighting-and-reading-focus.md)
 - [Audio Export and Headless Execution](audio-export-and-headless-execution.md)
 
 ## Change Log

@@ -67,6 +67,12 @@ They are intentionally narrower than architecture documents. For any architectur
   Defines how document-time emphasis candidates are represented before voice/session realization.
 - [Discourse Role Annotation Model](discourse-role-annotation-model.md)
   Defines the document-time discourse-role vocabulary used to carry local delivery mode.
+- [Dialogue Span and Speaker Attribution](dialogue-span-and-speaker-attribution.md)
+  Umbrella specification for dialogue span detection and speaker attribution before playback.
+- [Dialogue Span Detection](dialogue-span-detection.md)
+  Defines how dialogue-like spans are identified and anchored to normalized speech ranges.
+- [Speaker Attribution Contract](speaker-attribution-contract.md)
+  Defines the result contract and provider boundary for attributing detected dialogue to likely speakers.
 - [Pronunciation Candidate Model](pronunciation-candidate-model.md)
   Defines reusable pronunciation candidates captured before voice-specific realization.
 - [Say-As Candidate Model](say-as-candidate-model.md)
@@ -129,6 +135,22 @@ They are intentionally narrower than architecture documents. For any architectur
   Defines how richer internal speech intent is translated to a specific engine such as Kokoro.
 - [Narration State](narration-state.md)
   Defines the symbolic continuity state carried across chunks.
+- [Character Cast Registry and Voice Assignment](character-cast-registry-and-voice-assignment.md)
+  Umbrella specification for stable narrator/character cast identity, automatic voice assignment, and override precedence.
+- [Character Cast Registry Model](character-cast-registry-model.md)
+  Defines the stable narrator-plus-character registry used by casting and routing.
+- [Automatic Voice Casting and Override Resolution](automatic-voice-casting-and-override-resolution.md)
+  Defines deterministic auto-casting plus user override precedence and fallback behavior.
+- [Multi-Voice Playback Routing](multi-voice-playback-routing.md)
+  Umbrella specification for turning narrator/character assignments into routed multi-voice playback behavior.
+- [Cast-Aware Speech Range Routing](cast-aware-speech-range-routing.md)
+  Defines routed narrator/character speech ranges, resolved voices, and adjacent-range merge behavior.
+- [Voice-Routed Progress and Diagnostics](voice-routed-progress-and-diagnostics.md)
+  Defines how routed voice use remains visible through progress events and runtime diagnostics.
+- [Voice Library Metadata and Information Surfacing](voice-library-metadata-and-information-surfacing.md)
+  Umbrella specification for app-owned voice metadata and downstream presentation-facing guarantees.
+- [Voice Metadata Model and Source Normalization](voice-metadata-model-and-source-normalization.md)
+  Defines the app-owned voice metadata fields and normalization from raw engine/catalog metadata.
 
 ### Speech Runtime Boundary
 
@@ -180,8 +202,29 @@ They are intentionally narrower than architecture documents. For any architectur
   Defines controller state, transport behavior, replay semantics, jump handling, and sleep fade behavior.
 - [Playback Progress and Jump Mapping](playback-progress-and-jump-mapping.md)
   Defines progress records, timing estimation, future highlighting payloads, and the 30-second jump algorithm.
+- [Spoken Text Highlighting and Reading Focus](spoken-text-highlighting-and-reading-focus.md)
+  Umbrella specification for spoken selection derivation, display mapping, and reading-focus follow behavior.
+- [Spoken Text Selection and Display Mapping](spoken-text-selection-and-display-mapping.md)
+  Defines how playback progress becomes a mapped visible spoken selection.
+- [Reading Focus Follow Policy](reading-focus-follow-policy.md)
+  Defines how the reader viewport follows playback and yields to user scrolling.
 - [Playback Quality Instrumentation](playback-quality-instrumentation.md)
   Defines the runtime metrics needed to evaluate smoothness, caching, and chunk-boundary quality.
+
+### Reader Surface and Voice Management UI
+
+- [Voice Library and Cast Management UI](voice-library-and-cast-management-ui.md)
+  Umbrella specification for advanced voice-library and cast-management UI structure.
+- [Voice Library Row and Information Affordance](voice-library-row-and-information-affordance.md)
+  Defines the voice-library row hierarchy, direct quality surfacing, and info affordance behavior.
+- [Cast Management Dialog Structure](cast-management-dialog-structure.md)
+  Defines the narrator/character voice-management dialog structure and override-state presentation.
+- [Follow-Along Reading Surface UI](follow-along-reading-surface-ui.md)
+  Umbrella specification for the visible follow-along reading-surface UI.
+- [Spoken Highlight Visual Presentation](spoken-highlight-visual-presentation.md)
+  Defines the visible styling and fallback precision of the spoken highlight.
+- [Follow-Along User Scroll Interaction](follow-along-user-scroll-interaction.md)
+  Defines how auto-follow yields to manual scrolling and how re-centering is exposed.
 
 ### Reader Session and Live Input
 

@@ -14,6 +14,8 @@ Planning answers:
 * what order specifications should be implemented in
 * what has been completed
 
+Planning does not define version intent by itself. That role belongs to release definitions.
+
 ---
 
 ## Purpose
@@ -105,6 +107,7 @@ If needed, planning may also indicate who is responsible for implementing a spec
 ## Relationship to Other Documents
 
 * architecture defines the system
+* release definitions define the holistic version scope
 * specifications define the implementation work
 * planning defines the order in which specifications are implemented
 
