@@ -1,5 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:read_aloud/src/controllers/reader_controller.dart';
+import 'package:read_aloud/src/models/reading_focus_state.dart';
 import 'package:read_aloud/src/models/spoken_chunk_record.dart';
 import 'package:read_aloud/src/models/spoken_selection.dart';
 import 'package:read_aloud/src/models/voice_profile.dart';
@@ -259,6 +260,80 @@ void main() {
 
       expect(controller.document.speakableText, contains('Gamma delta.'));
       expect(controller.statusMessage, contains('Live read updated'));
+    });
+
+    test('maintains reading focus state across progress, pause, and user yield', () async {
+      final engine = _FakeTtsEngine();
+      final controller = ReaderController(ttsEngine: engine);
+      addTearDown(controller.dispose);
+
+      await controller.initialize();
+      await controller.importPastedText(
+        'Alpha beta. Gamma delta. Epsilon zeta.',
+      );
+      await controller.startPlayback();
+      engine.emitStart();
+
+      final documentId = controller.document.displayDocument.documentId;
+      final secondSegment = controller.document.speechDocument.segments[1];
+      final voiceId = controller.selectedVoice!.id;
+
+      engine.emitProgress(
+        TtsProgressUpdate(
+          startOffset: 11,
+          endOffset: 22,
+          word: 'delta',
+          documentId: documentId,
+          chunkId: 'chunk-2',
+          segmentId: secondSegment.segmentId,
+          wordStartIndex: 2,
+          wordEndIndex: 4,
+          elapsedInChunk: const Duration(seconds: 2),
+          chunkAudioDuration: const Duration(seconds: 2),
+          voiceId: voiceId,
+          rate: controller.currentSpeed,
+        ),
+      );
+
+      expect(controller.readingFocusState.playbackActive, isTrue);
+      expect(
+        controller.readingFocusState.followMode,
+        ReadingFocusFollowMode.following,
+      );
+      expect(controller.readingFocusState.activeDisplayBlockId, 'b_0');
+      expect(controller.readingFocusState.shouldAutoFollow, isTrue);
+
+      controller.suspendReaderFollow();
+
+      expect(
+        controller.readingFocusState.followMode,
+        ReadingFocusFollowMode.suspendedByUser,
+      );
+      expect(controller.readingFocusState.shouldAutoFollow, isFalse);
+      expect(controller.readingFocusState.canRecenter, isTrue);
+
+      await controller.pausePlayback();
+
+      expect(controller.readingFocusState.playbackActive, isFalse);
+      expect(controller.readingFocusState.activeDisplayBlockId, 'b_0');
+      expect(controller.readingFocusState.canRecenter, isTrue);
+
+      controller.resumeReaderFollow();
+
+      expect(
+        controller.readingFocusState.followMode,
+        ReadingFocusFollowMode.following,
+      );
+      expect(controller.readingFocusState.canRecenter, isFalse);
+
+      await controller.jumpBySeconds(30);
+
+      expect(controller.readingFocusState.playbackActive, isFalse);
+      expect(controller.readingFocusState.activeDisplayBlockId, isNull);
+      expect(
+        controller.readingFocusState.followMode,
+        ReadingFocusFollowMode.following,
+      );
     });
   });
 }
