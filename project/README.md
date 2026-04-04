@@ -2,9 +2,10 @@
 
 This directory is the authoritative source of project understanding for `Read Aloud`.
 
-The documentation is organized around a product definition plus five supporting domains:
+The documentation is organized around a product definition plus six supporting domains:
 
 - `agents/`: project-specific agent operating rules
+- `ui/`: interface structure, interaction semantics, complexity layering, and durable visual behavior
 - `product-definition.md`: feature definition, user expectations, scope, and non-goals
 - `architecture/`: structural truth, boundaries, responsibilities, and data flow
 - `specifications/`: behavioral contracts, rules, thresholds, and acceptance criteria
@@ -16,6 +17,15 @@ The documentation is organized around a product definition plus five supporting 
 ### Agents
 
 - [Project Agent Rules](agents/README.md)
+
+### UI Definitions
+
+- [UI Definitions Index](ui/README.md)
+- [UI System Overview](ui/ui-system-overview.md)
+- [Primary Surface and Complexity Layering](ui/primary-surface-and-complexity-layering.md)
+- [Control State Semantics](ui/control-state-semantics.md)
+- [Theme and Appearance Modes](ui/theme-and-appearance-modes.md)
+- [Live Input and File Menu Behavior](ui/live-input-and-file-menu-behavior.md)
 
 ### Product
 
