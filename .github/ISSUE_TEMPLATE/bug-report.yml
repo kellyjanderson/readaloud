@@ -1,0 +1,60 @@
+name: Bug report
+description: Report broken or incorrect behavior.
+title: "[Bug]: "
+labels:
+  - bug
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for filing a bug.
+
+        Bug-fix work in this repository is expected to link back to an issue like this one.
+  - type: textarea
+    id: summary
+    attributes:
+      label: Summary
+      description: What is wrong?
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Reproduction steps
+      description: How can someone reproduce the problem?
+      placeholder: |
+        1. Open ...
+        2. Click ...
+        3. Observe ...
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+    validations:
+      required: true
+  - type: dropdown
+    id: platform
+    attributes:
+      label: Platform
+      options:
+        - macOS
+        - iOS
+        - Android
+        - Linux
+        - Windows
+        - Other
+    validations:
+      required: true
+  - type: textarea
+    id: diagnostics
+    attributes:
+      label: Logs, traces, or screenshots
+      description: Include any useful traces, audio notes, or screenshots.

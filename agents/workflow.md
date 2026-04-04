@@ -30,6 +30,18 @@ agents/git-and-github.md
 
 Agents should satisfy those branch and PR requirements before making code changes.
 
+UI definition guidance is defined in:
+
+```text
+agents/ui-definitions.md
+```
+
+Project UI definition documents should live in:
+
+```text
+project/ui/
+```
+
 ---
 
 ## Exploration Loops
@@ -50,6 +62,29 @@ project/product-definition.md
 * update the product definition as needed
 
 This loop continues until the product definition is sufficiently clear.
+
+---
+
+### UI Definitions ↔ Research
+
+UI definitions are refined through research and observation.
+
+Primary UI definition documents live in:
+
+```text
+project/ui/
+```
+
+* identify interface unknowns, clutter, ambiguity, or interaction problems
+* perform research or observation where needed
+* store findings in the research folder when they are durable
+* update UI definitions to reflect resolved interaction structure
+
+This loop continues until the relevant UI surface is sufficiently coherent.
+
+UI definition work is breadth first across the relevant interface area.
+
+The goal is to define the visible structure and interaction semantics of the surface before narrower specifications or implementation details are finalized.
 
 ---
 
@@ -77,6 +112,7 @@ The goal is to understand how the parts work together at system level, not to fu
 At some point:
 
 * product definition becomes stable enough to guide development
+* UI definitions become stable enough to guide interface work
 * architecture becomes stable enough to define system structure
 
 For architecture, "stable enough" means the relevant architecture documents for the area of work have been completed breadth first.
@@ -103,11 +139,12 @@ After stabilization:
 * break architecture into specifications
 * evaluate each specification for implementability
 
-Specifications are written only after the relevant architecture documents are complete enough to describe the whole system area being refined.
+Specifications are written only after the relevant architecture and UI definition documents are complete enough to describe the whole system area being refined.
 
-Architecture comes first.
+Architecture and UI definitions come first for their respective concerns.
 
 Specification refinement is not a substitute for unfinished architecture work.
+It is also not a substitute for unfinished UI definition work when the interface structure itself is still unclear.
 
 For each specification:
 
@@ -199,11 +236,13 @@ If specifications change during execution:
 If implementation reveals issues that affect:
 
 * product definition, or
+* UI definition, or
 * system structure
 
 return to the appropriate loop:
 
 * product ↔ research
+* UI definitions ↔ research
 * architecture ↔ research
 
 Update documents before continuing.

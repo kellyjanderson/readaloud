@@ -1,0 +1,37 @@
+name: Feature request
+description: Propose a new capability or enhancement.
+title: "[Feature]: "
+labels:
+  - enhancement
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for proposing a feature.
+
+        Feature implementation in this repository should be tied to a specification.
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem or need
+      description: What problem should this feature solve?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed feature
+      description: What should happen?
+    validations:
+      required: true
+  - type: textarea
+    id: spec
+    attributes:
+      label: Related specification
+      description: Link an existing spec, or describe what spec should be created first.
+      placeholder: project/specifications/...
+  - type: textarea
+    id: success
+    attributes:
+      label: Success criteria
+      description: What would make this feature complete?

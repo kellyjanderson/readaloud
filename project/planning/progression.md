@@ -120,6 +120,7 @@ It includes only leaf specifications that are marked final.
 
 - [x] [Playback Quality Instrumentation](../specifications/playback-quality-instrumentation.md)
 - [x] [Pronunciation Diagnostics and Observability](../specifications/pronunciation-diagnostics-and-observability.md)
+- [x] [Repository Readme and GitHub Community Files](../specifications/repository-readme-and-github-community-files.md)
 - [x] [Audio Export Assembly](../specifications/audio-export-assembly.md)
 - [x] [Command-Line Mode Selection](../specifications/command-line-mode-selection.md)
 - [x] [Headless Synthesis Session](../specifications/headless-synthesis-session.md)

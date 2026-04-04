@@ -188,6 +188,11 @@ They are intentionally narrower than architecture documents. For any architectur
 - [Reader Session Continuity and Live Input](reader-session-continuity-and-live-input.md)
   Defines remembered file-backed reader state and watched-file live input behavior inside the running app.
 
+### Repository Onboarding and Community
+
+- [Repository Readme and GitHub Community Files](repository-readme-and-github-community-files.md)
+  Defines the required root onboarding docs and GitHub community-health files for the repository surface.
+
 ### Audio Export and Headless Execution
 
 - [Audio Export and Headless Execution](audio-export-and-headless-execution.md)
