@@ -17,6 +17,7 @@ import '../models/display_document.dart';
 import '../models/chunk_plan.dart';
 import '../models/english_pronunciation_profile.dart';
 import '../models/spoken_chunk_record.dart';
+import '../models/spoken_selection.dart';
 import '../models/speech_document.dart';
 import '../models/tts_artifact.dart';
 import '../models/voice_session_realization.dart';
@@ -31,6 +32,7 @@ import '../services/playback_instrumentation_service.dart';
 import '../services/pronunciation_resource_layering_service.dart';
 import '../services/reader_preferences_service.dart';
 import '../services/share_intake_service.dart';
+import '../services/spoken_selection_mapper_service.dart';
 import '../services/tts_engine.dart';
 import '../services/voice_session_realization_service.dart';
 
@@ -63,6 +65,8 @@ class ReaderController extends ChangeNotifier {
   final PronunciationResourceLayeringService
   _pronunciationResourceLayeringService =
       const PronunciationResourceLayeringService();
+  final SpokenSelectionMapperService _spokenSelectionMapperService =
+      const SpokenSelectionMapperService();
   final PlaybackInstrumentationService _instrumentation =
       PlaybackInstrumentationService.instance;
   final ShareIntakeService _shareIntake = createShareIntakeService();
@@ -101,6 +105,7 @@ class ReaderController extends ChangeNotifier {
   DateTime? _ttsDebugTraceStartedAt;
   String? _ttsDebugTraceVoiceId;
   List<String> _ttsDebugTraceLines = const <String>[];
+  SpokenSelection _spokenSelection = const SpokenSelection.none();
 
   int _currentWordIndex = 0;
   double _wordsPerSecond = 2.8;
@@ -144,6 +149,7 @@ class ReaderController extends ChangeNotifier {
   DateTime? get ttsDebugTraceStartedAt => _ttsDebugTraceStartedAt;
   String? get ttsDebugTraceVoiceId => _ttsDebugTraceVoiceId;
   List<String> get ttsDebugTraceLines => _ttsDebugTraceLines;
+  SpokenSelection get spokenSelection => _spokenSelection;
   Duration? get sleepTimerDuration => _sleepTimerDuration;
   String get fontFamily => _fontFamily;
   double get fontScale => _fontScale;
@@ -469,6 +475,7 @@ class ReaderController extends ChangeNotifier {
       _utteranceStartedAt = null;
       _playbackEndedAtDocumentEnd = false;
       _activeSpokenChunkId = null;
+      _spokenSelection = const SpokenSelection.none();
       _narrationState = _narrationState.reset(recentRate: currentSpeed);
     }
 
@@ -529,6 +536,7 @@ class ReaderController extends ChangeNotifier {
     _currentWordIndex = snappedTarget;
     _playbackEndedAtDocumentEnd = false;
     _activeSpokenChunkId = null;
+    _spokenSelection = const SpokenSelection.none();
     _narrationState = _narrationState
         .reset(recentRate: currentSpeed)
         .copyWith(
@@ -871,6 +879,7 @@ class ReaderController extends ChangeNotifier {
     _playbackActivity = const TtsPlaybackActivity.idle();
     _spokenChunkRecords.clear();
     _activeSpokenChunkId = null;
+    _spokenSelection = const SpokenSelection.none();
     _playbackRequestedAt = null;
     _latencyRecordedSessions.clear();
     _positionConfidenceRecordedSessions.clear();
@@ -962,6 +971,14 @@ class ReaderController extends ChangeNotifier {
     _currentWordIndex = nextWordIndex.clamp(
       0,
       math.max(_document.wordCount - 1, 0),
+    );
+    _spokenSelection = _spokenSelectionMapperService.map(
+      SpokenSelectionMapperInput(
+        displayDocument: _document.displayDocument,
+        speechDocument: _document.speechDocument,
+        positionMap: _document.positionMap,
+        progress: update,
+      ),
     );
     _playbackEndedAtDocumentEnd = false;
     _narrationState = _narrationState.copyWith(
