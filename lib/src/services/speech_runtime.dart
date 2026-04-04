@@ -182,6 +182,9 @@ class SpeechRuntimeChunkPayload {
     required this.rate,
     required this.isInitialChunk,
     required this.isResumedChunk,
+    this.routeId,
+    this.castId,
+    this.dialogueSpanId,
     this.capabilityProfileId,
     this.pronunciationArtifacts = const <Map<String, Object?>>[],
     this.missingFallbackWordCount = 0,
@@ -201,6 +204,9 @@ class SpeechRuntimeChunkPayload {
   final double rate;
   final bool isInitialChunk;
   final bool isResumedChunk;
+  final String? routeId;
+  final String? castId;
+  final String? dialogueSpanId;
   final List<Map<String, Object?>> pronunciationArtifacts;
   final int missingFallbackWordCount;
 
@@ -220,6 +226,9 @@ class SpeechRuntimeChunkPayload {
       'rate': rate,
       'isInitialChunk': isInitialChunk,
       'isResumedChunk': isResumedChunk,
+      'routeId': routeId,
+      'castId': castId,
+      'dialogueSpanId': dialogueSpanId,
       'pronunciationArtifacts': pronunciationArtifacts,
       'missingFallbackWordCount': missingFallbackWordCount,
     };
@@ -241,6 +250,9 @@ class SpeechRuntimeChunkPayload {
       rate: (map['rate']! as num).toDouble(),
       isInitialChunk: map['isInitialChunk']! as bool,
       isResumedChunk: map['isResumedChunk']! as bool,
+      routeId: map['routeId'] as String?,
+      castId: map['castId'] as String?,
+      dialogueSpanId: map['dialogueSpanId'] as String?,
       pronunciationArtifacts: List<Map<String, Object?>>.from(
         (map['pronunciationArtifacts'] as List<Object?>? ?? const <Object?>[])
             .map(
@@ -495,6 +507,9 @@ class SpeechRuntimeEvent {
     this.sessionId,
     this.documentId,
     this.voiceId,
+    this.routeId,
+    this.castId,
+    this.dialogueSpanId,
     this.rate,
     this.generationId,
     this.chunkId,
@@ -554,6 +569,9 @@ class SpeechRuntimeEvent {
       sessionId: payload['sessionId'] as String?,
       documentId: payload['documentId'] as String?,
       voiceId: payload['voiceId'] as String?,
+      routeId: payload['routeId'] as String?,
+      castId: payload['castId'] as String?,
+      dialogueSpanId: payload['dialogueSpanId'] as String?,
       rate: (payload['rate'] as num?)?.toDouble(),
       generationId: payload['generationId'] as String?,
       chunkId: payload['chunkId'] as String?,
@@ -606,6 +624,9 @@ class SpeechRuntimeEvent {
   final String? sessionId;
   final String? documentId;
   final String? voiceId;
+  final String? routeId;
+  final String? castId;
+  final String? dialogueSpanId;
   final double? rate;
   final String? generationId;
   final String? chunkId;
@@ -1045,6 +1066,8 @@ class SpeechRuntime {
       return;
     }
 
+    final workItem = _pendingChunksById[event.chunkId];
+
     switch (event.type) {
       case SpeechWorkerEventType.queued:
         _emit(
@@ -1053,6 +1076,10 @@ class SpeechRuntime {
             sessionId: event.sessionId,
             generationId: event.generationId,
             chunkId: event.chunkId,
+            voiceId: workItem?.chunk.voiceId,
+            routeId: workItem?.chunk.routeId,
+            castId: workItem?.chunk.castId,
+            dialogueSpanId: workItem?.chunk.dialogueSpanId,
           ),
         );
       case SpeechWorkerEventType.cacheHit:
@@ -1063,6 +1090,10 @@ class SpeechRuntime {
             sessionId: event.sessionId,
             generationId: event.generationId,
             chunkId: event.chunkId,
+            voiceId: workItem?.chunk.voiceId,
+            routeId: workItem?.chunk.routeId,
+            castId: workItem?.chunk.castId,
+            dialogueSpanId: workItem?.chunk.dialogueSpanId,
             audioPath: event.audioPath,
             duration: event.duration,
           ),
@@ -1076,6 +1107,10 @@ class SpeechRuntime {
             sessionId: event.sessionId,
             generationId: event.generationId,
             chunkId: event.chunkId,
+            voiceId: workItem?.chunk.voiceId,
+            routeId: workItem?.chunk.routeId,
+            castId: workItem?.chunk.castId,
+            dialogueSpanId: workItem?.chunk.dialogueSpanId,
             stage: event.stage,
             elapsedMillis: event.elapsedMillis,
           ),
@@ -1090,6 +1125,10 @@ class SpeechRuntime {
             sessionId: event.sessionId,
             generationId: event.generationId,
             chunkId: event.chunkId,
+            voiceId: workItem?.chunk.voiceId,
+            routeId: workItem?.chunk.routeId,
+            castId: workItem?.chunk.castId,
+            dialogueSpanId: workItem?.chunk.dialogueSpanId,
             errorCode: 'workerFailure',
             message: event.message,
           ),
@@ -1111,6 +1150,10 @@ class SpeechRuntime {
         sessionId: workItem.sessionId,
         generationId: workItem.generationId,
         chunkId: workItem.chunk.chunkId,
+        voiceId: workItem.chunk.voiceId,
+        routeId: workItem.chunk.routeId,
+        castId: workItem.chunk.castId,
+        dialogueSpanId: workItem.chunk.dialogueSpanId,
         stage: 'boundaryCorrecting',
       ),
     );
@@ -1147,6 +1190,10 @@ class SpeechRuntime {
           sessionId: workItem.sessionId,
           generationId: workItem.generationId,
           chunkId: workItem.chunk.chunkId,
+          voiceId: workItem.chunk.voiceId,
+          routeId: workItem.chunk.routeId,
+          castId: workItem.chunk.castId,
+          dialogueSpanId: workItem.chunk.dialogueSpanId,
           audioPath: event.audioPath,
           duration: event.duration,
           boundaryClass: workItem.chunk.boundaryClass,
@@ -1180,6 +1227,10 @@ class SpeechRuntime {
           sessionId: workItem.sessionId,
           generationId: workItem.generationId,
           chunkId: workItem.chunk.chunkId,
+          voiceId: workItem.chunk.voiceId,
+          routeId: workItem.chunk.routeId,
+          castId: workItem.chunk.castId,
+          dialogueSpanId: workItem.chunk.dialogueSpanId,
           errorCode: 'boundaryCorrectionFailed',
           message: '$error',
           fatalForSession: false,
@@ -1193,6 +1244,10 @@ class SpeechRuntime {
     required String sessionId,
     String? generationId,
     String? chunkId,
+    String? voiceId,
+    String? routeId,
+    String? castId,
+    String? dialogueSpanId,
     String? audioPath,
     Duration? duration,
     String? stage,
@@ -1217,8 +1272,18 @@ class SpeechRuntime {
     if (_activeDocumentId != null) {
       payload['documentId'] = _activeDocumentId;
     }
-    if (_activeVoiceId != null) {
-      payload['voiceId'] = _activeVoiceId;
+    final resolvedVoiceId = voiceId ?? _activeVoiceId;
+    if (resolvedVoiceId != null) {
+      payload['voiceId'] = resolvedVoiceId;
+    }
+    if (routeId != null) {
+      payload['routeId'] = routeId;
+    }
+    if (castId != null) {
+      payload['castId'] = castId;
+    }
+    if (dialogueSpanId != null) {
+      payload['dialogueSpanId'] = dialogueSpanId;
     }
     if (_activeRate != null) {
       payload['rate'] = _activeRate;
@@ -1296,7 +1361,10 @@ class SpeechRuntime {
       payload: payload,
       sessionId: sessionId,
       documentId: _activeDocumentId,
-      voiceId: _activeVoiceId,
+      voiceId: resolvedVoiceId,
+      routeId: routeId,
+      castId: castId,
+      dialogueSpanId: dialogueSpanId,
       rate: _activeRate,
       generationId: generationId,
       chunkId: chunkId,

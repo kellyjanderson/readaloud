@@ -17,6 +17,9 @@ class TtsProgressUpdate {
     this.chunkAudioDuration,
     this.voiceId,
     this.rate,
+    this.routeId,
+    this.castId,
+    this.dialogueSpanId,
   });
 
   final int startOffset;
@@ -31,6 +34,9 @@ class TtsProgressUpdate {
   final Duration? chunkAudioDuration;
   final String? voiceId;
   final double? rate;
+  final String? routeId;
+  final String? castId;
+  final String? dialogueSpanId;
 }
 
 enum TtsPlaybackPhase { idle, buffering, playing }

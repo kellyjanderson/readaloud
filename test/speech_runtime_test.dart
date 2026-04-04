@@ -36,6 +36,9 @@ void main() {
           rate: 1.0,
           isInitialChunk: true,
           isResumedChunk: false,
+          routeId: 'route_dialogue_jennifer',
+          castId: 'cast_character_jennifer',
+          dialogueSpanId: 'dlg_s_1',
           pronunciationArtifacts: const <Map<String, Object?>>[
             <String, Object?>{
               'artifactId': 'artifact-a',
@@ -62,6 +65,9 @@ void main() {
           roundTripped.pronunciationArtifacts.single['translationOutcome'],
           'direct',
         );
+        expect(roundTripped.routeId, 'route_dialogue_jennifer');
+        expect(roundTripped.castId, 'cast_character_jennifer');
+        expect(roundTripped.dialogueSpanId, 'dlg_s_1');
         expect(roundTripped.capabilityProfileId, 'kokoro:macos:v1');
         expect(roundTripped.missingFallbackWordCount, 2);
       },

@@ -365,6 +365,10 @@ class KokoroTtsEngine
             segmentIds: plannedChunk.segmentIds,
             startWordIndex: plannedChunk.startWordIndex,
             endWordIndex: plannedChunk.endWordIndex,
+            voiceId: plannedChunk.voiceId,
+            routeId: plannedChunk.routeId,
+            castId: plannedChunk.castId,
+            dialogueSpanId: plannedChunk.dialogueSpanId,
             capabilityProfileId: plannedChunk.capabilityProfileId,
             missingFallbackWordCount: plannedChunk.missingFallbackWordCount,
             boundaryMetadata: event.boundaryClass == null
@@ -454,9 +458,10 @@ class KokoroTtsEngine
         sessionId: sessionId,
         generationId: generationId,
         chunk: chunks.first.toRuntimeChunk(
-          voiceId: _selectedVoiceId,
           rate: _speechRate,
-          languageTag: KokoroVoiceCatalog.languageTagForVoice(_selectedVoiceId),
+          languageTag: KokoroVoiceCatalog.languageTagForVoice(
+            chunks.first.voiceId,
+          ),
           isInitialChunk: true,
           isResumedChunk: false,
         ),
@@ -470,10 +475,9 @@ class KokoroTtsEngine
               .skip(1)
               .map(
                 (chunk) => chunk.toRuntimeChunk(
-                  voiceId: _selectedVoiceId,
                   rate: _speechRate,
                   languageTag: KokoroVoiceCatalog.languageTagForVoice(
-                    _selectedVoiceId,
+                    chunk.voiceId,
                   ),
                   isInitialChunk: false,
                   isResumedChunk: false,
@@ -587,9 +591,10 @@ class KokoroTtsEngine
         sessionId: _activeSessionId!,
         generationId: generationId,
         chunk: chunks.first.toRuntimeChunk(
-          voiceId: _selectedVoiceId,
           rate: _speechRate,
-          languageTag: languageTag,
+          languageTag: KokoroVoiceCatalog.languageTagForVoice(
+            chunks.first.voiceId,
+          ),
           isInitialChunk: true,
           isResumedChunk: request.isResumedPlayback,
         ),
@@ -642,10 +647,9 @@ class KokoroTtsEngine
               .skip(1)
               .map(
                 (chunk) => chunk.toRuntimeChunk(
-                  voiceId: _selectedVoiceId,
                   rate: _speechRate,
                   languageTag: KokoroVoiceCatalog.languageTagForVoice(
-                    _selectedVoiceId,
+                    chunk.voiceId,
                   ),
                   isInitialChunk: false,
                   isResumedChunk: false,
@@ -703,9 +707,10 @@ class KokoroTtsEngine
           generationId: generationId,
           chunks: <SpeechRuntimeChunkPayload>[
             chunk.toRuntimeChunk(
-              voiceId: _selectedVoiceId,
               rate: _speechRate,
-              languageTag: languageTag,
+              languageTag: KokoroVoiceCatalog.languageTagForVoice(
+                chunk.voiceId,
+              ),
               isInitialChunk: false,
               isResumedChunk: false,
             ),
@@ -810,6 +815,9 @@ class KokoroTtsEngine
         chunkAudioDuration: chunk.duration,
         voiceId: chunk.voiceId,
         rate: chunk.rate,
+        routeId: chunk.routeId,
+        castId: chunk.castId,
+        dialogueSpanId: chunk.dialogueSpanId,
       ),
     );
   }
@@ -848,7 +856,17 @@ class KokoroTtsEngine
         _emitBufferingActivity();
       case SpeechRuntimeEventType.chunkCacheHit:
         if (event.chunkId != null) {
-          _recordMetric('chunkCacheHit', chunkId: event.chunkId, value: true);
+          _recordMetric(
+            'chunkCacheHit',
+            chunkId: event.chunkId,
+            voiceId: event.voiceId,
+            value: <String, Object?>{
+              'cacheHit': true,
+              'routeId': event.routeId,
+              'castId': event.castId,
+              'dialogueSpanId': event.dialogueSpanId,
+            },
+          );
         }
         _emitBufferingActivity();
       case SpeechRuntimeEventType.chunkStageChanged:
@@ -915,8 +933,11 @@ class KokoroTtsEngine
       filePath: event.audioPath!,
       leadingSilence: event.leadingSilence ?? Duration.zero,
       trailingSilence: event.trailingSilence ?? Duration.zero,
-      voiceId: _selectedVoiceId,
+      voiceId: chunk.voiceId,
       rate: _speechRate,
+      routeId: chunk.routeId,
+      castId: chunk.castId,
+      dialogueSpanId: chunk.dialogueSpanId,
     );
 
     final wasCacheHit = event.cacheHit ?? false;
@@ -929,28 +950,40 @@ class KokoroTtsEngine
         _recordMetric(
           'generationRealTimeFactor',
           chunkId: chunkId,
+          voiceId: chunk.voiceId,
           value: <String, Object?>{
             'factor': elapsedMillis / event.duration!.inMilliseconds,
             'generationMillis': elapsedMillis,
             'audioMillis': event.duration!.inMilliseconds,
+            'routeId': chunk.routeId,
+            'castId': chunk.castId,
+            'dialogueSpanId': chunk.dialogueSpanId,
           },
         );
       }
-      _recordMetric('chunkRegenerated', chunkId: chunkId, value: true);
+      _recordMetric(
+        'chunkRegenerated',
+        chunkId: chunkId,
+        voiceId: chunk.voiceId,
+        value: true,
+      );
     }
     _recordMetric(
       'boundaryCorrectionApplied',
       chunkId: chunkId,
+      voiceId: chunk.voiceId,
       value: event.boundaryCorrectionApplied ?? false,
     );
     _recordMetric(
       'joinSilenceBeforeMs',
       chunkId: chunkId,
+      voiceId: chunk.voiceId,
       value: event.joinSilenceBefore?.inMilliseconds ?? 0,
     );
     _recordMetric(
       'joinSilenceAfterMs',
       chunkId: chunkId,
+      voiceId: chunk.voiceId,
       value: event.joinSilenceAfter?.inMilliseconds ?? 0,
     );
 
@@ -979,6 +1012,7 @@ class KokoroTtsEngine
       _recordMetric(
         'prefetchLeadTimeMs',
         chunkId: playbackChunk.chunkId,
+        voiceId: playbackChunk.voiceId,
         value: _bufferedLeadTime().inMilliseconds,
       );
       _emitActivity(
@@ -1114,6 +1148,7 @@ class KokoroTtsEngine
         chunkId: spec.chunkId,
         segmentIds: spec.segmentIds,
         cacheKey: spec.cacheKey,
+        voiceId: spec.voiceId,
         boundaryClass: spec.boundaryClass,
         documentId: request.documentId ?? 'unknown-document',
         normalizationVersion:
@@ -1134,6 +1169,9 @@ class KokoroTtsEngine
         wordBoundaries: _buildWordBoundaries(spec.speakText),
         finalPhonemeString: tokenization.finalPhonemeString,
         phonemeTraceLines: tokenization.phonemeTraceLines,
+        routeId: spec.routeId,
+        castId: spec.castId,
+        dialogueSpanId: spec.dialogueSpanId,
       );
       prepared.add(chunk);
       searchOffset = startOffset + spec.speakText.length;
@@ -1166,6 +1204,7 @@ class KokoroTtsEngine
         chunkId: spec.chunkId,
         segmentIds: spec.segmentIds,
         cacheKey: spec.cacheKey,
+        voiceId: spec.voiceId,
         boundaryClass: spec.boundaryClass,
         documentId: request.documentId ?? 'unknown-document',
         normalizationVersion:
@@ -1186,6 +1225,9 @@ class KokoroTtsEngine
         wordBoundaries: _buildWordBoundaries(spec.speakText),
         finalPhonemeString: tokenization.finalPhonemeString,
         phonemeTraceLines: tokenization.phonemeTraceLines,
+        routeId: spec.routeId,
+        castId: spec.castId,
+        dialogueSpanId: spec.dialogueSpanId,
       ),
       nextSearchOffset: startOffset + spec.speakText.length,
     );
@@ -1219,6 +1261,7 @@ class KokoroTtsEngine
             rate: _speechRate,
             normalizationVersion: normalizationVersion,
           ),
+          voiceId: _selectedVoiceId,
           boundaryClass: chunks.isEmpty ? BreakClass.none : BreakClass.sentence,
           documentId: documentId,
           normalizationVersion: normalizationVersion,
@@ -1250,6 +1293,9 @@ class KokoroTtsEngine
           wordBoundaries: _buildWordBoundaries(text),
           finalPhonemeString: '',
           phonemeTraceLines: const <String>[],
+          routeId: null,
+          castId: null,
+          dialogueSpanId: null,
         ),
       );
       runningWordIndex += wordCount;
@@ -1474,7 +1520,12 @@ class KokoroTtsEngine
     return leadTime;
   }
 
-  void _recordMetric(String metric, {String? chunkId, Object? value}) {
+  void _recordMetric(
+    String metric, {
+    String? chunkId,
+    String? voiceId,
+    Object? value,
+  }) {
     final documentId = _activeDocumentId;
     final sessionId = _activeSessionId;
     if (documentId == null || sessionId == null) {
@@ -1485,7 +1536,7 @@ class KokoroTtsEngine
       metric: metric,
       documentId: documentId,
       sessionId: sessionId,
-      voiceId: _selectedVoiceId,
+      voiceId: voiceId ?? _selectedVoiceId,
       engineId: _engineId,
       chunkId: chunkId,
       value: value,
@@ -1546,7 +1597,12 @@ class KokoroTtsEngine
     _recordMetric(
       'pronunciationTranslationTrace',
       chunkId: chunk.chunkId,
+      voiceId: chunk.voiceId,
       value: <String, Object?>{
+        'routeId': chunk.routeId,
+        'castId': chunk.castId,
+        'dialogueSpanId': chunk.dialogueSpanId,
+        'routedVoiceId': chunk.voiceId,
         'capabilityProfileId': chunk.capabilityProfileId,
         'segmentIds': chunk.segmentIds,
         'engineSpeakText': chunk.engineSpeakText,
@@ -1563,6 +1619,10 @@ class KokoroTtsEngine
     _debugTraceSession?.appendLines(<String>[
       '',
       '=== chunk ${chunk.chunkId} ===',
+      'routeId: ${chunk.routeId ?? 'none'}',
+      'castId: ${chunk.castId ?? 'none'}',
+      'dialogueSpanId: ${chunk.dialogueSpanId ?? 'none'}',
+      'routedVoiceId: ${chunk.voiceId}',
       'text: ${jsonEncode(chunk.text)}',
       'engineSpeakText: ${jsonEncode(chunk.engineSpeakText)}',
       'finalPhonemes: ${jsonEncode(chunk.finalPhonemeString)}',
@@ -1638,6 +1698,7 @@ class _QueuedChunk {
     required this.chunkId,
     required this.segmentIds,
     required this.cacheKey,
+    required this.voiceId,
     required this.boundaryClass,
     required this.documentId,
     required this.normalizationVersion,
@@ -1656,11 +1717,15 @@ class _QueuedChunk {
     required this.wordBoundaries,
     required this.finalPhonemeString,
     required this.phonemeTraceLines,
+    required this.routeId,
+    required this.castId,
+    required this.dialogueSpanId,
   });
 
   final String chunkId;
   final List<String> segmentIds;
   final String cacheKey;
+  final String voiceId;
   final BreakClass boundaryClass;
   final String documentId;
   final String normalizationVersion;
@@ -1680,9 +1745,11 @@ class _QueuedChunk {
   final List<_WordBoundary> wordBoundaries;
   final String finalPhonemeString;
   final List<String> phonemeTraceLines;
+  final String? routeId;
+  final String? castId;
+  final String? dialogueSpanId;
 
   SpeechRuntimeChunkPayload toRuntimeChunk({
-    required String voiceId,
     required double rate,
     required String languageTag,
     required bool isInitialChunk,
@@ -1706,6 +1773,9 @@ class _QueuedChunk {
       rate: rate,
       isInitialChunk: isInitialChunk,
       isResumedChunk: isResumedChunk,
+      routeId: routeId,
+      castId: castId,
+      dialogueSpanId: dialogueSpanId,
       pronunciationArtifacts: translatedPronunciationArtifacts
           .map((artifact) => artifact.toMap())
           .toList(growable: false),
@@ -1771,6 +1841,9 @@ class _PlaybackChunk {
     required this.trailingSilence,
     required this.voiceId,
     required this.rate,
+    required this.routeId,
+    required this.castId,
+    required this.dialogueSpanId,
   });
 
   final String chunkId;
@@ -1788,6 +1861,9 @@ class _PlaybackChunk {
   final Duration trailingSilence;
   final String voiceId;
   final double rate;
+  final String? routeId;
+  final String? castId;
+  final String? dialogueSpanId;
 
   _ChunkSegmentRange? segmentRangeForWordIndex(int absoluteWordIndex) {
     for (final range in segmentRanges) {

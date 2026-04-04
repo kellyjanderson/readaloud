@@ -93,7 +93,7 @@ It includes only leaf specifications that are marked final.
 - [x] [Voice Metadata Model and Source Normalization](../specifications/voice-metadata-model-and-source-normalization.md)
 - [x] [Automatic Voice Casting and Override Resolution](../specifications/automatic-voice-casting-and-override-resolution.md)
 - [x] [Cast-Aware Speech Range Routing](../specifications/cast-aware-speech-range-routing.md)
-- [ ] [Voice-Routed Progress and Diagnostics](../specifications/voice-routed-progress-and-diagnostics.md)
+- [x] [Voice-Routed Progress and Diagnostics](../specifications/voice-routed-progress-and-diagnostics.md)
 
 ### Speech Runtime Boundary
 
