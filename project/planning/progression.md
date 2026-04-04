@@ -89,7 +89,7 @@ It includes only leaf specifications that are marked final.
 
 - [x] [Dialogue Span Detection](../specifications/dialogue-span-detection.md)
 - [x] [Speaker Attribution Contract](../specifications/speaker-attribution-contract.md)
-- [ ] [Character Cast Registry Model](../specifications/character-cast-registry-model.md)
+- [x] [Character Cast Registry Model](../specifications/character-cast-registry-model.md)
 - [ ] [Voice Metadata Model and Source Normalization](../specifications/voice-metadata-model-and-source-normalization.md)
 - [ ] [Automatic Voice Casting and Override Resolution](../specifications/automatic-voice-casting-and-override-resolution.md)
 - [ ] [Cast-Aware Speech Range Routing](../specifications/cast-aware-speech-range-routing.md)

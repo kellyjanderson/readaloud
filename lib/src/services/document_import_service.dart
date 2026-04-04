@@ -17,6 +17,7 @@ import '../models/position_map.dart';
 import '../models/reader_document.dart';
 import '../models/speech_document.dart';
 import 'base_speech_annotation_inference_service.dart';
+import 'character_cast_registry_service.dart';
 import 'document_time_pronunciation_planner_service.dart';
 import 'english_pronunciation_profile_selector.dart';
 import 'english_suffix_allomorph_module.dart';
@@ -85,6 +86,7 @@ class DocumentImportService {
   DocumentImportService({
     BaseSpeechAnnotationInferenceService? annotationInferenceService,
     SpeakerAttributionService? speakerAttributionService,
+    CharacterCastRegistryService? characterCastRegistryService,
     DocumentTimePronunciationPlannerService? pronunciationPlannerService,
     EnglishPronunciationProfileSelector? pronunciationProfileSelector,
     PronunciationResourceLayeringService? pronunciationResourceLayeringService,
@@ -94,6 +96,8 @@ class DocumentImportService {
            const BaseSpeechAnnotationInferenceService(),
        _speakerAttributionService =
            speakerAttributionService ?? const SpeakerAttributionService(),
+       _characterCastRegistryService =
+           characterCastRegistryService ?? const CharacterCastRegistryService(),
        _pronunciationPlannerService =
            pronunciationPlannerService ??
            const DocumentTimePronunciationPlannerService(),
@@ -121,6 +125,7 @@ class DocumentImportService {
 
   final BaseSpeechAnnotationInferenceService _annotationInferenceService;
   final SpeakerAttributionService _speakerAttributionService;
+  final CharacterCastRegistryService _characterCastRegistryService;
   final DocumentTimePronunciationPlannerService _pronunciationPlannerService;
   final EnglishPronunciationProfileSelector _pronunciationProfileSelector;
   final PronunciationResourceLayeringService
@@ -745,6 +750,9 @@ class DocumentImportService {
       speechDocument: normalized.speechDocument,
       baseAnnotations: baseSpeechAnnotations,
     );
+    final characterCastRegistry = _characterCastRegistryService.build(
+      dialogueAttributions: dialogueAttributions,
+    );
     final selectedProfile = _pronunciationProfileSelector.select(
       const EnglishPronunciationProfileSelectionInput(engineId: 'kokoro'),
     );
@@ -771,6 +779,7 @@ class DocumentImportService {
       normalizedImportResult: normalized,
       baseSpeechAnnotations: baseSpeechAnnotations,
       dialogueAttributions: dialogueAttributions,
+      characterCastRegistry: characterCastRegistry,
       basePronunciationArtifacts: basePronunciationArtifacts,
       presentation: presentation,
       pdfData: pdfData,
