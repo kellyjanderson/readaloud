@@ -10,8 +10,17 @@ void main() {
 
     expect(find.text('Read Aloud'), findsWidgets);
     expect(find.text('Reader Controls'), findsOneWidget);
-    expect(find.text('For Probe'), findsWidgets);
-    expect(find.text('TTS Input Trace'), findsOneWidget);
+    expect(find.text('For Probe'), findsNothing);
+    expect(
+      tester.widgetList<Title>(find.byType(Title)).any(
+        (widget) => widget.title == 'Read Aloud - For Probe',
+      ),
+      isTrue,
+    );
+    expect(
+      find.textContaining('Rich document surface with room for images'),
+      findsNothing,
+    );
     expect(
       find.textContaining(
         'Short phrases for tracing how "for" is realized by the TTS pipeline.',
@@ -35,5 +44,6 @@ void main() {
     expect(tester.takeException(), isNull);
     expect(find.byIcon(Icons.play_arrow), findsOneWidget);
     expect(find.text('Play'), findsNothing);
+    expect(find.text('For Probe'), findsNothing);
   });
 }
