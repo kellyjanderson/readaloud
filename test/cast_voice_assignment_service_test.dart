@@ -15,9 +15,24 @@ void main() {
           CastVoiceAssignmentInput(
             characterCastRegistry: _registry(),
             availableVoices: <VoiceProfile>[
-              _voice(id: 'am_michael', label: 'Michael', qualityGrade: 'C+'),
-              _voice(id: 'af_bella', label: 'Bella', qualityGrade: 'A-'),
-              _voice(id: 'bf_emma', label: 'Emma', qualityGrade: 'B-'),
+              _voice(
+                id: 'am_michael',
+                label: 'Michael',
+                qualityGrade: 'C+',
+                gender: VoiceGender.male,
+              ),
+              _voice(
+                id: 'af_bella',
+                label: 'Bella',
+                qualityGrade: 'A-',
+                gender: VoiceGender.female,
+              ),
+              _voice(
+                id: 'bf_emma',
+                label: 'Emma',
+                qualityGrade: 'B-',
+                gender: VoiceGender.female,
+              ),
             ],
             fallbackVoiceId: 'af_bella',
             preferredNarratorVoiceId: 'af_bella',
@@ -30,11 +45,11 @@ void main() {
         );
         expect(
           assignments.forCastId('cast_character_jennifer')?.effectiveVoiceId,
-          'bf_emma',
+          'am_michael',
         );
         expect(
           assignments.forCastId('cast_character_john')?.effectiveVoiceId,
-          'am_michael',
+          'bf_emma',
         );
         expect(
           assignments.forCastId('cast_character_jennifer')?.decisionKind,
@@ -48,8 +63,18 @@ void main() {
         CastVoiceAssignmentInput(
           characterCastRegistry: _registry(),
           availableVoices: <VoiceProfile>[
-            _voice(id: 'am_michael', label: 'Michael', qualityGrade: 'C+'),
-            _voice(id: 'af_bella', label: 'Bella', qualityGrade: 'A-'),
+            _voice(
+              id: 'am_michael',
+              label: 'Michael',
+              qualityGrade: 'C+',
+              gender: VoiceGender.male,
+            ),
+            _voice(
+              id: 'af_bella',
+              label: 'Bella',
+              qualityGrade: 'A-',
+              gender: VoiceGender.female,
+            ),
           ],
           fallbackVoiceId: 'af_bella',
           preferredNarratorVoiceId: 'af_bella',
@@ -74,8 +99,18 @@ void main() {
         CastVoiceAssignmentInput(
           characterCastRegistry: _registry(),
           availableVoices: <VoiceProfile>[
-            _voice(id: 'am_michael', label: 'Michael', qualityGrade: 'C+'),
-            _voice(id: 'af_bella', label: 'Bella', qualityGrade: 'A-'),
+            _voice(
+              id: 'am_michael',
+              label: 'Michael',
+              qualityGrade: 'C+',
+              gender: VoiceGender.male,
+            ),
+            _voice(
+              id: 'af_bella',
+              label: 'Bella',
+              qualityGrade: 'A-',
+              gender: VoiceGender.female,
+            ),
           ],
           fallbackVoiceId: 'af_bella',
           preferredNarratorVoiceId: 'af_bella',
@@ -155,12 +190,14 @@ VoiceProfile _voice({
   required String id,
   required String label,
   String? qualityGrade,
+  VoiceGender? gender,
 }) {
   return VoiceProfile(
     id: id,
     label: label,
     locale: 'en-US',
     rawValue: <String, dynamic>{'name': label, 'locale': 'en-US'},
+    gender: gender,
     qualityGrade: qualityGrade,
   );
 }
