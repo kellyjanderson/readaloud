@@ -46,13 +46,21 @@ class CastVoiceAssignmentService {
     final sortedCharacters =
         input.characterCastRegistry.characterEntries.toList(growable: false)
           ..sort((left, right) => left.castId.compareTo(right.castId));
+    final usedCharacterVoiceIds = <String>{};
 
     for (var index = 0; index < sortedCharacters.length; index += 1) {
       final character = sortedCharacters[index];
-      final automaticVoiceId = characterVoicePool.isNotEmpty
-          ? characterVoicePool[index % characterVoicePool.length].id
-          : narratorAutomaticVoiceId;
+      final automaticVoiceId = _chooseAutomaticCharacterVoiceId(
+        voices: sortedVoices,
+        character: character,
+        narratorVoiceId: narratorAutomaticVoiceId,
+        usedCharacterVoiceIds: usedCharacterVoiceIds,
+        fallbackPool: characterVoicePool,
+      );
       automaticAssignments[character.castId] = automaticVoiceId;
+      if (automaticVoiceId != null && automaticVoiceId != narratorAutomaticVoiceId) {
+        usedCharacterVoiceIds.add(automaticVoiceId);
+      }
     }
 
     final assignments = <CastVoiceAssignment>[];
@@ -109,45 +117,115 @@ class CastVoiceAssignmentService {
     return availableVoiceIds.contains(voiceId) ? voiceId : null;
   }
 
+  String? _chooseAutomaticCharacterVoiceId({
+    required List<VoiceProfile> voices,
+    required CastEntry character,
+    required String? narratorVoiceId,
+    required Set<String> usedCharacterVoiceIds,
+    required List<VoiceProfile> fallbackPool,
+  }) {
+    final preferredVoices = _prioritizedCharacterVoices(
+      voices,
+      narratorVoiceId,
+      preferredGender: character.inferredGender,
+    );
+    if (preferredVoices.isEmpty) {
+      return narratorVoiceId;
+    }
+
+    for (final voice in preferredVoices) {
+      if (!usedCharacterVoiceIds.contains(voice.id)) {
+        return voice.id;
+      }
+    }
+    if (fallbackPool.isNotEmpty) {
+      return fallbackPool.first.id;
+    }
+    return preferredVoices.first.id;
+  }
+
   List<VoiceProfile> _prioritizedCharacterVoices(
     List<VoiceProfile> sortedVoices,
     String? narratorVoiceId,
+    {VoiceGender? preferredGender,}
   ) {
     final nonNarratorVoices = sortedVoices
         .where((voice) => voice.id != narratorVoiceId)
         .toList(growable: false);
-    if (narratorVoiceId == null) {
-      return nonNarratorVoices;
-    }
-
     final narratorVoice = sortedVoices
         .where((voice) => voice.id == narratorVoiceId)
         .firstOrNull;
-    final narratorGender = narratorVoice?.gender;
-    if (narratorGender == null) {
-      return nonNarratorVoices;
-    }
-
-    final contrasting = <VoiceProfile>[];
-    final unknown = <VoiceProfile>[];
-    final similar = <VoiceProfile>[];
-
-    for (final voice in nonNarratorVoices) {
-      final gender = voice.gender;
-      if (gender == null || gender == VoiceGender.neutral) {
-        unknown.add(voice);
-      } else if (gender != narratorGender) {
-        contrasting.add(voice);
-      } else {
-        similar.add(voice);
+    final prioritized = List<VoiceProfile>.from(nonNarratorVoices);
+    prioritized.sort((left, right) {
+      final scoreComparison = _characterVoiceScore(
+        right,
+        narratorVoice: narratorVoice,
+        preferredGender: preferredGender,
+      ).compareTo(
+        _characterVoiceScore(
+          left,
+          narratorVoice: narratorVoice,
+          preferredGender: preferredGender,
+        ),
+      );
+      if (scoreComparison != 0) {
+        return scoreComparison;
       }
+      return _compareVoices(left, right);
+    });
+    return prioritized;
+  }
+
+  int _characterVoiceScore(
+    VoiceProfile voice, {
+    required VoiceProfile? narratorVoice,
+    required VoiceGender? preferredGender,
+  }) {
+    var score = _qualityScore(voice.qualityGrade);
+
+    final gender = voice.gender;
+    final preferredGenderIsConcrete =
+        preferredGender != null && preferredGender != VoiceGender.neutral;
+    if (preferredGenderIsConcrete && gender == preferredGender) {
+      score += 120;
+    } else if (preferredGenderIsConcrete &&
+        gender != null &&
+        gender != VoiceGender.neutral) {
+      score -= 20;
     }
 
-    return <VoiceProfile>[
-      ...contrasting,
-      ...unknown,
-      ...similar,
-    ];
+    if (narratorVoice == null) {
+      return score;
+    }
+
+    final narratorGender = narratorVoice.gender;
+    if (narratorGender != null &&
+        narratorGender != VoiceGender.neutral &&
+        gender != null &&
+        gender != VoiceGender.neutral &&
+        gender != narratorGender) {
+      score += 35;
+    }
+
+    if (voice.locale.isNotEmpty &&
+        narratorVoice.locale.isNotEmpty &&
+        voice.locale != narratorVoice.locale) {
+      score += 70;
+    }
+
+    if (_voiceFamily(voice.id) != _voiceFamily(narratorVoice.id)) {
+      score += 30;
+    }
+
+    return score;
+  }
+
+  String _voiceFamily(String voiceId) {
+    final separatorIndex = voiceId.indexOf('_');
+    if (separatorIndex <= 0) {
+      return voiceId;
+    }
+    return voiceId.substring(0, separatorIndex);
   }
 
   int _compareVoices(VoiceProfile left, VoiceProfile right) {

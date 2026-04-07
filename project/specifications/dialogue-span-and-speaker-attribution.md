@@ -27,7 +27,8 @@ The parent branch now delegates detailed implementation to child specifications.
 In particular:
 
 - dialogue-span identification belongs to its own leaf
-- speaker-attribution result shape and provider contract belong to their own leaf
+- quoted-dialogue speaker-context scanning belongs to its own branch
+- speaker-attribution result shape and provider contract belong to their own branch
 
 This parent specification keeps only the branch-level requirement that dialogue identity and likely speaker identity must be resolved before playback routing begins.
 
@@ -39,11 +40,12 @@ This parent specification keeps only the branch-level requirement that dialogue 
 
 ## Refinement Status
 
-Requires refinement.
+Refinement complete for the current planned branch.
 
 ## Child Specifications
 
 - [Dialogue Span Detection](dialogue-span-detection.md)
+- [Quoted Dialogue Speaker Context Scanning](quoted-dialogue-speaker-context-scanning.md)
 - [Speaker Attribution Contract](speaker-attribution-contract.md)
 
 ## Acceptance

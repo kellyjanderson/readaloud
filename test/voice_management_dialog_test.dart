@@ -154,6 +154,74 @@ void main() {
     expect(find.text('Narrator'), findsOneWidget);
     expect(find.text('Characters'), findsNothing);
   });
+
+  testWidgets('uses readable dark-theme card and field surfaces', (
+    WidgetTester tester,
+  ) async {
+    final darkTheme = ThemeData(
+      useMaterial3: true,
+      colorScheme: ColorScheme.fromSeed(
+        seedColor: const Color(0xFFE9C46A),
+        brightness: Brightness.dark,
+      ).copyWith(
+        surface: const Color(0xFF171B22),
+        onSurface: const Color(0xFFE8EDF5),
+        surfaceContainerHighest: const Color(0xFF202734),
+      ),
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: darkTheme,
+        darkTheme: darkTheme,
+        themeMode: ThemeMode.dark,
+        home: Scaffold(
+          body: VoiceManagementDialog(
+            voiceLibrary: <VoiceLibraryEntry>[
+              VoiceLibraryEntry(
+                voice: _voice(id: 'af_bella', label: 'Bella'),
+                isBundled: true,
+                isInstalled: true,
+              ),
+            ],
+            availableVoices: <VoiceProfile>[
+              _voice(id: 'af_bella', label: 'Bella'),
+            ],
+            characterCastRegistry: _narratorOnlyRegistry(),
+            castVoiceAssignments: CastVoiceAssignmentSet(
+              documentId: 'doc_2',
+              assignmentVersion: 'v1',
+              assignments: <CastVoiceAssignment>[
+                CastVoiceAssignment(
+                  castId: 'cast_narrator',
+                  effectiveVoiceId: 'af_bella',
+                  decisionKind: VoiceAssignmentDecisionKind.automatic,
+                  automaticVoiceId: 'af_bella',
+                ),
+              ],
+            ),
+            selectedVoiceId: 'af_bella',
+            onClose: () {},
+            onSelectLibraryVoice: (_) {},
+            onInstallVoice: (_) {},
+            onAssignCastVoice: (_, _) {},
+            onClearCastVoiceOverride: (_) {},
+          ),
+        ),
+      ),
+    );
+
+    final card = tester.widget<DecoratedBox>(
+      find.byKey(const Key('voice-assignment-card-Narrator')),
+    );
+    final cardDecoration = card.decoration as BoxDecoration;
+    expect(cardDecoration.color, darkTheme.colorScheme.surfaceContainerHighest);
+
+    final narratorField = tester.widget<DropdownButtonFormField<String>>(
+      find.byType(DropdownButtonFormField<String>).first,
+    );
+    expect(narratorField.decoration.fillColor, darkTheme.colorScheme.surface);
+  });
 }
 
 CharacterCastRegistry _richRegistry() {

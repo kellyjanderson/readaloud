@@ -39,6 +39,12 @@ Character entries may also preserve:
 
 - observed aliases
 - attribution evidence
+- optional gender identity extraction output
+- optional pronoun profile output
+- supporting evidence spans
+- conflict state when identity evidence cannot be resolved cleanly
+
+Gender identity, pronouns, and descriptors must remain separate concepts in the stored cast model rather than one collapsed inferred-gender field.
 
 Cast ids must remain stable within one normalized document version.
 
@@ -53,3 +59,4 @@ Cast ids must remain stable within one normalized document version.
 - the app can represent narrator and characters in one stable registry
 - cast identity remains stable within one normalized document version
 - voice assignment can resolve against cast ids without redoing attribution work
+- the registry has room for document-owned identity evidence without forcing casting to guess from names alone

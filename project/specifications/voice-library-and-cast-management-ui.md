@@ -29,7 +29,11 @@ In particular:
 - voice library row presentation and information affordance belong to one leaf
 - cast management dialog structure belongs to its own leaf
 
-This parent specification keeps only the branch-level contract that advanced voice and cast controls remain off the primary surface and accessible through the standard secondary affordance.
+This parent specification keeps only the branch-level contract for the advanced surface itself.
+
+The primary-surface entry path into that surface is refined separately by:
+
+- [Primary Reader Surface UI](primary-reader-surface-ui.md)
 
 ## Constraints
 
@@ -39,12 +43,13 @@ This parent specification keeps only the branch-level contract that advanced voi
 
 ## Refinement Status
 
-Requires refinement.
+Refinement complete for the current planned branch.
 
 ## Child Specifications
 
 - [Voice Library Row and Information Affordance](voice-library-row-and-information-affordance.md)
 - [Cast Management Dialog Structure](cast-management-dialog-structure.md)
+- [Voice Management Dialog Contrast And Readability](voice-management-dialog-contrast-and-readability.md)
 
 ## Acceptance
 

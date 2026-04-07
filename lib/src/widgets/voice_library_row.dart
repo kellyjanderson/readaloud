@@ -184,11 +184,12 @@ class VoiceMetadataBadge extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
     return DecoratedBox(
       decoration: BoxDecoration(
-        color: const Color(0xFFE6F0FF),
+        color: colorScheme.primaryContainer,
         borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: const Color(0xFFB7D2FF)),
+        border: Border.all(color: colorScheme.primary.withValues(alpha: 0.30)),
       ),
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
@@ -196,7 +197,7 @@ class VoiceMetadataBadge extends StatelessWidget {
           label,
           style: Theme.of(context).textTheme.labelMedium?.copyWith(
             fontWeight: FontWeight.w700,
-            color: const Color(0xFF0F3D91),
+            color: colorScheme.onPrimaryContainer,
           ),
         ),
       ),
@@ -211,14 +212,20 @@ class VoiceMetadataPill extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
     return DecoratedBox(
       decoration: BoxDecoration(
-        color: const Color(0xFFF4F4F5),
+        color: colorScheme.secondaryContainer,
         borderRadius: BorderRadius.circular(999),
       ),
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-        child: Text(label, style: Theme.of(context).textTheme.labelMedium),
+        child: Text(
+          label,
+          style: Theme.of(context).textTheme.labelMedium?.copyWith(
+            color: colorScheme.onSecondaryContainer,
+          ),
+        ),
       ),
     );
   }

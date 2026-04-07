@@ -6,6 +6,7 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 
 import '../controllers/reader_controller.dart';
+import '../models/reader_appearance_mode.dart';
 import '../models/reader_document.dart';
 import '../widgets/document_surface.dart';
 import '../widgets/reading_focus_recenter_button.dart';
@@ -24,9 +25,11 @@ class ReadAloudScreen extends StatefulWidget {
   const ReadAloudScreen({
     super.key,
     this.initialInputPaths = const <String>[],
+    this.controller,
   });
 
   final List<String> initialInputPaths;
+  final ReaderController? controller;
 
   @override
   State<ReadAloudScreen> createState() => _ReadAloudScreenState();
@@ -40,7 +43,7 @@ class _ReadAloudScreenState extends State<ReadAloudScreen> {
   @override
   void initState() {
     super.initState();
-    _controller = ReaderController();
+    _controller = widget.controller ?? ReaderController();
     _ttsTraceScrollController = ScrollController();
     unawaited(_initializeController());
   }
@@ -48,7 +51,9 @@ class _ReadAloudScreenState extends State<ReadAloudScreen> {
   @override
   void dispose() {
     _ttsTraceScrollController.dispose();
-    _controller.dispose();
+    if (widget.controller == null) {
+      _controller.dispose();
+    }
     super.dispose();
   }
 
@@ -57,6 +62,8 @@ class _ReadAloudScreenState extends State<ReadAloudScreen> {
     return AnimatedBuilder(
       animation: _controller,
       builder: (context, _) {
+        final theme = Theme.of(context);
+        final colorScheme = theme.colorScheme;
         final status = _controller.statusMessage;
         final isBuffering = _controller.isBufferingPlayback;
         final transportEnabled =
@@ -118,21 +125,21 @@ class _ReadAloudScreenState extends State<ReadAloudScreen> {
               child: LayoutBuilder(
                 builder: (context, constraints) {
                   final bodyContent = reader;
-                final intakeSurface = DropTarget(
-                  onDragEntered: (_) => setState(() => _isDraggingFiles = true),
-                  onDragExited: (_) => setState(() => _isDraggingFiles = false),
-                  onDragDone: (detail) {
-                    setState(() => _isDraggingFiles = false);
-                    _controller.importDroppedFiles(detail.files);
-                  },
-                  child: Stack(
-                    children: [
-                      Positioned.fill(child: bodyContent),
-                      if (_isDraggingFiles)
-                        const Positioned.fill(child: _DropOverlay()),
-                    ],
-                  ),
-                );
+                  final intakeSurface = DropTarget(
+                    onDragEntered: (_) => setState(() => _isDraggingFiles = true),
+                    onDragExited: (_) => setState(() => _isDraggingFiles = false),
+                    onDragDone: (detail) {
+                      setState(() => _isDraggingFiles = false);
+                      _controller.importDroppedFiles(detail.files);
+                    },
+                    child: Stack(
+                      children: [
+                        Positioned.fill(child: bodyContent),
+                        if (_isDraggingFiles)
+                          const Positioned.fill(child: _DropOverlay()),
+                      ],
+                    ),
+                  );
 
                   return Padding(
                     padding: const EdgeInsets.fromLTRB(20, 8, 20, 20),
@@ -143,13 +150,22 @@ class _ReadAloudScreenState extends State<ReadAloudScreen> {
                         if (status != null) ...[
                           const SizedBox(height: 12),
                           Material(
-                            color: const Color(0xFFFFF4D6),
+                            key: const Key('status-banner'),
+                            color: colorScheme.secondaryContainer,
                             borderRadius: BorderRadius.circular(16),
                             child: ListTile(
+                              iconColor: colorScheme.onSecondaryContainer,
+                              textColor: colorScheme.onSecondaryContainer,
                               leading: const Icon(Icons.info_outline),
-                              title: Text(status),
+                              title: Text(
+                                status,
+                                style: theme.textTheme.bodyLarge?.copyWith(
+                                  color: colorScheme.onSecondaryContainer,
+                                ),
+                              ),
                               trailing: IconButton(
                                 onPressed: _controller.clearStatus,
+                                color: colorScheme.onSecondaryContainer,
                                 icon: const Icon(Icons.close),
                               ),
                             ),
@@ -164,7 +180,7 @@ class _ReadAloudScreenState extends State<ReadAloudScreen> {
               ),
             ),
             bottomNavigationBar: Material(
-              color: const Color(0xFFF7F5EF),
+              color: colorScheme.surfaceContainerHighest,
               elevation: 12,
               child: SafeArea(
                 top: false,
@@ -327,6 +343,10 @@ class _ReadAloudScreenState extends State<ReadAloudScreen> {
   }
 
   Widget _buildPrimaryVoiceSelector(BuildContext context) {
+    if (_controller.isMultiVoiceEnabled) {
+      return _buildCastEntrypoint(context);
+    }
+
     final selectedVoiceId = _controller.selectedVoice?.id;
     final voices = _controller.voices;
     final canManageVoices = _controller.canManageVoices;
@@ -335,7 +355,7 @@ class _ReadAloudScreenState extends State<ReadAloudScreen> {
       decoration: BoxDecoration(
         color: Theme.of(context).colorScheme.surface,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: const Color(0x16000000)),
+        border: Border.all(color: Theme.of(context).colorScheme.outlineVariant),
       ),
       child: Padding(
         padding: const EdgeInsets.only(left: 12, right: 4, top: 4, bottom: 4),
@@ -381,18 +401,88 @@ class _ReadAloudScreenState extends State<ReadAloudScreen> {
     );
   }
 
+  Widget _buildCastEntrypoint(BuildContext context) {
+    final narratorLabel =
+        _controller.selectedVoice?.displayName ?? 'Choose narrator voice';
+    final characterCount =
+        _controller.document.characterCastRegistry.characterEntries.length;
+    final canOpen = _controller.voices.isNotEmpty;
+    final subtitle = switch (characterCount) {
+      0 => 'Narrator: $narratorLabel • no dialogue cast detected yet',
+      _ when !_controller.hasDistinctEffectiveCastVoices =>
+        'Narrator: $narratorLabel • $characterCount characters • no distinct cast voices yet',
+      _ => 'Narrator: $narratorLabel • $characterCount characters ready',
+    };
+
+    return Material(
+      color: Theme.of(context).colorScheme.surface,
+      borderRadius: BorderRadius.circular(16),
+      child: InkWell(
+        key: const Key('character-voices-entry'),
+        onTap: canOpen ? _showVoiceManagerDialog : null,
+        borderRadius: BorderRadius.circular(16),
+        child: Ink(
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: Theme.of(context).colorScheme.outlineVariant),
+          ),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+            child: Row(
+              children: [
+                Icon(
+                  Icons.record_voice_over_outlined,
+                  color: Theme.of(context).colorScheme.primary,
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        'Character Voices',
+                        style: Theme.of(context).textTheme.titleSmall,
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        subtitle,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: Theme.of(context).textTheme.bodySmall,
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Icon(
+                  Icons.tune,
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   Widget _buildControls(BuildContext context) {
     final remaining = _controller.sleepTimerRemaining;
     final speedLabel = '${_controller.currentSpeed.toStringAsFixed(2)}x';
+    final voiceSelectorLabel = _controller.isMultiVoiceEnabled
+        ? 'Narrator Voice'
+        : 'Voice';
 
     return DecoratedBox(
+      key: const Key('reader-options-sheet'),
       decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.92),
+        color: Theme.of(context).colorScheme.surface,
         borderRadius: BorderRadius.circular(28),
-        boxShadow: const [
+        boxShadow: [
           BoxShadow(
             blurRadius: 24,
-            color: Color(0x16000000),
+            color: Colors.black.withValues(alpha: 0.14),
             offset: Offset(0, 12),
           ),
         ],
@@ -409,8 +499,8 @@ class _ReadAloudScreenState extends State<ReadAloudScreen> {
           DropdownButtonFormField<String>(
             key: ValueKey(_controller.selectedVoice?.id ?? 'no-voice'),
             initialValue: _controller.selectedVoice?.id,
-            decoration: const InputDecoration(
-              labelText: 'Voice',
+            decoration: InputDecoration(
+              labelText: voiceSelectorLabel,
               border: OutlineInputBorder(),
             ),
             items: _controller.voices
@@ -428,11 +518,43 @@ class _ReadAloudScreenState extends State<ReadAloudScreen> {
                 ? null
                 : _controller.selectVoiceById,
           ),
+          const SizedBox(height: 12),
+          SwitchListTile.adaptive(
+            key: const Key('multi-voice-toggle'),
+            contentPadding: EdgeInsets.zero,
+            title: const Text('Multi-Voice Reading'),
+            subtitle: Text(
+              _controller.isMultiVoiceEnabled
+                  ? 'Narration stays with the narrator voice while quoted dialogue routes through the cast.'
+                  : 'Use one narrator voice for the whole document.',
+            ),
+            value: _controller.isMultiVoiceEnabled,
+            onChanged: _controller.voices.isEmpty
+                ? null
+                : (enabled) {
+                    unawaited(_controller.setMultiVoiceEnabled(enabled));
+                  },
+          ),
           if (_controller.canManageVoices) ...[
             const SizedBox(height: 8),
             Text(
-              'Use the integrated voice options control on the primary bar to manage narrator and cast voices.',
+              _controller.isMultiVoiceEnabled
+                  ? 'Use the integrated character voices control on the primary bar, or manage narrator and cast voices here.'
+                  : 'Use the integrated voice options control on the primary bar to manage available voices.',
               style: Theme.of(context).textTheme.bodySmall,
+            ),
+          ],
+          if (_controller.isMultiVoiceEnabled) ...[
+            const SizedBox(height: 12),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: OutlinedButton.icon(
+                onPressed: _controller.voices.isEmpty
+                    ? null
+                    : _showVoiceManagerDialog,
+                icon: const Icon(Icons.record_voice_over_outlined),
+                label: const Text('Set Character Voices'),
+              ),
             ),
           ],
           const SizedBox(height: 16),
@@ -462,6 +584,27 @@ class _ReadAloudScreenState extends State<ReadAloudScreen> {
             onChanged: (value) {
               if (value == null) return;
               _controller.setFontFamily(value);
+            },
+          ),
+          const SizedBox(height: 16),
+          DropdownButtonFormField<ReaderAppearanceMode>(
+            key: ValueKey(_controller.appearanceMode),
+            initialValue: _controller.appearanceMode,
+            decoration: const InputDecoration(
+              labelText: 'Appearance',
+              border: OutlineInputBorder(),
+            ),
+            items: ReaderAppearanceMode.values
+                .map(
+                  (mode) => DropdownMenuItem<ReaderAppearanceMode>(
+                    value: mode,
+                    child: Text(mode.label),
+                  ),
+                )
+                .toList(growable: false),
+            onChanged: (value) {
+              if (value == null) return;
+              unawaited(_controller.setAppearanceMode(value));
             },
           ),
           const SizedBox(height: 16),
@@ -520,44 +663,6 @@ class _ReadAloudScreenState extends State<ReadAloudScreen> {
           Text(
             'Jump buttons use the observed timing from the current reading session.',
             style: Theme.of(context).textTheme.bodySmall,
-          ),
-          const Divider(height: 32),
-          Text('Live Read', style: Theme.of(context).textTheme.titleMedium),
-          const SizedBox(height: 8),
-          Text(
-            _controller.isLiveReadEnabled
-                ? 'Watching a file for changes and reloading only the current document inside the running app.'
-                : 'Attach a file to create a live text feed into the running app. When the file changes, Read Aloud reloads the document in place.',
-            style: Theme.of(context).textTheme.bodySmall,
-          ),
-          const SizedBox(height: 8),
-          if (_controller.liveReadFilePath != null) ...[
-            SelectableText(
-              _controller.liveReadFilePath!,
-              style: Theme.of(context).textTheme.bodySmall,
-            ),
-            const SizedBox(height: 8),
-          ],
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: [
-              OutlinedButton.icon(
-                onPressed: _controller.pickAndStartLiveRead,
-                icon: const Icon(Icons.sync),
-                label: Text(
-                  _controller.isLiveReadEnabled
-                      ? 'Change Live File'
-                      : 'Choose Live File',
-                ),
-              ),
-              if (_controller.isLiveReadEnabled)
-                TextButton.icon(
-                  onPressed: () => _controller.stopLiveRead(),
-                  icon: const Icon(Icons.stop_circle_outlined),
-                  label: const Text('Stop Live Mode'),
-                ),
-            ],
           ),
           const Divider(height: 32),
           Text(
@@ -650,15 +755,25 @@ class _ReadAloudScreenState extends State<ReadAloudScreen> {
   }
 
   Widget _buildReader(BuildContext context) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
     return DecoratedBox(
+      key: const Key('reader-surface-shell'),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: theme.colorScheme.surface,
         borderRadius: BorderRadius.circular(32),
-        boxShadow: const [
+        border: Border.all(
+          color: isDark
+              ? const Color(0xFF263041)
+              : const Color(0x14000000),
+        ),
+        boxShadow: [
           BoxShadow(
             blurRadius: 28,
-            color: Color(0x18000000),
-            offset: Offset(0, 14),
+            color: isDark
+                ? const Color(0x40000000)
+                : const Color(0x18000000),
+            offset: const Offset(0, 14),
           ),
         ],
       ),
@@ -688,6 +803,13 @@ class _ReadAloudScreenState extends State<ReadAloudScreen> {
                 bottom: 12,
                 child: ReadingFocusRecenterButton(
                   onPressed: _controller.resumeReaderFollow,
+                ),
+              ),
+            if (_controller.isCastProcessingVisible)
+              Positioned.fill(
+                child: _CastProcessingOverlay(
+                  stageLabel: _controller.documentLoadStageLabel,
+                  progress: _controller.documentLoadStageProgress,
                 ),
               ),
           ],
@@ -806,6 +928,97 @@ class _DropOverlay extends StatelessWidget {
                   textAlign: TextAlign.center,
                 ),
               ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _CastProcessingOverlay extends StatelessWidget {
+  const _CastProcessingOverlay({
+    required this.stageLabel,
+    required this.progress,
+  });
+
+  final String stageLabel;
+  final double? progress;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+    return IgnorePointer(
+      child: Container(
+        key: const Key('cast-processing-overlay'),
+        decoration: BoxDecoration(
+          color: isDark
+              ? const Color(0xD9121720)
+              : const Color(0xCCF4F1E8),
+          borderRadius: BorderRadius.circular(24),
+        ),
+        margin: const EdgeInsets.all(8),
+        child: Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 420),
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                color: isDark
+                    ? const Color(0xFF1B2230)
+                    : const Color(0xFFFFFBF2),
+                borderRadius: BorderRadius.circular(24),
+                border: Border.all(
+                  color: isDark
+                      ? const Color(0xFF324154)
+                      : const Color(0x16000000),
+                ),
+                boxShadow: [
+                  BoxShadow(
+                    blurRadius: 24,
+                    color: isDark
+                        ? const Color(0x40000000)
+                        : const Color(0x14000000),
+                    offset: const Offset(0, 12),
+                  ),
+                ],
+              ),
+              child: Padding(
+                padding: const EdgeInsets.all(20),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Icon(
+                          Icons.auto_awesome_motion_outlined,
+                          color: theme.colorScheme.primary,
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Text(
+                            'Preparing Multi-Voice Reading',
+                            style: theme.textTheme.titleMedium,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                    Text(
+                      stageLabel,
+                      style: theme.textTheme.bodyMedium,
+                    ),
+                    const SizedBox(height: 14),
+                    LinearProgressIndicator(value: progress),
+                    const SizedBox(height: 14),
+                    Text(
+                      'We are scanning dialogue, consolidating characters, and materializing narrator-versus-cast routing before playback starts.',
+                      style: theme.textTheme.bodySmall,
+                    ),
+                  ],
+                ),
+              ),
             ),
           ),
         ),

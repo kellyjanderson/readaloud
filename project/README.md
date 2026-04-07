@@ -2,13 +2,14 @@
 
 This directory is the authoritative source of project understanding for `Read Aloud`.
 
-The documentation is organized around a product definition plus eight supporting domains:
+The documentation is organized around a product definition plus nine supporting domains:
 
 - `agents/`: project-specific agent operating rules
 - `ui/`: interface structure, interaction semantics, complexity layering, and durable visual behavior
 - `product-definition.md`: feature definition, user expectations, scope, and non-goals
 - `architecture/`: structural truth, boundaries, responsibilities, and data flow
 - `specifications/`: behavioral contracts, rules, thresholds, and acceptance criteria
+- `test-specifications/`: manual smoke checks plus automated smoke and acceptance coverage expectations for final feature leaves
 - `planning/`: active work sequencing, dependencies, and implementation plans
 - `release-x.y.z/`: holistic version intent, linked architecture/UI/spec scope, and release-level planning
 - `research/`: accumulated findings, observations, and external dependency notes
@@ -27,6 +28,7 @@ The documentation is organized around a product definition plus eight supporting
 - [Control State Semantics](ui/control-state-semantics.md)
 - [Voice Library and Cast Management](ui/voice-library-and-cast-management.md)
 - [Follow-Along Reading Surface](ui/follow-along-reading-surface.md)
+- [Reader Options and Secondary Settings](ui/reader-options-and-secondary-settings.md)
 - [Theme and Appearance Modes](ui/theme-and-appearance-modes.md)
 - [Live Input and File Menu Behavior](ui/live-input-and-file-menu-behavior.md)
 
@@ -92,6 +94,10 @@ The documentation is organized around a product definition plus eight supporting
 - [Imported Document Rework Plan](planning/imported-document-rework-plan.md)
 - [Open Source Compliance Plan](planning/open-source-compliance-plan.md)
 
+### Test Specifications
+
+- [Test Specifications Index](test-specifications/README.md)
+
 ### Research
 
 - [Research Index](research/README.md)
@@ -100,6 +106,7 @@ The documentation is organized around a product definition plus eight supporting
 - [Flutter Concurrency, Message Boundaries, and Runtime Decoupling](research/architecture-questions/flutter-concurrency-message-boundaries-and-runtime-decoupling-2026-03-30.md)
 - [Narration State and Voice-Specific Realization](research/architecture-questions/narration-state-and-voice-specific-realization-2026-03-30.md)
 - [Spoken Text Highlighting and Follow-Along Sync](research/architecture-questions/spoken-text-highlighting-and-follow-along-sync-2026-04-03.md)
+- [Branding, Design, and UX Recommendations](research/ui-and-brand/branding-design-and-ux-recommendations-2026-04-07.md)
 - [PositionMap Granularity and Anchor Model](research/document-processing/position-map-granularity-and-anchor-model-2026-03-30.md)
 - [Chunk Boundary and Silence Policy](research/speech-quality/chunk-boundary-and-silence-policy-2026-03-30.md)
 - [English Pronunciation Dictionary Backstop and Special Cases](research/speech-quality/english-pronunciation-dictionary-backstop-and-special-cases-2026-04-02.md)

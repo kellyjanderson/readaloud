@@ -1,23 +1,14 @@
 import '../models/cast_aware_speech_route.dart';
 import '../models/cast_voice_assignment.dart';
-import '../models/character_cast_registry.dart';
-import '../models/dialogue_attribution.dart';
-import '../models/speech_annotation.dart';
-import '../models/speech_document.dart';
+import '../models/document_voice_attribution.dart';
 
 class CastAwareSpeechRouteInput {
   const CastAwareSpeechRouteInput({
-    required this.speechDocument,
-    required this.baseAnnotations,
-    required this.dialogueAttributions,
-    required this.characterCastRegistry,
+    required this.documentVoiceAttribution,
     required this.castVoiceAssignments,
   });
 
-  final SpeechDocument speechDocument;
-  final BaseSpeechAnnotationSet baseAnnotations;
-  final DialogueAttributionSet dialogueAttributions;
-  final CharacterCastRegistry characterCastRegistry;
+  final DocumentVoiceAttributionSet documentVoiceAttribution;
   final CastVoiceAssignmentSet castVoiceAssignments;
 }
 
@@ -27,59 +18,33 @@ class CastAwareSpeechRouteService {
   static const routingVersion = 'read-aloud-cast-aware-routes-v1';
 
   CastAwareSpeechRouteSet build(CastAwareSpeechRouteInput input) {
-    final narratorCastId = input.characterCastRegistry.narratorEntry.castId;
-    final narratorVoiceId = input.castVoiceAssignments
-        .forCastId(narratorCastId)
-        ?.effectiveVoiceId;
-    if (narratorVoiceId == null || narratorVoiceId.isEmpty) {
+    final narratorAssignment = input.castVoiceAssignments.assignments.firstWhere(
+      (assignment) => assignment.castId == 'cast_narrator',
+      orElse: () => throw StateError(
+        'Cast-aware routing requires a narrator voice assignment.',
+      ),
+    );
+    final narratorVoiceId = narratorAssignment.effectiveVoiceId;
+    if (narratorVoiceId.isEmpty) {
       throw StateError(
         'Cast-aware routing requires a narrator voice assignment.',
       );
     }
-
-    final castIdByAttributionId = <String, String>{};
-    for (final entry in input.characterCastRegistry.characterEntries) {
-      for (final attributionId in entry.attributionIds) {
-        castIdByAttributionId[attributionId] = entry.castId;
-      }
-    }
-
-    final routeSegments = <_RouteSegment>[];
-    var runningWordIndex = 0;
-    for (final segment in input.speechDocument.segments) {
-      final dialogueAnnotation = input.baseAnnotations
-          .forSegment(segment.segmentId)
-          .where(
-            (annotation) =>
-                annotation.kind == SpeechAnnotationKind.dialogueSpan,
-          )
-          .cast<SpeechAnnotation?>()
-          .firstWhere((annotation) => annotation != null, orElse: () => null);
-      final dialogueSpanId = dialogueAnnotation?.dialogueSpanId;
-      final attribution = dialogueSpanId == null
-          ? null
-          : input.dialogueAttributions.forDialogueSpan(dialogueSpanId);
-
-      final castId = switch (attribution?.resolution) {
-        DialogueAttributionResolution.attributedSpeaker =>
-          castIdByAttributionId[attribution!.attributionId] ?? narratorCastId,
-        _ => narratorCastId,
-      };
-      final voiceId =
-          input.castVoiceAssignments.forCastId(castId)?.effectiveVoiceId ??
-          narratorVoiceId;
-      routeSegments.add(
-        _RouteSegment(
-          segmentId: segment.segmentId,
-          startWordIndex: runningWordIndex,
-          endWordIndex: runningWordIndex + segment.wordCount,
-          castId: castId,
-          voiceId: voiceId,
-          dialogueSpanId: dialogueSpanId,
-        ),
-      );
-      runningWordIndex += segment.wordCount;
-    }
+    final routeSegments = input.documentVoiceAttribution.ranges
+        .map(
+          (range) => _RouteSegment(
+            segmentIds: range.segmentIds,
+            startWordIndex: range.startWordIndex,
+            endWordIndex: range.endWordIndex,
+            castId: range.castId,
+            voiceId: input.castVoiceAssignments
+                    .forCastId(range.castId)
+                    ?.effectiveVoiceId ??
+                narratorVoiceId,
+            dialogueSpanId: range.dialogueSpanId,
+          ),
+        )
+        .toList(growable: false);
 
     final mergedRanges = <CastAwareSpeechRange>[];
     _RouteSegment? active;
@@ -104,7 +69,7 @@ class CastAwareSpeechRouteService {
     }
 
     return CastAwareSpeechRouteSet(
-      documentId: input.speechDocument.documentId,
+      documentId: input.documentVoiceAttribution.documentId,
       routingVersion: routingVersion,
       ranges: mergedRanges,
     );
@@ -134,14 +99,15 @@ class CastAwareSpeechRouteService {
 
 class _RouteSegment {
   _RouteSegment({
-    required this.segmentId,
+    required List<String> segmentIds,
     required this.startWordIndex,
     required this.endWordIndex,
     required this.castId,
     required this.voiceId,
     required this.dialogueSpanId,
-  }) : segmentIds = <String>[segmentId],
-       endSegmentId = segmentId;
+  }) : segmentIds = List<String>.unmodifiable(segmentIds),
+       segmentId = segmentIds.first,
+       endSegmentId = segmentIds.last;
 
   _RouteSegment._({
     required this.segmentIds,

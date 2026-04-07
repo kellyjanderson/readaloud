@@ -18,6 +18,7 @@ import 'english_suffix_allomorph_module.dart';
 import 'exported_audio_assembler.dart';
 import 'kokoro_assets.dart';
 import 'kokoro_ipa_adapter.dart';
+import 'kokoro_playback_coordination.dart';
 import 'kokoro_pronunciation_translation_service.dart';
 import 'kokoro_speech_worker_processor.dart';
 import 'kokoro_voice_catalog.dart';
@@ -144,7 +145,8 @@ class KokoroTtsEngine
       }
       if (state.processingState == ProcessingState.completed) {
         _emitFinalProgress();
-        if (_pendingChunksById.isNotEmpty || _remainingPlannedChunkCount > 0) {
+        final queueSnapshot = _playbackQueueSnapshot();
+        if (kokoroShouldEnterUnderrunRecovery(queueSnapshot)) {
           _waitingForUnderrunRecovery = true;
           _recordMetric(
             'playbackUnderrun',
@@ -152,6 +154,9 @@ class KokoroTtsEngine
               'currentChunkIndex': _currentChunkIndex,
               'bufferedChunkCount': _activeChunks.length,
               'pendingChunkCount': _pendingChunksById.length,
+              'hasBufferedFutureChunks': kokoroHasBufferedFutureChunks(
+                queueSnapshot,
+              ),
             },
           );
           _emitActivity(
@@ -161,6 +166,7 @@ class KokoroTtsEngine
               totalChunkCount: _expectedChunkCount,
             ),
           );
+          unawaited(_resumeAfterUnderrunIfPossible());
           return;
         }
         unawaited(_resetPlaybackState());
@@ -600,33 +606,6 @@ class KokoroTtsEngine
         ),
       );
 
-      final firstChunk = await _firstChunkCompleter!.future;
-      if (requestToken != _requestToken ||
-          generationId != _activeGenerationId) {
-        return;
-      }
-
-      _activeChunks = <_PlaybackChunk>[firstChunk];
-      _currentChunkIndex = 0;
-      _currentQueueBaseIndex = 0;
-      _activePlaybackToken = requestToken;
-      _waitingForUnderrunRecovery = false;
-      await _player.setVolume(_volume);
-      await _player.setAudioSources(<AudioSource>[
-        AudioSource.file(firstChunk.filePath),
-      ]);
-      _emitProgressForChunkWord(0, 0, elapsedInChunk: Duration.zero);
-      _emitActivity(
-        TtsPlaybackActivity(
-          phase: TtsPlaybackPhase.playing,
-          bufferedChunkCount: 1,
-          totalChunkCount: _expectedChunkCount,
-        ),
-      );
-      _onStatus?.call(null);
-      _onStart?.call();
-      unawaited(_player.play());
-
       if (hasPlannedChunks && request.chunkPlan!.chunks.length > 1) {
         unawaited(
           _queueRemainingPlannedChunks(
@@ -658,6 +637,33 @@ class KokoroTtsEngine
               .toList(growable: false),
         );
       }
+
+      final firstChunk = await _firstChunkCompleter!.future;
+      if (requestToken != _requestToken ||
+          generationId != _activeGenerationId) {
+        return;
+      }
+
+      _activeChunks = <_PlaybackChunk>[firstChunk];
+      _currentChunkIndex = 0;
+      _currentQueueBaseIndex = 0;
+      _activePlaybackToken = requestToken;
+      _waitingForUnderrunRecovery = false;
+      await _player.setVolume(_volume);
+      await _player.setAudioSources(<AudioSource>[
+        AudioSource.file(firstChunk.filePath),
+      ]);
+      _emitProgressForChunkWord(0, 0, elapsedInChunk: Duration.zero);
+      _emitActivity(
+        TtsPlaybackActivity(
+          phase: TtsPlaybackPhase.playing,
+          bufferedChunkCount: 1,
+          totalChunkCount: _expectedChunkCount,
+        ),
+      );
+      _onStatus?.call(null);
+      _onStart?.call();
+      unawaited(_player.play());
     } catch (error) {
       if (requestToken == _requestToken) {
         await _cancelActiveGeneration();
@@ -745,7 +751,9 @@ class KokoroTtsEngine
   }
 
   void _handlePosition(Duration position) {
-    if (_activePlaybackToken == null || _activeChunks.isEmpty) {
+    if (_activePlaybackToken == null ||
+        _activeChunks.isEmpty ||
+        _waitingForUnderrunRecovery) {
       return;
     }
 
@@ -766,7 +774,9 @@ class KokoroTtsEngine
   }
 
   void _handleCurrentIndex(int? index) {
-    if (_activePlaybackToken == null || index == null) {
+    if (_activePlaybackToken == null ||
+        index == null ||
+        _waitingForUnderrunRecovery) {
       return;
     }
     final absoluteIndex = _currentQueueBaseIndex + index;
@@ -909,6 +919,11 @@ class KokoroTtsEngine
   }
 
   Future<void> _handleRuntimeChunkReady(SpeechRuntimeEvent event) async {
+    if (event.generationId != null &&
+        _activeGenerationId != null &&
+        event.generationId != _activeGenerationId) {
+      return;
+    }
     final chunkId = event.chunkId;
     if (chunkId == null) {
       return;
@@ -1008,7 +1023,10 @@ class KokoroTtsEngine
 
       _activeChunks = List<_PlaybackChunk>.from(_activeChunks)
         ..add(playbackChunk);
-      await _player.addAudioSource(AudioSource.file(playbackChunk.filePath));
+      final waitingForRecovery = _waitingForUnderrunRecovery;
+      if (!waitingForRecovery) {
+        await _player.addAudioSource(AudioSource.file(playbackChunk.filePath));
+      }
       _recordMetric(
         'prefetchLeadTimeMs',
         chunkId: playbackChunk.chunkId,
@@ -1024,15 +1042,25 @@ class KokoroTtsEngine
       );
     });
     await _audioQueueMutation;
+    if (_activePlaybackToken != null &&
+        _player.playerState.processingState == ProcessingState.completed &&
+        kokoroHasBufferedFutureChunks(_playbackQueueSnapshot())) {
+      _waitingForUnderrunRecovery = true;
+    }
     await _resumeAfterUnderrunIfPossible();
   }
 
   void _handleRuntimeChunkFailure(SpeechRuntimeEvent event) {
+    if (event.generationId != null &&
+        _activeGenerationId != null &&
+        event.generationId != _activeGenerationId) {
+      return;
+    }
     final chunkId = event.chunkId;
     if (chunkId == null) {
       return;
     }
-    _pendingChunksById.remove(chunkId);
+    final failedChunk = _pendingChunksById.remove(chunkId);
     if (chunkId == _firstPendingChunkId) {
       final completer = _firstChunkCompleter;
       if (completer != null && !completer.isCompleted) {
@@ -1040,6 +1068,19 @@ class KokoroTtsEngine
           StateError(event.message ?? 'Kokoro failed to prepare audio.'),
         );
       }
+      return;
+    }
+
+    final generationId = event.generationId;
+    if (failedChunk != null &&
+        generationId != null &&
+        _activePlaybackToken != null) {
+      unawaited(
+        _attemptRecoverableChunkFailure(
+          failedChunk: failedChunk,
+          generationId: generationId,
+        ),
+      );
       return;
     }
 
@@ -1056,7 +1097,197 @@ class KokoroTtsEngine
     );
   }
 
+  Future<void> _attemptRecoverableChunkFailure({
+    required _QueuedChunk failedChunk,
+    required String generationId,
+  }) async {
+    final speechRuntime = _speechRuntime;
+    final sessionId = _activeSessionId;
+    if (speechRuntime == null ||
+        sessionId == null ||
+        generationId != _activeGenerationId) {
+      return;
+    }
+
+    final recoveryChunks = await _buildRecoverableFailureChunks(failedChunk);
+    if (recoveryChunks.isEmpty) {
+      _onError?.call(
+        'Kokoro could not prepare a later chunk: recoverable fallback was unavailable for "${failedChunk.text}".',
+      );
+      return;
+    }
+
+    final remainingPending = _pendingChunksById.values
+        .where((chunk) => chunk.generationOrder > failedChunk.generationOrder)
+        .toList(growable: false)
+      ..sort(
+        (left, right) => left.generationOrder.compareTo(right.generationOrder),
+      );
+
+    final rebuiltPending = <_QueuedChunk>[
+      ...recoveryChunks,
+      for (final chunk in remainingPending) chunk,
+    ];
+
+    final rebuiltWithFreshIds = <_QueuedChunk>[];
+    for (var index = 0; index < rebuiltPending.length; index += 1) {
+      final chunk = rebuiltPending[index];
+      rebuiltWithFreshIds.add(
+        chunk.copyWith(
+          chunkId:
+              '${failedChunk.chunkId}_recovery_${DateTime.now().microsecondsSinceEpoch}_$index',
+          generationOrder: index,
+        ),
+      );
+    }
+
+    await speechRuntime.cancelGeneration(generationId);
+
+    final newGenerationId =
+        '${generationId}_recovery_${DateTime.now().microsecondsSinceEpoch}';
+    _activeGenerationId = newGenerationId;
+    _pendingChunksById = <String, _QueuedChunk>{
+      for (final chunk in rebuiltWithFreshIds) chunk.chunkId: chunk,
+    };
+    _queuedAtByChunkId.removeWhere(
+      (chunkId, _) => !_pendingChunksById.containsKey(chunkId),
+    );
+    _expectedChunkCount = _activeChunks.length + rebuiltWithFreshIds.length;
+    _remainingPlannedChunkCount = 0;
+
+    await speechRuntime.prepareChunkPlan(
+      sessionId: sessionId,
+      generationId: newGenerationId,
+      chunks: rebuiltWithFreshIds
+          .map(
+            (chunk) => chunk.toRuntimeChunk(
+              rate: _speechRate,
+              languageTag: KokoroVoiceCatalog.languageTagForVoice(
+                chunk.voiceId,
+              ),
+              isInitialChunk: false,
+              isResumedChunk: false,
+            ),
+          )
+          .toList(growable: false),
+    );
+    _emitBufferingActivity();
+  }
+
+  Future<List<_QueuedChunk>> _buildRecoverableFailureChunks(
+    _QueuedChunk failedChunk,
+  ) async {
+    if (failedChunk.fallbackRecoveryDepth >= 2) {
+      return const <_QueuedChunk>[];
+    }
+
+    final slices = kokoroPlanRecoverableChunkSlices(
+      wordBoundaries: failedChunk.wordBoundaries
+          .map(
+            (boundary) => KokoroRecoveryWordBoundary(
+              start: boundary.start,
+              end: boundary.end,
+              word: boundary.word,
+            ),
+          )
+          .toList(growable: false),
+    );
+    if (slices.isEmpty) {
+      return const <_QueuedChunk>[];
+    }
+
+    final recoveredChunks = <_QueuedChunk>[];
+    for (var index = 0; index < slices.length; index += 1) {
+      recoveredChunks.add(
+        await _buildRecoverableFailureChunkPiece(
+          failedChunk: failedChunk,
+          slice: slices[index],
+          sliceIndex: index,
+        ),
+      );
+    }
+    return recoveredChunks;
+  }
+
+  Future<_QueuedChunk> _buildRecoverableFailureChunkPiece({
+    required _QueuedChunk failedChunk,
+    required KokoroRecoveryWordSlice slice,
+    required int sliceIndex,
+  }) async {
+    final localStartBoundary = failedChunk.wordBoundaries[slice.startWordOffset];
+    final localEndBoundary =
+        failedChunk.wordBoundaries[slice.endWordOffset - 1];
+    final pieceText = failedChunk.text.substring(
+      localStartBoundary.start,
+      localEndBoundary.end,
+    );
+    final pieceWordBoundaries = _buildWordBoundaries(pieceText);
+    final pieceStartWordIndex = failedChunk.startWordIndex + slice.startWordOffset;
+    final pieceEndWordIndex = failedChunk.startWordIndex + slice.endWordOffset;
+    final pieceSegmentRanges = _sliceSegmentRanges(
+      segmentRanges: failedChunk.segmentRanges,
+      startWordIndex: pieceStartWordIndex,
+      endWordIndex: pieceEndWordIndex,
+    );
+    final tokenization = await _tokenizeSpeakText(
+      pieceText,
+      KokoroVoiceCatalog.languageTagForVoice(failedChunk.voiceId),
+    );
+
+    return _QueuedChunk(
+      chunkId: '${failedChunk.chunkId}_recover_$sliceIndex',
+      generationOrder: sliceIndex,
+      segmentIds: pieceSegmentRanges
+          .map((range) => range.segmentId)
+          .toList(growable: false),
+      cacheKey: _fallbackCacheKey(
+        pieceText,
+        voiceId: failedChunk.voiceId,
+        rate: _speechRate,
+        normalizationVersion: failedChunk.normalizationVersion,
+      ),
+      voiceId: failedChunk.voiceId,
+      boundaryClass:
+          sliceIndex == 0 ? failedChunk.boundaryClass : BreakClass.none,
+      documentId: failedChunk.documentId,
+      normalizationVersion: failedChunk.normalizationVersion,
+      text: pieceText,
+      capabilityProfileId: '${failedChunk.capabilityProfileId}:fallback',
+      engineSpeakText: pieceText,
+      startOffset: failedChunk.startOffset + localStartBoundary.start,
+      startWordIndex: pieceStartWordIndex,
+      endWordIndex: pieceEndWordIndex,
+      tokens: tokenization,
+      segmentRanges: pieceSegmentRanges,
+      ttsSegments: <TtsArtifactSegment>[
+        TtsArtifactSegment(
+          segmentId: pieceSegmentRanges.first.segmentId,
+          speakText: pieceText,
+          pronunciationArtifacts: const <RealizedPronunciationArtifact>[],
+        ),
+      ],
+      translatedPronunciationArtifacts:
+          const <KokoroTranslatedPronunciationArtifact>[],
+      translatedPayloadUnits: const <KokoroEnginePayloadUnit>[],
+      missingFallbackWordCount: pieceWordBoundaries.length,
+      wordBoundaries: pieceWordBoundaries,
+      finalPhonemeString: '',
+      phonemeTraceLines: <String>[
+        'recoveryFallback sourceChunk=${failedChunk.chunkId} depth=${failedChunk.fallbackRecoveryDepth + 1}',
+      ],
+      routeId: failedChunk.routeId,
+      castId: failedChunk.castId,
+      dialogueSpanId: failedChunk.dialogueSpanId,
+      fallbackRecoveryDepth: failedChunk.fallbackRecoveryDepth + 1,
+    );
+  }
+
   void _handleRuntimeSessionCancelled(SpeechRuntimeEvent event) {
+    if (event.generationId != null &&
+        _activeGenerationId != null &&
+        event.generationId != _activeGenerationId) {
+      return;
+    }
     final pendingChunkId = _firstPendingChunkId;
     if (pendingChunkId == null) {
       return;
@@ -1146,6 +1377,7 @@ class KokoroTtsEngine
       );
       final chunk = _QueuedChunk(
         chunkId: spec.chunkId,
+        generationOrder: prepared.length,
         segmentIds: spec.segmentIds,
         cacheKey: spec.cacheKey,
         voiceId: spec.voiceId,
@@ -1172,6 +1404,7 @@ class KokoroTtsEngine
         routeId: spec.routeId,
         castId: spec.castId,
         dialogueSpanId: spec.dialogueSpanId,
+        fallbackRecoveryDepth: 0,
       );
       prepared.add(chunk);
       searchOffset = startOffset + spec.speakText.length;
@@ -1202,6 +1435,7 @@ class KokoroTtsEngine
     return _PreparedPlannedChunk(
       chunk: _QueuedChunk(
         chunkId: spec.chunkId,
+        generationOrder: spec.startSegmentIndex,
         segmentIds: spec.segmentIds,
         cacheKey: spec.cacheKey,
         voiceId: spec.voiceId,
@@ -1228,6 +1462,7 @@ class KokoroTtsEngine
         routeId: spec.routeId,
         castId: spec.castId,
         dialogueSpanId: spec.dialogueSpanId,
+        fallbackRecoveryDepth: 0,
       ),
       nextSearchOffset: startOffset + spec.speakText.length,
     );
@@ -1254,6 +1489,7 @@ class KokoroTtsEngine
       chunks.add(
         _QueuedChunk(
           chunkId: 'chunk_${chunks.length}',
+          generationOrder: chunks.length,
           segmentIds: <String>['chunk_${chunks.length}'],
           cacheKey: _fallbackCacheKey(
             text,
@@ -1296,6 +1532,7 @@ class KokoroTtsEngine
           routeId: null,
           castId: null,
           dialogueSpanId: null,
+          fallbackRecoveryDepth: 0,
         ),
       );
       runningWordIndex += wordCount;
@@ -1470,8 +1707,10 @@ class KokoroTtsEngine
       return;
     }
 
-    final nextChunkIndex = _currentChunkIndex + 1;
-    if (nextChunkIndex >= _activeChunks.length) {
+    final nextChunkIndex = kokoroNextRecoveryStartIndex(
+      _playbackQueueSnapshot(),
+    );
+    if (nextChunkIndex == null) {
       return;
     }
 
@@ -1481,11 +1720,13 @@ class KokoroTtsEngine
     _waitingForUnderrunRecovery = false;
 
     await _player.setVolume(_volume);
+    await _player.stop();
     await _player.setAudioSources(
       remainingChunks
           .map((chunk) => AudioSource.file(chunk.filePath))
           .toList(growable: false),
     );
+    await _player.seek(Duration.zero, index: 0);
     _emitProgressForChunkWord(nextChunkIndex, 0, elapsedInChunk: Duration.zero);
     _emitActivity(
       TtsPlaybackActivity(
@@ -1495,6 +1736,17 @@ class KokoroTtsEngine
       ),
     );
     await _player.play();
+  }
+
+  KokoroPlaybackQueueSnapshot _playbackQueueSnapshot() {
+    return KokoroPlaybackQueueSnapshot(
+      activeChunkCount: _activeChunks.length,
+      currentChunkIndex: _currentChunkIndex,
+      currentQueueBaseIndex: _currentQueueBaseIndex,
+      pendingChunkCount: _pendingChunksById.length,
+      remainingPlannedChunkCount: _remainingPlannedChunkCount,
+      playerRelativeIndex: _player.currentIndex,
+    );
   }
 
   Duration _bufferedLeadTime() {
@@ -1696,6 +1948,7 @@ _ExplicitSuffixPayload? _decodeExplicitSuffixPayload(String rawValue) {
 class _QueuedChunk {
   const _QueuedChunk({
     required this.chunkId,
+    required this.generationOrder,
     required this.segmentIds,
     required this.cacheKey,
     required this.voiceId,
@@ -1720,9 +1973,11 @@ class _QueuedChunk {
     required this.routeId,
     required this.castId,
     required this.dialogueSpanId,
+    required this.fallbackRecoveryDepth,
   });
 
   final String chunkId;
+  final int generationOrder;
   final List<String> segmentIds;
   final String cacheKey;
   final String voiceId;
@@ -1748,6 +2003,43 @@ class _QueuedChunk {
   final String? routeId;
   final String? castId;
   final String? dialogueSpanId;
+  final int fallbackRecoveryDepth;
+
+  _QueuedChunk copyWith({
+    String? chunkId,
+    int? generationOrder,
+    BreakClass? boundaryClass,
+  }) {
+    return _QueuedChunk(
+      chunkId: chunkId ?? this.chunkId,
+      generationOrder: generationOrder ?? this.generationOrder,
+      segmentIds: segmentIds,
+      cacheKey: cacheKey,
+      voiceId: voiceId,
+      boundaryClass: boundaryClass ?? this.boundaryClass,
+      documentId: documentId,
+      normalizationVersion: normalizationVersion,
+      text: text,
+      capabilityProfileId: capabilityProfileId,
+      engineSpeakText: engineSpeakText,
+      startOffset: startOffset,
+      startWordIndex: startWordIndex,
+      endWordIndex: endWordIndex,
+      tokens: tokens,
+      segmentRanges: segmentRanges,
+      ttsSegments: ttsSegments,
+      translatedPronunciationArtifacts: translatedPronunciationArtifacts,
+      translatedPayloadUnits: translatedPayloadUnits,
+      missingFallbackWordCount: missingFallbackWordCount,
+      wordBoundaries: wordBoundaries,
+      finalPhonemeString: finalPhonemeString,
+      phonemeTraceLines: phonemeTraceLines,
+      routeId: routeId,
+      castId: castId,
+      dialogueSpanId: dialogueSpanId,
+      fallbackRecoveryDepth: fallbackRecoveryDepth,
+    );
+  }
 
   SpeechRuntimeChunkPayload toRuntimeChunk({
     required double rate,
@@ -1955,6 +2247,45 @@ List<_ChunkSegmentRange> _segmentRangesForChunk(
     running += segment.wordCount;
   }
   return ranges;
+}
+
+List<_ChunkSegmentRange> _sliceSegmentRanges({
+  required List<_ChunkSegmentRange> segmentRanges,
+  required int startWordIndex,
+  required int endWordIndex,
+}) {
+  final slicedRanges = <_ChunkSegmentRange>[];
+  for (final range in segmentRanges) {
+    final overlapStart = startWordIndex > range.startWordIndex
+        ? startWordIndex
+        : range.startWordIndex;
+    final overlapEnd =
+        endWordIndex < range.endWordIndex ? endWordIndex : range.endWordIndex;
+    if (overlapStart >= overlapEnd) {
+      continue;
+    }
+    slicedRanges.add(
+      _ChunkSegmentRange(
+        segmentId: range.segmentId,
+        startWordIndex: overlapStart,
+        endWordIndex: overlapEnd,
+      ),
+    );
+  }
+
+  if (slicedRanges.isNotEmpty) {
+    return slicedRanges;
+  }
+
+  final fallbackSegmentId =
+      segmentRanges.isEmpty ? 'recovered_segment' : segmentRanges.first.segmentId;
+  return <_ChunkSegmentRange>[
+    _ChunkSegmentRange(
+      segmentId: fallbackSegmentId,
+      startWordIndex: startWordIndex,
+      endWordIndex: endWordIndex,
+    ),
+  ];
 }
 
 T? _firstOrNull<T>(List<T> values) {

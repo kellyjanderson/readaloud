@@ -1,4 +1,5 @@
 import 'dialogue_attribution.dart';
+import 'voice_profile.dart';
 
 enum CastEntryRoleKind { narrator, character }
 
@@ -7,6 +8,179 @@ enum CastEntryProvenance {
   attributedDialogueInference,
   sourceMetadata,
   providerOutput,
+}
+
+enum CharacterGenderIdentityLabel {
+  male,
+  female,
+  cisMale,
+  cisFemale,
+  transgender,
+  transMale,
+  transFemale,
+  nonbinary,
+  genderqueer,
+  unknown,
+}
+
+enum CharacterGenderEvidenceSource {
+  explicitIdentity,
+  explicitApposition,
+  descriptor,
+  pronoun,
+  unknown,
+}
+
+class CharacterPronounProfile {
+  factory CharacterPronounProfile({
+    Map<String, int> counts = const <String, int>{},
+  }) {
+    final normalizedCounts = <String, int>{};
+    for (final entry in counts.entries) {
+      final normalizedPronoun = entry.key.trim().toLowerCase();
+      if (normalizedPronoun.isEmpty) {
+        continue;
+      }
+      if (entry.value < 0) {
+        throw ArgumentError.value(
+          entry.value,
+          'counts',
+          'Pronoun counts must not be negative.',
+        );
+      }
+      normalizedCounts[normalizedPronoun] = entry.value;
+    }
+
+    return CharacterPronounProfile._(
+      counts: Map<String, int>.unmodifiable(normalizedCounts),
+    );
+  }
+
+  const CharacterPronounProfile._({required this.counts});
+
+  const CharacterPronounProfile.empty() : counts = const <String, int>{};
+
+  final Map<String, int> counts;
+
+  int countFor(String pronoun) => counts[pronoun.trim().toLowerCase()] ?? 0;
+
+  bool get hasEvidence => counts.values.any((count) => count > 0);
+}
+
+class CharacterIdentityEvidenceSpan {
+  factory CharacterIdentityEvidenceSpan({
+    required String segmentId,
+    required int startUtf16,
+    required int endUtf16,
+    required String text,
+  }) {
+    if (segmentId.trim().isEmpty) {
+      throw ArgumentError.value(
+        segmentId,
+        'segmentId',
+        'segmentId must not be empty.',
+      );
+    }
+    if (startUtf16 < 0 || endUtf16 < startUtf16) {
+      throw ArgumentError.value(
+        '$startUtf16..$endUtf16',
+        'startUtf16/endUtf16',
+        'Identity evidence spans must be non-negative and ordered.',
+      );
+    }
+    if (text.isEmpty) {
+      throw ArgumentError.value(
+        text,
+        'text',
+        'Identity evidence span text must not be empty.',
+      );
+    }
+    return CharacterIdentityEvidenceSpan._(
+      segmentId: segmentId.trim(),
+      startUtf16: startUtf16,
+      endUtf16: endUtf16,
+      text: text,
+    );
+  }
+
+  const CharacterIdentityEvidenceSpan._({
+    required this.segmentId,
+    required this.startUtf16,
+    required this.endUtf16,
+    required this.text,
+  });
+
+  final String segmentId;
+  final int startUtf16;
+  final int endUtf16;
+  final String text;
+}
+
+class CharacterIdentityProfile {
+  factory CharacterIdentityProfile({
+    required CharacterGenderIdentityLabel genderIdentityLabel,
+    required double genderConfidence,
+    required CharacterGenderEvidenceSource genderSource,
+    CharacterPronounProfile pronounProfile =
+        const CharacterPronounProfile.empty(),
+    List<CharacterIdentityEvidenceSpan> evidenceSpans =
+        const <CharacterIdentityEvidenceSpan>[],
+    bool conflictFlag = false,
+  }) {
+    if (genderConfidence < 0.0 || genderConfidence > 1.0) {
+      throw ArgumentError.value(
+        genderConfidence,
+        'genderConfidence',
+        'genderConfidence must be between 0.0 and 1.0.',
+      );
+    }
+    return CharacterIdentityProfile._(
+      genderIdentityLabel: genderIdentityLabel,
+      genderConfidence: genderConfidence,
+      genderSource: genderSource,
+      pronounProfile: pronounProfile,
+      evidenceSpans: List<CharacterIdentityEvidenceSpan>.unmodifiable(
+        evidenceSpans,
+      ),
+      conflictFlag: conflictFlag,
+    );
+  }
+
+  const CharacterIdentityProfile._({
+    required this.genderIdentityLabel,
+    required this.genderConfidence,
+    required this.genderSource,
+    required this.pronounProfile,
+    required this.evidenceSpans,
+    required this.conflictFlag,
+  });
+
+  const CharacterIdentityProfile.unknown()
+    : genderIdentityLabel = CharacterGenderIdentityLabel.unknown,
+      genderConfidence = 0.0,
+      genderSource = CharacterGenderEvidenceSource.unknown,
+      pronounProfile = const CharacterPronounProfile.empty(),
+      evidenceSpans = const <CharacterIdentityEvidenceSpan>[],
+      conflictFlag = false;
+
+  final CharacterGenderIdentityLabel genderIdentityLabel;
+  final double genderConfidence;
+  final CharacterGenderEvidenceSource genderSource;
+  final CharacterPronounProfile pronounProfile;
+  final List<CharacterIdentityEvidenceSpan> evidenceSpans;
+  final bool conflictFlag;
+
+  VoiceGender? get preferredVoiceGender {
+    return switch (genderIdentityLabel) {
+      CharacterGenderIdentityLabel.male ||
+      CharacterGenderIdentityLabel.cisMale ||
+      CharacterGenderIdentityLabel.transMale => VoiceGender.male,
+      CharacterGenderIdentityLabel.female ||
+      CharacterGenderIdentityLabel.cisFemale ||
+      CharacterGenderIdentityLabel.transFemale => VoiceGender.female,
+      _ => null,
+    };
+  }
 }
 
 class CharacterCastRegistry {
@@ -95,6 +269,9 @@ class CastEntry {
     required CastEntryProvenance provenance,
     List<String> observedAliases = const <String>[],
     List<String> attributionIds = const <String>[],
+    CharacterIdentityProfile? identityProfile,
+    VoiceGender? inferredGender,
+    double? inferredGenderConfidence,
   }) {
     if (castId.trim().isEmpty) {
       throw ArgumentError.value(castId, 'castId', 'castId must not be empty.');
@@ -113,6 +290,14 @@ class CastEntry {
         'confidence must be between 0.0 and 1.0.',
       );
     }
+    if (inferredGenderConfidence != null &&
+        (inferredGenderConfidence < 0.0 || inferredGenderConfidence > 1.0)) {
+      throw ArgumentError.value(
+        inferredGenderConfidence,
+        'inferredGenderConfidence',
+        'inferredGenderConfidence must be between 0.0 and 1.0.',
+      );
+    }
 
     final normalizedAliases = observedAliases
         .map((alias) => alias.trim())
@@ -124,6 +309,12 @@ class CastEntry {
         .where((attributionId) => attributionId.isNotEmpty)
         .toSet()
         .toList(growable: false);
+    final resolvedIdentityProfile =
+        identityProfile ??
+        _legacyIdentityProfile(
+          inferredGender: inferredGender,
+          inferredGenderConfidence: inferredGenderConfidence,
+        );
 
     return CastEntry._(
       castId: castId,
@@ -133,6 +324,7 @@ class CastEntry {
       provenance: provenance,
       observedAliases: normalizedAliases,
       attributionIds: normalizedAttributionIds,
+      identityProfile: resolvedIdentityProfile,
     );
   }
 
@@ -144,6 +336,7 @@ class CastEntry {
     required this.provenance,
     required this.observedAliases,
     required this.attributionIds,
+    required this.identityProfile,
   });
 
   final String castId;
@@ -153,6 +346,30 @@ class CastEntry {
   final CastEntryProvenance provenance;
   final List<String> observedAliases;
   final List<String> attributionIds;
+  final CharacterIdentityProfile? identityProfile;
+
+  VoiceGender? get inferredGender => identityProfile?.preferredVoiceGender;
+
+  double? get inferredGenderConfidence =>
+      inferredGender == null ? null : identityProfile?.genderConfidence;
+
+  static CharacterIdentityProfile? _legacyIdentityProfile({
+    required VoiceGender? inferredGender,
+    required double? inferredGenderConfidence,
+  }) {
+    if (inferredGender == null) {
+      return null;
+    }
+    return CharacterIdentityProfile(
+      genderIdentityLabel: switch (inferredGender) {
+        VoiceGender.male => CharacterGenderIdentityLabel.male,
+        VoiceGender.female => CharacterGenderIdentityLabel.female,
+        VoiceGender.neutral => CharacterGenderIdentityLabel.unknown,
+      },
+      genderConfidence: inferredGenderConfidence ?? 0.5,
+      genderSource: CharacterGenderEvidenceSource.unknown,
+    );
+  }
 }
 
 CastEntryProvenance castEntryProvenanceForAttribution(

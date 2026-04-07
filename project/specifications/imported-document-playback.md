@@ -40,6 +40,7 @@ In particular:
 - responsiveness policy for ordinary imported documents belongs to its own leaf
 - realization, generation, boundary, progress, and controller transport behavior belong to their respective leaves
 - file-backed reader continuity and watched-file live input belong to their own leaf because they change how imported content is refreshed without changing the shared speech pipeline
+- remembered last-heard position and startup resume belong to the reader-continuity branch rather than being left implicit
 
 This parent specification keeps only the branch-level rule that imported playback is an end-to-end path over normalized speech content rather than a separate flat-string playback system.
 

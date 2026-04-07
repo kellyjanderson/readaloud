@@ -9,6 +9,7 @@ Research documents capture accumulated project knowledge and evidence.
 - [Flutter Concurrency, Message Boundaries, and Runtime Decoupling — 2026-03-30](architecture-questions/flutter-concurrency-message-boundaries-and-runtime-decoupling-2026-03-30.md)
 - [Narration State and Voice-Specific Realization — 2026-03-30](architecture-questions/narration-state-and-voice-specific-realization-2026-03-30.md)
 - [Spoken Text Highlighting and Follow-Along Sync — 2026-04-03](architecture-questions/spoken-text-highlighting-and-follow-along-sync-2026-04-03.md)
+- [Branding, Design, and UX Recommendations — 2026-04-07](ui-and-brand/branding-design-and-ux-recommendations-2026-04-07.md)
 - [PositionMap Granularity and Anchor Model — 2026-03-30](document-processing/position-map-granularity-and-anchor-model-2026-03-30.md)
 - [Chunk Boundary and Silence Policy — 2026-03-30](speech-quality/chunk-boundary-and-silence-policy-2026-03-30.md)
 - [English Pronunciation Dictionary Backstop and Special Cases — 2026-04-02](speech-quality/english-pronunciation-dictionary-backstop-and-special-cases-2026-04-02.md)

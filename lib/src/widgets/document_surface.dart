@@ -97,6 +97,28 @@ class _DocumentSurfaceState extends State<DocumentSurface> {
     }
 
     final baseSize = 18.0 * widget.fontScale;
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+    final bodyTextColor = theme.colorScheme.onSurface;
+    final headingTextColor = isDark
+        ? const Color(0xFFF4F7FB)
+        : const Color(0xFF16202B);
+    final activeBlockColor = isDark
+        ? const Color(0x142F3A4A)
+        : const Color(0x1AFFBE0B);
+    final spokenWordBackground = isDark
+        ? const Color(0xFFF4C95D)
+        : const Color(0xFFF9D67A);
+    final spokenWordTextColor = const Color(0xFF111827);
+    final spokenSegmentBackground = isDark
+        ? const Color(0x38F4C95D)
+        : const Color(0x55FFB703);
+    final spokenBlockBackground = isDark
+        ? const Color(0x202F3A4A)
+        : const Color(0x24FFB703);
+    final spokenBlockBorder = isDark
+        ? const Color(0xCCF4C95D)
+        : const Color(0xD9F59E0B);
     final renderedHtml = renderDisplayDocumentToHtml(
       widget.document.displayDocument,
       spokenSelection: widget.spokenSelection,
@@ -162,6 +184,7 @@ class _DocumentSurfaceState extends State<DocumentSurface> {
                   padding: HtmlPaddings.zero,
                   backgroundColor: Colors.transparent,
                   fontFamily: widget.fontFamily,
+                  color: bodyTextColor,
                 ),
                 'body': Style(
                   margin: Margins.zero,
@@ -169,22 +192,33 @@ class _DocumentSurfaceState extends State<DocumentSurface> {
                   lineHeight: LineHeight.number(1.55),
                   fontSize: FontSize(baseSize),
                   fontFamily: widget.fontFamily,
+                  color: bodyTextColor,
                 ),
                 'article': Style(
                   margin: Margins.zero,
                   padding: HtmlPaddings.zero,
+                  color: bodyTextColor,
                 ),
                 'h1': Style(
                   fontSize: FontSize(baseSize * 1.8),
                   fontWeight: FontWeight.w700,
                   margin: Margins.only(bottom: 18, top: 0),
+                  color: headingTextColor,
                 ),
                 'h2': Style(
                   fontSize: FontSize(baseSize * 1.35),
                   fontWeight: FontWeight.w700,
                   margin: Margins.only(top: 22, bottom: 12),
+                  color: headingTextColor,
                 ),
-                'p': Style(margin: Margins.only(bottom: 16)),
+                'p': Style(
+                  margin: Margins.only(bottom: 16),
+                  color: bodyTextColor,
+                ),
+                'blockquote': Style(color: bodyTextColor),
+                'li': Style(color: bodyTextColor),
+                'code': Style(color: bodyTextColor),
+                'pre': Style(color: bodyTextColor),
                 'img': Style(
                   width: Width(100, Unit.percent),
                   margin: Margins.symmetric(vertical: 18),
@@ -199,21 +233,25 @@ class _DocumentSurfaceState extends State<DocumentSurface> {
                   margin: Margins.symmetric(vertical: 18),
                 ),
                 '.active-reading-block': Style(
-                  backgroundColor: const Color(0x1FFFBE0B),
+                  backgroundColor: activeBlockColor,
+                  color: bodyTextColor,
                 ),
                 '.spoken-word': Style(
-                  backgroundColor: const Color(0x66FFB703),
+                  backgroundColor: spokenWordBackground,
                   fontWeight: FontWeight.w700,
+                  color: spokenWordTextColor,
                 ),
                 '.spoken-segment': Style(
-                  backgroundColor: const Color(0x40FFB703),
+                  backgroundColor: spokenSegmentBackground,
                   fontWeight: FontWeight.w600,
+                  color: bodyTextColor,
                 ),
                 '.spoken-block': Style(
-                  backgroundColor: const Color(0x24FFB703),
+                  backgroundColor: spokenBlockBackground,
+                  color: bodyTextColor,
                   border: Border(
                     left: BorderSide(
-                      color: const Color(0xD9F59E0B),
+                      color: spokenBlockBorder,
                       width: 3,
                     ),
                   ),

@@ -16,6 +16,7 @@ source file / pasted text
   -> DisplayDocument + SpeechDocument + PositionMap
   -> document-time speech enrichment
   -> cached base speech annotations
+  -> document-time cast analysis and document-owned voice attribution
   -> optional background continuation of document-time enrichment
   -> document-time pronunciation planning
   -> cached pronunciation artifacts
@@ -33,6 +34,7 @@ source file / pasted text
   -> playback queue or export assembly
   -> controller state / headless result
   -> UI rendering, saved audio, and future highlighting
+  -> optional serialized internal document artifact for debugging and tests
 ```
 
 ## Structural Decisions
@@ -61,6 +63,8 @@ The accepted open-path strategy is:
 
 Heavy semantic or voice-specific work can continue after the document is already viewable.
 
+When multi-voice reading is enabled, the app may keep the document shell in a visible processing state while document-time cast analysis continues.
+
 ### 2. Speech enrichment is a first-class layer between normalization and chunk planning
 
 The system must infer and preserve speech-side information that is not guaranteed to exist in source documents, including:
@@ -84,6 +88,16 @@ The system must distinguish between:
 This split exists to keep playback startup fast without losing high-quality voice-specific behavior.
 
 Voice/session realization is windowed around the active playback position. Voice changes must not force whole-document structural recomputation.
+
+### 3b. Document-time cast analysis is part of the imported document artifact
+
+Dialogue attribution, cast identity, and document-owned narrator-versus-character voice attribution belong to the imported internal document state rather than controller-local reconstruction.
+
+Reason:
+
+- playback, export, and headless flows all need the same speaker ownership truth
+- quote-versus-narration boundaries should be inspectable and testable without running live playback
+- a serialized internal document artifact becomes meaningful only if document-time cast results are first-class data
 
 ### 3a. Pronunciation planning is a first-class internal artifact layer
 
@@ -177,6 +191,12 @@ The pipeline must produce enough metadata to measure:
 - join-silence corrections
 - playback underruns
 - progress-map confidence
+
+### 10. Internal document artifacts should be serializable for debugging and verification
+
+The normalized internal document state should be serializable to a project-owned format for fixture generation, debugging, and correction workflows.
+
+The first version should optimize for inspectability over compactness so document-time attribution and normalization decisions can be reviewed outside the running app.
 
 ## Required Data Flow Boundaries
 
