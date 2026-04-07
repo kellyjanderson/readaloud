@@ -11,6 +11,15 @@ import '../widgets/document_surface.dart';
 import '../widgets/reading_focus_recenter_button.dart';
 import '../widgets/voice_management_dialog.dart';
 
+enum _AppMenuAction {
+  open,
+  paste,
+  sample,
+  saveAudio,
+  readerOptions,
+  liveFeed,
+}
+
 class ReadAloudScreen extends StatefulWidget {
   const ReadAloudScreen({
     super.key,
@@ -49,13 +58,10 @@ class _ReadAloudScreenState extends State<ReadAloudScreen> {
       animation: _controller,
       builder: (context, _) {
         final status = _controller.statusMessage;
-        final voice = _controller.selectedVoice;
-        final voiceLabel = voice?.displayName ?? 'No voice selected';
         final isBuffering = _controller.isBufferingPlayback;
         final transportEnabled =
             _controller.document.wordCount > 0 && !isBuffering;
         final reader = _buildReader(context);
-        final controls = _buildControls(context);
 
         return Title(
           title: _controller.windowTitle,
@@ -65,103 +71,53 @@ class _ReadAloudScreenState extends State<ReadAloudScreen> {
               backgroundColor: Colors.transparent,
               surfaceTintColor: Colors.transparent,
               title: const Text('Read Aloud'),
-            actions: [
-              TextButton.icon(
-                onPressed: _controller.isImporting
-                    ? null
-                    : _controller.importDocument,
-                icon: const Icon(Icons.file_open),
-                label: const Text('Open'),
-              ),
-              TextButton.icon(
-                onPressed: _showPasteDialog,
-                icon: const Icon(Icons.content_paste_go),
-                label: const Text('Paste'),
-              ),
-              TextButton.icon(
-                onPressed: _controller.isLiveReadEnabled
-                    ? () => _controller.stopLiveRead()
-                    : _controller.pickAndStartLiveRead,
-                icon: Icon(
-                  _controller.isLiveReadEnabled
-                      ? Icons.stop_circle_outlined
-                      : Icons.sync,
+              actions: [
+                PopupMenuButton<_AppMenuAction>(
+                  tooltip: 'Reader menu',
+                  onSelected: _handleAppMenuAction,
+                  itemBuilder: (context) => <PopupMenuEntry<_AppMenuAction>>[
+                    const PopupMenuItem<_AppMenuAction>(
+                      value: _AppMenuAction.open,
+                      child: Text('Open Document'),
+                    ),
+                    const PopupMenuItem<_AppMenuAction>(
+                      value: _AppMenuAction.paste,
+                      child: Text('Paste Text'),
+                    ),
+                    const PopupMenuItem<_AppMenuAction>(
+                      value: _AppMenuAction.sample,
+                      child: Text('Load Sample'),
+                    ),
+                    PopupMenuItem<_AppMenuAction>(
+                      value: _AppMenuAction.saveAudio,
+                      enabled:
+                          !_controller.isExporting && _controller.canExportAudio,
+                      child: Text(
+                        _controller.isExporting
+                            ? 'Saving Audio...'
+                            : 'Save Audio',
+                      ),
+                    ),
+                    PopupMenuItem<_AppMenuAction>(
+                      value: _AppMenuAction.liveFeed,
+                      child: Text(
+                        _controller.isLiveReadEnabled
+                            ? 'Stop Live Feed'
+                            : 'Live Feed',
+                      ),
+                    ),
+                    const PopupMenuItem<_AppMenuAction>(
+                      value: _AppMenuAction.readerOptions,
+                      child: Text('Reader Options'),
+                    ),
+                  ],
                 ),
-                label: Text(
-                  _controller.isLiveReadEnabled ? 'Stop Live' : 'Live Feed',
-                ),
-              ),
-              TextButton.icon(
-                onPressed: _controller.loadSampleDocument,
-                icon: const Icon(Icons.auto_stories),
-                label: const Text('Sample'),
-              ),
-              TextButton.icon(
-                onPressed: _controller.isExporting || !_controller.canExportAudio
-                    ? null
-                    : _saveAudio,
-                icon: const Icon(Icons.download),
-                label: Text(_controller.isExporting ? 'Saving...' : 'Save Audio'),
-              ),
-            ],
-          ),
+              ],
+            ),
             body: SafeArea(
               child: LayoutBuilder(
                 builder: (context, constraints) {
-                final wide = constraints.maxWidth >= 980;
-                final useScrollableStackedLayout =
-                    !wide &&
-                    constraints.maxHeight.isFinite &&
-                    constraints.maxHeight < 640;
-                final mobileControlsMaxHeight = constraints.maxHeight.isFinite
-                    ? math.min(
-                        260.0,
-                        math.max(180.0, constraints.maxHeight * 0.30),
-                      )
-                    : 220.0;
-                final bodyContent = wide
-                    ? Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          SizedBox(width: 320, child: controls),
-                          const SizedBox(width: 20),
-                          Expanded(child: reader),
-                        ],
-                      )
-                    : useScrollableStackedLayout
-                    ? ListView(
-                        primary: false,
-                        padding: EdgeInsets.zero,
-                        children: [
-                          SizedBox(
-                            height: math.max(
-                              280.0,
-                              constraints.maxHeight * 0.58,
-                            ),
-                            child: reader,
-                          ),
-                          const SizedBox(height: 16),
-                          SizedBox(
-                            height: mobileControlsMaxHeight,
-                            child: controls,
-                          ),
-                        ],
-                      )
-                    : Column(
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: [
-                          Expanded(child: reader),
-                          const SizedBox(height: 16),
-                          Flexible(
-                            child: ConstrainedBox(
-                              constraints: BoxConstraints(
-                                maxHeight: mobileControlsMaxHeight,
-                              ),
-                              child: controls,
-                            ),
-                          ),
-                        ],
-                      );
+                  final bodyContent = reader;
                 final intakeSurface = DropTarget(
                   onDragEntered: (_) => setState(() => _isDraggingFiles = true),
                   onDragExited: (_) => setState(() => _isDraggingFiles = false),
@@ -220,11 +176,9 @@ class _ReadAloudScreenState extends State<ReadAloudScreen> {
                       Row(
                         children: [
                           Expanded(
-                            child: Text(
-                              voiceLabel,
-                              overflow: TextOverflow.ellipsis,
-                            ),
+                            child: _buildPrimaryVoiceSelector(context),
                           ),
+                          const SizedBox(width: 12),
                           Text(
                             '${_controller.currentWordIndex} / ${_controller.document.wordCount} words',
                             style: Theme.of(context).textTheme.bodySmall,
@@ -323,6 +277,88 @@ class _ReadAloudScreenState extends State<ReadAloudScreen> {
         SnackBar(content: Text('Could not start Save Audio: $error')),
       );
     }
+  }
+
+  Future<void> _handleAppMenuAction(_AppMenuAction action) async {
+    switch (action) {
+      case _AppMenuAction.open:
+        if (_controller.isImporting) {
+          return;
+        }
+        await _controller.importDocument();
+      case _AppMenuAction.paste:
+        await _showPasteDialog();
+      case _AppMenuAction.sample:
+        await _controller.loadSampleDocument();
+      case _AppMenuAction.saveAudio:
+        if (_controller.isExporting || !_controller.canExportAudio) {
+          return;
+        }
+        await _saveAudio();
+      case _AppMenuAction.readerOptions:
+        await _showReaderOptionsSheet();
+      case _AppMenuAction.liveFeed:
+        if (_controller.isLiveReadEnabled) {
+          await _controller.stopLiveRead();
+          return;
+        }
+        await _controller.pickAndStartLiveRead();
+    }
+  }
+
+  Future<void> _showReaderOptionsSheet() async {
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) {
+        final maxHeight = math.min(
+          MediaQuery.of(context).size.height * 0.88,
+          720.0,
+        );
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+            child: SizedBox(height: maxHeight, child: _buildControls(context)),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildPrimaryVoiceSelector(BuildContext context) {
+    final selectedVoiceId = _controller.selectedVoice?.id;
+    final voices = _controller.voices;
+
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.surface,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: const Color(0x16000000)),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+        child: DropdownButtonHideUnderline(
+          child: DropdownButton<String>(
+            isExpanded: true,
+            value: selectedVoiceId,
+            hint: const Text('Select voice'),
+            items: voices
+                .map(
+                  (voice) => DropdownMenuItem<String>(
+                    value: voice.id,
+                    child: Text(
+                      voice.displayName,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                )
+                .toList(growable: false),
+            onChanged: voices.isEmpty ? null : _controller.selectVoiceById,
+          ),
+        ),
+      ),
+    );
   }
 
   Widget _buildControls(BuildContext context) {

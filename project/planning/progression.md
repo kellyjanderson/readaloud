@@ -132,7 +132,7 @@ For user-facing branches, the unchecked surfaced leaves remain the feature-compl
 
 ### Reader Surface and Voice Management UI
 
-- [ ] [Primary Reader Control Set](../specifications/primary-reader-control-set.md)
+- [x] [Primary Reader Control Set](../specifications/primary-reader-control-set.md)
 - [x] [Document Identity Outside Reading Surface](../specifications/document-identity-outside-reading-surface.md)
 - [ ] [Integrated Secondary Voice Access](../specifications/integrated-secondary-voice-access.md)
 - [x] [Voice Library Row and Information Affordance](../specifications/voice-library-row-and-information-affordance.md)

@@ -9,7 +9,7 @@ void main() {
     await tester.pump();
 
     expect(find.text('Read Aloud'), findsWidgets);
-    expect(find.text('Reader Controls'), findsOneWidget);
+    expect(find.text('Reader Controls'), findsNothing);
     expect(find.text('For Probe'), findsNothing);
     expect(
       tester.widgetList<Title>(find.byType(Title)).any(
@@ -21,14 +21,10 @@ void main() {
       find.textContaining('Rich document surface with room for images'),
       findsNothing,
     );
-    expect(
-      find.textContaining(
-        'Short phrases for tracing how "for" is realized by the TTS pipeline.',
-      ),
-      findsWidgets,
-    );
     expect(find.byIcon(Icons.play_arrow), findsOneWidget);
+    expect(find.byIcon(Icons.more_vert), findsOneWidget);
     expect(find.text('Play'), findsNothing);
+    expect(find.byType(DropdownButton<String>), findsOneWidget);
     expect(find.byType(SelectionArea), findsWidgets);
   });
 
@@ -43,6 +39,7 @@ void main() {
 
     expect(tester.takeException(), isNull);
     expect(find.byIcon(Icons.play_arrow), findsOneWidget);
+    expect(find.byIcon(Icons.more_vert), findsOneWidget);
     expect(find.text('Play'), findsNothing);
     expect(find.text('For Probe'), findsNothing);
   });
