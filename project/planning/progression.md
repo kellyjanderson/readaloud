@@ -134,7 +134,7 @@ For user-facing branches, the unchecked surfaced leaves remain the feature-compl
 
 - [x] [Primary Reader Control Set](../specifications/primary-reader-control-set.md)
 - [x] [Document Identity Outside Reading Surface](../specifications/document-identity-outside-reading-surface.md)
-- [ ] [Integrated Secondary Voice Access](../specifications/integrated-secondary-voice-access.md)
+- [x] [Integrated Secondary Voice Access](../specifications/integrated-secondary-voice-access.md)
 - [x] [Voice Library Row and Information Affordance](../specifications/voice-library-row-and-information-affordance.md)
 - [x] [Cast Management Dialog Structure](../specifications/cast-management-dialog-structure.md)
 - [ ] [Appearance Mode Selection And System Following](../specifications/appearance-mode-selection-and-system-following.md)
