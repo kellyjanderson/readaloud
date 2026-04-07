@@ -714,6 +714,9 @@ class _ReadAloudScreenState extends State<ReadAloudScreen> {
               onAssignCastVoice: (castId, voiceId) {
                 unawaited(_controller.assignVoiceToCast(castId, voiceId));
               },
+              onClearCastVoiceOverride: (castId) {
+                unawaited(_controller.clearCastVoiceOverride(castId));
+              },
             );
           },
         );
