@@ -41,7 +41,7 @@ The implementation must support:
 
 ## Refinement Status
 
-Requires refinement.
+Refinement complete for the current planned branch.
 
 ## Child Specifications
 

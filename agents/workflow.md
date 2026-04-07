@@ -16,6 +16,8 @@ Research supports all phases and is used to store durable information.
 
 Release definitions provide version-level cohesion across stabilized UI, architecture, and specification work.
 
+Test specifications provide durable verification contracts for final feature leaf specifications.
+
 Project-specific agent rules are stored separately in:
 
 ```text
@@ -59,6 +61,18 @@ Project release definition documents should live in:
 
 ```text
 project/release-x.y.z/
+```
+
+Test specification guidance is defined in:
+
+```text
+agents/test-specifications.md
+```
+
+Project test specification documents should live in:
+
+```text
+project/test-specifications/
 ```
 
 ---
@@ -197,6 +211,8 @@ For each specification:
 * if implementable, mark it final
 * if not, refine it into child specifications
 
+When a feature leaf specification is marked final, create or update its paired test specification in the same refinement pass.
+
 Store all specifications and maintain backlinks.
 
 This process continues until all leaf specifications are marked final.
@@ -217,6 +233,14 @@ The goal is not to atomize work into the smallest possible leaves.
 
 Specification refinement should usually stop at the largest cohesive unit that can still be implemented cleanly in one round without hiding another full round of work.
 
+For user-facing feature branches, specification refinement must continue until surfaced running-app outcomes are also represented by final leaves.
+
+If a running-app surface such as a sheet, dialog, panel, or settings surface already exists, the tree should also include a named parent UI/specification branch for that surface rather than only isolated behavior leaves.
+
+Internal support leaves are often necessary, but they are not enough to finish a user-facing branch on their own.
+
+If the intended outcome is something the user should see, hear, or interact with, at least one final leaf must describe that observable behavior explicitly.
+
 After each specification pass, report how many specifications still require another refinement round so progress toward completed specification work remains visible.
 
 ---
@@ -234,14 +258,26 @@ project/planning/progression.md
 ```
 
 * populate it with references to the final leaf specifications
+* add paired test specification references for feature leaves
 * arrange those references according to dependency order
 * apply secondary ordering where needed
 
+Feature leaves should not enter progression without their paired test specifications already represented in `project/test-specifications/`.
+
 If a release definition exists for the active version, the progression document should remain consistent with that release scope.
 
-The progression document must contain only final leaf specifications.
+The progression document must contain only:
+
+* final leaf specifications
+* paired test specification references for final feature leaves
+
+For user-facing feature branches, progression should include the surfaced running-app leaves as well as any supporting leaves they depend on.
+
+Support leaves being checked off does not, by itself, mean the feature is shipped.
 
 Parent or umbrella specifications do not belong in progression and must not be tracked there.
+
+Test specification references in progression exist to represent verification work explicitly.
 
 The progression document becomes the execution sequence for the project.
 

@@ -18,6 +18,7 @@ import '../models/reader_document.dart';
 import '../models/speech_document.dart';
 import 'base_speech_annotation_inference_service.dart';
 import 'character_cast_registry_service.dart';
+import 'document_voice_attribution_service.dart';
 import 'document_time_pronunciation_planner_service.dart';
 import 'english_pronunciation_profile_selector.dart';
 import 'english_suffix_allomorph_module.dart';
@@ -87,6 +88,7 @@ class DocumentImportService {
     BaseSpeechAnnotationInferenceService? annotationInferenceService,
     SpeakerAttributionService? speakerAttributionService,
     CharacterCastRegistryService? characterCastRegistryService,
+    DocumentVoiceAttributionService? documentVoiceAttributionService,
     DocumentTimePronunciationPlannerService? pronunciationPlannerService,
     EnglishPronunciationProfileSelector? pronunciationProfileSelector,
     PronunciationResourceLayeringService? pronunciationResourceLayeringService,
@@ -98,6 +100,9 @@ class DocumentImportService {
            speakerAttributionService ?? const SpeakerAttributionService(),
        _characterCastRegistryService =
            characterCastRegistryService ?? const CharacterCastRegistryService(),
+       _documentVoiceAttributionService =
+           documentVoiceAttributionService ??
+           const DocumentVoiceAttributionService(),
        _pronunciationPlannerService =
            pronunciationPlannerService ??
            const DocumentTimePronunciationPlannerService(),
@@ -126,6 +131,7 @@ class DocumentImportService {
   final BaseSpeechAnnotationInferenceService _annotationInferenceService;
   final SpeakerAttributionService _speakerAttributionService;
   final CharacterCastRegistryService _characterCastRegistryService;
+  final DocumentVoiceAttributionService _documentVoiceAttributionService;
   final DocumentTimePronunciationPlannerService _pronunciationPlannerService;
   final EnglishPronunciationProfileSelector _pronunciationProfileSelector;
   final PronunciationResourceLayeringService
@@ -752,6 +758,15 @@ class DocumentImportService {
     );
     final characterCastRegistry = _characterCastRegistryService.build(
       dialogueAttributions: dialogueAttributions,
+      speechDocument: normalized.speechDocument,
+    );
+    final documentVoiceAttribution = _documentVoiceAttributionService.build(
+      DocumentVoiceAttributionInput(
+        speechDocument: normalized.speechDocument,
+        baseAnnotations: baseSpeechAnnotations,
+        dialogueAttributions: dialogueAttributions,
+        characterCastRegistry: characterCastRegistry,
+      ),
     );
     final selectedProfile = _pronunciationProfileSelector.select(
       const EnglishPronunciationProfileSelectionInput(engineId: 'kokoro'),
@@ -780,6 +795,7 @@ class DocumentImportService {
       baseSpeechAnnotations: baseSpeechAnnotations,
       dialogueAttributions: dialogueAttributions,
       characterCastRegistry: characterCastRegistry,
+      documentVoiceAttribution: documentVoiceAttribution,
       basePronunciationArtifacts: basePronunciationArtifacts,
       presentation: presentation,
       pdfData: pdfData,
@@ -1504,82 +1520,93 @@ class _NormalizedDocumentFactory {
         if (sentence.isEmpty) {
           continue;
         }
-        final segmentId = 's_$segmentOrdinal';
-        final words = RegExp(
-          r'\S+',
-        ).allMatches(sentence).toList(growable: false);
         final displayBlockId = block?.blockId ?? 'b_$paragraphIndex';
         final matchStart = nextDisplaySearchOffset[displayBlockId] ?? 0;
-        final displayStart = block == null
+        final sentenceDisplayStart = block == null
             ? 0
             : _matchOffset(block.plainText, sentence, matchStart);
-        final displayEnd = displayStart + sentence.length;
+        final sentenceDisplayEnd = sentenceDisplayStart + sentence.length;
         nextDisplaySearchOffset[displayBlockId] = math.max(
           matchStart,
-          displayEnd,
+          sentenceDisplayEnd,
         );
+        final sentenceConfidence = block == null
+            ? 0.45
+            : _confidenceForMatch(block.plainText, sentence);
+        final fragments = _splitMixedDialogueSentence(sentence);
 
-        speechSegments.add(
-          SpeechSegment(
-            segmentId: segmentId,
-            blockId: displayBlockId,
-            ordinal: segmentOrdinal,
-            paragraphIndex: paragraphIndex,
-            sentenceIndex: sentenceIndex,
-            normalizedText: sentence,
-            wordCount: words.length,
-            sourceRange: null,
-            displayAnchor: DisplayAnchor(
+        for (final fragment in fragments) {
+          final segmentId = 's_$segmentOrdinal';
+          final words = RegExp(
+            r'\S+',
+          ).allMatches(fragment.text).toList(growable: false);
+          final displayStart = sentenceDisplayStart + fragment.startOffset;
+          final displayEnd = sentenceDisplayStart + fragment.endOffset;
+
+          speechSegments.add(
+            SpeechSegment(
+              segmentId: segmentId,
               blockId: displayBlockId,
-              startInlineOffset: math.max(0, displayStart),
-              endInlineOffset: math.max(0, displayEnd),
-            ),
-            wordSpans: [
-              for (var wordIndex = 0; wordIndex < words.length; wordIndex += 1)
-                SpeechWordSpan(
-                  wordIndexWithinSegment: wordIndex,
-                  startUtf16: words[wordIndex].start,
-                  endUtf16: words[wordIndex].end,
-                  text: words[wordIndex].group(0)!,
-                ),
-            ],
-          ),
-        );
-
-        positionEntries.add(
-          PositionMapEntry(
-            entryId: 'pm_$segmentOrdinal',
-            displayBlockId: displayBlockId,
-            speechSegmentId: segmentId,
-            displayStart: math.max(0, displayStart),
-            displayEnd: math.max(0, displayEnd),
-            speechStartWord: 0,
-            speechEndWord: words.length,
-            confidence: block == null
-                ? 0.45
-                : _confidenceForMatch(block.plainText, sentence),
-            recoveryAnchor: RecoveryAnchor(
-              exact: sentence,
-              prefix: _prefixFor(sentence),
-              suffix: _suffixFor(sentence),
-            ),
-            sourceAnchor: _sourceAnchorForBlock(type, block),
-          ),
-        );
-        if (block == null ||
-            !_normalizeImportedText(block.plainText).contains(sentence)) {
-          workingDiagnostics.add(
-            ImportDiagnostic(
-              severity: ImportDiagnosticSeverity.warning,
-              code: 'low_mapping_confidence',
-              message:
-                  'A speech segment could not be aligned confidently to its display block.',
-              relatedBlockId: displayBlockId,
-              sourceLocator: segmentId,
+              ordinal: segmentOrdinal,
+              paragraphIndex: paragraphIndex,
+              sentenceIndex: sentenceIndex,
+              normalizedText: fragment.text,
+              wordCount: words.length,
+              sourceRange: null,
+              displayAnchor: DisplayAnchor(
+                blockId: displayBlockId,
+                startInlineOffset: math.max(0, displayStart),
+                endInlineOffset: math.max(0, displayEnd),
+              ),
+              wordSpans: [
+                for (
+                  var wordIndex = 0;
+                  wordIndex < words.length;
+                  wordIndex += 1
+                )
+                  SpeechWordSpan(
+                    wordIndexWithinSegment: wordIndex,
+                    startUtf16: words[wordIndex].start,
+                    endUtf16: words[wordIndex].end,
+                    text: words[wordIndex].group(0)!,
+                  ),
+              ],
             ),
           );
+
+          positionEntries.add(
+            PositionMapEntry(
+              entryId: 'pm_$segmentOrdinal',
+              displayBlockId: displayBlockId,
+              speechSegmentId: segmentId,
+              displayStart: math.max(0, displayStart),
+              displayEnd: math.max(0, displayEnd),
+              speechStartWord: 0,
+              speechEndWord: words.length,
+              confidence: sentenceConfidence,
+              recoveryAnchor: RecoveryAnchor(
+                exact: fragment.text,
+                prefix: _prefixFor(fragment.text),
+                suffix: _suffixFor(fragment.text),
+              ),
+              sourceAnchor: _sourceAnchorForBlock(type, block),
+            ),
+          );
+          if (block == null ||
+              !_normalizeImportedText(block.plainText).contains(fragment.text)) {
+            workingDiagnostics.add(
+              ImportDiagnostic(
+                severity: ImportDiagnosticSeverity.warning,
+                code: 'low_mapping_confidence',
+                message:
+                    'A speech segment could not be aligned confidently to its display block.',
+                relatedBlockId: displayBlockId,
+                sourceLocator: segmentId,
+              ),
+            );
+          }
+          segmentOrdinal += 1;
         }
-        segmentOrdinal += 1;
       }
       paragraphIndex += 1;
     }
@@ -2275,13 +2302,232 @@ List<String> _splitSentences(String paragraph) {
   if (normalized.isEmpty) {
     return const <String>[];
   }
-  final matches =
+  final provisional =
       RegExp(r'''[^.!?]+(?:[.!?]+(?:["'”’)\]}]+)?(?=\s|$)|$)''', dotAll: true)
           .allMatches(normalized)
           .map((match) => match.group(0)!.trim())
           .where((sentence) => sentence.isNotEmpty)
           .toList(growable: false);
-  return matches.isEmpty ? <String>[normalized] : matches;
+  if (provisional.isEmpty) {
+    return <String>[normalized];
+  }
+  return _mergeDialogueSentenceFragments(provisional);
+}
+
+const String _dialogueNarrationSpeechVerbPattern =
+    r'(said|says|say|asked|asks|ask|replied|replies|reply|whispered|whispers|whisper|yelled|yells|yell|cried|cries|cry|muttered|mutters|mutter|called|calls|call|answered|answers|answer|remarked|remarks|remark|added|adds|add|snapped|snaps|snap|continued|continues|continue|finished|finishes|finish|screamed|screams|scream|exclaimed|exclaims|exclaim|retorted|retorts|retort|shouted|shouts|shout|barked|barks|bark|hissed|hisses|hiss|growled|growls|growl)';
+
+final RegExp _dialogueNarrationLeadPattern = RegExp(
+  '^'
+  '(?:'
+  '[A-Z][A-Za-z\'’-]+(?:\\s+[A-Z][A-Za-z\'’-]+){0,2}'
+  '(?:\\s+[a-z][A-Za-z\'’-]*){0,4}\\s+$_dialogueNarrationSpeechVerbPattern'
+  '|'
+  '$_dialogueNarrationSpeechVerbPattern'
+  '(?:\\s+[a-z][A-Za-z\'’-]*){0,4}\\s+'
+  '[A-Z][A-Za-z\'’-]+(?:\\s+[A-Z][A-Za-z\'’-]+){0,2}'
+  ')\\b',
+);
+
+List<String> _mergeDialogueSentenceFragments(List<String> fragments) {
+  final merged = <String>[];
+  var buffer = fragments.first;
+
+  for (final fragment in fragments.skip(1)) {
+    if (_shouldMergeDialogueSentenceFragments(buffer, fragment)) {
+      buffer = '$buffer $fragment';
+      continue;
+    }
+    merged.add(buffer);
+    buffer = fragment;
+  }
+
+  merged.add(buffer);
+  return merged;
+}
+
+bool _shouldMergeDialogueSentenceFragments(String left, String right) {
+  final normalizedLeft = left.trim();
+  final normalizedRight = right.trim();
+  if (normalizedLeft.isEmpty || normalizedRight.isEmpty) {
+    return false;
+  }
+  if (_hasUnmatchedDialogueQuote(normalizedLeft)) {
+    return true;
+  }
+  return _endsWithDialogueClosingQuote(normalizedLeft) &&
+      _dialogueNarrationLeadPattern.hasMatch(normalizedRight);
+}
+
+bool _hasUnmatchedDialogueQuote(String text) {
+  var openQuoteOffset = -1;
+  for (var index = 0; index < text.length; index += 1) {
+    final char = text[index];
+    final isCurlyOpen = char == '“';
+    final isCurlyClose = char == '”';
+    final isStraightDouble = char == '"';
+    if (!isCurlyOpen && !isCurlyClose && !isStraightDouble) {
+      continue;
+    }
+
+    if (isCurlyOpen || (isStraightDouble && openQuoteOffset < 0)) {
+      openQuoteOffset = index;
+      continue;
+    }
+
+    if (openQuoteOffset >= 0) {
+      openQuoteOffset = -1;
+    }
+  }
+  return openQuoteOffset >= 0;
+}
+
+bool _endsWithDialogueClosingQuote(String text) {
+  final trimmed = text.trimRight();
+  if (trimmed.isEmpty) {
+    return false;
+  }
+  final lastChar = trimmed[trimmed.length - 1];
+  return lastChar == '"' || lastChar == '”';
+}
+
+List<_SpeechFragment> _splitMixedDialogueSentence(String sentence) {
+  final quoteRanges = _quotedRanges(sentence);
+  if (quoteRanges.isEmpty) {
+    return <_SpeechFragment>[
+      _SpeechFragment(
+        text: sentence,
+        startOffset: 0,
+        endOffset: sentence.length,
+      ),
+    ];
+  }
+
+  final fragments = <_SpeechFragment>[];
+  var cursor = 0;
+  for (final range in quoteRanges) {
+    final narration = _trimmedFragment(
+      sentence,
+      startOffset: cursor,
+      endOffset: range.start,
+    );
+    if (narration != null) {
+      fragments.add(narration);
+    }
+
+    final dialogue = _trimmedFragment(
+      sentence,
+      startOffset: range.start,
+      endOffset: range.end,
+    );
+    if (dialogue != null) {
+      fragments.add(dialogue);
+    }
+    cursor = range.end;
+  }
+
+  final trailingNarration = _trimmedFragment(
+    sentence,
+    startOffset: cursor,
+    endOffset: sentence.length,
+  );
+  if (trailingNarration != null) {
+    fragments.add(trailingNarration);
+  }
+
+  return fragments.isEmpty
+      ? <_SpeechFragment>[
+          _SpeechFragment(
+            text: sentence,
+            startOffset: 0,
+            endOffset: sentence.length,
+          ),
+        ]
+      : fragments;
+}
+
+List<_TextRange> _quotedRanges(String text) {
+  final ranges = <_TextRange>[];
+  int? openOffset;
+  for (var index = 0; index < text.length; index += 1) {
+    final char = text[index];
+    final isCurlyOpen = char == '“';
+    final isCurlyClose = char == '”';
+    final isStraightDouble = char == '"';
+    if (!isCurlyOpen && !isCurlyClose && !isStraightDouble) {
+      continue;
+    }
+
+    if (isCurlyOpen || (isStraightDouble && openOffset == null)) {
+      openOffset ??= index;
+      continue;
+    }
+
+    if (openOffset != null) {
+      ranges.add(_TextRange(start: openOffset, end: index + 1));
+      openOffset = null;
+    }
+  }
+
+  if (ranges.isEmpty) {
+    return const <_TextRange>[];
+  }
+
+  final nonQuotedText = StringBuffer();
+  var cursor = 0;
+  for (final range in ranges) {
+    if (range.start > cursor) {
+      nonQuotedText.write(text.substring(cursor, range.start));
+    }
+    cursor = range.end;
+  }
+  if (cursor < text.length) {
+    nonQuotedText.write(text.substring(cursor));
+  }
+
+  return nonQuotedText.toString().trim().isEmpty ? const <_TextRange>[] : ranges;
+}
+
+_SpeechFragment? _trimmedFragment(
+  String sentence, {
+  required int startOffset,
+  required int endOffset,
+}) {
+  var start = startOffset;
+  var end = endOffset;
+  while (start < end && sentence[start].trim().isEmpty) {
+    start += 1;
+  }
+  while (end > start && sentence[end - 1].trim().isEmpty) {
+    end -= 1;
+  }
+  if (start >= end) {
+    return null;
+  }
+  return _SpeechFragment(
+    text: sentence.substring(start, end),
+    startOffset: start,
+    endOffset: end,
+  );
+}
+
+class _TextRange {
+  const _TextRange({required this.start, required this.end});
+
+  final int start;
+  final int end;
+}
+
+class _SpeechFragment {
+  const _SpeechFragment({
+    required this.text,
+    required this.startOffset,
+    required this.endOffset,
+  });
+
+  final String text;
+  final int startOffset;
+  final int endOffset;
 }
 
 int _matchOffset(String blockText, String sentence, int startAt) {

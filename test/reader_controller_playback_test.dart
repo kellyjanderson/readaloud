@@ -1,9 +1,15 @@
+import 'dart:async';
+import 'dart:convert';
+import 'dart:typed_data';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:read_aloud/src/controllers/reader_controller.dart';
 import 'package:read_aloud/src/models/reading_focus_state.dart';
+import 'package:read_aloud/src/models/reader_document.dart';
+import 'package:read_aloud/src/models/reader_resume_state.dart';
 import 'package:read_aloud/src/models/spoken_chunk_record.dart';
 import 'package:read_aloud/src/models/spoken_selection.dart';
 import 'package:read_aloud/src/models/voice_profile.dart';
+import 'package:read_aloud/src/services/document_import_service.dart';
 import 'package:read_aloud/src/services/playback_instrumentation_service.dart';
 import 'dart:io';
 import 'package:read_aloud/src/services/tts_engine.dart';
@@ -169,17 +175,26 @@ void main() {
       expect(latencyMetric.value, isA<int>());
     });
 
-    test('restores the last opened document from preferences', () async {
+    test('restores the last heard position for the last opened document', () async {
       final tempDir = await Directory.systemTemp.createTemp(
         'read-aloud-restore-test',
       );
       addTearDown(() => tempDir.delete(recursive: true));
       final file = File('${tempDir.path}/remembered.txt');
-      await file.writeAsString('Restored documents should open by default.');
+      await file.writeAsString('Alpha beta. Gamma delta. Epsilon zeta.');
 
       SharedPreferences.setMockInitialValues(<String, Object>{
         'reader.lastOpenedDocumentPath': file.path,
         'reader.lastOpenedDirectoryPath': tempDir.path,
+        'reader.resumeState': jsonEncode(
+          ReaderResumeState(
+            documentPath: file.path,
+            wordIndex: 3,
+            wordIndexWithinSegment: 1,
+            segmentTextAnchor: 'Gamma delta.',
+            anchorWordText: 'delta',
+          ).toJson(),
+        ),
       });
 
       final engine = _FakeTtsEngine();
@@ -192,11 +207,68 @@ void main() {
       expect(restored, isTrue);
       expect(controller.document.title, 'remembered.txt');
       expect(controller.windowTitle, 'Read Aloud - remembered.txt');
+      expect(controller.currentWordIndex, 3);
       expect(
         controller.document.speakableText,
-        contains('Restored documents should open by default.'),
+        contains('Alpha beta. Gamma delta. Epsilon zeta.'),
       );
-      expect(controller.statusMessage, 'Restored remembered.txt.');
+      expect(
+        controller.statusMessage,
+        'Restored remembered.txt near your last heard position.',
+      );
+    });
+
+    test('persists playback-derived resume state and restores it on startup', () async {
+      final tempDir = await Directory.systemTemp.createTemp(
+        'read-aloud-resume-persist-test',
+      );
+      addTearDown(() => tempDir.delete(recursive: true));
+      final file = File('${tempDir.path}/resume.txt');
+      await file.writeAsString('Alpha beta. Gamma delta. Epsilon zeta.');
+
+      final firstEngine = _FakeTtsEngine();
+      final firstController = ReaderController(ttsEngine: firstEngine);
+
+      await firstController.initialize();
+      await firstController.importFilePaths(<String>[file.path]);
+      await firstController.startPlayback();
+      firstEngine.emitStart();
+
+      final documentId = firstController.document.displayDocument.documentId;
+      final secondSegment = firstController.document.speechDocument.segments[1];
+      firstEngine.emitProgress(
+        TtsProgressUpdate(
+          startOffset: 11,
+          endOffset: 22,
+          word: 'delta',
+          documentId: documentId,
+          chunkId: 'chunk-resume',
+          segmentId: secondSegment.segmentId,
+          wordStartIndex: 2,
+          wordEndIndex: 4,
+          elapsedInChunk: const Duration(seconds: 2),
+          chunkAudioDuration: const Duration(seconds: 2),
+          voiceId: firstController.selectedVoice!.id,
+          rate: firstController.currentSpeed,
+        ),
+      );
+      await firstController.pausePlayback();
+      firstController.dispose();
+
+      final secondEngine = _FakeTtsEngine();
+      final secondController = ReaderController(ttsEngine: secondEngine);
+      addTearDown(secondController.dispose);
+
+      await secondController.initialize();
+      final restored = await secondController.restoreLastOpenedDocument();
+
+      expect(restored, isTrue);
+      expect(secondController.document.title, 'resume.txt');
+      expect(secondController.currentWordIndex, 4);
+      expect(
+        secondController.statusMessage,
+        'Restored resume.txt near your last heard position.',
+      );
     });
 
     test('surfaces debug phoneme trace snapshots from the engine', () async {
@@ -213,7 +285,7 @@ void main() {
           voiceId: 'af_bella',
           recentLines: <String>[
             'voiceId: af_bella',
-            'trace: plainText text=\"for the road\" prepared=\"for the road\" phonemes=\"fˈɔɹ ðə ɹˈoʊd\"',
+            'trace: plainText text="for the road" prepared="for the road" phonemes="fˈɔɹ ðə ɹˈoʊd"',
           ],
           sessionId: 'session_debug',
         ),
@@ -226,7 +298,7 @@ void main() {
       expect(controller.ttsDebugTraceVoiceId, 'af_bella');
       expect(
         controller.ttsDebugTraceLines.last,
-        contains('phonemes=\"fˈɔɹ ðə ɹˈoʊd\"'),
+        contains('phonemes="fˈɔɹ ðə ɹˈoʊd"'),
       );
     });
 
@@ -262,6 +334,83 @@ void main() {
 
       expect(controller.document.speakableText, contains('Gamma delta.'));
       expect(controller.statusMessage, contains('Live read updated'));
+    });
+
+    test('live read refresh continues playback when the transport is active', () async {
+      final tempDir = await Directory.systemTemp.createTemp(
+        'read-aloud-live-read-resume-test',
+      );
+      addTearDown(() => tempDir.delete(recursive: true));
+      final file = File('${tempDir.path}/live-resume.txt');
+      await file.writeAsString('Alpha beta. Gamma delta.');
+
+      final engine = _FakeTtsEngine();
+      final controller = ReaderController(ttsEngine: engine);
+      addTearDown(controller.dispose);
+
+      await controller.initialize();
+      await controller.startLiveReadFromPath(file.path);
+      await controller.startPlayback();
+      engine.emitStart();
+
+      expect(engine.speakCallCount, 1);
+      expect(controller.isPlaying, isTrue);
+
+      await file.writeAsString('Alpha beta. Gamma delta. Epsilon zeta.');
+
+      for (var attempt = 0; attempt < 30; attempt += 1) {
+        if (controller.document.speakableText.contains('Epsilon zeta.') &&
+            engine.speakCallCount >= 2) {
+          break;
+        }
+        await Future<void>.delayed(const Duration(milliseconds: 100));
+      }
+
+      expect(controller.document.speakableText, contains('Epsilon zeta.'));
+      expect(engine.speakCallCount, greaterThanOrEqualTo(2));
+      expect(
+        controller.playbackState,
+        isIn(<ReaderPlaybackPrimaryState>[
+          ReaderPlaybackPrimaryState.bufferingFirstChunk,
+          ReaderPlaybackPrimaryState.playing,
+        ]),
+      );
+    });
+
+    test('live read refresh stays paused after an explicit user pause', () async {
+      final tempDir = await Directory.systemTemp.createTemp(
+        'read-aloud-live-read-paused-test',
+      );
+      addTearDown(() => tempDir.delete(recursive: true));
+      final file = File('${tempDir.path}/live-paused.txt');
+      await file.writeAsString('Alpha beta. Gamma delta.');
+
+      final engine = _FakeTtsEngine();
+      final controller = ReaderController(ttsEngine: engine);
+      addTearDown(controller.dispose);
+
+      await controller.initialize();
+      await controller.startLiveReadFromPath(file.path);
+      await controller.startPlayback();
+      engine.emitStart();
+      await controller.pausePlayback();
+
+      expect(engine.speakCallCount, 1);
+      expect(controller.isPlaying, isFalse);
+
+      await file.writeAsString('Alpha beta. Gamma delta. Epsilon zeta.');
+
+      for (var attempt = 0; attempt < 30; attempt += 1) {
+        if (controller.document.speakableText.contains('Epsilon zeta.')) {
+          break;
+        }
+        await Future<void>.delayed(const Duration(milliseconds: 100));
+      }
+
+      expect(controller.document.speakableText, contains('Epsilon zeta.'));
+      expect(engine.speakCallCount, 1);
+      expect(controller.isPlaying, isFalse);
+      expect(controller.playbackState, ReaderPlaybackPrimaryState.idle);
     });
 
     test('uses document title as the window title fallback for non-file content', () async {
@@ -352,7 +501,7 @@ void main() {
       );
     });
 
-    test('builds a multi-voice playback plan for attributed dialogue', () async {
+    test('builds a multi-voice playback plan with narrator speaker tags and quoted character speech', () async {
       final engine = _FakeTtsEngine(
         voices: const <VoiceProfile>[
           VoiceProfile(
@@ -376,7 +525,7 @@ void main() {
 
       await controller.initialize();
       await controller.importPastedText(
-        '"Go now," Jennifer said. The room was silent.',
+        'John said, "Are you ok?" The room was silent.',
       );
 
       await controller.startPlayback();
@@ -386,11 +535,260 @@ void main() {
       final chunkPlan = request!.chunkPlan;
       expect(chunkPlan, isNotNull);
 
-      final routedVoiceIds = chunkPlan!.chunks
-          .map((chunk) => chunk.voiceId)
-          .toSet();
-      expect(routedVoiceIds, contains('af_bella'));
-      expect(routedVoiceIds, contains('am_michael'));
+      final chunks = chunkPlan!.chunks;
+      expect(chunks.length, greaterThanOrEqualTo(3));
+      expect(chunks[0].speakText, 'John said,');
+      expect(chunks[0].voiceId, 'af_bella');
+      expect(chunks[0].castId, 'cast_narrator');
+
+      expect(chunks[1].speakText, '"Are you ok?"');
+      expect(chunks[1].voiceId, 'am_michael');
+      expect(chunks[1].castId, 'cast_character_john');
+      expect(chunks[1].dialogueSpanId, isNotNull);
+
+      expect(chunks.last.speakText, 'The room was silent.');
+      expect(chunks.last.voiceId, 'af_bella');
+      expect(chunks.last.castId, 'cast_narrator');
+    });
+
+    test('disables cast-aware routing when multi-voice mode is turned off', () async {
+      final engine = _FakeTtsEngine(
+        voices: const <VoiceProfile>[
+          VoiceProfile(
+            id: 'af_bella',
+            label: 'Bella',
+            locale: 'en-US',
+            rawValue: <String, dynamic>{'name': 'Bella', 'locale': 'en-US'},
+            gender: VoiceGender.female,
+          ),
+          VoiceProfile(
+            id: 'am_michael',
+            label: 'Michael',
+            locale: 'en-US',
+            rawValue: <String, dynamic>{'name': 'Michael', 'locale': 'en-US'},
+            gender: VoiceGender.male,
+          ),
+        ],
+      );
+      final controller = ReaderController(ttsEngine: engine);
+      addTearDown(controller.dispose);
+
+      await controller.initialize();
+      await controller.importPastedText('John said, "Are you ok?" The room was silent.');
+
+      expect(controller.isMultiVoiceEnabled, isTrue);
+      await controller.setMultiVoiceEnabled(false);
+      expect(controller.castVoiceAssignments, isNull);
+
+      await controller.startPlayback();
+
+      final request = engine.lastSpeakRequest;
+      expect(request, isNotNull);
+      final chunkPlan = request!.chunkPlan;
+      expect(chunkPlan, isNotNull);
+      expect(
+        chunkPlan!.chunks.every(
+          (chunk) =>
+              chunk.voiceId == 'af_bella' &&
+              chunk.castId == null &&
+              chunk.routeId == null &&
+              chunk.dialogueSpanId == null,
+        ),
+        isTrue,
+      );
+    });
+
+    test(
+      'assigns quoted Jennifer dialogue to a narrator-distinct character voice',
+      () async {
+        final engine = _FakeTtsEngine(
+          voices: const <VoiceProfile>[
+            VoiceProfile(
+              id: 'af_bella',
+              label: 'Bella',
+              locale: 'en-US',
+              rawValue: <String, dynamic>{'name': 'Bella', 'locale': 'en-US'},
+              gender: VoiceGender.female,
+              qualityGrade: 'A-',
+            ),
+            VoiceProfile(
+              id: 'af_heart',
+              label: 'Heart',
+              locale: 'en-US',
+              rawValue: <String, dynamic>{'name': 'Heart', 'locale': 'en-US'},
+              gender: VoiceGender.female,
+              qualityGrade: 'A',
+            ),
+            VoiceProfile(
+              id: 'bf_emma',
+              label: 'Emma',
+              locale: 'en-GB',
+              rawValue: <String, dynamic>{'name': 'Emma', 'locale': 'en-GB'},
+              gender: VoiceGender.female,
+              qualityGrade: 'B-',
+            ),
+            VoiceProfile(
+              id: 'am_michael',
+              label: 'Michael',
+              locale: 'en-US',
+              rawValue: <String, dynamic>{'name': 'Michael', 'locale': 'en-US'},
+              gender: VoiceGender.male,
+              qualityGrade: 'C+',
+            ),
+          ],
+        );
+        final controller = ReaderController(ttsEngine: engine);
+        addTearDown(controller.dispose);
+
+        await controller.initialize();
+        await controller.importPastedText(
+          '"JUST STOP FIGHTING!" Jennifer screamed, pulling on her hair.',
+        );
+
+        await controller.startPlayback();
+
+        final request = engine.lastSpeakRequest;
+        expect(request, isNotNull);
+        final chunkPlan = request!.chunkPlan;
+        expect(chunkPlan, isNotNull);
+
+        final quoteChunk = chunkPlan!.chunks.firstWhere(
+          (chunk) => chunk.speakText == '"JUST STOP FIGHTING!"',
+        );
+        final narratorChunk = chunkPlan.chunks.firstWhere(
+          (chunk) =>
+              chunk.speakText == 'Jennifer screamed, pulling on her hair.',
+        );
+
+        expect(quoteChunk.castId, 'cast_character_jennifer');
+        expect(narratorChunk.castId, 'cast_narrator');
+        expect(quoteChunk.voiceId, isNot(narratorChunk.voiceId));
+      },
+    );
+
+    test(
+      'builds alternating narrator and character chunks for quote-tag-quote exchanges',
+      () async {
+        final engine = _FakeTtsEngine(
+          voices: const <VoiceProfile>[
+            VoiceProfile(
+              id: 'af_bella',
+              label: 'Bella',
+              locale: 'en-US',
+              rawValue: <String, dynamic>{'name': 'Bella', 'locale': 'en-US'},
+              gender: VoiceGender.female,
+              qualityGrade: 'A',
+            ),
+            VoiceProfile(
+              id: 'am_michael',
+              label: 'Michael',
+              locale: 'en-US',
+              rawValue: <String, dynamic>{'name': 'Michael', 'locale': 'en-US'},
+              gender: VoiceGender.male,
+              qualityGrade: 'A-',
+            ),
+            VoiceProfile(
+              id: 'bm_fable',
+              label: 'Fable',
+              locale: 'en-US',
+              rawValue: <String, dynamic>{'name': 'Fable', 'locale': 'en-US'},
+              gender: VoiceGender.male,
+              qualityGrade: 'B',
+            ),
+          ],
+        );
+        final controller = ReaderController(ttsEngine: engine);
+        addTearDown(controller.dispose);
+
+        await controller.initialize();
+        await controller.importPastedText(
+          '"John, why did you have to budge in front of me this morning?" Elliot said '
+          '"I dunno. I thought taking someone\'s position in line is how we operate now," '
+          'John replied sarcastically.',
+        );
+
+        await controller.startPlayback();
+
+        final request = engine.lastSpeakRequest;
+        expect(request, isNotNull);
+        final chunkPlan = request!.chunkPlan;
+        expect(chunkPlan, isNotNull);
+
+        final chunks = chunkPlan!.chunks;
+        expect(
+          chunks.map((chunk) => chunk.speakText).toList(growable: false),
+          containsAllInOrder(<String>[
+            '"John, why did you have to budge in front of me this morning?"',
+            'Elliot said',
+            '"I dunno. I thought taking someone\'s position in line is how we operate now,"',
+            'John replied sarcastically.',
+          ]),
+        );
+        expect(
+          chunks.map((chunk) => chunk.castId).toList(growable: false),
+          containsAllInOrder(<String?>[
+            'cast_character_elliot',
+            'cast_narrator',
+            'cast_character_john',
+            'cast_narrator',
+          ]),
+        );
+
+        final firstQuote = chunks.firstWhere(
+          (chunk) =>
+              chunk.speakText ==
+              '"John, why did you have to budge in front of me this morning?"',
+        );
+        final narratorTag = chunks.firstWhere(
+          (chunk) => chunk.speakText == 'Elliot said',
+        );
+        final secondQuote = chunks.firstWhere(
+          (chunk) =>
+              chunk.speakText ==
+              '"I dunno. I thought taking someone\'s position in line is how we operate now,"',
+        );
+        final closingTag = chunks.firstWhere(
+          (chunk) => chunk.speakText == 'John replied sarcastically.',
+        );
+
+        expect(firstQuote.voiceId, isNot(narratorTag.voiceId));
+        expect(secondQuote.voiceId, isNot(closingTag.voiceId));
+        expect(narratorTag.voiceId, closingTag.voiceId);
+        expect(firstQuote.dialogueSpanId, isNotNull);
+        expect(secondQuote.dialogueSpanId, isNotNull);
+        expect(narratorTag.dialogueSpanId, isNull);
+        expect(closingTag.dialogueSpanId, isNull);
+      },
+    );
+
+    test('exposes cast-processing state while a multi-voice import is in flight', () async {
+      final importer = _DelayedDocumentImporter();
+      final controller = ReaderController(
+        importer: importer,
+        ttsEngine: _FakeTtsEngine(),
+      );
+      addTearDown(controller.dispose);
+      await controller.initialize();
+
+      final tempDir = await Directory.systemTemp.createTemp(
+        'read-aloud-cast-processing',
+      );
+      addTearDown(() => tempDir.delete(recursive: true));
+      final file = File('${tempDir.path}/processing.txt');
+      await file.writeAsString('"Hello," John said.');
+
+      final importFuture = controller.importFilePaths(<String>[file.path]);
+      await Future<void>.delayed(Duration.zero);
+
+      expect(controller.isImporting, isTrue);
+      expect(controller.isCastProcessingVisible, isTrue);
+      expect(controller.documentLoadStageLabel, contains('dialogue'));
+
+      importer.complete();
+      await importFuture;
+
+      expect(controller.isImporting, isFalse);
+      expect(controller.isCastProcessingVisible, isFalse);
     });
   });
 }
@@ -417,6 +815,7 @@ class _FakeTtsEngine implements TtsEngine {
   void Function(TtsPlaybackActivity activity)? _onActivity;
   void Function(TtsDebugTraceSnapshot trace)? _onDebugTrace;
   TtsSpeakRequest? lastSpeakRequest;
+  int speakCallCount = 0;
 
   @override
   set onStart(void Function()? callback) => _onStart = callback;
@@ -463,6 +862,7 @@ class _FakeTtsEngine implements TtsEngine {
   @override
   Future<void> speak(TtsSpeakRequest request) async {
     lastSpeakRequest = request;
+    speakCallCount += 1;
     _onActivity?.call(
       const TtsPlaybackActivity(phase: TtsPlaybackPhase.buffering),
     );
@@ -501,5 +901,26 @@ class _FakeTtsEngine implements TtsEngine {
 
   void emitDebugTrace(TtsDebugTraceSnapshot trace) {
     _onDebugTrace?.call(trace);
+  }
+}
+
+class _DelayedDocumentImporter extends DocumentImportService {
+  _DelayedDocumentImporter();
+
+  final Completer<void> _completer = Completer<void>();
+
+  void complete() {
+    if (!_completer.isCompleted) {
+      _completer.complete();
+    }
+  }
+
+  @override
+  Future<ReaderDocument> importBytes({
+    required String fileName,
+    required Uint8List bytes,
+  }) async {
+    await _completer.future;
+    return ReaderDocument.sample();
   }
 }

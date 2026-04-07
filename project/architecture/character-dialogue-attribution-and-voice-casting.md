@@ -23,6 +23,10 @@ The app needs an internal casting layer that can:
 
 This layer belongs between speech enrichment and active playback routing.
 
+The document itself must own speaker and cast attribution results once import finishes.
+
+That means the imported document should carry first-class attribution structures that say which spoken ranges belong to narration, which belong to attributed characters, and which remain unattributed dialogue fallback. Playback may still resolve current effective voice ids from narrator choice and user overrides, but it must not decide who is speaking a range during live reading.
+
 ## Components
 
 ### Dialogue Span Detection
@@ -38,7 +42,10 @@ Responsibilities:
 Responsibilities:
 
 - infer which nearby mention or entity is the most likely speaker for a dialogue span
-- preserve attribution confidence and provenance
+- preserve attribution confidence, rule trace, and evidence spans
+- apply an ordered rule ladder rather than one opaque score
+- allow explicit same-sentence tags to outrank weaker heuristics
+- support lower-priority paragraph ownership, alternation, pronoun resolution, and speaker persistence fallback
 - allow unattributed dialogue to remain explicit rather than silently collapsing into narrator
 
 ### Character Registry
@@ -49,6 +56,9 @@ Responsibilities:
 - keep one stable document-scoped id per detected character
 - preserve visible display label, observed aliases, and supporting evidence
 - preserve one explicit narrator entry even when no dialogue is found
+- consolidate obvious near-duplicate longer-name variants conservatively when document evidence supports that merge
+- preserve optional document-owned identity metadata extracted in a later pass after alias consolidation
+- keep gender identity, pronoun profile, and descriptor evidence as separate data rather than one collapsed inferred-gender field
 
 ### Voice Casting Policy
 
@@ -56,8 +66,10 @@ Responsibilities:
 
 - assign a narrator voice
 - assign default voices to detected characters
-- use locale and future voice metadata as inputs
+- use locale and available voice metadata as inputs
+- use document-owned character identity metadata only when it has been explicitly and conservatively extracted
 - keep auto-casting deterministic within one document version
+- support a user-visible processing phase while document-load cast analysis is still underway
 
 ### User Override Layer
 
@@ -71,6 +83,7 @@ Responsibilities:
 
 Responsibilities:
 
+- consume document-owned cast-attributed speech ranges rather than rescanning dialogue context live
 - resolve each spoken segment window to the correct active voice
 - switch voices at dialogue and narration boundaries
 - merge adjacent ranges when the resolved voice is identical
@@ -90,10 +103,18 @@ Responsibilities:
 - dialogue detection depends on normalized speech segments and existing discourse-role inference
 - speaker attribution depends on dialogue spans plus nearby lexical and structural context
 - character registry depends on attribution results and mention clustering
+- document-owned voice attribution depends on dialogue spans, speaker attribution, and the character registry
 - voice casting depends on the character registry, narrator identity, and installed/available voice metadata
-- voice casting may use explicit app-owned voice gender metadata, but more socially sensitive cultural or identity metadata must remain out of scope until explicitly designed
+- voice casting may use explicit app-owned voice gender metadata plus document-owned character identity extraction when that extraction is explicit, conservative, and separately traceable from pronoun evidence
 - user overrides apply after auto-casting and before runtime chunk routing
-- playback/export/headless generation consume routed voices; they do not infer speakers themselves
+- playback/export/headless generation consume document-owned attribution plus resolved voice assignments; they do not infer speakers themselves
+
+The intended sequencing is:
+
+- document load builds dialogue and cast truth first
+- a later pass extracts character identity metadata from canonicalized character entities
+- the app may surface progress while that work is still running
+- live playback starts from the resulting document-owned attribution rather than improvising cast truth mid-read
 
 ## Data Flow
 
@@ -102,6 +123,7 @@ SpeechDocument
   -> dialogue span detection
   -> speaker attribution
   -> character registry
+  -> document-owned cast attribution
   -> narrator + character cast registry
   -> auto-cast voice assignment
   -> user override layer
@@ -119,6 +141,16 @@ Reason:
 
 - playback, export, and headless runs need the same speaker truth
 - user overrides must persist against stable character identity, not ephemeral widgets
+
+### 1a. Voice attribution is document-owned state, not controller-local reconstruction
+
+The app must not reconstruct speaker ownership of spoken ranges inside the reader controller each time playback is prepared.
+
+Reason:
+
+- speaker ownership is part of the imported document meaning, not a transient playback convenience
+- export and headless generation need the same narrator-versus-character boundaries as live playback
+- document-owned attribution is the only clean place to guarantee that quoted text and surrounding narration stay distinct
 
 ### 2. Narrator is a first-class cast member
 
@@ -159,6 +191,7 @@ Reason:
 ## Architectural Rules
 
 - Dialogue attribution is document-time work and should be cached with the normalized document version when practical.
+- Document-owned cast attribution must be materialized at document load and carried by the internal document structure.
 - Character ids must remain stable within one normalized document version.
 - Every spoken span must resolve to narrator, a detected character, or explicit unattributed-dialogue fallback.
 - User overrides must win over auto-cast policy.
@@ -167,12 +200,26 @@ Reason:
 
 ## Current Implementation Gap
 
-The current implementation is still single-voice at the session level:
+The current implementation now includes:
 
-- discourse-role inference exists, but no speaker-attribution or character-registry sidecar exists
-- `NarrationState` tracks delivery continuity, not cast identity
-- the reader controller owns one selected voice, not narrator-plus-character assignments
-- the voice library dialog shows installation state, but not quality/traits/description metadata
+- dialogue span detection
+- heuristic speaker attribution with local before/after quoted-dialogue context scanning
+- a narrator-plus-character cast registry
+- conservative consolidation of obvious longer-name variants into one character entry
+- optional narrow referential-gender inference from alias-linked local text evidence
+- the richer character identity extraction model is not yet implemented; the current code still uses a much narrower referential-gender shortcut and must be upgraded
+- context-aware automatic casting that consumes app-owned voice metadata and cast metadata
+- document-owned cast attribution materialized on the imported document structure
+- routed multi-voice playback planning and live routed synthesis
+- surfaced voice metadata and override UI
+
+The main remaining gaps are:
+
+- broader quality and sophistication gaps beyond the current release leaves, including:
+- richer cross-paragraph character clustering beyond conservative typo and alias handling
+- stronger speaker attribution and referential inference than the current lightweight local heuristics
+- the new ordered speaker-attribution rule system and richer character-identity extraction model are still not implemented end-to-end
+- any future culturally sensitive voice metadata remains intentionally out of scope until explicitly designed
 
 ## Governing Specifications
 

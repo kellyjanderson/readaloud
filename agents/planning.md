@@ -1,10 +1,10 @@
 # Planning Guidance
 
-Planning documents define the implementation sequence for specifications.
+Planning documents define the implementation and verification sequence for specifications.
 
 The primary planning artifact is a dependency-ordered list of specification references with checkboxes for completion in planning/progression.md.
 
-Only final leaf specifications belong in the progression document.
+Only final leaf specifications and paired feature test specifications belong in the progression document.
 
 Parent or umbrella specifications must never appear in progression, because they are not executable work units and are never marked complete directly.
 
@@ -30,7 +30,10 @@ It provides a simple execution document that defines which specifications must b
 
 Planning documents should consist of dependency-ordered specification references grouped into implementation lanes.
 
-Those references must point only to final leaf specifications.
+Those references must point only to:
+
+- final leaf specifications
+- paired feature test specifications
 
 A planning document will usually include:
 
@@ -62,6 +65,8 @@ Planning begins only from those final leaves, regardless of how many refinement 
 
 Because final leaves are meant to be cohesive implementation-sized units rather than artificially tiny fragments, progression should normally reference leaves that correspond to meaningful chunks of work, not the smallest imaginable subtopics.
 
+For feature leaves, the paired test specification should already exist before the leaf enters active implementation through progression.
+
 ---
 
 ## Dependencies
@@ -92,7 +97,7 @@ Planning documents should track completion directly.
 
 Checkboxes should be used to indicate whether a referenced specification has been implemented.
 
-Because only final leaf specifications belong in progression, only final leaf specifications are ever marked complete there.
+Because only final leaf specifications and paired feature test specifications belong in progression, only those items are ever marked complete there.
 
 ---
 

@@ -1,10 +1,10 @@
 # Speaker Attribution Contract
 
-Status: final
+Status: draft
 
 ## Overview
 
-This specification defines the result contract and provider boundary for attributing detected dialogue to likely speakers.
+This specification refines the speaker-attribution contract into narrower implementable units.
 
 ## Backlink
 
@@ -17,29 +17,20 @@ Parent specification:
 This specification covers:
 
 - the per-span speaker-attribution result
-- attribution confidence and provenance
+- rule trace and evidence requirements
+- attribution conflict and unknown handling
 - provider substitution rules
 
 ## Behavior
 
-For each detected dialogue span, the system must produce one attribution outcome:
+The parent branch now delegates detailed implementation to child specifications.
 
-- a likely speaker reference, or
-- explicit unattributed dialogue
+In particular:
 
-Each attribution result must preserve:
+- the attribution outcome schema belongs to its own leaf
+- rule-priority and unknown-threshold behavior belong to their own leaf
 
-- the dialogue span id
-- the attributed speaker reference when present
-- confidence
-- provenance such as heuristic inference, imported metadata, or future provider output
-
-The attribution subsystem must support:
-
-- a built-in heuristic provider
-- future richer providers without changing downstream casting contracts
-
-Downstream consumers must not depend on one specific attribution algorithm.
+This parent specification keeps only the branch-level contract that speaker attribution remains provider-independent and document-time.
 
 ## Constraints
 
@@ -47,8 +38,18 @@ Downstream consumers must not depend on one specific attribution algorithm.
 - unattributed dialogue must remain explicit
 - attribution results must remain traceable to normalized segment ids and word ranges through their dialogue span references
 
+## Refinement Status
+
+Refinement complete for the current planned branch.
+
+## Child Specifications
+
+- [Speaker Attribution Outcome Schema](speaker-attribution-outcome-schema.md)
+- [Speaker Attribution Priority And Unknown Handling](speaker-attribution-priority-and-unknown-handling.md)
+
 ## Acceptance
 
 - the app can attribute likely speakers to dialogue spans when enough evidence exists
 - the app can represent unattributed dialogue explicitly
 - downstream cast management can consume a stable provider-independent result contract
+- the remaining work in this branch is represented by final leaf specifications

@@ -20,6 +20,9 @@ Start here before taking action.
 * **specifications.md**
   Defines how architecture is refined into implementable specification units.
 
+* **test-specifications.md**
+  Defines how final feature leaf specifications gain paired manual and automated verification documents.
+
 * **planning.md**
   Defines how specifications are sequenced and tracked for implementation.
 
@@ -45,6 +48,7 @@ project/
   product-definition.md
   architecture/
   specifications/
+  test-specifications/
   planning/
   release-x.y.z/
   research/

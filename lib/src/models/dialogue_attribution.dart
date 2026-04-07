@@ -6,6 +6,19 @@ enum DialogueAttributionProvenance {
   providerOutput,
 }
 
+enum DialogueAttributionRule {
+  sameSentenceExplicit,
+  adjacentAfter,
+  adjacentBefore,
+  paragraphOwnership,
+  dialogueAlternation,
+  actionBinding,
+  pronounResolution,
+  speakerPersistence,
+  unknownBelowThreshold,
+  noEvidence,
+}
+
 class DialogueAttributionSet {
   factory DialogueAttributionSet({
     required String documentId,
@@ -102,7 +115,9 @@ class DialogueAttributionOutcome {
     required DialogueAttributionResolution resolution,
     required double confidence,
     required DialogueAttributionProvenance provenance,
+    required DialogueAttributionRule ruleUsed,
     SpeakerReference? speakerReference,
+    DialogueEvidenceSpan? evidenceSpan,
   }) {
     if (attributionId.trim().isEmpty) {
       throw ArgumentError.value(
@@ -141,6 +156,14 @@ class DialogueAttributionOutcome {
         'Unattributed dialogue outcomes must not carry a speaker reference.',
       );
     }
+    if (resolution == DialogueAttributionResolution.attributedSpeaker &&
+        evidenceSpan == null) {
+      throw ArgumentError.value(
+        evidenceSpan,
+        'evidenceSpan',
+        'Attributed-speaker outcomes must carry an evidence span.',
+      );
+    }
 
     return DialogueAttributionOutcome._(
       attributionId: attributionId,
@@ -148,7 +171,9 @@ class DialogueAttributionOutcome {
       resolution: resolution,
       confidence: confidence,
       provenance: provenance,
+      ruleUsed: ruleUsed,
       speakerReference: speakerReference,
+      evidenceSpan: evidenceSpan,
     );
   }
 
@@ -158,7 +183,9 @@ class DialogueAttributionOutcome {
     required this.resolution,
     required this.confidence,
     required this.provenance,
+    required this.ruleUsed,
     required this.speakerReference,
+    required this.evidenceSpan,
   });
 
   final String attributionId;
@@ -166,7 +193,9 @@ class DialogueAttributionOutcome {
   final DialogueAttributionResolution resolution;
   final double confidence;
   final DialogueAttributionProvenance provenance;
+  final DialogueAttributionRule ruleUsed;
   final SpeakerReference? speakerReference;
+  final DialogueEvidenceSpan? evidenceSpan;
 }
 
 class SpeakerReference {
@@ -213,4 +242,50 @@ class SpeakerReference {
   final String referenceId;
   final String displayLabel;
   final String normalizedLabel;
+}
+
+class DialogueEvidenceSpan {
+  factory DialogueEvidenceSpan({
+    required String segmentId,
+    required int startUtf16,
+    required int endUtf16,
+    required String text,
+  }) {
+    if (segmentId.trim().isEmpty) {
+      throw ArgumentError.value(
+        segmentId,
+        'segmentId',
+        'segmentId must not be empty.',
+      );
+    }
+    if (startUtf16 < 0 || endUtf16 < startUtf16) {
+      throw ArgumentError.value(
+        <int>[startUtf16, endUtf16],
+        'startUtf16/endUtf16',
+        'Evidence offsets must be non-negative and ordered.',
+      );
+    }
+    if (text.trim().isEmpty) {
+      throw ArgumentError.value(text, 'text', 'text must not be empty.');
+    }
+
+    return DialogueEvidenceSpan._(
+      segmentId: segmentId,
+      startUtf16: startUtf16,
+      endUtf16: endUtf16,
+      text: text,
+    );
+  }
+
+  const DialogueEvidenceSpan._({
+    required this.segmentId,
+    required this.startUtf16,
+    required this.endUtf16,
+    required this.text,
+  });
+
+  final String segmentId;
+  final int startUtf16;
+  final int endUtf16;
+  final String text;
 }

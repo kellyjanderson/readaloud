@@ -13,7 +13,9 @@ import '../models/document_import_exception.dart';
 import '../models/cast_voice_assignment.dart';
 import '../models/narration_state.dart';
 import '../models/reading_focus_state.dart';
+import '../models/reader_appearance_mode.dart';
 import '../models/reader_document.dart';
+import '../models/reader_resume_state.dart';
 import '../models/display_document.dart';
 import '../models/chunk_plan.dart';
 import '../models/english_pronunciation_profile.dart';
@@ -80,18 +82,24 @@ class ReaderController extends ChangeNotifier {
   final Map<String, double> _voiceSpeeds = <String, double>{};
   String _fontFamily = ReaderPreferences.defaultFontFamily;
   double _fontScale = ReaderPreferences.defaultFontScale;
+  ReaderAppearanceMode _appearanceMode = ReaderAppearanceMode.system;
+  bool _isMultiVoiceEnabled = ReaderPreferences.defaultMultiVoiceEnabled;
   String? _lastOpenedDocumentPath;
   String? _lastOpenedDirectoryPath;
+  ReaderResumeState? _resumeState;
   String? _currentDocumentPath;
   String? _liveReadFilePath;
   StreamSubscription<FileSystemEvent>? _liveReadSubscription;
   Timer? _liveReadReloadDebounce;
+  Timer? _resumePersistenceDebounce;
 
   bool _isInitializing = true;
   bool _isImporting = false;
   bool _isExporting = false;
   bool _isPlaying = false;
   bool _isFadingOut = false;
+  String? _documentLoadStageLabel;
+  double? _documentLoadStageProgress;
   bool _playbackEndedAtDocumentEnd = false;
   ReaderPlaybackPrimaryState _playbackState = ReaderPlaybackPrimaryState.idle;
   TtsPlaybackActivity _playbackActivity = const TtsPlaybackActivity.idle();
@@ -135,6 +143,11 @@ class ReaderController extends ChangeNotifier {
   bool get isImporting => _isImporting;
   bool get isExporting => _isExporting;
   bool get isPlaying => _isPlaying;
+  bool get isMultiVoiceEnabled => _isMultiVoiceEnabled;
+  bool get isCastProcessingVisible => _isImporting && _isMultiVoiceEnabled;
+  String get documentLoadStageLabel =>
+      _documentLoadStageLabel ?? 'Preparing cast and dialogue voices...';
+  double? get documentLoadStageProgress => _documentLoadStageProgress;
   bool get isBufferingPlayback => _playbackActivity.isBuffering;
   bool get isFadingOut => _isFadingOut;
   ReaderPlaybackPrimaryState get playbackState => _playbackState;
@@ -156,15 +169,30 @@ class ReaderController extends ChangeNotifier {
   SpokenSelection get spokenSelection => _spokenSelection;
   ReadingFocusState get readingFocusState => _readingFocusState;
   CastVoiceAssignmentSet? get castVoiceAssignments {
+    if (!_isMultiVoiceEnabled) {
+      return null;
+    }
     final voiceId = _selectedVoiceId;
     if (voiceId == null) {
       return null;
     }
     return _resolveCastVoiceAssignments(preferredNarratorVoiceId: voiceId);
   }
+  bool get hasDistinctEffectiveCastVoices {
+    final assignments = castVoiceAssignments;
+    if (assignments == null) {
+      return false;
+    }
+    return assignments.assignments
+            .map((assignment) => assignment.effectiveVoiceId)
+            .toSet()
+            .length >
+        1;
+  }
   Duration? get sleepTimerDuration => _sleepTimerDuration;
   String get fontFamily => _fontFamily;
   double get fontScale => _fontScale;
+  ReaderAppearanceMode get appearanceMode => _appearanceMode;
   bool get isLiveReadEnabled => _liveReadFilePath != null;
   String? get liveReadFilePath => _liveReadFilePath;
   bool get canExportAudio => _ttsEngine is AudioExportCapable;
@@ -213,6 +241,7 @@ class ReaderController extends ChangeNotifier {
       notifyListeners();
     };
     _ttsEngine.onComplete = () {
+      unawaited(_flushResumePersistence());
       _finalizeActiveSpokenChunk();
       _isPlaying = false;
       _isFadingOut = false;
@@ -232,6 +261,7 @@ class ReaderController extends ChangeNotifier {
       notifyListeners();
     };
     _ttsEngine.onError = (message) {
+      unawaited(_flushResumePersistence());
       _statusMessage = message;
       _isPlaying = false;
       _isFadingOut = false;
@@ -273,6 +303,9 @@ class ReaderController extends ChangeNotifier {
       ..addAll(preferences.voiceSpeeds);
     _fontFamily = preferences.fontFamily;
     _fontScale = preferences.fontScale;
+    _appearanceMode = preferences.appearanceMode;
+    _isMultiVoiceEnabled = preferences.multiVoiceEnabled;
+    _resumeState = preferences.resumeState;
     _lastOpenedDocumentPath = preferences.lastOpenedDocumentPath;
     _lastOpenedDirectoryPath = preferences.lastOpenedDirectoryPath;
 
@@ -305,11 +338,7 @@ class ReaderController extends ChangeNotifier {
 
   Future<void> importDocument() async {
     await stopLiveRead(clearStatus: true);
-    _isImporting = true;
-    _statusMessage = null;
-    notifyListeners();
-
-    try {
+    await _runImportOperation(() async {
       final result = await FilePicker.platform.pickFiles(
         type: FileType.custom,
         withData: true,
@@ -334,15 +363,7 @@ class ReaderController extends ChangeNotifier {
         sourcePath: file.path,
         successMessage: 'Loaded ${file.name}.',
       );
-    } catch (error) {
-      _statusMessage = _describeImportError(
-        sourceLabel: 'picked file',
-        error: error,
-      );
-    } finally {
-      _isImporting = false;
-      notifyListeners();
-    }
+    }, errorSourceLabel: 'picked file');
   }
 
   Future<void> importDroppedFiles(List<XFile> files) async {
@@ -367,12 +388,33 @@ class ReaderController extends ChangeNotifier {
       return;
     }
 
-    await _replaceDocument(_importer.importPastedText(normalized));
+    await _runImportOperation(() async {
+      await _setDocumentLoadStage(
+        'Preparing cast and dialogue voices...',
+        progress: 0.35,
+      );
+      final imported = _importer.importPastedText(normalized);
+      await _setDocumentLoadStage(
+        'Finalizing routed reading surface...',
+        progress: 0.85,
+      );
+      await _replaceDocument(imported);
+    });
   }
 
   Future<void> loadSampleDocument() async {
     await stopLiveRead(clearStatus: false);
-    await _replaceDocument(ReaderDocument.sample());
+    await _runImportOperation(() async {
+      await _setDocumentLoadStage(
+        'Preparing cast and dialogue voices...',
+        progress: 0.35,
+      );
+      await _setDocumentLoadStage(
+        'Finalizing routed reading surface...',
+        progress: 0.85,
+      );
+      await _replaceDocument(ReaderDocument.sample());
+    });
   }
 
   Future<void> loadDocument(ReaderDocument document) async {
@@ -461,6 +503,7 @@ class ReaderController extends ChangeNotifier {
     }
 
     await importFilePaths(<String>[lastPath], sourceLabel: 'Restored');
+    _restoreRememberedReadingPositionIfPossible(lastPath);
     return _document.type != ReaderDocumentType.sample;
   }
 
@@ -544,6 +587,7 @@ class ReaderController extends ChangeNotifier {
 
   Future<void> pausePlayback() async {
     await _ttsEngine.pause();
+    await _flushResumePersistence();
     _finalizeActiveSpokenChunk();
     _isPlaying = false;
     _playbackState = ReaderPlaybackPrimaryState.paused;
@@ -634,6 +678,25 @@ class ReaderController extends ChangeNotifier {
     await _persistPreferences();
 
     if (_isPlaying) {
+      await _ttsEngine.stop();
+      _isPlaying = false;
+      await startPlayback();
+      return;
+    }
+
+    notifyListeners();
+  }
+
+  Future<void> setMultiVoiceEnabled(bool enabled) async {
+    if (_isMultiVoiceEnabled == enabled) {
+      return;
+    }
+
+    _isMultiVoiceEnabled = enabled;
+    _refreshChunkPlan();
+    await _persistPreferences();
+
+    if (_isPlaying || _playbackActivity.isBuffering) {
       await _ttsEngine.stop();
       _isPlaying = false;
       await startPlayback();
@@ -741,6 +804,15 @@ class ReaderController extends ChangeNotifier {
       return;
     }
     _fontScale = normalized;
+    await _persistPreferences();
+    notifyListeners();
+  }
+
+  Future<void> setAppearanceMode(ReaderAppearanceMode appearanceMode) async {
+    if (_appearanceMode == appearanceMode) {
+      return;
+    }
+    _appearanceMode = appearanceMode;
     await _persistPreferences();
     notifyListeners();
   }
@@ -897,9 +969,15 @@ class ReaderController extends ChangeNotifier {
       await _importXFiles(files, sourceLabel: sourceLabel);
     } else if (sharedData.text?.trim().isNotEmpty ?? false) {
       await stopLiveRead(clearStatus: false);
-      await _replaceDocument(_importer.importSharedText(sharedData.text!));
-      _statusMessage = 'Loaded shared text.';
-      notifyListeners();
+      await _runImportOperation(() async {
+        await _setDocumentLoadStage(
+          'Preparing cast and dialogue voices...',
+          progress: 0.35,
+        );
+        await _replaceDocument(_importer.importSharedText(sharedData.text!));
+        _statusMessage = 'Loaded shared text.';
+        notifyListeners();
+      }, errorSourceLabel: sourceLabel);
     }
 
     if (clearAfterHandling) {
@@ -916,11 +994,7 @@ class ReaderController extends ChangeNotifier {
     }
 
     await stopLiveRead(clearStatus: false);
-    _isImporting = true;
-    _statusMessage = null;
-    notifyListeners();
-
-    try {
+    await _runImportOperation(() async {
       final firstFile = files.first;
       final bytes = await firstFile.readAsBytes();
       final fileName = firstFile.name.isNotEmpty
@@ -937,16 +1011,7 @@ class ReaderController extends ChangeNotifier {
         sourcePath: firstFile.path,
         successMessage: message,
       );
-    } catch (error) {
-      _statusMessage = _describeImportError(
-        sourceLabel: sourceLabel,
-        error: error,
-      );
-      notifyListeners();
-    } finally {
-      _isImporting = false;
-      notifyListeners();
-    }
+    }, errorSourceLabel: sourceLabel);
   }
 
   Future<void> _loadImportedBytes({
@@ -955,9 +1020,17 @@ class ReaderController extends ChangeNotifier {
     String? sourcePath,
     String? successMessage,
   }) async {
+    await _setDocumentLoadStage(
+      'Discovering dialogue and character context...',
+      progress: 0.35,
+    );
     final imported = await _importer.importBytes(
       fileName: fileName,
       bytes: bytes,
+    );
+    await _setDocumentLoadStage(
+      'Finalizing narrator and character routing...',
+      progress: 0.85,
     );
     await _replaceDocument(imported, sourcePath: sourcePath);
     await _rememberOpenedDocumentPath(sourcePath);
@@ -998,6 +1071,7 @@ class ReaderController extends ChangeNotifier {
     _currentRealization = null;
     _currentChunkPlan = null;
     _primePlaybackPreparation();
+    _clearDocumentLoadStage();
     _statusMessage =
         statusMessage ??
         (document.wordCount == 0
@@ -1101,6 +1175,7 @@ class ReaderController extends ChangeNotifier {
       currentSectionMode: _sectionModeForCurrentPosition(),
       discourseMode: _discourseModeForCurrentPosition(),
     );
+    _scheduleResumePersistence();
     notifyListeners();
   }
 
@@ -1111,6 +1186,7 @@ class ReaderController extends ChangeNotifier {
     _shareSubscription?.cancel();
     _liveReadReloadDebounce?.cancel();
     _liveReadSubscription?.cancel();
+    _resumePersistenceDebounce?.cancel();
     _ttsEngine.onStart = null;
     _ttsEngine.onStatus = null;
     _ttsEngine.onProgress = null;
@@ -1142,9 +1218,117 @@ class ReaderController extends ChangeNotifier {
       voiceSpeeds: _voiceSpeeds,
       fontFamily: _fontFamily,
       fontScale: _fontScale,
+      appearanceMode: _appearanceMode,
+      multiVoiceEnabled: _isMultiVoiceEnabled,
+      resumeState: _resumeState,
       lastOpenedDocumentPath: _lastOpenedDocumentPath,
       lastOpenedDirectoryPath: _lastOpenedDirectoryPath,
     );
+  }
+
+  void _scheduleResumePersistence() {
+    _resumePersistenceDebounce?.cancel();
+    _resumePersistenceDebounce = Timer(
+      const Duration(milliseconds: 400),
+      () => unawaited(_persistResumeStateNow()),
+    );
+  }
+
+  Future<void> _flushResumePersistence() async {
+    _resumePersistenceDebounce?.cancel();
+    _resumePersistenceDebounce = null;
+    await _persistResumeStateNow();
+  }
+
+  Future<void> _persistResumeStateNow() async {
+    final currentPath = _currentDocumentPath;
+    if (currentPath == null || currentPath.trim().isEmpty || _document.wordCount == 0) {
+      return;
+    }
+
+    final clampedWordIndex = _currentWordIndex.clamp(
+      0,
+      math.max(_document.wordCount - 1, 0),
+    ).toInt();
+    final segment = _document.segmentForWordIndex(clampedWordIndex);
+    final segmentStartWordIndex = segment == null
+        ? clampedWordIndex
+        : _document.startWordIndexForSegment(segment);
+    final wordIndexWithinSegment = math.max(
+      0,
+      clampedWordIndex - segmentStartWordIndex,
+    ).toInt();
+    final anchorWordText = _document.wordSpans.isEmpty
+        ? null
+        : _document.speakableText.substring(
+            _document.wordSpans[clampedWordIndex].start,
+            _document.wordSpans[clampedWordIndex].end,
+          );
+
+    _resumeState = ReaderResumeState(
+      documentPath: currentPath,
+      wordIndex: clampedWordIndex,
+      wordIndexWithinSegment: wordIndexWithinSegment,
+      segmentTextAnchor: segment?.normalizedText,
+      anchorWordText: anchorWordText,
+    );
+    await _persistPreferences();
+  }
+
+  void _restoreRememberedReadingPositionIfPossible(
+    String documentPath, {
+    bool updateStatus = true,
+  }) {
+    final resumeState = _resumeState;
+    final normalizedPath = p.normalize(documentPath.trim());
+    if (resumeState == null ||
+        resumeState.documentPath != normalizedPath ||
+        _document.wordCount == 0) {
+      return;
+    }
+
+    final recoveredWordIndex = _recoverWordIndexFromResumeState(resumeState);
+    if (recoveredWordIndex == null) {
+      _currentWordIndex = 0;
+      if (updateStatus) {
+        _statusMessage =
+            'Restored ${p.basename(normalizedPath)}, but the last heard position could not be recovered.';
+      }
+      notifyListeners();
+      return;
+    }
+
+    _currentWordIndex = recoveredWordIndex;
+    if (updateStatus) {
+      _statusMessage = recoveredWordIndex == 0 && resumeState.wordIndex > 0
+          ? 'Restored ${p.basename(normalizedPath)}, but the last heard position could not be recovered.'
+          : 'Restored ${p.basename(normalizedPath)} near your last heard position.';
+    }
+    notifyListeners();
+  }
+
+  int? _recoverWordIndexFromResumeState(ReaderResumeState resumeState) {
+    final anchorText = resumeState.segmentTextAnchor?.trim();
+    if (anchorText != null && anchorText.isNotEmpty) {
+      for (final segment in _document.speechDocument.segments) {
+        if (segment.normalizedText.trim() != anchorText) {
+          continue;
+        }
+        final segmentStartWordIndex = _document.startWordIndexForSegment(segment);
+        return (segmentStartWordIndex + resumeState.wordIndexWithinSegment).clamp(
+          0,
+          math.max(_document.wordCount - 1, 0),
+        ).toInt();
+      }
+    }
+
+    if (resumeState.wordIndex < _document.wordCount) {
+      return resumeState.wordIndex
+          .clamp(0, math.max(_document.wordCount - 1, 0))
+          .toInt();
+    }
+
+    return _document.wordCount > 0 ? _document.wordCount - 1 : null;
   }
 
   Future<void> _rememberOpenedDocumentPath(String? sourcePath) async {
@@ -1205,9 +1389,23 @@ class ReaderController extends ChangeNotifier {
     }
 
     try {
+      final shouldResumeAfterRefresh =
+          !initialLoad && (_isPlaying || _playbackActivity.isBuffering);
+      await _flushResumePersistence();
+      _isImporting = true;
+      await _setDocumentLoadStage(
+        initialLoad
+            ? 'Discovering dialogue and character context...'
+            : 'Refreshing live cast and dialogue routing...',
+        progress: 0.35,
+      );
       final imported = await _importer.importBytes(
         fileName: p.basename(sourcePath),
         bytes: await file.readAsBytes(),
+      );
+      await _setDocumentLoadStage(
+        'Finalizing narrator and character routing...',
+        progress: 0.85,
       );
       await _replaceDocument(
         imported,
@@ -1216,13 +1414,62 @@ class ReaderController extends ChangeNotifier {
             ? 'Live read connected to ${p.basename(sourcePath)}.'
             : 'Live read updated ${p.basename(sourcePath)}.',
       );
+      if (!initialLoad) {
+        _restoreRememberedReadingPositionIfPossible(
+          sourcePath,
+          updateStatus: false,
+        );
+      }
+      if (shouldResumeAfterRefresh) {
+        await startPlayback();
+      }
     } catch (error) {
       _statusMessage = _describeImportError(
         sourceLabel: 'live read file',
         error: error,
       );
       notifyListeners();
+    } finally {
+      _isImporting = false;
+      _clearDocumentLoadStage();
+      notifyListeners();
     }
+  }
+
+  Future<void> _runImportOperation(
+    Future<void> Function() operation, {
+    String? errorSourceLabel,
+  }) async {
+    _isImporting = true;
+    _statusMessage = null;
+    _clearDocumentLoadStage();
+    notifyListeners();
+    await Future<void>.delayed(Duration.zero);
+
+    try {
+      await operation();
+    } catch (error) {
+      _statusMessage = errorSourceLabel == null
+          ? '$error'
+          : _describeImportError(sourceLabel: errorSourceLabel, error: error);
+      notifyListeners();
+    } finally {
+      _isImporting = false;
+      _clearDocumentLoadStage();
+      notifyListeners();
+    }
+  }
+
+  Future<void> _setDocumentLoadStage(String label, {double? progress}) async {
+    _documentLoadStageLabel = label;
+    _documentLoadStageProgress = progress?.clamp(0.0, 1.0).toDouble();
+    notifyListeners();
+    await Future<void>.delayed(Duration.zero);
+  }
+
+  void _clearDocumentLoadStage() {
+    _documentLoadStageLabel = null;
+    _documentLoadStageProgress = null;
   }
 
   String? _sectionModeForCurrentPosition() {
@@ -1320,10 +1567,7 @@ class ReaderController extends ChangeNotifier {
         ? null
         : _castAwareSpeechRouteService.build(
             CastAwareSpeechRouteInput(
-              speechDocument: _document.speechDocument,
-              baseAnnotations: _document.baseSpeechAnnotations,
-              dialogueAttributions: _document.dialogueAttributions,
-              characterCastRegistry: _document.characterCastRegistry,
+              documentVoiceAttribution: _document.documentVoiceAttribution,
               castVoiceAssignments: castVoiceAssignments,
             ),
           );
@@ -1429,10 +1673,7 @@ class ReaderController extends ChangeNotifier {
         ? null
         : _castAwareSpeechRouteService.build(
             CastAwareSpeechRouteInput(
-              speechDocument: _document.speechDocument,
-              baseAnnotations: _document.baseSpeechAnnotations,
-              dialogueAttributions: _document.dialogueAttributions,
-              characterCastRegistry: _document.characterCastRegistry,
+              documentVoiceAttribution: _document.documentVoiceAttribution,
               castVoiceAssignments: castVoiceAssignments,
             ),
           );
@@ -1469,7 +1710,7 @@ class ReaderController extends ChangeNotifier {
   CastVoiceAssignmentSet? _resolveCastVoiceAssignments({
     required String preferredNarratorVoiceId,
   }) {
-    if (_voices.isEmpty) {
+    if (!_isMultiVoiceEnabled || _voices.isEmpty) {
       return null;
     }
 

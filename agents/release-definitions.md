@@ -43,6 +43,7 @@ Release definitions answer:
 
 * why this version exists
 * what coherent set of work belongs together in the version
+* which user-visible outcomes the release is expected to surface
 
 ---
 
@@ -107,6 +108,7 @@ Release definitions should:
 * stay holistic and version-oriented
 * link to source documents rather than duplicating all of their detail
 * avoid turning into a second progression checklist
+* avoid implying a feature is delivered merely because enabling layers exist
 
 Release definitions should not:
 
@@ -119,3 +121,7 @@ Release definitions should not:
 ## Guiding Principle
 
 A release should be understandable as a coherent project step, not just a pile of unrelated completed tasks.
+
+For user-facing release goals, the release definition should stay anchored on surfaced outcomes.
+
+Support or enabling leaves may land earlier, but a release feature should not be treated as delivered until the intended visible or audible outcome is observable in the running app.

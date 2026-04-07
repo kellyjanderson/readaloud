@@ -6,6 +6,8 @@ Live file watching is useful, but it should not consume a full top-level control
 
 Live file watching should be accessed from the File menu rather than a dedicated persistent primary-surface button.
 
+It should also remain out of Reader Options so the workflow stays associated with document/file actions rather than general reading preferences.
+
 ## Behavioral Goal
 
 Live mode should feel truly live.

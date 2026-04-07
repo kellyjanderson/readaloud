@@ -122,11 +122,13 @@ Reason:
 
 ## Current Implementation Gap
 
-The current implementation is close on data and incomplete on presentation:
+The core branch is now implemented:
 
-- runtime progress events already expose word and segment identity
-- normalized models already preserve the display/speech anchors needed for follow-along
-- the controller currently updates `currentWordIndex`, but the reader surface does not yet paint spoken ranges or auto-follow them
+- follow-along rendering is active
+- reading focus and recenter behavior are active
+- the reading surface now preserves readable contrast across appearance modes
+
+Future work in this area should focus on additional polish or accessibility improvements rather than missing core branch behavior.
 
 ## Governing Specifications
 
