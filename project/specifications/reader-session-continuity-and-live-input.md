@@ -1,11 +1,11 @@
-# Reader Session Continuity and Live Input
+# Reader Session Continuity And Live Input
 
-Last updated: April 3, 2026
-Status: Final specification
+Last updated: April 4, 2026
+Status: Draft specification
 
 ## Overview
 
-This specification defines file-backed reader continuity across app launches and the watched-file live input mode used to refresh a running reader session without restarting the app.
+This specification refines file-backed reader continuity and watched-file live input into executable leaves.
 
 ## Backlink
 
@@ -17,76 +17,44 @@ Parent specification:
 
 This specification covers:
 
-- remembering the last opened file-backed document path
-- remembering the last opened directory for file selection
-- restoring the remembered file-backed document on startup when no explicit launch input is present
-- watched-file live input behavior inside the running app
+- remembering the most recently opened file-backed document
+- restoring that document on startup when no explicit startup input is provided
+- remembering the reader's last heard position for that document
+- watched-file live input refresh inside the running app
 
-This specification does not define pronunciation behavior, headless probe harnesses, or audio export.
+Visible menu placement and playing-versus-paused continuation semantics for live input are refined separately by:
+
+- [Live Input And File Menu UI](live-input-and-file-menu-ui.md)
 
 ## Behavior
 
-### Remembered-Document Rule
+The parent branch now delegates detailed continuity and live-input work to child specifications.
 
-When a readable file-backed document is loaded through the normal open flow or live-read file selection, the app must persist:
+In particular:
 
-- the normalized absolute document path
-- the parent directory path when available
+- file-backed document restore and directory continuity belong to one leaf
+- remembered reading position and startup resume belong to one leaf
+- watched-file session refresh belongs to one leaf
 
-Sample content and pasted/shared text must not replace the remembered file-backed document path.
-
-### Startup-Restore Rule
-
-When the interactive app starts without an explicit startup input file, it should attempt to restore the last remembered file-backed document.
-
-If restoration fails or the file no longer exists, the app may keep the current sample or default document and surface a nonfatal status.
-
-### Initial-Directory Rule
-
-Interactive file selection should use the remembered directory as the initial directory when the platform picker supports it.
-
-### Live-Read Activation Rule
-
-The app must allow the user to select a readable file and turn it into a watched live input source for the current running session.
-
-Starting live read must:
-
-- normalize and persist the selected path as the current remembered file-backed document
-- import the file through the same importer stack used for ordinary file loads
-- replace only the current document state inside the running app
-- start a watch on the selected file's parent directory
-
-### Live-Read Reload Rule
-
-When the watched file changes, the app must debounce rapid filesystem events briefly and then re-import only that file into the current reader session.
-
-The app must not restart or reload the full Flutter process.
-
-### Live-Read Playback Interaction Rule
-
-If live-read reload replaces the active document while playback or buffering is in progress, the controller may stop current playback and reset playback state before loading the updated document.
-
-### Missing-File Rule
-
-If the watched live-read file disappears temporarily, the app should remain in live-read mode and surface that it is waiting for the file to reappear.
+This parent specification keeps only the branch-level contract that the app should preserve continuity for file-backed reading sessions rather than dropping the user back into sample content or the top of the document by default.
 
 ## Constraints
 
-- File-backed continuity and live-read behavior must reuse the normal importer path rather than a special parser shortcut.
-- Live-read mode is file-based and local; it does not require pipes, sockets, or process restart behavior in `v1`.
-- Remembered-document behavior must remain best-effort and must not block startup indefinitely.
+- continuity behavior must reuse the normal importer path rather than a special parser shortcut
+- remembered resume state must remain best-effort and must not block startup indefinitely
+- watched-file live input must refresh the running session without restarting the Flutter process
 
 ## Refinement Status
 
-This is a final leaf specification.
+Refinement complete for the current planned branch.
 
 ## Child Specifications
 
-No child specifications.
+- [File-Backed Document Restore And Directory Continuity](file-backed-document-restore-and-directory-continuity.md)
+- [Remembered Reading Position And Startup Resume](remembered-reading-position-and-startup-resume.md)
+- [Watched-File Session Refresh](watched-file-session-refresh.md)
 
 ## Acceptance
 
-- The app remembers the last opened file-backed document and the last used directory.
-- UI startup can restore the remembered file-backed document when no explicit input file is provided.
-- A watched file can refresh the current document inside the running app without restarting the app.
-- Live-read reload uses the same importer behavior as ordinary file loading.
+- the remaining continuity and live-input work is represented by final leaf specifications
+- the running app has an explicit leaf for reopening the most recent file-backed document at the user's last heard position

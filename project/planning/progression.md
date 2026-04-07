@@ -13,6 +13,10 @@ Checked support leaves do not, by themselves, mean a user-facing feature is surf
 
 For user-facing branches, the unchecked surfaced leaves remain the feature-completion gates.
 
+Implementation checkboxes track feature-spec implementation work.
+
+Test specification checkboxes track verification work against the paired documents in `project/test-specifications/`.
+
 ## Ordering Rule
 
 - primary ordering is dependency order
@@ -92,14 +96,35 @@ For user-facing branches, the unchecked surfaced leaves remain the feature-compl
 ### Narrative Casting and Multi-Voice Playback
 
 - [x] [Dialogue Span Detection](../specifications/dialogue-span-detection.md)
-- [x] [Speaker Attribution Contract](../specifications/speaker-attribution-contract.md)
+- [x] [Speaker Attribution Outcome Schema](../specifications/speaker-attribution-outcome-schema.md)
+- [x] [Speaker Attribution Priority And Unknown Handling](../specifications/speaker-attribution-priority-and-unknown-handling.md)
+- [x] [Explicit Speaker Tag Attribution](../specifications/explicit-speaker-tag-attribution.md)
+- [x] [Adjacent Speaker Context Attribution](../specifications/adjacent-speaker-context-attribution.md)
+- [x] [Paragraph Ownership And Dialogue Alternation](../specifications/paragraph-ownership-and-dialogue-alternation.md)
+- [x] [Speaker Pronoun Resolution And Persistence](../specifications/speaker-pronoun-resolution-and-persistence.md)
 - [x] [Character Cast Registry Model](../specifications/character-cast-registry-model.md)
+- [x] [Character Reference Consolidation And Alias Clustering](../specifications/character-reference-consolidation-and-alias-clustering.md)
+- [x] [Character Identity Extraction Pass Ordering](../specifications/character-identity-extraction-pass-ordering.md)
+- [x] [Character Identity Output Schema](../specifications/character-identity-output-schema.md)
+- [x] [Explicit Character Identity Evidence](../specifications/explicit-character-identity-evidence.md)
+- [x] [Character Identity Descriptor Attachment](../specifications/character-identity-descriptor-attachment.md)
+- [x] [Character Pronoun Profile Extraction](../specifications/character-pronoun-profile-extraction.md)
+- [x] [Character Identity Conflict Resolution](../specifications/character-identity-conflict-resolution.md)
 - [x] [Voice Metadata Model and Source Normalization](../specifications/voice-metadata-model-and-source-normalization.md)
 - [x] [Automatic Voice Casting and Override Resolution](../specifications/automatic-voice-casting-and-override-resolution.md)
+- [x] [Context-Aware Automatic Voice Casting](../specifications/context-aware-automatic-voice-casting.md)
+- [x] [Document-Load Voice Attribution Materialization](../specifications/document-load-voice-attribution-materialization.md)
 - [x] [Cast-Aware Speech Range Routing](../specifications/cast-aware-speech-range-routing.md)
+- [x] [Quoted Dialogue Voice Segmentation](../specifications/quoted-dialogue-voice-segmentation.md)
 - [x] [Voice-Routed Progress and Diagnostics](../specifications/voice-routed-progress-and-diagnostics.md)
 - [x] [Cast Voice Override Workflow](../specifications/cast-voice-override-workflow.md)
 - [x] [Running-App Multi-Voice Playback Switching](../specifications/running-app-multi-voice-playback-switching.md)
+
+#### Test Specifications
+
+- [ ] [Test Specification: Cast Voice Override Workflow](../test-specifications/cast-voice-override-workflow.md)
+- [ ] [Test Specification: Quoted Dialogue Voice Segmentation](../test-specifications/quoted-dialogue-voice-segmentation.md)
+- [ ] [Test Specification: Running-App Multi-Voice Playback Switching](../test-specifications/running-app-multi-voice-playback-switching.md)
 
 ### Speech Runtime Boundary
 
@@ -130,23 +155,63 @@ For user-facing branches, the unchecked surfaced leaves remain the feature-compl
 - [x] [Spoken Text Selection and Display Mapping](../specifications/spoken-text-selection-and-display-mapping.md)
 - [x] [Reading Focus Follow Policy](../specifications/reading-focus-follow-policy.md)
 
+#### Test Specifications
+
+- [ ] [Test Specification: Playback Coordination](../test-specifications/playback-coordination.md)
+- [ ] [Test Specification: Playback Progress And Jump Mapping](../test-specifications/playback-progress-and-jump-mapping.md)
+
 ### Reader Surface and Voice Management UI
 
 - [x] [Primary Reader Control Set](../specifications/primary-reader-control-set.md)
 - [x] [Document Identity Outside Reading Surface](../specifications/document-identity-outside-reading-surface.md)
 - [x] [Integrated Secondary Voice Access](../specifications/integrated-secondary-voice-access.md)
-- [x] [Voice Library Row and Information Affordance](../specifications/voice-library-row-and-information-affordance.md)
-- [x] [Cast Management Dialog Structure](../specifications/cast-management-dialog-structure.md)
-- [ ] [Appearance Mode Selection And System Following](../specifications/appearance-mode-selection-and-system-following.md)
+- [x] [Document-Load Cast Processing Overlay](../specifications/document-load-cast-processing-overlay.md)
+- [x] [Multi-Voice Mode Toggle And Cast Entrypoint](../specifications/multi-voice-mode-toggle-and-cast-entrypoint.md)
+- [x] [Feedback Surface Contrast Readability](../specifications/feedback-surface-contrast-readability.md)
+- [x] [Reader Preferences Controls](../specifications/reader-preferences-controls.md)
+- [x] [Sleep Timer And Timing Surface](../specifications/sleep-timer-and-timing-surface.md)
+- [x] [Reader Diagnostics And Source Panels](../specifications/reader-diagnostics-and-source-panels.md)
+- [ ] [Voice Library Row and Information Affordance](../specifications/voice-library-row-and-information-affordance.md)
+- [ ] [Cast Management Dialog Structure](../specifications/cast-management-dialog-structure.md)
+- [x] [Voice Management Dialog Contrast And Readability](../specifications/voice-management-dialog-contrast-and-readability.md)
+- [x] [Internal Document Serialization Format](../specifications/internal-document-serialization-format.md)
+- [x] [Appearance Mode Selection And System Following](../specifications/appearance-mode-selection-and-system-following.md)
 - [x] [Spoken Highlight Visual Presentation](../specifications/spoken-highlight-visual-presentation.md)
+- [x] [Reading Surface Contrast And Highlight Legibility](../specifications/reading-surface-contrast-and-highlight-legibility.md)
 - [x] [Follow-Along User Scroll Interaction](../specifications/follow-along-user-scroll-interaction.md)
+
+#### Test Specifications
+
+- [ ] [Test Specification: Primary Reader Control Set](../test-specifications/primary-reader-control-set.md)
+- [ ] [Test Specification: Document Identity Outside Reading Surface](../test-specifications/document-identity-outside-reading-surface.md)
+- [ ] [Test Specification: Integrated Secondary Voice Access](../test-specifications/integrated-secondary-voice-access.md)
+- [ ] [Test Specification: Document-Load Cast Processing Overlay](../test-specifications/document-load-cast-processing-overlay.md)
+- [ ] [Test Specification: Multi-Voice Mode Toggle And Cast Entrypoint](../test-specifications/multi-voice-mode-toggle-and-cast-entrypoint.md)
+- [ ] [Test Specification: Feedback Surface Contrast Readability](../test-specifications/feedback-surface-contrast-readability.md)
+- [ ] [Test Specification: Reader Preferences Controls](../test-specifications/reader-preferences-controls.md)
+- [ ] [Test Specification: Sleep Timer And Timing Surface](../test-specifications/sleep-timer-and-timing-surface.md)
+- [ ] [Test Specification: Reader Diagnostics And Source Panels](../test-specifications/reader-diagnostics-and-source-panels.md)
+- [ ] [Test Specification: Voice Library Row And Information Affordance](../test-specifications/voice-library-row-and-information-affordance.md)
+- [ ] [Test Specification: Cast Management Dialog Structure](../test-specifications/cast-management-dialog-structure.md)
+- [ ] [Test Specification: Voice Management Dialog Contrast And Readability](../test-specifications/voice-management-dialog-contrast-and-readability.md)
+- [ ] [Test Specification: Appearance Mode Selection And System Following](../test-specifications/appearance-mode-selection-and-system-following.md)
+- [ ] [Test Specification: Spoken Highlight Visual Presentation](../test-specifications/spoken-highlight-visual-presentation.md)
+- [ ] [Test Specification: Reading Surface Contrast And Highlight Legibility](../test-specifications/reading-surface-contrast-and-highlight-legibility.md)
+- [ ] [Test Specification: Follow-Along User Scroll Interaction](../test-specifications/follow-along-user-scroll-interaction.md)
 
 ### Reader Session and Live Input
 
 - [x] [File-Backed Document Restore And Directory Continuity](../specifications/file-backed-document-restore-and-directory-continuity.md)
-- [ ] [Remembered Reading Position And Startup Resume](../specifications/remembered-reading-position-and-startup-resume.md)
+- [x] [Remembered Reading Position And Startup Resume](../specifications/remembered-reading-position-and-startup-resume.md)
 - [x] [Watched-File Session Refresh](../specifications/watched-file-session-refresh.md)
-- [ ] [Live Input Menu Placement And Playing-State Continuation](../specifications/live-input-menu-placement-and-playing-state-continuation.md)
+- [x] [Live Input Menu Placement And Playing-State Continuation](../specifications/live-input-menu-placement-and-playing-state-continuation.md)
+
+#### Test Specifications
+
+- [ ] [Test Specification: File-Backed Document Restore And Directory Continuity](../test-specifications/file-backed-document-restore-and-directory-continuity.md)
+- [ ] [Test Specification: Remembered Reading Position And Startup Resume](../test-specifications/remembered-reading-position-and-startup-resume.md)
+- [ ] [Test Specification: Watched-File Session Refresh](../test-specifications/watched-file-session-refresh.md)
+- [ ] [Test Specification: Live Input Menu Placement And Playing-State Continuation](../test-specifications/live-input-menu-placement-and-playing-state-continuation.md)
 
 ## Obligate Specifications
 
@@ -161,5 +226,5 @@ For user-facing branches, the unchecked surfaced leaves remain the feature-compl
 
 ## Notes
 
-- This document contains only final leaf specifications.
+- This document contains only final leaf specifications and paired feature test specifications.
 - If new child specifications are created later, this document should be updated before implementation continues.

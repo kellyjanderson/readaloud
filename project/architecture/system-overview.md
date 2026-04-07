@@ -204,10 +204,10 @@ The current codebase now follows most of this architecture, with a smaller set o
 - normalized importer output, display/speech documents, position mapping, speech annotations, pronunciation artifacts, runtime messaging, boundary correction, export, and speech QA tooling are all first-class in code
 - `ReaderDocument` still exposes compatibility views such as `displayHtml`, `speakableText`, and coarse word spans for current UI and export callers even though normalized models are the underlying source of truth
 - speech enrichment, narration continuity, and profile-aware pronunciation behavior are implemented, but prosody richness and long-form delivery variation remain narrower than the target architecture
-- dialogue attribution, narrator/character cast management, and multi-voice routing are still future work
+- dialogue attribution, narrator/character cast management, and multi-voice routing are now implemented in the current import and playback path, though the heuristics remain intentionally lightweight compared with the longer-term architecture target
 - engine capability modeling and adapter-boundary pronunciation expression are explicit for the current Kokoro path, including canonical IPA to Kokoro/Misaki inventory adaptation, but broader multi-engine support remains future work
 - runtime, export, and debugging flows are well represented on current native targets, while broader cross-platform verification still trails the architectural target
-- progress mapping is ready for follow-along reading, but spoken-text highlighting and reading-focus behavior are not yet surfaced in the reader UI
+- progress mapping, spoken-text highlighting, and reading-focus behavior are now surfaced in the current reader UI, though more polish and broader UX validation remain
 
 ## Governing Specifications
 

@@ -3,6 +3,10 @@
 Last updated: March 30, 2026
 Status: Final specification
 
+Issue anchor:
+
+- GitHub issue `#20`
+
 ## Scope
 
 This specification defines controller-level playback behavior for imported documents.
@@ -68,6 +72,7 @@ Unsupported action:
 
 - Playback begins as soon as the first chunk is ready.
 - Later chunks queue behind active playback.
+- Later routed chunks must continue forward playback without requiring a user pause/play recovery cycle.
 - Pausing playback does not delete completed chunk files.
 - Changing voice or rate clears the in-memory queue and starts a new generation sequence, but it does not delete cached chunk files.
 - Jumping clears the in-memory queue from the old position and requests a new plan from the jump target.
@@ -89,6 +94,7 @@ Unsupported action:
 
 - A chunk-generation failure moves the coordinator to `failed` only if playback cannot continue from already prepared audio.
 - Recoverable later-chunk failures may surface an error while preserving current playback until the queue is exhausted.
+- Silent progress/highlight loops over already-spoken content are not a valid recovery mode.
 
 ## Constraints
 
@@ -109,3 +115,4 @@ No child specifications.
 - Controller state transitions are defined for play, pause, replay, jump, rate change, voice change, and sleep fade.
 - Playback completion and replay semantics are explicit.
 - Startup buffering is scoped to the transport controls rather than a broad warning banner.
+- Queued routed playback does not require manual pause/play intervention to continue after the first chunk.

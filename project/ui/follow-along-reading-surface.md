@@ -30,6 +30,14 @@ The active spoken range should receive the strongest emphasis.
 
 Surrounding context should remain readable and calm.
 
+Across supported appearance modes, the reading pane must preserve strong text-to-surface contrast.
+
+In dark mode specifically:
+
+- the reading surface should be a very dark gray
+- reading text should be much lighter than the surface
+- highlight styling must not turn the active text into a low-contrast wash
+
 ## Reading Focus Motion
 
 Automatic viewport movement should:

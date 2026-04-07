@@ -26,6 +26,7 @@ The parent UI branch now delegates detailed implementation to child specificatio
 In particular:
 
 - spoken highlight presentation belongs to one leaf
+- reading-surface contrast and highlight legibility belong to one leaf
 - user-scroll interaction and re-centering behavior belong to one leaf
 
 This parent specification keeps only the branch-level contract that the reading surface should be visibly follow-along and visually calm.
@@ -37,11 +38,12 @@ This parent specification keeps only the branch-level contract that the reading 
 
 ## Refinement Status
 
-Requires refinement.
+Refinement complete for the current planned branch.
 
 ## Child Specifications
 
 - [Spoken Highlight Visual Presentation](spoken-highlight-visual-presentation.md)
+- [Reading Surface Contrast And Highlight Legibility](reading-surface-contrast-and-highlight-legibility.md)
 - [Follow-Along User Scroll Interaction](follow-along-user-scroll-interaction.md)
 
 ## Acceptance

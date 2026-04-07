@@ -4,11 +4,15 @@ import 'dart:typed_data';
 
 import 'package:archive/archive.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:read_aloud/src/models/character_cast_registry.dart';
+import 'package:read_aloud/src/models/voice_profile.dart';
 import 'package:read_aloud/src/models/display_document.dart';
 import 'package:read_aloud/src/models/document_import_exception.dart';
 import 'package:read_aloud/src/models/import_diagnostic.dart';
 import 'package:read_aloud/src/models/reader_document.dart';
+import 'package:read_aloud/src/services/cast_voice_assignment_service.dart';
 import 'package:read_aloud/src/services/document_import_service.dart';
+import 'package:read_aloud/src/services/kokoro_voice_catalog.dart';
 
 void main() {
   group('DocumentImportService', () {
@@ -118,6 +122,172 @@ Second paragraph here.
       expect(document.speechDocument.segments, isNotEmpty);
       expect(document.speakableText, contains('John and Elliot were fighting'));
     });
+
+    test(
+      'splits mixed dialogue sentences into narrator tags and quoted speech segments',
+      () {
+        final service = DocumentImportService();
+        final document = service.importPastedText(
+          'John said, "Are you ok?" She waited.',
+        );
+
+        expect(
+          document.speechDocument.segments
+              .map((segment) => segment.normalizedText)
+              .toList(growable: false),
+          <String>['John said,', '"Are you ok?"', 'She waited.'],
+        );
+        expect(
+          document.documentVoiceAttribution.ranges
+              .map((range) => range.castId)
+              .toList(growable: false),
+          <String>['cast_narrator', 'cast_character_john', 'cast_narrator'],
+        );
+      },
+    );
+
+    test(
+      'keeps quoted exchanges in character voice and speaker tags in narrator voice',
+      () {
+        final service = DocumentImportService();
+        final document = service.importPastedText(
+          '"JUST STOP FIGHTING!" Jennifer screamed, pulling on her hair.\n\n'
+          '"John, why did you have to budge in front of me this morning?" Elliot said '
+          '"I dunno. I thought taking someone\'s position in line is how we operate now," '
+          'John replied sarcastically.',
+        );
+
+        final segments = document.speechDocument.segments
+            .map((segment) => segment.normalizedText)
+            .toList(growable: false);
+        final casts = document.documentVoiceAttribution.ranges
+            .map((range) => range.castId)
+            .toList(growable: false);
+
+        expect(
+          segments,
+          containsAllInOrder(<String>[
+            '"JUST STOP FIGHTING!"',
+            'Jennifer screamed, pulling on her hair.',
+            '"John, why did you have to budge in front of me this morning?"',
+            'Elliot said',
+            '"I dunno. I thought taking someone\'s position in line is how we operate now,"',
+            'John replied sarcastically.',
+          ]),
+        );
+        expect(
+          casts,
+          containsAllInOrder(<String>[
+            'cast_character_jennifer',
+            'cast_narrator',
+            'cast_character_elliot',
+            'cast_narrator',
+            'cast_character_john',
+            'cast_narrator',
+          ]),
+        );
+      },
+    );
+
+    test(
+      'imports Love.txt with consolidated character aliases and inferred cast gender',
+      () async {
+        final service = DocumentImportService();
+        final file = File('project/testdocs/Love.txt');
+        final document = await service.importBytes(
+          fileName: 'Love.txt',
+          bytes: await file.readAsBytes(),
+        );
+
+        final jennifer = document.characterCastRegistry.forCastId(
+          'cast_character_jennifer',
+        );
+        final john = document.characterCastRegistry.forCastId(
+          'cast_character_john',
+        );
+        final elliot = document.characterCastRegistry.forCastId(
+          'cast_character_elliot',
+        );
+
+        expect(jennifer, isNotNull);
+        expect(
+          jennifer!.observedAliases,
+          containsAll(<String>['Jennifer', 'Jenifer', 'Jenefer']),
+        );
+        expect(
+          jennifer.identityProfile?.genderIdentityLabel,
+          CharacterGenderIdentityLabel.female,
+        );
+        expect(
+          jennifer.identityProfile?.genderSource,
+          CharacterGenderEvidenceSource.pronoun,
+        );
+        expect(jennifer.inferredGender, VoiceGender.female);
+        expect(jennifer.inferredGenderConfidence, greaterThan(0.5));
+
+        expect(john, isNotNull);
+        final johnEntry = john!;
+        expect(
+          johnEntry.identityProfile?.genderIdentityLabel,
+          CharacterGenderIdentityLabel.male,
+        );
+        expect(johnEntry.inferredGender, VoiceGender.male);
+        expect(johnEntry.inferredGenderConfidence, greaterThan(0.5));
+
+        expect(elliot, isNotNull);
+        final elliotEntry = elliot!;
+        expect(
+          elliotEntry.identityProfile?.genderIdentityLabel,
+          CharacterGenderIdentityLabel.male,
+        );
+        expect(elliotEntry.inferredGender, VoiceGender.male);
+        expect(elliotEntry.inferredGenderConfidence, greaterThan(0.5));
+      },
+    );
+
+    test(
+      'automatic casting uses imported cast metadata to choose more plausible bundled voices',
+      () async {
+        final service = DocumentImportService();
+        final assignmentService = CastVoiceAssignmentService();
+        final file = File('project/testdocs/Love.txt');
+        final document = await service.importBytes(
+          fileName: 'Love.txt',
+          bytes: await file.readAsBytes(),
+        );
+
+        final assignments = assignmentService.resolve(
+          CastVoiceAssignmentInput(
+            characterCastRegistry: document.characterCastRegistry,
+            availableVoices: KokoroVoiceCatalog.profilesForIds(
+              KokoroVoiceCatalog.bundledVoiceIds,
+            ),
+            fallbackVoiceId: 'af_heart',
+            preferredNarratorVoiceId: 'af_heart',
+          ),
+        );
+
+        final narrator = assignments.forCastId('cast_narrator');
+        final jennifer = assignments.forCastId('cast_character_jennifer');
+        final john = assignments.forCastId('cast_character_john');
+        final elliot = assignments.forCastId('cast_character_elliot');
+        final voicesById = <String, VoiceProfile>{
+          for (final voice in KokoroVoiceCatalog.profilesForIds(
+            KokoroVoiceCatalog.bundledVoiceIds,
+          ))
+            voice.id: voice,
+        };
+
+        expect(narrator?.effectiveVoiceId, 'af_heart');
+        expect(jennifer!.effectiveVoiceId, isNot(narrator?.effectiveVoiceId));
+        expect(
+          voicesById[jennifer.effectiveVoiceId]?.gender,
+          VoiceGender.female,
+        );
+        expect(voicesById[john!.effectiveVoiceId]?.gender, VoiceGender.male);
+        expect(voicesById[elliot!.effectiveVoiceId]?.gender, VoiceGender.male);
+      },
+    );
 
     test(
       'source fingerprint remains stable for repeated file imports',

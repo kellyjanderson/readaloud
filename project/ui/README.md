@@ -20,6 +20,7 @@ They define:
 - [Control State Semantics](control-state-semantics.md)
 - [Voice Library and Cast Management](voice-library-and-cast-management.md)
 - [Follow-Along Reading Surface](follow-along-reading-surface.md)
+- [Reader Options and Secondary Settings](reader-options-and-secondary-settings.md)
 - [Theme and Appearance Modes](theme-and-appearance-modes.md)
 - [Live Input and File Menu Behavior](live-input-and-file-menu-behavior.md)
 

@@ -1,6 +1,6 @@
 # Playback Orchestration and Synthesis Boundaries
 
-Last updated: March 31, 2026
+Last updated: April 4, 2026
 Status: Active architecture
 
 ## Purpose
@@ -29,6 +29,7 @@ Responsibilities:
 
 - own the active playback session id
 - own current reading position
+- persist and restore file-backed resume position when session continuity applies
 - own replay, pause, jump, and sleep-timer transitions
 - coordinate queue resets on voice, rate, or position changes
 
@@ -212,6 +213,7 @@ Reason:
 - Chunk planning is sentence-first, with clause fallback only when engine limits require it.
 - Background generation never owns playback state directly.
 - Controller code never invokes heavy speech plugins directly.
+- File-backed reading continuity should preserve the user's last known heard position across app relaunch when recovery is possible.
 - The runtime consumes prepared pronunciation/TTS artifacts and must not invent new pronunciation policy as a side effect of live playback.
 - Completed chunks are not deleted just because playback is paused, replayed, or jumped.
 - Boundary policy is applied before a chunk is treated as final cache content.
@@ -226,7 +228,8 @@ The current implementation now satisfies most of this architecture for the activ
 - first-chunk startup, background preparation, finalized chunk reuse, boundary correction, and playback instrumentation are all first-class in code
 - document-open priming and runtime scheduling now keep playback smooth, but long-form prosody richness remains narrower than the target architecture
 - queue, cache, and progress behavior are implemented for the current Kokoro/native path; broader cross-platform validation remains future work
-- the progress mapper is highlight-ready at the data-contract level, but the reader surface still does not render spoken-text highlighting or reading focus
+- the progress mapper now drives spoken highlighting and reading-focus behavior on the reader surface
+- file-backed continuity now restores the last heard reading position when recovery is possible, and watched-file live input preserves playing-versus-paused semantics across refresh
 - current controller code still leans on compatibility text views in `ReaderDocument` while normalized mappings remain the underlying source of truth
 
 ## Governing Specifications

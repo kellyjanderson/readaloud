@@ -37,8 +37,12 @@ class VoiceManagementDialog extends StatelessWidget {
     final characterEntries = characterCastRegistry.characterEntries.toList(
       growable: false,
     )..sort((left, right) => left.displayLabel.compareTo(right.displayLabel));
+    final colorScheme = Theme.of(context).colorScheme;
 
     return Dialog(
+      backgroundColor: colorScheme.surface,
+      surfaceTintColor: Colors.transparent,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
       child: ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: 760, maxHeight: 720),
         child: Padding(
@@ -204,6 +208,8 @@ class _VoiceAssignmentCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
     final selectedVoice = assignment == null
         ? null
         : voices
@@ -220,10 +226,11 @@ class _VoiceAssignmentCard extends StatelessWidget {
         assignment?.decisionKind == VoiceAssignmentDecisionKind.userOverride;
 
     return DecoratedBox(
+      key: Key('voice-assignment-card-$label'),
       decoration: BoxDecoration(
-        color: const Color(0xFFF8F7F3),
+        color: colorScheme.surfaceContainerHighest,
         borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: const Color(0x14000000)),
+        border: Border.all(color: colorScheme.outlineVariant),
       ),
       child: Padding(
         padding: const EdgeInsets.all(16),
@@ -248,7 +255,9 @@ class _VoiceAssignmentCard extends StatelessWidget {
                 hasExplicitOverride
                     ? 'Automatic voice: ${automaticVoice.displayName}'
                     : 'Using automatic voice selection.',
-                style: Theme.of(context).textTheme.bodySmall,
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: colorScheme.onSurfaceVariant,
+                ),
               ),
               const SizedBox(height: 12),
             ],
@@ -258,8 +267,18 @@ class _VoiceAssignmentCard extends StatelessWidget {
                 Expanded(
                   child: DropdownButtonFormField<String>(
                     initialValue: assignment?.effectiveVoiceId,
-                    decoration: const InputDecoration(
+                    dropdownColor: colorScheme.surface,
+                    style: theme.textTheme.titleMedium?.copyWith(
+                      color: colorScheme.onSurface,
+                    ),
+                    iconEnabledColor: colorScheme.onSurfaceVariant,
+                    decoration: InputDecoration(
                       labelText: 'Assigned voice',
+                      filled: true,
+                      fillColor: colorScheme.surface,
+                      labelStyle: theme.textTheme.bodyMedium?.copyWith(
+                        color: colorScheme.onSurfaceVariant,
+                      ),
                       border: OutlineInputBorder(),
                     ),
                     items: voices
@@ -302,7 +321,9 @@ class _VoiceAssignmentCard extends StatelessWidget {
               const SizedBox(height: 8),
               Text(
                 selectedVoice.locale,
-                style: Theme.of(context).textTheme.bodySmall,
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: colorScheme.onSurfaceVariant,
+                ),
               ),
             ],
             if (hasExplicitOverride) ...[

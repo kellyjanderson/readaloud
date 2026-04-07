@@ -30,6 +30,7 @@ void main() {
               _voice(
                 id: 'bf_emma',
                 label: 'Emma',
+                locale: 'en-GB',
                 qualityGrade: 'B-',
                 gender: VoiceGender.female,
               ),
@@ -45,11 +46,11 @@ void main() {
         );
         expect(
           assignments.forCastId('cast_character_jennifer')?.effectiveVoiceId,
-          'am_michael',
+          'bf_emma',
         );
         expect(
           assignments.forCastId('cast_character_john')?.effectiveVoiceId,
-          'bf_emma',
+          'am_michael',
         );
         expect(
           assignments.forCastId('cast_character_jennifer')?.decisionKind,
@@ -151,6 +152,55 @@ void main() {
         VoiceAssignmentDecisionKind.fallback,
       );
     });
+
+    test(
+      'prefers narrator-contrasting character voices when multiple plausible voices exist',
+      () {
+        final assignments = service.resolve(
+          CastVoiceAssignmentInput(
+            characterCastRegistry: _registry(),
+            availableVoices: <VoiceProfile>[
+              _voice(
+                id: 'af_bella',
+                label: 'Bella',
+                qualityGrade: 'A-',
+                gender: VoiceGender.female,
+              ),
+              _voice(
+                id: 'af_heart',
+                label: 'Heart',
+                qualityGrade: 'A',
+                gender: VoiceGender.female,
+              ),
+              _voice(
+                id: 'bf_emma',
+                label: 'Emma',
+                locale: 'en-GB',
+                qualityGrade: 'B-',
+                gender: VoiceGender.female,
+              ),
+              _voice(
+                id: 'am_michael',
+                label: 'Michael',
+                qualityGrade: 'C+',
+                gender: VoiceGender.male,
+              ),
+            ],
+            fallbackVoiceId: 'af_bella',
+            preferredNarratorVoiceId: 'af_bella',
+          ),
+        );
+
+        expect(
+          assignments.forCastId('cast_character_jennifer')?.effectiveVoiceId,
+          'bf_emma',
+        );
+        expect(
+          assignments.forCastId('cast_character_john')?.effectiveVoiceId,
+          'am_michael',
+        );
+      },
+    );
   });
 }
 
@@ -173,6 +223,8 @@ CharacterCastRegistry _registry() {
         confidence: 0.8,
         provenance: CastEntryProvenance.attributedDialogueInference,
         attributionIds: const <String>['attr_0'],
+        inferredGender: VoiceGender.female,
+        inferredGenderConfidence: 0.9,
       ),
       CastEntry(
         castId: 'cast_character_john',
@@ -181,6 +233,8 @@ CharacterCastRegistry _registry() {
         confidence: 0.8,
         provenance: CastEntryProvenance.attributedDialogueInference,
         attributionIds: const <String>['attr_1'],
+        inferredGender: VoiceGender.male,
+        inferredGenderConfidence: 0.9,
       ),
     ],
   );
@@ -191,12 +245,13 @@ VoiceProfile _voice({
   required String label,
   String? qualityGrade,
   VoiceGender? gender,
+  String locale = 'en-US',
 }) {
   return VoiceProfile(
     id: id,
     label: label,
-    locale: 'en-US',
-    rawValue: <String, dynamic>{'name': label, 'locale': 'en-US'},
+    locale: locale,
+    rawValue: <String, dynamic>{'name': label, 'locale': locale},
     gender: gender,
     qualityGrade: qualityGrade,
   );

@@ -38,7 +38,7 @@ UI presentation of that metadata is refined separately in the UI-derived specifi
 
 ## Refinement Status
 
-Requires refinement.
+Refinement complete for the current planned branch.
 
 ## Child Specifications
 

@@ -74,6 +74,21 @@ Each child specification must backlink to the specification it refines.
 
 This process continues until all leaf specifications are marked final.
 
+For user-facing feature branches, refinement is not complete merely because the internal support leaves are final.
+
+At least one final leaf in a user-facing branch must terminate in behavior that can be observed in the running app.
+
+Examples of observable outcomes include:
+
+* a visible control or UI state
+* an audible playback change
+* a visible navigation or follow-along behavior
+* a surfaced settings behavior such as appearance-mode following
+
+Support or enabling leaves may still be final.
+
+They do not, by themselves, complete the specification of a user-facing feature branch.
+
 Agents should expect to review newly created child specifications in later rounds and either:
 
 * mark them final if they are now implementation-sized, or
@@ -89,9 +104,16 @@ If the answer to those questions is "no," the leaf should usually remain final e
 
 The process is complete only when every executable leaf in the tree is final.
 
+For user-facing feature work, that means both:
+
+* the supporting implementation leaves are final
+* the surfaced running-app outcome leaves are final
+
 At the end of each specification pass, the agent should explicitly report how many specifications still require another refinement round.
 
-That count should reflect the number of specifications that are still not final.
+That count should reflect the number of branches that still need another refinement step to create or clarify missing executable leaves.
+
+Non-executable parent containers whose implied work is already fully represented by final child leaves do not count as needing another refinement round just because the parent document itself remains broad.
 
 ---
 
@@ -133,6 +155,20 @@ All implementation work implied by a specification must be represented at the le
 
 If a parent specification still implies work that is not represented by child leaves, refinement is not finished yet.
 
+For user-facing branches, a final leaf should make it impossible to claim success based only on internal plumbing.
+
+If the intended feature outcome is something a user should be able to see, hear, or interact with in the running app, at least one final leaf must describe that surfaced outcome explicitly.
+
+Useful questions are:
+
+* can a user observe this outcome in the running app?
+* would this leaf still be marked complete if only internal state or infrastructure existed?
+* is there another full surfaced behavior pass still hidden after this leaf?
+
+If a user-facing feature could still remain invisible after the current leaves are implemented, refinement is not done yet.
+
+When a feature leaf is marked final, a paired test specification should also be created so the feature has both an implementation contract and a verification contract.
+
 ---
 
 ## Recommended Structure
@@ -163,6 +199,10 @@ Requirements that must be satisfied.
 
 Whether the specification is final or requires further refinement.
 
+Parent specifications that already have the final child leaves needed for the current planned branch should say so explicitly.
+
+Do not leave `Requires refinement` in place once the branch is fully decomposed into the leaves needed to guide implementation.
+
 ### Child Specifications
 
 References to any specification documents derived from this one.
@@ -170,6 +210,12 @@ References to any specification documents derived from this one.
 ### Acceptance
 
 What must be true for the work to be considered complete.
+
+For user-facing final leaves, acceptance should explicitly state what can be observed in the running app.
+
+If a user-visible surface exists in the running app, that surface should have a named parent UI/specification branch rather than being implied only by scattered leaf behavior.
+
+For feature leaves, acceptance should be mirrored by a paired test specification in `project/test-specifications/` that defines manual smoke checks plus automated smoke and acceptance coverage.
 
 ---
 

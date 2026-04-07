@@ -761,6 +761,17 @@ class SpeechRuntime {
     );
   }
 
+  Future<void> cancelGeneration(String generationId) async {
+    await _pipeline.cancelGeneration(generationId);
+    _lastTrailingSilenceByGenerationId.remove(generationId);
+    _pendingChunksById.removeWhere(
+      (_, item) => item.generationId == generationId,
+    );
+    if (_activeGenerationId == generationId) {
+      _activeGenerationId = null;
+    }
+  }
+
   Future<void> cancelSession(String sessionId, {String? reasonCode}) {
     return dispatch(
       SpeechRuntimeCommand.cancelSession(
