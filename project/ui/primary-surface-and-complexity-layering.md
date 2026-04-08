@@ -32,6 +32,8 @@ When multi-voice mode is on, the top-level control should instead reflect narrat
 
 - narrator remains the main selected voice
 - the primary-surface entry becomes a `Character Voices` access path rather than a misleading whole-document voice picker
+- the primary-surface entry should stay compact and action-oriented rather than expanding into a large summary card
+- whole-document word count should not be promoted into the same top-level control row unless a later specification proves it is necessary for normal reading
 
 ## Secondary Access Pattern
 
@@ -70,6 +72,28 @@ Features that add top-level complexity without being part of normal reading flow
 Current example:
 
 - live file watching belongs in the File menu rather than as a persistent primary-surface button
+
+The same rule applies to authoring.
+
+Authoring or studio workflows should not appear on the primary reading surface.
+
+For now, they should not be surfaced in the shipped app at all.
+
+### Platform Navigation Split
+
+This menu-layering rule is platform-specific.
+
+On macOS desktop:
+
+- remove the in-app three-dots overflow menu from the Reader shell
+- move the commands currently housed there into the native menu bar
+- use the File menu as the primary product-facing home for those commands unless the platform reserves a command for the application menu
+
+On mobile:
+
+- preserve the three-dots overflow menu as the secondary command surface
+
+Do not maintain a hybrid desktop shell where the same command family exists in both the native menu bar and an in-app overflow trigger.
 
 ## Secondary Settings Surface
 

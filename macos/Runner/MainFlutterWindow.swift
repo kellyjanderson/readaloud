@@ -9,6 +9,9 @@ class MainFlutterWindow: NSWindow {
     self.setFrame(windowFrame, display: true)
 
     RegisterGeneratedPlugins(registry: flutterViewController)
+    (NSApp.delegate as? AppDelegate)?.configureDocumentAccessChannel(
+      using: flutterViewController
+    )
 
     super.awakeFromNib()
   }

@@ -17,6 +17,7 @@ Parent specification:
 This specification covers:
 
 - remembering the last opened file-backed document path
+- remembering platform-owned persistent restore access when available
 - remembering the last opened directory for file selection
 - restoring the remembered document on startup when no explicit startup input is present
 
@@ -25,6 +26,7 @@ This specification covers:
 When a readable file-backed document is loaded through the normal open flow or live-input file selection, the app must persist:
 
 - the normalized absolute document path
+- platform-owned persistent access data when the platform requires that for future restore
 - the parent directory path when available
 
 Sample content and pasted or shared text must not replace the remembered file-backed document path.

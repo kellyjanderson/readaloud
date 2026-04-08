@@ -45,6 +45,12 @@ UI definition guidance is defined in:
 agents/ui-definitions.md
 ```
 
+Mandatory structural UI rules are defined in:
+
+```text
+agents/ui-ux-invariants.md
+```
+
 Project UI definition documents should live in:
 
 ```text
@@ -118,6 +124,17 @@ This loop continues until the relevant UI surface is sufficiently coherent.
 UI definition work is breadth first across the relevant interface area.
 
 The goal is to define the visible structure and interaction semantics of the surface before narrower specifications or implementation details are finalized.
+
+Agents should apply `agents/ui-ux-invariants.md` during this loop rather than waiting until implementation to discover layout-shift, missing-state, or scanning-flow problems.
+
+For broad UI system work, breadth-first refinement should usually move through:
+
+1. brand and voice rules
+2. design guide and look-and-feel rules
+3. component-system rules
+4. surface-specific UI definitions
+
+Surface-specific UI specifications should usually come after those layers are stable enough to guide implementation.
 
 ---
 

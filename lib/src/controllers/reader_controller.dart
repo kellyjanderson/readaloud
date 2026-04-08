@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:developer' as developer;
 import 'dart:io';
 import 'dart:math' as math;
 
@@ -24,11 +25,13 @@ import '../models/spoken_selection.dart';
 import '../models/speech_document.dart';
 import '../models/tts_artifact.dart';
 import '../models/voice_session_realization.dart';
+import '../models/voice_preview_state.dart';
 import '../models/voice_profile.dart';
 import '../services/cast_aware_speech_route_service.dart';
 import '../services/cast_voice_assignment_service.dart';
 import '../services/chunk_planner_service.dart';
 import '../services/default_tts_engine.dart';
+import '../services/document_access_service.dart';
 import '../services/document_import_service.dart';
 import '../services/english_pronunciation_profile_selector.dart';
 import '../services/playback_instrumentation_service.dart';
@@ -42,10 +45,13 @@ import '../services/voice_session_realization_service.dart';
 class ReaderController extends ChangeNotifier {
   ReaderController({
     DocumentImportService? importer,
+    DocumentAccessService? documentAccessService,
     ReaderPreferencesService? preferencesService,
     TtsEngine? ttsEngine,
     bool enablePlatformIntakeChannels = true,
   }) : _importer = importer ?? DocumentImportService(),
+       _documentAccessService =
+           documentAccessService ?? createDocumentAccessService(),
        _preferencesService = preferencesService ?? ReaderPreferencesService(),
        _ttsEngine = ttsEngine ?? createDefaultTtsEngine(),
        _enablePlatformIntakeChannels = enablePlatformIntakeChannels,
@@ -54,6 +60,7 @@ class ReaderController extends ChangeNotifier {
        _chunkPlannerService = const ChunkPlannerService();
 
   final DocumentImportService _importer;
+  final DocumentAccessService _documentAccessService;
   final ReaderPreferencesService _preferencesService;
   final TtsEngine _ttsEngine;
   final bool _enablePlatformIntakeChannels;
@@ -85,7 +92,11 @@ class ReaderController extends ChangeNotifier {
   ReaderAppearanceMode _appearanceMode = ReaderAppearanceMode.system;
   bool _isMultiVoiceEnabled = ReaderPreferences.defaultMultiVoiceEnabled;
   String? _lastOpenedDocumentPath;
+  String? _lastOpenedDocumentAccessToken;
   String? _lastOpenedDirectoryPath;
+  String? _lastOpenedDirectoryAccessToken;
+  final Map<String, Map<String, String>> _storedDocumentCastVoiceAssignments =
+      <String, Map<String, String>>{};
   ReaderResumeState? _resumeState;
   String? _currentDocumentPath;
   String? _liveReadFilePath;
@@ -98,6 +109,9 @@ class ReaderController extends ChangeNotifier {
   bool _isExporting = false;
   bool _isPlaying = false;
   bool _isFadingOut = false;
+  String? _activePreviewVoiceId;
+  bool _isVoicePreviewLoading = false;
+  bool _isVoicePreviewPlaying = false;
   String? _documentLoadStageLabel;
   double? _documentLoadStageProgress;
   bool _playbackEndedAtDocumentEnd = false;
@@ -118,6 +132,7 @@ class ReaderController extends ChangeNotifier {
   List<String> _ttsDebugTraceLines = const <String>[];
   SpokenSelection _spokenSelection = const SpokenSelection.none();
   ReadingFocusState _readingFocusState = const ReadingFocusState();
+  String? _activePlaybackDocumentId;
 
   int _currentWordIndex = 0;
   double _wordsPerSecond = 2.8;
@@ -144,6 +159,7 @@ class ReaderController extends ChangeNotifier {
   bool get isExporting => _isExporting;
   bool get isPlaying => _isPlaying;
   bool get isMultiVoiceEnabled => _isMultiVoiceEnabled;
+  String? get activePreviewVoiceId => _activePreviewVoiceId;
   bool get isCastProcessingVisible => _isImporting && _isMultiVoiceEnabled;
   String get documentLoadStageLabel =>
       _documentLoadStageLabel ?? 'Preparing cast and dialogue voices...';
@@ -178,6 +194,7 @@ class ReaderController extends ChangeNotifier {
     }
     return _resolveCastVoiceAssignments(preferredNarratorVoiceId: voiceId);
   }
+
   bool get hasDistinctEffectiveCastVoices {
     final assignments = castVoiceAssignments;
     if (assignments == null) {
@@ -189,6 +206,7 @@ class ReaderController extends ChangeNotifier {
             .length >
         1;
   }
+
   Duration? get sleepTimerDuration => _sleepTimerDuration;
   String get fontFamily => _fontFamily;
   double get fontScale => _fontScale;
@@ -206,6 +224,7 @@ class ReaderController extends ChangeNotifier {
     final title = _document.title.trim();
     return title.isEmpty ? 'Untitled' : title;
   }
+
   String get windowTitle => 'Read Aloud - $currentDocumentWindowLabel';
 
   Duration? get sleepTimerRemaining {
@@ -228,8 +247,30 @@ class ReaderController extends ChangeNotifier {
     return _voiceSpeeds[voiceId] ?? 1.0;
   }
 
+  VoicePreviewState previewStateForVoice(String voiceId) {
+    if (_activePreviewVoiceId != voiceId) {
+      return VoicePreviewState.idle;
+    }
+    if (_isVoicePreviewLoading) {
+      return VoicePreviewState.loading;
+    }
+    if (_isVoicePreviewPlaying) {
+      return VoicePreviewState.playing;
+    }
+    return VoicePreviewState.idle;
+  }
+
   Future<void> initialize() async {
     _ttsEngine.onStart = () {
+      if (_activePreviewVoiceId != null) {
+        _isVoicePreviewLoading = false;
+        _isVoicePreviewPlaying = true;
+        notifyListeners();
+        return;
+      }
+      if (_activePlaybackDocumentId == null) {
+        return;
+      }
       _isPlaying = true;
       _playbackState = ReaderPlaybackPrimaryState.playing;
       _readingFocusState = _readingFocusState.copyWith(playbackActive: true);
@@ -237,12 +278,25 @@ class ReaderController extends ChangeNotifier {
       notifyListeners();
     };
     _ttsEngine.onStatus = (message) {
+      if (_activePreviewVoiceId != null) {
+        return;
+      }
       _statusMessage = message;
       notifyListeners();
     };
     _ttsEngine.onComplete = () {
+      if (_activePreviewVoiceId != null) {
+        _resetPreviewState();
+        unawaited(_restoreSelectedVoiceEngineState());
+        notifyListeners();
+        return;
+      }
+      if (_activePlaybackDocumentId == null) {
+        return;
+      }
       unawaited(_flushResumePersistence());
       _finalizeActiveSpokenChunk();
+      _activePlaybackDocumentId = null;
       _isPlaying = false;
       _isFadingOut = false;
       _playbackRequestedAt = null;
@@ -261,8 +315,19 @@ class ReaderController extends ChangeNotifier {
       notifyListeners();
     };
     _ttsEngine.onError = (message) {
+      if (_activePreviewVoiceId != null) {
+        _resetPreviewState();
+        unawaited(_restoreSelectedVoiceEngineState());
+        _statusMessage = 'Voice preview failed.';
+        notifyListeners();
+        return;
+      }
+      if (_activePlaybackDocumentId == null) {
+        return;
+      }
       unawaited(_flushResumePersistence());
       _statusMessage = message;
+      _activePlaybackDocumentId = null;
       _isPlaying = false;
       _isFadingOut = false;
       _playbackRequestedAt = null;
@@ -274,6 +339,28 @@ class ReaderController extends ChangeNotifier {
     };
     _ttsEngine.onProgress = _handleProgress;
     _ttsEngine.onActivity = (activity) {
+      if (_activePreviewVoiceId != null) {
+        switch (activity.phase) {
+          case TtsPlaybackPhase.buffering:
+            _isVoicePreviewLoading = true;
+            _isVoicePreviewPlaying = false;
+            break;
+          case TtsPlaybackPhase.playing:
+            _isVoicePreviewLoading = false;
+            _isVoicePreviewPlaying = true;
+            break;
+          case TtsPlaybackPhase.idle:
+            _isVoicePreviewLoading = false;
+            _isVoicePreviewPlaying = false;
+            break;
+        }
+        notifyListeners();
+        return;
+      }
+      if (_activePlaybackDocumentId == null &&
+          activity.phase != TtsPlaybackPhase.idle) {
+        return;
+      }
       _playbackActivity = activity;
       if (activity.phase == TtsPlaybackPhase.buffering) {
         _playbackState = ReaderPlaybackPrimaryState.bufferingFirstChunk;
@@ -305,9 +392,14 @@ class ReaderController extends ChangeNotifier {
     _fontScale = preferences.fontScale;
     _appearanceMode = preferences.appearanceMode;
     _isMultiVoiceEnabled = preferences.multiVoiceEnabled;
+    _storedDocumentCastVoiceAssignments
+      ..clear()
+      ..addAll(preferences.storedDocumentCastVoiceAssignments);
     _resumeState = preferences.resumeState;
     _lastOpenedDocumentPath = preferences.lastOpenedDocumentPath;
+    _lastOpenedDocumentAccessToken = preferences.lastOpenedDocumentAccessToken;
     _lastOpenedDirectoryPath = preferences.lastOpenedDirectoryPath;
+    _lastOpenedDirectoryAccessToken = preferences.lastOpenedDirectoryAccessToken;
 
     if (_enablePlatformIntakeChannels) {
       await _initializeIntakeChannels();
@@ -361,7 +453,6 @@ class ReaderController extends ChangeNotifier {
         fileName: file.name,
         bytes: bytes,
         sourcePath: file.path,
-        successMessage: 'Loaded ${file.name}.',
       );
     }, errorSourceLabel: 'picked file');
   }
@@ -373,10 +464,15 @@ class ReaderController extends ChangeNotifier {
   Future<void> importFilePaths(
     List<String> paths, {
     String sourceLabel = 'Opened',
+    bool surfaceErrors = true,
   }) async {
     await stopLiveRead(clearStatus: false);
     final files = paths.map(XFile.new).toList(growable: false);
-    await _importXFiles(files, sourceLabel: sourceLabel);
+    await _importXFiles(
+      files,
+      sourceLabel: sourceLabel,
+      surfaceErrors: surfaceErrors,
+    );
   }
 
   Future<void> importPastedText(String text) async {
@@ -447,7 +543,8 @@ class ReaderController extends ChangeNotifier {
 
       await startLiveReadFromPath(path);
     } catch (error) {
-      _statusMessage = 'Could not start live read mode: $error';
+      _statusMessage =
+          'Could not start Live Feed right now. Choose the file again and try again.';
       notifyListeners();
     }
   }
@@ -499,12 +596,209 @@ class ReaderController extends ChangeNotifier {
   Future<bool> restoreLastOpenedDocument() async {
     final lastPath = _lastOpenedDocumentPath;
     if (lastPath == null || lastPath.trim().isEmpty) {
+      _logRestoreDiagnostic(
+        'Skipped startup restore because no remembered document path exists.',
+      );
       return false;
     }
 
-    await importFilePaths(<String>[lastPath], sourceLabel: 'Restored');
-    _restoreRememberedReadingPositionIfPossible(lastPath);
-    return _document.type != ReaderDocumentType.sample;
+    final requestedPath = p.normalize(lastPath.trim());
+    final requestedDirectoryPath = p.normalize(p.dirname(requestedPath));
+    var restorePath = requestedPath;
+    DocumentAccessLease? lease;
+    var attemptedPersistentAccess = false;
+
+    try {
+      var directoryToken = _lastOpenedDirectoryAccessToken;
+      var token = _lastOpenedDocumentAccessToken;
+      _logRestoreDiagnostic(
+        'Starting startup restore.',
+        context: <String, Object?>{
+          'requestedPath': requestedPath,
+          'requestedDirectoryPath': requestedDirectoryPath,
+          'hasStoredDirectoryToken':
+              directoryToken != null && directoryToken.trim().isNotEmpty,
+          'hasStoredToken': token != null && token.trim().isNotEmpty,
+          'resumeDocumentPath': _resumeState?.documentPath,
+        },
+      );
+
+      if (directoryToken != null && directoryToken.trim().isNotEmpty) {
+        attemptedPersistentAccess = true;
+        try {
+          lease = await _documentAccessService.openPersistentRestoreToken(
+            directoryToken,
+          );
+          if (lease != null) {
+            final resolvedDirectoryPath = p.normalize(lease.path.trim());
+            _lastOpenedDirectoryPath = resolvedDirectoryPath;
+            _lastOpenedDirectoryAccessToken =
+                lease.refreshedToken ?? directoryToken;
+            _logRestoreDiagnostic(
+              'Opened persistent directory access for startup restore.',
+              context: <String, Object?>{
+                'requestedDirectoryPath': requestedDirectoryPath,
+                'resolvedDirectoryPath': resolvedDirectoryPath,
+                'refreshedToken': lease.refreshedToken != null,
+              },
+            );
+          } else {
+            _logRestoreDiagnostic(
+              'Persistent directory token did not resolve to a readable lease.',
+              context: <String, Object?>{
+                'requestedDirectoryPath': requestedDirectoryPath,
+              },
+            );
+          }
+        } catch (error) {
+          _logRestoreDiagnostic(
+            'Could not reopen persistent directory access for the remembered document.',
+            context: <String, Object?>{
+              'requestedDirectoryPath': requestedDirectoryPath,
+            },
+            error: error,
+          );
+        }
+      }
+
+      if (lease == null && (token == null || token.trim().isEmpty)) {
+        try {
+          final bootstrappedToken = await _documentAccessService
+              .createPersistentRestoreToken(requestedPath);
+          if (bootstrappedToken != null && bootstrappedToken.trim().isNotEmpty) {
+            token = bootstrappedToken;
+            _lastOpenedDocumentAccessToken = bootstrappedToken;
+            _logRestoreDiagnostic(
+              'Bootstrapped a missing restore token from the remembered path.',
+              context: <String, Object?>{'requestedPath': requestedPath},
+            );
+          } else {
+            _logRestoreDiagnostic(
+              'No restore token was available for the remembered path; falling back to path access.',
+              context: <String, Object?>{'requestedPath': requestedPath},
+            );
+          }
+        } catch (error) {
+          _logRestoreDiagnostic(
+            'Failed to bootstrap a restore token from the remembered path.',
+            context: <String, Object?>{'requestedPath': requestedPath},
+            error: error,
+          );
+        }
+      }
+
+      if (lease == null && token != null && token.trim().isNotEmpty) {
+        attemptedPersistentAccess = true;
+        try {
+          lease = await _documentAccessService.openPersistentRestoreToken(
+            token,
+          );
+          if (lease != null) {
+            restorePath = p.normalize(lease.path.trim());
+            _lastOpenedDocumentAccessToken = lease.refreshedToken ?? token;
+            if (restorePath != requestedPath) {
+              _lastOpenedDocumentPath = restorePath;
+            }
+            _logRestoreDiagnostic(
+              'Opened persistent restore access.',
+              context: <String, Object?>{
+                'requestedPath': requestedPath,
+                'resolvedPath': restorePath,
+                'refreshedToken': lease.refreshedToken != null,
+              },
+            );
+          } else {
+            _logRestoreDiagnostic(
+              'Persistent restore token did not resolve to a readable lease; falling back to path access.',
+              context: <String, Object?>{'requestedPath': requestedPath},
+            );
+          }
+        } catch (error) {
+          _logRestoreDiagnostic(
+            'Could not reopen persistent restore access for the remembered document.',
+            context: <String, Object?>{'requestedPath': requestedPath},
+            error: error,
+          );
+        }
+      }
+
+      if (lease == null) {
+        try {
+          _logRestoreDiagnostic(
+            attemptedPersistentAccess
+                ? 'Requesting explicit directory access after persistent access was unavailable.'
+                : 'Requesting explicit directory access because no persistent restore token was available.',
+            context: <String, Object?>{
+              'requestedPath': requestedPath,
+              'requestedDirectoryPath': requestedDirectoryPath,
+            },
+          );
+          lease = await _documentAccessService.requestPersistentDirectoryAccess(
+            requestedDirectoryPath,
+          );
+          if (lease != null) {
+            final resolvedDirectoryPath = p.normalize(lease.path.trim());
+            _lastOpenedDirectoryPath = resolvedDirectoryPath;
+            _lastOpenedDirectoryAccessToken =
+                lease.refreshedToken ?? _lastOpenedDirectoryAccessToken;
+            _logRestoreDiagnostic(
+              'User granted explicit directory access for startup reopen.',
+              context: <String, Object?>{
+                'requestedPath': requestedPath,
+                'resolvedDirectoryPath': resolvedDirectoryPath,
+              },
+            );
+          } else {
+            _logRestoreDiagnostic(
+              'Explicit directory access was not granted; startup restore will fall back to path access.',
+              context: <String, Object?>{
+                'requestedPath': requestedPath,
+                'requestedDirectoryPath': requestedDirectoryPath,
+              },
+            );
+          }
+        } catch (error) {
+          _logRestoreDiagnostic(
+            'Explicit directory access request failed.',
+            context: <String, Object?>{
+              'requestedPath': requestedPath,
+              'requestedDirectoryPath': requestedDirectoryPath,
+            },
+            error: error,
+          );
+        }
+      }
+
+      final previousDocumentId = _document.displayDocument.documentId;
+      await importFilePaths(
+        <String>[restorePath],
+        sourceLabel: 'Restored',
+        surfaceErrors: false,
+      );
+      final restoredSuccessfully =
+          _currentDocumentPath == restorePath &&
+          _document.displayDocument.documentId != previousDocumentId;
+      _logRestoreDiagnostic(
+        restoredSuccessfully
+            ? 'Startup restore imported the remembered document.'
+            : 'Startup restore did not replace the current document.',
+        context: <String, Object?>{
+          'requestedPath': requestedPath,
+          'restorePath': restorePath,
+          'currentDocumentPath': _currentDocumentPath,
+          'documentTitle': _document.title,
+          'documentType': _document.type.name,
+        },
+      );
+      if (!restoredSuccessfully) {
+        return false;
+      }
+      _restoreRememberedReadingPositionIfPossible(restorePath);
+      return true;
+    } finally {
+      await lease?.close();
+      await _persistPreferences();
+    }
   }
 
   Future<void> togglePlayback() async {
@@ -566,6 +860,7 @@ class ReaderController extends ChangeNotifier {
     _playbackState = ReaderPlaybackPrimaryState.bufferingFirstChunk;
     _playbackRequestedAt = DateTime.now();
     _recordPositionMapConfidenceIfNeeded();
+    _activePlaybackDocumentId = _document.displayDocument.documentId;
 
     final speakableTail = _document.speakableText.substring(
       _utteranceStartOffset,
@@ -589,6 +884,7 @@ class ReaderController extends ChangeNotifier {
     await _ttsEngine.pause();
     await _flushResumePersistence();
     _finalizeActiveSpokenChunk();
+    _activePlaybackDocumentId = null;
     _isPlaying = false;
     _playbackState = ReaderPlaybackPrimaryState.paused;
     _readingFocusState = _readingFocusState.copyWith(playbackActive: false);
@@ -618,6 +914,7 @@ class ReaderController extends ChangeNotifier {
     _currentChunkPlan = null;
     _statusMessage =
         'Jumped ${seconds.abs()} seconds ${seconds < 0 ? 'back' : 'forward'}.';
+    _activePlaybackDocumentId = null;
 
     if (_isPlaying) {
       await _ttsEngine.stop();
@@ -716,7 +1013,68 @@ class ReaderController extends ChangeNotifier {
       await voiceLibraryCapable.installVoice(voiceId);
       await _refreshVoiceLibraryState();
     } catch (error) {
-      _statusMessage = 'Failed to install the selected voice: $error';
+      _statusMessage =
+          'Could not install the selected voice right now. Try again.';
+      notifyListeners();
+    }
+  }
+
+  Future<void> toggleVoicePreview(String voiceId) async {
+    if (_activePreviewVoiceId == voiceId &&
+        (_isVoicePreviewLoading || _isVoicePreviewPlaying)) {
+      await stopVoicePreview();
+      return;
+    }
+    await previewVoice(voiceId);
+  }
+
+  Future<void> previewVoice(String voiceId) async {
+    if (_isPlaying || _playbackActivity.isBuffering) {
+      await pausePlayback();
+    }
+
+    final voice = _voices
+        .where((candidate) => candidate.id == voiceId)
+        .firstOrNull;
+    if (voice == null) {
+      return;
+    }
+
+    if (_activePreviewVoiceId != null) {
+      await stopVoicePreview(notify: false);
+    }
+
+    _activePreviewVoiceId = voiceId;
+    _isVoicePreviewLoading = true;
+    _isVoicePreviewPlaying = false;
+    notifyListeners();
+
+    try {
+      await _ttsEngine.selectVoice(voice);
+      await _ttsEngine.setSpeechRate(_voiceSpeeds[voiceId] ?? 1.0);
+      await _ttsEngine.setVolume(1.0);
+      await _ttsEngine.speak(
+        const TtsSpeakRequest(
+          text: 'Hello. This is Read Aloud previewing this voice.',
+          documentId: 'voice-preview',
+        ),
+      );
+    } catch (_) {
+      _resetPreviewState();
+      await _restoreSelectedVoiceEngineState();
+      _statusMessage = 'Voice preview failed.';
+      notifyListeners();
+    }
+  }
+
+  Future<void> stopVoicePreview({bool notify = true}) async {
+    if (_activePreviewVoiceId == null) {
+      return;
+    }
+    await _ttsEngine.stop();
+    _resetPreviewState();
+    await _restoreSelectedVoiceEngineState();
+    if (notify) {
       notifyListeners();
     }
   }
@@ -740,7 +1098,8 @@ class ReaderController extends ChangeNotifier {
   }
 
   Future<void> assignVoiceToCast(String castId, String voiceId) async {
-    if (_selectedVoiceId == null || _voices.every((voice) => voice.id != voiceId)) {
+    if (_selectedVoiceId == null ||
+        _voices.every((voice) => voice.id != voiceId)) {
       return;
     }
 
@@ -755,9 +1114,12 @@ class ReaderController extends ChangeNotifier {
     final automaticAssignment = automaticAssignments.forCastId(castId);
     if (automaticAssignment?.effectiveVoiceId == voiceId) {
       _castVoiceOverrides.remove(castId);
+      _clearStoredCastVoiceAssignment(castId);
     } else {
       _castVoiceOverrides[castId] = voiceId;
+      _storeCastVoiceAssignment(castId, voiceId);
     }
+    await _persistPreferences();
 
     _refreshChunkPlan();
 
@@ -772,11 +1134,15 @@ class ReaderController extends ChangeNotifier {
   }
 
   Future<void> clearCastVoiceOverride(String castId) async {
-    if (!_castVoiceOverrides.containsKey(castId)) {
+    final storedAssignments = _currentStoredCastVoiceAssignments();
+    if (!_castVoiceOverrides.containsKey(castId) &&
+        !storedAssignments.containsKey(castId)) {
       return;
     }
 
     _castVoiceOverrides.remove(castId);
+    _clearStoredCastVoiceAssignment(castId);
+    await _persistPreferences();
     _refreshChunkPlan();
 
     if (_isPlaying) {
@@ -847,6 +1213,26 @@ class ReaderController extends ChangeNotifier {
     notifyListeners();
   }
 
+  void showStatusMessage(String message) {
+    _statusMessage = message;
+    notifyListeners();
+  }
+
+  void _resetPreviewState() {
+    _activePreviewVoiceId = null;
+    _isVoicePreviewLoading = false;
+    _isVoicePreviewPlaying = false;
+  }
+
+  Future<void> _restoreSelectedVoiceEngineState() async {
+    final selected = selectedVoice;
+    if (selected == null) {
+      return;
+    }
+    await _ttsEngine.selectVoice(selected);
+    await _ttsEngine.setSpeechRate(currentSpeed);
+  }
+
   Future<TtsExportResult?> exportAudioToPath(String outputPath) async {
     final exporter = _ttsEngine is AudioExportCapable
         ? _ttsEngine as AudioExportCapable
@@ -902,7 +1288,7 @@ class ReaderController extends ChangeNotifier {
       _statusMessage = 'Saved audio to ${result.outputPath}.';
       return result;
     } catch (error) {
-      _statusMessage = 'Audio export failed: $error';
+      _statusMessage = 'Could not save audio right now. Try again.';
       return null;
     } finally {
       _isExporting = false;
@@ -975,8 +1361,6 @@ class ReaderController extends ChangeNotifier {
           progress: 0.35,
         );
         await _replaceDocument(_importer.importSharedText(sharedData.text!));
-        _statusMessage = 'Loaded shared text.';
-        notifyListeners();
       }, errorSourceLabel: sourceLabel);
     }
 
@@ -988,37 +1372,40 @@ class ReaderController extends ChangeNotifier {
   Future<void> _importXFiles(
     List<XFile> files, {
     required String sourceLabel,
+    bool surfaceErrors = true,
   }) async {
     if (files.isEmpty) {
       return;
     }
 
     await stopLiveRead(clearStatus: false);
-    await _runImportOperation(() async {
-      final firstFile = files.first;
-      final bytes = await firstFile.readAsBytes();
-      final fileName = firstFile.name.isNotEmpty
-          ? firstFile.name
-          : _fallbackFileName(firstFile.path);
+    await _runImportOperation(
+      () async {
+        final firstFile = files.first;
+        final bytes = await _readBytesWithAccessRecovery(
+          sourceLabel: sourceLabel,
+          sourcePath: firstFile.path,
+          readBytes: firstFile.readAsBytes,
+        );
+        final fileName = firstFile.name.isNotEmpty
+            ? firstFile.name
+            : _fallbackFileName(firstFile.path);
 
-      final message = files.length == 1
-          ? '$sourceLabel $fileName.'
-          : '$sourceLabel ${files.length} files; loaded $fileName.';
-
-      await _loadImportedBytes(
-        fileName: fileName,
-        bytes: Uint8List.fromList(bytes),
-        sourcePath: firstFile.path,
-        successMessage: message,
-      );
-    }, errorSourceLabel: sourceLabel);
+        await _loadImportedBytes(
+          fileName: fileName,
+          bytes: Uint8List.fromList(bytes),
+          sourcePath: firstFile.path,
+        );
+      },
+      errorSourceLabel: sourceLabel,
+      surfaceErrors: surfaceErrors,
+    );
   }
 
   Future<void> _loadImportedBytes({
     required String fileName,
     required Uint8List bytes,
     String? sourcePath,
-    String? successMessage,
   }) async {
     await _setDocumentLoadStage(
       'Discovering dialogue and character context...',
@@ -1034,12 +1421,6 @@ class ReaderController extends ChangeNotifier {
     );
     await _replaceDocument(imported, sourcePath: sourcePath);
     await _rememberOpenedDocumentPath(sourcePath);
-    if (successMessage != null) {
-      _statusMessage = imported.wordCount == 0
-          ? '$successMessage No readable text was extracted yet.'
-          : successMessage;
-      notifyListeners();
-    }
   }
 
   Future<void> _replaceDocument(
@@ -1047,7 +1428,9 @@ class ReaderController extends ChangeNotifier {
     String? statusMessage,
     String? sourcePath,
   }) async {
+    _activePlaybackDocumentId = null;
     await _ttsEngine.stop();
+    _finalizeActiveSpokenChunk();
     _document = document;
     _currentDocumentPath = (sourcePath == null || sourcePath.trim().isEmpty)
         ? null
@@ -1064,6 +1447,9 @@ class ReaderController extends ChangeNotifier {
     _spokenSelection = const SpokenSelection.none();
     _castVoiceOverrides.clear();
     _readingFocusState = const ReadingFocusState();
+    _utteranceStartOffset = 0;
+    _utteranceStartWordIndex = 0;
+    _utteranceStartedAt = null;
     _playbackRequestedAt = null;
     _latencyRecordedSessions.clear();
     _positionConfidenceRecordedSessions.clear();
@@ -1072,11 +1458,11 @@ class ReaderController extends ChangeNotifier {
     _currentChunkPlan = null;
     _primePlaybackPreparation();
     _clearDocumentLoadStage();
-    _statusMessage =
-        statusMessage ??
-        (document.wordCount == 0
-            ? 'Loaded ${document.title}, but no readable text was extracted yet.'
-            : 'Loaded ${document.title}.');
+    _statusMessage = statusMessage;
+    if (_statusMessage == null && document.wordCount == 0) {
+      _statusMessage =
+          'Loaded ${document.title}, but no readable text was extracted yet.';
+    }
     notifyListeners();
   }
 
@@ -1135,6 +1521,15 @@ class ReaderController extends ChangeNotifier {
   }
 
   void _handleProgress(TtsProgressUpdate update) {
+    final activePlaybackDocumentId = _activePlaybackDocumentId;
+    if (activePlaybackDocumentId == null) {
+      return;
+    }
+    final updateDocumentId = update.documentId;
+    if (updateDocumentId != null &&
+        updateDocumentId != activePlaybackDocumentId) {
+      return;
+    }
     _recordProgress(update);
     final globalOffset = _utteranceStartOffset + update.endOffset;
     final nextWordIndex =
@@ -1220,9 +1615,12 @@ class ReaderController extends ChangeNotifier {
       fontScale: _fontScale,
       appearanceMode: _appearanceMode,
       multiVoiceEnabled: _isMultiVoiceEnabled,
+      storedDocumentCastVoiceAssignments: _storedDocumentCastVoiceAssignments,
       resumeState: _resumeState,
       lastOpenedDocumentPath: _lastOpenedDocumentPath,
+      lastOpenedDocumentAccessToken: _lastOpenedDocumentAccessToken,
       lastOpenedDirectoryPath: _lastOpenedDirectoryPath,
+      lastOpenedDirectoryAccessToken: _lastOpenedDirectoryAccessToken,
     );
   }
 
@@ -1242,22 +1640,22 @@ class ReaderController extends ChangeNotifier {
 
   Future<void> _persistResumeStateNow() async {
     final currentPath = _currentDocumentPath;
-    if (currentPath == null || currentPath.trim().isEmpty || _document.wordCount == 0) {
+    if (currentPath == null ||
+        currentPath.trim().isEmpty ||
+        _document.wordCount == 0) {
       return;
     }
 
-    final clampedWordIndex = _currentWordIndex.clamp(
-      0,
-      math.max(_document.wordCount - 1, 0),
-    ).toInt();
+    final clampedWordIndex = _currentWordIndex
+        .clamp(0, math.max(_document.wordCount - 1, 0))
+        .toInt();
     final segment = _document.segmentForWordIndex(clampedWordIndex);
     final segmentStartWordIndex = segment == null
         ? clampedWordIndex
         : _document.startWordIndexForSegment(segment);
-    final wordIndexWithinSegment = math.max(
-      0,
-      clampedWordIndex - segmentStartWordIndex,
-    ).toInt();
+    final wordIndexWithinSegment = math
+        .max(0, clampedWordIndex - segmentStartWordIndex)
+        .toInt();
     final anchorWordText = _document.wordSpans.isEmpty
         ? null
         : _document.speakableText.substring(
@@ -1277,7 +1675,7 @@ class ReaderController extends ChangeNotifier {
 
   void _restoreRememberedReadingPositionIfPossible(
     String documentPath, {
-    bool updateStatus = true,
+    bool surfaceSuccessMessage = false,
   }) {
     final resumeState = _resumeState;
     final normalizedPath = p.normalize(documentPath.trim());
@@ -1290,21 +1688,38 @@ class ReaderController extends ChangeNotifier {
     final recoveredWordIndex = _recoverWordIndexFromResumeState(resumeState);
     if (recoveredWordIndex == null) {
       _currentWordIndex = 0;
-      if (updateStatus) {
-        _statusMessage =
-            'Restored ${p.basename(normalizedPath)}, but the last heard position could not be recovered.';
+      _focusReaderSurfaceOnWordIndex(0);
+      final message =
+          'Restored ${p.basename(normalizedPath)}, but the last heard position could not be recovered.';
+      if (surfaceSuccessMessage) {
+        _statusMessage = message;
+      } else {
+        _logDiagnostic(message);
       }
       notifyListeners();
       return;
     }
 
     _currentWordIndex = recoveredWordIndex;
-    if (updateStatus) {
+    _focusReaderSurfaceOnWordIndex(recoveredWordIndex);
+    if (surfaceSuccessMessage) {
       _statusMessage = recoveredWordIndex == 0 && resumeState.wordIndex > 0
           ? 'Restored ${p.basename(normalizedPath)}, but the last heard position could not be recovered.'
           : 'Restored ${p.basename(normalizedPath)} near your last heard position.';
     }
     notifyListeners();
+  }
+
+  void _focusReaderSurfaceOnWordIndex(int wordIndex) {
+    final segment = _document.segmentForWordIndex(wordIndex);
+    final blockId = segment?.blockId;
+    _readingFocusState = _readingFocusState.copyWith(
+      playbackActive: false,
+      followMode: ReadingFocusFollowMode.following,
+      activeDisplayBlockId: blockId,
+      recenterRequestTick: _readingFocusState.recenterRequestTick + 1,
+      clearActiveDisplayBlockId: blockId == null,
+    );
   }
 
   int? _recoverWordIndexFromResumeState(ReaderResumeState resumeState) {
@@ -1314,11 +1729,12 @@ class ReaderController extends ChangeNotifier {
         if (segment.normalizedText.trim() != anchorText) {
           continue;
         }
-        final segmentStartWordIndex = _document.startWordIndexForSegment(segment);
-        return (segmentStartWordIndex + resumeState.wordIndexWithinSegment).clamp(
-          0,
-          math.max(_document.wordCount - 1, 0),
-        ).toInt();
+        final segmentStartWordIndex = _document.startWordIndexForSegment(
+          segment,
+        );
+        return (segmentStartWordIndex + resumeState.wordIndexWithinSegment)
+            .clamp(0, math.max(_document.wordCount - 1, 0))
+            .toInt();
       }
     }
 
@@ -1337,12 +1753,117 @@ class ReaderController extends ChangeNotifier {
     }
 
     final normalizedPath = p.normalize(sourcePath.trim());
-    _lastOpenedDocumentPath = normalizedPath;
     final parent = p.dirname(normalizedPath);
+    await _rememberOpenedDirectoryAccess(parent);
+
+    final previousPath = _lastOpenedDocumentPath;
+    final previousToken = _lastOpenedDocumentAccessToken;
+    _lastOpenedDocumentPath = normalizedPath;
+    try {
+      final restoreToken = await _documentAccessService
+          .createPersistentRestoreToken(normalizedPath);
+      if (restoreToken != null && restoreToken.trim().isNotEmpty) {
+        _lastOpenedDocumentAccessToken = restoreToken;
+        _logRestoreDiagnostic(
+          'Persisted restore access for the opened document.',
+          context: <String, Object?>{'path': normalizedPath},
+        );
+      } else if (previousPath != normalizedPath) {
+        _lastOpenedDocumentAccessToken = null;
+        _logRestoreDiagnostic(
+          'Opened document path was remembered without a restore token.',
+          context: <String, Object?>{'path': normalizedPath},
+        );
+      } else {
+        _lastOpenedDocumentAccessToken = previousToken;
+        _logRestoreDiagnostic(
+          'Retained the previous restore token for the remembered document.',
+          context: <String, Object?>{'path': normalizedPath},
+        );
+      }
+    } catch (error) {
+      _lastOpenedDocumentAccessToken = previousPath == normalizedPath
+          ? previousToken
+          : null;
+      _logRestoreDiagnostic(
+        'Could not persist startup-restore access for the opened document.',
+        context: <String, Object?>{'path': normalizedPath},
+        error: error,
+      );
+    }
     if (parent.isNotEmpty && parent != '.') {
       _lastOpenedDirectoryPath = parent;
     }
     await _persistPreferences();
+  }
+
+  Future<void> _rememberOpenedDirectoryAccess(String directoryPath) async {
+    final normalizedDirectoryPath = p.normalize(directoryPath.trim());
+    if (normalizedDirectoryPath.isEmpty || normalizedDirectoryPath == '.') {
+      return;
+    }
+
+    final previousDirectoryPath = _lastOpenedDirectoryPath;
+    final previousDirectoryToken = _lastOpenedDirectoryAccessToken;
+    _lastOpenedDirectoryPath = normalizedDirectoryPath;
+
+    if (previousDirectoryPath == normalizedDirectoryPath &&
+        previousDirectoryToken != null &&
+        previousDirectoryToken.trim().isNotEmpty) {
+      return;
+    }
+
+    DocumentAccessLease? lease;
+    try {
+      final restoreToken = await _documentAccessService
+          .createPersistentRestoreToken(normalizedDirectoryPath);
+      if (restoreToken != null && restoreToken.trim().isNotEmpty) {
+        _lastOpenedDirectoryAccessToken = restoreToken;
+        _logRestoreDiagnostic(
+          'Persisted directory access for the opened document folder without prompting.',
+          context: <String, Object?>{'directoryPath': normalizedDirectoryPath},
+        );
+        await _persistPreferences();
+        return;
+      }
+
+      lease = await _documentAccessService.requestPersistentDirectoryAccess(
+        normalizedDirectoryPath,
+      );
+      if (lease != null) {
+        _lastOpenedDirectoryPath = p.normalize(lease.path.trim());
+        _lastOpenedDirectoryAccessToken =
+            lease.refreshedToken ?? previousDirectoryToken;
+        _logRestoreDiagnostic(
+          'Persisted directory access for the opened document folder.',
+          context: <String, Object?>{'directoryPath': _lastOpenedDirectoryPath},
+        );
+      } else if (previousDirectoryPath == normalizedDirectoryPath) {
+        _lastOpenedDirectoryAccessToken = previousDirectoryToken;
+        _logRestoreDiagnostic(
+          'Directory access prompt was dismissed; retaining the previous directory token.',
+          context: <String, Object?>{'directoryPath': normalizedDirectoryPath},
+        );
+      } else {
+        _lastOpenedDirectoryAccessToken = null;
+        _logRestoreDiagnostic(
+          'Directory access was not granted for the newly opened document folder.',
+          context: <String, Object?>{'directoryPath': normalizedDirectoryPath},
+        );
+      }
+    } catch (error) {
+      _lastOpenedDirectoryAccessToken = previousDirectoryPath ==
+              normalizedDirectoryPath
+          ? previousDirectoryToken
+          : null;
+      _logRestoreDiagnostic(
+        'Could not persist directory access for the opened document folder.',
+        context: <String, Object?>{'directoryPath': normalizedDirectoryPath},
+        error: error,
+      );
+    } finally {
+      await lease?.close();
+    }
   }
 
   Future<void> _startLiveReadWatch(String normalizedPath) async {
@@ -1399,9 +1920,14 @@ class ReaderController extends ChangeNotifier {
             : 'Refreshing live cast and dialogue routing...',
         progress: 0.35,
       );
+      final liveReadBytes = await _readBytesWithAccessRecovery(
+        sourceLabel: 'live read file',
+        sourcePath: sourcePath,
+        readBytes: file.readAsBytes,
+      );
       final imported = await _importer.importBytes(
         fileName: p.basename(sourcePath),
-        bytes: await file.readAsBytes(),
+        bytes: liveReadBytes,
       );
       await _setDocumentLoadStage(
         'Finalizing narrator and character routing...',
@@ -1417,7 +1943,7 @@ class ReaderController extends ChangeNotifier {
       if (!initialLoad) {
         _restoreRememberedReadingPositionIfPossible(
           sourcePath,
-          updateStatus: false,
+          surfaceSuccessMessage: false,
         );
       }
       if (shouldResumeAfterRefresh) {
@@ -1436,9 +1962,86 @@ class ReaderController extends ChangeNotifier {
     }
   }
 
+  Future<Uint8List> _readBytesWithAccessRecovery({
+    required String sourceLabel,
+    required String? sourcePath,
+    required Future<Uint8List> Function() readBytes,
+  }) async {
+    final normalizedPath = (sourcePath == null || sourcePath.trim().isEmpty)
+        ? null
+        : p.normalize(sourcePath.trim());
+
+    try {
+      return await readBytes();
+    } catch (error) {
+      if (!_looksLikePermissionIssue(error) || normalizedPath == null) {
+        rethrow;
+      }
+
+      final lease = await _requestDirectoryAccessAfterReadFailure(
+        sourceLabel: sourceLabel,
+        sourcePath: normalizedPath,
+        initialError: error,
+      );
+      if (lease == null) {
+        rethrow;
+      }
+
+      try {
+        return await readBytes();
+      } finally {
+        await lease.close();
+      }
+    }
+  }
+
+  Future<DocumentAccessLease?> _requestDirectoryAccessAfterReadFailure({
+    required String sourceLabel,
+    required String sourcePath,
+    required Object initialError,
+  }) async {
+    final directoryPath = p.normalize(p.dirname(sourcePath));
+    if (directoryPath.isEmpty || directoryPath == '.') {
+      return null;
+    }
+
+    _logDiagnostic(
+      '[access-recovery] Read failed; requesting directory access and retrying. | sourceLabel=$sourceLabel, sourcePath=$sourcePath, directoryPath=$directoryPath',
+      error: initialError,
+    );
+
+    try {
+      final lease = await _documentAccessService.requestPersistentDirectoryAccess(
+        directoryPath,
+      );
+      if (lease == null) {
+        _logDiagnostic(
+          '[access-recovery] Directory access prompt was dismissed. | sourcePath=$sourcePath, directoryPath=$directoryPath',
+        );
+        return null;
+      }
+
+      _lastOpenedDirectoryPath = p.normalize(lease.path.trim());
+      _lastOpenedDirectoryAccessToken =
+          lease.refreshedToken ?? _lastOpenedDirectoryAccessToken;
+      await _persistPreferences();
+      _logDiagnostic(
+        '[access-recovery] Directory access granted; retrying read. | sourcePath=$sourcePath, directoryPath=$_lastOpenedDirectoryPath',
+      );
+      return lease;
+    } catch (error) {
+      _logDiagnostic(
+        '[access-recovery] Directory access request failed. | sourcePath=$sourcePath, directoryPath=$directoryPath',
+        error: error,
+      );
+      return null;
+    }
+  }
+
   Future<void> _runImportOperation(
     Future<void> Function() operation, {
     String? errorSourceLabel,
+    bool surfaceErrors = true,
   }) async {
     _isImporting = true;
     _statusMessage = null;
@@ -1449,10 +2052,15 @@ class ReaderController extends ChangeNotifier {
     try {
       await operation();
     } catch (error) {
-      _statusMessage = errorSourceLabel == null
+      final message = errorSourceLabel == null
           ? '$error'
           : _describeImportError(sourceLabel: errorSourceLabel, error: error);
-      notifyListeners();
+      if (surfaceErrors) {
+        _statusMessage = message;
+        notifyListeners();
+      } else {
+        _logDiagnostic(message, error: error);
+      }
     } finally {
       _isImporting = false;
       _clearDocumentLoadStage();
@@ -1470,6 +2078,24 @@ class ReaderController extends ChangeNotifier {
   void _clearDocumentLoadStage() {
     _documentLoadStageLabel = null;
     _documentLoadStageProgress = null;
+  }
+
+  void _logDiagnostic(String message, {Object? error}) {
+    developer.log(message, name: 'read_aloud.reader', error: error);
+  }
+
+  void _logRestoreDiagnostic(
+    String message, {
+    Map<String, Object?> context = const <String, Object?>{},
+    Object? error,
+  }) {
+    final details = context.entries
+        .map((entry) => '${entry.key}=${entry.value}')
+        .join(', ');
+    final formattedMessage = details.isEmpty
+        ? '[startup-restore] $message'
+        : '[startup-restore] $message | $details';
+    _logDiagnostic(formattedMessage, error: error);
   }
 
   String? _sectionModeForCurrentPosition() {
@@ -1720,9 +2346,37 @@ class ReaderController extends ChangeNotifier {
         availableVoices: _voices,
         fallbackVoiceId: preferredNarratorVoiceId,
         preferredNarratorVoiceId: preferredNarratorVoiceId,
+        storedAssignments: _currentStoredCastVoiceAssignments(),
         userOverrides: _castVoiceOverrides,
       ),
     );
+  }
+
+  Map<String, String> _currentStoredCastVoiceAssignments() {
+    return Map<String, String>.unmodifiable(
+      _storedDocumentCastVoiceAssignments[_document.displayDocument.documentId] ??
+          const <String, String>{},
+    );
+  }
+
+  void _storeCastVoiceAssignment(String castId, String voiceId) {
+    final documentId = _document.displayDocument.documentId;
+    final assignments =
+        _storedDocumentCastVoiceAssignments[documentId] ?? <String, String>{};
+    assignments[castId] = voiceId;
+    _storedDocumentCastVoiceAssignments[documentId] = assignments;
+  }
+
+  void _clearStoredCastVoiceAssignment(String castId) {
+    final documentId = _document.displayDocument.documentId;
+    final assignments = _storedDocumentCastVoiceAssignments[documentId];
+    if (assignments == null) {
+      return;
+    }
+    assignments.remove(castId);
+    if (assignments.isEmpty) {
+      _storedDocumentCastVoiceAssignments.remove(documentId);
+    }
   }
 
   void _recordFirstAudioLatency() {

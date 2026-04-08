@@ -7,6 +7,7 @@ import '../models/display_document.dart';
 import '../models/reader_document.dart';
 import '../models/spoken_selection.dart';
 import '../services/display_document_html_renderer.dart';
+import '../theme/read_aloud_theme.dart';
 
 class DocumentSurface extends StatefulWidget {
   const DocumentSurface({
@@ -98,27 +99,10 @@ class _DocumentSurfaceState extends State<DocumentSurface> {
 
     final baseSize = 18.0 * widget.fontScale;
     final theme = Theme.of(context);
-    final isDark = theme.brightness == Brightness.dark;
+    final tokens = readAloudThemeTokens(context);
+    final resolvedFontFamily = resolveReaderFontFamily(widget.fontFamily);
     final bodyTextColor = theme.colorScheme.onSurface;
-    final headingTextColor = isDark
-        ? const Color(0xFFF4F7FB)
-        : const Color(0xFF16202B);
-    final activeBlockColor = isDark
-        ? const Color(0x142F3A4A)
-        : const Color(0x1AFFBE0B);
-    final spokenWordBackground = isDark
-        ? const Color(0xFFF4C95D)
-        : const Color(0xFFF9D67A);
-    final spokenWordTextColor = const Color(0xFF111827);
-    final spokenSegmentBackground = isDark
-        ? const Color(0x38F4C95D)
-        : const Color(0x55FFB703);
-    final spokenBlockBackground = isDark
-        ? const Color(0x202F3A4A)
-        : const Color(0x24FFB703);
-    final spokenBlockBorder = isDark
-        ? const Color(0xCCF4C95D)
-        : const Color(0xD9F59E0B);
+    final headingTextColor = theme.colorScheme.onSurface;
     final renderedHtml = renderDisplayDocumentToHtml(
       widget.document.displayDocument,
       spokenSelection: widget.spokenSelection,
@@ -183,7 +167,7 @@ class _DocumentSurfaceState extends State<DocumentSurface> {
                   margin: Margins.zero,
                   padding: HtmlPaddings.zero,
                   backgroundColor: Colors.transparent,
-                  fontFamily: widget.fontFamily,
+                  fontFamily: resolvedFontFamily,
                   color: bodyTextColor,
                 ),
                 'body': Style(
@@ -191,7 +175,7 @@ class _DocumentSurfaceState extends State<DocumentSurface> {
                   padding: HtmlPaddings.zero,
                   lineHeight: LineHeight.number(1.55),
                   fontSize: FontSize(baseSize),
-                  fontFamily: widget.fontFamily,
+                  fontFamily: resolvedFontFamily,
                   color: bodyTextColor,
                 ),
                 'article': Style(
@@ -226,32 +210,32 @@ class _DocumentSurfaceState extends State<DocumentSurface> {
                 '.page-break': Style(
                   border: Border(
                     top: BorderSide(
-                      color: const Color(0x22000000),
+                      color: tokens.border.withValues(alpha: 0.45),
                       width: 1,
                     ),
                   ),
                   margin: Margins.symmetric(vertical: 18),
                 ),
                 '.active-reading-block': Style(
-                  backgroundColor: activeBlockColor,
+                  backgroundColor: tokens.activeReadingBlock,
                   color: bodyTextColor,
                 ),
                 '.spoken-word': Style(
-                  backgroundColor: spokenWordBackground,
+                  backgroundColor: tokens.spokenWordBackground,
                   fontWeight: FontWeight.w700,
-                  color: spokenWordTextColor,
+                  color: tokens.spokenWordText,
                 ),
                 '.spoken-segment': Style(
-                  backgroundColor: spokenSegmentBackground,
+                  backgroundColor: tokens.spokenSegmentBackground,
                   fontWeight: FontWeight.w600,
                   color: bodyTextColor,
                 ),
                 '.spoken-block': Style(
-                  backgroundColor: spokenBlockBackground,
+                  backgroundColor: tokens.spokenBlockBackground,
                   color: bodyTextColor,
                   border: Border(
                     left: BorderSide(
-                      color: spokenBlockBorder,
+                      color: tokens.spokenBlockBorder,
                       width: 3,
                     ),
                   ),
@@ -355,18 +339,19 @@ class _EmbeddedContextCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final tokens = readAloudThemeTokens(context);
     return Container(
       margin: const EdgeInsets.symmetric(vertical: 12),
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: const Color(0xFFF4F6F8),
+        color: tokens.embeddedContextSurface,
         borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: const Color(0x1F000000)),
+        border: Border.all(color: tokens.embeddedContextBorder),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(icon),
+          Icon(icon, color: Theme.of(context).colorScheme.primary),
           const SizedBox(width: 12),
           Expanded(
             child: Column(

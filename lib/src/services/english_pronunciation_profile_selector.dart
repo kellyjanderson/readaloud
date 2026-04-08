@@ -72,7 +72,15 @@ String? _exactVoiceMappedProfileId({
     };
   }
   return switch (voiceId) {
-    'af_bella' || 'af_heart' || 'af_nicole' || 'am_michael' => 'en-us-core',
+    'af_bella' ||
+    'af_heart' ||
+    'af_nicole' ||
+    'af_aoede' ||
+    'af_kore' ||
+    'af_sarah' ||
+    'am_fenrir' ||
+    'am_michael' ||
+    'am_puck' => 'en-us-core',
     'bf_emma' || 'bm_fable' => 'en-gb-core',
     _ => null,
   };

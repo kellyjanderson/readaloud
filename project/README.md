@@ -22,8 +22,12 @@ The documentation is organized around a product definition plus nine supporting 
 
 ### UI Definitions
 
+- [Brand Guide](ui/brand-guide.md)
+- [Design Guide](ui/design-guide.md)
+- [Component System](ui/component-system.md)
 - [UI Definitions Index](ui/README.md)
 - [UI System Overview](ui/ui-system-overview.md)
+- [Platform Navigation And Menu Segmentation](ui/platform-navigation-and-menu-segmentation.md)
 - [Primary Surface and Complexity Layering](ui/primary-surface-and-complexity-layering.md)
 - [Control State Semantics](ui/control-state-semantics.md)
 - [Voice Library and Cast Management](ui/voice-library-and-cast-management.md)

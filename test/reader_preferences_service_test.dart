@@ -25,9 +25,12 @@ void main() {
       );
       expect(preferences.selectedVoiceId, isNull);
       expect(preferences.voiceSpeeds, isEmpty);
+      expect(preferences.storedDocumentCastVoiceAssignments, isEmpty);
       expect(preferences.resumeState, isNull);
       expect(preferences.lastOpenedDocumentPath, isNull);
+      expect(preferences.lastOpenedDocumentAccessToken, isNull);
       expect(preferences.lastOpenedDirectoryPath, isNull);
+      expect(preferences.lastOpenedDirectoryAccessToken, isNull);
     });
 
     test('persists last opened document and folder paths', () async {
@@ -40,6 +43,12 @@ void main() {
         fontScale: 1.2,
         appearanceMode: ReaderAppearanceMode.dark,
         multiVoiceEnabled: false,
+        storedDocumentCastVoiceAssignments: const <String, Map<String, String>>{
+          'doc_love': <String, String>{
+            'cast_narrator': 'af_heart',
+            'cast_character_jennifer': 'am_michael',
+          },
+        },
         resumeState: const ReaderResumeState(
           documentPath: '/tmp/books/love.txt',
           wordIndex: 42,
@@ -48,7 +57,9 @@ void main() {
           anchorWordText: 'sentence',
         ),
         lastOpenedDocumentPath: '/tmp/books/love.txt',
+        lastOpenedDocumentAccessToken: 'bookmark-token',
         lastOpenedDirectoryPath: '/tmp/books',
+        lastOpenedDirectoryAccessToken: 'folder-bookmark-token',
       );
 
       final preferences = await service.load();
@@ -58,6 +69,15 @@ void main() {
       expect(preferences.fontScale, 1.2);
       expect(preferences.appearanceMode, ReaderAppearanceMode.dark);
       expect(preferences.multiVoiceEnabled, isFalse);
+      expect(
+        preferences.storedDocumentCastVoiceAssignments,
+        const <String, Map<String, String>>{
+          'doc_love': <String, String>{
+            'cast_narrator': 'af_heart',
+            'cast_character_jennifer': 'am_michael',
+          },
+        },
+      );
       expect(preferences.resumeState, isNotNull);
       expect(preferences.resumeState!.documentPath, '/tmp/books/love.txt');
       expect(preferences.resumeState!.wordIndex, 42);
@@ -68,7 +88,12 @@ void main() {
       );
       expect(preferences.resumeState!.anchorWordText, 'sentence');
       expect(preferences.lastOpenedDocumentPath, '/tmp/books/love.txt');
+      expect(preferences.lastOpenedDocumentAccessToken, 'bookmark-token');
       expect(preferences.lastOpenedDirectoryPath, '/tmp/books');
+      expect(
+        preferences.lastOpenedDirectoryAccessToken,
+        'folder-bookmark-token',
+      );
     });
   });
 }

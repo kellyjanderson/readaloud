@@ -10,6 +10,15 @@ Examples include:
 - project-specific debugging workflows
 - project-specific release or QA procedures
 - project-specific document maintenance rules
+- project-specific UI and brand operating rules
+
+## Current Documents
+
+- [UI, Brand, and Component Rules](ui-brand-and-component-rules.md)
+
+Shared UI structural rules also apply from:
+
+- [`agents/ui-ux-invariants.md`](../../agents/ui-ux-invariants.md)
 
 ## Audio Change Verification Rule
 
@@ -109,6 +118,41 @@ Automated coverage expectations should be the heavier part of the document, with
 Feature implementation should use the paired test specification as the verification contract for that leaf.
 
 When progression is updated for a feature leaf, the paired test specification may also be added as its own checkbox so implementation completion and verification completion remain separately visible.
+
+## Implementation vs Verification Tracking Rule
+
+For this project, progression implementation checkboxes and test-specification checkboxes serve different purposes.
+
+The rule is:
+
+- mark the feature leaf complete when the implementation work for that leaf is done
+- keep the paired test specification open until the verification work is done
+
+Agents should not leave an implementation leaf unchecked just because manual testing or broader acceptance verification still remains.
+
+That remaining work belongs in the paired test-spec checkbox.
+
+## UI Guide Distillation Rule
+
+When broad UI-system documents change, agents must distill the implementation-relevant decisions into `project/agents/`.
+
+This rule applies at minimum to:
+
+- `project/ui/brand-guide.md`
+- `project/ui/design-guide.md`
+- `project/ui/component-system.md`
+
+The goal is that agents always have a project-local operational layer for:
+
+- brand voice
+- terminology
+- typography
+- color direction
+- workspace rules
+- component rules
+- desktop navigation expectations
+
+Do not leave major UI-system decisions only in broad guide prose.
 
 ## Relationship to `agents/`
 

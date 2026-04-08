@@ -2,8 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:read_aloud/src/models/cast_voice_assignment.dart';
 import 'package:read_aloud/src/models/character_cast_registry.dart';
+import 'package:read_aloud/src/models/voice_preview_state.dart';
 import 'package:read_aloud/src/models/voice_profile.dart';
 import 'package:read_aloud/src/services/tts_engine.dart';
+import 'package:read_aloud/src/theme/read_aloud_theme.dart';
 import 'package:read_aloud/src/widgets/voice_management_dialog.dart';
 
 void main() {
@@ -16,16 +18,19 @@ void main() {
     String? changedCastId;
     String? changedVoiceId;
     String? clearedCastId;
+    String? previewVoiceId;
 
     await tester.pumpWidget(
       MaterialApp(
         home: Scaffold(
           body: VoiceManagementDialog(
+            isCharacterModeEnabled: true,
             voiceLibrary: <VoiceLibraryEntry>[
               VoiceLibraryEntry(
                 voice: _voice(
                   id: 'af_bella',
                   label: 'Bella',
+                  gender: VoiceGender.female,
                   qualityGrade: 'A-',
                   traits: const <String>['warm'],
                   description: 'Balanced and clear.',
@@ -43,6 +48,7 @@ void main() {
               _voice(
                 id: 'af_bella',
                 label: 'Bella',
+                gender: VoiceGender.female,
                 qualityGrade: 'A-',
                 traits: const <String>['warm'],
                 description: 'Balanced and clear.',
@@ -70,9 +76,13 @@ void main() {
               ],
             ),
             selectedVoiceId: 'af_bella',
+            previewStateForVoice: (_) => VoicePreviewState.idle,
             onClose: () {},
             onSelectLibraryVoice: (_) {},
             onInstallVoice: (_) {},
+            onToggleVoicePreview: (voiceId) {
+              previewVoiceId = voiceId;
+            },
             onAssignCastVoice: (castId, voiceId) {
               changedCastId = castId;
               changedVoiceId = voiceId;
@@ -92,7 +102,14 @@ void main() {
     expect(find.text('Automatic'), findsOneWidget);
     expect(find.text('Overridden'), findsOneWidget);
     expect(find.text('Automatic voice: Bella (en-US)'), findsOneWidget);
+    expect(find.text('Female'), findsOneWidget);
+    expect(find.text('Balanced and clear.'), findsWidgets);
     expect(find.text('Use Automatic Assignment'), findsOneWidget);
+
+    await tester.tap(find.byTooltip('Preview voice').first);
+    await tester.pump();
+
+    expect(previewVoiceId, 'af_bella');
 
     await tester.tap(find.byType(DropdownButtonFormField<String>).at(1));
     await tester.pumpAndSettle();
@@ -117,6 +134,7 @@ void main() {
       MaterialApp(
         home: Scaffold(
           body: VoiceManagementDialog(
+            isCharacterModeEnabled: false,
             voiceLibrary: <VoiceLibraryEntry>[
               VoiceLibraryEntry(
                 voice: _voice(id: 'af_bella', label: 'Bella'),
@@ -141,9 +159,11 @@ void main() {
               ],
             ),
             selectedVoiceId: 'af_bella',
+            previewStateForVoice: (_) => VoicePreviewState.idle,
             onClose: () {},
             onSelectLibraryVoice: (_) {},
             onInstallVoice: (_) {},
+            onToggleVoicePreview: (_) {},
             onAssignCastVoice: (_, _) {},
             onClearCastVoiceOverride: (_) {},
           ),
@@ -177,6 +197,7 @@ void main() {
         themeMode: ThemeMode.dark,
         home: Scaffold(
           body: VoiceManagementDialog(
+            isCharacterModeEnabled: false,
             voiceLibrary: <VoiceLibraryEntry>[
               VoiceLibraryEntry(
                 voice: _voice(id: 'af_bella', label: 'Bella'),
@@ -201,9 +222,11 @@ void main() {
               ],
             ),
             selectedVoiceId: 'af_bella',
+            previewStateForVoice: (_) => VoicePreviewState.idle,
             onClose: () {},
             onSelectLibraryVoice: (_) {},
             onInstallVoice: (_) {},
+            onToggleVoicePreview: (_) {},
             onAssignCastVoice: (_, _) {},
             onClearCastVoiceOverride: (_) {},
           ),
@@ -215,13 +238,94 @@ void main() {
       find.byKey(const Key('voice-assignment-card-Narrator')),
     );
     final cardDecoration = card.decoration as BoxDecoration;
-    expect(cardDecoration.color, darkTheme.colorScheme.surfaceContainerHighest);
+    expect(cardDecoration.color, ReadAloudThemeTokens.dark.elevatedSurface);
 
     final narratorField = tester.widget<DropdownButtonFormField<String>>(
       find.byType(DropdownButtonFormField<String>).first,
     );
-    expect(narratorField.decoration.fillColor, darkTheme.colorScheme.surface);
+    expect(narratorField.decoration.fillColor, isNull);
   });
+
+  testWidgets(
+    'assigns an installed library voice directly to a character in character mode',
+    (WidgetTester tester) async {
+      String? assignedCastId;
+      String? assignedVoiceId;
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: VoiceManagementDialog(
+              isCharacterModeEnabled: true,
+              voiceLibrary: <VoiceLibraryEntry>[
+                VoiceLibraryEntry(
+                  voice: _voice(id: 'am_michael', label: 'Michael'),
+                  isBundled: false,
+                  isInstalled: true,
+                ),
+              ],
+              availableVoices: <VoiceProfile>[
+                _voice(id: 'af_bella', label: 'Bella'),
+                _voice(id: 'am_michael', label: 'Michael'),
+              ],
+              characterCastRegistry: _richRegistry(),
+              castVoiceAssignments: CastVoiceAssignmentSet(
+                documentId: 'doc_1',
+                assignmentVersion: 'v1',
+                assignments: <CastVoiceAssignment>[
+                  CastVoiceAssignment(
+                    castId: 'cast_narrator',
+                    effectiveVoiceId: 'af_bella',
+                    decisionKind: VoiceAssignmentDecisionKind.automatic,
+                    automaticVoiceId: 'af_bella',
+                  ),
+                ],
+              ),
+              selectedVoiceId: 'af_bella',
+              previewStateForVoice: (_) => VoicePreviewState.idle,
+              onClose: () {},
+              onSelectLibraryVoice: (_) {},
+              onInstallVoice: (_) {},
+              onToggleVoicePreview: (_) {},
+              onAssignCastVoice: (castId, voiceId) {
+                assignedCastId = castId;
+                assignedVoiceId = voiceId;
+              },
+              onClearCastVoiceOverride: (_) {},
+            ),
+          ),
+        ),
+      );
+
+      expect(find.text('Assign', skipOffstage: false), findsOneWidget);
+      expect(
+        find.byType(DropdownButtonFormField<String>, skipOffstage: false),
+        findsNWidgets(3),
+      );
+      expect(find.text('Use', skipOffstage: false), findsNothing);
+      expect(
+        find.byKey(const Key('voice-library-assign-button-am_michael')),
+        findsNothing,
+      );
+
+      await tester.scrollUntilVisible(
+        find.text('Assign', skipOffstage: false),
+        240,
+        scrollable: find.byType(Scrollable).first,
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(
+        find.byType(DropdownButtonFormField<String>, skipOffstage: false).last,
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Jennifer').last);
+      await tester.pumpAndSettle();
+
+      expect(assignedCastId, 'cast_character_jennifer');
+      expect(assignedVoiceId, 'am_michael');
+    },
+  );
 }
 
 CharacterCastRegistry _richRegistry() {
@@ -266,6 +370,7 @@ CharacterCastRegistry _narratorOnlyRegistry() {
 VoiceProfile _voice({
   required String id,
   required String label,
+  VoiceGender? gender,
   String? qualityGrade,
   List<String> traits = const <String>[],
   String? description,
@@ -275,6 +380,7 @@ VoiceProfile _voice({
     label: label,
     locale: 'en-US',
     rawValue: <String, dynamic>{},
+    gender: gender,
     qualityGrade: qualityGrade,
     traits: traits,
     description: description,

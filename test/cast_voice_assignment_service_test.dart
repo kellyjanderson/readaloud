@@ -154,7 +154,7 @@ void main() {
     });
 
     test(
-      'prefers narrator-contrasting character voices when multiple plausible voices exist',
+      'prefers US-English character voices over other English regional voices when plausible options exist',
       () {
         final assignments = service.resolve(
           CastVoiceAssignmentInput(
@@ -193,7 +193,7 @@ void main() {
 
         expect(
           assignments.forCastId('cast_character_jennifer')?.effectiveVoiceId,
-          'bf_emma',
+          'af_heart',
         );
         expect(
           assignments.forCastId('cast_character_john')?.effectiveVoiceId,

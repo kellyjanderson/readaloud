@@ -12,10 +12,13 @@ class ReaderPreferences {
     required this.appearanceMode,
     required this.multiVoiceEnabled,
     required this.voiceSpeeds,
+    required this.storedDocumentCastVoiceAssignments,
     this.resumeState,
     this.selectedVoiceId,
     this.lastOpenedDocumentPath,
+    this.lastOpenedDocumentAccessToken,
     this.lastOpenedDirectoryPath,
+    this.lastOpenedDirectoryAccessToken,
   });
 
   static const String defaultFontFamily = 'serif';
@@ -28,9 +31,12 @@ class ReaderPreferences {
   final bool multiVoiceEnabled;
   final String? selectedVoiceId;
   final Map<String, double> voiceSpeeds;
+  final Map<String, Map<String, String>> storedDocumentCastVoiceAssignments;
   final ReaderResumeState? resumeState;
   final String? lastOpenedDocumentPath;
+  final String? lastOpenedDocumentAccessToken;
   final String? lastOpenedDirectoryPath;
+  final String? lastOpenedDirectoryAccessToken;
 }
 
 class ReaderPreferencesService {
@@ -41,10 +47,16 @@ class ReaderPreferencesService {
   static const String _appearanceModeKey = 'reader.appearanceMode';
   static const String _multiVoiceEnabledKey = 'reader.multiVoiceEnabled';
   static const String _resumeStateKey = 'reader.resumeState';
+  static const String _storedDocumentCastVoiceAssignmentsKey =
+      'reader.storedDocumentCastVoiceAssignments';
   static const String _lastOpenedDocumentPathKey =
       'reader.lastOpenedDocumentPath';
+  static const String _lastOpenedDocumentAccessTokenKey =
+      'reader.lastOpenedDocumentAccessToken';
   static const String _lastOpenedDirectoryPathKey =
       'reader.lastOpenedDirectoryPath';
+  static const String _lastOpenedDirectoryAccessTokenKey =
+      'reader.lastOpenedDirectoryAccessToken';
 
   Future<ReaderPreferences> load() async {
     final preferences = await SharedPreferences.getInstance();
@@ -63,10 +75,20 @@ class ReaderPreferencesService {
       multiVoiceEnabled:
           preferences.getBool(_multiVoiceEnabledKey) ??
           ReaderPreferences.defaultMultiVoiceEnabled,
+      storedDocumentCastVoiceAssignments:
+          _decodeStoredDocumentCastVoiceAssignments(
+            preferences.getString(_storedDocumentCastVoiceAssignmentsKey),
+          ),
       resumeState: _decodeResumeState(preferences.getString(_resumeStateKey)),
       lastOpenedDocumentPath: preferences.getString(_lastOpenedDocumentPathKey),
+      lastOpenedDocumentAccessToken: preferences.getString(
+        _lastOpenedDocumentAccessTokenKey,
+      ),
       lastOpenedDirectoryPath: preferences.getString(
         _lastOpenedDirectoryPathKey,
+      ),
+      lastOpenedDirectoryAccessToken: preferences.getString(
+        _lastOpenedDirectoryAccessTokenKey,
       ),
     );
   }
@@ -77,10 +99,13 @@ class ReaderPreferencesService {
     required ReaderAppearanceMode appearanceMode,
     required bool multiVoiceEnabled,
     required Map<String, double> voiceSpeeds,
+    required Map<String, Map<String, String>> storedDocumentCastVoiceAssignments,
     ReaderResumeState? resumeState,
     String? selectedVoiceId,
     String? lastOpenedDocumentPath,
+    String? lastOpenedDocumentAccessToken,
     String? lastOpenedDirectoryPath,
+    String? lastOpenedDirectoryAccessToken,
   }) async {
     final preferences = await SharedPreferences.getInstance();
 
@@ -95,6 +120,10 @@ class ReaderPreferencesService {
     await preferences.setString(_appearanceModeKey, appearanceMode.storageValue);
     await preferences.setBool(_multiVoiceEnabledKey, multiVoiceEnabled);
     await preferences.setString(_voiceSpeedsKey, jsonEncode(voiceSpeeds));
+    await preferences.setString(
+      _storedDocumentCastVoiceAssignmentsKey,
+      jsonEncode(storedDocumentCastVoiceAssignments),
+    );
     if (resumeState == null) {
       await preferences.remove(_resumeStateKey);
     } else {
@@ -110,12 +139,32 @@ class ReaderPreferencesService {
       );
     }
 
+    if (lastOpenedDocumentAccessToken == null ||
+        lastOpenedDocumentAccessToken.isEmpty) {
+      await preferences.remove(_lastOpenedDocumentAccessTokenKey);
+    } else {
+      await preferences.setString(
+        _lastOpenedDocumentAccessTokenKey,
+        lastOpenedDocumentAccessToken,
+      );
+    }
+
     if (lastOpenedDirectoryPath == null || lastOpenedDirectoryPath.isEmpty) {
       await preferences.remove(_lastOpenedDirectoryPathKey);
     } else {
       await preferences.setString(
         _lastOpenedDirectoryPathKey,
         lastOpenedDirectoryPath,
+      );
+    }
+
+    if (lastOpenedDirectoryAccessToken == null ||
+        lastOpenedDirectoryAccessToken.isEmpty) {
+      await preferences.remove(_lastOpenedDirectoryAccessTokenKey);
+    } else {
+      await preferences.setString(
+        _lastOpenedDirectoryAccessTokenKey,
+        lastOpenedDirectoryAccessToken,
       );
     }
   }
@@ -154,6 +203,47 @@ class ReaderPreferencesService {
       return ReaderResumeState.fromJson(jsonDecode(rawValue));
     } catch (_) {
       return null;
+    }
+  }
+
+  Map<String, Map<String, String>> _decodeStoredDocumentCastVoiceAssignments(
+    String? rawValue,
+  ) {
+    if (rawValue == null || rawValue.isEmpty) {
+      return <String, Map<String, String>>{};
+    }
+
+    try {
+      final decoded = jsonDecode(rawValue);
+      if (decoded is! Map<String, dynamic>) {
+        return <String, Map<String, String>>{};
+      }
+
+      final result = <String, Map<String, String>>{};
+      for (final entry in decoded.entries) {
+        final documentId = entry.key.trim();
+        final castAssignments = entry.value;
+        if (documentId.isEmpty || castAssignments is! Map<String, dynamic>) {
+          continue;
+        }
+
+        final normalizedAssignments = <String, String>{};
+        for (final castEntry in castAssignments.entries) {
+          final castId = castEntry.key.trim();
+          final voiceId = (castEntry.value as String?)?.trim();
+          if (castId.isEmpty || voiceId == null || voiceId.isEmpty) {
+            continue;
+          }
+          normalizedAssignments[castId] = voiceId;
+        }
+
+        if (normalizedAssignments.isNotEmpty) {
+          result[documentId] = normalizedAssignments;
+        }
+      }
+      return result;
+    } catch (_) {
+      return <String, Map<String, String>>{};
     }
   }
 }

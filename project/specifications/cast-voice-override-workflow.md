@@ -40,6 +40,13 @@ The app must also allow the user to clear an override and return that role to au
 
 After a user changes an assignment, the next relevant playback for that role must use the overridden voice rather than the automatic choice.
 
+Explicit document-backed assignments must also be remembered for that document when the document is reopened later.
+
+The override workflow may be reached either from:
+
+- the narrator and character assignment rows
+- direct assignment controls in the voice library when character mode is active
+
 ## Constraints
 
 - override actions must operate on stable cast roles, not ephemeral utterances

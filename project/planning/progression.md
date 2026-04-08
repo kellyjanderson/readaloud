@@ -1,6 +1,6 @@
 # Progression
 
-Last updated: April 4, 2026
+Last updated: April 7, 2026
 Status: Active progression
 
 ## Purpose
@@ -113,6 +113,8 @@ Test specification checkboxes track verification work against the paired documen
 - [x] [Voice Metadata Model and Source Normalization](../specifications/voice-metadata-model-and-source-normalization.md)
 - [x] [Automatic Voice Casting and Override Resolution](../specifications/automatic-voice-casting-and-override-resolution.md)
 - [x] [Context-Aware Automatic Voice Casting](../specifications/context-aware-automatic-voice-casting.md)
+- [x] [US-English Starter Voice Set And Auto-Cast Preference](../specifications/us-english-starter-voice-set-and-auto-cast-preference.md)
+- [x] [Document-Specific Cast Voice Assignment Memory](../specifications/document-specific-cast-voice-assignment-memory.md)
 - [x] [Document-Load Voice Attribution Materialization](../specifications/document-load-voice-attribution-materialization.md)
 - [x] [Cast-Aware Speech Range Routing](../specifications/cast-aware-speech-range-routing.md)
 - [x] [Quoted Dialogue Voice Segmentation](../specifications/quoted-dialogue-voice-segmentation.md)
@@ -122,9 +124,11 @@ Test specification checkboxes track verification work against the paired documen
 
 #### Test Specifications
 
-- [ ] [Test Specification: Cast Voice Override Workflow](../test-specifications/cast-voice-override-workflow.md)
-- [ ] [Test Specification: Quoted Dialogue Voice Segmentation](../test-specifications/quoted-dialogue-voice-segmentation.md)
-- [ ] [Test Specification: Running-App Multi-Voice Playback Switching](../test-specifications/running-app-multi-voice-playback-switching.md)
+- [x] [Test Specification: Cast Voice Override Workflow](../test-specifications/cast-voice-override-workflow.md)
+- [x] [Test Specification: US-English Starter Voice Set And Auto-Cast Preference](../test-specifications/us-english-starter-voice-set-and-auto-cast-preference.md)
+- [x] [Test Specification: Document-Specific Cast Voice Assignment Memory](../test-specifications/document-specific-cast-voice-assignment-memory.md)
+- [x] [Test Specification: Quoted Dialogue Voice Segmentation](../test-specifications/quoted-dialogue-voice-segmentation.md)
+- [x] [Test Specification: Running-App Multi-Voice Playback Switching](../test-specifications/running-app-multi-voice-playback-switching.md)
 
 ### Speech Runtime Boundary
 
@@ -152,27 +156,62 @@ Test specification checkboxes track verification work against the paired documen
 - [x] [Boundary-Corrected Chunk Output and Reuse](../specifications/boundary-corrected-chunk-output-and-reuse.md)
 - [x] [Playback Coordination](../specifications/playback-coordination.md)
 - [x] [Playback Progress and Jump Mapping](../specifications/playback-progress-and-jump-mapping.md)
+- [x] [Document Replacement Playback Reset And Stale Event Rejection](../specifications/document-replacement-playback-reset-and-stale-event-rejection.md)
 - [x] [Spoken Text Selection and Display Mapping](../specifications/spoken-text-selection-and-display-mapping.md)
 - [x] [Reading Focus Follow Policy](../specifications/reading-focus-follow-policy.md)
 
 #### Test Specifications
 
-- [ ] [Test Specification: Playback Coordination](../test-specifications/playback-coordination.md)
-- [ ] [Test Specification: Playback Progress And Jump Mapping](../test-specifications/playback-progress-and-jump-mapping.md)
+- [x] [Test Specification: Playback Coordination](../test-specifications/playback-coordination.md)
+- [x] [Test Specification: Playback Progress And Jump Mapping](../test-specifications/playback-progress-and-jump-mapping.md)
+- [x] [Test Specification: Document Replacement Playback Reset And Stale Event Rejection](../test-specifications/document-replacement-playback-reset-and-stale-event-rejection.md)
+
+### App Shell And Platform Navigation UI
+
+- [x] [Desktop Native Menu And Mobile Overflow Navigation](../specifications/desktop-native-menu-and-mobile-overflow-navigation.md)
+- [x] [Mobile Overflow Menu Domain Grouping](../specifications/mobile-overflow-menu-domain-grouping.md)
+- [x] [Desktop Reader Title Chrome Minimization](../specifications/desktop-reader-title-chrome-minimization.md)
+- [x] [Reader-Only App Shell Until Authoring Exists](../specifications/studio-workspace-entry-and-reader-isolation.md)
+
+#### Test Specifications
+
+- [x] [Test Specification: Desktop Native Menu And Mobile Overflow Navigation](../test-specifications/desktop-native-menu-and-mobile-overflow-navigation.md)
+- [x] [Test Specification: Mobile Overflow Menu Domain Grouping](../test-specifications/mobile-overflow-menu-domain-grouping.md)
+- [x] [Test Specification: Desktop Reader Title Chrome Minimization](../test-specifications/desktop-reader-title-chrome-minimization.md)
+- [x] [Test Specification: Reader-Only App Shell Until Authoring Exists](../test-specifications/studio-workspace-entry-and-reader-isolation.md)
+
+### Visual Design System Adoption UI
+
+- [x] [App-Wide Semantic Theme Token Adoption](../specifications/app-wide-semantic-theme-token-adoption.md)
+- [x] [Editorial Typography Role Application](../specifications/editorial-typography-role-application.md)
+- [x] [Secondary Surface Component Family Consistency](../specifications/secondary-surface-component-family-consistency.md)
+- [x] [Reader Options Sectioned Information Hierarchy](../specifications/reader-options-sectioned-information-hierarchy.md)
+
+#### Test Specifications
+
+- [x] [Test Specification: App-Wide Semantic Theme Token Adoption](../test-specifications/app-wide-semantic-theme-token-adoption.md)
+- [x] [Test Specification: Editorial Typography Role Application](../test-specifications/editorial-typography-role-application.md)
+- [x] [Test Specification: Secondary Surface Component Family Consistency](../test-specifications/secondary-surface-component-family-consistency.md)
+- [x] [Test Specification: Reader Options Sectioned Information Hierarchy](../test-specifications/reader-options-sectioned-information-hierarchy.md)
 
 ### Reader Surface and Voice Management UI
 
+- [x] [Segmented Transport Capsule](../specifications/segmented-transport-capsule.md)
 - [x] [Primary Reader Control Set](../specifications/primary-reader-control-set.md)
 - [x] [Document Identity Outside Reading Surface](../specifications/document-identity-outside-reading-surface.md)
 - [x] [Integrated Secondary Voice Access](../specifications/integrated-secondary-voice-access.md)
 - [x] [Document-Load Cast Processing Overlay](../specifications/document-load-cast-processing-overlay.md)
 - [x] [Multi-Voice Mode Toggle And Cast Entrypoint](../specifications/multi-voice-mode-toggle-and-cast-entrypoint.md)
 - [x] [Feedback Surface Contrast Readability](../specifications/feedback-surface-contrast-readability.md)
+- [x] [Transient Feedback Toast Behavior](../specifications/transient-feedback-toast-behavior.md)
+- [x] [Compact Voice Domain Control And Word Count De-Emphasis](../specifications/compact-voice-domain-control-and-word-count-de-emphasis.md)
 - [x] [Reader Preferences Controls](../specifications/reader-preferences-controls.md)
 - [x] [Sleep Timer And Timing Surface](../specifications/sleep-timer-and-timing-surface.md)
 - [x] [Reader Diagnostics And Source Panels](../specifications/reader-diagnostics-and-source-panels.md)
-- [ ] [Voice Library Row and Information Affordance](../specifications/voice-library-row-and-information-affordance.md)
-- [ ] [Cast Management Dialog Structure](../specifications/cast-management-dialog-structure.md)
+- [x] [Voice Preview Button Behavior](../specifications/voice-preview-button-behavior.md)
+- [x] [Voice Library Row and Information Affordance](../specifications/voice-library-row-and-information-affordance.md)
+- [x] [Voice Library Direct Character Assignment](../specifications/voice-library-direct-character-assignment.md)
+- [x] [Cast Management Dialog Structure](../specifications/cast-management-dialog-structure.md)
 - [x] [Voice Management Dialog Contrast And Readability](../specifications/voice-management-dialog-contrast-and-readability.md)
 - [x] [Internal Document Serialization Format](../specifications/internal-document-serialization-format.md)
 - [x] [Appearance Mode Selection And System Following](../specifications/appearance-mode-selection-and-system-following.md)
@@ -182,36 +221,43 @@ Test specification checkboxes track verification work against the paired documen
 
 #### Test Specifications
 
-- [ ] [Test Specification: Primary Reader Control Set](../test-specifications/primary-reader-control-set.md)
-- [ ] [Test Specification: Document Identity Outside Reading Surface](../test-specifications/document-identity-outside-reading-surface.md)
-- [ ] [Test Specification: Integrated Secondary Voice Access](../test-specifications/integrated-secondary-voice-access.md)
-- [ ] [Test Specification: Document-Load Cast Processing Overlay](../test-specifications/document-load-cast-processing-overlay.md)
-- [ ] [Test Specification: Multi-Voice Mode Toggle And Cast Entrypoint](../test-specifications/multi-voice-mode-toggle-and-cast-entrypoint.md)
-- [ ] [Test Specification: Feedback Surface Contrast Readability](../test-specifications/feedback-surface-contrast-readability.md)
-- [ ] [Test Specification: Reader Preferences Controls](../test-specifications/reader-preferences-controls.md)
-- [ ] [Test Specification: Sleep Timer And Timing Surface](../test-specifications/sleep-timer-and-timing-surface.md)
-- [ ] [Test Specification: Reader Diagnostics And Source Panels](../test-specifications/reader-diagnostics-and-source-panels.md)
-- [ ] [Test Specification: Voice Library Row And Information Affordance](../test-specifications/voice-library-row-and-information-affordance.md)
-- [ ] [Test Specification: Cast Management Dialog Structure](../test-specifications/cast-management-dialog-structure.md)
-- [ ] [Test Specification: Voice Management Dialog Contrast And Readability](../test-specifications/voice-management-dialog-contrast-and-readability.md)
-- [ ] [Test Specification: Appearance Mode Selection And System Following](../test-specifications/appearance-mode-selection-and-system-following.md)
-- [ ] [Test Specification: Spoken Highlight Visual Presentation](../test-specifications/spoken-highlight-visual-presentation.md)
-- [ ] [Test Specification: Reading Surface Contrast And Highlight Legibility](../test-specifications/reading-surface-contrast-and-highlight-legibility.md)
-- [ ] [Test Specification: Follow-Along User Scroll Interaction](../test-specifications/follow-along-user-scroll-interaction.md)
+- [x] [Test Specification: Segmented Transport Capsule](../test-specifications/segmented-transport-capsule.md)
+- [x] [Test Specification: Primary Reader Control Set](../test-specifications/primary-reader-control-set.md)
+- [x] [Test Specification: Document Identity Outside Reading Surface](../test-specifications/document-identity-outside-reading-surface.md)
+- [x] [Test Specification: Integrated Secondary Voice Access](../test-specifications/integrated-secondary-voice-access.md)
+- [x] [Test Specification: Document-Load Cast Processing Overlay](../test-specifications/document-load-cast-processing-overlay.md)
+- [x] [Test Specification: Multi-Voice Mode Toggle And Cast Entrypoint](../test-specifications/multi-voice-mode-toggle-and-cast-entrypoint.md)
+- [x] [Test Specification: Feedback Surface Contrast Readability](../test-specifications/feedback-surface-contrast-readability.md)
+- [x] [Test Specification: Transient Feedback Toast Behavior](../test-specifications/transient-feedback-toast-behavior.md)
+- [x] [Test Specification: Compact Voice Domain Control And Word Count De-Emphasis](../test-specifications/compact-voice-domain-control-and-word-count-de-emphasis.md)
+- [x] [Test Specification: Reader Preferences Controls](../test-specifications/reader-preferences-controls.md)
+- [x] [Test Specification: Sleep Timer And Timing Surface](../test-specifications/sleep-timer-and-timing-surface.md)
+- [x] [Test Specification: Reader Diagnostics And Source Panels](../test-specifications/reader-diagnostics-and-source-panels.md)
+- [x] [Test Specification: Voice Preview Button Behavior](../test-specifications/voice-preview-button-behavior.md)
+- [x] [Test Specification: Voice Library Row And Information Affordance](../test-specifications/voice-library-row-and-information-affordance.md)
+- [x] [Test Specification: Voice Library Direct Character Assignment](../test-specifications/voice-library-direct-character-assignment.md)
+- [x] [Test Specification: Cast Management Dialog Structure](../test-specifications/cast-management-dialog-structure.md)
+- [x] [Test Specification: Voice Management Dialog Contrast And Readability](../test-specifications/voice-management-dialog-contrast-and-readability.md)
+- [x] [Test Specification: Appearance Mode Selection And System Following](../test-specifications/appearance-mode-selection-and-system-following.md)
+- [x] [Test Specification: Spoken Highlight Visual Presentation](../test-specifications/spoken-highlight-visual-presentation.md)
+- [x] [Test Specification: Reading Surface Contrast And Highlight Legibility](../test-specifications/reading-surface-contrast-and-highlight-legibility.md)
+- [x] [Test Specification: Follow-Along User Scroll Interaction](../test-specifications/follow-along-user-scroll-interaction.md)
 
 ### Reader Session and Live Input
 
 - [x] [File-Backed Document Restore And Directory Continuity](../specifications/file-backed-document-restore-and-directory-continuity.md)
+- [x] [Persistent Folder Access For Startup Restore](../specifications/persistent-file-access-for-startup-restore.md)
 - [x] [Remembered Reading Position And Startup Resume](../specifications/remembered-reading-position-and-startup-resume.md)
 - [x] [Watched-File Session Refresh](../specifications/watched-file-session-refresh.md)
 - [x] [Live Input Menu Placement And Playing-State Continuation](../specifications/live-input-menu-placement-and-playing-state-continuation.md)
 
 #### Test Specifications
 
-- [ ] [Test Specification: File-Backed Document Restore And Directory Continuity](../test-specifications/file-backed-document-restore-and-directory-continuity.md)
-- [ ] [Test Specification: Remembered Reading Position And Startup Resume](../test-specifications/remembered-reading-position-and-startup-resume.md)
-- [ ] [Test Specification: Watched-File Session Refresh](../test-specifications/watched-file-session-refresh.md)
-- [ ] [Test Specification: Live Input Menu Placement And Playing-State Continuation](../test-specifications/live-input-menu-placement-and-playing-state-continuation.md)
+- [x] [Test Specification: File-Backed Document Restore And Directory Continuity](../test-specifications/file-backed-document-restore-and-directory-continuity.md)
+- [x] [Test Specification: Persistent Folder Access For Startup Restore](../test-specifications/persistent-file-access-for-startup-restore.md)
+- [x] [Test Specification: Remembered Reading Position And Startup Resume](../test-specifications/remembered-reading-position-and-startup-resume.md)
+- [x] [Test Specification: Watched-File Session Refresh](../test-specifications/watched-file-session-refresh.md)
+- [x] [Test Specification: Live Input Menu Placement And Playing-State Continuation](../test-specifications/live-input-menu-placement-and-playing-state-continuation.md)
 
 ## Obligate Specifications
 

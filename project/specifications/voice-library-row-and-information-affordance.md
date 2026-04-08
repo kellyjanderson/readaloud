@@ -6,6 +6,10 @@ Status: final
 
 This specification defines the primary row presentation and information affordance for voices in the library surface.
 
+Issue anchor:
+
+- GitHub issue `#41`
+
 ## Backlink
 
 Parent specification:
@@ -57,11 +61,23 @@ The information affordance should reveal:
 
 If no description exists, the UI may show traits only or omit the affordance when there is nothing meaningful to reveal.
 
+Metadata positions within the primary row must remain spatially stable across rows even when some metadata is absent.
+
+That means missing quality or gender data should not cause adjacent controls like preview or the remaining metadata to slide horizontally into a different slot.
+
+The same stability rule also applies to the row's supporting information region.
+
+Missing description or support text should not cause the row height to collapse unpredictably or pull action controls into a noticeably different vertical relationship from one row to the next.
+
+If a short description is unavailable, the row should preserve that supporting slot with a stable fallback or equally stable reserved treatment rather than silently removing the region and changing the row structure.
+
 ## Constraints
 
 - the user should not need to open a details surface just to learn that one voice is materially higher quality than another
 - the user should not need to assign a voice just to hear what it sounds like
 - the row must remain usable when metadata is partial or absent
+- the row must preserve stable scan positions even when metadata is partial or absent
+- missing summary data must not cause the row height or supporting-text slot to jitter between rows
 
 ## Acceptance
 
@@ -70,4 +86,6 @@ If no description exists, the UI may show traits only or omit the affordance whe
 - each voice row includes a preview action
 - a short description is visible in the row when available
 - richer metadata can be inspected without cluttering the main row
+- quality, gender, preview, and primary action positions remain visually stable across rows even when metadata is missing
+- summary text or its reserved slot remains vertically stable across rows even when descriptions are absent
 - desktop and mobile interaction behavior are both defined

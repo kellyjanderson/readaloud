@@ -164,6 +164,9 @@ Sentence nine. Sentence ten. Sentence eleven. Sentence twelve.
         'Narration starts here. "Go now," Jennifer said. Narration ends here.',
       );
       final service = ChunkPlannerService();
+      final closingSegments = document.speechDocument.segments
+          .skip(2)
+          .toList(growable: false);
       final realization = const VoiceSessionRealizationService().realize(
         VoiceSessionRealizationInput(
           speechDocument: document.speechDocument,
@@ -220,11 +223,11 @@ Sentence nine. Sentence ten. Sentence eleven. Sentence twelve.
               ),
               CastAwareSpeechRange(
                 routeId: 'route_narration_close',
-                segmentIds: <String>[
-                  document.speechDocument.segments[2].segmentId,
-                ],
+                segmentIds: closingSegments
+                    .map((segment) => segment.segmentId)
+                    .toList(growable: false),
                 startSegmentId: document.speechDocument.segments[2].segmentId,
-                endSegmentId: document.speechDocument.segments[2].segmentId,
+                endSegmentId: closingSegments.last.segmentId,
                 startWordIndex:
                     document.speechDocument.segments[0].wordCount +
                     document.speechDocument.segments[1].wordCount,

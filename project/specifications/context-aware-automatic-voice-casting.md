@@ -31,7 +31,7 @@ For character roles, automatic casting should prefer voices using this order:
 
 1. installed voices that match the cast entry's extracted gender identity label when that label is explicit, strong, and usable for casting
 2. within that set, voices that remain audibly distinct from the narrator voice when possible
-3. remaining installed voices using stable quality and locale ordering
+3. remaining installed voices using stable quality ordering with a preference for US-English voices before other English regional voices when multiple plausible English voices exist
 4. narrator or default fallback when no distinct match is available
 
 When a cast entry has no usable explicit identity label, automatic casting may still prefer voices that preserve audible contrast from the narrator before falling back to arbitrary reuse.

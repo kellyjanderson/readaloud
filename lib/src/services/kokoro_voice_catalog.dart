@@ -1,15 +1,14 @@
 import '../models/voice_profile.dart';
 
 class KokoroVoiceCatalog {
-  static const String defaultVoiceId = 'af_bella';
+  static const String defaultVoiceId = 'af_heart';
 
   static const List<String> bundledVoiceIds = <String>[
-    'af_bella',
-    'af_nicole',
     'af_heart',
+    'af_bella',
     'am_michael',
-    'bf_emma',
-    'bm_fable',
+    'am_fenrir',
+    'am_puck',
   ];
 
   static const List<String> allVoiceIds = <String>[
@@ -197,12 +196,32 @@ class KokoroVoiceCatalog {
           gender: VoiceGender.female,
           qualityGrade: 'A-',
         ),
+        'af_aoede': _KokoroVoiceMetadata(
+          gender: VoiceGender.female,
+          qualityGrade: 'C+',
+        ),
         'af_nicole': _KokoroVoiceMetadata(
           gender: VoiceGender.female,
           qualityGrade: 'B-',
         ),
+        'af_kore': _KokoroVoiceMetadata(
+          gender: VoiceGender.female,
+          qualityGrade: 'C+',
+        ),
+        'af_sarah': _KokoroVoiceMetadata(
+          gender: VoiceGender.female,
+          qualityGrade: 'C+',
+        ),
+        'am_fenrir': _KokoroVoiceMetadata(
+          gender: VoiceGender.male,
+          qualityGrade: 'C+',
+        ),
         'am_michael': _KokoroVoiceMetadata(
           gender: VoiceGender.male,
+          qualityGrade: 'C+',
+        ),
+        'am_puck': _KokoroVoiceMetadata(
+          gender: VoiceGender.neutral,
           qualityGrade: 'C+',
         ),
         'bf_emma': _KokoroVoiceMetadata(

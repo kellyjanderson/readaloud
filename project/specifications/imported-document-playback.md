@@ -27,6 +27,7 @@ Detailed implementation specifications:
 - [Synthesis Boundary Policy](synthesis-boundary-policy.md)
 - [Playback Coordination](playback-coordination.md)
 - [Playback Progress and Jump Mapping](playback-progress-and-jump-mapping.md)
+- [Document Replacement Playback Reset And Stale Event Rejection](document-replacement-playback-reset-and-stale-event-rejection.md)
 - [Playback Quality Instrumentation](playback-quality-instrumentation.md)
 - [Reader Session Continuity and Live Input](reader-session-continuity-and-live-input.md)
 
@@ -60,6 +61,7 @@ This is a draft umbrella specification. Its child specifications are expected to
 - [Synthesis Boundary Policy](synthesis-boundary-policy.md)
 - [Playback Coordination](playback-coordination.md)
 - [Playback Progress and Jump Mapping](playback-progress-and-jump-mapping.md)
+- [Document Replacement Playback Reset And Stale Event Rejection](document-replacement-playback-reset-and-stale-event-rejection.md)
 - [Playback Quality Instrumentation](playback-quality-instrumentation.md)
 - [Reader Session Continuity and Live Input](reader-session-continuity-and-live-input.md)
 

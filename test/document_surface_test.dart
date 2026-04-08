@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:flutter_html/flutter_html.dart';
 import 'package:read_aloud/src/models/reader_document.dart';
+import 'package:read_aloud/src/theme/read_aloud_theme.dart';
 import 'package:read_aloud/src/widgets/document_surface.dart';
 
 void main() {
@@ -106,5 +108,28 @@ void main() {
     await tester.pumpAndSettle(const Duration(milliseconds: 500));
 
     expect(scrollController.offset, greaterThan(0));
+  });
+
+  testWidgets('reading content resolves the editorial serif role', (
+    WidgetTester tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SizedBox(
+            width: 420,
+            height: 240,
+            child: DocumentSurface(
+              document: ReaderDocument.sample(),
+              fontFamily: 'serif',
+              fontScale: 1.0,
+            ),
+          ),
+        ),
+      ),
+    );
+
+    final html = tester.widget<Html>(find.byType(Html));
+    expect(html.style['body']?.fontFamily, kReadingFontFamily);
   });
 }
