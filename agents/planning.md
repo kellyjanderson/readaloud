@@ -97,6 +97,17 @@ Planning documents should track completion directly.
 
 Checkboxes should be used to indicate whether a referenced specification has been implemented.
 
+For feature leaves, the implementation checkbox should be marked complete when the implementation work for that leaf is done.
+
+Paired test specification checkboxes exist to track the remaining verification work separately.
+
+That means agents should not leave a feature leaf unchecked merely because manual or broader acceptance verification is still pending.
+
+Instead:
+
+- check the feature leaf when implementation is complete
+- leave the paired test specification unchecked until verification is complete
+
 Because only final leaf specifications and paired feature test specifications belong in progression, only those items are ever marked complete there.
 
 ---

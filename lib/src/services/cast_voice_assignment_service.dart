@@ -181,7 +181,8 @@ class CastVoiceAssignmentService {
     required VoiceProfile? narratorVoice,
     required VoiceGender? preferredGender,
   }) {
-    var score = _qualityScore(voice.qualityGrade);
+    var score =
+        _qualityScore(voice.qualityGrade) + _usEnglishPreferenceBonus(voice);
 
     final gender = voice.gender;
     final preferredGenderIsConcrete =
@@ -209,6 +210,11 @@ class CastVoiceAssignmentService {
 
     if (voice.locale.isNotEmpty &&
         narratorVoice.locale.isNotEmpty &&
+        _regionalEnglishContrastSuppressed(
+          voice.locale,
+          narratorVoice.locale,
+        ) ==
+            false &&
         voice.locale != narratorVoice.locale) {
       score += 70;
     }
@@ -229,9 +235,11 @@ class CastVoiceAssignmentService {
   }
 
   int _compareVoices(VoiceProfile left, VoiceProfile right) {
-    final qualityComparison = _qualityScore(
-      right.qualityGrade,
-    ).compareTo(_qualityScore(left.qualityGrade));
+    final qualityComparison = (_qualityScore(right.qualityGrade) +
+            _usEnglishPreferenceBonus(right))
+        .compareTo(
+          _qualityScore(left.qualityGrade) + _usEnglishPreferenceBonus(left),
+        );
     if (qualityComparison != 0) {
       return qualityComparison;
     }
@@ -258,5 +266,34 @@ class CastVoiceAssignmentService {
       'D-' => 10,
       _ => 0,
     };
+  }
+
+  int _usEnglishPreferenceBonus(VoiceProfile voice) {
+    return _englishLocaleFamily(voice.locale) == 'en-us' ? 110 : 0;
+  }
+
+  bool _regionalEnglishContrastSuppressed(
+    String firstLocale,
+    String secondLocale,
+  ) {
+    final firstFamily = _englishLocaleFamily(firstLocale);
+    final secondFamily = _englishLocaleFamily(secondLocale);
+    return firstFamily != null &&
+        secondFamily != null &&
+        firstFamily != secondFamily;
+  }
+
+  String? _englishLocaleFamily(String locale) {
+    final normalized = locale.trim().toLowerCase().replaceAll('_', '-');
+    if (normalized.startsWith('en-us')) {
+      return 'en-us';
+    }
+    if (normalized.startsWith('en-gb')) {
+      return 'en-gb';
+    }
+    if (normalized.startsWith('en-au')) {
+      return 'en-au';
+    }
+    return null;
   }
 }

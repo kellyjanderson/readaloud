@@ -43,6 +43,7 @@ Refinement complete for the current planned branch.
 ## Child Specifications
 
 - [Voice Metadata Model and Source Normalization](voice-metadata-model-and-source-normalization.md)
+- [US-English Starter Voice Set And Auto-Cast Preference](us-english-starter-voice-set-and-auto-cast-preference.md)
 
 ## Acceptance
 

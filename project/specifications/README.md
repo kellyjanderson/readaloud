@@ -175,6 +175,10 @@ They are intentionally narrower than architecture documents. For any architectur
   Defines deterministic auto-casting plus user override precedence and fallback behavior.
 - [Context-Aware Automatic Voice Casting](context-aware-automatic-voice-casting.md)
   Defines higher-quality automatic casting that uses cast metadata and available voice metadata more intelligently.
+- [US-English Starter Voice Set And Auto-Cast Preference](us-english-starter-voice-set-and-auto-cast-preference.md)
+  Defines the bundled US-English starter voices and the regional preference used by automatic casting.
+- [Document-Specific Cast Voice Assignment Memory](document-specific-cast-voice-assignment-memory.md)
+  Defines how narrator and character voice choices are remembered and restored for one document.
 - [Cast Voice Override Workflow](cast-voice-override-workflow.md)
   Defines the user-visible narrator/character voice override workflow and its applied playback effect.
 - [Multi-Voice Playback Routing](multi-voice-playback-routing.md)
@@ -244,6 +248,8 @@ They are intentionally narrower than architecture documents. For any architectur
   Defines controller state, transport behavior, replay semantics, jump handling, and sleep fade behavior.
 - [Playback Progress and Jump Mapping](playback-progress-and-jump-mapping.md)
   Defines progress records, timing estimation, future highlighting payloads, and the 30-second jump algorithm.
+- [Document Replacement Playback Reset And Stale Event Rejection](document-replacement-playback-reset-and-stale-event-rejection.md)
+  Defines replacement safety and rejection of stale playback effects after the active document changes.
 - [Spoken Text Highlighting and Reading Focus](spoken-text-highlighting-and-reading-focus.md)
   Umbrella specification for spoken selection derivation, display mapping, and reading-focus follow behavior.
 - [Spoken Text Selection and Display Mapping](spoken-text-selection-and-display-mapping.md)
@@ -253,10 +259,38 @@ They are intentionally narrower than architecture documents. For any architectur
 - [Playback Quality Instrumentation](playback-quality-instrumentation.md)
   Defines the runtime metrics needed to evaluate smoothness, caching, and chunk-boundary quality.
 
+### App Shell And Platform Navigation UI
+
+- [App Shell And Platform Navigation UI](app-shell-and-platform-navigation-ui.md)
+  Umbrella specification for platform-specific app-shell command access and navigation structure.
+- [Desktop Native Menu And Mobile Overflow Navigation](desktop-native-menu-and-mobile-overflow-navigation.md)
+  Defines the platform split that removes the in-app overflow menu on desktop while preserving it on mobile.
+- [Mobile Overflow Menu Domain Grouping](mobile-overflow-menu-domain-grouping.md)
+  Defines lightweight domain grouping inside the mobile overflow menu.
+- [Desktop Reader Title Chrome Minimization](desktop-reader-title-chrome-minimization.md)
+  Defines the desktop-shell rule that avoids repeating app identity inside the in-app Reader title chrome.
+- [Reader-Only App Shell Until Authoring Exists](studio-workspace-entry-and-reader-isolation.md)
+  Keeps unimplemented authoring work out of the current shell so Reader remains the only exposed workspace.
+
+### Visual Design System Adoption UI
+
+- [Visual Design System Adoption UI](visual-design-system-adoption-ui.md)
+  Umbrella specification for the broader brand, design, and UX overhaul across current app surfaces.
+- [App-Wide Semantic Theme Token Adoption](app-wide-semantic-theme-token-adoption.md)
+  Defines one shared semantic token family across the running app surfaces.
+- [Editorial Typography Role Application](editorial-typography-role-application.md)
+  Defines role-based typography across UI chrome, reading content, and technical surfaces.
+- [Secondary Surface Component Family Consistency](secondary-surface-component-family-consistency.md)
+  Defines one shared visual family for current dialogs, sheets, cards, chips, and overlays.
+- [Reader Options Sectioned Information Hierarchy](reader-options-sectioned-information-hierarchy.md)
+  Defines the grouped hierarchy and section structure inside Reader Options.
+
 ### Reader Surface and Voice Management UI
 
 - [Primary Reader Surface UI](primary-reader-surface-ui.md)
   Umbrella specification for the simplified reading-first primary surface and integrated advanced voice access.
+- [Segmented Transport Capsule](segmented-transport-capsule.md)
+  Defines the unified three-segment transport object for back, play or pause or processing, and forward.
 - [Primary Reader Control Set](primary-reader-control-set.md)
   Defines which reading controls remain visibly dominant on the primary surface.
 - [Document Identity Outside Reading Surface](document-identity-outside-reading-surface.md)
@@ -269,6 +303,10 @@ They are intentionally narrower than architecture documents. For any architectur
   Defines the user control for multi-voice mode and the primary-surface cast-management entry behavior when that mode is active.
 - [Feedback Surface Contrast Readability](feedback-surface-contrast-readability.md)
   Defines the minimum readable contrast requirements for surfaced in-app feedback while broader feedback UX redesign remains pending.
+- [Transient Feedback Toast Behavior](transient-feedback-toast-behavior.md)
+  Defines the non-blocking toast feedback pattern and prohibits layout-shifting inline reader banners.
+- [Compact Voice Domain Control And Word Count De-Emphasis](compact-voice-domain-control-and-word-count-de-emphasis.md)
+  Defines a compact top-level `Character Voices` entry and removes whole-document word count from prominent top-level placement.
 - [Reader Options And Secondary Settings UI](reader-options-and-secondary-settings-ui.md)
   Umbrella specification for the Reader Options secondary settings and diagnostics surface.
 - [Reader Preferences Controls](reader-preferences-controls.md)
@@ -279,8 +317,12 @@ They are intentionally narrower than architecture documents. For any architectur
   Defines the Reader Options panels for TTS trace inspection and document-source metadata.
 - [Voice Library and Cast Management UI](voice-library-and-cast-management-ui.md)
   Umbrella specification for advanced voice-library and cast-management UI structure.
+- [Voice Preview Button Behavior](voice-preview-button-behavior.md)
+  Defines reusable voice-preview activation, state behavior, and one-preview-at-a-time rules.
 - [Voice Library Row and Information Affordance](voice-library-row-and-information-affordance.md)
   Defines the voice-library row hierarchy, direct quality surfacing, and info affordance behavior.
+- [Voice Library Direct Character Assignment](voice-library-direct-character-assignment.md)
+  Defines direct assignment from discovered library voices to chosen characters inside Voice Management.
 - [Cast Management Dialog Structure](cast-management-dialog-structure.md)
   Defines the narrator/character voice-management dialog structure and override-state presentation.
 - [Voice Management Dialog Contrast And Readability](voice-management-dialog-contrast-and-readability.md)
@@ -304,6 +346,8 @@ They are intentionally narrower than architecture documents. For any architectur
   Umbrella specification for remembered file-backed reader state, startup resume, and watched-file live input behavior.
 - [File-Backed Document Restore And Directory Continuity](file-backed-document-restore-and-directory-continuity.md)
   Defines remembering the last file-backed document, restoring it on startup, and preserving the last used directory.
+- [Persistent Folder Access For Startup Restore](persistent-file-access-for-startup-restore.md)
+  Defines persisted platform access data such as sandboxed macOS restore bookmarks for remembered documents.
 - [Remembered Reading Position And Startup Resume](remembered-reading-position-and-startup-resume.md)
   Defines restoring the user's last heard position when the remembered document is reopened.
 - [Watched-File Session Refresh](watched-file-session-refresh.md)

@@ -14,6 +14,9 @@ Start here before taking action.
 * **ui-definitions.md**
   Defines the interface-structure layer that captures durable visible behavior and interaction semantics.
 
+* **ui-ux-invariants.md**
+  Defines mandatory structural interface rules such as layout stability, spatial memory, state coverage, accessibility, and responsive clarity.
+
 * **release-definitions.md**
   Defines holistic version-level planning documents that connect release intent to UI, architecture, and specifications.
 
@@ -75,8 +78,9 @@ When beginning work:
 3. review `git-and-github.md` before implementation work
 4. review relevant release definitions
 5. review relevant UI definitions
-6. review relevant architecture
-7. follow the workflow defined in `workflow.md`
+6. review `ui-ux-invariants.md` for interface work
+7. review relevant architecture
+8. follow the workflow defined in `workflow.md`
 
 ---
 

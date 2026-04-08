@@ -16,6 +16,7 @@ Parent UI definition:
 
 This specification covers:
 
+- reusable voice preview behavior
 - voice library row presentation
 - information affordance behavior
 - cast management dialog structure
@@ -26,6 +27,7 @@ The parent UI branch now delegates detailed implementation to child specificatio
 
 In particular:
 
+- voice preview button behavior belongs to one leaf
 - voice library row presentation and information affordance belong to one leaf
 - cast management dialog structure belongs to its own leaf
 
@@ -47,6 +49,7 @@ Refinement complete for the current planned branch.
 
 ## Child Specifications
 
+- [Voice Preview Button Behavior](voice-preview-button-behavior.md)
 - [Voice Library Row and Information Affordance](voice-library-row-and-information-affordance.md)
 - [Cast Management Dialog Structure](cast-management-dialog-structure.md)
 - [Voice Management Dialog Contrast And Readability](voice-management-dialog-contrast-and-readability.md)

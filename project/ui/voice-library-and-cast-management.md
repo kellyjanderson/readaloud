@@ -123,6 +123,8 @@ When multi-voice mode is disabled, the app may continue to use the simpler singl
 
 When multi-voice mode is enabled, narrator choice remains first-class, but the user-facing management surface should center on cast assignments rather than pretending the whole document is driven by one voice.
 
+The library rows lower in the dialog should also support direct assignment to a chosen character so the user can discover voices and immediately assign them without scrolling back to the top review rows after each comparison.
+
 ## Override Semantics
 
 Changing a narrator or character voice in this dialog is a user override.

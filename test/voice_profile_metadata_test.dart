@@ -52,5 +52,45 @@ void main() {
       expect(profile.traits, isEmpty);
       expect(profile.description, isNull);
     });
+
+    test('bundled starter set is a curated US-English balance', () {
+      final bundledProfiles = KokoroVoiceCatalog.profilesForIds(
+        KokoroVoiceCatalog.bundledVoiceIds,
+      );
+
+      expect(KokoroVoiceCatalog.defaultVoiceId, 'af_heart');
+      expect(
+        KokoroVoiceCatalog.bundledVoiceIds,
+        <String>[
+          'af_heart',
+          'af_bella',
+          'am_michael',
+          'am_fenrir',
+          'am_puck',
+        ],
+      );
+      expect(
+        bundledProfiles.every((profile) => profile.locale == 'en-US'),
+        isTrue,
+      );
+      expect(
+        bundledProfiles.where((profile) => profile.gender == VoiceGender.female),
+        hasLength(2),
+      );
+      expect(
+        bundledProfiles.where((profile) => profile.gender == VoiceGender.male),
+        hasLength(2),
+      );
+      expect(
+        bundledProfiles.where((profile) => profile.gender == VoiceGender.neutral),
+        hasLength(1),
+      );
+      expect(
+        bundledProfiles.singleWhere(
+          (profile) => profile.id == 'am_puck',
+        ).qualityGrade,
+        'C+',
+      );
+    });
   });
 }

@@ -89,6 +89,21 @@ flutter:
     - assets/kokoro/model/
     - assets/kokoro/voices/
 
+  fonts:
+    - family: Source Sans 3
+      fonts:
+        - asset: 'assets/fonts/SourceSans3[wght].ttf'
+    - family: Source Serif 4
+      fonts:
+        - asset: 'assets/fonts/SourceSerif4[opsz,wght].ttf'
+    - family: IBM Plex Mono
+      fonts:
+        - asset: assets/fonts/IBMPlexMono-Regular.ttf
+        - asset: assets/fonts/IBMPlexMono-Medium.ttf
+          weight: 500
+        - asset: assets/fonts/IBMPlexMono-SemiBold.ttf
+          weight: 600
+
   # An image asset can refer to one or more resolution-specific "variants", see
   # https://flutter.dev/to/resolution-aware-images
 

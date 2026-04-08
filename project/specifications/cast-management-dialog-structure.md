@@ -6,6 +6,10 @@ Status: final
 
 This specification defines the structure of the advanced narrator/character voice-management dialog.
 
+Issue anchor:
+
+- GitHub issue `#44`
+
 ## Backlink
 
 Parent specification:
@@ -41,6 +45,8 @@ Each assignment row should show:
 - whether the assignment is automatic or user-overridden
 - metadata/info affordance for the selected voice
 
+When character mode is active, the voice-library rows lower in the same dialog should also support direct assignment to a chosen character so discovery and assignment do not require bouncing back to the top of the dialog after every voice comparison.
+
 Changing a narrator or character voice in this dialog creates a user override.
 
 That override state must remain visible in the UI.
@@ -52,6 +58,7 @@ If no detected cast exists, the dialog may reduce to narrator/default voice mana
 - cast management must remain a secondary surface, not a permanently expanded top-level panel
 - the UI must distinguish automatic and explicit user-selected assignment state
 - the user must be able to preview a voice without committing to it first
+- the dialog should support both review-oriented assignment rows and discovery-oriented library assignment without forcing unnecessary scrolling
 
 ## Acceptance
 

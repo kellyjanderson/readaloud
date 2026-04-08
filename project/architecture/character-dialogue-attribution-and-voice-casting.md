@@ -89,6 +89,14 @@ Responsibilities:
 - merge adjacent ranges when the resolved voice is identical
 - reuse the same routing behavior for playback, export, and headless synthesis
 
+### Mode Policy Layer
+
+Responsibilities:
+
+- allow the app to expose narrator-only or cast-aware UI modes without forking the underlying cast architecture
+- keep narrator, cast registry, attribution, and assignment structures materialized even when the surfaced UI is temporarily in a simpler narrator-first mode
+- allow unresolved or unassigned roles to fall back cleanly to narrator voice without inventing a separate internal pipeline
+
 ### Voice Metadata Catalog
 
 Responsibilities:
@@ -108,6 +116,7 @@ Responsibilities:
 - voice casting may use explicit app-owned voice gender metadata plus document-owned character identity extraction when that extraction is explicit, conservative, and separately traceable from pronoun evidence
 - user overrides apply after auto-casting and before runtime chunk routing
 - playback/export/headless generation consume document-owned attribution plus resolved voice assignments; they do not infer speakers themselves
+- narrator-only surfaced behavior should remain a mode or policy decision over the same underlying cast structures rather than a second architecture path
 
 The intended sequencing is:
 
@@ -197,6 +206,7 @@ Reason:
 - User overrides must win over auto-cast policy.
 - Voice routing must be explicit and inspectable in playback/export diagnostics.
 - Voice metadata must be modeled as optional app-owned fields rather than UI-private ad hoc parsing.
+- Simpler narrator-only UI modes should not require a separate internal cast pipeline.
 
 ## Current Implementation Gap
 

@@ -18,7 +18,9 @@ void main() {
                 label: 'Bella',
                 locale: 'en-US',
                 rawValue: <String, dynamic>{},
+                gender: VoiceGender.female,
                 qualityGrade: 'A-',
+                description: 'Balanced and smooth.',
               ),
               isBundled: true,
               isInstalled: true,
@@ -32,8 +34,11 @@ void main() {
     expect(find.text('Bella'), findsOneWidget);
     expect(find.text('en-US'), findsOneWidget);
     expect(find.text('A-'), findsOneWidget);
+    expect(find.text('Female'), findsOneWidget);
     expect(find.text('Installed'), findsOneWidget);
     expect(find.text('Included'), findsOneWidget);
+    expect(find.text('Balanced and smooth.'), findsWidgets);
+    expect(find.byTooltip('Preview voice'), findsOneWidget);
   });
 
   testWidgets('shows info affordance only when metadata details exist', (
@@ -86,6 +91,120 @@ void main() {
     expect(find.text('warm'), findsOneWidget);
     expect(find.text('clear'), findsOneWidget);
     expect(find.text('Training: extended'), findsOneWidget);
-    expect(find.text('Balanced and smooth.'), findsOneWidget);
+    expect(find.text('Balanced and smooth.'), findsWidgets);
   });
+
+  testWidgets(
+    'keeps metadata and preview slots stable when quality is missing',
+    (WidgetTester tester) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: SizedBox(
+              width: 900,
+              child: Column(
+                children: [
+                  VoiceLibraryRow(
+                    entry: VoiceLibraryEntry(
+                      voice: const VoiceProfile(
+                        id: 'emma',
+                        label: 'Emma',
+                        locale: 'en-GB',
+                        rawValue: <String, dynamic>{},
+                        gender: VoiceGender.female,
+                        qualityGrade: 'B-',
+                      ),
+                      isBundled: true,
+                      isInstalled: true,
+                    ),
+                    onTogglePreview: () {},
+                  ),
+                  VoiceLibraryRow(
+                    entry: VoiceLibraryEntry(
+                      voice: const VoiceProfile(
+                        id: 'george',
+                        label: 'George',
+                        locale: 'en-GB',
+                        rawValue: <String, dynamic>{},
+                        gender: VoiceGender.male,
+                      ),
+                      isBundled: false,
+                      isInstalled: false,
+                    ),
+                    onTogglePreview: () {},
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      );
+
+      final previewButtons = find.byTooltip('Preview voice');
+      expect(previewButtons, findsNWidgets(2));
+
+      final firstPreviewDx = tester.getCenter(previewButtons.first).dx;
+      final secondPreviewDx = tester.getCenter(previewButtons.last).dx;
+
+      expect((firstPreviewDx - secondPreviewDx).abs(), lessThanOrEqualTo(1.0));
+    },
+  );
+
+  testWidgets(
+    'keeps supporting text stable when descriptions are missing',
+    (WidgetTester tester) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: SizedBox(
+              width: 900,
+              child: Column(
+                children: [
+                  VoiceLibraryRow(
+                    entry: VoiceLibraryEntry(
+                      voice: const VoiceProfile(
+                        id: 'emma',
+                        label: 'Emma',
+                        locale: 'en-GB',
+                        rawValue: <String, dynamic>{},
+                        gender: VoiceGender.female,
+                        qualityGrade: 'B-',
+                        description: 'Balanced and smooth.',
+                      ),
+                      isBundled: true,
+                      isInstalled: true,
+                    ),
+                    onTogglePreview: () {},
+                  ),
+                  VoiceLibraryRow(
+                    entry: VoiceLibraryEntry(
+                      voice: const VoiceProfile(
+                        id: 'george',
+                        label: 'George',
+                        locale: 'en-GB',
+                        rawValue: <String, dynamic>{},
+                        gender: VoiceGender.male,
+                      ),
+                      isBundled: false,
+                      isInstalled: false,
+                    ),
+                    onTogglePreview: () {},
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      );
+
+      final rows = find.byType(ListTile);
+      expect(rows, findsNWidgets(2));
+      expect(find.text('No description available'), findsOneWidget);
+
+      final firstRowHeight = tester.getSize(rows.first).height;
+      final secondRowHeight = tester.getSize(rows.last).height;
+
+      expect((firstRowHeight - secondRowHeight).abs(), lessThanOrEqualTo(1.0));
+    },
+  );
 }

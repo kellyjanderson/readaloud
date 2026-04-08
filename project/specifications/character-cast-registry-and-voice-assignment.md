@@ -55,6 +55,8 @@ Refinement complete for the current planned branch.
 - [Character Gender Identity Extraction](character-gender-identity-extraction.md)
 - [Automatic Voice Casting and Override Resolution](automatic-voice-casting-and-override-resolution.md)
 - [Context-Aware Automatic Voice Casting](context-aware-automatic-voice-casting.md)
+- [US-English Starter Voice Set And Auto-Cast Preference](us-english-starter-voice-set-and-auto-cast-preference.md)
+- [Document-Specific Cast Voice Assignment Memory](document-specific-cast-voice-assignment-memory.md)
 - [Cast Voice Override Workflow](cast-voice-override-workflow.md)
 
 ## Acceptance
