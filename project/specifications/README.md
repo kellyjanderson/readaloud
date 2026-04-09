@@ -244,6 +244,16 @@ They are intentionally narrower than architecture documents. For any architectur
 
 ### Playback Coordination
 
+- [Audio-Authoritative Playback Synchronization](audio-authoritative-playback-synchronization.md)
+  Umbrella specification for making active speech audio authoritative while progress and reader presentation follow behind it.
+- [Uninterrupted Audio Primary Channel](uninterrupted-audio-primary-channel.md)
+  Defines the ownership rule that active speech audio is the authoritative session channel and follower concerns stay downstream.
+- [Append-Only Forward Playback Queue](append-only-forward-playback-queue.md)
+  Defines append-only queue growth during ordinary forward playback.
+- [Buffered Lead-Time And Underrun Policy](buffered-lead-time-and-underrun-policy.md)
+  Defines explicit lead-time thresholds, scheduler reaction, and true underrun recovery behavior.
+- [Running-App Uninterrupted Speech Under Follow-Along Load](running-app-uninterrupted-speech-under-follow-along-load.md)
+  Defines the surfaced running-app outcome that speech stays smooth even when the reader surface must catch up.
 - [Playback Coordination](playback-coordination.md)
   Defines controller state, transport behavior, replay semantics, jump handling, and sleep fade behavior.
 - [Playback Progress and Jump Mapping](playback-progress-and-jump-mapping.md)
@@ -254,6 +264,8 @@ They are intentionally narrower than architecture documents. For any architectur
   Umbrella specification for spoken selection derivation, display mapping, and reading-focus follow behavior.
 - [Spoken Text Selection and Display Mapping](spoken-text-selection-and-display-mapping.md)
   Defines how playback progress becomes a mapped visible spoken selection.
+- [Follower Progress Coalescing And Drift Resynchronization](follower-progress-coalescing-and-drift-resynchronization.md)
+  Defines how the visible follower path may coalesce or hard-resynchronize when it falls behind active audio.
 - [Reading Focus Follow Policy](reading-focus-follow-policy.md)
   Defines how the reader viewport follows playback and yields to user scrolling.
 - [Playback Quality Instrumentation](playback-quality-instrumentation.md)

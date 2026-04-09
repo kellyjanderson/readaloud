@@ -1,6 +1,6 @@
 # Spoken Text Highlighting and Reading Focus
 
-Last updated: April 3, 2026
+Last updated: April 8, 2026
 Status: Active architecture
 
 ## Purpose
@@ -112,25 +112,39 @@ Reason:
 - some imported formats or future engine paths may have weaker mapping confidence
 - segment or block highlighting is still better than no follow-along state
 
+### 4. Highlight and focus are follower channels, not playback owners
+
+The reader surface must follow the active audio session rather than competing with it.
+
+Reason:
+
+- the user hears stutter more harshly than they notice skipped intermediate highlight states
+- UI update pressure is allowed to degrade gracefully
+- playback continuity and presentation continuity are not equally important
+
 ## Architectural Rules
 
 - Highlight state must derive from normalized ids and ranges.
 - The UI must not re-derive spoken ranges from flattened `displayHtml` or `speakableText`.
 - The mapping layer must support a fallback ladder from word to segment to block.
+- Highlight and focus updates must not block, restart, or indirectly reconfigure active playback.
+- The visible follower path may coalesce, drop intermediate states, or hard-resynchronize to the current audio-mapped position when needed.
 - Viewport follow policy must be explicit and suspendable.
 - Pause must freeze the visible highlight at the last known spoken range until playback resumes or resets.
 
 ## Current Implementation Gap
 
-The core branch is now implemented:
+The core branch is now implemented, but one coordination gap remains open:
 
 - follow-along rendering is active
 - reading focus and recenter behavior are active
 - the reading surface now preserves readable contrast across appearance modes
+- explicit follower coalescing and hard-resynchronization behavior under playback load is still being defined as a focused implementation branch
 
-Future work in this area should focus on additional polish or accessibility improvements rather than missing core branch behavior.
+Future work in this area should focus on follower catch-up behavior under load plus later polish or accessibility improvements.
 
 ## Governing Specifications
 
 - [Playback Progress and Jump Mapping](../specifications/playback-progress-and-jump-mapping.md)
 - [Spoken Text Highlighting and Reading Focus](../specifications/spoken-text-highlighting-and-reading-focus.md)
+- [Follower Progress Coalescing And Drift Resynchronization](../specifications/follower-progress-coalescing-and-drift-resynchronization.md)
