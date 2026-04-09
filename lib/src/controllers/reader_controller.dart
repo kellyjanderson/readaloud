@@ -43,6 +43,20 @@ import '../services/tts_engine.dart';
 import '../services/voice_session_realization_service.dart';
 
 class ReaderController extends ChangeNotifier {
+  static const Duration _healthyFollowerUpdateInterval = Duration(
+    milliseconds: 100,
+  );
+  static const Duration _lowWaterFollowerUpdateInterval = Duration(
+    milliseconds: 180,
+  );
+  static const Duration _criticalFollowerUpdateInterval = Duration(
+    milliseconds: 250,
+  );
+  static const int _healthyFollowerSoftWordDelta = 2;
+  static const int _lowWaterFollowerSoftWordDelta = 3;
+  static const int _criticalFollowerSoftWordDelta = 4;
+  static const int _followerHardResyncWordDelta = 10;
+
   ReaderController({
     DocumentImportService? importer,
     DocumentAccessService? documentAccessService,
@@ -103,6 +117,7 @@ class ReaderController extends ChangeNotifier {
   StreamSubscription<FileSystemEvent>? _liveReadSubscription;
   Timer? _liveReadReloadDebounce;
   Timer? _resumePersistenceDebounce;
+  Timer? _followerProgressDebounce;
 
   bool _isInitializing = true;
   bool _isImporting = false;
@@ -133,6 +148,8 @@ class ReaderController extends ChangeNotifier {
   SpokenSelection _spokenSelection = const SpokenSelection.none();
   ReadingFocusState _readingFocusState = const ReadingFocusState();
   String? _activePlaybackDocumentId;
+  TtsProgressUpdate? _pendingFollowerProgressUpdate;
+  DateTime? _lastFollowerProgressAppliedAt;
 
   int _currentWordIndex = 0;
   double _wordsPerSecond = 2.8;
@@ -294,6 +311,7 @@ class ReaderController extends ChangeNotifier {
       if (_activePlaybackDocumentId == null) {
         return;
       }
+      _flushPendingFollowerProgress();
       unawaited(_flushResumePersistence());
       _finalizeActiveSpokenChunk();
       _activePlaybackDocumentId = null;
@@ -325,6 +343,7 @@ class ReaderController extends ChangeNotifier {
       if (_activePlaybackDocumentId == null) {
         return;
       }
+      _flushPendingFollowerProgress();
       unawaited(_flushResumePersistence());
       _statusMessage = message;
       _activePlaybackDocumentId = null;
@@ -842,6 +861,7 @@ class ReaderController extends ChangeNotifier {
     }
 
     _statusMessage = null;
+    _resetFollowerProgressSynchronization();
     _narrationState = _narrationState.copyWith(
       currentSectionMode: _sectionModeForCurrentPosition(),
       discourseMode: _discourseModeForCurrentPosition(),
@@ -881,6 +901,7 @@ class ReaderController extends ChangeNotifier {
   }
 
   Future<void> pausePlayback() async {
+    _flushPendingFollowerProgress();
     await _ttsEngine.pause();
     await _flushResumePersistence();
     _finalizeActiveSpokenChunk();
@@ -902,6 +923,7 @@ class ReaderController extends ChangeNotifier {
     _currentWordIndex = snappedTarget;
     _playbackEndedAtDocumentEnd = false;
     _activeSpokenChunkId = null;
+    _resetFollowerProgressSynchronization();
     _spokenSelection = const SpokenSelection.none();
     _readingFocusState = const ReadingFocusState();
     _narrationState = _narrationState
@@ -1444,6 +1466,7 @@ class ReaderController extends ChangeNotifier {
     _playbackActivity = const TtsPlaybackActivity.idle();
     _spokenChunkRecords.clear();
     _activeSpokenChunkId = null;
+    _resetFollowerProgressSynchronization();
     _spokenSelection = const SpokenSelection.none();
     _castVoiceOverrides.clear();
     _readingFocusState = const ReadingFocusState();
@@ -1552,26 +1575,13 @@ class ReaderController extends ChangeNotifier {
       0,
       math.max(_document.wordCount - 1, 0),
     );
-    _spokenSelection = _spokenSelectionMapperService.map(
-      SpokenSelectionMapperInput(
-        displayDocument: _document.displayDocument,
-        speechDocument: _document.speechDocument,
-        positionMap: _document.positionMap,
-        progress: update,
-      ),
-    );
-    _readingFocusState = _readingFocusState.copyWith(
-      playbackActive: true,
-      activeDisplayBlockId: _spokenSelection.displayBlockId,
-      clearActiveDisplayBlockId: _spokenSelection.displayBlockId == null,
-    );
     _playbackEndedAtDocumentEnd = false;
     _narrationState = _narrationState.copyWith(
       currentSectionMode: _sectionModeForCurrentPosition(),
       discourseMode: _discourseModeForCurrentPosition(),
     );
     _scheduleResumePersistence();
-    notifyListeners();
+    _queueFollowerProgressUpdate(update);
   }
 
   @override
@@ -1582,6 +1592,7 @@ class ReaderController extends ChangeNotifier {
     _liveReadReloadDebounce?.cancel();
     _liveReadSubscription?.cancel();
     _resumePersistenceDebounce?.cancel();
+    _followerProgressDebounce?.cancel();
     _ttsEngine.onStart = null;
     _ttsEngine.onStatus = null;
     _ttsEngine.onProgress = null;
@@ -2511,6 +2522,174 @@ class ReaderController extends ChangeNotifier {
     _wordsPerSecond = _estimateWordsPerSecond(voiceId: voiceId, rate: rate);
   }
 
+  void _queueFollowerProgressUpdate(TtsProgressUpdate update) {
+    _pendingFollowerProgressUpdate = update;
+    final policy = _currentFollowerSyncPolicy();
+
+    if (_shouldFlushFollowerProgressImmediately(update, policy)) {
+      _flushPendingFollowerProgress();
+      return;
+    }
+
+    final lastAppliedAt = _lastFollowerProgressAppliedAt;
+    if (lastAppliedAt == null) {
+      _flushPendingFollowerProgress();
+      return;
+    }
+
+    final elapsedSinceLastApply = DateTime.now().difference(lastAppliedAt);
+    final remainingDelay = policy.flushInterval - elapsedSinceLastApply;
+    if (!remainingDelay.isNegative && remainingDelay > Duration.zero) {
+      _followerProgressDebounce?.cancel();
+      _followerProgressDebounce = Timer(
+        remainingDelay,
+        _flushPendingFollowerProgress,
+      );
+      return;
+    }
+
+    _flushPendingFollowerProgress();
+  }
+
+  bool _shouldFlushFollowerProgressImmediately(
+    TtsProgressUpdate update,
+    _FollowerSyncPolicy policy,
+  ) {
+    if (!_spokenSelection.hasSelection) {
+      return true;
+    }
+
+    final pendingWordEndIndex = _resolvedProgressWordEndIndex(update);
+    final visibleWordEndIndex = _spokenSelection.speechEndWordIndex ?? 0;
+    final wordDrift = pendingWordEndIndex - visibleWordEndIndex;
+
+    if (wordDrift >= _followerHardResyncWordDelta) {
+      return true;
+    }
+
+    if (update.segmentId != null && update.segmentId != _spokenSelection.segmentId) {
+      return true;
+    }
+
+    if (update.routeId != _spokenSelection.routeId ||
+        update.castId != _spokenSelection.castId ||
+        update.dialogueSpanId != _spokenSelection.dialogueSpanId) {
+      return true;
+    }
+
+    final lastAppliedAt = _lastFollowerProgressAppliedAt;
+    if (lastAppliedAt == null) {
+      return true;
+    }
+
+    final elapsedSinceLastApply = DateTime.now().difference(lastAppliedAt);
+    return wordDrift >= policy.softWordDelta &&
+        elapsedSinceLastApply >= policy.flushInterval;
+  }
+
+  void _flushPendingFollowerProgress() {
+    _followerProgressDebounce?.cancel();
+    _followerProgressDebounce = null;
+
+    final update = _pendingFollowerProgressUpdate;
+    if (update == null) {
+      return;
+    }
+    _pendingFollowerProgressUpdate = null;
+    _applyFollowerProgressUpdate(update);
+  }
+
+  void _applyFollowerProgressUpdate(TtsProgressUpdate update) {
+    final nextSelection = _spokenSelectionMapperService.map(
+      SpokenSelectionMapperInput(
+        displayDocument: _document.displayDocument,
+        speechDocument: _document.speechDocument,
+        positionMap: _document.positionMap,
+        progress: update,
+      ),
+    );
+    final nextReadingFocusState = _readingFocusState.copyWith(
+      playbackActive: true,
+      activeDisplayBlockId: nextSelection.displayBlockId,
+      clearActiveDisplayBlockId: nextSelection.displayBlockId == null,
+    );
+
+    final selectionChanged = !_sameSpokenSelection(
+      _spokenSelection,
+      nextSelection,
+    );
+    final readingFocusChanged = !_sameReadingFocusState(
+      _readingFocusState,
+      nextReadingFocusState,
+    );
+
+    _spokenSelection = nextSelection;
+    _readingFocusState = nextReadingFocusState;
+    _lastFollowerProgressAppliedAt = DateTime.now();
+
+    if (selectionChanged || readingFocusChanged) {
+      notifyListeners();
+    }
+  }
+
+  void _resetFollowerProgressSynchronization() {
+    _pendingFollowerProgressUpdate = null;
+    _lastFollowerProgressAppliedAt = null;
+    _followerProgressDebounce?.cancel();
+    _followerProgressDebounce = null;
+  }
+
+  _FollowerSyncPolicy _currentFollowerSyncPolicy() {
+    switch (_playbackActivity.bufferPressure) {
+      case TtsBufferPressure.critical:
+        return const _FollowerSyncPolicy(
+          flushInterval: _criticalFollowerUpdateInterval,
+          softWordDelta: _criticalFollowerSoftWordDelta,
+        );
+      case TtsBufferPressure.lowWater:
+        return const _FollowerSyncPolicy(
+          flushInterval: _lowWaterFollowerUpdateInterval,
+          softWordDelta: _lowWaterFollowerSoftWordDelta,
+        );
+      case TtsBufferPressure.none:
+      case TtsBufferPressure.healthy:
+        return const _FollowerSyncPolicy(
+          flushInterval: _healthyFollowerUpdateInterval,
+          softWordDelta: _healthyFollowerSoftWordDelta,
+        );
+    }
+  }
+
+  int _resolvedProgressWordEndIndex(TtsProgressUpdate update) {
+    return update.wordEndIndex ??
+        _document.wordIndexForOffset(_utteranceStartOffset + update.endOffset);
+  }
+
+  bool _sameSpokenSelection(SpokenSelection left, SpokenSelection right) {
+    return left.precision == right.precision &&
+        left.confidence == right.confidence &&
+        left.segmentId == right.segmentId &&
+        left.displayBlockId == right.displayBlockId &&
+        left.displayStart == right.displayStart &&
+        left.displayEnd == right.displayEnd &&
+        left.speechStartWordIndex == right.speechStartWordIndex &&
+        left.speechEndWordIndex == right.speechEndWordIndex &&
+        left.voiceId == right.voiceId &&
+        left.routeId == right.routeId &&
+        left.castId == right.castId &&
+        left.dialogueSpanId == right.dialogueSpanId;
+  }
+
+  bool _sameReadingFocusState(
+    ReadingFocusState left,
+    ReadingFocusState right,
+  ) {
+    return left.playbackActive == right.playbackActive &&
+        left.followMode == right.followMode &&
+        left.activeDisplayBlockId == right.activeDisplayBlockId &&
+        left.recenterRequestTick == right.recenterRequestTick;
+  }
+
   void _finalizeActiveSpokenChunk() {
     final chunkId = _activeSpokenChunkId;
     if (chunkId == null) {
@@ -2645,4 +2824,14 @@ bool _looksLikePermissionIssue(Object error) {
       text.contains('access denied') ||
       text.contains('sandbox') ||
       text.contains('security-scoped');
+}
+
+class _FollowerSyncPolicy {
+  const _FollowerSyncPolicy({
+    required this.flushInterval,
+    required this.softWordDelta,
+  });
+
+  final Duration flushInterval;
+  final int softWordDelta;
 }

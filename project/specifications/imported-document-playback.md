@@ -1,6 +1,6 @@
 # Imported Document Playback
 
-Last updated: April 3, 2026
+Last updated: April 8, 2026
 Status: Draft specification
 
 ## Scope
@@ -26,6 +26,7 @@ Detailed implementation specifications:
 - [Generated Audio Cache](generated-audio-cache.md)
 - [Synthesis Boundary Policy](synthesis-boundary-policy.md)
 - [Playback Coordination](playback-coordination.md)
+- [Audio-Authoritative Playback Synchronization](audio-authoritative-playback-synchronization.md)
 - [Playback Progress and Jump Mapping](playback-progress-and-jump-mapping.md)
 - [Document Replacement Playback Reset And Stale Event Rejection](document-replacement-playback-reset-and-stale-event-rejection.md)
 - [Playback Quality Instrumentation](playback-quality-instrumentation.md)
@@ -40,6 +41,7 @@ In particular:
 - first-chunk startup behavior belongs to its own leaf
 - responsiveness policy for ordinary imported documents belongs to its own leaf
 - realization, generation, boundary, progress, and controller transport behavior belong to their respective leaves
+- audio-authoritative playback synchronization belongs to its own branch because uninterrupted speech requires stricter coordination rules than ordinary transport state alone
 - file-backed reader continuity and watched-file live input belong to their own leaf because they change how imported content is refreshed without changing the shared speech pipeline
 - remembered last-heard position and startup resume belong to the reader-continuity branch rather than being left implicit
 
@@ -60,6 +62,7 @@ This is a draft umbrella specification. Its child specifications are expected to
 - [Generated Audio Cache](generated-audio-cache.md)
 - [Synthesis Boundary Policy](synthesis-boundary-policy.md)
 - [Playback Coordination](playback-coordination.md)
+- [Audio-Authoritative Playback Synchronization](audio-authoritative-playback-synchronization.md)
 - [Playback Progress and Jump Mapping](playback-progress-and-jump-mapping.md)
 - [Document Replacement Playback Reset And Stale Event Rejection](document-replacement-playback-reset-and-stale-event-rejection.md)
 - [Playback Quality Instrumentation](playback-quality-instrumentation.md)

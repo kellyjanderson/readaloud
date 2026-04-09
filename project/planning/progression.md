@@ -1,6 +1,6 @@
 # Progression
 
-Last updated: April 7, 2026
+Last updated: April 8, 2026
 Status: Active progression
 
 ## Purpose
@@ -155,16 +155,26 @@ Test specification checkboxes track verification work against the paired documen
 - [x] [Initial and Resumed Boundary Handling](../specifications/initial-and-resumed-boundary-handling.md)
 - [x] [Boundary-Corrected Chunk Output and Reuse](../specifications/boundary-corrected-chunk-output-and-reuse.md)
 - [x] [Playback Coordination](../specifications/playback-coordination.md)
+- [x] [Uninterrupted Audio Primary Channel](../specifications/uninterrupted-audio-primary-channel.md)
+- [x] [Append-Only Forward Playback Queue](../specifications/append-only-forward-playback-queue.md)
+- [x] [Buffered Lead-Time And Underrun Policy](../specifications/buffered-lead-time-and-underrun-policy.md)
 - [x] [Playback Progress and Jump Mapping](../specifications/playback-progress-and-jump-mapping.md)
 - [x] [Document Replacement Playback Reset And Stale Event Rejection](../specifications/document-replacement-playback-reset-and-stale-event-rejection.md)
 - [x] [Spoken Text Selection and Display Mapping](../specifications/spoken-text-selection-and-display-mapping.md)
+- [x] [Follower Progress Coalescing And Drift Resynchronization](../specifications/follower-progress-coalescing-and-drift-resynchronization.md)
 - [x] [Reading Focus Follow Policy](../specifications/reading-focus-follow-policy.md)
+- [x] [Running-App Uninterrupted Speech Under Follow-Along Load](../specifications/running-app-uninterrupted-speech-under-follow-along-load.md)
 
 #### Test Specifications
 
 - [x] [Test Specification: Playback Coordination](../test-specifications/playback-coordination.md)
+- [x] [Test Specification: Uninterrupted Audio Primary Channel](../test-specifications/uninterrupted-audio-primary-channel.md)
+- [x] [Test Specification: Append-Only Forward Playback Queue](../test-specifications/append-only-forward-playback-queue.md)
+- [x] [Test Specification: Buffered Lead-Time And Underrun Policy](../test-specifications/buffered-lead-time-and-underrun-policy.md)
 - [x] [Test Specification: Playback Progress And Jump Mapping](../test-specifications/playback-progress-and-jump-mapping.md)
 - [x] [Test Specification: Document Replacement Playback Reset And Stale Event Rejection](../test-specifications/document-replacement-playback-reset-and-stale-event-rejection.md)
+- [x] [Test Specification: Follower Progress Coalescing And Drift Resynchronization](../test-specifications/follower-progress-coalescing-and-drift-resynchronization.md)
+- [x] [Test Specification: Running-App Uninterrupted Speech Under Follow-Along Load](../test-specifications/running-app-uninterrupted-speech-under-follow-along-load.md)
 
 ### App Shell And Platform Navigation UI
 

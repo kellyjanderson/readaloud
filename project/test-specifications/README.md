@@ -59,9 +59,17 @@ This initial backfill focuses on the current running-app feature surface so acti
 - [Document-Specific Cast Voice Assignment Memory](document-specific-cast-voice-assignment-memory.md)
 - [Quoted Dialogue Voice Segmentation](quoted-dialogue-voice-segmentation.md)
 - [Running-App Multi-Voice Playback Switching](running-app-multi-voice-playback-switching.md)
+
+### Playback Coordination And Follower Synchronization
+
 - [Playback Coordination](playback-coordination.md)
+- [Uninterrupted Audio Primary Channel](uninterrupted-audio-primary-channel.md)
+- [Append-Only Forward Playback Queue](append-only-forward-playback-queue.md)
+- [Buffered Lead-Time And Underrun Policy](buffered-lead-time-and-underrun-policy.md)
+- [Running-App Uninterrupted Speech Under Follow-Along Load](running-app-uninterrupted-speech-under-follow-along-load.md)
 - [Playback Progress And Jump Mapping](playback-progress-and-jump-mapping.md)
 - [Document Replacement Playback Reset And Stale Event Rejection](document-replacement-playback-reset-and-stale-event-rejection.md)
+- [Follower Progress Coalescing And Drift Resynchronization](follower-progress-coalescing-and-drift-resynchronization.md)
 
 ### Reader Session And Live Input
 

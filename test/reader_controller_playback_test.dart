@@ -156,6 +156,137 @@ void main() {
       },
     );
 
+    test(
+      'coalesces follower selection updates while keeping audio word position current',
+      () async {
+        final engine = _FakeTtsEngine();
+        final controller = ReaderController(ttsEngine: engine);
+        addTearDown(controller.dispose);
+
+        await controller.initialize();
+        await controller.importPastedText(
+          'Alpha beta gamma delta epsilon zeta eta theta iota kappa lambda mu.',
+        );
+        await controller.startPlayback();
+        engine.emitStart();
+
+        final documentId = controller.document.displayDocument.documentId;
+        final segmentId = controller.document.speechDocument.segments.first.segmentId;
+        final voiceId = controller.selectedVoice!.id;
+
+        engine.emitProgress(
+          TtsProgressUpdate(
+            startOffset: 0,
+            endOffset: 5,
+            word: 'Alpha',
+            documentId: documentId,
+            chunkId: 'chunk-1',
+            segmentId: segmentId,
+            wordStartIndex: 0,
+            wordEndIndex: 1,
+            elapsedInChunk: const Duration(milliseconds: 80),
+            chunkAudioDuration: const Duration(seconds: 4),
+            voiceId: voiceId,
+            rate: controller.currentSpeed,
+          ),
+        );
+
+        expect(controller.currentWordIndex, 1);
+        expect(controller.spokenSelection.speechEndWordIndex, 1);
+
+        engine.emitProgress(
+          TtsProgressUpdate(
+            startOffset: 6,
+            endOffset: 10,
+            word: 'beta',
+            documentId: documentId,
+            chunkId: 'chunk-1',
+            segmentId: segmentId,
+            wordStartIndex: 1,
+            wordEndIndex: 2,
+            elapsedInChunk: const Duration(milliseconds: 160),
+            chunkAudioDuration: const Duration(seconds: 4),
+            voiceId: voiceId,
+            rate: controller.currentSpeed,
+          ),
+        );
+
+        expect(controller.currentWordIndex, 2);
+        expect(
+          controller.spokenSelection.speechEndWordIndex,
+          1,
+          reason: 'Visible follower state should be allowed to lag briefly.',
+        );
+
+        await Future<void>.delayed(const Duration(milliseconds: 200));
+
+        expect(controller.spokenSelection.speechEndWordIndex, 2);
+      },
+    );
+
+    test(
+      'hard-resynchronizes follower selection when drift grows too large',
+      () async {
+        final engine = _FakeTtsEngine();
+        final controller = ReaderController(ttsEngine: engine);
+        addTearDown(controller.dispose);
+
+        await controller.initialize();
+        await controller.importPastedText(
+          'one two three four five six seven eight nine ten eleven twelve thirteen fourteen fifteen sixteen.',
+        );
+        await controller.startPlayback();
+        engine.emitStart();
+
+        final documentId = controller.document.displayDocument.documentId;
+        final segmentId = controller.document.speechDocument.segments.first.segmentId;
+        final voiceId = controller.selectedVoice!.id;
+
+        engine.emitProgress(
+          TtsProgressUpdate(
+            startOffset: 0,
+            endOffset: 3,
+            word: 'one',
+            documentId: documentId,
+            chunkId: 'chunk-long',
+            segmentId: segmentId,
+            wordStartIndex: 0,
+            wordEndIndex: 1,
+            elapsedInChunk: const Duration(milliseconds: 100),
+            chunkAudioDuration: const Duration(seconds: 6),
+            voiceId: voiceId,
+            rate: controller.currentSpeed,
+          ),
+        );
+
+        expect(controller.spokenSelection.speechEndWordIndex, 1);
+
+        engine.emitProgress(
+          TtsProgressUpdate(
+            startOffset: 48,
+            endOffset: 62,
+            word: 'twelve',
+            documentId: documentId,
+            chunkId: 'chunk-long',
+            segmentId: segmentId,
+            wordStartIndex: 11,
+            wordEndIndex: 12,
+            elapsedInChunk: const Duration(seconds: 3),
+            chunkAudioDuration: const Duration(seconds: 6),
+            voiceId: voiceId,
+            rate: controller.currentSpeed,
+          ),
+        );
+
+        expect(controller.currentWordIndex, 12);
+        expect(
+          controller.spokenSelection.speechEndWordIndex,
+          12,
+          reason: 'Large drift should force an immediate visible catch-up.',
+        );
+      },
+    );
+
     test('records debug playback metrics with session attribution', () async {
       final engine = _FakeTtsEngine();
       final controller = ReaderController(ttsEngine: engine);

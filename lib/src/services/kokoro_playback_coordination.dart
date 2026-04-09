@@ -1,3 +1,5 @@
+import 'tts_engine.dart';
+
 class KokoroPlaybackQueueSnapshot {
   const KokoroPlaybackQueueSnapshot({
     required this.activeChunkCount,
@@ -14,6 +16,71 @@ class KokoroPlaybackQueueSnapshot {
   final int pendingChunkCount;
   final int remainingPlannedChunkCount;
   final int? playerRelativeIndex;
+}
+
+enum KokoroForwardRecoveryAction {
+  none,
+  waitForPreparedAudio,
+  resumeFromNextBufferedChunk,
+}
+
+class KokoroForwardRecoveryPlan {
+  const KokoroForwardRecoveryPlan._({
+    required this.action,
+    this.nextChunkIndex,
+  });
+
+  const KokoroForwardRecoveryPlan.none()
+    : this._(action: KokoroForwardRecoveryAction.none);
+
+  const KokoroForwardRecoveryPlan.waitForPreparedAudio()
+    : this._(action: KokoroForwardRecoveryAction.waitForPreparedAudio);
+
+  const KokoroForwardRecoveryPlan.resumeFromNextBufferedChunk(
+    int nextChunkIndex,
+  ) : this._(
+         action: KokoroForwardRecoveryAction.resumeFromNextBufferedChunk,
+         nextChunkIndex: nextChunkIndex,
+       );
+
+  final KokoroForwardRecoveryAction action;
+  final int? nextChunkIndex;
+}
+
+const Duration kokoroTargetBufferedLeadTime = Duration(seconds: 8);
+const Duration kokoroLowWaterBufferedLeadTime = Duration(seconds: 4);
+const Duration kokoroCriticalBufferedLeadTime = Duration(seconds: 2);
+const Duration kokoroStartupMinimumBufferedLeadTime = Duration(seconds: 4);
+const int kokoroStartupMinimumBufferedChunkCount = 2;
+const int kokoroStartupPreparedChunkWindow = 3;
+
+TtsBufferPressure kokoroBufferPressureForLeadTime(Duration leadTime) {
+  if (leadTime <= kokoroCriticalBufferedLeadTime) {
+    return TtsBufferPressure.critical;
+  }
+  if (leadTime <= kokoroLowWaterBufferedLeadTime) {
+    return TtsBufferPressure.lowWater;
+  }
+  return TtsBufferPressure.healthy;
+}
+
+bool kokoroIsStartupWarmEnough({
+  required int bufferedChunkCount,
+  required Duration bufferedLeadTime,
+  required int pendingChunkCount,
+  required int remainingPlannedChunkCount,
+}) {
+  final hasFutureWork = pendingChunkCount > 0 || remainingPlannedChunkCount > 0;
+  if (!hasFutureWork) {
+    return true;
+  }
+
+  if (bufferedLeadTime >= kokoroTargetBufferedLeadTime) {
+    return true;
+  }
+
+  return bufferedChunkCount >= kokoroStartupMinimumBufferedChunkCount &&
+      bufferedLeadTime >= kokoroStartupMinimumBufferedLeadTime;
 }
 
 class KokoroRecoveryWordBoundary {
@@ -44,6 +111,21 @@ bool kokoroShouldEnterUnderrunRecovery(KokoroPlaybackQueueSnapshot snapshot) {
   return kokoroHasBufferedFutureChunks(snapshot) ||
       snapshot.pendingChunkCount > 0 ||
       snapshot.remainingPlannedChunkCount > 0;
+}
+
+KokoroForwardRecoveryPlan kokoroPlanForwardRecovery(
+  KokoroPlaybackQueueSnapshot snapshot,
+) {
+  final nextChunkIndex = kokoroNextRecoveryStartIndex(snapshot);
+  if (nextChunkIndex != null) {
+    return KokoroForwardRecoveryPlan.resumeFromNextBufferedChunk(
+      nextChunkIndex,
+    );
+  }
+  if (snapshot.pendingChunkCount > 0 || snapshot.remainingPlannedChunkCount > 0) {
+    return const KokoroForwardRecoveryPlan.waitForPreparedAudio();
+  }
+  return const KokoroForwardRecoveryPlan.none();
 }
 
 bool kokoroHasBufferedFutureChunks(KokoroPlaybackQueueSnapshot snapshot) {
@@ -135,6 +217,91 @@ List<KokoroRecoveryWordSlice> kokoroPlanRecoverableChunkSlices({
     return const <KokoroRecoveryWordSlice>[];
   }
   return List<KokoroRecoveryWordSlice>.unmodifiable(slices);
+}
+
+List<T> kokoroBuildInitialPlaybackQueue<T>({
+  required T firstChunk,
+  required Iterable<T> stagedChunks,
+  required String Function(T chunk) chunkIdOf,
+  required int Function(T chunk) startWordIndexOf,
+  required int Function(T chunk) startOffsetOf,
+}) {
+  final chunksById = <String, T>{chunkIdOf(firstChunk): firstChunk};
+  for (final chunk in stagedChunks) {
+    chunksById[chunkIdOf(chunk)] = chunk;
+  }
+
+  final ordered = chunksById.values.toList(growable: false)
+    ..sort((left, right) {
+      final wordComparison =
+          startWordIndexOf(left).compareTo(startWordIndexOf(right));
+      if (wordComparison != 0) {
+        return wordComparison;
+      }
+      final offsetComparison =
+          startOffsetOf(left).compareTo(startOffsetOf(right));
+      if (offsetComparison != 0) {
+        return offsetComparison;
+      }
+      return chunkIdOf(left).compareTo(chunkIdOf(right));
+  });
+  return ordered;
+}
+
+int kokoroPlaybackInsertIndex<T>({
+  required List<T> activeChunks,
+  required T incomingChunk,
+  required String Function(T chunk) chunkIdOf,
+  required int Function(T chunk) startWordIndexOf,
+  required int Function(T chunk) startOffsetOf,
+}) {
+  for (var index = 0; index < activeChunks.length; index += 1) {
+    final comparison = _comparePlaybackChunkOrder(
+      activeChunks[index],
+      incomingChunk,
+      chunkIdOf: chunkIdOf,
+      startWordIndexOf: startWordIndexOf,
+      startOffsetOf: startOffsetOf,
+    );
+    if (comparison >= 0) {
+      return index;
+    }
+  }
+  return activeChunks.length;
+}
+
+int? kokoroFirstFutureReplacementIndex<T>({
+  required List<T> activeChunks,
+  required int currentChunkIndex,
+  required int replacementStartWordIndex,
+  required int Function(T chunk) startWordIndexOf,
+}) {
+  final startIndex = currentChunkIndex + 1;
+  for (var index = startIndex; index < activeChunks.length; index += 1) {
+    if (startWordIndexOf(activeChunks[index]) >= replacementStartWordIndex) {
+      return index;
+    }
+  }
+  return null;
+}
+
+int _comparePlaybackChunkOrder<T>(
+  T left,
+  T right, {
+  required String Function(T chunk) chunkIdOf,
+  required int Function(T chunk) startWordIndexOf,
+  required int Function(T chunk) startOffsetOf,
+}) {
+  final wordComparison =
+      startWordIndexOf(left).compareTo(startWordIndexOf(right));
+  if (wordComparison != 0) {
+    return wordComparison;
+  }
+  final offsetComparison = startOffsetOf(left).compareTo(startOffsetOf(right));
+  if (offsetComparison != 0) {
+    return offsetComparison;
+  }
+  return chunkIdOf(left).compareTo(chunkIdOf(right));
 }
 
 int? _findRecoveryBoundary({

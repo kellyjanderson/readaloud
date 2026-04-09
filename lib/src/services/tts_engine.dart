@@ -40,12 +40,15 @@ class TtsProgressUpdate {
 }
 
 enum TtsPlaybackPhase { idle, buffering, playing }
+enum TtsBufferPressure { none, healthy, lowWater, critical }
 
 class TtsPlaybackActivity {
   const TtsPlaybackActivity({
     required this.phase,
     this.bufferedChunkCount = 0,
     this.totalChunkCount = 0,
+    this.bufferPressure = TtsBufferPressure.none,
+    this.bufferedLeadTime = Duration.zero,
     this.message,
   });
 
@@ -53,15 +56,24 @@ class TtsPlaybackActivity {
     : phase = TtsPlaybackPhase.idle,
       bufferedChunkCount = 0,
       totalChunkCount = 0,
+      bufferPressure = TtsBufferPressure.none,
+      bufferedLeadTime = Duration.zero,
       message = null;
 
   final TtsPlaybackPhase phase;
   final int bufferedChunkCount;
   final int totalChunkCount;
+  final TtsBufferPressure bufferPressure;
+  final Duration bufferedLeadTime;
   final String? message;
 
   bool get isBuffering => phase == TtsPlaybackPhase.buffering;
   bool get isPlaying => phase == TtsPlaybackPhase.playing;
+  bool get isAudioUnderPressure =>
+      bufferPressure == TtsBufferPressure.lowWater ||
+      bufferPressure == TtsBufferPressure.critical;
+  bool get isAudioInCriticalPressure =>
+      bufferPressure == TtsBufferPressure.critical;
 }
 
 class TtsDebugTraceSnapshot {

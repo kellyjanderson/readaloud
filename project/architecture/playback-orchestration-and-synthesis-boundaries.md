@@ -1,6 +1,6 @@
 # Playback Orchestration and Synthesis Boundaries
 
-Last updated: April 4, 2026
+Last updated: April 8, 2026
 Status: Active architecture
 
 ## Purpose
@@ -89,6 +89,7 @@ Responsibilities:
 - hold prepared chunk sequence for the current session
 - start when the first chunk is ready
 - continue while later chunks are still being prepared
+- preserve uninterrupted forward audio whenever prepared audio still exists
 
 ### Progress Mapper
 
@@ -97,6 +98,7 @@ Responsibilities:
 - translate active playback back into segment ids and word ranges
 - support visible spoken-text highlighting
 - support 30-second jump estimation and recovery
+- behave as a follower channel behind active audio rather than as a co-owner of playback
 
 ## Relationships
 
@@ -206,6 +208,33 @@ Reason:
 - narration quality must be evaluated in paragraph and session context, not only in isolated chunk generation
 - subjective listening review needs runtime metrics to stay actionable during implementation
 
+### 6. Speech audio is the uninterrupted primary channel
+
+The system must treat active speech audio as the authoritative real-time rail for a playback session.
+
+That means:
+
+- audio owns the session clock while playback is active
+- progress mapping follows audio
+- reader highlighting and viewport behavior follow mapped progress
+- follower state may lag, coalesce, or jump forward to catch up
+
+Reason:
+
+- speech is temporally sensitive in a way that follow-along visuals are not
+- small interruptions in audio are more damaging than skipped intermediate highlight states
+- the user can tolerate visible catch-up much more easily than audible stutter
+
+### 7. Ordinary forward playback queue mutation is append-only
+
+While session identity is unchanged and prepared audio still exists ahead of the playhead, ordinary later-chunk arrival must not rebuild active playback.
+
+Reason:
+
+- `stop -> setAudioSources -> seek -> play` is an audible interruption pattern
+- queue mutation should extend forward playback rather than restart it
+- later chunk readiness is not, by itself, a transport event
+
 ## Architectural Rules
 
 - The first playback action waits only for first-chunk readiness.
@@ -218,12 +247,16 @@ Reason:
 - Completed chunks are not deleted just because playback is paused, replayed, or jumped.
 - Boundary policy is applied before a chunk is treated as final cache content.
 - Boundary policy uses trim-and-cap joins by default and does not add blind player-level gaps.
+- Active speech audio is the authoritative session clock while playback is running.
+- Progress mapping, highlighting, follow-along, diagnostics, and resume persistence are follower concerns and must not stop, rebuild, or restart active playback.
+- Ordinary forward queue growth is append-only while session identity is unchanged.
+- If follower presentation falls behind audio, the system must prefer coalescing or resynchronizing the follower state over interrupting audio.
 - Progress mapping stays tied to normalized content ids, not only elapsed audio time.
 - Highlighting and reading-focus behavior consume progress mapping output rather than reparsing display HTML.
 
 ## Current Implementation Gap
 
-The current implementation now satisfies most of this architecture for the active engine path, with a few remaining gaps:
+The current implementation now satisfies much of this architecture for the active engine path, with a few remaining gaps:
 
 - first-chunk startup, background preparation, finalized chunk reuse, boundary correction, and playback instrumentation are all first-class in code
 - document-open priming and runtime scheduling now keep playback smooth, but long-form prosody richness remains narrower than the target architecture
@@ -231,6 +264,8 @@ The current implementation now satisfies most of this architecture for the activ
 - the progress mapper now drives spoken highlighting and reading-focus behavior on the reader surface
 - file-backed continuity now restores the last heard reading position when recovery is possible, and watched-file live input preserves playing-versus-paused semantics across refresh
 - current controller code still leans on compatibility text views in `ReaderDocument` while normalized mappings remain the underlying source of truth
+- the active Kokoro path still allows player-source rebuilding during underrun recovery, which violates the new audio-authoritative target for ordinary forward playback
+- follower progress and visible follow-along behavior do not yet have an explicit coalescing and hard-resynchronization policy under load
 
 ## Governing Specifications
 
@@ -240,6 +275,7 @@ The current implementation now satisfies most of this architecture for the activ
 - [Generated Audio Cache](../specifications/generated-audio-cache.md)
 - [Synthesis Boundary Policy](../specifications/synthesis-boundary-policy.md)
 - [Playback Coordination](../specifications/playback-coordination.md)
+- [Audio-Authoritative Playback Synchronization](../specifications/audio-authoritative-playback-synchronization.md)
 - [Playback Progress and Jump Mapping](../specifications/playback-progress-and-jump-mapping.md)
 - [Spoken Text Highlighting and Reading Focus](../specifications/spoken-text-highlighting-and-reading-focus.md)
 - [Playback Quality Instrumentation](../specifications/playback-quality-instrumentation.md)
