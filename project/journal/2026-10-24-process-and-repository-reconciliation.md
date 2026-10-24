@@ -43,3 +43,7 @@ The initial checkout already contained the prior-turn documentation edits and an
 ## Validation
 
 `ruby tools/check_docs.rb` and `git diff --check` passed. Six changed/new scoped skills passed SkillsKeeper validation and sync. A temporary ordinary Markdown missing-link fixture failed as expected and was removed; the subsequent clean check passed. An initial dot-prefixed fixture was outside the checker glob and was removed; hidden Markdown files are not part of its coverage. Application behavior checks are not applicable to this documentation/process change; native acceptance remains explicitly pending.
+
+## Follow-up: external planning authority
+
+The user clarified that document-maintenance work and planning-induced dirty repositories/reconciliation are the two allowance concerns. The ACD/plan cleanup is interim, not rejection of external planning. Inspected the sibling project managment ACD-001/004/005 intentions and current GitHub tracking APIs. Updated docs/maintenance.md with a tentative integration/pilot comparison; savings remain unproven. No migration, service changes or GitHub tracking records were created.

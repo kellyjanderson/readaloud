@@ -2,7 +2,7 @@
 
 ## Minimal repository workflow
 
-Keep current architecture in Git, proposed deltas in one ACD, and execution state in its same-name plan. Use one PR per plan. Issues capture a bug or user outcome and link to those files; do not duplicate the full plan in an issue, wiki and board. GitHub is useful for tracking and enforcing checks, not as a substitute for architectural ownership and decisions.
+The current interim repository workflow keeps architecture in Git, proposed deltas in one ACD, and execution state in its same-name plan. This is not a decision to retain planning authority in Git permanently. Use one PR per plan. Issues capture a bug or user outcome and link to those files; do not duplicate the full plan in an issue, wiki and board. GitHub is useful for tracking and enforcing checks, not as a substitute for architectural ownership and decisions.
 
 The documentation workflow runs `ruby tools/check_docs.rb` without a model or Flutter installation. The checker verifies local paths, direct leaf/architecture links and one-to-one active ACD/plan pairing. It cannot establish semantic correctness or runtime conformance.
 
@@ -32,3 +32,15 @@ No Project, billing change, branch protection or Dependabot schedule was enabled
 - Pin model provenance/checksum and establish reproducible native CI before claiming clean-clone build qualification.
 - Review remaining legacy ancestors whose refinement or semantic coverage is unresolved; do not archive merely because a heading lists children.
 - Capture native memory/audio/GUI evidence for runtime claims. Source reconciliation is not installed-app validation.
+
+## External planning evaluation — October 24 clarification
+
+The costs to test are (1) agent work maintaining planning documents and (2) dirty source checkouts, commits and reconciliation caused by planning edits. External planning may reduce these costs, but token/allowance savings have not been established.
+
+The sibling `project managment` prototype defines typed/versioned records (ACD-001), narrow lifecycle operations and compact context packets (ACD-004), and provenance-preserving import/export (ACD-005). Its intended authority includes architecture as well as plans. These are inspected design intentions, not a verified end-to-end service. Some of its design still assumes recursive specs and paired test specs; integration should not silently reintroduce that older process.
+
+GitHub Issues/sub-issues can hold change proposals and bounded slices; dependencies represent blocking relationships; Projects fields hold status and priority. These records live outside source branches. GitHub supports [dependency APIs and webhooks](https://github.blog/changelog/2025-08-21-dependencies-on-issues/), [Projects REST operations](https://github.blog/changelog/2025-09-11-a-rest-api-for-github-projects-sub-issues-improvements-and-more/) and [built-in automation](https://docs.github.com/en/issues/planning-and-tracking-with-projects/automating-your-project). An adapter would still need to enforce project-specific readiness/evidence rules, stable approved revisions and compact context retrieval. External records do not remove semantic reconciliation with implemented code.
+
+Tentative pilot: compare the current lightweight file workflow with one externally managed change. Use one authority, no bidirectional Markdown mirror, explicit approved revision/hash, and code/PR/evidence links. Export only at deliberate backup or release boundaries. Do not migrate existing authority until the pilot demonstrates acceptable reliability and benefit.
+
+Measure matched planning/replanning/review/closure tasks: input/cached-input/output tokens where available, tool-call count and returned payload volume, planning-only file mutations/commits, conflicts/recovery turns, elapsed time and missed requirements. Include adapter/setup/maintenance cost separately and amortize it over realistic task volume. Hold model, task scope and quality gates comparable; repeated observations are needed. Account allowance changes are a separate coarse observation, not interchangeable with token counts. No numeric savings claim is established.
