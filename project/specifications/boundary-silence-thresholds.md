@@ -1,5 +1,15 @@
 # Boundary Silence Thresholds
 
+## Architecture ownership
+
+- [document speech pipeline](../architecture/document-speech-pipeline.md)
+- [speech runtime messaging boundary](../architecture/speech-runtime-messaging-boundary.md)
+- [speech enrichment and narration](../architecture/speech-enrichment-and-narration.md)
+- [system overview](../architecture/system-overview.md)
+- [playback orchestration and synthesis boundaries](../architecture/playback-orchestration-and-synthesis-boundaries.md)
+
+Retained legacy contract. Final/refinement status is not implementation proof; current behavior is described in the architecture above. New work follows [AGENTS.md](../../AGENTS.md) and the active ACD/plan.
+
 Last updated: March 30, 2026
 Status: Final specification
 

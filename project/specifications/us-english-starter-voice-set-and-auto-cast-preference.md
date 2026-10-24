@@ -1,5 +1,12 @@
 # US-English Starter Voice Set And Auto-Cast Preference
 
+## Architecture ownership
+
+- [character dialogue attribution and voice casting](../architecture/character-dialogue-attribution-and-voice-casting.md)
+- [speech enrichment and narration](../architecture/speech-enrichment-and-narration.md)
+
+Retained legacy contract. Final/refinement status is not implementation proof; current behavior is described in the architecture above. New work follows [AGENTS.md](../../AGENTS.md) and the active ACD/plan.
+
 Status: final
 
 ## Overview
@@ -10,8 +17,8 @@ This specification defines the curated bundled Kokoro starter voices and the def
 
 Parent specifications:
 
-- [Character Cast Registry and Voice Assignment](character-cast-registry-and-voice-assignment.md)
-- [Voice Library Metadata and Information Surfacing](voice-library-metadata-and-information-surfacing.md)
+- [Character Cast Registry and Voice Assignment](../archive/specification-ancestors/character-cast-registry-and-voice-assignment.md)
+- [Voice Library Metadata and Information Surfacing](../archive/specification-ancestors/voice-library-metadata-and-information-surfacing.md)
 
 ## Scope
 

@@ -1,5 +1,12 @@
 # Speaker Attribution Priority And Unknown Handling
 
+## Architecture ownership
+
+- [character dialogue attribution and voice casting](../architecture/character-dialogue-attribution-and-voice-casting.md)
+- [speech enrichment and narration](../architecture/speech-enrichment-and-narration.md)
+
+Retained legacy contract. Final/refinement status is not implementation proof; current behavior is described in the architecture above. New work follows [AGENTS.md](../../AGENTS.md) and the active ACD/plan.
+
 Status: final
 
 ## Overview
@@ -8,9 +15,9 @@ This specification defines how competing speaker-attribution rules are ordered a
 
 ## Backlink
 
-Parent specification:
+Historical specification lineage:
 
-- [Speaker Attribution Contract](speaker-attribution-contract.md)
+- [Speaker Attribution Contract](../archive/specification-ancestors/speaker-attribution-contract.md)
 
 ## Scope
 

@@ -1,5 +1,12 @@
 # Explicit Speaker Tag Attribution
 
+## Architecture ownership
+
+- [character dialogue attribution and voice casting](../architecture/character-dialogue-attribution-and-voice-casting.md)
+- [speech enrichment and narration](../architecture/speech-enrichment-and-narration.md)
+
+Retained legacy contract. Final/refinement status is not implementation proof; current behavior is described in the architecture above. New work follows [AGENTS.md](../../AGENTS.md) and the active ACD/plan.
+
 Status: final
 
 ## Overview
@@ -8,9 +15,9 @@ This specification defines authoritative same-sentence speaker attribution from 
 
 ## Backlink
 
-Parent specification:
+Historical specification lineage:
 
-- [Quoted Dialogue Speaker Context Scanning](quoted-dialogue-speaker-context-scanning.md)
+- [Quoted Dialogue Speaker Context Scanning](../archive/specification-ancestors/quoted-dialogue-speaker-context-scanning.md)
 
 ## Scope
 

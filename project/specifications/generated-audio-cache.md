@@ -1,6 +1,17 @@
 # Generated Audio Cache
 
-Last updated: March 30, 2026
+## Architecture ownership
+
+- [document speech pipeline](../architecture/document-speech-pipeline.md)
+- [speech runtime messaging boundary](../architecture/speech-runtime-messaging-boundary.md)
+- [speech enrichment and narration](../architecture/speech-enrichment-and-narration.md)
+- [system overview](../architecture/system-overview.md)
+- [audio export and headless execution](../architecture/audio-export-and-headless-execution.md)
+- [playback orchestration and synthesis boundaries](../architecture/playback-orchestration-and-synthesis-boundaries.md)
+
+Retained legacy contract. Final/refinement status is not implementation proof; current behavior is described in the architecture above. New work follows [AGENTS.md](../../AGENTS.md) and the active ACD/plan.
+
+Last updated: October 24, 2026
 Status: Final specification
 
 ## Scope
@@ -69,6 +80,12 @@ Each cached chunk sidecar must include:
 - normalization version
 - hash of normalized `speakText`
 
+## Character Binding Identity
+
+Voice and model identity come from the prepared character voice binding, including voice-asset digest, model-manifest digest, engine compatibility and pronunciation-profile identity. The cache key and sidecar must also identify effective pronunciation/delivery realization, adapter and boundary-policy versions. A stable voice name is insufficient when its bytes change. Binding revisions route result ownership; unchanged content fingerprints may reuse audio across revisions.
+
+The runtime validates manifests and publishes assets/audio atomically. Legacy entries without required fingerprints are not reusable under the new contract. Characters reference shared manifests; they do not own cache files or native handles. Disk retention and cleanup remain shared cache-service responsibilities. This amendment does not introduce automatic eviction: any future disk-budget policy must preserve pinned queue/export audio and explicitly revise the retention contract below. See [Document Preparation and Execution Contexts](../acd/prepared-document-runtime.acd).
+
 ## Retention Rules
 
 - Generated chunk audio does not auto-expire.
@@ -85,6 +102,8 @@ Cached audio is invalid when any of the following changes:
 - rate
 - normalization version
 - normalized chunk text
+- voice/model content fingerprint
+- effective pronunciation/delivery realization and adapter/boundary-policy version
 
 Invalid entries are ignored; they are not reused under a mismatched key.
 

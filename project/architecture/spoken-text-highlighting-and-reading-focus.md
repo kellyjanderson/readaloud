@@ -1,150 +1,37 @@
 # Spoken Text Highlighting and Reading Focus
 
-Last updated: April 8, 2026
-Status: Active architecture
+Reconciled: October 24, 2026
+Status: Current source architecture; runtime validation not refreshed
 
-## Purpose
+## Implemented structure and limitations
 
-This document defines how `Read Aloud` should highlight the text currently being spoken and keep the visible reading surface aligned with playback.
+Player progress is mapped to spoken selections and display positions. The reading surface renders highlights and follow-along state; user scrolling can suspend following and the recenter control restores it.
 
-## Overview
+The controller already coalesces follower updates. Healthy/low/critical buffer-pressure policies use 100/180/250 ms intervals and soft word-drift thresholds of 2/3/4; a ten-word drift triggers hard resynchronization. Pending updates are flushed at relevant transport boundaries. The claim that follower coalescing remained wholly unimplemented was stale.
 
-The app already knows:
+Follower updates should remain subordinate to audio; the presence of these policies does not prove smooth playback under every document/rendering load. Long-session UI/audio integration measurements remain pending. Windowing expensive display preparation and keeping bounded UI updates are part of the execution-placement review.
 
-- what speech segment and word range is active
-- how normalized speech maps back to visible display content
+## Source and tests
 
-What it does not yet do is turn that knowledge into stable UI behavior.
+- [reader_controller.dart](../../lib/src/controllers/reader_controller.dart)
+- [spoken_selection_mapper_service.dart](../../lib/src/services/spoken_selection_mapper_service.dart)
+- [document_surface.dart](../../lib/src/widgets/document_surface.dart)
+- [reading_focus_state.dart](../../lib/src/models/reading_focus_state.dart)
+- [spoken_selection_mapper_service_test.dart](../../test/spoken_selection_mapper_service_test.dart)
+- [document_surface_test.dart](../../test/document_surface_test.dart)
+- [reading_focus_recenter_button_test.dart](../../test/reading_focus_recenter_button_test.dart)
 
-This architecture defines the missing layer between playback progress and reader-surface presentation.
+Tests listed here are existing evidence locations, not a claim that they passed in this review. The bundled Intel Dart executable cannot run in the current Apple Silicon execution environment.
 
-## Components
+## Proposed changes
 
-### Spoken Progress State
+See [prepared document runtime ACD](../acd/prepared-document-runtime.acd) and its [implementation plan](../planning/prepared-document-runtime.plan). Historical design prose is preserved in the [architecture snapshot](../archive/architecture/2026-10-24/spoken-text-highlighting-and-reading-focus.md).
 
-Responsibilities:
+## Retained child contracts
 
-- consume runtime progress events
-- preserve the current spoken segment id and word range
-- preserve current voice and rate context for follow-along decisions
+These legacy contracts describe intended behavior and acceptance; `final` denotes refinement, not verified implementation. New changes use an ACD and plan.
 
-### Progress-to-Display Mapper
-
-Responsibilities:
-
-- resolve spoken segment and word ranges to visible display ranges
-- use normalized display/speech mappings rather than renderer-private string search
-- preserve confidence and fallback level for the resolved visible range
-
-### Highlight Model
-
-Responsibilities:
-
-- represent the active spoken selection in UI-friendly form
-- support word-, segment-, and block-level highlight precision
-- preserve enough information for debugging and later accessibility behavior
-
-### Reading Focus Controller
-
-Responsibilities:
-
-- decide when the viewport should follow playback
-- avoid jitter from per-word scrolling
-- pause or relax follow behavior when the user manually scrolls
-- resume follow mode based on explicit policy rather than accidental motion
-
-### Reader Surface Rendering
-
-Responsibilities:
-
-- paint the active spoken range
-- degrade gracefully when only lower-confidence mapping is available
-- keep highlight presentation separate from playback timing logic
-
-## Relationships
-
-- spoken progress state depends on playback/runtime events
-- progress-to-display mapping depends on `SpeechDocument`, `DisplayDocument`, and `PositionMap`
-- the highlight model depends on mapping output, not on raw HTML
-- the reading focus controller consumes the same highlight state but applies separate viewport policy
-
-## Data Flow
-
-```text
-playback progress event
-  -> spoken progress state
-  -> progress-to-display mapper
-  -> highlight model
-  -> reader surface painting
-  -> reading focus controller
-  -> viewport updates
-```
-
-## Cross-Domain Solutions
-
-### 1. Highlighting is a normalized-content feature, not an HTML trick
-
-The system must not anchor follow-along behavior to renderer-private HTML substring search.
-
-Reason:
-
-- HTML conversion is a presentation detail
-- normalized mapping is the durable cross-format contract
-
-### 2. Precision and user comfort are different concerns
-
-The system must separate:
-
-- precise spoken-range updates
-- comfortable viewport movement
-
-Reason:
-
-- per-word progress can be frequent
-- per-word scrolling is visually noisy
-
-### 3. Degraded mapping still needs useful feedback
-
-The app must not fail silently when exact word-level mapping is unavailable.
-
-Reason:
-
-- some imported formats or future engine paths may have weaker mapping confidence
-- segment or block highlighting is still better than no follow-along state
-
-### 4. Highlight and focus are follower channels, not playback owners
-
-The reader surface must follow the active audio session rather than competing with it.
-
-Reason:
-
-- the user hears stutter more harshly than they notice skipped intermediate highlight states
-- UI update pressure is allowed to degrade gracefully
-- playback continuity and presentation continuity are not equally important
-
-## Architectural Rules
-
-- Highlight state must derive from normalized ids and ranges.
-- The UI must not re-derive spoken ranges from flattened `displayHtml` or `speakableText`.
-- The mapping layer must support a fallback ladder from word to segment to block.
-- Highlight and focus updates must not block, restart, or indirectly reconfigure active playback.
-- The visible follower path may coalesce, drop intermediate states, or hard-resynchronize to the current audio-mapped position when needed.
-- Viewport follow policy must be explicit and suspendable.
-- Pause must freeze the visible highlight at the last known spoken range until playback resumes or resets.
-
-## Current Implementation Gap
-
-The core branch is now implemented, but one coordination gap remains open:
-
-- follow-along rendering is active
-- reading focus and recenter behavior are active
-- the reading surface now preserves readable contrast across appearance modes
-- explicit follower coalescing and hard-resynchronization behavior under playback load is still being defined as a focused implementation branch
-
-Future work in this area should focus on follower catch-up behavior under load plus later polish or accessibility improvements.
-
-## Governing Specifications
-
-- [Playback Progress and Jump Mapping](../specifications/playback-progress-and-jump-mapping.md)
-- [Spoken Text Highlighting and Reading Focus](../specifications/spoken-text-highlighting-and-reading-focus.md)
-- [Follower Progress Coalescing And Drift Resynchronization](../specifications/follower-progress-coalescing-and-drift-resynchronization.md)
+- [follower progress coalescing and drift resynchronization](../specifications/follower-progress-coalescing-and-drift-resynchronization.md)
+- [playback progress and jump mapping](../specifications/playback-progress-and-jump-mapping.md)
+- [reading focus follow policy](../specifications/reading-focus-follow-policy.md)
+- [spoken text selection and display mapping](../specifications/spoken-text-selection-and-display-mapping.md)

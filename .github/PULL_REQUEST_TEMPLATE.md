@@ -1,30 +1,15 @@
-## Summary
+## Change
 
-Describe the change clearly and briefly.
+Problem and resulting behavior:
 
-## Change Type
+## Authority
 
-- [ ] Bug fix
-- [ ] Feature
-- [ ] Docs only
-- [ ] Maintenance
-
-## Required Linkage
-
-- Issue:
-- Specification:
-
-Bug-fix branches should link to an issue.
-
-Feature branches should link to a specification.
+ACD + same-name plan, or issue/journal entry for a small architecture-conforming change:
 
 ## Validation
 
-- [ ] `flutter analyze`
-- [ ] `flutter test`
-- [ ] relevant manual validation completed
-- [ ] speech/audio verification completed when relevant
+Commands and results; distinguish passed, not run and blocked. Include native/audio evidence when relevant.
 
-## Notes
+## Reconciliation
 
-Anything reviewers or future readers should know.
+Architecture and user-doc impact (or why none). For completed plans, link archived ACD/plan. Do not mark runtime acceptance complete based only on source tests.

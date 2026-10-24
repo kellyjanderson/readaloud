@@ -1,5 +1,11 @@
 # Persistent Folder Access For Startup Restore
 
+## Architecture ownership
+
+- [system overview](../architecture/system-overview.md)
+
+Retained legacy contract. Final/refinement status is not implementation proof; current behavior is described in the architecture above. New work follows [AGENTS.md](../../AGENTS.md) and the active ACD/plan.
+
 Status: final
 
 ## Overview
@@ -12,9 +18,9 @@ Issue anchor:
 
 ## Backlink
 
-Parent specification:
+Historical specification lineage:
 
-- [Reader Session Continuity And Live Input](reader-session-continuity-and-live-input.md)
+- [Reader Session Continuity And Live Input](../archive/specification-ancestors/reader-session-continuity-and-live-input.md)
 
 ## Scope
 

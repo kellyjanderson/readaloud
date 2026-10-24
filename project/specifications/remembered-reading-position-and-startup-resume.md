@@ -1,5 +1,13 @@
 # Remembered Reading Position And Startup Resume
 
+## Architecture ownership
+
+- [speech enrichment and narration](../architecture/speech-enrichment-and-narration.md)
+- [system overview](../architecture/system-overview.md)
+- [playback orchestration and synthesis boundaries](../architecture/playback-orchestration-and-synthesis-boundaries.md)
+
+Retained legacy contract. Final/refinement status is not implementation proof; current behavior is described in the architecture above. New work follows [AGENTS.md](../../AGENTS.md) and the active ACD/plan.
+
 Status: final
 
 ## Overview
@@ -13,9 +21,9 @@ Issue anchor:
 
 ## Backlink
 
-Parent specification:
+Historical specification lineage:
 
-- [Reader Session Continuity And Live Input](reader-session-continuity-and-live-input.md)
+- [Reader Session Continuity And Live Input](../archive/specification-ancestors/reader-session-continuity-and-live-input.md)
 
 ## Scope
 

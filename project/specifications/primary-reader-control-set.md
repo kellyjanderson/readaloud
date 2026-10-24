@@ -1,5 +1,11 @@
 # Primary Reader Control Set
 
+## Architecture ownership
+
+- [system overview](../architecture/system-overview.md)
+
+Retained legacy contract. Final/refinement status is not implementation proof; current behavior is described in the architecture above. New work follows [AGENTS.md](../../AGENTS.md) and the active ACD/plan.
+
 Status: final
 
 ## Overview
@@ -8,9 +14,9 @@ This specification defines which controls remain visibly dominant on the primary
 
 ## Backlink
 
-Parent specification:
+Historical specification lineage:
 
-- [Primary Reader Surface UI](primary-reader-surface-ui.md)
+- [Primary Reader Surface UI](../archive/specification-ancestors/primary-reader-surface-ui.md)
 
 ## Scope
 

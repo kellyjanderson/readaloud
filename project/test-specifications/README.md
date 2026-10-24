@@ -1,18 +1,12 @@
-# Test Specifications Index
+# Retained verification scenarios
 
-Test specifications define how final feature leaf specifications should be verified manually and automatically.
-
-Each document in this folder should pair to exactly one final feature leaf specification in:
-
-```text
-project/specifications/
-```
-
-The paired filename should normally use the same basename as the feature specification it verifies.
-
-This initial backfill focuses on the current running-app feature surface so active UI and playback work can be tested against durable expectations instead of ad hoc notes.
+Existing detailed test specifications remain reference material. New work defines acceptance in the ACD and bounded checks in its plan; creating one test document per feature leaf is no longer required. Existing checked/final labels are not fresh test evidence. See [AGENTS.md](../../AGENTS.md).
 
 ## Current Documents
+
+### Document Preparation and Buffered Playback
+
+- [Prepared Document and Buffered Playback](prepared-document-and-buffered-playback.md)
 
 ### App Shell And Platform Navigation
 

@@ -1,5 +1,11 @@
 # Spoken Highlight Visual Presentation
 
+## Architecture ownership
+
+- [system overview](../architecture/system-overview.md)
+
+Retained legacy contract. Final/refinement status is not implementation proof; current behavior is described in the architecture above. New work follows [AGENTS.md](../../AGENTS.md) and the active ACD/plan.
+
 Status: final
 
 ## Overview
@@ -8,9 +14,9 @@ This specification defines how the currently spoken text is visually highlighted
 
 ## Backlink
 
-Parent specification:
+Historical specification lineage:
 
-- [Follow-Along Reading Surface UI](follow-along-reading-surface-ui.md)
+- [Follow-Along Reading Surface UI](../archive/specification-ancestors/follow-along-reading-surface-ui.md)
 
 ## Scope
 

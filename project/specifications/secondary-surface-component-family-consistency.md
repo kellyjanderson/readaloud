@@ -1,5 +1,11 @@
 # Secondary Surface Component Family Consistency
 
+## Architecture ownership
+
+- [system overview](../architecture/system-overview.md)
+
+Retained legacy contract. Final/refinement status is not implementation proof; current behavior is described in the architecture above. New work follows [AGENTS.md](../../AGENTS.md) and the active ACD/plan.
+
 Status: final
 
 ## Overview
@@ -8,9 +14,9 @@ This specification defines the shared visual family for secondary surfaces such 
 
 ## Backlink
 
-Parent specification:
+Historical specification lineage:
 
-- [Visual Design System Adoption UI](visual-design-system-adoption-ui.md)
+- [Visual Design System Adoption UI](../archive/specification-ancestors/visual-design-system-adoption-ui.md)
 
 ## Scope
 

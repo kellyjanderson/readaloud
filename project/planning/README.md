@@ -1,9 +1,6 @@
-# Planning Index
+# Implementation planning
 
-Planning documents define active execution paths for `Read Aloud`.
+- [Prepared document runtime](prepared-document-runtime.plan) — active; paired with its [ACD](../acd/prepared-document-runtime.acd).
+- [Open-source compliance checklist](open-source-compliance-plan.md) — retained release prerequisite; requires owner license/packaging decisions.
 
-## Current Documents
-
-- [Progression](progression.md)
-- [Imported Document Rework Plan](imported-document-rework-plan.md)
-- [Open Source Compliance Plan](open-source-compliance-plan.md)
+Completed plans archive here; old leaf checklists are [historical](archive/progression.md), not current implementation status. Use the [plan template](../../.agents/skills/implementation-plan/TEMPLATE.plan). No separate implementation-specification stage is required.

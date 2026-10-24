@@ -1,5 +1,12 @@
 # Character Identity Extraction Pass Ordering
 
+## Architecture ownership
+
+- [character dialogue attribution and voice casting](../architecture/character-dialogue-attribution-and-voice-casting.md)
+- [speech enrichment and narration](../architecture/speech-enrichment-and-narration.md)
+
+Retained legacy contract. Final/refinement status is not implementation proof; current behavior is described in the architecture above. New work follows [AGENTS.md](../../AGENTS.md) and the active ACD/plan.
+
 Status: final
 
 ## Overview
@@ -8,9 +15,9 @@ This specification defines when character identity extraction runs and what data
 
 ## Backlink
 
-Parent specification:
+Historical specification lineage:
 
-- [Character Gender Identity Extraction](character-gender-identity-extraction.md)
+- [Character Gender Identity Extraction](../archive/specification-ancestors/character-gender-identity-extraction.md)
 
 ## Scope
 

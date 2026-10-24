@@ -1,5 +1,7 @@
 # Release 0.3.0
 
+Historical release-intent record. This is not the active implementation plan or verified release status. See [active planning](../planning/README.md).
+
 Status: fully specified, implementation active
 
 ## Intent
@@ -43,17 +45,17 @@ This release should improve both:
 
 ## Planned Specifications
 
-- [Dialogue Span and Speaker Attribution](../specifications/dialogue-span-and-speaker-attribution.md)
-- [Character Cast Registry and Voice Assignment](../specifications/character-cast-registry-and-voice-assignment.md)
-- [Multi-Voice Playback Routing](../specifications/multi-voice-playback-routing.md)
-- [Spoken Text Highlighting and Reading Focus](../specifications/spoken-text-highlighting-and-reading-focus.md)
-- [Voice Library Metadata and Information Surfacing](../specifications/voice-library-metadata-and-information-surfacing.md)
-- [Primary Reader Surface UI](../specifications/primary-reader-surface-ui.md)
-- [Reader Options And Secondary Settings UI](../specifications/reader-options-and-secondary-settings-ui.md)
-- [Voice Library and Cast Management UI](../specifications/voice-library-and-cast-management-ui.md)
-- [Follow-Along Reading Surface UI](../specifications/follow-along-reading-surface-ui.md)
-- [Theme and Appearance Modes UI](../specifications/theme-and-appearance-modes-ui.md)
-- [Live Input and File Menu UI](../specifications/live-input-and-file-menu-ui.md)
+- [Dialogue Span and Speaker Attribution](../archive/specification-ancestors/dialogue-span-and-speaker-attribution.md)
+- [Character Cast Registry and Voice Assignment](../archive/specification-ancestors/character-cast-registry-and-voice-assignment.md)
+- [Multi-Voice Playback Routing](../archive/specification-ancestors/multi-voice-playback-routing.md)
+- [Spoken Text Highlighting and Reading Focus](../archive/specification-ancestors/spoken-text-highlighting-and-reading-focus.md)
+- [Voice Library Metadata and Information Surfacing](../archive/specification-ancestors/voice-library-metadata-and-information-surfacing.md)
+- [Primary Reader Surface UI](../archive/specification-ancestors/primary-reader-surface-ui.md)
+- [Reader Options And Secondary Settings UI](../archive/specification-ancestors/reader-options-and-secondary-settings-ui.md)
+- [Voice Library and Cast Management UI](../archive/specification-ancestors/voice-library-and-cast-management-ui.md)
+- [Follow-Along Reading Surface UI](../archive/specification-ancestors/follow-along-reading-surface-ui.md)
+- [Theme and Appearance Modes UI](../archive/specification-ancestors/theme-and-appearance-modes-ui.md)
+- [Live Input and File Menu UI](../archive/specification-ancestors/live-input-and-file-menu-ui.md)
 
 ## Notes
 

@@ -1,5 +1,12 @@
 # Spoken Text Selection and Display Mapping
 
+## Architecture ownership
+
+- [spoken text highlighting and reading focus](../architecture/spoken-text-highlighting-and-reading-focus.md)
+- [playback orchestration and synthesis boundaries](../architecture/playback-orchestration-and-synthesis-boundaries.md)
+
+Retained legacy contract. Final/refinement status is not implementation proof; current behavior is described in the architecture above. New work follows [AGENTS.md](../../AGENTS.md) and the active ACD/plan.
+
 Status: final
 
 ## Overview
@@ -8,9 +15,9 @@ This specification defines how playback progress becomes a visible spoken select
 
 ## Backlink
 
-Parent specification:
+Historical specification lineage:
 
-- [Spoken Text Highlighting and Reading Focus](spoken-text-highlighting-and-reading-focus.md)
+- [Spoken Text Highlighting and Reading Focus](../archive/specification-ancestors/spoken-text-highlighting-and-reading-focus.md)
 
 ## Scope
 

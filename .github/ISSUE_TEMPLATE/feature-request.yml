@@ -9,7 +9,7 @@ body:
       value: |
         Thanks for proposing a feature.
 
-        Feature implementation in this repository should be tied to a specification.
+        Architecture changes use an ACD and paired implementation plan; small changes may use this issue.
   - type: textarea
     id: problem
     attributes:
@@ -25,11 +25,11 @@ body:
     validations:
       required: true
   - type: textarea
-    id: spec
+    id: planning
     attributes:
-      label: Related specification
-      description: Link an existing spec, or describe what spec should be created first.
-      placeholder: project/specifications/...
+      label: Related planning
+      description: Link an active ACD/plan when available. Describe the problem before proposing implementation.
+      placeholder: project/acd/... and project/planning/...
   - type: textarea
     id: success
     attributes:

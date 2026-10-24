@@ -1,6 +1,16 @@
 # Speech Worker Pipeline
 
-Last updated: March 30, 2026
+## Architecture ownership
+
+- [document speech pipeline](../architecture/document-speech-pipeline.md)
+- [speech runtime messaging boundary](../architecture/speech-runtime-messaging-boundary.md)
+- [speech enrichment and narration](../architecture/speech-enrichment-and-narration.md)
+- [system overview](../architecture/system-overview.md)
+- [playback orchestration and synthesis boundaries](../architecture/playback-orchestration-and-synthesis-boundaries.md)
+
+Retained legacy contract. Final/refinement status is not implementation proof; current behavior is described in the architecture above. New work follows [AGENTS.md](../../AGENTS.md) and the active ACD/plan.
+
+Last updated: October 24, 2026
 Status: Final specification
 
 ## Scope
@@ -64,8 +74,14 @@ Every event must include:
 - The initial implementation uses one active inference worker per engine instance.
 - The first chunk for the active playback request has strict priority over all later chunks.
 - Background generation for later chunks may continue while playback is running.
-- Changing document, voice, or rate cancels the active generation sequence for all not-yet-completed chunks.
+- Document replacement invalidates the old preparation revision. Ordinary character changes select resident voice context without cancellation. User assignment/rate edits generate a replacement future revision and commit it only after contiguous replacement audio is ready.
 - Background generation stays sequential in `v1`; it does not fan out multiple inference jobs in parallel.
+
+## Document and Buffer Contract
+
+The worker consumes a fully analyzed instrumented document and resident character voice bindings. It does not infer speakers while rendering. The runtime worker and model session are long-lived; inference tensors are released per request. Realization, route derivation and chunk planning run in this worker rather than the UI controller.
+
+Scheduling uses bounded contiguous playable-time watermarks, with active refill ahead of export/speculative work. First-chunk priority does not bypass the startup lead gate. Worker exit, timeout, cancellation and shutdown must resolve owned requests. [Document Preparation and Execution Contexts](../acd/prepared-document-runtime.acd) defines execution lanes and handoffs.
 
 ## Stage Rules
 

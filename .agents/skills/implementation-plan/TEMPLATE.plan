@@ -1,0 +1,19 @@
+# Change title implementation plan
+Type: Implementation Plan
+Status: Draft
+Architecture authority: ../acd/same-basename.acd
+Branch: codex/same-basename
+
+## Goal and constraints
+## Dependencies
+## [ ] P0 — Bounded state change
+Objective:
+Depends on:
+Scope:
+Validation:
+Completion evidence:
+
+## [ ] FINAL — Validate, reconcile and archive
+Run final validation. Reconcile actual implementation into canonical architecture and subject-oriented docs; record docs impact or why none. Remove contradictions, verify links, archive the ACD and this plan, and prepare one PR. Merge requires user authorization.
+Validation:
+Completion evidence:

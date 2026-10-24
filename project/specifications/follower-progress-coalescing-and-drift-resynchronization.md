@@ -1,5 +1,12 @@
 # Follower Progress Coalescing And Drift Resynchronization
 
+## Architecture ownership
+
+- [spoken text highlighting and reading focus](../architecture/spoken-text-highlighting-and-reading-focus.md)
+- [playback orchestration and synthesis boundaries](../architecture/playback-orchestration-and-synthesis-boundaries.md)
+
+Retained legacy contract. Final/refinement status is not implementation proof; current behavior is described in the architecture above. New work follows [AGENTS.md](../../AGENTS.md) and the active ACD/plan.
+
 Last updated: April 8, 2026
 Status: Final specification
 
@@ -9,9 +16,9 @@ This specification defines how visible spoken selection and reader follow-along 
 
 ## Backlink
 
-Parent specification:
+Historical specification lineage:
 
-- [Spoken Text Highlighting and Reading Focus](spoken-text-highlighting-and-reading-focus.md)
+- [Spoken Text Highlighting and Reading Focus](../archive/specification-ancestors/spoken-text-highlighting-and-reading-focus.md)
 
 ## Scope
 

@@ -1,6 +1,14 @@
 # Speech Runtime Lifecycle and Ownership
 
-Last updated: March 30, 2026
+## Architecture ownership
+
+- [speech runtime messaging boundary](../architecture/speech-runtime-messaging-boundary.md)
+- [system overview](../architecture/system-overview.md)
+- [audio export and headless execution](../architecture/audio-export-and-headless-execution.md)
+
+Retained legacy contract. Final/refinement status is not implementation proof; current behavior is described in the architecture above. New work follows [AGENTS.md](../../AGENTS.md) and the active ACD/plan.
+
+Last updated: October 24, 2026
 Status: Final specification
 
 ## Overview
@@ -47,8 +55,8 @@ The runtime may own at most one active playback session at a time.
 `sessionId` is the controller-visible ownership token for:
 
 - active document playback
-- selected voice
-- selected rate
+- document voice context
+- committed playback configuration
 - active replay/jump context
 
 ### Session Invalidation Rule
@@ -56,12 +64,10 @@ The runtime may own at most one active playback session at a time.
 A new `sessionId` is required when:
 
 - document changes
-- voice changes
-- rate changes
 - playback jumps to a new target
 - replay begins after completion
 
-Pausing and resuming without changing playback identity must not require a new `sessionId`.
+Pausing/resuming and ordinary character transitions must not require a new `sessionId`. Assignment/rate edits create binding/configuration and generation revisions within the session, committed at a future safe boundary after replacement audio is ready. Explicit immediate restart may replace the session. Old audio remains valid only until the committed revision boundary.
 
 ### Generation Rule
 
@@ -74,6 +80,10 @@ A new `generationId` is required when:
 - the active session is replaced
 - the existing generation is explicitly cancelled and restarted
 - a stale plan must be abandoned in favor of a new preparation sequence
+
+### Document Resource Rule
+
+The runtime prepares document-wide voice bindings before playback, retaining required voice vectors and a reusable model session through ordinary transitions. Native sessions are shared where compatible; they are not created per character or chunk. Tensor lifetime is per inference. Document completion/replacement releases document resources after draining work; replay establishes a fresh ready context. Serialized characters carry binding identity, never native handles.
 
 ### Ownership Rule
 
@@ -107,6 +117,8 @@ Shutdown must:
 - cancel or drain in-flight work according to implementation safety
 - emit one terminal runtime shutdown event
 - release runtime-owned background resources
+
+Unexpected worker exit, startup failure and timeout must complete outstanding requests with an owned terminal result. Cancellation must document whether native work drains or supports cancellation; destroying an isolate alone does not establish native cleanup. Shutdown is awaitable and releases tensors before sessions.
 
 ### Failure Rule
 

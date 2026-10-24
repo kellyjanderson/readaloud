@@ -1,5 +1,11 @@
 # Reader Options Sectioned Information Hierarchy
 
+## Architecture ownership
+
+- [system overview](../architecture/system-overview.md)
+
+Retained legacy contract. Final/refinement status is not implementation proof; current behavior is described in the architecture above. New work follows [AGENTS.md](../../AGENTS.md) and the active ACD/plan.
+
 Status: final
 
 ## Overview
@@ -10,8 +16,8 @@ This specification defines the visual hierarchy and grouping structure for the R
 
 Parent specifications:
 
-- [Visual Design System Adoption UI](visual-design-system-adoption-ui.md)
-- [Reader Options And Secondary Settings UI](reader-options-and-secondary-settings-ui.md)
+- [Visual Design System Adoption UI](../archive/specification-ancestors/visual-design-system-adoption-ui.md)
+- [Reader Options And Secondary Settings UI](../archive/specification-ancestors/reader-options-and-secondary-settings-ui.md)
 
 ## Scope
 

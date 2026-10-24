@@ -1,5 +1,11 @@
 # Pronunciation Resource Layering Policy
 
+## Architecture ownership
+
+- [english pronunciation profiles and rule modularity](../architecture/english-pronunciation-profiles-and-rule-modularity.md)
+
+Retained legacy contract. Final/refinement status is not implementation proof; current behavior is described in the architecture above. New work follows [AGENTS.md](../../AGENTS.md) and the active ACD/plan.
+
 Last updated: March 31, 2026
 Status: Final specification
 

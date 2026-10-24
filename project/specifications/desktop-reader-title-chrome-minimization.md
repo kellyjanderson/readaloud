@@ -1,5 +1,11 @@
 # Desktop Reader Title Chrome Minimization
 
+## Architecture ownership
+
+- [reader interface and session state](../architecture/reader-interface-and-session-state.md)
+
+Retained legacy contract. Final/refinement status is not implementation proof; current behavior is described in the architecture above. New work follows [AGENTS.md](../../AGENTS.md) and the active ACD/plan.
+
 Status: final
 
 ## Overview
@@ -12,9 +18,9 @@ Issue anchor:
 
 ## Backlink
 
-Parent specification:
+Historical specification lineage:
 
-- [App Shell And Platform Navigation UI](app-shell-and-platform-navigation-ui.md)
+- [App Shell And Platform Navigation UI](../archive/specification-ancestors/app-shell-and-platform-navigation-ui.md)
 
 ## Scope
 
