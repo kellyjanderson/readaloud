@@ -4,14 +4,25 @@ import 'tts_engine.dart';
 /// clear native playback before publishing the terminal failure instead.
 Future<void> kokoroTerminatePreparationFailure({
   required void Function() invalidate,
+  required bool Function() isCurrent,
   required Future<void> Function() cancel,
   required Future<void> Function() reset,
-  required void Function() report,
+  required void Function(List<Object> cleanupErrors) report,
 }) async {
   invalidate();
-  await cancel();
-  await reset();
-  report();
+  final cleanupErrors = <Object>[];
+  try {
+    await cancel();
+  } catch (error) {
+    cleanupErrors.add(error);
+  }
+  if (!isCurrent()) return;
+  try {
+    await reset();
+  } catch (error) {
+    cleanupErrors.add(error);
+  }
+  if (isCurrent()) report(cleanupErrors);
 }
 
 /// End-of-document and a new speak request join the same in-flight reset.

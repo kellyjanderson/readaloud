@@ -11,6 +11,7 @@ void main() {
       final events = <String>[];
       final terminal = kokoroTerminatePreparationFailure(
         invalidate: () => events.add('invalidated'),
+        isCurrent: () => true,
         cancel: () {
           events.add('cancel');
           return cancel.future;
@@ -19,7 +20,7 @@ void main() {
           events.add('reset');
           return reset.future;
         },
-        report: () => events.add('reported'),
+        report: (_) => events.add('reported'),
       );
       expect(events, ['invalidated', 'cancel']);
       cancel.complete();
@@ -28,6 +29,55 @@ void main() {
       reset.complete();
       await terminal;
       expect(events, ['invalidated', 'cancel', 'reset', 'reported']);
+    },
+  );
+  for (final failedStep in ['cancel', 'reset']) {
+    test(
+      'tail failure reports original terminal after $failedStep throws',
+      () async {
+        final events = <String>[];
+        final failure = StateError(failedStep);
+        await kokoroTerminatePreparationFailure(
+          invalidate: () => events.add('invalidate'),
+          isCurrent: () => true,
+          cancel: () async {
+            events.add('cancel');
+            if (failedStep == 'cancel') throw failure;
+          },
+          reset: () async {
+            events.add('reset');
+            if (failedStep == 'reset') throw failure;
+          },
+          report: (errors) {
+            events.add('original reported');
+            expect(errors, [failure]);
+          },
+        );
+        expect(events, ['invalidate', 'cancel', 'reset', 'original reported']);
+      },
+    );
+  }
+  test(
+    'replacement while cancellation drains suppresses old reset and terminal',
+    () async {
+      final cancel = Completer<void>();
+      var current = true;
+      var reset = false;
+      var reported = false;
+      final terminal = kokoroTerminatePreparationFailure(
+        invalidate: () {},
+        isCurrent: () => current,
+        cancel: () => cancel.future,
+        reset: () async {
+          reset = true;
+        },
+        report: (_) => reported = true,
+      );
+      current = false;
+      cancel.complete();
+      await terminal;
+      expect(reset, isFalse);
+      expect(reported, isFalse);
     },
   );
   for (final replacement in [

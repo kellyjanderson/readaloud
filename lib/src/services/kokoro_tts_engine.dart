@@ -1217,13 +1217,23 @@ class KokoroTtsEngine
     }
   }
 
-  Future<void> _terminatePreparationFailure(String message) =>
-      kokoroTerminatePreparationFailure(
-        invalidate: () => ++_requestToken,
-        cancel: _cancelActiveGeneration,
-        reset: _resetPlaybackState,
-        report: () => _onError?.call(message),
-      );
+  Future<void> _terminatePreparationFailure(String message) {
+    late int terminalToken;
+    return kokoroTerminatePreparationFailure(
+      invalidate: () => terminalToken = ++_requestToken,
+      isCurrent: () => terminalToken == _requestToken,
+      cancel: _cancelActiveGeneration,
+      reset: _resetPlaybackState,
+      report: (cleanupErrors) {
+        if (terminalToken != _requestToken) return;
+        _onError?.call(
+          cleanupErrors.isEmpty
+              ? message
+              : '$message; cleanup failed: ${cleanupErrors.join('; ')}',
+        );
+      },
+    );
+  }
 
   @override
   Future<void> pause() async {
