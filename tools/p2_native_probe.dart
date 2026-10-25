@@ -18,11 +18,18 @@ import 'package:read_aloud/src/services/speech_worker_pipeline.dart';
 
 Future<void> main(List<String> arguments) async {
   WidgetsFlutterBinding.ensureInitialized();
-  if (arguments.length != 1) {
-    stderr.writeln('Usage: p2 probe NEW_OUTPUT_DIRECTORY');
+  final contexts = arguments.length == 2 ? int.tryParse(arguments[1]) : 3;
+  if (arguments.isEmpty ||
+      arguments.length > 2 ||
+      contexts == null ||
+      contexts < 3 ||
+      contexts > 100) {
+    stderr.writeln(
+      'Usage: p2 probe NEW_OUTPUT_DIRECTORY [CONTEXTS=3, range 3..100]',
+    );
     exit(64);
   }
-  final output = Directory(arguments.single);
+  final output = Directory(arguments.first);
   if (await output.exists()) {
     stderr.writeln('Probe output must not exist: ${output.path}');
     exit(64);
@@ -99,7 +106,8 @@ Future<void> main(List<String> arguments) async {
           )
           .toString(),
       'mainChunks': 300,
-      'cycleChunks': 6,
+      'cycleChunks': (contexts - 1) * 3,
+      'contexts': contexts,
     });
     KokoroSpeechWorkerChunkProcessor createProcessor() =>
         KokoroSpeechWorkerChunkProcessor(
@@ -111,9 +119,10 @@ Future<void> main(List<String> arguments) async {
           engineVersion: 'p2-probe',
         );
     final referencePcm = <String, String>{};
-    for (var cycle = 0; cycle < 3; cycle++) {
+    for (var cycle = 0; cycle < contexts; cycle++) {
       processor ??= createProcessor();
       final documentId = 'p2-probe-document-$cycle';
+      await record('before_prepare', {'cycle': cycle});
       final bindings = await processor.prepareResources(
         documentId: documentId,
         revision: cycle + 1,
@@ -192,9 +201,11 @@ Future<void> main(List<String> arguments) async {
         });
       }
       if (cycle == 0) {
+        await record('before_release', {'cycle': cycle});
         await processor.releaseResources();
         await record('released', {'cycle': cycle});
       } else {
+        await record('before_dispose', {'cycle': cycle});
         await processor.dispose();
         processor = null;
         await record('disposed', {'cycle': cycle});
@@ -202,8 +213,8 @@ Future<void> main(List<String> arguments) async {
     }
     await record('assets_after', await fingerprints());
     await record('complete', {
-      'chunks': 306,
-      'contexts': 3,
+      'chunks': 300 + (contexts - 1) * 3,
+      'contexts': contexts,
       'limitation':
           'Native synthesis lifetime only; no player, live playback continuity or perceptual-quality claim.',
     });
