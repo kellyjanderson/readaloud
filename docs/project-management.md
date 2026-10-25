@@ -28,7 +28,7 @@ Give the orchestrator the parent issue URL and intended delivery target. It read
 - Required verification and limits on completion claims.
 - Return contract: summary, paths, commit/PR, tests/evidence, blockers, remaining work.
 
-The orchestrator owns assignment and parent updates. Workers may report to their slice when authorized; otherwise the orchestrator publishes their returned results. No worker needs to create or rewrite local planning documents. An isolated worktree per concurrent writer avoids index and checkout collisions; sequential work may reuse a safe checkout. The orchestrator decides integration order and resolves conflicts. A slice branch merged into a feature branch is not yet delivered to main.
+The orchestrator owns assignment and parent updates. Workers may report to their slice when authorized; otherwise the orchestrator publishes their returned results. No worker needs to create or rewrite local planning documents. An isolated worktree per concurrent writer avoids index and checkout collisions; sequential work may reuse a safe checkout. The orchestrator decides integration order and resolves conflicts. A slice branch merged into a feature or release branch is not yet delivered to main or shipped. Include the release milestone, release issue and release branch in each assignment.
 
 For re-entry, read the latest coordination checkpoint and linked slice results. Record a checkpoint at dispatch, meaningful blocker, handoff or integration—not every tool call. Include current owner, active assignments, branches/commits and next safe action. Chat summaries are convenience; GitHub is durable authority. Do not depend on another chat being open to reconstruct ownership.
 
@@ -36,7 +36,27 @@ For re-entry, read the latest coordination checkpoint and linked slice results. 
 
 Workers submit evidence and move to Review. The orchestrator verifies dependencies and integration, then performs FINAL. Repository architecture documents the resulting implementation and intent, with links back to the design issue for discussion. Update user docs or explain no impact. Close the parent only after required evidence and architecture changes are accepted and merged to the declared final target. No automatic closing keyword for the parent on intermediate PRs.
 
+## Release planning and delivery
+
+Use a GitHub milestone named for the tentative release version and one release coordination issue, created with the release template. The milestone describes intended user outcomes, exclusions and optional target date; its issue/PR membership is the scope list. Feature issues retain their own slices and dependencies. The release issue links those records and owns only release-wide readiness and publication, not a duplicate feature checklist. Scope and tentative version changes stay in GitHub.
+
+The release coordinator creates `codex/release-<version-or-name>` from freshly fetched `origin/main` and records the base commit. Workers branch from the release branch or a declared prerequisite branch, integrating via scoped PRs into the release branch, optionally through feature branches. Keep existing in-flight branches intact and record their integration route. Do not switch another worker's checkout or rewrite its history. Individual release features do not merge directly into main.
+
+Features can complete once their acceptance and architecture reconciliation are integrated into the release branch; record them as integrated but unreleased. Close their issues explicitly after checking evidence, since PRs into a non-default branch may not auto-close them. Release readiness remains separate from feature completion and milestone percentage.
+
+The release issue coordinates this sequence:
+
+1. Select the actual version; reconcile existing package/tag conventions before changing metadata. Record release membership through the milestone, without copying slice plans.
+2. Integrate accepted features, reconcile architecture/user docs, update package version and release notes on the release branch, and record the candidate commit.
+3. Validate integration and the packaged macOS application, including applicable installation, playback and voice-transition evidence. Reuse valid feature evidence; report missing checks explicitly.
+4. Open the release PR from the working release branch into main. Merge only with user authorization and stable passing checks and review gates.
+5. Verify the resulting main commit; build and validate the artifacts from that exact commit before tagging and publishing. Recheck affected behavior if the candidate changed. Use a draft GitHub Release to prepare notes and assets, then publish the immutable `vX.Y.Z` tag and release under the user's authorization.
+6. Verify the tag points to the intended main commit and published artifacts are downloadable. Record evidence and close the release issue/milestone. Retain release branches/worktrees until the merge is verified on local main and publication is verified. Publication failure leaves the issue open; never move a published tag to disguise a correction.
+
+The repository holds final architecture, human guidance, actual version/build metadata and release automation. It holds no working release plan or duplicate scope ledger. Defining this workflow does not itself authorize any particular merge or publication.
+
 ## Migration receipt and proof limits
+
 
 On October 24, 2026 the ACD at commit 62a16f3 moved to #48; its complete slice plan moved to #49–#54, with native parent/dependency relationships. The supplementary target contract moved into #48 and integrated verification scenarios into #54. The compliance plan moved to #55. Original files remain recoverable in Git history. Active copies were removed rather than synchronized. Legacy archives and detailed historical contracts are retained as references, not new working-document locations.
 

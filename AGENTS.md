@@ -11,6 +11,7 @@ Read README.md, project/README.md, docs/project-management.md, the assigned GitH
 - `project/architecture/`: implemented structure, intent, invariants, durable rationale and honest evidence limits. Update with implementation; never promote a proposal to current fact.
 - GitHub design issue: working ACD, scope, alternatives, decisions, acceptance and architecture targets.
 - Native sub-issues/dependencies: implementation slices and readiness. Small fixes may use a single issue.
+- GitHub milestone: release scope, tentative version, intended outcomes and exclusions. One release issue owns release-wide readiness and publication; link feature evidence instead of copying plans.
 - GitHub Project: authoritative status and priority. Issue comments: assignment, handoff, blockers, evidence and reconciliation records.
 - `docs/`: durable setup, usage and process guidance. `project/ui/`, legacy specifications/test specifications and research are retained references; new working drafts belong in issues.
 - `project/archive/` and historical journals: preserved history, not active instructions. Do not create local ACDs, plans, progress journals, task checklists or mirrored issue bodies. Ignored `tmp/` may hold disposable tool payloads, never the sole authority.
@@ -27,13 +28,24 @@ Read the latest design revision before starting and before integration. A materi
 
 ## Delivery and completion
 
-Use scoped branches, preserve WIP, stage intentional paths. Link slice and parent in every PR; use `Refs` for the parent so an intermediate merge cannot close the feature. Declare the actual PR base. The orchestrator may integrate slice PRs into a feature branch or directly into main when authorized; always identify what has and has not reached main. No merge or push directly to main without explicit user authorization.
+Use scoped branches, preserve WIP, stage intentional paths. Link slice and parent in every PR; use `Refs` for the parent so an intermediate merge cannot close the feature. Declare the actual PR base. Create each release working branch as `codex/release-<version-or-name>` from freshly fetched `origin/main`; record its starting commit in the release issue. Worker/feature branches start from the assigned release branch (or a declared dependency branch) and target that release branch, optionally through a feature integration branch. Do not merge individual release slices directly into `main`. Preserve existing work: record how an existing feature branch will join the release rather than resetting or rewriting it. Process-only maintenance may use a scoped branch from main and a PR back to main, explicitly marked as outside a product release. No merge or push directly to main without explicit user authorization; this process definition is not authorization to publish a release.
 
 Run bounded relevant checks; report passed, failed, blocked and not run distinctly. Checkpoints report result, changed paths, commit/PR, base, evidence and remaining work. Batch meaningful updates; no heartbeat comments, repeated whole-plan rewrites or routine agent polling.
 
-Final slice reconciles architecture and human docs in the implementation/final PR, verifies required evidence and merged commits, then closes the feature. `Reconcile` is a real gate; merged PRs, closed children or Project Done alone do not prove acceptance. Record missing evidence explicitly and leave incomplete work open. Never archive a feature as a substitute for finishing it. Do not delete branches/worktrees before integration is verified.
+Final slice reconciles architecture and human docs in the implementation/final PR, verifies required evidence and merged commits, then closes the feature. `Reconcile` is a real gate; merged PRs, closed children or Project Done alone do not prove acceptance. Record missing evidence explicitly and leave incomplete work open. Never archive a feature as a substitute for finishing it. A feature may close after acceptance and reconciliation are merged into the declared release branch; record that it is integrated but unreleased. Do not rely on GitHub auto-closing issues for PRs targeting a non-default branch. Do not delete release branches/worktrees until the release merge is verified on local `main` and publication is verified.
+
+## Releases
+
+Use one GitHub milestone and one release issue per release. Keep tentative versions, scope changes, assignments and readiness evidence in GitHub; do not create local release plans or planning-only tags/releases. Change package version metadata only when preparing a real release candidate. The release coordinator owns integration and release readiness; feature orchestrators retain their bounded assignments.
+
+The release issue records the milestone, release branch/base, included feature links, dependencies, version decision, release PR, exact candidate commit, checks and evidence limits, architecture/doc reconciliation, packaged-app validation, artifacts and publication result. Reuse feature evidence where applicable; run release-wide checks for integration and packaging risks. Milestone completion is not proof of release readiness.
+
+Prepare the version/changelog and final architecture on the release branch, validate the candidate, and open the release PR into `main`. Merge only with user authorization and stable passing checks/review gates. Verify the resulting `main` commit and validate/build the actual release artifacts from that commit before tagging it `vX.Y.Z` and publishing the GitHub Release. If the merge or subsequent changes alter the candidate, rerun affected checks; never label an untested artifact as the tested candidate. A draft release may stage notes/assets before publication. Published version tags are immutable; corrections get a new version.
+
+Close the release issue and milestone only after verifying the main merge, tag, published release and downloadable artifacts. Record exact commit/tag and evidence links. If publication fails after merge, leave the release issue open and resume from the recorded state; do not claim shipped or move an existing tag. Actual merges and publication require explicit user authorization, which may cover a whole release in advance.
 
 ## Execution and evidence
+
 
 Every asynchronous producer names its owner, execution context, bounded queue, revision/session identity, stale success/failure handling, cancellation/timeout, shutdown and proof scenario. `async` is not CPU offload. UI state belongs on Flutter's main isolate; preparation, planning, inference, assembly and heavy I/O need explicit worker/native ownership.
 
