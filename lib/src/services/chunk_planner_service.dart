@@ -74,7 +74,7 @@ class ChunkPlannerGraph {
         [
           input.startSegmentId,
           input.voiceId,
-          input.rate.toStringAsFixed(2),
+          input.rate.toString(),
           input.engineId,
           input.engineVersion,
           chunks.map((chunk) => chunk.cacheKey).join('|'),
@@ -280,7 +280,7 @@ ChunkSpec _finalizeChunk({
     input.engineId,
     input.engineVersion,
     built.voiceId,
-    input.rate.toStringAsFixed(2),
+    input.rate.toString(),
     speechDocument.normalizationVersion,
     speakHash,
     pronunciationFingerprint,

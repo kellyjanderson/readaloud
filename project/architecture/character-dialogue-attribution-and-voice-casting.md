@@ -1,7 +1,7 @@
 # Character Dialogue Attribution and Voice Casting
 
-Reconciled: October 24, 2026
-Status: Current source architecture; runtime validation not refreshed
+Reconciled: October 25, 2026; P4 production lineage 295677e
+Status: Implemented casting/resource references and P4 assignment source; native assignment acceptance pending
 
 ## Implemented structure and limitations
 
@@ -11,7 +11,7 @@ The cast registry canonicalizes aliases and includes a narrator. The current cha
 
 Assignments remain a separate `CastVoiceAssignmentSet`. Resolution prioritizes user override, stored document choice, automatic choice and fallback. Automatic casting scores voice metadata and avoids narrator/reused voices where possible. Document voice attribution maps segments to cast ids; cast-aware routing maps them to effective voices. Unattributed dialogue uses narrator fallback.
 
-Character-owned fingerprinted voice bindings and persistent document voice residency are accepted changes in the ACD, not implemented fields. Whole-document processing does not eliminate wrong attribution; neural replacement requires evaluation, not an architecture-wide rewrite.
+`ResolvedPreparedVoiceReference` joins cast identity and assignment decision provenance to immutable `PreparedVoiceBinding` records. The resident worker validates model/voice content digests and request-bound fingerprints/revisions; native handles remain worker-owned. `VoiceAssignmentCoordinator` separately retains requested and effective default/cast snapshots. Edits during active playback change requested intent without changing the current chunk. Initial buffering coalesces to the newest request; effective state updates only on the current engine acknowledgment. Explicit Apply replays from the current audible source chunk start, and paused pending edits use the retained chunk-start anchor on next Play; repetition is disclosed instead of promising seamless tail replacement. Failures retain pending intent for retry. Ordinary attribution/routing never becomes a user edit. Whole-document processing does not eliminate wrong attribution; a neural provider still requires evaluation.
 
 ## Source and tests
 
@@ -26,9 +26,9 @@ Character-owned fingerprinted voice bindings and persistent document voice resid
 - [cast_voice_assignment_service_test.dart](../../test/cast_voice_assignment_service_test.dart)
 - [document_voice_attribution_service_test.dart](../../test/document_voice_attribution_service_test.dart)
 
-Tests listed here are existing evidence locations, not a claim that they passed in this review. The bundled Intel Dart executable cannot run in the current Apple Silicon execution environment.
+Tests listed here are evidence locations, not a claim that every case was rerun for this page. The pinned native arm64 Flutter 3.41.5 / Dart 3.11.3 toolchain is runnable; the earlier Intel SDK failure is historical. See the [evidence index](README.md#evidence-and-acceptance-limits) for bounded source/native results.
 
-## Proposed changes
+## Design and remaining acceptance
 
 See [prepared document runtime ACD](https://github.com/kellyjanderson/readaloud/issues/48) and its [implementation plan](https://github.com/kellyjanderson/readaloud/issues/48). Historical design prose is preserved in the [architecture snapshot](../archive/architecture/2026-10-24/character-dialogue-attribution-and-voice-casting.md).
 

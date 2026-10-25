@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:read_aloud/src/models/voice_assignment_state.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:read_aloud/src/models/cast_voice_assignment.dart';
 import 'package:read_aloud/src/models/character_cast_registry.dart';
@@ -9,6 +11,121 @@ import 'package:read_aloud/src/theme/read_aloud_theme.dart';
 import 'package:read_aloud/src/widgets/voice_management_dialog.dart';
 
 void main() {
+  testWidgets(
+    'assignment feedback preserves current and requested choices and keyboard apply',
+    (tester) async {
+      var applied = 0;
+      var retried = 0;
+      Future<void> render(
+        VoiceAssignmentPhase phase, {
+        bool initial = false,
+      }) async {
+        await tester.pumpWidget(
+          MaterialApp(
+            home: Scaffold(
+              body: Center(
+                child: SizedBox(
+                  width: 480,
+                  child: VoiceAssignmentFeedback(
+                    state: VoiceAssignmentState(
+                      requestedRevision: 2,
+                      effectiveRevision: 1,
+                      requestedDefaultVoiceId: 'am_michael',
+                      effectiveDefaultVoiceId: 'af_bella',
+                      phase: phase,
+                      isInitialBuffering: initial,
+                      errorMessage: phase == VoiceAssignmentPhase.failed
+                          ? 'Voice unavailable.'
+                          : null,
+                    ),
+                    voices: [
+                      _voice(id: 'af_bella', label: 'Bella'),
+                      _voice(id: 'am_michael', label: 'Michael'),
+                    ],
+                    castRegistry: _narratorOnlyRegistry(),
+                    onApply: () => applied++,
+                    onRetry: () => retried++,
+                  ),
+                ),
+              ),
+            ),
+          ),
+        );
+        await tester.pump();
+      }
+
+      await render(VoiceAssignmentPhase.pending);
+      expect(find.text('Current: Bella (en-US)'), findsOneWidget);
+      expect(find.text('Pending: Michael (en-US)'), findsOneWidget);
+      final before = tester.getTopLeft(
+        find.byKey(const Key('voice-assignment-feedback')),
+      );
+      await tester.sendKeyEvent(LogicalKeyboardKey.tab);
+      await tester.sendKeyEvent(LogicalKeyboardKey.space);
+      await tester.pump();
+      expect(applied, 1);
+      await render(VoiceAssignmentPhase.preparing, initial: true);
+      expect(
+        find.text('Preparing latest choices before playback.'),
+        findsOneWidget,
+      );
+      expect(
+        tester
+            .widget<FilledButton>(
+              find.byKey(const Key('apply-voice-assignments')),
+            )
+            .onPressed,
+        isNull,
+      );
+      expect(
+        tester.getTopLeft(find.byKey(const Key('voice-assignment-feedback'))),
+        before,
+      );
+      await render(VoiceAssignmentPhase.applying);
+      expect(find.text('Applying choices and rebuffering.'), findsOneWidget);
+      await render(VoiceAssignmentPhase.failed);
+      expect(find.textContaining('Voice unavailable.'), findsOneWidget);
+      await tester.tap(find.text('Retry voice change'));
+      expect(retried, 1);
+      expect(applied, 1);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets(
+    'assignment feedback remains scrollable at narrow width and large text',
+    (tester) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          home: MediaQuery(
+            data: const MediaQueryData(textScaler: TextScaler.linear(2)),
+            child: Scaffold(
+              body: SizedBox(
+                width: 280,
+                child: VoiceAssignmentFeedback(
+                  state: VoiceAssignmentState(
+                    requestedRevision: 1,
+                    phase: VoiceAssignmentPhase.failed,
+                    errorMessage:
+                        'An unusually long failure message explains which requested voice could not be prepared and asks for a retry.',
+                  ),
+                  voices: const [],
+                  castRegistry: _narratorOnlyRegistry(),
+                  onRetry: () {},
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+      expect(tester.takeException(), isNull);
+      await tester.ensureVisible(find.text('Retry voice change'));
+      await tester.pumpAndSettle();
+      expect(find.text('Retry voice change').hitTestable(), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
   testWidgets('groups narrator and character assignments with override state', (
     WidgetTester tester,
   ) async {
@@ -111,7 +228,19 @@ void main() {
 
     expect(previewVoiceId, 'af_bella');
 
-    await tester.tap(find.byType(DropdownButtonFormField<String>).at(1));
+    await tester.ensureVisible(
+      find.descendant(
+        of: find.byKey(const Key('voice-assignment-card-Jennifer')),
+        matching: find.byType(DropdownButtonFormField<String>),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(
+      find.descendant(
+        of: find.byKey(const Key('voice-assignment-card-Jennifer')),
+        matching: find.byType(DropdownButtonFormField<String>),
+      ),
+    );
     await tester.pumpAndSettle();
     await tester.tap(find.text('Bella (en-US)').last);
     await tester.pumpAndSettle();
@@ -180,14 +309,15 @@ void main() {
   ) async {
     final darkTheme = ThemeData(
       useMaterial3: true,
-      colorScheme: ColorScheme.fromSeed(
-        seedColor: const Color(0xFFE9C46A),
-        brightness: Brightness.dark,
-      ).copyWith(
-        surface: const Color(0xFF171B22),
-        onSurface: const Color(0xFFE8EDF5),
-        surfaceContainerHighest: const Color(0xFF202734),
-      ),
+      colorScheme:
+          ColorScheme.fromSeed(
+            seedColor: const Color(0xFFE9C46A),
+            brightness: Brightness.dark,
+          ).copyWith(
+            surface: const Color(0xFF171B22),
+            onSurface: const Color(0xFFE8EDF5),
+            surfaceContainerHighest: const Color(0xFF202734),
+          ),
     );
 
     await tester.pumpWidget(
@@ -297,10 +427,15 @@ void main() {
         ),
       );
 
+      await tester.scrollUntilVisible(
+        find.text('Assign', skipOffstage: false),
+        240,
+        scrollable: find.byType(Scrollable).first,
+      );
       expect(find.text('Assign', skipOffstage: false), findsOneWidget);
       expect(
         find.byType(DropdownButtonFormField<String>, skipOffstage: false),
-        findsNWidgets(3),
+        findsWidgets,
       );
       expect(find.text('Use', skipOffstage: false), findsNothing);
       expect(

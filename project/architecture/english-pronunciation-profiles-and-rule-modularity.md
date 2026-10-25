@@ -19,9 +19,9 @@ A registered profile is not a claim of complete accent modeling or validated nat
 - [pronunciation_resource_layering_service_test.dart](../../test/pronunciation_resource_layering_service_test.dart)
 - [english_suffix_allomorph_module_test.dart](../../test/english_suffix_allomorph_module_test.dart)
 
-Tests listed here are existing evidence locations, not a claim that they passed in this review. The bundled Intel Dart executable cannot run in the current Apple Silicon execution environment.
+Tests listed here are evidence locations, not a claim that every case was rerun for this page. The pinned native arm64 Flutter 3.41.5 / Dart 3.11.3 toolchain is runnable; the earlier Intel SDK failure is historical. See the [evidence index](README.md#evidence-and-acceptance-limits) for bounded source/native results.
 
-## Proposed changes
+## Design and remaining acceptance
 
 See [prepared document runtime ACD](https://github.com/kellyjanderson/readaloud/issues/48) and its [implementation plan](https://github.com/kellyjanderson/readaloud/issues/48). Historical design prose is preserved in the [architecture snapshot](../archive/architecture/2026-10-24/english-pronunciation-profiles-and-rule-modularity.md).
 

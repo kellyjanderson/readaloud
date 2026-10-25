@@ -3,10 +3,128 @@ import 'package:flutter/material.dart';
 import '../models/cast_voice_assignment.dart';
 import '../models/character_cast_registry.dart';
 import '../models/voice_preview_state.dart';
+import '../models/voice_assignment_state.dart';
 import '../models/voice_profile.dart';
 import '../services/tts_engine.dart';
 import '../theme/read_aloud_theme.dart';
 import 'voice_library_row.dart';
+
+/// Assignment feedback stays outside the scrolling voice list.
+class VoiceAssignmentFeedback extends StatelessWidget {
+  const VoiceAssignmentFeedback({
+    super.key,
+    required this.state,
+    required this.voices,
+    required this.castRegistry,
+    this.onApply,
+    this.onRetry,
+  });
+
+  final VoiceAssignmentState state;
+  final List<VoiceProfile> voices;
+  final CharacterCastRegistry castRegistry;
+  final VoidCallback? onApply;
+  final VoidCallback? onRetry;
+
+  String _summary(String? defaultId, Map<String, String> castVoices) {
+    String voiceName(String id) =>
+        voices
+            .where((voice) => voice.id == id)
+            .map((voice) => voice.displayName)
+            .firstOrNull ??
+        id;
+    if (castVoices.isEmpty) {
+      return defaultId == null ? 'Not active yet' : voiceName(defaultId);
+    }
+    return castVoices.entries
+        .map((entry) {
+          final label =
+              castRegistry.entries
+                  .where((cast) => cast.castId == entry.key)
+                  .map((cast) => cast.displayLabel)
+                  .firstOrNull ??
+              entry.key;
+          return '$label: ${voiceName(entry.value)}';
+        })
+        .join('; ');
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final failed = state.phase == VoiceAssignmentPhase.failed;
+    final busy =
+        state.phase == VoiceAssignmentPhase.preparing ||
+        state.phase == VoiceAssignmentPhase.applying;
+    final canApply = state.hasPending && !state.isInitialBuffering && !busy;
+    final status = switch (state.phase) {
+      VoiceAssignmentPhase.current => 'No pending voice changes.',
+      VoiceAssignmentPhase.pending =>
+        state.isInitialBuffering
+            ? 'Preparing latest choices before playback.'
+            : 'Pending choices apply on next Play. Current audio continues.',
+      VoiceAssignmentPhase.preparing =>
+        state.isInitialBuffering
+            ? 'Preparing latest choices before playback.'
+            : 'Preparing requested choices.',
+      VoiceAssignmentPhase.applying => 'Applying choices and rebuffering.',
+      VoiceAssignmentPhase.failed =>
+        'Voice change failed. ${state.errorMessage ?? 'Retry the latest choices.'}',
+    };
+    final current = _summary(
+      state.effectiveDefaultVoiceId,
+      state.effectiveCastVoices,
+    );
+    final pending = state.hasPending
+        ? _summary(state.requestedDefaultVoiceId, state.requestedCastVoices)
+        : 'None';
+    return ConstrainedBox(
+      key: const Key('voice-assignment-feedback'),
+      constraints: const BoxConstraints(minHeight: 166, maxHeight: 220),
+      child: SingleChildScrollView(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Tooltip(
+              message: current,
+              child: Text(
+                'Current: $current',
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+            Tooltip(
+              message: pending,
+              child: Text(
+                'Pending: $pending',
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+            const SizedBox(height: 6),
+            Semantics(liveRegion: true, child: Text(status)),
+            const SizedBox(height: 6),
+            const Text(
+              'Applying replays the current chunk and may repeat words. Apply pending choices before saving audio.',
+            ),
+            const SizedBox(height: 8),
+            Align(
+              alignment: Alignment.centerRight,
+              child: FilledButton(
+                key: const Key('apply-voice-assignments'),
+                onPressed: failed ? onRetry : (canApply ? onApply : null),
+                child: Text(
+                  failed
+                      ? 'Retry voice change'
+                      : 'Apply and replay current chunk',
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
 
 class VoiceManagementDialog extends StatelessWidget {
   const VoiceManagementDialog({
@@ -18,6 +136,9 @@ class VoiceManagementDialog extends StatelessWidget {
     required this.castVoiceAssignments,
     required this.selectedVoiceId,
     required this.previewStateForVoice,
+    this.assignmentState,
+    this.onApplyAssignments,
+    this.onRetryAssignments,
     required this.onClose,
     required this.onSelectLibraryVoice,
     required this.onInstallVoice,
@@ -33,6 +154,9 @@ class VoiceManagementDialog extends StatelessWidget {
   final CastVoiceAssignmentSet? castVoiceAssignments;
   final String? selectedVoiceId;
   final VoicePreviewState Function(String voiceId) previewStateForVoice;
+  final VoiceAssignmentState? assignmentState;
+  final VoidCallback? onApplyAssignments;
+  final VoidCallback? onRetryAssignments;
   final VoidCallback onClose;
   final ValueChanged<String> onSelectLibraryVoice;
   final ValueChanged<String> onInstallVoice;
@@ -60,14 +184,19 @@ class VoiceManagementDialog extends StatelessWidget {
             children: [
               Row(
                 children: [
-                  Text(
-                    'Voice Management',
-                    style: Theme.of(context).textTheme.headlineSmall,
+                  Expanded(
+                    child: Text(
+                      'Voice Management',
+                      style: Theme.of(context).textTheme.headlineSmall,
+                    ),
                   ),
-                  const Spacer(),
                   IconButton(
+                    tooltip: 'Close voice management',
                     onPressed: onClose,
-                    icon: const Icon(Icons.close),
+                    icon: const Icon(
+                      Icons.close,
+                      semanticLabel: 'Close voice management',
+                    ),
                   ),
                 ],
               ),
@@ -136,27 +265,41 @@ class VoiceManagementDialog extends StatelessWidget {
                       style: Theme.of(context).textTheme.bodyMedium,
                     ),
                     const SizedBox(height: 16),
-                    for (var index = 0; index < voiceLibrary.length; index += 1)
-                      ...[
-                        VoiceLibraryRow(
-                          entry: voiceLibrary[index],
-                          previewState: previewStateForVoice(
-                            voiceLibrary[index].voice.id,
-                          ),
-                          onTogglePreview: () => onToggleVoicePreview(
-                            voiceLibrary[index].voice.id,
-                          ),
-                          trailing: _buildLibraryTrailing(
-                            context,
-                            voiceLibrary[index],
-                            characterEntries,
-                          ),
+                    for (
+                      var index = 0;
+                      index < voiceLibrary.length;
+                      index += 1
+                    ) ...[
+                      VoiceLibraryRow(
+                        entry: voiceLibrary[index],
+                        previewState: previewStateForVoice(
+                          voiceLibrary[index].voice.id,
                         ),
-                        if (index < voiceLibrary.length - 1)
-                          const Divider(height: 1),
-                      ],
+                        onTogglePreview: () =>
+                            onToggleVoicePreview(voiceLibrary[index].voice.id),
+                        trailing: _buildLibraryTrailing(
+                          context,
+                          voiceLibrary[index],
+                          characterEntries,
+                        ),
+                      ),
+                      if (index < voiceLibrary.length - 1)
+                        const Divider(height: 1),
+                    ],
                   ],
                 ),
+              ),
+              const Divider(height: 24),
+              VoiceAssignmentFeedback(
+                state:
+                    assignmentState ??
+                    VoiceAssignmentState(
+                      effectiveDefaultVoiceId: selectedVoiceId,
+                    ),
+                voices: availableVoices,
+                castRegistry: characterCastRegistry,
+                onApply: onApplyAssignments,
+                onRetry: onRetryAssignments,
               ),
             ],
           ),
@@ -205,7 +348,7 @@ class VoiceManagementDialog extends StatelessWidget {
         spacing: 8,
         crossAxisAlignment: WrapCrossAlignment.center,
         children: [
-          if (isSelected) const VoiceMetadataPill(label: 'Selected'),
+          if (isSelected) const VoiceMetadataPill(label: 'Requested'),
           if (!isSelected)
             FilledButton.tonal(
               onPressed: () => onSelectLibraryVoice(entry.voice.id),
@@ -252,10 +395,7 @@ class _VoiceLibraryCharacterAssignControlState
         key: Key('voice-library-assign-target-${widget.voiceId}'),
         initialValue: _selectedCastId,
         isExpanded: true,
-        decoration: const InputDecoration(
-          isDense: true,
-          hintText: 'Assign',
-        ),
+        decoration: const InputDecoration(isDense: true, hintText: 'Assign'),
         hint: const Text('Assign'),
         items: widget.characterEntries
             .map(
@@ -362,6 +502,7 @@ class _VoiceAssignmentCard extends StatelessWidget {
               children: [
                 Expanded(
                   child: DropdownButtonFormField<String>(
+                    key: ValueKey('$label-${assignment?.effectiveVoiceId}'),
                     initialValue: assignment?.effectiveVoiceId,
                     dropdownColor: tokens.dialogSurface,
                     style: theme.textTheme.titleMedium?.copyWith(
@@ -369,7 +510,7 @@ class _VoiceAssignmentCard extends StatelessWidget {
                     ),
                     iconEnabledColor: colorScheme.onSurfaceVariant,
                     decoration: InputDecoration(
-                      labelText: 'Assigned voice',
+                      labelText: 'Requested voice for $label',
                       labelStyle: theme.textTheme.bodyMedium?.copyWith(
                         color: colorScheme.onSurfaceVariant,
                       ),

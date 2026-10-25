@@ -38,7 +38,9 @@ void main() {
             isInitialChunk: true,
             isResumedChunk: false,
           );
-          final actual = await file.readAsBytes();
+          final actual = await File(outcome.audioPath!).readAsBytes();
+          expect(await file.readAsBytes(), original);
+          expect(outcome.audioPath, isNot(file.path));
           final header = ByteData.sublistView(actual);
           expect(header.getUint32(4, Endian.little), actual.length - 8);
           expect(header.getUint32(40, Endian.little), actual.length - 44);
@@ -47,22 +49,35 @@ void main() {
           expect(actual.sublist(44), original.sublist(44 + removedBytes));
           expect(outcome.applied, leadingMs > 120);
           if (!outcome.applied) expect(actual, original);
-          final metadata = jsonDecode(await sidecar.readAsString()) as Map;
+          final metadata =
+              jsonDecode(
+                    await File(
+                      outcome.audioPath!.replaceFirst('.wav', '.json'),
+                    ).readAsString(),
+                  )
+                  as Map;
           expect(
             metadata['durationMillis'],
             ((actual.length - 44) / 2 / sampleRate * 1000).round(),
           );
           expect(metadata['voiceId'], 'fixture');
-          await const SynthesisBoundaryPolicy().correctWavFile(
+          final reused = await const SynthesisBoundaryPolicy().correctWavFile(
             chunkId: 'chunk',
             wavFilePath: file.path,
             boundaryClass: BreakClass.none,
             isInitialChunk: true,
             isResumedChunk: false,
           );
-          expect(await file.readAsBytes(), actual);
+          expect(reused.audioPath, outcome.audioPath);
+          expect(await File(reused.audioPath!).readAsBytes(), actual);
+          expect(await file.readAsBytes(), original);
           expect(
-            (jsonDecode(await sidecar.readAsString()) as Map)['durationMillis'],
+            (jsonDecode(
+                  await File(
+                    reused.audioPath!.replaceFirst('.wav', '.json'),
+                  ).readAsString(),
+                )
+                as Map)['durationMillis'],
             metadata['durationMillis'],
           );
         },
@@ -77,11 +92,7 @@ void main() {
       final wavFile = File('${tempDir.path}/initial.wav');
       final sidecarFile = File('${tempDir.path}/initial.json');
       await wavFile.writeAsBytes(
-        _buildWav(
-          leadingSilenceMs: 240,
-          speechMs: 300,
-          trailingSilenceMs: 40,
-        ),
+        _buildWav(leadingSilenceMs: 240, speechMs: 300, trailingSilenceMs: 40),
       );
       await sidecarFile.writeAsString(jsonEncode(<String, dynamic>{}));
 
@@ -99,80 +110,92 @@ void main() {
       expect(outcome.leadingSilenceAfter, const Duration(milliseconds: 120));
     });
 
-    test('retains a 20ms floor when combined join silence exceeds budget', () async {
-      final tempDir = await Directory.systemTemp.createTemp(
-        'read-aloud-boundary-',
-      );
-      addTearDown(() => tempDir.delete(recursive: true));
+    test(
+      'retains a 20ms floor when combined join silence exceeds budget',
+      () async {
+        final tempDir = await Directory.systemTemp.createTemp(
+          'read-aloud-boundary-',
+        );
+        addTearDown(() => tempDir.delete(recursive: true));
 
-      final wavFile = File('${tempDir.path}/joined.wav');
-      final sidecarFile = File('${tempDir.path}/joined.json');
-      await wavFile.writeAsBytes(
-        _buildWav(
-          leadingSilenceMs: 200,
-          speechMs: 300,
-          trailingSilenceMs: 60,
-        ),
-      );
-      await sidecarFile.writeAsString(jsonEncode(<String, dynamic>{}));
+        final wavFile = File('${tempDir.path}/joined.wav');
+        final sidecarFile = File('${tempDir.path}/joined.json');
+        await wavFile.writeAsBytes(
+          _buildWav(
+            leadingSilenceMs: 200,
+            speechMs: 300,
+            trailingSilenceMs: 60,
+          ),
+        );
+        await sidecarFile.writeAsString(jsonEncode(<String, dynamic>{}));
 
-      final policy = const SynthesisBoundaryPolicy();
-      final outcome = await policy.correctWavFile(
-        chunkId: 'joined',
-        wavFilePath: wavFile.path,
-        boundaryClass: BreakClass.weak,
-        isInitialChunk: false,
-        isResumedChunk: false,
-        previousTrailingSilence: const Duration(milliseconds: 100),
-      );
+        final policy = const SynthesisBoundaryPolicy();
+        final outcome = await policy.correctWavFile(
+          chunkId: 'joined',
+          wavFilePath: wavFile.path,
+          boundaryClass: BreakClass.weak,
+          isInitialChunk: false,
+          isResumedChunk: false,
+          previousTrailingSilence: const Duration(milliseconds: 100),
+        );
 
-      expect(outcome.applied, isTrue);
-      expect(outcome.leadingSilenceBefore, const Duration(milliseconds: 200));
-      expect(outcome.leadingSilenceAfter, const Duration(milliseconds: 20));
-      expect(outcome.joinSilenceAfter, const Duration(milliseconds: 120));
-    });
+        expect(outcome.applied, isTrue);
+        expect(outcome.leadingSilenceBefore, const Duration(milliseconds: 200));
+        expect(outcome.leadingSilenceAfter, const Duration(milliseconds: 20));
+        expect(outcome.joinSilenceAfter, const Duration(milliseconds: 120));
+      },
+    );
 
-    test('treats resumed chunks as fresh starts and records sidecar metadata', () async {
-      final tempDir = await Directory.systemTemp.createTemp(
-        'read-aloud-boundary-',
-      );
-      addTearDown(() => tempDir.delete(recursive: true));
+    test(
+      'treats resumed chunks as fresh starts and records sidecar metadata',
+      () async {
+        final tempDir = await Directory.systemTemp.createTemp(
+          'read-aloud-boundary-',
+        );
+        addTearDown(() => tempDir.delete(recursive: true));
 
-      final wavFile = File('${tempDir.path}/resumed.wav');
-      final sidecarFile = File('${tempDir.path}/resumed.json');
-      await wavFile.writeAsBytes(
-        _buildWav(
-          leadingSilenceMs: 250,
-          speechMs: 280,
-          trailingSilenceMs: 35,
-        ),
-      );
-      await sidecarFile.writeAsString(jsonEncode(<String, dynamic>{}));
+        final wavFile = File('${tempDir.path}/resumed.wav');
+        final sidecarFile = File('${tempDir.path}/resumed.json');
+        await wavFile.writeAsBytes(
+          _buildWav(
+            leadingSilenceMs: 250,
+            speechMs: 280,
+            trailingSilenceMs: 35,
+          ),
+        );
+        await sidecarFile.writeAsString(jsonEncode(<String, dynamic>{}));
 
-      final outcome = await const SynthesisBoundaryPolicy().correctWavFile(
-        chunkId: 'resumed',
-        wavFilePath: wavFile.path,
-        boundaryClass: BreakClass.sentence,
-        isInitialChunk: false,
-        isResumedChunk: true,
-        previousTrailingSilence: const Duration(milliseconds: 180),
-      );
+        final outcome = await const SynthesisBoundaryPolicy().correctWavFile(
+          chunkId: 'resumed',
+          wavFilePath: wavFile.path,
+          boundaryClass: BreakClass.sentence,
+          isInitialChunk: false,
+          isResumedChunk: true,
+          previousTrailingSilence: const Duration(milliseconds: 180),
+        );
 
-      expect(outcome.candidate.chunkId, 'resumed');
-      expect(outcome.candidate.isResumedChunk, isTrue);
-      expect(outcome.joinSilenceBefore, const Duration(milliseconds: 250));
-      expect(outcome.leadingSilenceAfter, const Duration(milliseconds: 120));
+        expect(outcome.candidate.chunkId, 'resumed');
+        expect(outcome.candidate.isResumedChunk, isTrue);
+        expect(outcome.joinSilenceBefore, const Duration(milliseconds: 250));
+        expect(outcome.leadingSilenceAfter, const Duration(milliseconds: 120));
 
-      final sidecar = jsonDecode(await sidecarFile.readAsString()) as Map;
-      expect(sidecar['chunkId'], 'resumed');
-      expect(sidecar['boundaryClass'], BreakClass.sentence.name);
-      expect(sidecar['isInitialChunk'], isFalse);
-      expect(sidecar['isResumedChunk'], isTrue);
-      expect(sidecar['leadingSilenceBeforeMs'], 250);
-      expect(sidecar['leadingSilenceAfterMs'], 120);
-      expect(sidecar['joinSilenceBeforeMs'], 250);
-      expect(sidecar['joinSilenceAfterMs'], 120);
-    });
+        final sidecar =
+            jsonDecode(
+                  await File(
+                    outcome.audioPath!.replaceFirst('.wav', '.json'),
+                  ).readAsString(),
+                )
+                as Map;
+        expect(sidecar['chunkId'], 'resumed');
+        expect(sidecar['boundaryClass'], BreakClass.sentence.name);
+        expect(sidecar['isInitialChunk'], isFalse);
+        expect(sidecar['isResumedChunk'], isTrue);
+        expect(sidecar['leadingSilenceBeforeMs'], 250);
+        expect(sidecar['leadingSilenceAfterMs'], 120);
+        expect(sidecar['joinSilenceBeforeMs'], 250);
+        expect(sidecar['joinSilenceAfterMs'], 120);
+      },
+    );
   });
 }
 
@@ -186,7 +209,11 @@ Uint8List _buildWav({
   final trailingSamples = _msToSamples(trailingSilenceMs);
   final pcm = Int16List(leadingSamples + speechSamples + trailingSamples);
 
-  for (var index = leadingSamples; index < leadingSamples + speechSamples; index += 1) {
+  for (
+    var index = leadingSamples;
+    index < leadingSamples + speechSamples;
+    index += 1
+  ) {
     pcm[index] = 12000;
   }
 

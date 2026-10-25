@@ -1,4 +1,73 @@
 import 'tts_engine.dart';
+import 'audio_artifact_store.dart';
+
+/// Assembly has already settled before entering this drain. All independent
+/// owners still close if one reports failure; pins release only after all join.
+Future<void> kokoroDrainExportOwners({
+  required Future<void> Function() runtime,
+  required Future<void> Function() subscription,
+  required Future<void> Function() planner,
+  required void Function() releasePins,
+}) async {
+  try {
+    await Future.wait([
+      Future<void>.sync(runtime),
+      Future<void>.sync(subscription),
+      Future<void>.sync(planner),
+    ]);
+  } finally {
+    releasePins();
+  }
+}
+
+/// Playback ownership is generation + chunk, even when immutable content paths
+/// are reused. Late releases cannot consume a newer generation's pin.
+class KokoroPlaybackArtifactPins {
+  KokoroPlaybackArtifactPins(this.registry);
+  final AudioArtifactPins registry;
+  final Map<String, AudioArtifactPin> _owned = {};
+  int get length => _owned.length;
+  String _key(String generation, String chunk) => '$generation\u0000$chunk';
+  void pin(String generation, String chunk, String path) =>
+      _owned.putIfAbsent(_key(generation, chunk), () => registry.pin(path));
+  void release(String generation, String chunk) =>
+      _owned.remove(_key(generation, chunk))?.release();
+  Map<String, AudioArtifactPin> snapshot({String? generation}) =>
+      Map.unmodifiable({
+        for (final entry in _owned.entries)
+          if (generation == null || entry.key.startsWith('$generation\u0000'))
+            entry.key: entry.value,
+      });
+  void releaseSnapshot(Map<String, AudioArtifactPin> snapshot) {
+    for (final entry in snapshot.entries) {
+      if (identical(_owned[entry.key], entry.value)) {
+        _owned.remove(entry.key);
+        entry.value.release();
+      }
+    }
+  }
+}
+
+/// Runs inside the engine's serialized native mutation slot. Even a platform
+/// install that finishes or fails after supersession must settle its cleanup
+/// before that slot admits the newest document/revision.
+Future<bool> kokoroInstallPreparedPlayback({
+  required bool Function() isCurrent,
+  required Future<void> Function() install,
+  required Future<void> Function() clearStale,
+}) async {
+  if (!isCurrent()) return false;
+  try {
+    await install();
+  } catch (_) {
+    if (isCurrent()) rethrow;
+    await clearStale();
+    return false;
+  }
+  if (isCurrent()) return true;
+  await clearStale();
+  return false;
+}
 
 /// Completed native WAVs retain admission credit while boundary correction and
 /// playlist publication are pending. Publication replaces this conservative raw

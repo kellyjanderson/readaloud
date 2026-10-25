@@ -305,7 +305,9 @@ void main() {
             chunk: _chunk('chunk-a'),
           );
           final event = await ready.timeout(const Duration(seconds: 5));
-          final retained = await file.readAsBytes();
+          final retained = await File(event.audioPath!).readAsBytes();
+          expect(event.audioPath, isNot(file.path));
+          expect(await file.readAsBytes(), bytes);
           final expectedMs = ((retained.length - 44) / 2 / sampleRate * 1000)
               .round();
           expect(event.duration, Duration(milliseconds: expectedMs));

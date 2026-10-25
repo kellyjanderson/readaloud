@@ -3,11 +3,13 @@ import 'dart:convert';
 import 'dart:isolate';
 import 'dart:io';
 import 'dart:typed_data';
-import 'package:crypto/crypto.dart' as crypto;
 import 'package:flutter/services.dart';
 import 'package:kokoro_tts_flutter/kokoro_tts_flutter.dart';
 import '../models/prepared_voice_binding.dart';
 import 'kokoro_model_runner.dart';
+import 'model_content_snapshot.dart';
+import 'audio_artifact_store.dart';
+import 'kokoro_audio_identity.dart';
 import 'kokoro_voice_repository.dart';
 import 'speech_worker_pipeline.dart';
 
@@ -225,17 +227,18 @@ Future<void> _residentWorker(Map<String, dynamic> configuration) async {
       switch (command['kind']) {
         case 'prepare':
           if (documentId != command['documentId']) await release();
-          final modelPath = configuration['modelPath'] as String;
-          final model = File(modelPath);
-          if (!await model.exists() || await model.length() == 0) {
-            throw StateError('Missing model asset.');
+          final snapshot = await ModelContentSnapshot.capture(
+            configuration['modelPath'] as String,
+            Directory(
+              '${configuration['generatedAudioDirectory']}/model-snapshots',
+            ),
+          );
+          if (modelDigest != null && modelDigest != snapshot.digest) {
+            await release();
           }
-          final digestNow = (await crypto.sha256.bind(model.openRead()).first)
-              .toString();
-          if (modelDigest != null && modelDigest != digestNow) await release();
           if (runner == null) {
-            modelDigest = digestNow;
-            runner = KokoroModelRunner(modelPath: modelPath);
+            modelDigest = snapshot.digest;
+            runner = KokoroModelRunner(modelPath: snapshot.path);
             await runner!.initialize();
             documentId = command['documentId'] as String;
           }
@@ -275,6 +278,7 @@ Future<void> _residentWorker(Map<String, dynamic> configuration) async {
               'Chunk resources were not prepared for this document and voice.',
             );
           }
+          validateExpectedBinding(request, binding);
           await _processResidentChunk(
             request,
             configuration,
@@ -329,12 +333,14 @@ Future<void> _processResidentChunk(
       configuration['generatedAudioDirectory'] as String;
   final engineId = configuration['engineId'] as String;
   final engineVersion = configuration['engineVersion'] as String;
-  final cacheFiles = _cacheFilesForChunk(
+  final store = AudioArtifactStore(
+    Directory('$generatedAudioDirectory/raw-v1'),
+  );
+  final identity = kokoroRawAudioIdentity(
     request,
-    generatedAudioDirectory: generatedAudioDirectory,
-    engineId: engineId,
-    engineVersion: engineVersion,
-    bindingFingerprint: binding.fingerprint,
+    binding,
+    engineId,
+    engineVersion,
   );
 
   Future<void> emitEvent(
@@ -361,23 +367,19 @@ Future<void> _processResidentChunk(
   }
 
   try {
-    final cachedDuration = await _cachedDurationForChunk(
-      cacheFiles,
-      request,
-      binding,
-    );
-    if (cachedDuration != null) {
+    final cached = store.lookup(identity);
+    if (cached != null) {
       await emitEvent(
         SpeechWorkerEventType.cacheHit,
         stage: 'cacheLookup',
-        audioPath: cacheFiles.wavFile.path,
-        duration: cachedDuration,
+        audioPath: cached.audioPath,
+        duration: cached.duration,
       );
       await emitEvent(
         SpeechWorkerEventType.completed,
         stage: 'completed',
-        audioPath: cacheFiles.wavFile.path,
-        duration: cachedDuration,
+        audioPath: cached.audioPath,
+        duration: cached.duration,
       );
       return;
     }
@@ -409,16 +411,10 @@ Future<void> _processResidentChunk(
       stage: 'serializing',
       elapsedMillis: inferenceWatch.elapsedMilliseconds,
     );
-    await cacheFiles.wavFile.parent.create(recursive: true);
-    await cacheFiles.wavFile.writeAsBytes(
-      _buildWavFile(_audioToPcm16(audio), sampleRate),
-      flush: true,
-    );
-    final duration = Duration(
-      milliseconds: (audio.length / sampleRate * 1000).round(),
-    );
-    await cacheFiles.sidecarFile.writeAsString(
-      jsonEncode(<String, dynamic>{
+    final published = store.publish(
+      identity: identity,
+      wav: _buildWavFile(_audioToPcm16(audio), sampleRate),
+      metadata: <String, dynamic>{
         'chunkId': request.chunkId,
         'cacheKey': request.cacheKey,
         'engineId': engineId,
@@ -436,18 +432,16 @@ Future<void> _processResidentChunk(
         'tokens': request.tokens,
         'pronunciationArtifacts': request.pronunciationArtifacts,
         'missingFallbackWordCount': request.missingFallbackWordCount,
-        'durationMillis': duration.inMilliseconds,
         'createdAt': DateTime.now().toUtc().toIso8601String(),
-      }),
-      flush: true,
+      },
     );
     serializationWatch.stop();
 
     await emitEvent(
       SpeechWorkerEventType.completed,
       stage: 'completed',
-      audioPath: cacheFiles.wavFile.path,
-      duration: duration,
+      audioPath: published.audioPath,
+      duration: published.duration,
       elapsedMillis: serializationWatch.elapsedMilliseconds,
     );
   } catch (error) {
@@ -460,75 +454,6 @@ Future<void> _processResidentChunk(
   } finally {
     send(<String, dynamic>{'kind': 'done', 'quarantined': quarantined});
   }
-}
-
-_ChunkCacheFiles _cacheFilesForChunk(
-  SpeechWorkerChunkRequest request, {
-  required String generatedAudioDirectory,
-  required String engineId,
-  required String engineVersion,
-  required String bindingFingerprint,
-}) {
-  final rateKey =
-      'rate_${(request.rate * 100).round().toString().padLeft(3, '0')}';
-  final cacheDirectory = Directory(
-    [
-      generatedAudioDirectory,
-      engineId,
-      engineVersion,
-      request.voiceId,
-      rateKey,
-    ].join(Platform.pathSeparator),
-  );
-  final chunkHash = crypto.sha256
-      .convert(utf8.encode('${request.cacheKey}:$bindingFingerprint'))
-      .toString();
-  return _ChunkCacheFiles(
-    wavFile: File(
-      '${cacheDirectory.path}${Platform.pathSeparator}$chunkHash.wav',
-    ),
-    sidecarFile: File(
-      '${cacheDirectory.path}${Platform.pathSeparator}$chunkHash.json',
-    ),
-  );
-}
-
-Future<Duration?> _cachedDurationForChunk(
-  _ChunkCacheFiles cacheFiles,
-  SpeechWorkerChunkRequest request,
-  PreparedVoiceBinding binding,
-) async {
-  if (!await cacheFiles.wavFile.exists() ||
-      !await cacheFiles.sidecarFile.exists() ||
-      await cacheFiles.wavFile.length() <= 44) {
-    return null;
-  }
-
-  try {
-    final raw = jsonDecode(await cacheFiles.sidecarFile.readAsString());
-    if (raw is! Map<String, dynamic>) {
-      return null;
-    }
-    if (raw['binding'] is! Map ||
-        PreparedVoiceBinding.fromMap(raw['binding'] as Map).fingerprint !=
-            binding.fingerprint ||
-        raw['cacheKey'] != request.cacheKey ||
-        raw['voiceId'] != request.voiceId ||
-        raw['normalizationVersion'] != request.normalizationVersion) {
-      return null;
-    }
-    final durationMillis = raw['durationMillis'];
-    if (durationMillis is int && durationMillis > 0) {
-      return Duration(milliseconds: durationMillis);
-    }
-  } catch (_) {
-    return null;
-  }
-
-  final length = await cacheFiles.wavFile.length();
-  final dataBytes = (length - 44).clamp(0, length);
-  final sampleCount = dataBytes ~/ Int16List.bytesPerElement;
-  return Duration(milliseconds: (sampleCount / sampleRate * 1000).round());
 }
 
 Int16List _audioToPcm16(List<num> audio) {
@@ -577,11 +502,4 @@ Uint8List _buildWavFile(Int16List pcm, int wavSampleRate) {
   bytes.add(pcm.buffer.asUint8List());
 
   return bytes.takeBytes();
-}
-
-class _ChunkCacheFiles {
-  const _ChunkCacheFiles({required this.wavFile, required this.sidecarFile});
-
-  final File wavFile;
-  final File sidecarFile;
 }
