@@ -34,6 +34,7 @@ class BoundaryCorrectionOutcome {
     required this.trailingSilenceAfter,
     required this.joinSilenceBefore,
     required this.joinSilenceAfter,
+    required this.duration,
   });
 
   final BoundaryCandidateMetadata candidate;
@@ -44,6 +45,8 @@ class BoundaryCorrectionOutcome {
   final Duration trailingSilenceAfter;
   final Duration joinSilenceBefore;
   final Duration joinSilenceAfter;
+  /// Duration of the retained PCM, after boundary correction.
+  final Duration duration;
 }
 
 class SynthesisBoundaryPolicy {
@@ -108,6 +111,7 @@ class SynthesisBoundaryPolicy {
         trailingSilenceAfter: Duration.zero,
         joinSilenceBefore: Duration.zero,
         joinSilenceAfter: Duration.zero,
+        duration: Duration.zero,
       );
     }
 
@@ -166,13 +170,14 @@ class SynthesisBoundaryPolicy {
       trailingSilenceAfter: trailingAfter,
       joinSilenceBefore: joinBefore,
       joinSilenceAfter: joinAfter,
+      duration: _silenceDuration(retainedSampleCount),
     );
     _updateSidecarSync(
       wavFile,
       outcome,
       isInitialChunk,
       isResumedChunk,
-      duration: _silenceDuration(retainedSampleCount),
+      duration: outcome.duration,
     );
     return outcome;
   }
