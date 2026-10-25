@@ -406,12 +406,7 @@ void main() {
         find.byKey(const Key('status-toast')).hitTestable(),
         findsOneWidget,
       );
-      await tester.tap(
-        find.descendant(
-          of: find.byKey(const Key('status-toast')),
-          matching: find.byType(IconButton),
-        ),
-      );
+      await tester.tap(find.byTooltip('Dismiss status message'));
       await tester.pump();
       expect(find.byKey(const Key('status-toast')), findsNothing);
     },
