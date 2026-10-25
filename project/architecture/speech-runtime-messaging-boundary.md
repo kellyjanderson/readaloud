@@ -1,7 +1,7 @@
 # Speech Runtime Messaging Boundary
 
 Reconciled: October 24, 2026
-Status: Current source architecture; runtime validation not refreshed
+Status: Current source architecture; bounded native baseline recorded in P0
 
 ## Implemented structure and limitations
 
@@ -10,6 +10,8 @@ The runtime exposes commands, events, session/generation identity and chunk payl
 The macOS plugin dispatches heavy operations to its serial `ortQueue` and returns results on the main queue. Native sessions and tensors are retained in dictionaries. The model runner does not dispose inference tensors and deliberately skips session closure on macOS. Isolate teardown therefore does not establish native cleanup.
 
 The processor waits for a done message without explicit exit/error/timeout supervision and has an empty dispose method. Cancellation removes queued work/suppresses stale results but does not prove cancellation of active native inference. These are source-confirmed lifecycle gaps; native resource growth and failure behavior need runtime measurement.
+
+The macOS plugin offers opt-in `READALOUD_ORT_RESOURCE_TRACE=1` snapshots after native method handling on its serial queue. They report retained session/tensor counts and errors before dispatching results to Flutter; they do not alter cleanup. The bounded P0 uncached three-chunk export retained three sessions and twelve tensors. This confirms retention for that run, not a long-session growth rate or cleanup guarantee. Reproducible tooling and evidence limits are in [development guidance](../../docs/development.md) and [P0 evidence](https://github.com/kellyjanderson/readaloud/issues/49).
 
 The active ACD specifies persistent document resources, explicit preparation lanes, bounded queues and supervised terminal outcomes. Those targets must not be described as current architecture until implemented and verified.
 
@@ -23,7 +25,7 @@ The active ACD specifies persistent document resources, explicit preparation lan
 - [speech_runtime_test.dart](../../test/speech_runtime_test.dart)
 - [speech_worker_pipeline_test.dart](../../test/speech_worker_pipeline_test.dart)
 
-Tests listed here are existing evidence locations, not a claim that they passed in this review. The bundled Intel Dart executable cannot run in the current Apple Silicon execution environment.
+P0 ran the focused runtime/pipeline tests and full suite on native arm64 Flutter 3.41.5 / Dart 3.11.3. The full run passed 241 tests with one existing PDF integration smoke skip. Deterministic failure/startup fixtures characterize current behavior; they do not establish audible continuity, resource drain, or responsiveness. See P0 for commands, baseline assets and remaining acceptance. The original ignored Intel SDK remains unsuitable for this arm64 host.
 
 ## Proposed changes
 
