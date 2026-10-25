@@ -69,6 +69,8 @@ class KokoroTtsEngine
   SpeechRuntime? _speechRuntime;
   KokoroSpeechWorkerChunkProcessor? _resourceProcessor;
   SynthesisAdmissionOwner? _admission;
+  CancellableSynthesisLease? _playbackLease;
+  CancellableSynthesisLease? _exportLease;
   final SpeechPlanningSupervisor _refillPlanner = SpeechPlanningSupervisor();
   Completer<void> _bufferChanged = Completer<void>();
   int _nextReadyWord = 0;
@@ -89,9 +91,15 @@ class KokoroTtsEngine
     _exportCancelled = true;
     _exportAssembler.cancel();
     _exportTokenizer?.cancel();
-    _signalBuffer();
     final session = _exportSession;
-    if (session != null) await _exportRuntime?.cancelSession(session);
+    final cancellation = session == null
+        ? null
+        : _exportRuntime?.cancelSession(session);
+    // Runtime cancellation invalidates publication; lease cancellation removes
+    // native admission even when export has no playback-lead credit.
+    _exportLease?.cancelPending();
+    _signalBuffer();
+    await cancellation;
     await _exportDrained?.future;
   }
 
@@ -370,9 +378,10 @@ class KokoroTtsEngine
             (_activePlaybackToken != null &&
                 _playableBufferedLeadTime() >= kokoroLowWaterBufferedLeadTime),
       );
+      _playbackLease = _admission!.lease(export: false);
       _speechRuntime = SpeechRuntime(
         engineId: _engineId,
-        processor: _admission!.lease(export: false),
+        processor: _playbackLease!,
       );
       _runtimeEventSubscription = _speechRuntime!.events.listen(
         _handleRuntimeEvent,
@@ -470,6 +479,7 @@ class KokoroTtsEngine
       _exportDrained!.complete();
       _exportRuntime = null;
       _exportSession = null;
+      _exportLease = null;
     }
   }
 
@@ -524,9 +534,10 @@ class KokoroTtsEngine
       );
     }
     if (_exportCancelled) throw StateError('Export cancelled.');
+    _exportLease = _admission!.lease(export: true);
     final runtime = SpeechRuntime(
       engineId: _engineId,
-      processor: _admission!.lease(export: true),
+      processor: _exportLease!,
     );
     final sessionId =
         request.sessionId ?? 'export_${DateTime.now().microsecondsSinceEpoch}';
@@ -1741,6 +1752,8 @@ class KokoroTtsEngine
   Future<void> _cancelActiveGeneration() async {
     final sessionId = _activeSessionId;
     if (sessionId == null) {
+      _playbackLease?.cancelPending();
+      _signalBuffer();
       return;
     }
 
@@ -1749,7 +1762,12 @@ class KokoroTtsEngine
       completer.completeError(StateError('Kokoro generation was cancelled.'));
     }
 
-    await _speechRuntime?.cancelSession(sessionId, reasonCode: 'cancelled');
+    final cancellation = _speechRuntime?.cancelSession(
+      sessionId,
+      reasonCode: 'cancelled',
+    );
+    _playbackLease?.cancelPending();
+    await cancellation;
     _activeGenerationId = null;
     _firstPendingChunkId = null;
     _firstChunkCompleter = null;
