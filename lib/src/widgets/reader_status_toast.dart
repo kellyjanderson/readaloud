@@ -41,7 +41,10 @@ class ReaderStatusToast extends StatelessWidget {
               tooltip: 'Dismiss status message',
               onPressed: onDismiss,
               color: style.foreground,
-              icon: const Icon(Icons.close),
+              icon: const Icon(
+                Icons.close,
+                semanticLabel: 'Dismiss status message',
+              ),
             ),
           ],
         ),

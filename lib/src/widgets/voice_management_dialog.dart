@@ -193,7 +193,10 @@ class VoiceManagementDialog extends StatelessWidget {
                   IconButton(
                     tooltip: 'Close voice management',
                     onPressed: onClose,
-                    icon: const Icon(Icons.close),
+                    icon: const Icon(
+                      Icons.close,
+                      semanticLabel: 'Close voice management',
+                    ),
                   ),
                 ],
               ),
