@@ -94,9 +94,18 @@ class ReaderController extends ChangeNotifier {
   List<PreparedVoiceBinding> _resourceBindings = const [];
   List<ResolvedPreparedVoiceReference> _resolvedResourceBindings = const [];
   int _resourceBindingIntent = 0;
+  int _preparedAssignmentRevision = -1;
   final _voiceAssignments = VoiceAssignmentCoordinator();
   int? _assignmentReplayWord;
   bool _applyingVoiceAssignments = false;
+  int _playbackIntent = 0;
+  bool _playbackStartPending = false;
+  Future<void>? _playbackStartDriver;
+  Future<void>? _startupStop;
+  bool _explicitVoiceRebuffer = false;
+  int? _activeAssignmentRevision;
+  int? _activePlaybackIntent;
+  int? _acknowledgedPlaybackIntent;
   VoiceAssignmentState get voiceAssignmentState => _voiceAssignments.state;
 
   Future<void> applyPendingVoiceAssignments() async {
@@ -113,11 +122,23 @@ class ReaderController extends ChangeNotifier {
       _assignmentReplayWord ??= _snapWordIndexToSegmentStart(_currentWordIndex);
     }
     _applyingVoiceAssignments = true;
+    _explicitVoiceRebuffer = true;
+    final applyIntent = ++_playbackIntent;
+    final documentRevision = _documentRevision;
+    _resumeAfterPreparation = true;
+    _currentWordIndex = _assignmentReplayWord!;
+    _playbackEndedAtDocumentEnd = false;
     _voiceAssignments.preparing(revision, initialBuffering: false);
     notifyListeners();
     try {
-      await _ttsEngine.stop();
-      if (_disposed || !_voiceAssignments.isCurrent(revision)) return;
+      await _stopSupersededStartup();
+      if (_disposed ||
+          !_resumeAfterPreparation ||
+          applyIntent != _playbackIntent ||
+          documentRevision != _documentRevision ||
+          !_voiceAssignments.isCurrent(revision)) {
+        return;
+      }
       _isPlaying = false;
       _currentWordIndex = _assignmentReplayWord!;
       _invalidateResourceBindings();
@@ -131,6 +152,46 @@ class ReaderController extends ChangeNotifier {
   }
 
   Future<void> retryVoiceAssignments() => applyPendingVoiceAssignments();
+
+  Future<void> _stopSupersededStartup() => _startupStop ??= _ttsEngine
+      .stop()
+      .whenComplete(() => _startupStop = null);
+
+  bool get _isInitialVoiceBuffering =>
+      _applyingVoiceAssignments ||
+      (!_isPlaying && _playbackStartDriver != null) ||
+      (!_isPlaying &&
+          _playbackState == ReaderPlaybackPrimaryState.bufferingFirstChunk);
+
+  void _captureRequestedVoiceChoices({bool initialBuffering = false}) {
+    final voiceId = _selectedVoiceId;
+    final assignments = voiceId == null
+        ? null
+        : _resolveCastVoiceAssignments(preferredNarratorVoiceId: voiceId);
+    _voiceAssignments.request(
+      defaultVoiceId: voiceId,
+      castVoices: {
+        for (final a in assignments?.assignments ?? <CastVoiceAssignment>[])
+          a.castId: a.effectiveVoiceId,
+      },
+      initialBuffering: initialBuffering,
+    );
+  }
+
+  Future<void> _voiceChoicesEdited() async {
+    final initial = _isInitialVoiceBuffering;
+    _captureRequestedVoiceChoices(initialBuffering: initial);
+    notifyListeners();
+    if (initial) {
+      ++_playbackIntent;
+      _invalidateResourceBindings();
+      _playbackStartPending = true;
+      unawaited(_stopSupersededStartup());
+      unawaited(_drivePlaybackStarts());
+    }
+    await _persistPreferences();
+  }
+
   List<PreparedVoiceBinding> get resourceBindings =>
       isResourcesReady ? _resourceBindings : const [];
   List<ResolvedPreparedVoiceReference> get resolvedResourceBindings =>
@@ -141,6 +202,7 @@ class ReaderController extends ChangeNotifier {
     _exportPlanner?.cancel();
     _resourceBindings = const [];
     _resolvedResourceBindings = const [];
+    _preparedAssignmentRevision = -1;
   }
 
   bool get isDisplayReady =>
@@ -159,6 +221,8 @@ class ReaderController extends ChangeNotifier {
   }
 
   int _beginDocumentRequest() {
+    ++_playbackIntent;
+    _playbackStartPending = false;
     _invalidateResourceBindings();
     _preparation.cancel();
     return ++_documentRevision;
@@ -201,6 +265,9 @@ class ReaderController extends ChangeNotifier {
 
   final DocumentAccessService _documentAccessService;
   final ReaderPreferencesService _preferencesService;
+  ReaderPreferences? _pendingPreferences;
+  Future<void>? _preferenceSavePump;
+  int _preferenceSnapshotRevision = 0;
   final TtsEngine _ttsEngine;
   final bool _enablePlatformIntakeChannels;
   final CastVoiceAssignmentService _castVoiceAssignmentService =
@@ -421,6 +488,11 @@ class ReaderController extends ChangeNotifier {
       if (_activePlaybackDocumentId == null) {
         return;
       }
+      if (_activePlaybackIntent != _playbackIntent ||
+          (_ttsEngine is VoiceAssignmentPlaybackCapable &&
+              _acknowledgedPlaybackIntent != _playbackIntent)) {
+        return;
+      }
       _isPlaying = true;
       _playbackState = ReaderPlaybackPrimaryState.playing;
       _readingFocusState = _readingFocusState.copyWith(playbackActive: true);
@@ -444,6 +516,7 @@ class ReaderController extends ChangeNotifier {
       if (_activePlaybackDocumentId == null) {
         return;
       }
+      if (_activePlaybackIntent != _playbackIntent) return;
       _flushPendingFollowerProgress();
       unawaited(_flushResumePersistence());
       _finalizeActiveSpokenChunk();
@@ -476,7 +549,12 @@ class ReaderController extends ChangeNotifier {
       if (_activePlaybackDocumentId == null) {
         return;
       }
+      if (_activePlaybackIntent != _playbackIntent) return;
       _flushPendingFollowerProgress();
+      if (voiceAssignmentState.hasPending &&
+          _activeAssignmentRevision != null) {
+        _voiceAssignments.fail(_activeAssignmentRevision!, message);
+      }
       unawaited(_flushResumePersistence());
       _statusMessage = message;
       _activePlaybackDocumentId = null;
@@ -970,6 +1048,61 @@ class ReaderController extends ChangeNotifier {
   Future<void> startPlayback() async {
     if (_disposed || !isDocumentPrepared) return;
     _resumeAfterPreparation = true;
+    if (voiceAssignmentState.requestedDefaultVoiceId == null) {
+      _captureRequestedVoiceChoices(initialBuffering: true);
+    }
+    ++_playbackIntent;
+    _playbackStartPending = true;
+    await _drivePlaybackStarts();
+  }
+
+  Future<void> _drivePlaybackStarts() =>
+      _playbackStartDriver ??= _pumpPlaybackStarts().whenComplete(() {
+        _playbackStartDriver = null;
+        if (_playbackStartPending && !_disposed && _resumeAfterPreparation) {
+          unawaited(_drivePlaybackStarts());
+        }
+      });
+
+  Future<void> _pumpPlaybackStarts() async {
+    while (_playbackStartPending && !_disposed && _resumeAfterPreparation) {
+      _playbackStartPending = false;
+      final intent = _playbackIntent;
+      final assignment = voiceAssignmentState.requestedRevision;
+      try {
+        await _startupStop;
+        if (intent != _playbackIntent) continue;
+        await _startPlaybackOnce(intent);
+      } catch (error) {
+        if (intent != _playbackIntent ||
+            !_resumeAfterPreparation ||
+            _disposed) {
+          continue;
+        }
+        _voiceAssignments.fail(assignment, error);
+        _statusMessage = 'Could not prepare the requested voices: $error';
+        _playbackState = ReaderPlaybackPrimaryState.failed;
+        _isPlaying = false;
+        notifyListeners();
+      }
+    }
+  }
+
+  Future<void> _startPlaybackOnce(int playbackIntent) async {
+    if (_disposed || !isDocumentPrepared) return;
+    final documentRevision = _documentRevision;
+    final assignmentRevision = voiceAssignmentState.requestedRevision;
+    bool current() =>
+        !_disposed &&
+        _resumeAfterPreparation &&
+        playbackIntent == _playbackIntent &&
+        documentRevision == _documentRevision &&
+        _voiceAssignments.isCurrent(assignmentRevision);
+    _voiceAssignments.preparing(
+      assignmentRevision,
+      initialBuffering: !_explicitVoiceRebuffer,
+    );
+    _resumeAfterPreparation = true;
     if (_document.speakableText.trim().isEmpty) {
       _statusMessage = 'This document does not contain readable text yet.';
       notifyListeners();
@@ -982,17 +1115,23 @@ class ReaderController extends ChangeNotifier {
       notifyListeners();
       return;
     }
+    if (_preparedAssignmentRevision != assignmentRevision) {
+      _invalidateResourceBindings();
+    }
     if (!isResourcesReady) {
       try {
         await _prepareResourceBindings(_documentRevision);
       } on _SupersededPreparation {
         return;
       } catch (error) {
+        if (!current()) return;
+        _voiceAssignments.fail(assignmentRevision, error);
         _statusMessage = 'Speech resources unavailable: $error';
         notifyListeners();
         return;
       }
     }
+    if (!current()) return;
 
     if (_currentWordIndex >= _document.wordCount && _document.wordCount > 0) {
       _currentWordIndex = 0;
@@ -1019,10 +1158,13 @@ class ReaderController extends ChangeNotifier {
     );
     final requestedRate = currentSpeed;
     await _primePlaybackPreparation();
-    if (requestedRate != currentSpeed) return;
+    if (!current() || requestedRate != currentSpeed) return;
     await _ttsEngine.selectVoice(voice);
+    if (!current()) return;
     await _ttsEngine.setSpeechRate(currentSpeed);
+    if (!current()) return;
     await _ttsEngine.setVolume(1.0);
+    if (!current()) return;
 
     _utteranceStartWordIndex = _currentWordIndex;
     _utteranceStartOffset = _document.charOffsetForWord(_currentWordIndex);
@@ -1031,6 +1173,9 @@ class ReaderController extends ChangeNotifier {
     _playbackRequestedAt = DateTime.now();
     _recordPositionMapConfidenceIfNeeded();
     _activePlaybackDocumentId = _document.displayDocument.documentId;
+    _activeAssignmentRevision = assignmentRevision;
+    _activePlaybackIntent = playbackIntent;
+    _acknowledgedPlaybackIntent = null;
 
     final speakableTail = _document.speakableText.substring(
       _utteranceStartOffset,
@@ -1043,6 +1188,22 @@ class ReaderController extends ChangeNotifier {
         normalizationVersion: _document.speechDocument.normalizationVersion,
         chunkPlan: _currentChunkPlan,
         planningContext: _currentPlanningContext,
+        assignmentRevision: assignmentRevision,
+        isCurrent: current,
+        onPlaybackReady: (ack) {
+          if (!current() ||
+              ack.assignmentRevision != assignmentRevision ||
+              ack.documentId != _document.displayDocument.documentId) {
+            return;
+          }
+          final expected = _resourceBindings.map((b) => b.fingerprint).toSet();
+          if (!setEquals(expected, ack.bindingFingerprints)) return;
+          _voiceAssignments.acknowledge(assignmentRevision);
+          _acknowledgedPlaybackIntent = playbackIntent;
+          _assignmentReplayWord = null;
+          _explicitVoiceRebuffer = false;
+          notifyListeners();
+        },
         isResumedPlayback: _currentWordIndex > 0,
         speechDocument: _document.speechDocument,
         ttsArtifactSet: _currentRealization?.ttsArtifactSet,
@@ -1055,6 +1216,8 @@ class ReaderController extends ChangeNotifier {
   }
 
   Future<void> pausePlayback() async {
+    ++_playbackIntent;
+    _playbackStartPending = false;
     _resumeAfterPreparation = false;
     _flushPendingFollowerProgress();
     await _ttsEngine.pause();
@@ -1133,53 +1296,22 @@ class ReaderController extends ChangeNotifier {
   }
 
   Future<void> selectVoiceById(String? voiceId) async {
-    if (voiceId == null) return;
-    _invalidateResourceBindings();
-    _selectedVoiceId = voiceId;
-    _voiceSpeeds.putIfAbsent(voiceId, () => 1.0);
-    final voice = selectedVoice;
-    if (voice != null) {
-      await _ttsEngine.selectVoice(voice);
-      await _ttsEngine.setSpeechRate(currentSpeed);
-    }
-    _narrationState = _narrationState.reset(recentRate: currentSpeed);
-    _currentRealization = null;
-    _currentChunkPlan = null;
-    await _primePlaybackPreparation();
-    _wordsPerSecond = _estimateWordsPerSecond(
-      voiceId: voiceId,
-      rate: currentSpeed,
-    );
-    await _persistPreferences();
-
-    if (_isPlaying) {
-      await _ttsEngine.stop();
-      _isPlaying = false;
-      await startPlayback();
+    if (voiceId == null ||
+        _voices.every((v) => v.id != voiceId) ||
+        voiceId == _selectedVoiceId) {
       return;
     }
-
-    notifyListeners();
+    _selectedVoiceId = voiceId;
+    _voiceSpeeds.putIfAbsent(voiceId, () => 1.0);
+    await _voiceChoicesEdited();
   }
 
   Future<void> setMultiVoiceEnabled(bool enabled) async {
     if (_isMultiVoiceEnabled == enabled) {
       return;
     }
-    _invalidateResourceBindings();
-
     _isMultiVoiceEnabled = enabled;
-    await _primePlaybackPreparation();
-    await _persistPreferences();
-
-    if (_isPlaying || _playbackActivity.isBuffering) {
-      await _ttsEngine.stop();
-      _isPlaying = false;
-      await startPlayback();
-      return;
-    }
-
-    notifyListeners();
+    await _voiceChoicesEdited();
   }
 
   Future<void> installVoice(String voiceId) async {
@@ -1224,6 +1356,7 @@ class ReaderController extends ChangeNotifier {
     }
 
     _activePreviewVoiceId = voiceId;
+    _invalidateResourceBindings();
     _isVoicePreviewLoading = true;
     _isVoicePreviewPlaying = false;
     notifyListeners();
@@ -1262,11 +1395,20 @@ class ReaderController extends ChangeNotifier {
     final voiceId = _selectedVoiceId;
     if (voiceId == null) return;
     final effectiveRate = _effectiveSpeechRate(speed);
+    if (voiceAssignmentState.hasPending) {
+      final initial = _isInitialVoiceBuffering;
+      _voiceSpeeds[voiceId] = effectiveRate;
+      await _voiceChoicesEdited();
+      if (initial) await _drivePlaybackStarts();
+      return;
+    }
     final restart =
         _isPlaying ||
+        _playbackStartDriver != null ||
         _playbackActivity.isBuffering ||
         _playbackState == ReaderPlaybackPrimaryState.bufferingFirstChunk;
     if (restart) {
+      ++_playbackIntent;
       await _ttsEngine.stop();
       _isPlaying = false;
     }
@@ -1290,8 +1432,6 @@ class ReaderController extends ChangeNotifier {
         _voices.every((voice) => voice.id != voiceId)) {
       return;
     }
-    _invalidateResourceBindings();
-
     final automaticAssignments = _castVoiceAssignmentService.resolve(
       CastVoiceAssignmentInput(
         characterCastRegistry: _document.characterCastRegistry,
@@ -1308,18 +1448,7 @@ class ReaderController extends ChangeNotifier {
       _castVoiceOverrides[castId] = voiceId;
       _storeCastVoiceAssignment(castId, voiceId);
     }
-    await _persistPreferences();
-
-    await _primePlaybackPreparation();
-
-    if (_isPlaying) {
-      await _ttsEngine.stop();
-      _isPlaying = false;
-      await startPlayback();
-      return;
-    }
-
-    notifyListeners();
+    await _voiceChoicesEdited();
   }
 
   Future<void> clearCastVoiceOverride(String castId) async {
@@ -1328,21 +1457,9 @@ class ReaderController extends ChangeNotifier {
         !storedAssignments.containsKey(castId)) {
       return;
     }
-    _invalidateResourceBindings();
-
     _castVoiceOverrides.remove(castId);
     _clearStoredCastVoiceAssignment(castId);
-    await _persistPreferences();
-    await _primePlaybackPreparation();
-
-    if (_isPlaying) {
-      await _ttsEngine.stop();
-      _isPlaying = false;
-      await startPlayback();
-      return;
-    }
-
-    notifyListeners();
+    await _voiceChoicesEdited();
   }
 
   Future<void> setFontFamily(String fontFamily) async {
@@ -1415,6 +1532,11 @@ class ReaderController extends ChangeNotifier {
   }
 
   Future<void> _restoreSelectedVoiceEngineState() async {
+    if (voiceAssignmentState.hasPending ||
+        _isPlaying ||
+        _isInitialVoiceBuffering) {
+      return;
+    }
     final selected = selectedVoice;
     if (selected == null) {
       return;
@@ -1424,6 +1546,11 @@ class ReaderController extends ChangeNotifier {
   }
 
   Future<TtsExportResult?> exportAudioToPath(String outputPath) async {
+    if (voiceAssignmentState.hasPending) {
+      _statusMessage = 'Apply pending voice choices before saving audio.';
+      notifyListeners();
+      return null;
+    }
     final exporter = _ttsEngine is AudioExportCapable
         ? _ttsEngine as AudioExportCapable
         : null;
@@ -1457,6 +1584,7 @@ class ReaderController extends ChangeNotifier {
     }
 
     final exportRevision = _documentRevision;
+    final exportAssignmentRevision = voiceAssignmentState.requestedRevision;
     _isExporting = true;
     _statusMessage = 'Saving audio with ${voice.displayName}...';
     notifyListeners();
@@ -1465,6 +1593,11 @@ class ReaderController extends ChangeNotifier {
       if (!isResourcesReady) await _prepareResourceBindings(_documentRevision);
 
       _requireRevision(exportRevision);
+      if (exportAssignmentRevision != voiceAssignmentState.requestedRevision) {
+        throw StateError(
+          'Voice choices changed before export preparation completed.',
+        );
+      }
       final exportRequest = await _buildExportRequest(normalizedPath);
       _requireRevision(exportRevision);
       final result = await exporter.exportAudio(exportRequest);
@@ -1627,6 +1760,7 @@ class ReaderController extends ChangeNotifier {
 
   Future<void> _prepareResourceBindingsOnce(int revision) async {
     final intent = _resourceBindingIntent;
+    final assignmentRevision = voiceAssignmentState.requestedRevision;
     final resourceEngine = _ttsEngine;
     if (resourceEngine is ResourcePreparationCapable &&
         _selectedVoiceId != null) {
@@ -1636,7 +1770,7 @@ class ReaderController extends ChangeNotifier {
       final bindings = await (resourceEngine as ResourcePreparationCapable)
           .prepareDocumentResources(
             documentId: _document.displayDocument.documentId,
-            revision: revision,
+            revision: assignmentRevision,
             voiceIds: {
               _selectedVoiceId!,
               ...?assignments?.assignments.map((v) => v.effectiveVoiceId),
@@ -1645,19 +1779,21 @@ class ReaderController extends ChangeNotifier {
           )
           .catchError((Object error) {
             _requireRevision(revision);
-            if (intent != _resourceBindingIntent) {
+            if (intent != _resourceBindingIntent ||
+                !_voiceAssignments.isCurrent(assignmentRevision)) {
               throw const _SupersededPreparation();
             }
             throw error;
           });
       _requireRevision(revision);
-      if (intent != _resourceBindingIntent) {
+      if (intent != _resourceBindingIntent ||
+          !_voiceAssignments.isCurrent(assignmentRevision)) {
         throw const _SupersededPreparation();
       }
       if (bindings.any(
         (binding) =>
             binding.documentId != _document.displayDocument.documentId ||
-            binding.bindingRevision != revision ||
+            binding.bindingRevision != assignmentRevision ||
             binding.pronunciationProfileId !=
                 _selectedPronunciationProfile().profileId,
       )) {
@@ -1666,6 +1802,7 @@ class ReaderController extends ChangeNotifier {
         );
       }
       _resourceBindings = List.unmodifiable(bindings);
+      _preparedAssignmentRevision = assignmentRevision;
       _resolvedResourceBindings = List.unmodifiable([
         for (final assignment
             in assignments?.assignments ?? <CastVoiceAssignment>[])
@@ -1692,6 +1829,9 @@ class ReaderController extends ChangeNotifier {
     _requireRevision(revision);
     _finalizeActiveSpokenChunk();
     _document = document;
+    _voiceAssignments.resetDocument();
+    _assignmentReplayWord = null;
+    _explicitVoiceRebuffer = false;
     _preparedDocumentRevision = revision;
     _documentPrepared = false;
     _resourceBindings = const [];
@@ -1869,20 +2009,57 @@ class ReaderController extends ChangeNotifier {
   }
 
   Future<void> _persistPreferences() async {
-    await _preferencesService.save(
+    _pendingPreferences = ReaderPreferences(
       selectedVoiceId: _selectedVoiceId,
-      voiceSpeeds: _voiceSpeeds,
+      voiceSpeeds: Map.unmodifiable(_voiceSpeeds),
       fontFamily: _fontFamily,
       fontScale: _fontScale,
       appearanceMode: _appearanceMode,
       multiVoiceEnabled: _isMultiVoiceEnabled,
-      storedDocumentCastVoiceAssignments: _storedDocumentCastVoiceAssignments,
+      storedDocumentCastVoiceAssignments: Map.unmodifiable({
+        for (final entry in _storedDocumentCastVoiceAssignments.entries)
+          entry.key: Map<String, String>.unmodifiable(entry.value),
+      }),
       resumeState: _resumeState,
       lastOpenedDocumentPath: _lastOpenedDocumentPath,
       lastOpenedDocumentAccessToken: _lastOpenedDocumentAccessToken,
       lastOpenedDirectoryPath: _lastOpenedDirectoryPath,
       lastOpenedDirectoryAccessToken: _lastOpenedDirectoryAccessToken,
     );
+    ++_preferenceSnapshotRevision;
+    await (_preferenceSavePump ??= _drainPreferenceSnapshots().whenComplete(() {
+      _preferenceSavePump = null;
+    }));
+  }
+
+  Future<void> _drainPreferenceSnapshots() async {
+    while (_pendingPreferences != null) {
+      final value = _pendingPreferences!;
+      final revision = _preferenceSnapshotRevision;
+      _pendingPreferences = null;
+      try {
+        await _preferencesService.save(
+          selectedVoiceId: value.selectedVoiceId,
+          voiceSpeeds: value.voiceSpeeds,
+          fontFamily: value.fontFamily,
+          fontScale: value.fontScale,
+          appearanceMode: value.appearanceMode,
+          multiVoiceEnabled: value.multiVoiceEnabled,
+          storedDocumentCastVoiceAssignments:
+              value.storedDocumentCastVoiceAssignments,
+          resumeState: value.resumeState,
+          lastOpenedDocumentPath: value.lastOpenedDocumentPath,
+          lastOpenedDocumentAccessToken: value.lastOpenedDocumentAccessToken,
+          lastOpenedDirectoryPath: value.lastOpenedDirectoryPath,
+          lastOpenedDirectoryAccessToken: value.lastOpenedDirectoryAccessToken,
+        );
+      } catch (error) {
+        if (!_disposed && revision == _preferenceSnapshotRevision) {
+          _statusMessage = 'Could not save current preferences: $error';
+          notifyListeners();
+        }
+      }
+    }
   }
 
   void _scheduleResumePersistence() {

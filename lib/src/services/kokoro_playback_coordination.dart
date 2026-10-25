@@ -1,5 +1,26 @@
 import 'tts_engine.dart';
 
+/// Runs inside the engine's serialized native mutation slot. Even a platform
+/// install that finishes or fails after supersession must settle its cleanup
+/// before that slot admits the newest document/revision.
+Future<bool> kokoroInstallPreparedPlayback({
+  required bool Function() isCurrent,
+  required Future<void> Function() install,
+  required Future<void> Function() clearStale,
+}) async {
+  if (!isCurrent()) return false;
+  try {
+    await install();
+  } catch (_) {
+    if (isCurrent()) rethrow;
+    await clearStale();
+    return false;
+  }
+  if (isCurrent()) return true;
+  await clearStale();
+  return false;
+}
+
 /// Completed native WAVs retain admission credit while boundary correction and
 /// playlist publication are pending. Publication replaces this conservative raw
 /// duration with the corrected duration; it never opens an accounting gap.

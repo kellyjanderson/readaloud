@@ -112,6 +112,19 @@ class _RateLimitedEngine extends _RateEngine
     implements SpeechRateNormalizationCapable, AudioExportCapable {
   final exports = <TtsExportRequest>[];
   @override
+  Future<void> speak(TtsSpeakRequest request) async {
+    await super.speak(request);
+    request.onPlaybackReady?.call(
+      TtsPlaybackAcknowledgment(
+        documentId: request.documentId!,
+        assignmentRevision: request.assignmentRevision,
+        generationId: 'normalized-rate-generation',
+        bindingFingerprints: const {},
+      ),
+    );
+  }
+
+  @override
   double normalizeSpeechRate(double requested) =>
       kokoroNormalizeSpeechRate(requested);
   @override

@@ -1,9 +1,11 @@
 import 'kokoro_tokenization_worker.dart';
 import 'speech_planning_supervisor.dart';
 import 'synthesis_admission_owner.dart';
+import 'audio_artifact_store.dart';
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'dart:isolate';
 
 import 'package:crypto/crypto.dart' as crypto;
 import 'package:flutter/services.dart';
@@ -35,10 +37,33 @@ class KokoroTtsEngine
         VoiceLibraryCapable,
         AudioExportCapable,
         ResourcePreparationCapable,
-        SpeechRateNormalizationCapable {
-  KokoroTtsEngine({AudioPlayer? player, this.beforeSynthesis})
-    : _player = player ?? AudioPlayer(useLazyPreparation: false);
+        SpeechRateNormalizationCapable,
+        VoiceAssignmentPlaybackCapable {
+  KokoroTtsEngine({
+    AudioPlayer? player,
+    this.beforeSynthesis,
+    AudioArtifactPins? artifactPins,
+  }) : _player = player ?? AudioPlayer(useLazyPreparation: false),
+       _artifactPins = artifactPins ?? AudioArtifactPins.shared;
   final Future<void> Function()? beforeSynthesis;
+  final AudioArtifactPins _artifactPins;
+  final Map<String, AudioArtifactPin> _playbackPins = {};
+  String _synthesisIdentity = 'uninitialized';
+  int get debugPlaybackPinCount => _playbackPins.length;
+  @override
+  TtsPlaybackResumeAnchor? get currentPlaybackResumeAnchor {
+    if (_activePlaybackToken == null ||
+        _activeChunks.isEmpty ||
+        _currentChunkIndex >= _activeChunks.length) {
+      return null;
+    }
+    final chunk = _activeChunks[_currentChunkIndex];
+    return TtsPlaybackResumeAnchor(
+      documentId: chunk.documentId,
+      chunkId: chunk.chunkId,
+      startWordIndex: chunk.startWordIndex,
+    );
+  }
 
   static const String _engineId = 'kokoro';
   static const String _engineVersion = '12';
@@ -410,6 +435,9 @@ class KokoroTtsEngine
         rawDictionary: tokenizerSources[4],
         ownerId: 'playback-tokenizer',
       );
+      _synthesisIdentity = await Isolate.run(
+        () => _tokenizerContentDigest(tokenizerSources),
+      );
       _exportTokenizer = KokoroTokenizationWorker(
         assets: tokenizerAssets,
         rawDictionary: tokenizerSources[4],
@@ -522,12 +550,14 @@ class KokoroTtsEngine
   @override
   Future<void> speak(TtsSpeakRequest request) async {
     await initialize();
+    if (request.isCurrent?.call() == false) return;
     if (_speechRuntime == null || _voiceManager == null) {
       _onError?.call(_assets?.message ?? 'Kokoro is unavailable.');
       return;
     }
 
     await stop();
+    if (request.isCurrent?.call() == false) return;
 
     final requestToken = ++_requestToken;
     _lastProgressKey = null;
@@ -538,6 +568,9 @@ class KokoroTtsEngine
     _waitingForUnderrunRecovery = false;
     _currentQueueBaseIndex = 0;
     await _startDebugTraceSession(sessionId: _activeSessionId!);
+    if (requestToken != _requestToken || request.isCurrent?.call() == false) {
+      return;
+    }
 
     _ownPlaybackPreparation(
       _synthesizeAndPlay(requestToken, request),
@@ -582,6 +615,7 @@ class KokoroTtsEngine
     await initialize();
     if (_exportCancelled) throw StateError('Export cancelled.');
     final planner = SpeechPlanningSupervisor();
+    final exportPins = <AudioArtifactPin>[];
     final context = request.planningContext;
     final rate = context?.realization.rate ?? _speechRate;
     if (normalizeSpeechRate(rate) != rate) {
@@ -651,6 +685,9 @@ class KokoroTtsEngine
     final subscription = runtime.events.listen((event) {
       if (event.sessionId != null && event.sessionId != sessionId) return;
       if (event.type == SpeechRuntimeEventType.chunkReady) {
+        if (event.audioPath != null) {
+          exportPins.add(_artifactPins.pin(event.audioPath!));
+        }
         final chunkId = event.chunkId;
         final plannedChunk = pendingChunksById[chunkId];
         if (chunkId == null ||
@@ -741,6 +778,9 @@ class KokoroTtsEngine
           normalizationVersion: request.normalizationVersion,
           chunkPlan: plan,
           speechDocument: request.speechDocument,
+          preparedResources: List.unmodifiable(
+            request.preparedResources ?? _preparedBindings,
+          ),
         );
         if (plan == null) {
           chunks = await _prepareChunks(
@@ -806,9 +846,15 @@ class KokoroTtsEngine
         ),
       );
     } finally {
-      await runtime.shutdownRuntime();
-      await subscription.cancel();
-      await planner.shutdown();
+      try {
+        await runtime.shutdownRuntime();
+        await subscription.cancel();
+        await planner.shutdown();
+      } finally {
+        for (final pin in exportPins) {
+          pin.release();
+        }
+      }
     }
   }
 
@@ -816,6 +862,8 @@ class KokoroTtsEngine
     int requestToken,
     TtsSpeakRequest request,
   ) async {
+    bool current() =>
+        requestToken == _requestToken && request.isCurrent?.call() != false;
     final speechRuntime = _speechRuntime;
     if (speechRuntime == null) {
       _onError?.call('Kokoro speech runtime is unavailable.');
@@ -865,7 +913,7 @@ class KokoroTtsEngine
               request.ttsArtifactSet?.selectedProfileId ?? 'kokoro-default',
         );
       }
-      if (requestToken != _requestToken) return;
+      if (!current()) return;
       final languageTag = KokoroVoiceCatalog.languageTagForVoice(
         _selectedVoiceId,
       );
@@ -1040,23 +1088,55 @@ class KokoroTtsEngine
           'remainingPlannedChunkCount': _remainingPlannedChunkCount,
         },
       );
-      _activeChunks = initialBufferedChunks;
-      _producedAudioCredit.published(
-        initialBufferedChunks.map((c) => c.chunkId),
-      );
-      _currentChunkIndex = 0;
-      _currentQueueBaseIndex = 0;
-      _waitingForUnderrunRecovery = false;
-      await _player.setVolume(_volume);
-      await _player.setAudioSources(
-        initialBufferedChunks
-            .map((chunk) => AudioSource.file(chunk.filePath))
-            .toList(growable: false),
-      );
-      _activePlaybackToken = requestToken;
+      final installed = await _mutateAudioQueue(() async {
+        if (!current()) return;
+        _activeChunks = initialBufferedChunks;
+        _producedAudioCredit.published(
+          initialBufferedChunks.map((c) => c.chunkId),
+        );
+        _currentChunkIndex = 0;
+        _currentQueueBaseIndex = 0;
+        _waitingForUnderrunRecovery = false;
+        final ready = await kokoroInstallPreparedPlayback(
+          isCurrent: current,
+          install: () async {
+            await _player.setVolume(_volume);
+            if (!current()) return;
+            await _player.setAudioSources(
+              initialBufferedChunks
+                  .map((chunk) => AudioSource.file(chunk.filePath))
+                  .toList(growable: false),
+            );
+          },
+          clearStale: () async {
+            await _player.stop();
+            await _player.clearAudioSources();
+            _releaseAllPlaybackPins();
+          },
+        );
+        if (!ready) return;
+        _activePlaybackToken = requestToken;
+      });
+      if (!installed || !current() || _activePlaybackToken != requestToken) {
+        return;
+      }
       await _flushStagedReadyChunksToActiveQueue(
         generationId: activeGenerationId,
       );
+      if (!current()) return;
+      request.onPlaybackReady?.call(
+        TtsPlaybackAcknowledgment(
+          documentId: request.documentId ?? 'unknown-document',
+          assignmentRevision: request.assignmentRevision,
+          generationId: activeGenerationId,
+          bindingFingerprints: Set.unmodifiable(
+            (request.preparedResources ?? _preparedBindings).map(
+              (b) => b.fingerprint,
+            ),
+          ),
+        ),
+      );
+      if (!current()) return;
       _emitProgressForChunkWord(0, 0, elapsedInChunk: Duration.zero);
       _emitActivity(
         _playbackActivityForPhase(
@@ -1069,7 +1149,7 @@ class KokoroTtsEngine
       _onStart?.call();
       unawaited(_player.play());
     } catch (error) {
-      if (requestToken == _requestToken) {
+      if (current()) {
         await _cancelActiveGeneration();
         await _resetPlaybackState();
         _onError?.call('Kokoro synthesis failed: $error');
@@ -1372,7 +1452,11 @@ class KokoroTtsEngine
           // remains installed; suppress intermediate index notifications while the
           // platform rebases indexes, then read its settled index.
           _pruningHistory = true;
+          final pruned = _activeChunks.take(count).toList(growable: false);
           await _player.removeAudioSourceRange(0, count);
+          for (final chunk in pruned) {
+            _releasePlaybackPin(chunk.chunkId);
+          }
           _activeChunks = _activeChunks.sublist(count);
           _currentQueueBaseIndex = 0;
           _currentChunkIndex = _player.currentIndex ?? 0;
@@ -1423,6 +1507,7 @@ class KokoroTtsEngine
     }
     try {
       await _player.clearAudioSources();
+      _releaseAllPlaybackPins();
     } catch (cleanupError) {
       failures.add(cleanupError);
     }
@@ -1574,6 +1659,18 @@ class KokoroTtsEngine
     if (chunk == null || event.audioPath == null || event.duration == null) {
       return;
     }
+    _playbackPins.putIfAbsent(
+      chunkId,
+      () => _artifactPins.pin(event.audioPath!),
+    );
+    _recordMetric(
+      'audioArtifactPinned',
+      chunkId: chunkId,
+      value: <String, Object?>{
+        'path': event.audioPath!,
+        'pinCount': _artifactPins.pinCount(event.audioPath!),
+      },
+    );
 
     final playbackChunk = _PlaybackChunk(
       chunkId: chunk.chunkId,
@@ -1785,9 +1882,15 @@ class KokoroTtsEngine
       return;
     }
 
+    final discardedStaged = _stagedReadyChunks
+        .where((chunk) => chunk.startWordIndex >= failedChunk.startWordIndex)
+        .toList(growable: false);
     _stagedReadyChunks.removeWhere(
       (chunk) => chunk.startWordIndex >= failedChunk.startWordIndex,
     );
+    for (final chunk in discardedStaged) {
+      _releasePlaybackPin(chunk.chunkId);
+    }
     await _discardFutureBufferedChunksFromStartWordIndex(
       failedChunk.startWordIndex,
     );
@@ -1922,6 +2025,9 @@ class KokoroTtsEngine
 
     return _QueuedChunk(
       chunkId: '${failedChunk.chunkId}_recover_$sliceIndex',
+      expectedBinding: failedChunk.expectedBinding,
+      synthesisIdentity: failedChunk.synthesisIdentity,
+      synthesisRate: failedChunk.synthesisRate,
       generationOrder: sliceIndex,
       segmentIds: pieceSegmentRanges
           .map((range) => range.segmentId)
@@ -1929,7 +2035,7 @@ class KokoroTtsEngine
       cacheKey: _fallbackCacheKey(
         pieceText,
         voiceId: failedChunk.voiceId,
-        rate: _speechRate,
+        rate: failedChunk.synthesisRate,
         normalizationVersion: failedChunk.normalizationVersion,
       ),
       voiceId: failedChunk.voiceId,
@@ -2057,6 +2163,12 @@ class KokoroTtsEngine
       baseStartWordIndex: 0,
       tokenWorker: tokenWorker,
       languageTag: languageTag,
+      binding: _bindingForVoice(
+        request.preparedResources ?? _preparedBindings,
+        _selectedVoiceId,
+      ),
+      synthesisIdentity: _synthesisIdentity,
+      synthesisRate: request.planningContext?.realization.rate ?? _speechRate,
     );
   }
 
@@ -2066,6 +2178,12 @@ class KokoroTtsEngine
     KokoroTokenizationWorker? tokenWorker,
   }) async {
     final chunkPlan = request.chunkPlan!;
+    final bindings = List<PreparedVoiceBinding>.of(
+      request.preparedResources ?? _preparedBindings,
+    );
+    final synthesisRate =
+        request.planningContext?.realization.rate ?? _speechRate;
+    final synthesisIdentity = _synthesisIdentity;
     final prepared = <_QueuedChunk>[];
     var searchOffset = 0;
 
@@ -2082,6 +2200,9 @@ class KokoroTtsEngine
       final translatedChunk = tokenization.translatedChunk!;
       final chunk = _QueuedChunk(
         chunkId: spec.chunkId,
+        expectedBinding: _bindingForVoice(bindings, spec.voiceId),
+        synthesisIdentity: synthesisIdentity,
+        synthesisRate: synthesisRate,
         generationOrder: prepared.length,
         segmentIds: spec.segmentIds,
         cacheKey: spec.cacheKey,
@@ -2129,6 +2250,13 @@ class KokoroTtsEngine
     required String languageTag,
     KokoroTokenizationWorker? tokenWorker,
   }) async {
+    final binding = _bindingForVoice(
+      request.preparedResources ?? _preparedBindings,
+      spec.voiceId,
+    );
+    final synthesisRate =
+        request.planningContext?.realization.rate ?? _speechRate;
+    final synthesisIdentity = _synthesisIdentity;
     final startOffset = _findChunkStartOffset(
       fullText: request.text,
       searchOffset: searchOffset,
@@ -2142,6 +2270,9 @@ class KokoroTtsEngine
     return _PreparedPlannedChunk(
       chunk: _QueuedChunk(
         chunkId: spec.chunkId,
+        expectedBinding: binding,
+        synthesisIdentity: synthesisIdentity,
+        synthesisRate: synthesisRate,
         generationOrder: spec.startSegmentIndex,
         segmentIds: spec.segmentIds,
         cacheKey: spec.cacheKey,
@@ -2211,6 +2342,9 @@ class KokoroTtsEngine
     required String normalizationVersion,
     required int baseStartWordIndex,
     required String languageTag,
+    required PreparedVoiceBinding binding,
+    required String synthesisIdentity,
+    required double synthesisRate,
     KokoroTokenizationWorker? tokenWorker,
   }) async {
     final chunks = <_QueuedChunk>[];
@@ -2231,15 +2365,18 @@ class KokoroTtsEngine
       chunks.add(
         _QueuedChunk(
           chunkId: 'chunk_${chunks.length}',
+          expectedBinding: binding,
+          synthesisIdentity: synthesisIdentity,
+          synthesisRate: synthesisRate,
           generationOrder: chunks.length,
           segmentIds: <String>['chunk_${chunks.length}'],
           cacheKey: _fallbackCacheKey(
             text,
-            voiceId: _selectedVoiceId,
-            rate: _speechRate,
+            voiceId: binding.voiceId,
+            rate: synthesisRate,
             normalizationVersion: normalizationVersion,
           ),
-          voiceId: _selectedVoiceId,
+          voiceId: binding.voiceId,
           boundaryClass: chunks.isEmpty ? BreakClass.none : BreakClass.sentence,
           documentId: documentId,
           normalizationVersion: normalizationVersion,
@@ -2306,6 +2443,7 @@ class KokoroTtsEngine
     _clearPlaybackStateFields();
     await _player.stop();
     await _player.clearAudioSources();
+    _releaseAllPlaybackPins();
     _emitActivity(const TtsPlaybackActivity.idle());
   }
 
@@ -2329,6 +2467,15 @@ class KokoroTtsEngine
     _waitingForUnderrunRecovery = false;
     _lastRecordedBufferPressure = TtsBufferPressure.none;
     _stagedReadyChunks.clear();
+  }
+
+  void _releasePlaybackPin(String chunkId) =>
+      _playbackPins.remove(chunkId)?.release();
+  void _releaseAllPlaybackPins() {
+    for (final pin in _playbackPins.values) {
+      pin.release();
+    }
+    _playbackPins.clear();
   }
 
   Future<List<int>> _tokenizeSpeakText(
@@ -2474,6 +2621,7 @@ class KokoroTtsEngine
   }) async {
     await _mutateAudioQueue(() async {
       if (generationId != _activeGenerationId) {
+        _releasePlaybackPin(playbackChunk.chunkId);
         return;
       }
       if (_activePlaybackToken == null) {
@@ -2572,6 +2720,9 @@ class KokoroTtsEngine
           startRelativeIndex,
           endRelativeIndex,
         );
+      }
+      for (final chunk in prunedChunks) {
+        _releasePlaybackPin(chunk.chunkId);
       }
 
       _recordMetric(
@@ -2793,6 +2944,9 @@ class KokoroTtsEngine
 class _QueuedChunk {
   const _QueuedChunk({
     required this.chunkId,
+    required this.expectedBinding,
+    required this.synthesisIdentity,
+    required this.synthesisRate,
     required this.generationOrder,
     required this.segmentIds,
     required this.cacheKey,
@@ -2822,6 +2976,9 @@ class _QueuedChunk {
   });
 
   final String chunkId;
+  final PreparedVoiceBinding expectedBinding;
+  final String synthesisIdentity;
+  final double synthesisRate;
   final int generationOrder;
   final List<String> segmentIds;
   final String cacheKey;
@@ -2857,6 +3014,9 @@ class _QueuedChunk {
   }) {
     return _QueuedChunk(
       chunkId: chunkId ?? this.chunkId,
+      expectedBinding: expectedBinding,
+      synthesisIdentity: synthesisIdentity,
+      synthesisRate: synthesisRate,
       generationOrder: generationOrder ?? this.generationOrder,
       segmentIds: segmentIds,
       cacheKey: cacheKey,
@@ -2894,6 +3054,9 @@ class _QueuedChunk {
   }) {
     return SpeechRuntimeChunkPayload(
       chunkId: chunkId,
+      expectedBindingFingerprint: expectedBinding.fingerprint,
+      expectedBindingRevision: expectedBinding.bindingRevision,
+      synthesisIdentity: synthesisIdentity,
       segmentIds: segmentIds,
       cacheKey: runtimeCacheKey(
         isInitialChunk: isInitialChunk,
@@ -2907,7 +3070,7 @@ class _QueuedChunk {
       tokens: tokens,
       languageTag: languageTag,
       voiceId: voiceId,
-      rate: rate,
+      rate: synthesisRate,
       isInitialChunk: isInitialChunk,
       isResumedChunk: isResumedChunk,
       routeId: routeId,
@@ -3207,7 +3370,7 @@ String _fallbackCacheKey(
     KokoroTtsEngine._engineId,
     KokoroTtsEngine._engineVersion,
     voiceId,
-    rate.toStringAsFixed(2),
+    rate.toString(),
     normalizationVersion,
     speakHash,
   ].join(':');
@@ -3248,3 +3411,14 @@ List<_WordBoundary> _buildWordBoundaries(String text) {
       )
       .toList(growable: false);
 }
+
+PreparedVoiceBinding _bindingForVoice(
+  List<PreparedVoiceBinding> bindings,
+  String voiceId,
+) => bindings.firstWhere(
+  (binding) => binding.voiceId == voiceId,
+  orElse: () => throw StateError('No captured prepared binding for $voiceId'),
+);
+
+String _tokenizerContentDigest(List<String> sources) =>
+    crypto.sha256.convert(utf8.encode(jsonEncode(sources))).toString();

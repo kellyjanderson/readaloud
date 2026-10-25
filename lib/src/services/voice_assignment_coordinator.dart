@@ -42,6 +42,18 @@ class VoiceAssignmentCoordinator {
   }
 
   bool isCurrent(int revision) => revision == _requestedRevision;
+  void resetDocument() {
+    ++_requestedRevision;
+    _effectiveRevision = _requestedRevision;
+    _requestedDefault = null;
+    _effectiveDefault = null;
+    _requestedCast = const {};
+    _effectiveCast = const {};
+    _phase = VoiceAssignmentPhase.current;
+    _initialBuffering = false;
+    _error = null;
+  }
+
   void preparing(int revision, {required bool initialBuffering}) {
     if (!isCurrent(revision)) return;
     _initialBuffering = initialBuffering;
