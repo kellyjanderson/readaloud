@@ -74,6 +74,7 @@ class KokoroTtsEngine
   SynthesisAdmissionOwner? _admission;
   CancellableSynthesisLease? _playbackLease;
   CancellableSynthesisLease? _exportLease;
+  final _nativePlaybackAdmission = KokoroBufferAdmission();
   final SpeechPlanningSupervisor _refillPlanner = SpeechPlanningSupervisor();
   Completer<void> _bufferChanged = Completer<void>();
   int _nextReadyWord = 0;
@@ -390,6 +391,13 @@ class KokoroTtsEngine
       _admission = SynthesisAdmissionOwner(
         _resourceProcessor!,
         beforeProcess: beforeSynthesis,
+        playbackMayRun: () =>
+            _activeGenerationId == null ||
+            _nativePlaybackAdmission.admits(
+              audioLead: _preparedLead(),
+              outstandingChunks: 0,
+              playerSpeed: _player.speed,
+            ),
         exportMayRun: () =>
             _exportCancelled ||
             _activeGenerationId == null ||
