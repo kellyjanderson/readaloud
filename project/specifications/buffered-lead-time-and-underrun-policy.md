@@ -1,5 +1,13 @@
 # Buffered Lead-Time And Underrun Policy
 
+## Architecture ownership
+
+- [speech enrichment and narration](../architecture/speech-enrichment-and-narration.md)
+- [system overview](../architecture/system-overview.md)
+- [playback orchestration and synthesis boundaries](../architecture/playback-orchestration-and-synthesis-boundaries.md)
+
+Retained legacy contract. Final/refinement status is not implementation proof; current behavior is described in the architecture above. New work follows [AGENTS.md](../../AGENTS.md) and the GitHub design issue and slices.
+
 Last updated: April 8, 2026
 Status: Final specification
 
@@ -9,9 +17,9 @@ This specification defines the buffer-lead policy that keeps active speech audio
 
 ## Backlink
 
-Parent specification:
+Historical specification lineage:
 
-- [Audio-Authoritative Playback Synchronization](audio-authoritative-playback-synchronization.md)
+- [Audio-Authoritative Playback Synchronization](../archive/specification-ancestors/audio-authoritative-playback-synchronization.md)
 
 ## Scope
 

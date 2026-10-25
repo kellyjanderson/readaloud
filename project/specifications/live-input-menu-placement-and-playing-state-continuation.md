@@ -1,5 +1,11 @@
 # Live Input Menu Placement And Playing-State Continuation
 
+## Architecture ownership
+
+- [system overview](../architecture/system-overview.md)
+
+Retained legacy contract. Final/refinement status is not implementation proof; current behavior is described in the architecture above. New work follows [AGENTS.md](../../AGENTS.md) and the GitHub design issue and slices.
+
 Status: final
 
 ## Overview
@@ -8,9 +14,9 @@ This specification defines where live input is accessed in the running app and h
 
 ## Backlink
 
-Parent specification:
+Historical specification lineage:
 
-- [Live Input And File Menu UI](live-input-and-file-menu-ui.md)
+- [Live Input And File Menu UI](../archive/specification-ancestors/live-input-and-file-menu-ui.md)
 
 ## Scope
 

@@ -1,8 +1,8 @@
 # Legacy Licensing Pointer
 
-The authoritative licensing documents now live under `project/`.
+The active compliance plan lives in GitHub; retained licensing research remains in the repository.
 
 Start here:
 
-- [Open Source Compliance Plan](project/planning/open-source-compliance-plan.md)
+- [Open Source Compliance Plan](https://github.com/kellyjanderson/readaloud/issues/55)
 - [Open Source Licensing Notes](project/research/open-source-licensing-notes.md)

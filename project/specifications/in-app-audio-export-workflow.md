@@ -1,5 +1,13 @@
 # In-App Audio Export Workflow
 
+## Architecture ownership
+
+- [document speech pipeline](../architecture/document-speech-pipeline.md)
+- [system overview](../architecture/system-overview.md)
+- [audio export and headless execution](../architecture/audio-export-and-headless-execution.md)
+
+Retained legacy contract. Final/refinement status is not implementation proof; current behavior is described in the architecture above. New work follows [AGENTS.md](../../AGENTS.md) and the GitHub design issue and slices.
+
 Last updated: March 30, 2026
 Status: Final specification
 
@@ -9,9 +17,9 @@ This specification defines how a user exports spoken audio from the interactive 
 
 ## Backlink
 
-Parent specification:
+Historical specification lineage:
 
-- [Audio Export and Headless Execution](audio-export-and-headless-execution.md)
+- [Audio Export and Headless Execution](../archive/specification-ancestors/audio-export-and-headless-execution.md)
 
 ## Scope
 

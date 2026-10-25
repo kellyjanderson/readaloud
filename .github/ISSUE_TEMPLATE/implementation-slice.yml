@@ -1,0 +1,31 @@
+name: Implementation slice
+description: A bounded work order for an orchestrator or worker.
+title: "[Slice]: "
+labels: ["kind:slice"]
+body:
+  - type: textarea
+    id: authority
+    attributes:
+      label: Parent and design revision
+      description: Link the parent design and accepted decision revision. Add native parent/dependency relationships after creation.
+    validations:
+      required: true
+  - type: textarea
+    id: scope
+    attributes:
+      label: Objective and ownership
+      description: Outcome, exclusions, owned files/modules, and overlap constraints.
+    validations:
+      required: true
+  - type: textarea
+    id: dispatch
+    attributes:
+      label: Orchestrator handoff
+      description: Owner/chat, prerequisite evidence, base commit, branch/worktree, and intended integration target. Leave unassigned until claimed by the orchestrator.
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance and return contract
+      description: Required checks and evidence; report result, paths, commit/PR, blockers and remaining work. FINAL must verify merged architecture and accepted feature evidence.
+    validations:
+      required: true

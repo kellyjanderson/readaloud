@@ -1,5 +1,13 @@
 # EPUB Document Normalization
 
+## Architecture ownership
+
+- [document speech pipeline](../architecture/document-speech-pipeline.md)
+- [normalized content and position mapping](../architecture/normalized-content-and-position-mapping.md)
+- [system overview](../architecture/system-overview.md)
+
+Retained legacy contract. Final/refinement status is not implementation proof; current behavior is described in the architecture above. New work follows [AGENTS.md](../../AGENTS.md) and the GitHub design issue and slices.
+
 Last updated: April 1, 2026
 Status: Final specification
 

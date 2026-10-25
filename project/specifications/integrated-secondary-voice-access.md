@@ -1,5 +1,11 @@
 # Integrated Secondary Voice Access
 
+## Architecture ownership
+
+- [system overview](../architecture/system-overview.md)
+
+Retained legacy contract. Final/refinement status is not implementation proof; current behavior is described in the architecture above. New work follows [AGENTS.md](../../AGENTS.md) and the GitHub design issue and slices.
+
 Status: final
 
 ## Overview
@@ -8,9 +14,9 @@ This specification defines how the primary surface exposes advanced voice and ca
 
 ## Backlink
 
-Parent specification:
+Historical specification lineage:
 
-- [Primary Reader Surface UI](primary-reader-surface-ui.md)
+- [Primary Reader Surface UI](../archive/specification-ancestors/primary-reader-surface-ui.md)
 
 ## Scope
 

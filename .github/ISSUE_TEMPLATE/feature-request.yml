@@ -9,7 +9,7 @@ body:
       value: |
         Thanks for proposing a feature.
 
-        Feature implementation in this repository should be tied to a specification.
+        This issue is the working design authority. Use native sub-issues for implementation slices; do not create local planning files.
   - type: textarea
     id: problem
     attributes:
@@ -25,11 +25,11 @@ body:
     validations:
       required: true
   - type: textarea
-    id: spec
+    id: planning
     attributes:
-      label: Related specification
-      description: Link an existing spec, or describe what spec should be created first.
-      placeholder: project/specifications/...
+      label: Related planning
+      description: Link affected repository architecture and any parent issue. Include exclusions, migration and execution ownership when relevant.
+      placeholder: Architecture URL, related issues, constraints and unresolved decisions
   - type: textarea
     id: success
     attributes:

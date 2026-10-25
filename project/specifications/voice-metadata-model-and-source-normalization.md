@@ -1,5 +1,11 @@
 # Voice Metadata Model and Source Normalization
 
+## Architecture ownership
+
+- [character dialogue attribution and voice casting](../architecture/character-dialogue-attribution-and-voice-casting.md)
+
+Retained legacy contract. Final/refinement status is not implementation proof; current behavior is described in the architecture above. New work follows [AGENTS.md](../../AGENTS.md) and the GitHub design issue and slices.
+
 Status: final
 
 ## Overview
@@ -8,9 +14,9 @@ This specification defines the app-owned voice metadata model and how raw engine
 
 ## Backlink
 
-Parent specification:
+Historical specification lineage:
 
-- [Voice Library Metadata and Information Surfacing](voice-library-metadata-and-information-surfacing.md)
+- [Voice Library Metadata and Information Surfacing](../archive/specification-ancestors/voice-library-metadata-and-information-surfacing.md)
 
 ## Scope
 

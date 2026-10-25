@@ -59,4 +59,4 @@ Examples include:
 
 ## Related Specifications
 
-- [App Shell And Platform Navigation UI](../specifications/app-shell-and-platform-navigation-ui.md)
+- [App Shell And Platform Navigation UI](../archive/specification-ancestors/app-shell-and-platform-navigation-ui.md)

@@ -1,5 +1,11 @@
 # Reader Preferences Controls
 
+## Architecture ownership
+
+- [system overview](../architecture/system-overview.md)
+
+Retained legacy contract. Final/refinement status is not implementation proof; current behavior is described in the architecture above. New work follows [AGENTS.md](../../AGENTS.md) and the GitHub design issue and slices.
+
 Status: final
 
 ## Overview
@@ -8,9 +14,9 @@ This specification defines the reading-preferences controls surfaced through the
 
 ## Backlink
 
-Parent specification:
+Historical specification lineage:
 
-- [Reader Options And Secondary Settings UI](reader-options-and-secondary-settings-ui.md)
+- [Reader Options And Secondary Settings UI](../archive/specification-ancestors/reader-options-and-secondary-settings-ui.md)
 
 ## Scope
 

@@ -1,0 +1,13 @@
+# GitHub slice issue body template
+
+Use in GitHub; do not instantiate in the repository.
+
+Parent design / decision revision:
+Objective and exclusions:
+Dependencies (also use native relationships):
+Owner/chat and file/module scope:
+Base commit, branch/worktree and integration target:
+Validation and acceptance:
+Return contract: result, changed paths, commit/PR, exact checks/evidence, blockers and remaining work.
+
+FINAL: verify required evidence and merged architecture/user-documentation reconciliation before closing parent.

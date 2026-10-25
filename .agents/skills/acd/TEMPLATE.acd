@@ -1,0 +1,14 @@
+# GitHub design issue body template
+
+Use in GitHub; do not instantiate this file in the repository.
+
+## Problem and outcome
+## Architectural delta and affected architecture
+## Constraints and exclusions
+## Ownership, execution contexts and failure handling
+## Migration and compatibility
+## Acceptance evidence
+## Reconciliation targets
+## Decisions and open questions
+
+Use native sub-issues for execution; decision comments identify accepted revisions.

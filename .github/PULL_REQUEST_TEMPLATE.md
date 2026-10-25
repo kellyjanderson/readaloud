@@ -1,30 +1,21 @@
-## Summary
+## Change
 
-Describe the change clearly and briefly.
+Problem and resulting behavior:
 
-## Change Type
+## Authority and integration
 
-- [ ] Bug fix
-- [ ] Feature
-- [ ] Docs only
-- [ ] Maintenance
-
-## Required Linkage
-
-- Issue:
-- Specification:
-
-Bug-fix branches should link to an issue.
-
-Feature branches should link to a specification.
+Refs parent design issue:
+Slice issue and accepted design revision:
+Base branch/commit and intended integration target:
+Orchestrator/worker ownership (if delegated):
 
 ## Validation
 
-- [ ] `flutter analyze`
-- [ ] `flutter test`
-- [ ] relevant manual validation completed
-- [ ] speech/audio verification completed when relevant
+Checks and evidence; distinguish passed, failed, blocked and not run. Include native/audio and running-app evidence where relevant.
 
-## Notes
+## Architecture reconciliation
 
-Anything reviewers or future readers should know.
+Architecture/user-doc changes or why none:
+Remaining feature acceptance or reconciliation work:
+
+Do not auto-close the parent design from an intermediate PR. A merged slice is not proof of final feature acceptance.

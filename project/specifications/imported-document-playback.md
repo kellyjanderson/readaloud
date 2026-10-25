@@ -1,5 +1,11 @@
 # Imported Document Playback
 
+## Architecture ownership
+
+- [system overview](../architecture/system-overview.md)
+
+Retained legacy contract. Final/refinement status is not implementation proof; current behavior is described in the architecture above. New work follows [AGENTS.md](../../AGENTS.md) and the GitHub design issue and slices.
+
 Last updated: April 8, 2026
 Status: Draft specification
 
@@ -26,11 +32,11 @@ Detailed implementation specifications:
 - [Generated Audio Cache](generated-audio-cache.md)
 - [Synthesis Boundary Policy](synthesis-boundary-policy.md)
 - [Playback Coordination](playback-coordination.md)
-- [Audio-Authoritative Playback Synchronization](audio-authoritative-playback-synchronization.md)
+- [Audio-Authoritative Playback Synchronization](../archive/specification-ancestors/audio-authoritative-playback-synchronization.md)
 - [Playback Progress and Jump Mapping](playback-progress-and-jump-mapping.md)
 - [Document Replacement Playback Reset And Stale Event Rejection](document-replacement-playback-reset-and-stale-event-rejection.md)
 - [Playback Quality Instrumentation](playback-quality-instrumentation.md)
-- [Reader Session Continuity and Live Input](reader-session-continuity-and-live-input.md)
+- [Reader Session Continuity and Live Input](../archive/specification-ancestors/reader-session-continuity-and-live-input.md)
 
 ## Behavior
 
@@ -62,11 +68,11 @@ This is a draft umbrella specification. Its child specifications are expected to
 - [Generated Audio Cache](generated-audio-cache.md)
 - [Synthesis Boundary Policy](synthesis-boundary-policy.md)
 - [Playback Coordination](playback-coordination.md)
-- [Audio-Authoritative Playback Synchronization](audio-authoritative-playback-synchronization.md)
+- [Audio-Authoritative Playback Synchronization](../archive/specification-ancestors/audio-authoritative-playback-synchronization.md)
 - [Playback Progress and Jump Mapping](playback-progress-and-jump-mapping.md)
 - [Document Replacement Playback Reset And Stale Event Rejection](document-replacement-playback-reset-and-stale-event-rejection.md)
 - [Playback Quality Instrumentation](playback-quality-instrumentation.md)
-- [Reader Session Continuity and Live Input](reader-session-continuity-and-live-input.md)
+- [Reader Session Continuity and Live Input](../archive/specification-ancestors/reader-session-continuity-and-live-input.md)
 
 ## Acceptance Criteria
 

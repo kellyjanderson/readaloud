@@ -1,5 +1,12 @@
 # Dialogue Span Detection
 
+## Architecture ownership
+
+- [character dialogue attribution and voice casting](../architecture/character-dialogue-attribution-and-voice-casting.md)
+- [speech enrichment and narration](../architecture/speech-enrichment-and-narration.md)
+
+Retained legacy contract. Final/refinement status is not implementation proof; current behavior is described in the architecture above. New work follows [AGENTS.md](../../AGENTS.md) and the GitHub design issue and slices.
+
 Status: final
 
 ## Overview
@@ -8,9 +15,9 @@ This specification defines how direct-speech spans are identified in normalized 
 
 ## Backlink
 
-Parent specification:
+Historical specification lineage:
 
-- [Dialogue Span and Speaker Attribution](dialogue-span-and-speaker-attribution.md)
+- [Dialogue Span and Speaker Attribution](../archive/specification-ancestors/dialogue-span-and-speaker-attribution.md)
 
 ## Scope
 

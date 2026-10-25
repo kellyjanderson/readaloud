@@ -1,5 +1,11 @@
 # Appearance Mode Selection And System Following
 
+## Architecture ownership
+
+- [system overview](../architecture/system-overview.md)
+
+Retained legacy contract. Final/refinement status is not implementation proof; current behavior is described in the architecture above. New work follows [AGENTS.md](../../AGENTS.md) and the GitHub design issue and slices.
+
 Status: final
 
 ## Overview
@@ -8,9 +14,9 @@ This specification defines the surfaced appearance-mode behavior for light, dark
 
 ## Backlink
 
-Parent specification:
+Historical specification lineage:
 
-- [Theme And Appearance Modes UI](theme-and-appearance-modes-ui.md)
+- [Theme And Appearance Modes UI](../archive/specification-ancestors/theme-and-appearance-modes-ui.md)
 
 ## Scope
 

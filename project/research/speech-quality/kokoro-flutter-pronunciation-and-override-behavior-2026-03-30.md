@@ -39,9 +39,9 @@ Implication:
 
 The `malsami` documentation explicitly says phonetic annotations are supported in markdown-link form:
 
-- `[Word](/phonemes/)`
+- `[Word](phonemes)`
 
-The docs show `EnglishG2P.convert('[Kokoro](/kˈOkəɹO/) models')`.
+The docs show `EnglishG2P.convert('[Kokoro](kˈOkəɹO) models')`.
 
 That means:
 
@@ -86,7 +86,7 @@ The `-ed` pronunciation failures fit this pattern very well.
 
 The upstream Kokoro issue tracker has a report that pronunciation helpers in the form:
 
-- `[Kokoro](/kˈOkəɹO/)`
+- `[Kokoro](kˈOkəɹO)`
 
 work for short text but can fail on very long text, producing both the original and helper pronunciation. The reported workaround is to split long text and process pieces separately.
 

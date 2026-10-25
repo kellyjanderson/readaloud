@@ -1,5 +1,12 @@
 # Automatic Voice Casting and Override Resolution
 
+## Architecture ownership
+
+- [character dialogue attribution and voice casting](../architecture/character-dialogue-attribution-and-voice-casting.md)
+- [speech enrichment and narration](../architecture/speech-enrichment-and-narration.md)
+
+Retained legacy contract. Final/refinement status is not implementation proof; current behavior is described in the architecture above. New work follows [AGENTS.md](../../AGENTS.md) and the GitHub design issue and slices.
+
 Status: final
 
 ## Overview
@@ -8,9 +15,9 @@ This specification defines how the app assigns voices automatically and how user
 
 ## Backlink
 
-Parent specification:
+Historical specification lineage:
 
-- [Character Cast Registry and Voice Assignment](character-cast-registry-and-voice-assignment.md)
+- [Character Cast Registry and Voice Assignment](../archive/specification-ancestors/character-cast-registry-and-voice-assignment.md)
 
 ## Scope
 

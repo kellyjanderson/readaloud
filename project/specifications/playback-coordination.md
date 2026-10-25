@@ -1,6 +1,17 @@
 # Playback Coordination
 
-Last updated: March 30, 2026
+## Architecture ownership
+
+- [document speech pipeline](../architecture/document-speech-pipeline.md)
+- [speech runtime messaging boundary](../architecture/speech-runtime-messaging-boundary.md)
+- [speech enrichment and narration](../architecture/speech-enrichment-and-narration.md)
+- [system overview](../architecture/system-overview.md)
+- [audio export and headless execution](../architecture/audio-export-and-headless-execution.md)
+- [playback orchestration and synthesis boundaries](../architecture/playback-orchestration-and-synthesis-boundaries.md)
+
+Retained legacy contract. Final/refinement status is not implementation proof; current behavior is described in the architecture above. New work follows [AGENTS.md](../../AGENTS.md) and the GitHub design issue and slices.
+
+Last updated: October 24, 2026
 Status: Final specification
 
 Issue anchor:
@@ -59,8 +70,8 @@ Unsupported action:
 - If the state is `idle`, `play` begins from the current reading position.
 - If the state is `paused`, `play` resumes from the current reading position.
 - If the state is `completed`, `play` resets the reading position to the beginning and starts replay.
-- If no prepared audio exists for the current position, `play` enters `bufferingFirstChunk`.
-- If prepared audio already exists for the current position, `play` may transition directly to `playing`.
+- After whole-document preparation, if contiguous audio lead is below the configured startup target, `play` enters `bufferingFirstChunk` (the retained state name now covers startup lead preparation). Before document readiness, the document processing state owns progress.
+- If document readiness and startup lead are satisfied, `play` may transition directly to `playing`; a short document may start when all remaining audio is ready.
 
 ## First-Chunk Startup Behavior
 
@@ -70,11 +81,11 @@ Unsupported action:
 
 ## Queue Behavior
 
-- Playback begins as soon as the first chunk is ready.
-- Later chunks queue behind active playback.
+- Playback begins after document readiness and contiguous startup lead; [Document Preparation and Execution Contexts](https://github.com/kellyjanderson/readaloud/issues/48) defines watermark and short-document semantics.
+- Audio is generated ahead of the playhead; finalized contiguous chunks append to the active queue without restart.
 - Later routed chunks must continue forward playback without requiring a user pause/play recovery cycle.
 - Pausing playback does not delete completed chunk files.
-- Changing voice or rate clears the in-memory queue and starts a new generation sequence, but it does not delete cached chunk files.
+- Ordinary character voice transitions do not invalidate the session or queue. User voice/rate edits prepare a replacement revision, then commit a future queue boundary only when replacement lead is ready. Preserve current audio; show a pending assignment until effective. If safe tail replacement is unsupported, defer application or expose explicit rebuffering rather than silently restarting. During startup, only the newest requested revision may start.
 - Jumping clears the in-memory queue from the old position and requests a new plan from the jump target.
 
 ## Completion Behavior
@@ -109,6 +120,10 @@ This is a final leaf specification.
 ## Child Specifications
 
 No child specifications.
+
+## Verification Status
+
+The October 24 changes are target behavior, not verified implementation. Paired scenarios are in [Prepared Document and Buffered Playback](https://github.com/kellyjanderson/readaloud/issues/54).
 
 ## Acceptance
 

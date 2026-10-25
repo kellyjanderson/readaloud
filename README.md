@@ -1,127 +1,54 @@
 # Read Aloud
 
-`Read Aloud` is a local-first Flutter document reader focused on high-quality long-form text-to-speech.
+A local-first Flutter reader for long-form text-to-speech using Kokoro. Import documents, listen with narrator and character voices, follow the spoken text, and export audio.
 
-The current repository contains the new Kokoro-based speech pipeline, document import and normalization, pronunciation planning and diagnostics, export and headless QA tooling, and the full architecture/specification corpus for the project.
+## Project status
 
-## Status
+macOS is the current functional target. Other Flutter platform folders are retained but are not qualified by the current project review. This repository is pre-release; older release labels and the package version are being reconciled before the next release.
 
-- current release target: `Beta 2`
-- platform status: macOS is the only platform currently treated as functional
-- other Flutter targets may build, but have not been validated yet
+Speaker attribution is heuristic. Document preparation and native inference resource lifetime have known limitations documented in [current architecture](project/architecture/README.md). Planned improvements live in [GitHub design and slice issues](docs/project-management.md).
 
-## What It Does
+## Features
 
-- opens and normalizes imported documents
-- reads them aloud through a local speech pipeline
-- supports playback progress, jumping, and export
-- traces pronunciation and synthesis behavior for debugging
-- provides probe and sentence-by-sentence QA workflows for speech evaluation
+- Import plain text, Markdown, HTML, EPUB, PDF, DOCX and RTF.
+- Use local speech generation with narrator/character casting and manual voice assignments.
+- Follow spoken text, navigate playback, and restore file-backed reading position.
+- Export WAV audio and run headless pronunciation/sentence probes.
 
-## Repository Layout
+## Development quick start
 
-- [`lib/`](lib/) application code
-- [`assets/`](assets/) bundled pronunciation resources and Kokoro voice assets
-- [`project/`](project/) product, architecture, specifications, planning, and research
-- [`test/`](test/) regression and behavior tests
-- [`third_party/`](third_party/) vendored third-party source and license material
+The documented baseline is Flutter **3.41.5** and Dart **3.11.3**. Install a matching native SDK, Xcode and CocoaPods for macOS.
 
-Project system documentation starts in [`project/README.md`](project/README.md).
-
-## Prerequisites
-
-- Flutter `3.41.5`
-- Dart `3.11.3`
-- Xcode and CocoaPods for macOS and iOS work
-- Git LFS is not required for a normal clone of this repository as currently checked in
-
-## External Model Dependency
-
-The Kokoro ONNX model is not committed to this repository.
-
-Before running or building the app, place a compatible model file at:
-
-```text
-assets/kokoro/model/kokoro-v1.0.onnx
-```
-
-Setup notes live in:
-
-- [`assets/kokoro/model/README.md`](assets/kokoro/model/README.md)
-
-Without that file, Kokoro-backed speech startup will fail because the Flutter asset bundle expects that model path to exist.
-
-## Quick Start
-
-```bash
+```sh
 git clone https://github.com/kellyjanderson/readaloud.git
 cd readaloud
 flutter pub get
 ```
 
-Then download or place the Kokoro model file at:
+Before running, place a compatible model at `assets/kokoro/model/kokoro-v1.0.onnx`. Model weights are not in Git; see [model setup](assets/kokoro/model/README.md). The app uses a [vendored ONNX plugin override](third_party/flutter_onnxruntime/pubspec.yaml).
 
-```text
-assets/kokoro/model/kokoro-v1.0.onnx
-```
-
-Run the macOS app:
-
-```bash
+```sh
 flutter run -d macos
 ```
 
-Build the macOS app:
+See [development and verification](docs/development.md) for checks and build instructions. The ignored local SDK/build caches are not clean-clone prerequisites.
 
-```bash
-flutter build macos
-```
+## Repository guide
 
-## Development Notes
+| Path | Purpose |
+| --- | --- |
+| `lib/`, `test/` | Application source and tests |
+| `assets/`, `third_party/` | Bundled resources and vendored dependencies |
+| [docs](docs/README.md) | Human setup and maintenance guidance |
+| [architecture](project/architecture/README.md) | Current implementation and evidence locations |
+| [GitHub planning](docs/project-management.md) | Working design, execution slices and orchestrator handoffs |
+| [legacy contracts](project/specifications/README.md) | Retained detailed behavior references |
+| [archive](project/archive/README.md) | Superseded specifications and historical snapshots |
 
-- the repository currently uses a local `dependency_overrides` path for [`third_party/flutter_onnxruntime`](third_party/flutter_onnxruntime)
-- Kokoro voice `.npy` files and pronunciation resources are checked in
-- generated local speech QA artifacts are ignored under [`project/test-artifacts/`](project/test-artifacts)
+## Contributing and support
 
-## Testing
+Read [CONTRIBUTING.md](CONTRIBUTING.md), [AGENTS.md](AGENTS.md), [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md), [SUPPORT.md](SUPPORT.md) and [SECURITY.md](SECURITY.md). Working architecture and planning live in GitHub; final architecture is reconciled alongside implementation in this repository.
 
-Examples:
+## Licensing
 
-```bash
-flutter test
-flutter analyze
-```
-
-Speech-quality work should also use the in-repo probe and trace workflows rather than relying only on manual listening. Project-specific agent rules for that live in:
-
-- [`project/agents/README.md`](project/agents/README.md)
-
-## Contributing
-
-Start here:
-
-- [`CONTRIBUTING.md`](CONTRIBUTING.md)
-- [`CODE_OF_CONDUCT.md`](CODE_OF_CONDUCT.md)
-- [`SECURITY.md`](SECURITY.md)
-- [`SUPPORT.md`](SUPPORT.md)
-
-Branch and pull request workflow rules are defined in:
-
-- [`agents/git-and-github.md`](agents/git-and-github.md)
-
-## Community Standards
-
-- bugs should be filed through GitHub issues
-- feature work should be tied to a specification
-- bug-fix work should be tied to an issue
-- implementation work should happen on branches, not directly on `main`
-- pull requests are required, even though formal review is not currently required for this repo
-
-## License And Third-Party Notes
-
-The repository includes third-party code and license material under [`third_party/`](third_party/) and supporting notes in:
-
-- [`project/research/open-source-licensing-notes.md`](project/research/open-source-licensing-notes.md)
-- [`OPEN_SOURCE_LICENSING_PLAN.md`](OPEN_SOURCE_LICENSING_PLAN.md)
-
-A top-level project license has not yet been added in this pass.
+A top-level project license has not yet been selected. Do not infer a project license from public repository visibility. Existing third-party notices remain with their components; see the [licensing checklist](https://github.com/kellyjanderson/readaloud/issues/55).

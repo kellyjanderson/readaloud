@@ -1,0 +1,3 @@
+*.acd linguist-language=Markdown
+*.plan linguist-language=Markdown
+*.arc linguist-language=Markdown

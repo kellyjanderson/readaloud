@@ -1,5 +1,11 @@
 # Voice Library Row and Information Affordance
 
+## Architecture ownership
+
+- [system overview](../architecture/system-overview.md)
+
+Retained legacy contract. Final/refinement status is not implementation proof; current behavior is described in the architecture above. New work follows [AGENTS.md](../../AGENTS.md) and the GitHub design issue and slices.
+
 Status: final
 
 ## Overview
@@ -12,9 +18,9 @@ Issue anchor:
 
 ## Backlink
 
-Parent specification:
+Historical specification lineage:
 
-- [Voice Library and Cast Management UI](voice-library-and-cast-management-ui.md)
+- [Voice Library and Cast Management UI](../archive/specification-ancestors/voice-library-and-cast-management-ui.md)
 
 ## Scope
 

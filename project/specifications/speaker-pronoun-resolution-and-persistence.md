@@ -1,5 +1,12 @@
 # Speaker Pronoun Resolution And Persistence
 
+## Architecture ownership
+
+- [character dialogue attribution and voice casting](../architecture/character-dialogue-attribution-and-voice-casting.md)
+- [speech enrichment and narration](../architecture/speech-enrichment-and-narration.md)
+
+Retained legacy contract. Final/refinement status is not implementation proof; current behavior is described in the architecture above. New work follows [AGENTS.md](../../AGENTS.md) and the GitHub design issue and slices.
+
 Status: final
 
 ## Overview
@@ -8,9 +15,9 @@ This specification defines lower-priority speaker attribution from recent pronou
 
 ## Backlink
 
-Parent specification:
+Historical specification lineage:
 
-- [Quoted Dialogue Speaker Context Scanning](quoted-dialogue-speaker-context-scanning.md)
+- [Quoted Dialogue Speaker Context Scanning](../archive/specification-ancestors/quoted-dialogue-speaker-context-scanning.md)
 
 ## Scope
 

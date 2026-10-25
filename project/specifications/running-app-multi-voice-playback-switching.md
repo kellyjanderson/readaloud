@@ -1,5 +1,11 @@
 # Running-App Multi-Voice Playback Switching
 
+## Architecture ownership
+
+- [character dialogue attribution and voice casting](../architecture/character-dialogue-attribution-and-voice-casting.md)
+
+Retained legacy contract. Final/refinement status is not implementation proof; current behavior is described in the architecture above. New work follows [AGENTS.md](../../AGENTS.md) and the GitHub design issue and slices.
+
 Status: final
 
 ## Overview
@@ -13,9 +19,9 @@ Issue anchors:
 
 ## Backlink
 
-Parent specification:
+Historical specification lineage:
 
-- [Multi-Voice Playback Routing](multi-voice-playback-routing.md)
+- [Multi-Voice Playback Routing](../archive/specification-ancestors/multi-voice-playback-routing.md)
 
 ## Scope
 
@@ -45,6 +51,10 @@ The intended effect should be directly hearable during normal playback.
 When multiple compatible voices are available, automatic casting should preserve audible contrast between narrator and at least one non-narrator cast role unless the user has explicitly overridden the assignments to collapse them.
 
 When distinct assignments are not possible because compatible voices are unavailable, the app may fall back to one voice, but that outcome must remain explicit in the surfaced cast state rather than pretending multi-voice playback is active.
+
+## Prepared Audio Requirement
+
+Ordinary narrator/character transitions select resident document voice context during render-ahead generation. The player consumes finalized audio and must not stop, seek, rebuild sources or recreate an engine session merely because the next character differs. Whole-document semantic readiness and contiguous audio lead follow [Prepared Document and Buffered Playback](https://github.com/kellyjanderson/readaloud/issues/48). User edits to assignments are distinct revision changes, not ordinary character transitions.
 
 ## Constraints
 

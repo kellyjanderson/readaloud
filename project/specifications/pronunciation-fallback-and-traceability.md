@@ -1,5 +1,15 @@
 # Pronunciation Fallback and Traceability
 
+## Architecture ownership
+
+- [document speech pipeline](../architecture/document-speech-pipeline.md)
+- [speech enrichment and narration](../architecture/speech-enrichment-and-narration.md)
+- [system overview](../architecture/system-overview.md)
+- [engine pronunciation expression and capability adaptation](../architecture/engine-pronunciation-expression-and-capability-adaptation.md)
+- [pronunciation planning and tts artifacts](../architecture/pronunciation-planning-and-tts-artifacts.md)
+
+Retained legacy contract. Final/refinement status is not implementation proof; current behavior is described in the architecture above. New work follows [AGENTS.md](../../AGENTS.md) and the GitHub design issue and slices.
+
 Last updated: March 31, 2026
 Status: Final specification
 

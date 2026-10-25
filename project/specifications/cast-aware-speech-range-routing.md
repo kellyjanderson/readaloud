@@ -1,5 +1,11 @@
 # Cast-Aware Speech Range Routing
 
+## Architecture ownership
+
+- [character dialogue attribution and voice casting](../architecture/character-dialogue-attribution-and-voice-casting.md)
+
+Retained legacy contract. Final/refinement status is not implementation proof; current behavior is described in the architecture above. New work follows [AGENTS.md](../../AGENTS.md) and the GitHub design issue and slices.
+
 Status: final
 
 ## Overview
@@ -8,9 +14,9 @@ This specification defines how narrator and character cast assignments become ex
 
 ## Backlink
 
-Parent specification:
+Historical specification lineage:
 
-- [Multi-Voice Playback Routing](multi-voice-playback-routing.md)
+- [Multi-Voice Playback Routing](../archive/specification-ancestors/multi-voice-playback-routing.md)
 
 ## Scope
 

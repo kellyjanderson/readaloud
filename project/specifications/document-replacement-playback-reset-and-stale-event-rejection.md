@@ -1,5 +1,13 @@
 # Document Replacement Playback Reset And Stale Event Rejection
 
+## Architecture ownership
+
+- [speech enrichment and narration](../architecture/speech-enrichment-and-narration.md)
+- [system overview](../architecture/system-overview.md)
+- [playback orchestration and synthesis boundaries](../architecture/playback-orchestration-and-synthesis-boundaries.md)
+
+Retained legacy contract. Final/refinement status is not implementation proof; current behavior is described in the architecture above. New work follows [AGENTS.md](../../AGENTS.md) and the GitHub design issue and slices.
+
 Status: final
 
 ## Overview
