@@ -12,6 +12,13 @@ class EnglishPronunciationDictionaryService {
   Map<String, String> _entries = const <String, String>{};
   Future<void>? _initializationFuture;
 
+  Map<String, String> get entriesSnapshot => Map.unmodifiable(_entries);
+
+  void restoreSnapshot(Map<String, String> entries) {
+    _entries = Map.unmodifiable(entries);
+    _initializationFuture = Future<void>.value();
+  }
+
   bool get isInitialized => _entries.isNotEmpty;
 
   Future<void> initialize() {
@@ -63,7 +70,8 @@ class EnglishPronunciationDictionaryService {
 
 Map<String, String> _parseCmudictToIpaEntries(String rawDictionary) {
   final entries = <String, String>{};
-  for (final rawLine in rawDictionary.split('\n')) {
+  for (final rawLine in rawDictionary.split('
+')) {
     final line = rawLine.trim();
     if (line.isEmpty || line.startsWith(';;;')) {
       continue;
