@@ -21,6 +21,7 @@ class VoiceSessionRealizationService {
     final windowSegments = _selectWindowSegments(
       input.speechDocument,
       startIndex,
+      input.segmentLimit,
     );
     if (windowSegments.isEmpty) {
       final emptySet = TtsArtifactSet(
@@ -256,6 +257,7 @@ List<RealizedEmphasisIntent> _realizeEmphasisIntents({
 List<SpeechSegment> _selectWindowSegments(
   SpeechDocument speechDocument,
   int startIndex,
+  int? segmentLimit,
 ) {
   if (speechDocument.segments.isEmpty) {
     return const <SpeechSegment>[];
@@ -264,6 +266,12 @@ List<SpeechSegment> _selectWindowSegments(
     return <SpeechSegment>[speechDocument.segments.last];
   }
 
+  if (segmentLimit != null) {
+    return speechDocument.segments
+        .skip(startIndex)
+        .take(segmentLimit)
+        .toList(growable: false);
+  }
   final selected = <SpeechSegment>[speechDocument.segments[startIndex]];
   final anchorParagraph = speechDocument.segments[startIndex].paragraphIndex;
   for (

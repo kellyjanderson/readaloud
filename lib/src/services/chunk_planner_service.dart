@@ -26,7 +26,8 @@ class ChunkPlannerService {
     );
 
     var cursor = startSegmentIndex;
-    while (cursor < speechDocument.segments.length) {
+    while (cursor < speechDocument.segments.length &&
+        (input.maxChunks == null || chunks.length < input.maxChunks!)) {
       final isFirstChunk = chunks.isEmpty;
       final softTarget = isFirstChunk
           ? _firstChunkSoftTargetWords
@@ -68,6 +69,9 @@ class ChunkPlannerService {
     return ChunkPlan(
       planId: 'plan_${planDigest.toString().substring(0, 16)}',
       chunks: chunks,
+      nextSegmentId: cursor < speechDocument.segments.length
+          ? speechDocument.segments[cursor].segmentId
+          : null,
     );
   }
 }
