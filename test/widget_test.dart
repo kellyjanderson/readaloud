@@ -1,3 +1,5 @@
+import 'dart:ui' show SemanticsAction, Tristate;
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -28,6 +30,88 @@ void main() {
 
   tearDown(() {
     binding.defaultBinaryMessenger.setMockMethodCallHandler(menuChannel, null);
+    debugDefaultTargetPlatformOverride = null;
+  });
+
+  testWidgets('transport exposes actions and state through semantics', (
+    tester,
+  ) async {
+    final engine = _AccessibleTtsEngine();
+    final controller = ReaderController(
+      preferencesService: _MemoryReaderPreferencesService(),
+      ttsEngine: engine,
+      enablePlatformIntakeChannels: false,
+    );
+    addTearDown(controller.dispose);
+    await tester.pumpWidget(ReadAloudApp(controller: controller));
+    await tester.pump();
+
+    for (final label in [
+      'Play',
+      'Back 30 seconds',
+      'Forward 30 seconds',
+      'Character Voices',
+    ]) {
+      final data = tester
+          .getSemantics(find.bySemanticsLabel(label))
+          .getSemanticsData();
+      expect(data.flagsCollection.isButton, isTrue, reason: label);
+      expect(data.flagsCollection.isEnabled, Tristate.isTrue, reason: label);
+      expect(data.hasAction(SemanticsAction.tap), isTrue, reason: label);
+    }
+    tester.semantics.tap(find.semantics.byLabel('Play'));
+    await tester.pump();
+    expect(engine.speakCount, 1);
+    final buffering = tester
+        .getSemantics(find.bySemanticsLabel('Play'))
+        .getSemanticsData();
+    expect(buffering.value, 'Buffering');
+    expect(buffering.flagsCollection.isEnabled, Tristate.isFalse);
+    expect(buffering.hasAction(SemanticsAction.tap), isFalse);
+
+    engine.start();
+    await tester.pump();
+    expect(find.bySemanticsLabel('Pause'), findsOneWidget);
+    tester.semantics.tap(find.semantics.byLabel('Pause'));
+    await tester.pump();
+    expect(engine.pauseCount, 1);
+    expect(find.bySemanticsLabel('Play'), findsOneWidget);
+
+    tester.semantics.tap(find.semantics.byLabel('Character Voices'));
+    await tester.pump(const Duration(milliseconds: 500));
+    expect(find.text('Voice Management'), findsOneWidget);
+  });
+
+  testWidgets('transport supports keyboard focus and activation', (
+    tester,
+  ) async {
+    debugDefaultTargetPlatformOverride = TargetPlatform.macOS;
+    final engine = _AccessibleTtsEngine();
+    final controller = ReaderController(
+      preferencesService: _MemoryReaderPreferencesService(),
+      ttsEngine: engine,
+      enablePlatformIntakeChannels: false,
+    );
+    addTearDown(controller.dispose);
+    await tester.pumpWidget(ReadAloudApp(controller: controller));
+    await tester.pump();
+    var focused = false;
+    for (var step = 0; step < 10; step += 1) {
+      await tester.sendKeyEvent(LogicalKeyboardKey.tab);
+      await tester.pump();
+      focused =
+          tester
+              .getSemantics(find.bySemanticsLabel('Play'))
+              .getSemanticsData()
+              .flagsCollection
+              .isFocused ==
+          Tristate.isTrue;
+      if (focused) break;
+    }
+    expect(focused, isTrue);
+    await tester.sendKeyEvent(LogicalKeyboardKey.space);
+    await tester.pump();
+    expect(engine.speakCount, 1);
     debugDefaultTargetPlatformOverride = null;
   });
 
@@ -484,7 +568,8 @@ class _MemoryReaderPreferencesService extends ReaderPreferencesService {
     required ReaderAppearanceMode appearanceMode,
     required bool multiVoiceEnabled,
     required Map<String, double> voiceSpeeds,
-    required Map<String, Map<String, String>> storedDocumentCastVoiceAssignments,
+    required Map<String, Map<String, String>>
+    storedDocumentCastVoiceAssignments,
     ReaderResumeState? resumeState,
     String? selectedVoiceId,
     String? lastOpenedDocumentPath,
@@ -575,6 +660,39 @@ class _FakeTtsEngine implements TtsEngine {
 
   void emitError(String message) {
     _onError?.call(message);
+  }
+}
+
+class _AccessibleTtsEngine extends _FakeTtsEngine {
+  void Function()? _start;
+  void Function(TtsPlaybackActivity)? _activity;
+  int speakCount = 0;
+  int pauseCount = 0;
+
+  @override
+  set onStart(void Function()? callback) => _start = callback;
+
+  @override
+  set onActivity(void Function(TtsPlaybackActivity)? callback) =>
+      _activity = callback;
+
+  @override
+  Future<void> speak(TtsSpeakRequest request) async {
+    speakCount += 1;
+    _activity?.call(
+      const TtsPlaybackActivity(phase: TtsPlaybackPhase.buffering),
+    );
+  }
+
+  void start() {
+    _activity?.call(const TtsPlaybackActivity(phase: TtsPlaybackPhase.playing));
+    _start?.call();
+  }
+
+  @override
+  Future<void> pause() async {
+    pauseCount += 1;
+    _activity?.call(const TtsPlaybackActivity.idle());
   }
 }
 
