@@ -112,13 +112,27 @@ class KokoroTtsEngine
     required int revision,
     required Set<String> voiceIds,
     required String pronunciationProfileId,
+  }) => _prepareDocumentResources(
+    documentId: documentId,
+    revision: revision,
+    voiceIds: voiceIds,
+    pronunciationProfileId: pronunciationProfileId,
+  );
+
+  Future<List<PreparedVoiceBinding>> _prepareDocumentResources({
+    required String documentId,
+    required int revision,
+    required Set<String> voiceIds,
+    required String pronunciationProfileId,
+    bool ownedByExport = false,
   }) async {
+    if (_exportingResources && !ownedByExport) await _cancelExport();
     await initialize();
+    if (ownedByExport && _exportCancelled) {
+      throw StateError('Export cancelled.');
+    }
     if (_resourceShutdown != null) {
       throw StateError('Speech resources are unavailable.');
-    }
-    if (_exportRuntime != null) {
-      await _cancelExport();
     }
     final resourceRequest = ++_resourceRequest;
     final operation = _resourceTransition.then((_) async {
@@ -402,6 +416,7 @@ class KokoroTtsEngine
 
   @override
   Future<void> setSpeechRate(double multiplier) async {
+    if (_activeGenerationId != null && multiplier != _speechRate) await stop();
     _speechRate = multiplier.clamp(0.7, 1.4).toDouble();
   }
 
@@ -456,29 +471,53 @@ class KokoroTtsEngine
     TtsExportRequest request,
   ) async {
     await initialize();
+    if (_exportCancelled) throw StateError('Export cancelled.');
     final planner = SpeechPlanningSupervisor();
     final context = request.planningContext;
     final rate = context?.realization.rate ?? _speechRate;
     final voiceId = context?.realization.voiceId ?? _selectedVoiceId;
-    if (!_resourcesReady ||
-        !_preparedBindings.any((b) => b.documentId == request.documentId)) {
-      if (_activeGenerationId != null) {
-        throw StateError('Export requires the active prepared document.');
+    final requiredVoices = {
+      ...?context?.routes?.castVoiceAssignments.assignments.map(
+        (a) => a.effectiveVoiceId,
+      ),
+      voiceId,
+      ...?request.chunkPlan?.chunks.map((c) => c.voiceId),
+    };
+    final supplied = request.preparedResources;
+    if (supplied != null) {
+      if (!_resourcesReady ||
+          requiredVoices.any(
+            (voice) => !supplied.any(
+              (binding) =>
+                  binding.voiceId == voice &&
+                  binding.documentId == request.documentId &&
+                  _preparedBindings.any(
+                    (resident) =>
+                        resident.voiceId == binding.voiceId &&
+                        resident.documentId == binding.documentId &&
+                        resident.bindingRevision == binding.bindingRevision &&
+                        resident.fingerprint == binding.fingerprint,
+                  ),
+            ),
+          )) {
+        throw StateError('Export resource reference is stale.');
       }
-      await prepareDocumentResources(
+    } else {
+      if (_activeGenerationId != null) {
+        throw StateError(
+          'Export requires prepared resource references during playback.',
+        );
+      }
+      await _prepareDocumentResources(
         documentId: request.documentId ?? 'export-document',
         revision: 0,
-        voiceIds: {
-          ...?context?.routes?.castVoiceAssignments.assignments.map(
-            (a) => a.effectiveVoiceId,
-          ),
-          voiceId,
-          ...?request.chunkPlan?.chunks.map((c) => c.voiceId),
-        },
+        voiceIds: requiredVoices,
         pronunciationProfileId:
             request.ttsArtifactSet?.selectedProfileId ?? 'kokoro-default',
+        ownedByExport: true,
       );
     }
+    if (_exportCancelled) throw StateError('Export cancelled.');
     final runtime = SpeechRuntime(
       engineId: _engineId,
       processor: _admission!.lease(export: true),
@@ -2009,7 +2048,10 @@ class KokoroTtsEngine
     _currentChunkIndex = nextChunkIndex;
 
     await _player.setVolume(_volume);
+    final recoveryToken = _activePlaybackToken;
     await _player.seek(Duration.zero, index: nextRelativeIndex);
+    if (recoveryToken != _activePlaybackToken) return;
+    _prunePlayedHistory();
     _emitProgressForChunkWord(nextChunkIndex, 0, elapsedInChunk: Duration.zero);
     _emitActivity(
       _playbackActivityForPhase(

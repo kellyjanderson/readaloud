@@ -966,7 +966,9 @@ class ReaderController extends ChangeNotifier {
       recentRate: currentSpeed,
       localPronunciationChoices: const <String, String>{},
     );
+    final requestedRate = currentSpeed;
     await _primePlaybackPreparation();
+    if (requestedRate != currentSpeed) return;
     await _ttsEngine.selectVoice(voice);
     await _ttsEngine.setSpeechRate(currentSpeed);
     await _ttsEngine.setVolume(1.0);
@@ -1208,18 +1210,20 @@ class ReaderController extends ChangeNotifier {
   Future<void> setVoiceSpeed(double speed) async {
     final voiceId = _selectedVoiceId;
     if (voiceId == null) return;
+    final restart = _isPlaying || _playbackActivity.isBuffering;
+    if (restart) {
+      await _ttsEngine.stop();
+      _isPlaying = false;
+    }
+    _planning.cancel();
     _voiceSpeeds[voiceId] = speed;
     await _ttsEngine.setSpeechRate(speed);
     _wordsPerSecond = _estimateWordsPerSecond(voiceId: voiceId, rate: speed);
     await _persistPreferences();
-
-    if (_isPlaying) {
-      await _ttsEngine.stop();
-      _isPlaying = false;
+    if (restart && currentSpeed == speed) {
       await startPlayback();
       return;
     }
-
     notifyListeners();
   }
 
