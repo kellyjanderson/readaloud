@@ -74,10 +74,14 @@ Future<void> main(List<String> arguments) async {
 
   final player = AudioPlayer();
   var imposedSynthesisDelay = Duration.zero;
+  var stressPlaybackStarted = false;
   final engine = KokoroTtsEngine(
     player: player,
     beforeSynthesis: () async {
-      if (imposedSynthesisDelay > Duration.zero) {
+      if (stressPlaybackStarted && imposedSynthesisDelay > Duration.zero) {
+        record('imposedSynthesisDelay', {
+          'milliseconds': imposedSynthesisDelay.inMilliseconds,
+        });
         await Future<void>.delayed(imposedSynthesisDelay);
       }
     },
@@ -89,6 +93,9 @@ Future<void> main(List<String> arguments) async {
   final files = <String>{};
   final subscriptions = <StreamSubscription<dynamic>>[
     player.playerStateStream.listen((state) {
+      if (state.playing && imposedSynthesisDelay > Duration.zero) {
+        stressPlaybackStarted = true;
+      }
       record('playerState', {
         'phase': phase,
         'playing': state.playing,
@@ -189,12 +196,14 @@ Future<void> main(List<String> arguments) async {
     for (final scenario in [(1.0, 1.0), (1.5, 1.0), (1.0, 1.5), (1.0, 8.0)]) {
       final speed = scenario.$1;
       final transportSpeed = scenario.$2;
-      imposedSynthesisDelay = transportSpeed == 8
-          ? const Duration(seconds: 3)
-          : Duration.zero;
+      imposedSynthesisDelay = Duration.zero;
+      stressPlaybackStarted = false;
       await player.setSpeed(1.0);
       phase = 'configure-$speed-player-$transportSpeed';
       await controller.setVoiceSpeed(speed);
+      imposedSynthesisDelay = transportSpeed == 8
+          ? const Duration(seconds: 3)
+          : Duration.zero;
       scenarioGate = P3ProbeScenarioGate()..request();
       phase = 'synthesis-${controller.currentSpeed}-player-$transportSpeed';
       record('playRequested', {
@@ -203,6 +212,7 @@ Future<void> main(List<String> arguments) async {
         'effectiveSynthesisRate': controller.currentSpeed,
         'transportSpeed': transportSpeed,
         'imposedSynthesisDelayMs': imposedSynthesisDelay.inMilliseconds,
+        'imposedDelayArming': 'native playing event; latched through underrun',
       });
       await controller.startPlayback();
       final startupDeadline = DateTime.now().add(const Duration(seconds: 30));
