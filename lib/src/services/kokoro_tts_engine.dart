@@ -1,5 +1,4 @@
 import 'kokoro_tokenization_worker.dart';
-import 'english_pronunciation_dictionary_service.dart';
 import 'speech_planning_supervisor.dart';
 import 'synthesis_admission_owner.dart';
 import 'dart:async';
@@ -8,7 +7,6 @@ import 'dart:io';
 
 import 'package:crypto/crypto.dart' as crypto;
 import 'package:flutter/services.dart';
-import 'package:kokoro_tts_flutter/kokoro_tts_flutter.dart';
 import 'package:just_audio/just_audio.dart';
 import 'package:path_provider/path_provider.dart';
 
@@ -66,7 +64,6 @@ class KokoroTtsEngine
   KokoroAssetBundle? _assets;
   KokoroVoiceRepository? _voiceRepository;
   KokoroVoiceManager? _voiceManager;
-  Tokenizer? _tokenizer;
   KokoroTokenizationWorker? _playbackTokenizer;
   KokoroTokenizationWorker? _exportTokenizer;
   SpeechRuntime? _speechRuntime;
@@ -218,7 +215,7 @@ class KokoroTtsEngine
   int _expectedChunkCount = 0;
   int _remainingPlannedChunkCount = 0;
   bool _waitingForUnderrunRecovery = false;
-  Future<void> _audioQueueMutation = Future<void>.value();
+  final _audioQueueMutations = KokoroPlaylistMutationQueue();
   TtsBufferPressure _lastRecordedBufferPressure = TtsBufferPressure.none;
   final List<_PlaybackChunk> _stagedReadyChunks = <_PlaybackChunk>[];
 
@@ -334,24 +331,30 @@ class KokoroTtsEngine
       )..onChanged = () => _onVoiceLibraryChanged?.call();
       await _voiceManager!.initialize();
 
-      _tokenizer ??= Tokenizer(
-        config: const TokenizerConfig(lexiconPath: 'assets/lexicon.json'),
+      // The platform bridge obtains asset text only. Lexicon JSON decoding,
+      // dictionary growth, CMU conversion and lazy G2P initialization all belong
+      // to each pure-Dart tokenization owner, never this UI isolate.
+      final tokenizerSources = await Future.wait([
+        rootBundle.loadString('assets/tokenizer_vocab.json'),
+        rootBundle.loadString('assets/lexicon.json').catchError((_) => '{}'),
+        rootBundle.loadString('assets/us_gold.json'),
+        rootBundle.loadString('assets/us_silver.json'),
+        rootBundle.loadString('assets/cmudict.dict'),
+      ]);
+      final tokenizerAssets = KokoroTokenizerAssets(
+        vocabularyJson: tokenizerSources[0],
+        lexiconJson: tokenizerSources[1],
+        goldJson: tokenizerSources[2],
+        silverJson: tokenizerSources[3],
       );
-      await _tokenizer!.ensureInitialized();
-      // The dependency initializes its G2P lazily even after ensureInitialized.
-      // Finish its asset access on the root isolate before sending the snapshot.
-      await _tokenizer!.phonemizeWithTokens('warmup', 'en-us');
-      await EnglishPronunciationDictionaryService.instance.initialize();
-      final dictionary =
-          EnglishPronunciationDictionaryService.instance.entriesSnapshot;
       _playbackTokenizer = KokoroTokenizationWorker(
-        tokenizer: _tokenizer!,
-        dictionaryEntries: dictionary,
+        assets: tokenizerAssets,
+        rawDictionary: tokenizerSources[4],
         ownerId: 'playback-tokenizer',
       );
       _exportTokenizer = KokoroTokenizationWorker(
-        tokenizer: _tokenizer!,
-        dictionaryEntries: dictionary,
+        assets: tokenizerAssets,
+        rawDictionary: tokenizerSources[4],
         ownerId: 'export-tokenizer',
       );
       final rootIsolateToken = ServicesBinding.rootIsolateToken;
@@ -365,7 +368,7 @@ class KokoroTtsEngine
             _exportCancelled ||
             _activeGenerationId == null ||
             (_activePlaybackToken != null &&
-                _bufferedLeadTime() >= kokoroLowWaterBufferedLeadTime),
+                _playableBufferedLeadTime() >= kokoroLowWaterBufferedLeadTime),
       );
       _speechRuntime = SpeechRuntime(
         engineId: _engineId,
@@ -791,7 +794,6 @@ class KokoroTtsEngine
                 chunks.length +
                 (request.chunkPlan!.nextSegmentId == null ? 0 : 1)
           : 0;
-      _audioQueueMutation = Future<void>.value();
 
       _emitActivity(
         _playbackActivityForPhase(
@@ -1005,7 +1007,9 @@ class KokoroTtsEngine
           );
         }
         if (next == null || request.planningContext == null) break;
-        while (current() && _preparedLead() >= kokoroTargetBufferedLeadTime) {
+        while (current() &&
+            kokoroPlayableLead(_preparedLead(), playerSpeed: _player.speed) >=
+                kokoroTargetBufferedLeadTime) {
           await _bufferChanged.future;
         }
         if (!current()) return;
@@ -1111,34 +1115,72 @@ class KokoroTtsEngine
     if (_pruneScheduled || _currentChunkIndex <= 0) return;
     _pruneScheduled = true;
     final token = _activePlaybackToken;
-    _audioQueueMutation = _audioQueueMutation.then((_) async {
-      try {
-        if (token == null || token != _activePlaybackToken) return;
-        final count = _player.currentIndex ?? 0;
-        if (count <= 0 || count >= _activeChunks.length) return;
-        // Remove only completed predecessors. Native current source/position
-        // remains installed; suppress intermediate index notifications while the
-        // platform rebases indexes, then read its settled index.
-        _pruningHistory = true;
-        await _player.removeAudioSourceRange(0, count);
-        _activeChunks = _activeChunks.sublist(count);
-        _currentQueueBaseIndex = 0;
-        _currentChunkIndex = _player.currentIndex ?? 0;
-        _lastProgressKey = null;
-        _recordMetric(
-          'playedHistoryPruned',
-          value: <String, Object?>{
-            'removed': count,
-            'retained': _activeChunks.length,
-            'positionMs': _player.position.inMilliseconds,
-          },
-        );
-      } finally {
-        _pruningHistory = false;
-        _pruneScheduled = false;
-        _signalBuffer();
-      }
-    });
+    unawaited(
+      _mutateAudioQueue(() async {
+        try {
+          if (token == null || token != _activePlaybackToken) return;
+          final count = _player.currentIndex ?? 0;
+          if (count <= 0 || count >= _activeChunks.length) return;
+          // Remove only completed predecessors. Native current source/position
+          // remains installed; suppress intermediate index notifications while the
+          // platform rebases indexes, then read its settled index.
+          _pruningHistory = true;
+          await _player.removeAudioSourceRange(0, count);
+          _activeChunks = _activeChunks.sublist(count);
+          _currentQueueBaseIndex = 0;
+          _currentChunkIndex = _player.currentIndex ?? 0;
+          _lastProgressKey = null;
+          _recordMetric(
+            'playedHistoryPruned',
+            value: <String, Object?>{
+              'removed': count,
+              'retained': _activeChunks.length,
+              'positionMs': _player.position.inMilliseconds,
+            },
+          );
+        } finally {
+          _pruningHistory = false;
+          _pruneScheduled = false;
+          _signalBuffer();
+        }
+      }),
+    );
+  }
+
+  Future<bool> _mutateAudioQueue(Future<void> Function() action) {
+    final request = _requestToken;
+    return _audioQueueMutations.run(
+      action,
+      onFailure: (error, stack) => _handleAudioQueueFailure(request, error),
+    );
+  }
+
+  Future<void> _handleAudioQueueFailure(int request, Object error) async {
+    if (request != _requestToken) return;
+    ++_requestToken;
+    _refillPlanner.cancel();
+    _playbackTokenizer?.cancel();
+    final failures = <Object>[error];
+    try {
+      await _cancelActiveGeneration();
+    } catch (cleanupError) {
+      failures.add(cleanupError);
+    }
+    _clearPlaybackStateFields();
+    // This handler already owns the playlist-mutation slot. It must not call
+    // reset(), which joins that same slot and would wait for itself.
+    try {
+      await _player.stop();
+    } catch (cleanupError) {
+      failures.add(cleanupError);
+    }
+    try {
+      await _player.clearAudioSources();
+    } catch (cleanupError) {
+      failures.add(cleanupError);
+    }
+    _emitActivity(const TtsPlaybackActivity.idle());
+    _onError?.call('Audio queue update failed: ${failures.join('; ')}');
   }
 
   void _emitProgressForChunkWord(
@@ -1502,6 +1544,7 @@ class KokoroTtsEngine
     await _discardFutureBufferedChunksFromStartWordIndex(
       failedChunk.startWordIndex,
     );
+    if (generationId != _activeGenerationId) return;
 
     final remainingPending =
         _pendingChunksById.values
@@ -1717,6 +1760,10 @@ class KokoroTtsEngine
     _waitingForUnderrunRecovery = false;
     _lastRecordedBufferPressure = TtsBufferPressure.none;
     _stagedReadyChunks.clear();
+    // The generation changed after the earlier pause/stop signal. Export
+    // admission must observe the settled state even if the player emits no
+    // further position notification after pausing.
+    _signalBuffer();
   }
 
   Future<List<_QueuedChunk>> _prepareChunks(
@@ -1999,7 +2046,15 @@ class KokoroTtsEngine
 
   Future<void> _resetPlaybackStateInternal() async {
     _activePlaybackToken = null;
-    await _audioQueueMutation;
+    await _audioQueueMutations.drained;
+    _clearPlaybackStateFields();
+    await _player.stop();
+    await _player.clearAudioSources();
+    _emitActivity(const TtsPlaybackActivity.idle());
+  }
+
+  void _clearPlaybackStateFields() {
+    _activePlaybackToken = null;
     _currentChunkIndex = 0;
     _currentQueueBaseIndex = 0;
     _activeChunks = const <_PlaybackChunk>[];
@@ -2017,10 +2072,6 @@ class KokoroTtsEngine
     _waitingForUnderrunRecovery = false;
     _lastRecordedBufferPressure = TtsBufferPressure.none;
     _stagedReadyChunks.clear();
-    _audioQueueMutation = Future<void>.value();
-    await _player.stop();
-    await _player.clearAudioSources();
-    _emitActivity(const TtsPlaybackActivity.idle());
   }
 
   Future<List<int>> _tokenizeSpeakText(
@@ -2107,6 +2158,7 @@ class KokoroTtsEngine
       bufferedLeadTime: _initialBufferedQueueLeadTime(startupBufferedChunks),
       pendingChunkCount: _pendingChunksById.length,
       remainingPlannedChunkCount: _remainingPlannedChunkCount,
+      playerSpeed: _player.speed,
     );
   }
 
@@ -2163,7 +2215,7 @@ class KokoroTtsEngine
     _PlaybackChunk playbackChunk, {
     required String? generationId,
   }) async {
-    _audioQueueMutation = _audioQueueMutation.then((_) async {
+    await _mutateAudioQueue(() async {
       if (generationId != _activeGenerationId) {
         return;
       }
@@ -2221,7 +2273,9 @@ class KokoroTtsEngine
         chunkId: playbackChunk.chunkId,
         voiceId: playbackChunk.voiceId,
         value: <String, Object?>{
-          'leadTimeMs': _bufferedLeadTime().inMilliseconds,
+          'leadTimeMs': _playableBufferedLeadTime().inMilliseconds,
+          'pcmLeadTimeMs': _bufferedLeadTime().inMilliseconds,
+          'playerSpeed': _player.speed,
           'insertIndex': insertIndex,
           'activeChunkCount': _activeChunks.length,
         },
@@ -2234,13 +2288,12 @@ class KokoroTtsEngine
         ),
       );
     });
-    await _audioQueueMutation;
   }
 
   Future<void> _discardFutureBufferedChunksFromStartWordIndex(
     int replacementStartWordIndex,
   ) async {
-    _audioQueueMutation = _audioQueueMutation.then((_) async {
+    await _mutateAudioQueue(() async {
       final pruneIndex = kokoroFirstFutureReplacementIndex<_PlaybackChunk>(
         activeChunks: _activeChunks,
         currentChunkIndex: _currentChunkIndex,
@@ -2274,7 +2327,6 @@ class KokoroTtsEngine
         },
       );
     });
-    await _audioQueueMutation;
   }
 
   KokoroPlaybackQueueSnapshot _playbackQueueSnapshot() {
@@ -2310,6 +2362,9 @@ class KokoroTtsEngine
     }
     return leadTime;
   }
+
+  Duration _playableBufferedLeadTime() =>
+      kokoroPlayableLead(_bufferedLeadTime(), playerSpeed: _player.speed);
 
   void _recordMetric(
     String metric, {
@@ -2356,7 +2411,7 @@ class KokoroTtsEngine
   }) {
     final leadTime = phase == TtsPlaybackPhase.idle
         ? Duration.zero
-        : _bufferedLeadTime();
+        : kokoroPlayableLead(_preparedLead(), playerSpeed: _player.speed);
     final pressure = phase == TtsPlaybackPhase.idle
         ? TtsBufferPressure.none
         : kokoroBufferPressureForLeadTime(leadTime);

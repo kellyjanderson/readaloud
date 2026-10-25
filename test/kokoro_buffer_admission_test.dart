@@ -3,6 +3,56 @@ import 'package:read_aloud/src/services/kokoro_playback_coordination.dart';
 
 void main() {
   group('KokoroBufferAdmission', () {
+    test('all wall-time gates share transport-adjusted lead', () {
+      const pcm = Duration(seconds: 8);
+      expect(
+        kokoroPlayableLead(pcm, playerSpeed: 2),
+        const Duration(seconds: 4),
+      );
+      expect(
+        kokoroPlayableLead(pcm, playerSpeed: 0.5),
+        const Duration(seconds: 16),
+      );
+      expect(
+        kokoroIsStartupWarmEnough(
+          bufferedChunkCount: 2,
+          bufferedLeadTime: const Duration(seconds: 4),
+          pendingChunkCount: 1,
+          remainingPlannedChunkCount: 0,
+          playerSpeed: 2,
+        ),
+        isFalse,
+        reason: 'four seconds of PCM is only two playable seconds at 2x',
+      );
+      expect(
+        kokoroIsStartupWarmEnough(
+          bufferedChunkCount: 2,
+          bufferedLeadTime: pcm,
+          pendingChunkCount: 1,
+          remainingPlannedChunkCount: 0,
+          playerSpeed: 2,
+        ),
+        isTrue,
+      );
+      expect(
+        kokoroIsStartupWarmEnough(
+          bufferedChunkCount: 1,
+          bufferedLeadTime: const Duration(milliseconds: 200),
+          pendingChunkCount: 0,
+          remainingPlannedChunkCount: 0,
+          playerSpeed: 2,
+        ),
+        isTrue,
+        reason: 'all remaining audio still permits a short document',
+      );
+      for (final speed in [0.0, -1.0, double.nan, double.infinity]) {
+        expect(
+          () => kokoroPlayableLead(pcm, playerSpeed: speed),
+          throwsArgumentError,
+        );
+      }
+    });
+
     for (final speed in <double>[0.5, 1, 2]) {
       test('refill hysteresis uses wall time at ${speed}x', () {
         final policy = KokoroBufferAdmission();

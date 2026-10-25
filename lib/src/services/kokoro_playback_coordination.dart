@@ -10,6 +10,33 @@ class KokoroPlaybackResetBarrier {
       _pending ??= _reset().whenComplete(() => _pending = null);
 }
 
+/// Serial native playlist mutations have an owned failure route. A rejected
+/// mutation is handled before the next operation, and cannot poison the drain
+/// future used by reset/replay. The bool distinguishes handled failure from a
+/// successfully committed mutation.
+class KokoroPlaylistMutationQueue {
+  Future<void> _tail = Future<void>.value();
+
+  Future<bool> run(
+    Future<void> Function() action, {
+    required Future<void> Function(Object, StackTrace) onFailure,
+  }) {
+    final result = _tail.then((_) async {
+      try {
+        await action();
+        return true;
+      } catch (error, stack) {
+        await onFailure(error, stack);
+        return false;
+      }
+    });
+    _tail = result.then<void>((_) {}, onError: (Object _, StackTrace _) {});
+    return result;
+  }
+
+  Future<void> get drained => _tail;
+}
+
 class KokoroPlaybackQueueSnapshot {
   const KokoroPlaybackQueueSnapshot({
     required this.activeChunkCount,
@@ -64,6 +91,17 @@ const Duration kokoroStartupMinimumBufferedLeadTime = Duration(seconds: 4);
 const int kokoroStartupMinimumBufferedChunkCount = 2;
 const int kokoroStartupPreparedChunkWindow = 3;
 
+/// PCM duration already incorporates synthesis rate. Only transport speed
+/// changes how long that finalized audio remains playable in wall time.
+Duration kokoroPlayableLead(Duration audioLead, {double playerSpeed = 1}) {
+  if (!playerSpeed.isFinite || playerSpeed <= 0) {
+    throw ArgumentError.value(playerSpeed, 'playerSpeed');
+  }
+  return Duration(
+    microseconds: (audioLead.inMicroseconds / playerSpeed).round(),
+  );
+}
+
 TtsBufferPressure kokoroBufferPressureForLeadTime(Duration leadTime) {
   if (leadTime <= kokoroCriticalBufferedLeadTime) {
     return TtsBufferPressure.critical;
@@ -79,18 +117,23 @@ bool kokoroIsStartupWarmEnough({
   required Duration bufferedLeadTime,
   required int pendingChunkCount,
   required int remainingPlannedChunkCount,
+  double playerSpeed = 1,
 }) {
+  final effectiveLead = kokoroPlayableLead(
+    bufferedLeadTime,
+    playerSpeed: playerSpeed,
+  );
   final hasFutureWork = pendingChunkCount > 0 || remainingPlannedChunkCount > 0;
   if (!hasFutureWork) {
     return true;
   }
 
-  if (bufferedLeadTime >= kokoroTargetBufferedLeadTime) {
+  if (effectiveLead >= kokoroTargetBufferedLeadTime) {
     return true;
   }
 
   return bufferedChunkCount >= kokoroStartupMinimumBufferedChunkCount &&
-      bufferedLeadTime >= kokoroStartupMinimumBufferedLeadTime;
+      effectiveLead >= kokoroStartupMinimumBufferedLeadTime;
 }
 
 class KokoroRecoveryWordBoundary {
@@ -401,14 +444,11 @@ class KokoroBufferAdmission {
     required int remainingPlannedChunkCount,
     double playerSpeed = 1,
   }) {
-    if (!playerSpeed.isFinite || playerSpeed <= 0) {
-      throw ArgumentError.value(playerSpeed);
-    }
+    final effective = kokoroPlayableLead(audioLead, playerSpeed: playerSpeed);
     return bufferedChunkCount >= maxChunks &&
         pendingChunkCount == 0 &&
         remainingPlannedChunkCount > 0 &&
-        audioLead.inMicroseconds / playerSpeed <
-            kokoroStartupMinimumBufferedLeadTime.inMicroseconds;
+        effective < kokoroStartupMinimumBufferedLeadTime;
   }
 
   bool admits({
@@ -416,12 +456,7 @@ class KokoroBufferAdmission {
     required int outstandingChunks,
     double playerSpeed = 1,
   }) {
-    if (!playerSpeed.isFinite || playerSpeed <= 0) {
-      throw ArgumentError.value(playerSpeed);
-    }
-    final effective = Duration(
-      microseconds: (audioLead.inMicroseconds / playerSpeed).round(),
-    );
+    final effective = kokoroPlayableLead(audioLead, playerSpeed: playerSpeed);
     if (_full && effective <= low) _full = false;
     if (effective >= high) _full = true;
     return !_full && outstandingChunks < maxChunks;
