@@ -38,6 +38,7 @@ void main() {
     [513, 1, 256],
     [510, 1, 255],
     [510],
+    [1, -1, -256],
   ]) {
     test('rejects incompatible shape $shape without caching', () async {
       await write(_npy(shape));
@@ -71,6 +72,11 @@ void main() {
     await expectLater(repository.loadVoice('af_heart'), throwsFormatException);
     expect(repository.loadedVoiceCount, 0);
   });
+  test('rejects column-major vectors', () async {
+    await write(_npy([2, 1, 256], fortran: true));
+    await expectLater(repository.loadVoice('af_heart'), throwsFormatException);
+    expect(repository.loadedVoiceCount, 0);
+  });
   for (final id in [
     '',
     '../af_heart',
@@ -90,10 +96,10 @@ void main() {
 }
 
 // Small deterministic NPY v1 fixture, independent of installed model assets.
-Uint8List _npy(List<int> shape, {double first = 0}) {
+Uint8List _npy(List<int> shape, {double first = 0, bool fortran = false}) {
   final tuple = shape.isEmpty ? '' : '${shape.join(', ')},';
   final header =
-      "{'descr': '<f4', 'fortran_order': False, 'shape': ($tuple), }";
+      "{'descr': '<f4', 'fortran_order': ${fortran ? 'True' : 'False'}, 'shape': ($tuple), }";
   final padding = (16 - ((10 + header.length + 1) % 16)) % 16;
   final headerBytes = ascii.encode('$header${' ' * padding}\n');
   final count = shape.isEmpty ? 0 : shape.fold<int>(1, (a, b) => a * b);

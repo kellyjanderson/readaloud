@@ -103,7 +103,9 @@ List<Float32List> _parseStyleVectors(Uint8List bytes) {
   final vectorLength = header.shape
       .skip(1)
       .fold<int>(1, (product, dimension) => product * dimension);
-  if (vectorCount < 1 || vectorCount > 512 || vectorLength != 256) {
+  if (header.shape.any((dimension) => dimension <= 0) ||
+      vectorCount > 512 ||
+      vectorLength != 256) {
     throw const FormatException(
       'Expected Kokoro vectors with 256 values and 1..512 rows.',
     );
@@ -160,6 +162,9 @@ _NpyHeader _parseNpyHeader(Uint8List bytes) {
     r"'descr':\s*'([^']+)'",
   ).firstMatch(headerText);
   final shapeMatch = RegExp(r"'shape':\s*\(([^)]*)\)").firstMatch(headerText);
+  if (!RegExp(r"'fortran_order':\s*False").hasMatch(headerText)) {
+    throw const FormatException('Expected row-major Kokoro voice vectors.');
+  }
   if (descriptorMatch == null || shapeMatch == null) {
     throw const FormatException('Kokoro voice array header is malformed.');
   }
