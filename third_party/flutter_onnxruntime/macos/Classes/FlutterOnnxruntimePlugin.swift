@@ -17,6 +17,8 @@ enum OrtError: Error {
 public class FlutterOnnxruntimePlugin: NSObject, FlutterPlugin {
   private var sessions = [String: ORTSession]()
   private var env: ORTEnv?
+  // Opt-in P0 measurement; observe retention without changing resource lifetime.
+  private let traceResources = ProcessInfo.processInfo.environment["READALOUD_ORT_RESOURCE_TRACE"] == "1"
   private let ortQueueKey = DispatchSpecificKey<Void>()
   private lazy var ortQueue: DispatchQueue = {
     let queue = DispatchQueue(
@@ -84,6 +86,11 @@ public class FlutterOnnxruntimePlugin: NSObject, FlutterPlugin {
 
     ortQueue.async {
       let safeResult: FlutterResult = { value in
+        if self.traceResources {
+          NSLog("READALOUD_ORT method=%@ sessions=%d tensors=%d error=%@",
+                call.method, self.sessions.count, self.ortValues.count,
+                value is FlutterError ? "true" : "false")
+        }
         self.dispatchResult(result, value: value)
       }
 
