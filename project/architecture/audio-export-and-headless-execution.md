@@ -17,6 +17,8 @@ Durations come from decoded frame counts rather than the caller's possibly stale
 
 Export/probe outputs are local artifacts and are excluded from normal source control. Audio correctness requires comparing emitted output with the intended phrase and routing, not merely a successful process exit. Model availability, native plugin lifetime and toolchain compatibility affect all these routes.
 
+The controller snapshots document, planning context and prepared bindings before export planning, and rejects stale preparation, dispatch and completion revisions. Export owns a separate resident planner/tokenizer/runtime, shares the single native synthesis admission owner with playback, and yields inference admission below playback's low-water lead. It does not stop playback or create a second native model session. Native resource replacement cancels and drains the export owner from initialization onward; direct headless callers prepare their own revision-zero context, while controller requests validate supplied resident bindings. Assembly receives ordered per-chunk metadata after bounded synthesis windows; metadata grows with document length, but whole PCM is never accumulated on the UI isolate.
+
 ## Source and tests
 
 - [app_launch_options.dart](../../lib/src/services/app_launch_options.dart)

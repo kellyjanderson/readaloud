@@ -9,7 +9,7 @@ The document-time planner creates pronunciation artifacts from normalized speech
 
 Canonical pronunciation intent and engine-specific payloads are separate. Unsupported or uncovered tokens can fall back to engine handling; fallback is not proof of a positive pronunciation decision. Pronunciation probe and sentence-probe tooling expose generated output and trace information.
 
-The import planner and controller realization are synchronous service calls today. The runtime does not make all upstream policy worker-owned merely because inference uses an isolate. Moving these passes and establishing prepared-document version ownership belongs to the active ACD. Speech-quality acceptance still requires emitted-audio evidence, not only artifact structure.
+Document preparation owns import-time planning in its pure Dart worker. A resident SpeechPlanningSupervisor now owns runtime realization and chunk planning; the immutable graph and routing indexes cross once per context epoch, followed by bounded scalar window requests. Playback and export retain separate planning/tokenization owners. KokoroTokenizationWorker preserves dictionary and capability identity as well as tokenizer state, avoiding isolate-local singleton drift. Its asset bridge carries raw strings; lexicon JSON, CMU dictionary conversion and G2P setup run in the pure worker, including the first fallback path. Remote initializer/request errors retain their worker stacks. Speech-quality acceptance still requires emitted-audio evidence, not only artifact structure.
 
 ## Source and tests
 
@@ -20,7 +20,7 @@ The import planner and controller realization are synchronous service calls toda
 - [document_time_pronunciation_planner_service_test.dart](../../test/document_time_pronunciation_planner_service_test.dart)
 - [voice_session_realization_service_test.dart](../../test/voice_session_realization_service_test.dart)
 
-Tests listed here are existing evidence locations, not a claim that they passed in this review. The bundled Intel Dart executable cannot run in the current Apple Silicon execution environment.
+The pinned arm64 SDK runs resident-planner and tokenization worker regressions, including exact dictionary/IPA/suffix equivalence and cancellation/exit ownership. Native timing and perceptual pronunciation remain separate evidence.
 
 ## Proposed changes
 
