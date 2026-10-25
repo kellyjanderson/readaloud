@@ -1,7 +1,7 @@
 # Normalized Content and Position Mapping
 
 Reconciled: October 24, 2026
-Status: Current source architecture; runtime validation not refreshed
+Status: Current source architecture with P1 immutable worker handoff
 
 ## Implemented structure and limitations
 
@@ -10,6 +10,8 @@ Import produces a normalized result envelope, `DisplayDocument`, `SpeechDocument
 `ReaderDocument` also exposes HTML/plain-text compatibility views used by current consumers. They coexist with the structured model; they are not evidence that every caller operates exclusively on normalized DTOs. Imported diagnostics retain parsing and recovery limitations. Quote segmentation separates mixed narration/dialogue before document voice ranges are materialized.
 
 Source-native mapping quality varies by importer. PDF text extraction and line-wrap/paragraph recovery are heuristic. A successful import or a mapping fixture does not prove perfect reading order for arbitrary documents. Source bytes are acquired separately from these normalized representations.
+
+Interactive preparation freezes the completed normalized graph on the worker before transfer. Display blocks/inlines/assets/metadata, speech segments/index/word spans, position entries, diagnostics, pronunciation artifacts and cast alias/id arrays are unmodifiable. Existing immutable annotation/attribution/identity objects retain their evidence and uncertainty. PDF data uses an unmodifiable owned byte snapshot. HTML, flat text and document word spans cross with the artifact without rebuilding on the UI isolate. The `.radoc` export now retains PDF bytes as base64; it remains a write-only inspection format, not a reload codec.
 
 ## Source and tests
 
@@ -21,7 +23,7 @@ Source-native mapping quality varies by importer. PDF text extraction and line-w
 - [document_ingestion_smoke_test.dart](../../test/document_ingestion_smoke_test.dart)
 - [spoken_selection_mapper_service_test.dart](../../test/spoken_selection_mapper_service_test.dart)
 
-Tests listed here are existing evidence locations, not a claim that they passed in this review. The bundled Intel Dart executable cannot run in the current Apple Silicon execution environment.
+Worker/direct-import artifact equality and mutation rejection are covered by [preparation tests](../../test/document_preparation_supervisor_test.dart). Current exact execution evidence lives in [P1](https://github.com/kellyjanderson/readaloud/issues/50); mapping fidelity on fixtures is not universal source-layout correctness.
 
 ## Proposed changes
 

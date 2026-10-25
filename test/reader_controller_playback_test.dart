@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:typed_data';
 import 'package:cross_file/cross_file.dart';
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:read_aloud/src/controllers/reader_controller.dart';
 import 'package:read_aloud/src/models/cast_voice_assignment.dart';
@@ -29,6 +30,197 @@ void main() {
   });
 
   group('ReaderController playback', () {
+    for (final mode in ['cancel', 'invalid', 'error', 'superseded']) {
+      test(
+        'Live Feed picker $mode owns loading cleanup after replacing an import',
+        () async {
+          final picker = _ControlledPicker();
+          FilePicker.platform = picker;
+          final importer = _ControlledPreparationImporter();
+          final controller = ReaderController(
+            importer: importer,
+            ttsEngine: _FakeTtsEngine(),
+          );
+          addTearDown(controller.dispose);
+          await controller.initialize();
+          final a = controller.importDroppedFiles([
+            XFile.fromData(
+              Uint8List.fromList(utf8.encode('Old.')),
+              name: 'old.txt',
+            ),
+          ]);
+          await importer.started(0);
+          final picking = controller.pickAndStartLiveRead();
+          await a;
+          expect(controller.isImporting, isTrue);
+          Future<void>? latest;
+          if (mode == 'superseded') {
+            latest = controller.importDroppedFiles([
+              XFile.fromData(
+                Uint8List.fromList(utf8.encode('Latest.')),
+                name: 'latest.txt',
+              ),
+            ]);
+          }
+          switch (mode) {
+            case 'error':
+              picker.result.completeError(StateError('picker failed'));
+            case 'invalid':
+              picker.result.complete(
+                FilePickerResult([PlatformFile(name: 'missing.txt', size: 0)]),
+              );
+            default:
+              picker.result.complete(null);
+          }
+          await picking;
+          if (mode == 'superseded') {
+            expect(controller.isImporting, isTrue);
+            expect(controller.statusMessage, isNull);
+          } else {
+            expect(controller.isImporting, isFalse);
+            expect(controller.isCastProcessingVisible, isFalse);
+            expect(controller.isDocumentPrepared, isTrue);
+          }
+          importer.results[0].completeError(
+            StateError('old preparation failed'),
+          );
+          if (latest != null) {
+            await importer.started(1);
+            importer.results[1].complete(
+              DocumentImportService().importPastedText('Latest.'),
+            );
+            await latest;
+            expect(controller.document.speakableText, 'Latest.');
+          }
+          await controller.shutdownPreparation();
+        },
+      );
+    }
+
+    test('empty startup restore does not supersede an active import', () async {
+      final importer = _ControlledPreparationImporter();
+      final controller = ReaderController(
+        importer: importer,
+        ttsEngine: _FakeTtsEngine(),
+      );
+      addTearDown(controller.dispose);
+      await controller.initialize();
+      final pending = controller.importDroppedFiles([
+        XFile.fromData(
+          Uint8List.fromList(utf8.encode('Current.')),
+          name: 'current.txt',
+        ),
+      ]);
+      await importer.started(0);
+      expect(await controller.restoreLastOpenedDocument(), isFalse);
+      expect(controller.isImporting, isTrue);
+      importer.results[0].complete(
+        DocumentImportService().importPastedText('Current.'),
+      );
+      await pending;
+      expect(controller.document.speakableText, 'Current.');
+    });
+
+    for (final failOld in [false, true]) {
+      test(
+        'superseded import ${failOld ? 'failure' : 'success'} cannot clear latest state',
+        () async {
+          final importer = _ControlledPreparationImporter();
+          final engine = _FakeTtsEngine();
+          final controller = ReaderController(
+            importer: importer,
+            ttsEngine: engine,
+          );
+          addTearDown(controller.dispose);
+          await controller.initialize();
+          final a = controller.importDroppedFiles([
+            XFile.fromData(
+              Uint8List.fromList(utf8.encode('First.')),
+              name: 'a.txt',
+            ),
+          ]);
+          await importer.started(0);
+          final b = controller.importDroppedFiles([
+            XFile.fromData(
+              Uint8List.fromList(utf8.encode('Second.')),
+              name: 'b.txt',
+            ),
+          ]);
+          await a;
+          expect(controller.isImporting, isTrue);
+          expect(controller.isDocumentPrepared, isFalse);
+          await controller.startPlayback();
+          expect(engine.speakCallCount, 0);
+          if (failOld) {
+            importer.results[0].completeError(StateError('obsolete failure'));
+          } else {
+            importer.results[0].complete(
+              DocumentImportService().importPastedText('First.'),
+            );
+          }
+          await importer.started(1);
+          expect(controller.isImporting, isTrue);
+          expect(controller.statusMessage, isNull);
+          importer.results[1].complete(
+            DocumentImportService().importPastedText('Second.'),
+          );
+          await b;
+          expect(controller.document.speakableText, 'Second.');
+          expect(controller.isDocumentPrepared, isTrue);
+          expect(controller.isImporting, isFalse);
+        },
+      );
+    }
+
+    test('revision is rechecked after an engine stop await', () async {
+      final engine = _BarrierStopTtsEngine();
+      final controller = ReaderController(ttsEngine: engine);
+      addTearDown(controller.dispose);
+      await controller.initialize();
+      engine.holdNext = true;
+      final a = controller.importPastedText('First document.');
+      await engine.stopped.future;
+      await controller.importPastedText('Second document.');
+      expect(controller.document.speakableText, 'Second document.');
+      engine.release.complete();
+      await a;
+      expect(controller.document.speakableText, 'Second document.');
+      expect(controller.isImporting, isFalse);
+    });
+
+    test(
+      'stop live read cancels pending initial publication and watcher installation',
+      () async {
+        final dir = await Directory.systemTemp.createTemp(
+          'read-aloud-live-cancel',
+        );
+        addTearDown(() => dir.delete(recursive: true));
+        final file = File('${dir.path}/fixture.txt');
+        await file.writeAsString('Initial.');
+        final importer = _ControlledPreparationImporter();
+        final controller = ReaderController(
+          importer: importer,
+          ttsEngine: _FakeTtsEngine(),
+        );
+        addTearDown(controller.dispose);
+        await controller.initialize();
+        final original = controller.document;
+        final live = controller.startLiveReadFromPath(file.path);
+        await importer.started(0);
+        await controller.stopLiveRead();
+        importer.results[0].complete(
+          DocumentImportService().importPastedText('Obsolete.'),
+        );
+        await live;
+        await controller.shutdownPreparation();
+        expect(controller.document, same(original));
+        expect(controller.isImporting, isFalse);
+        await file.writeAsString('Must not reload.');
+        await Future<void>.delayed(const Duration(milliseconds: 350));
+        expect(importer.results, hasLength(1));
+      },
+    );
+
     test(
       'P0 baseline: startup A/B/C selection still accepts the original A start (P4 gap)',
       () async {
@@ -208,7 +400,8 @@ void main() {
         engine.emitStart();
 
         final documentId = controller.document.displayDocument.documentId;
-        final segmentId = controller.document.speechDocument.segments.first.segmentId;
+        final segmentId =
+            controller.document.speechDocument.segments.first.segmentId;
         final voiceId = controller.selectedVoice!.id;
 
         engine.emitProgress(
@@ -276,7 +469,8 @@ void main() {
         engine.emitStart();
 
         final documentId = controller.document.displayDocument.documentId;
-        final segmentId = controller.document.speechDocument.segments.first.segmentId;
+        final segmentId =
+            controller.document.speechDocument.segments.first.segmentId;
         final voiceId = controller.selectedVoice!.id;
 
         engine.emitProgress(
@@ -424,7 +618,8 @@ void main() {
         SharedPreferences.setMockInitialValues(<String, Object>{
           'reader.lastOpenedDocumentPath': file.path,
           'reader.lastOpenedDirectoryPath': tempDir.path,
-          'reader.lastOpenedDirectoryAccessToken': 'directory-bookmark-original',
+          'reader.lastOpenedDirectoryAccessToken':
+              'directory-bookmark-original',
           'reader.resumeState': jsonEncode(
             ReaderResumeState(
               documentPath: file.path,
@@ -505,11 +700,11 @@ void main() {
         final restored = await controller.restoreLastOpenedDocument();
 
         expect(restored, isTrue);
+        expect(accessService.openedTokens, contains('bookmark-token-original'));
         expect(
-          accessService.openedTokens,
-          contains('bookmark-token-original'),
+          accessService.closedTokens,
+          contains('bookmark-token-refreshed'),
         );
-        expect(accessService.closedTokens, contains('bookmark-token-refreshed'));
         expect(controller.document.title, 'remembered-token.txt');
 
         final preferences = await ReaderPreferencesService().load();
@@ -786,44 +981,47 @@ void main() {
       },
     );
 
-    test('persists restore access when a file-backed document is opened', () async {
-      final tempDir = await Directory.systemTemp.createTemp(
-        'read-aloud-access-persist-test',
-      );
-      addTearDown(() => tempDir.delete(recursive: true));
-      final file = File('${tempDir.path}/persisted.txt');
-      await file.writeAsString('Alpha beta. Gamma delta.');
-      final accessService = _FakeDocumentAccessService(
-        createdTokensByPath: <String, String>{
-          tempDir.path: 'directory-bookmark-token',
-          file.path: 'bookmark-created-token',
-        },
-      );
+    test(
+      'persists restore access when a file-backed document is opened',
+      () async {
+        final tempDir = await Directory.systemTemp.createTemp(
+          'read-aloud-access-persist-test',
+        );
+        addTearDown(() => tempDir.delete(recursive: true));
+        final file = File('${tempDir.path}/persisted.txt');
+        await file.writeAsString('Alpha beta. Gamma delta.');
+        final accessService = _FakeDocumentAccessService(
+          createdTokensByPath: <String, String>{
+            tempDir.path: 'directory-bookmark-token',
+            file.path: 'bookmark-created-token',
+          },
+        );
 
-      final controller = ReaderController(
-        ttsEngine: _FakeTtsEngine(),
-        documentAccessService: accessService,
-      );
-      addTearDown(controller.dispose);
+        final controller = ReaderController(
+          ttsEngine: _FakeTtsEngine(),
+          documentAccessService: accessService,
+        );
+        addTearDown(controller.dispose);
 
-      await controller.initialize();
-      await controller.importFilePaths(<String>[file.path]);
+        await controller.initialize();
+        await controller.importFilePaths(<String>[file.path]);
 
-      expect(accessService.createdPaths, contains(file.path));
-      expect(accessService.createdPaths, contains(tempDir.path));
-      expect(accessService.requestedPaths, isEmpty);
+        expect(accessService.createdPaths, contains(file.path));
+        expect(accessService.createdPaths, contains(tempDir.path));
+        expect(accessService.requestedPaths, isEmpty);
 
-      final preferences = await ReaderPreferencesService().load();
-      expect(preferences.lastOpenedDocumentPath, file.path);
-      expect(
-        preferences.lastOpenedDirectoryAccessToken,
-        'directory-bookmark-token',
-      );
-      expect(
-        preferences.lastOpenedDocumentAccessToken,
-        'bookmark-created-token',
-      );
-    });
+        final preferences = await ReaderPreferencesService().load();
+        expect(preferences.lastOpenedDocumentPath, file.path);
+        expect(
+          preferences.lastOpenedDirectoryAccessToken,
+          'directory-bookmark-token',
+        );
+        expect(
+          preferences.lastOpenedDocumentAccessToken,
+          'bookmark-created-token',
+        );
+      },
+    );
 
     test(
       'recovers from a permission-shaped file-read failure by requesting directory access and retrying',
@@ -1835,7 +2033,9 @@ class _FakeDocumentAccessService implements DocumentAccessService {
   }
 
   @override
-  Future<DocumentAccessLease?> requestPersistentRestoreAccess(String path) async {
+  Future<DocumentAccessLease?> requestPersistentRestoreAccess(
+    String path,
+  ) async {
     requestedPaths.add(path);
     final resolvedPath = requestedLeasePath;
     if (resolvedPath == null) {
@@ -1878,7 +2078,8 @@ class _FakeDocumentAccessService implements DocumentAccessService {
 }
 
 class _FailOnceXFile extends XFile {
-  _FailOnceXFile(this.filePath, this.payload, this.firstError) : super(filePath);
+  _FailOnceXFile(this.filePath, this.payload, this.firstError)
+    : super(filePath);
 
   final String filePath;
   final Uint8List payload;
@@ -1893,4 +2094,59 @@ class _FailOnceXFile extends XFile {
     }
     return payload;
   }
+}
+
+class _ControlledPreparationImporter extends DocumentImportService {
+  final results = <Completer<ReaderDocument>>[];
+  final _starts = <int, Completer<void>>{};
+  Future<void> started(int index) {
+    if (results.length > index) return Future.value();
+    return (_starts[index] ??= Completer<void>()).future;
+  }
+
+  @override
+  Future<ReaderDocument> importBytes({
+    required String fileName,
+    required Uint8List bytes,
+  }) {
+    final index = results.length;
+    final result = Completer<ReaderDocument>();
+    results.add(result);
+    _starts[index]?.complete();
+    return result.future;
+  }
+}
+
+class _BarrierStopTtsEngine extends _FakeTtsEngine {
+  bool holdNext = false;
+  final stopped = Completer<void>();
+  final release = Completer<void>();
+  @override
+  Future<void> stop() async {
+    if (holdNext) {
+      holdNext = false;
+      stopped.complete();
+      await release.future;
+    }
+    await super.stop();
+  }
+}
+
+class _ControlledPicker extends FilePicker {
+  final result = Completer<FilePickerResult?>();
+  @override
+  Future<FilePickerResult?> pickFiles({
+    String? dialogTitle,
+    String? initialDirectory,
+    FileType type = FileType.any,
+    List<String>? allowedExtensions,
+    Function(FilePickerStatus)? onFileLoading,
+    bool allowCompression = false,
+    int compressionQuality = 0,
+    bool allowMultiple = false,
+    bool withData = false,
+    bool withReadStream = false,
+    bool lockParentWindow = false,
+    bool readSequential = false,
+  }) => result.future;
 }

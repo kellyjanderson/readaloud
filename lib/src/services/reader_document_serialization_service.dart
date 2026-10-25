@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'dart:io';
+import 'dart:isolate';
 
 import '../models/character_cast_registry.dart';
 import '../models/dialogue_attribution.dart';
@@ -28,7 +29,8 @@ class ReaderDocumentSerializationService {
   }) async {
     final file = File(outputPath);
     await file.create(recursive: true);
-    await file.writeAsString(serializeToJsonString(document));
+    final serialized = await Isolate.run(() => serializeToJsonString(document));
+    await file.writeAsString(serialized);
     return file;
   }
 
@@ -39,6 +41,9 @@ class ReaderDocumentSerializationService {
       'title': document.title,
       'documentType': document.type.name,
       'presentation': document.presentation.name,
+      'pdfDataBase64': document.pdfData == null
+          ? null
+          : base64Encode(document.pdfData!),
       'sourceDescription': document.sourceDescription,
       'displayHtml': document.displayHtml,
       'speakableText': document.speakableText,
