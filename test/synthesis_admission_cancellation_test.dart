@@ -7,6 +7,181 @@ import 'package:read_aloud/src/services/synthesis_admission_owner.dart';
 
 void main() {
   test(
+    'produced credit is visible before forwarding and next native permit',
+    () async {
+      final processor = _CompletionDrainProcessor();
+      var producedMs = 0;
+      final order = <String>[];
+      final owner = SynthesisAdmissionOwner(
+        processor,
+        exportMayRun: () => false,
+        playbackMayRun: () => producedMs < 8000,
+        onPlaybackCompleted: (event) {
+          producedMs += event.duration!.inMilliseconds;
+          order.add('reserve ${event.chunkId}');
+        },
+      );
+      final lease = owner.lease(export: false);
+      final first = lease.process(_request('first'), (event) {
+        if (event.type == SpeechWorkerEventType.completed) {
+          expect(producedMs, 8000);
+          order.add('forward first');
+        }
+      });
+      await processor.completionSent.future;
+      final second = lease.process(_request('second'), (_) {});
+      expect(order, ['reserve first', 'forward first']);
+      expect(processor.order, ['first']);
+      processor.release.complete();
+      await first;
+      await Future<void>.delayed(Duration.zero);
+      expect(processor.order, [
+        'first',
+      ], reason: 'Finalized but unpublished audio owns credit.');
+      producedMs = 0; // Publication/playback consumed the engine-owned credit.
+      owner.signal();
+      await second;
+      expect(processor.order, ['first', 'second']);
+      expect(order, ['reserve first', 'forward first', 'reserve second']);
+      await lease.dispose();
+      await owner.shutdown();
+    },
+  );
+
+  test(
+    'cache completions reserve once while export and stale identities do not',
+    () async {
+      final processor = _CompletionDrainProcessor(
+        cacheHit: true,
+        staleFirst: true,
+        duplicateCompletion: true,
+      );
+      final credits = <String>[];
+      final owner = SynthesisAdmissionOwner(
+        processor,
+        exportMayRun: () => true,
+        onPlaybackCompleted: (event) => credits.add(event.chunkId),
+      );
+      final playback = owner.lease(export: false);
+      final seen = <SpeechWorkerEvent>[];
+      final first = playback.process(_request('first'), seen.add);
+      await processor.completionSent.future;
+      expect(credits, ['first']);
+      expect(seen.map((event) => event.type), [
+        SpeechWorkerEventType.cacheHit,
+        SpeechWorkerEventType.completed,
+      ]);
+      processor.release.complete();
+      await first;
+      final export = owner.lease(export: true);
+      await export.process(_request('export'), (_) {});
+      expect(credits, ['first']);
+      await playback.dispose();
+      await export.dispose();
+      await owner.shutdown();
+    },
+  );
+
+  test(
+    'cancelled active completion cannot reserve or forward stale audio',
+    () async {
+      final processor = _Processor();
+      var credits = 0;
+      final owner = SynthesisAdmissionOwner(
+        processor,
+        exportMayRun: () => true,
+        onPlaybackCompleted: (_) {
+          ++credits;
+        },
+      );
+      final lease = owner.lease(export: false);
+      final events = <SpeechWorkerEvent>[];
+      final work = lease.process(_request('held'), events.add);
+      final cancelled = expectLater(
+        work,
+        throwsA(isA<SynthesisAdmissionCancelled>()),
+      );
+      lease.cancelPending();
+      processor.gate.complete();
+      await cancelled;
+      expect(credits, 0);
+      _expectCancelled(events, 'held');
+      await lease.dispose();
+      await owner.shutdown();
+    },
+  );
+
+  test(
+    'credit callback failure waits native drain and becomes one pipeline failure',
+    () async {
+      final processor = _CompletionDrainProcessor();
+      final owner = SynthesisAdmissionOwner(
+        processor,
+        exportMayRun: () => true,
+        onPlaybackCompleted: (_) => throw StateError('credit failure'),
+      );
+      final lease = owner.lease(export: false);
+      final pipeline = SpeechWorkerPipeline(processor: lease);
+      final events = <SpeechWorkerEvent>[];
+      final failed = Completer<SpeechWorkerEvent>();
+      final subscription = pipeline.events.listen((event) {
+        events.add(event);
+        if (event.type == SpeechWorkerEventType.failed && !failed.isCompleted) {
+          failed.complete(event);
+        }
+      });
+      await pipeline.prepareChunk(_request('first'));
+      await processor.completionSent.future;
+      expect(
+        processor.afterEmit,
+        isTrue,
+        reason: 'Hook errors cannot escape the native event callback.',
+      );
+      expect(
+        failed.isCompleted,
+        isFalse,
+        reason: 'The active processor must drain first.',
+      );
+      expect(events.where((event) => event.isTerminal), isEmpty);
+      processor.release.complete();
+      final failure = await failed.future;
+      expect(failure.message, contains('credit failure'));
+      await pipeline.shutdown();
+      await subscription.cancel();
+      expect(
+        events.where((event) => event.type == SpeechWorkerEventType.failed),
+        hasLength(1),
+      );
+      expect(
+        events.where((event) => event.type == SpeechWorkerEventType.completed),
+        isEmpty,
+      );
+      await owner.shutdown();
+    },
+  );
+
+  test('synchronous reservation does not join its own native drain', () async {
+    final processor = _CompletionDrainProcessor();
+    late SynthesisAdmissionOwner owner;
+    Future<void>? observedDrain;
+    owner = SynthesisAdmissionOwner(
+      processor,
+      exportMayRun: () => true,
+      onPlaybackCompleted: (_) {
+        observedDrain = owner.drain();
+      },
+    );
+    final lease = owner.lease(export: false);
+    final work = lease.process(_request('first'), (_) {});
+    await processor.completionSent.future;
+    expect(observedDrain, isNotNull);
+    processor.release.complete();
+    await Future.wait([work, observedDrain!]);
+    await lease.dispose();
+    await owner.shutdown();
+  });
+
+  test(
     'fresh lead gate blocks queued burst until explicit low-water wake',
     () async {
       final processor = _Processor();
@@ -451,4 +626,48 @@ class _Processor implements SpeechWorkerChunkProcessor {
     ++disposeCount;
     if (failDispose) throw StateError('close failure');
   }
+}
+
+class _CompletionDrainProcessor implements SpeechWorkerChunkProcessor {
+  _CompletionDrainProcessor({
+    this.cacheHit = false,
+    this.staleFirst = false,
+    this.duplicateCompletion = false,
+  });
+  final bool cacheHit;
+  final bool staleFirst;
+  final bool duplicateCompletion;
+  final completionSent = Completer<void>();
+  final release = Completer<void>();
+  final order = <String>[];
+  bool afterEmit = false;
+  @override
+  Future<void> process(
+    SpeechWorkerChunkRequest request,
+    void Function(SpeechWorkerEvent) emit,
+  ) async {
+    order.add(request.chunkId);
+    SpeechWorkerEvent event(SpeechWorkerEventType type, {bool stale = false}) =>
+        SpeechWorkerEvent(
+          type: type,
+          sessionId: stale ? 'stale-session' : request.sessionId,
+          generationId: request.generationId,
+          chunkId: request.chunkId,
+          emittedAt: DateTime.now().toUtc(),
+          stage: type.name,
+          duration: const Duration(seconds: 8),
+        );
+    if (staleFirst) emit(event(SpeechWorkerEventType.completed, stale: true));
+    if (cacheHit) emit(event(SpeechWorkerEventType.cacheHit));
+    emit(event(SpeechWorkerEventType.completed));
+    if (duplicateCompletion) emit(event(SpeechWorkerEventType.completed));
+    afterEmit = true;
+    if (request.chunkId == 'first') {
+      completionSent.complete();
+      await release.future;
+    }
+  }
+
+  @override
+  Future<void> dispose() async {}
 }
