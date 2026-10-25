@@ -10,6 +10,7 @@ import 'package:flutter/services.dart';
 import '../controllers/reader_controller.dart';
 import '../models/reader_appearance_mode.dart';
 import '../models/reader_document.dart';
+import '../models/voice_assignment_state.dart';
 import '../theme/read_aloud_theme.dart';
 import '../widgets/document_surface.dart';
 import '../widgets/reading_focus_recenter_button.dart';
@@ -126,6 +127,7 @@ class _ReadAloudScreenState extends State<ReadAloudScreen> {
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     _buildPrimaryVoiceSelector(context),
+                    _buildAssignmentStatus(context),
                     const SizedBox(height: 8),
                     _SegmentedTransportCapsule(
                       isBuffering: isBuffering,
@@ -411,6 +413,38 @@ class _ReadAloudScreenState extends State<ReadAloudScreen> {
           ),
         );
       },
+    );
+  }
+
+  Widget _buildAssignmentStatus(BuildContext context) {
+    final state = _controller.voiceAssignmentState;
+    final managerLabel = _controller.isMultiVoiceEnabled
+        ? 'Character Voices'
+        : 'Voice options';
+    final label = switch (state.phase) {
+      VoiceAssignmentPhase.current => 'Current voice choices',
+      VoiceAssignmentPhase.pending =>
+        'Pending voice change — open $managerLabel to apply',
+      VoiceAssignmentPhase.preparing =>
+        state.isInitialBuffering
+            ? 'Preparing latest voice choices before playback'
+            : 'Preparing voice change',
+      VoiceAssignmentPhase.applying => 'Applying voice change and rebuffering',
+      VoiceAssignmentPhase.failed =>
+        'Voice change failed — open $managerLabel to retry',
+    };
+    return SizedBox(
+      height: math.max(40, MediaQuery.textScalerOf(context).scale(14) * 2.8),
+      child: Align(
+        alignment: Alignment.centerLeft,
+        child: Semantics(
+          liveRegion: true,
+          child: Tooltip(
+            message: label,
+            child: Text(label, maxLines: 2, overflow: TextOverflow.ellipsis),
+          ),
+        ),
+      ),
     );
   }
 
@@ -949,6 +983,13 @@ class _ReadAloudScreenState extends State<ReadAloudScreen> {
               characterCastRegistry: _controller.document.characterCastRegistry,
               castVoiceAssignments: _controller.castVoiceAssignments,
               selectedVoiceId: _controller.selectedVoice?.id,
+              assignmentState: _controller.voiceAssignmentState,
+              onApplyAssignments: () {
+                unawaited(_controller.applyPendingVoiceAssignments());
+              },
+              onRetryAssignments: () {
+                unawaited(_controller.retryVoiceAssignments());
+              },
               previewStateForVoice: _controller.previewStateForVoice,
               onClose: Navigator.of(context).pop,
               onSelectLibraryVoice: (voiceId) {

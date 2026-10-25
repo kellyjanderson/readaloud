@@ -374,29 +374,48 @@ void main() {
     expect(find.byType(SnackBar), findsNothing);
   });
 
-  testWidgets('status toast stays visible while the voice dialog is open', (
-    WidgetTester tester,
-  ) async {
-    final controller = ReaderController(
-      preferencesService: _MemoryReaderPreferencesService(),
-      ttsEngine: _FakeTtsEngine(),
-      enablePlatformIntakeChannels: false,
-    );
-    addTearDown(controller.dispose);
+  testWidgets(
+    'modal controls cover reader toast and dismissal preserves reader layout',
+    (WidgetTester tester) async {
+      final controller = ReaderController(
+        preferencesService: _MemoryReaderPreferencesService(),
+        ttsEngine: _FakeTtsEngine(),
+        enablePlatformIntakeChannels: false,
+      );
+      addTearDown(controller.dispose);
 
-    await tester.pumpWidget(ReadAloudApp(controller: controller));
-    await tester.pump(const Duration(milliseconds: 300));
+      await tester.pumpWidget(ReadAloudApp(controller: controller));
+      await tester.pump(const Duration(milliseconds: 300));
 
-    await tester.tap(find.byKey(const Key('character-voices-entry')));
-    await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('character-voices-entry')));
+      await tester.pumpAndSettle();
 
-    controller.showStatusMessage('Temporary message');
-    await tester.pump();
+      controller.showStatusMessage('Temporary message');
+      await tester.pump();
 
-    expect(find.text('Voice Management'), findsOneWidget);
-    expect(find.byKey(const Key('status-toast')), findsOneWidget);
-    expect(find.text('Temporary message'), findsOneWidget);
-  });
+      expect(find.text('Voice Management'), findsOneWidget);
+      expect(find.byKey(const Key('status-toast')), findsOneWidget);
+      expect(find.text('Temporary message'), findsOneWidget);
+      expect(find.byKey(const Key('status-toast')).hitTestable(), findsNothing);
+      final closeDialog = find.byTooltip('Close voice management');
+      expect(closeDialog.hitTestable(), findsOneWidget);
+      await tester.tap(closeDialog);
+      await tester.pumpAndSettle();
+      expect(find.text('Voice Management'), findsNothing);
+      expect(
+        find.byKey(const Key('status-toast')).hitTestable(),
+        findsOneWidget,
+      );
+      await tester.tap(
+        find.descendant(
+          of: find.byKey(const Key('status-toast')),
+          matching: find.byType(IconButton),
+        ),
+      );
+      await tester.pump();
+      expect(find.byKey(const Key('status-toast')), findsNothing);
+    },
+  );
 
   testWidgets('dark appearance uses a dark reader surface shell', (
     WidgetTester tester,

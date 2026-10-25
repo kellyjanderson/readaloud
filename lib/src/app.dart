@@ -329,39 +329,40 @@ class _ReadAloudAppState extends State<ReadAloudApp> {
           theme: _buildLightTheme(),
           darkTheme: _buildDarkTheme(),
           themeMode: _controller.appearanceMode.themeMode,
-          builder: (context, child) {
-            return Stack(
-              children: [
-                child ?? const SizedBox.shrink(),
-                if (toastMessage != null)
-                  Positioned(
-                    top: 0,
-                    left: 0,
-                    right: 0,
-                    child: SafeArea(
-                      bottom: false,
-                      child: Padding(
-                        padding: const EdgeInsets.fromLTRB(36, 12, 36, 0),
-                        child: ReaderStatusToast(
-                          key: const Key('status-toast'),
-                          message: toastMessage,
-                          style: toastStyleForStatus(
-                            context: context,
-                            message: status!,
+          home: Builder(
+            builder: (context) {
+              return Stack(
+                children: [
+                  ReadAloudScreen(
+                    controller: _controller,
+                    initialInputPaths: widget.launchOptions.inputPaths,
+                  ),
+                  if (toastMessage != null)
+                    Positioned(
+                      top: 0,
+                      left: 0,
+                      right: 0,
+                      child: SafeArea(
+                        bottom: false,
+                        child: Padding(
+                          padding: const EdgeInsets.fromLTRB(36, 12, 36, 0),
+                          child: ReaderStatusToast(
+                            key: const Key('status-toast'),
+                            message: toastMessage,
+                            style: toastStyleForStatus(
+                              context: context,
+                              message: status!,
+                            ),
+                            onDismiss: () {
+                              _controller.clearStatus();
+                            },
                           ),
-                          onDismiss: () {
-                            _controller.clearStatus();
-                          },
                         ),
                       ),
                     ),
-                  ),
-              ],
-            );
-          },
-          home: ReadAloudScreen(
-            controller: _controller,
-            initialInputPaths: widget.launchOptions.inputPaths,
+                ],
+              );
+            },
           ),
         );
       },
