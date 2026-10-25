@@ -1,7 +1,7 @@
 # System Overview
 
-Reconciled: October 24, 2026
-Status: Current source architecture; runtime validation not refreshed
+Reconciled: October 25, 2026; P4 source 16310e9
+Status: Implemented source with bounded P0–P3 evidence; integrated P4/FINAL acceptance pending
 
 ## Implemented structure and limitations
 
@@ -9,9 +9,9 @@ Read Aloud is a local Flutter document reader. The native default engine path us
 
 The main entry selects UI or headless execution. `ReaderController` owns UI-facing transport, document intake, voice settings, restore, watched-file reload and follow-along state. `ReaderDocument` aggregates display/speech models, position mappings, annotations, pronunciation, character registry and document voice attribution. Compatibility text/HTML views remain in use.
 
-Import performs document analysis before returning the document. Realization and chunk planning are invoked synchronously from controller paths; inference uses a runtime facade and sequential worker queue. Runtime commands carry session/generation identity. The native plugin has a serial background queue, but the Dart synthesis processor spawns a new isolate per chunk.
+Interactive import runs decode/normalization/semantic preparation in a supervised pure Dart worker, then transfers one frozen completed graph. Resident pure Dart planning and tokenization workers own render-ahead realization, cast routes and token preparation. The controller accepts bounded results on the main isolate using document, assignment and playback identities. One supervised resident synthesis isolate owns the model session and validated voice vectors; the native plugin serializes ONNX calls. Default boundary correction and export assembly run in explicit worker contexts.
 
-The system already has multi-voice routing, startup audio warmup, follower coalescing, export and QA probes. Persistent model/voice residency, fingerprinted character bindings and revision-safe future assignment edits are proposed changes, not current capabilities. The active ACD is the authority for that delta.
+Display readiness, completed document preparation, prepared resources and finalized audio lead are distinct. Playback uses bounded contiguous lead and single-owner native admission shared with export. Prepared cast references retain attribution/assignment provenance and content fingerprints; ordinary speaker transitions select resident vectors. P4 records requested choices separately from engine-acknowledged effective choices. Active edits preserve current audio until explicit Apply and replay current chunk or next Play; this fallback may repeat a partial chunk and makes no seamless-tail claim. Immutable raw/corrected artifacts and generation-owned pins protect publication/lifetime. See the component pages and [evidence index](README.md#evidence-and-acceptance-limits) for exact limits.
 
 ## Source and tests
 
@@ -21,9 +21,9 @@ The system already has multi-voice routing, startup audio warmup, follower coale
 - [widget_test.dart](../../test/widget_test.dart)
 - [reader_controller_playback_test.dart](../../test/reader_controller_playback_test.dart)
 
-Tests listed here are existing evidence locations, not a claim that they passed in this review. The bundled Intel Dart executable cannot run in the current Apple Silicon execution environment.
+Tests listed here are evidence locations, not a claim that every case was rerun for this page. The pinned native arm64 Flutter 3.41.5 / Dart 3.11.3 toolchain is runnable; the earlier Intel SDK failure is historical. See the [evidence index](README.md#evidence-and-acceptance-limits) for bounded source/native results.
 
-## Proposed changes
+## Design and remaining acceptance
 
 See [prepared document runtime ACD](https://github.com/kellyjanderson/readaloud/issues/48) and its [implementation plan](https://github.com/kellyjanderson/readaloud/issues/48). Historical design prose is preserved in the [architecture snapshot](../archive/architecture/2026-10-24/system-overview.md).
 
