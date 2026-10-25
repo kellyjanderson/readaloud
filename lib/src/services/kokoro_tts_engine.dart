@@ -75,6 +75,37 @@ class KokoroTtsEngine
   CancellableSynthesisLease? _playbackLease;
   CancellableSynthesisLease? _exportLease;
   final _nativePlaybackAdmission = KokoroBufferAdmission();
+  final Set<Future<void>> _playbackPreparationTasks = {};
+  int get pendingPlaybackPreparationTasks => _playbackPreparationTasks.length;
+
+  void _ownPlaybackPreparation(Future<void> task, int requestToken) {
+    _playbackPreparationTasks.add(task);
+    unawaited(
+      task.then<void>(
+        (_) {
+          _playbackPreparationTasks.remove(task);
+        },
+        onError: (Object error, StackTrace stack) {
+          _playbackPreparationTasks.remove(task);
+          if (requestToken == _requestToken) {
+            _onError?.call('Playback preparation failed: $error');
+          }
+        },
+      ),
+    );
+  }
+
+  Future<void> _drainPlaybackPreparation() async {
+    while (_playbackPreparationTasks.isNotEmpty) {
+      await Future.wait(
+        _playbackPreparationTasks.toList().map(
+          (task) =>
+              task.then<void>((_) {}, onError: (Object _, StackTrace _) {}),
+        ),
+      );
+    }
+  }
+
   final SpeechPlanningSupervisor _refillPlanner = SpeechPlanningSupervisor();
   Completer<void> _bufferChanged = Completer<void>();
   int _nextReadyWord = 0;
@@ -191,7 +222,7 @@ class KokoroTtsEngine
   Future<void> _shutdownResources() async {
     ++_resourceRequest;
     _resourcesReady = false;
-    await _cancelExport();
+    await Future.wait([_cancelExport(), stop()]);
     await _exportAssembler.shutdown();
     await _resourceTransition;
     await _speechRuntime?.shutdownRuntime();
@@ -462,7 +493,8 @@ class KokoroTtsEngine
   @override
   Future<void> setSpeechRate(double multiplier) async {
     final effectiveRate = normalizeSpeechRate(multiplier);
-    if (_activeGenerationId != null && effectiveRate != _speechRate) {
+    if ((_activeGenerationId != null || _playbackPreparationTasks.isNotEmpty) &&
+        effectiveRate != _speechRate) {
       await stop();
     }
     _speechRate = effectiveRate;
@@ -494,7 +526,10 @@ class KokoroTtsEngine
     _currentQueueBaseIndex = 0;
     await _startDebugTraceSession(sessionId: _activeSessionId!);
 
-    unawaited(_synthesizeAndPlay(requestToken, request));
+    _ownPlaybackPreparation(
+      _synthesizeAndPlay(requestToken, request),
+      requestToken,
+    );
   }
 
   @override
@@ -833,16 +868,19 @@ class KokoroTtsEngine
               languageTag: languageTag,
             )
           : null;
-      final chunks = hasPlannedChunks
+      final preparedChunks = hasPlannedChunks
           ? preparedStartupWindow!.chunks
           : await _prepareChunks(request, languageTag: languageTag);
-      if (chunks.isEmpty) {
+      if (requestToken != _requestToken) return;
+      if (preparedChunks.isEmpty) {
         _onError?.call('Kokoro could not prepare readable text for synthesis.');
         return;
       }
-      for (final chunk in chunks) {
+      for (final chunk in preparedChunks) {
         _recordPronunciationTrace(chunk);
       }
+      final startupWindow = KokoroStartupChunkWindow(preparedChunks);
+      final chunks = startupWindow.startup;
 
       final generationId = 'generation_$requestToken';
       _activeGenerationId = generationId;
@@ -850,17 +888,25 @@ class KokoroTtsEngine
       _nextReadyWord = chunks.first.startWordIndex;
       _startupFirstChunk = null;
       _firstChunkCompleter = Completer<_PlaybackChunk>();
+      // Cancellation may arrive while initial admission is still awaiting the
+      // runtime. Own its error immediately, before the later startup await.
+      unawaited(
+        _firstChunkCompleter!.future.then<void>(
+          (_) {},
+          onError: (Object _, StackTrace _) {},
+        ),
+      );
       _pendingChunksById = <String, _QueuedChunk>{
         for (final chunk in chunks) chunk.chunkId: chunk,
       };
       _expectedChunkCount = hasPlannedChunks
           ? request.chunkPlan!.chunks.length
-          : chunks.length;
+          : preparedChunks.length;
       _remainingPlannedChunkCount = hasPlannedChunks
           ? request.chunkPlan!.chunks.length -
                 chunks.length +
                 (request.chunkPlan!.nextSegmentId == null ? 0 : 1)
-          : 0;
+          : startupWindow.tail.length;
 
       _emitActivity(
         _playbackActivityForPhase(
@@ -924,7 +970,7 @@ class KokoroTtsEngine
         final remainingSpecs = request.chunkPlan!.chunks
             .skip(chunks.length)
             .toList(growable: false);
-        unawaited(
+        _ownPlaybackPreparation(
           _queueRemainingPlannedChunks(
             requestToken: requestToken,
             request: request,
@@ -933,6 +979,16 @@ class KokoroTtsEngine
             specs: remainingSpecs,
             initialSearchOffset: preparedStartupWindow!.nextSearchOffset,
           ),
+          requestToken,
+        );
+      } else if (startupWindow.tail.isNotEmpty) {
+        _ownPlaybackPreparation(
+          _queueRemainingPreparedChunks(
+            requestToken: requestToken,
+            generationId: generationId,
+            chunks: startupWindow.tail,
+          ),
+          requestToken,
         );
       }
 
@@ -1029,23 +1085,7 @@ class KokoroTtsEngine
         for (final spec in remaining) {
           // A hard count cap complements the audio-duration watermark, including
           // tiny/zero-duration chunks. Only one translation runs ahead of credit.
-          while (current() &&
-              !policy.admits(
-                audioLead: _preparedLead(),
-                outstandingChunks:
-                    _pendingChunksById.length +
-                    _stagedReadyChunks.length +
-                    (_activePlaybackToken == null && _startupFirstChunk != null
-                        ? 1
-                        : 0) +
-                    (_activeChunks.length - _currentChunkIndex - 1).clamp(
-                      0,
-                      1000000,
-                    ),
-                playerSpeed: _player.speed,
-              )) {
-            await _bufferChanged.future;
-          }
+          await _awaitPlaybackCredit(policy, current);
           if (!current()) return;
           final prepared = await _preparePlannedChunk(
             request: request,
@@ -1112,6 +1152,72 @@ class KokoroTtsEngine
         : _initialBufferedQueueLeadTime(_startupBufferedChunks(first));
   }
 
+  Future<void> _awaitPlaybackCredit(
+    KokoroBufferAdmission policy,
+    bool Function() current,
+  ) async {
+    while (current() &&
+        !policy.admits(
+          audioLead: _preparedLead(),
+          outstandingChunks:
+              _pendingChunksById.length +
+              _stagedReadyChunks.length +
+              (_activePlaybackToken == null && _startupFirstChunk != null
+                  ? 1
+                  : 0) +
+              (_activeChunks.length - _currentChunkIndex - 1).clamp(0, 1000000),
+          playerSpeed: _player.speed,
+        )) {
+      await _bufferChanged.future;
+    }
+  }
+
+  Future<void> _queueRemainingPreparedChunks({
+    required int requestToken,
+    required String generationId,
+    required List<_QueuedChunk> chunks,
+  }) async {
+    final runtime = _speechRuntime;
+    final session = _activeSessionId;
+    if (runtime == null || session == null) return;
+    bool current() =>
+        requestToken == _requestToken &&
+        generationId == _activeGenerationId &&
+        session == _activeSessionId;
+    final policy = KokoroBufferAdmission();
+    try {
+      for (final chunk in chunks) {
+        await _awaitPlaybackCredit(policy, current);
+        if (!current()) return;
+        _pendingChunksById[chunk.chunkId] = chunk;
+        await runtime.prepareChunkPlan(
+          sessionId: session,
+          generationId: generationId,
+          chunks: [
+            chunk.toRuntimeChunk(
+              rate: _speechRate,
+              languageTag: KokoroVoiceCatalog.languageTagForVoice(
+                chunk.voiceId,
+              ),
+              isInitialChunk: false,
+              isResumedChunk: false,
+            ),
+          ],
+        );
+      }
+      if (current()) {
+        _remainingPlannedChunkCount = 0;
+        _signalBuffer();
+      }
+    } catch (error) {
+      if (!current()) return;
+      ++_requestToken;
+      await _cancelActiveGeneration();
+      await _resetPlaybackState();
+      _onError?.call('Kokoro could not prepare the remaining text: $error');
+    }
+  }
+
   @override
   Future<void> pause() async {
     _requestToken += 1;
@@ -1119,6 +1225,7 @@ class KokoroTtsEngine
     _refillPlanner.cancel();
     _playbackTokenizer?.cancel();
     await _cancelActiveGeneration();
+    await _drainPlaybackPreparation();
     _activePlaybackToken = null;
     await _player.pause();
     _emitActivity(const TtsPlaybackActivity.idle());
@@ -1131,6 +1238,7 @@ class KokoroTtsEngine
     _refillPlanner.cancel();
     _playbackTokenizer?.cancel();
     await _cancelActiveGeneration();
+    await _drainPlaybackPreparation();
     await _resetPlaybackState();
   }
 

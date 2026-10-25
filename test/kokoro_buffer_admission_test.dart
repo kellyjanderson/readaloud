@@ -3,6 +3,23 @@ import 'package:read_aloud/src/services/kokoro_playback_coordination.dart';
 
 void main() {
   group('KokoroBufferAdmission', () {
+    test(
+      'text-only startup does not admit its beyond-capacity tail synchronously',
+      () {
+        final all = List.generate(40, (index) => index);
+        final window = KokoroStartupChunkWindow(all);
+        expect(window.startup, [0, 1, 2]);
+        expect(
+          window.startup.length,
+          lessThanOrEqualTo(8),
+          reason: 'pipeline capacity',
+        );
+        expect(window.tail, all.skip(3));
+        expect(window.tail.length, greaterThan(8));
+        expect([...window.startup, ...window.tail], all);
+      },
+    );
+
     test('all wall-time gates share transport-adjusted lead', () {
       const pcm = Duration(seconds: 8);
       expect(

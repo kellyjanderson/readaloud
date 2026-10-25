@@ -1223,7 +1223,10 @@ class ReaderController extends ChangeNotifier {
     final voiceId = _selectedVoiceId;
     if (voiceId == null) return;
     final effectiveRate = _effectiveSpeechRate(speed);
-    final restart = _isPlaying || _playbackActivity.isBuffering;
+    final restart =
+        _isPlaying ||
+        _playbackActivity.isBuffering ||
+        _playbackState == ReaderPlaybackPrimaryState.bufferingFirstChunk;
     if (restart) {
       await _ttsEngine.stop();
       _isPlaying = false;

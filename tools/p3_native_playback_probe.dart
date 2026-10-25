@@ -10,6 +10,7 @@ import 'package:read_aloud/src/controllers/reader_controller.dart';
 import 'package:read_aloud/src/models/spoken_chunk_record.dart';
 import 'package:read_aloud/src/services/kokoro_tts_engine.dart';
 import 'package:read_aloud/src/services/playback_instrumentation_service.dart';
+import 'package:read_aloud/src/services/tts_engine.dart';
 
 /// A previous completed document can notify listeners during rate/resource
 /// configuration. A fresh scenario accepts completion only after its own
@@ -245,6 +246,52 @@ Future<void> main(List<String> arguments) async {
       if (result == null) throw StateError('Concurrent export failed');
       await Future<void>.delayed(const Duration(seconds: 2));
     }
+    phase = 'legacy-text-only';
+    imposedSynthesisDelay = Duration.zero;
+    await player.setSpeed(1);
+    final legacyText = List.generate(
+      40,
+      (i) => 'At marker $i the quiet river follows the winding valley road.',
+    ).join(' ');
+    record('legacyRequested', {
+      'wordCount': RegExp(r'\S+').allMatches(legacyText).length,
+      'minimumChunkCount': 20,
+      'hasChunkPlan': false,
+    });
+    await engine.speak(
+      TtsSpeakRequest(
+        text: legacyText,
+        documentId: 'p3-legacy-probe',
+        sessionId: 'p3-legacy-probe',
+      ),
+    );
+    final legacyDeadline = DateTime.now().add(const Duration(seconds: 30));
+    while (!player.playing && DateTime.now().isBefore(legacyDeadline)) {
+      await Future<void>.delayed(const Duration(milliseconds: 20));
+    }
+    if (!player.playing) {
+      throw StateError('Text-only startup did not progress beyond capacity');
+    }
+    await Future<void>.delayed(const Duration(seconds: 2));
+    if (player.position <= Duration.zero) {
+      throw StateError('Text-only player position did not advance');
+    }
+    record('legacyProgress', {
+      'playing': player.playing,
+      'positionMs': player.position.inMilliseconds,
+      'sequenceCount': player.sequence.length,
+      'preparationTasks': engine.pendingPlaybackPreparationTasks,
+    });
+    await engine.stop();
+    if (engine.pendingPlaybackPreparationTasks != 0) {
+      throw StateError('Text-only cancellation left a preparation producer');
+    }
+    await engine.releaseDocumentResources();
+    record('legacyCancelled', {
+      'playing': player.playing,
+      'sequenceCount': player.sequence.length,
+      'preparationTasks': engine.pendingPlaybackPreparationTasks,
+    });
     phase = 'interactive';
     record('interactiveReady', {'seconds': 40});
     await Future<void>.delayed(const Duration(seconds: 40));

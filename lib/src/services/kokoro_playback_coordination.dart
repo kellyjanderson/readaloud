@@ -127,6 +127,19 @@ const Duration kokoroStartupMinimumBufferedLeadTime = Duration(seconds: 4);
 const int kokoroStartupMinimumBufferedChunkCount = 2;
 const int kokoroStartupPreparedChunkWindow = 3;
 
+/// Legacy text-only callers can have more chunks than pipeline capacity. Only
+/// this bounded prefix is synchronously admitted before the player may start;
+/// the remainder belongs to a separately cancellable producer.
+class KokoroStartupChunkWindow<T> {
+  KokoroStartupChunkWindow(List<T> chunks)
+    : startup = List.unmodifiable(
+        chunks.take(kokoroStartupPreparedChunkWindow),
+      ),
+      tail = List.unmodifiable(chunks.skip(kokoroStartupPreparedChunkWindow));
+  final List<T> startup;
+  final List<T> tail;
+}
+
 double kokoroNormalizeSpeechRate(double requested) {
   if (!requested.isFinite || requested <= 0) {
     throw ArgumentError.value(requested, 'speechRate');
