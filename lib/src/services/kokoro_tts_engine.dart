@@ -77,6 +77,7 @@ class KokoroTtsEngine
   int _resourceRequest = 0;
   Future<void>? _resourceShutdown;
   bool _resourcesReady = false;
+  List<PreparedVoiceBinding> _preparedBindings = const [];
   @override
   bool get resourcesReady => _resourcesReady;
 
@@ -112,6 +113,7 @@ class KokoroTtsEngine
         throw StateError('Resource preparation superseded.');
       }
       _resourcesReady = true;
+      _preparedBindings = bindings;
       return bindings;
     });
     _resourceTransition = operation.then<void>((_) {}, onError: (Object _) {});
@@ -633,16 +635,40 @@ class KokoroTtsEngine
     }
 
     try {
-      await prepareDocumentResources(
-        documentId: request.documentId ?? 'unknown-document',
-        revision: requestToken,
-        voiceIds: {
-          _selectedVoiceId,
-          ...?request.chunkPlan?.chunks.map((c) => c.voiceId),
-        },
-        pronunciationProfileId:
-            request.ttsArtifactSet?.selectedProfileId ?? 'kokoro-default',
-      );
+      final requiredVoices = {
+        _selectedVoiceId,
+        ...?request.chunkPlan?.chunks.map((c) => c.voiceId),
+      };
+      final suppliedResources = request.preparedResources;
+      if (suppliedResources != null) {
+        if (!_resourcesReady ||
+            requiredVoices.any(
+              (voice) => !suppliedResources.any(
+                (supplied) =>
+                    supplied.voiceId == voice &&
+                    supplied.documentId == request.documentId &&
+                    _preparedBindings.any(
+                      (current) =>
+                          current.voiceId == supplied.voiceId &&
+                          current.documentId == supplied.documentId &&
+                          current.bindingRevision == supplied.bindingRevision &&
+                          current.fingerprint == supplied.fingerprint,
+                    ),
+              ),
+            )) {
+          throw StateError(
+            'Playback resource reference is stale. Prepare this document again.',
+          );
+        }
+      } else {
+        await prepareDocumentResources(
+          documentId: request.documentId ?? 'unknown-document',
+          revision: 0,
+          voiceIds: requiredVoices,
+          pronunciationProfileId:
+              request.ttsArtifactSet?.selectedProfileId ?? 'kokoro-default',
+        );
+      }
       if (requestToken != _requestToken) return;
       final languageTag = KokoroVoiceCatalog.languageTagForVoice(
         _selectedVoiceId,

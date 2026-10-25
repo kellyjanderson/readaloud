@@ -134,6 +134,7 @@ class TtsSpeakRequest {
     this.isResumedPlayback = false,
     this.speechDocument,
     this.ttsArtifactSet,
+    this.preparedResources,
   });
 
   final String text;
@@ -144,6 +145,7 @@ class TtsSpeakRequest {
   final bool isResumedPlayback;
   final SpeechDocument? speechDocument;
   final TtsArtifactSet? ttsArtifactSet;
+  final List<PreparedVoiceBinding>? preparedResources;
 }
 
 class TtsExportRequest {

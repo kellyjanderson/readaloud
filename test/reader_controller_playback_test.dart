@@ -33,6 +33,34 @@ void main() {
   group('ReaderController playback', () {
     for (final fails in [false, true]) {
       test(
+        'resource intent during import converges after stale ${fails ? 'failure' : 'success'}',
+        () async {
+          final engine = _ResourceBarrierEngine();
+          final controller = ReaderController(ttsEngine: engine);
+          addTearDown(controller.dispose);
+          await controller.initialize();
+          final loading = controller.loadDocument(ReaderDocument.sample());
+          await engine.started.future;
+          await controller.setMultiVoiceEnabled(
+            !controller.isMultiVoiceEnabled,
+          );
+          engine.ready = true;
+          if (fails) {
+            engine.barrier.completeError(StateError('stale resource failure'));
+          } else {
+            engine.barrier.complete(const []);
+          }
+          await loading;
+          expect(engine.preparations, 2);
+          expect(controller.isDocumentPrepared, isTrue);
+          expect(controller.isResourcesReady, isTrue);
+          await controller.startPlayback();
+          expect(controller.isDocumentPrepared, isTrue);
+        },
+      );
+    }
+    for (final fails in [false, true]) {
+      test(
         'document speech readiness waits for resource ${fails ? 'failure' : 'success'}',
         () async {
           final engine = _ResourceBarrierEngine();
@@ -2200,6 +2228,7 @@ class _ResourceBarrierEngine extends _FakeTtsEngine
   final started = Completer<void>();
   final barrier = Completer<List<PreparedVoiceBinding>>();
   bool ready = false;
+  int preparations = 0;
   @override
   bool get resourcesReady => ready;
   @override
@@ -2210,20 +2239,24 @@ class _ResourceBarrierEngine extends _FakeTtsEngine
     required String pronunciationProfileId,
   }) {
     if (!started.isCompleted) started.complete();
-    return barrier.future.then(
-      (_) => [
-        for (final voiceId in voiceIds)
-          PreparedVoiceBinding(
-            voiceId: voiceId,
-            voiceDigest: 'voice',
-            modelDigest: 'model',
-            engineVersion: 'test',
-            pronunciationProfileId: pronunciationProfileId,
-            bindingRevision: revision,
-            documentId: documentId,
-          ),
-      ],
-    );
+    ++preparations;
+    return (preparations == 1
+            ? barrier.future
+            : Future<List<PreparedVoiceBinding>>.value(const []))
+        .then(
+          (_) => [
+            for (final voiceId in voiceIds)
+              PreparedVoiceBinding(
+                voiceId: voiceId,
+                voiceDigest: 'voice',
+                modelDigest: 'model',
+                engineVersion: 'test',
+                pronunciationProfileId: pronunciationProfileId,
+                bindingRevision: revision,
+                documentId: documentId,
+              ),
+          ],
+        );
   }
 
   @override

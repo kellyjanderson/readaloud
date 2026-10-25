@@ -995,6 +995,9 @@ class ReaderController extends ChangeNotifier {
         isResumedPlayback: _currentWordIndex > 0,
         speechDocument: _document.speechDocument,
         ttsArtifactSet: _currentRealization?.ttsArtifactSet,
+        preparedResources: _ttsEngine is ResourcePreparationCapable
+            ? resourceBindings
+            : null,
       ),
     );
     notifyListeners();
@@ -1079,8 +1082,8 @@ class ReaderController extends ChangeNotifier {
   }
 
   Future<void> selectVoiceById(String? voiceId) async {
-    _invalidateResourceBindings();
     if (voiceId == null) return;
+    _invalidateResourceBindings();
     _selectedVoiceId = voiceId;
     _voiceSpeeds.putIfAbsent(voiceId, () => 1.0);
     final voice = selectedVoice;
@@ -1109,10 +1112,10 @@ class ReaderController extends ChangeNotifier {
   }
 
   Future<void> setMultiVoiceEnabled(bool enabled) async {
-    _invalidateResourceBindings();
     if (_isMultiVoiceEnabled == enabled) {
       return;
     }
+    _invalidateResourceBindings();
 
     _isMultiVoiceEnabled = enabled;
     _refreshChunkPlan();
@@ -1223,11 +1226,11 @@ class ReaderController extends ChangeNotifier {
   }
 
   Future<void> assignVoiceToCast(String castId, String voiceId) async {
-    _invalidateResourceBindings();
     if (_selectedVoiceId == null ||
         _voices.every((voice) => voice.id != voiceId)) {
       return;
     }
+    _invalidateResourceBindings();
 
     final automaticAssignments = _castVoiceAssignmentService.resolve(
       CastVoiceAssignmentInput(
@@ -1260,12 +1263,12 @@ class ReaderController extends ChangeNotifier {
   }
 
   Future<void> clearCastVoiceOverride(String castId) async {
-    _invalidateResourceBindings();
     final storedAssignments = _currentStoredCastVoiceAssignments();
     if (!_castVoiceOverrides.containsKey(castId) &&
         !storedAssignments.containsKey(castId)) {
       return;
     }
+    _invalidateResourceBindings();
 
     _castVoiceOverrides.remove(castId);
     _clearStoredCastVoiceAssignment(castId);
@@ -1552,6 +1555,19 @@ class ReaderController extends ChangeNotifier {
   }
 
   Future<void> _prepareResourceBindings(int revision) async {
+    while (true) {
+      try {
+        await _prepareResourceBindingsOnce(revision);
+        return;
+      } on _SupersededPreparation {
+        // A newer cast/voice intent on the same analyzed document must retry;
+        // a replacement document still terminates this owner immediately.
+        _requireRevision(revision);
+      }
+    }
+  }
+
+  Future<void> _prepareResourceBindingsOnce(int revision) async {
     final intent = _resourceBindingIntent;
     final resourceEngine = _ttsEngine;
     if (resourceEngine is ResourcePreparationCapable &&
