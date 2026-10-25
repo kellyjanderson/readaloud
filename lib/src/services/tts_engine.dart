@@ -2,6 +2,19 @@ import '../models/chunk_plan.dart';
 import '../models/speech_document.dart';
 import '../models/tts_artifact.dart';
 import '../models/voice_profile.dart';
+import '../models/prepared_voice_binding.dart';
+
+abstract interface class ResourcePreparationCapable {
+  bool get resourcesReady;
+  Future<List<PreparedVoiceBinding>> prepareDocumentResources({
+    required String documentId,
+    required int revision,
+    required Set<String> voiceIds,
+    required String pronunciationProfileId,
+  });
+  Future<void> releaseDocumentResources();
+  Future<void> shutdownResources();
+}
 
 class TtsProgressUpdate {
   const TtsProgressUpdate({
@@ -40,6 +53,7 @@ class TtsProgressUpdate {
 }
 
 enum TtsPlaybackPhase { idle, buffering, playing }
+
 enum TtsBufferPressure { none, healthy, lowWater, critical }
 
 class TtsPlaybackActivity {

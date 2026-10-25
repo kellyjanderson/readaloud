@@ -13,6 +13,7 @@ import '../models/speech_annotation.dart';
 import '../models/speech_document.dart';
 import '../models/tts_artifact.dart';
 import '../models/voice_profile.dart';
+import '../models/prepared_voice_binding.dart';
 import 'english_speech_preprocessor.dart';
 import 'english_suffix_allomorph_module.dart';
 import 'exported_audio_assembler.dart';
@@ -30,7 +31,11 @@ import 'tts_debug_trace_session.dart';
 import 'tts_engine.dart';
 
 class KokoroTtsEngine
-    implements TtsEngine, VoiceLibraryCapable, AudioExportCapable {
+    implements
+        TtsEngine,
+        VoiceLibraryCapable,
+        AudioExportCapable,
+        ResourcePreparationCapable {
   KokoroTtsEngine({AudioPlayer? player}) : _player = player ?? AudioPlayer();
 
   static const String _engineId = 'kokoro';
@@ -38,9 +43,7 @@ class KokoroTtsEngine
   static const String _fallbackNormalizationVersion =
       'read-aloud-normalization-v1';
   static const int _targetChunkWordCount = 18;
-  static const Duration _startupWarmupPollInterval = Duration(
-    milliseconds: 40,
-  );
+  static const Duration _startupWarmupPollInterval = Duration(milliseconds: 40);
   static const Duration _startupWarmupMaxWait = Duration(seconds: 5);
 
   final AudioPlayer _player;
@@ -67,6 +70,75 @@ class KokoroTtsEngine
   KokoroVoiceManager? _voiceManager;
   Tokenizer? _tokenizer;
   SpeechRuntime? _speechRuntime;
+  KokoroSpeechWorkerChunkProcessor? _resourceProcessor;
+  Future<void> _resourceTransition = Future<void>.value();
+  bool _exportingResources = false;
+  Completer<void>? _exportDrained;
+  int _resourceRequest = 0;
+  Future<void>? _resourceShutdown;
+  bool _resourcesReady = false;
+  @override
+  bool get resourcesReady => _resourcesReady;
+
+  @override
+  Future<List<PreparedVoiceBinding>> prepareDocumentResources({
+    required String documentId,
+    required int revision,
+    required Set<String> voiceIds,
+    required String pronunciationProfileId,
+  }) async {
+    await initialize();
+    if (_exportingResources || _resourceShutdown != null) {
+      throw StateError('Speech resources are unavailable.');
+    }
+    final resourceRequest = ++_resourceRequest;
+    final operation = _resourceTransition.then((_) async {
+      if (resourceRequest != _resourceRequest) {
+        throw StateError('Resource preparation superseded.');
+      }
+      final processor = _resourceProcessor;
+      if (processor == null) {
+        throw StateError('Speech resources failed to initialize.');
+      }
+      await processor.drain();
+      _resourcesReady = false;
+      final bindings = await processor.prepareResources(
+        documentId: documentId,
+        revision: revision,
+        voiceIds: voiceIds,
+        pronunciationProfileId: pronunciationProfileId,
+      );
+      if (resourceRequest != _resourceRequest) {
+        throw StateError('Resource preparation superseded.');
+      }
+      _resourcesReady = true;
+      return bindings;
+    });
+    _resourceTransition = operation.then<void>((_) {}, onError: (Object _) {});
+    return operation;
+  }
+
+  @override
+  Future<void> releaseDocumentResources() {
+    ++_resourceRequest;
+    _resourcesReady = false;
+    final operation = _resourceTransition.then((_) async {
+      _resourcesReady = false;
+      await _resourceProcessor?.releaseResources();
+    });
+    _resourceTransition = operation.then<void>((_) {}, onError: (Object _) {});
+    return operation;
+  }
+
+  @override
+  Future<void> shutdownResources() =>
+      _resourceShutdown ??= _shutdownResources();
+  Future<void> _shutdownResources() async {
+    _resourcesReady = false;
+    await _exportDrained?.future;
+    await _resourceTransition;
+    await _speechRuntime?.shutdownRuntime();
+  }
 
   StreamSubscription<PlayerState>? _playerStateSubscription;
   StreamSubscription<Duration>? _positionSubscription;
@@ -175,6 +247,7 @@ class KokoroTtsEngine
           unawaited(_resumeAfterUnderrunIfPossible());
           return;
         }
+        unawaited(releaseDocumentResources());
         unawaited(_resetPlaybackState());
         _onComplete?.call();
       }
@@ -215,9 +288,10 @@ class KokoroTtsEngine
       if (rootIsolateToken == null) {
         throw StateError('Kokoro requires a root isolate token.');
       }
+      _resourceProcessor = await _createWorkerProcessor(rootIsolateToken);
       _speechRuntime = SpeechRuntime(
         engineId: _engineId,
-        processor: await _createWorkerProcessor(rootIsolateToken),
+        processor: _resourceProcessor!,
       );
       _runtimeEventSubscription = _speechRuntime!.events.listen(
         _handleRuntimeEvent,
@@ -301,6 +375,22 @@ class KokoroTtsEngine
 
   @override
   Future<TtsExportResult> exportAudio(TtsExportRequest request) async {
+    if (_exportingResources) {
+      throw StateError('An export already owns speech resources.');
+    }
+    _exportingResources = true;
+    _exportDrained = Completer<void>();
+    try {
+      return await _exportAudioWithResources(request);
+    } finally {
+      _exportingResources = false;
+      _exportDrained!.complete();
+    }
+  }
+
+  Future<TtsExportResult> _exportAudioWithResources(
+    TtsExportRequest request,
+  ) async {
     await initialize();
     final assets = _assets;
     if (assets == null || !(assets.isReady)) {
@@ -332,10 +422,13 @@ class KokoroTtsEngine
       throw StateError('Kokoro could not prepare readable text for export.');
     }
 
+    await stop();
+    await releaseDocumentResources();
+    final exportProcessor = await _createWorkerProcessor(rootIsolateToken);
     final runtime = SpeechRuntime(
       engineId: _engineId,
       runtimeId: 'export_runtime_${DateTime.now().microsecondsSinceEpoch}',
-      processor: await _createWorkerProcessor(rootIsolateToken),
+      processor: exportProcessor,
     );
     final sessionId =
         request.sessionId ??
@@ -387,8 +480,7 @@ class KokoroTtsEngine
                 ? null
                 : ExportedBoundaryMetadata(
                     boundaryClass: event.boundaryClass!.name,
-                    correctionApplied:
-                        event.boundaryCorrectionApplied ?? false,
+                    correctionApplied: event.boundaryCorrectionApplied ?? false,
                     leadingSilenceBefore:
                         event.leadingSilenceBefore ?? Duration.zero,
                     leadingSilenceAfter: event.leadingSilence ?? Duration.zero,
@@ -396,10 +488,8 @@ class KokoroTtsEngine
                         event.trailingSilenceBefore ?? Duration.zero,
                     trailingSilenceAfter:
                         event.trailingSilence ?? Duration.zero,
-                    joinSilenceBefore:
-                        event.joinSilenceBefore ?? Duration.zero,
-                    joinSilenceAfter:
-                        event.joinSilenceAfter ?? Duration.zero,
+                    joinSilenceBefore: event.joinSilenceBefore ?? Duration.zero,
+                    joinSilenceAfter: event.joinSilenceAfter ?? Duration.zero,
                     isInitialChunk: event.isInitialChunk ?? false,
                     isResumedChunk: event.isResumedChunk ?? false,
                   ),
@@ -448,6 +538,11 @@ class KokoroTtsEngine
     });
 
     try {
+      await exportProcessor.prepareResources(
+        documentId: request.documentId ?? 'export-document',
+        revision: 0,
+        voiceIds: chunks.map((chunk) => chunk.voiceId),
+      );
       await runtime.initializeRuntime(preferredVoiceId: _selectedVoiceId);
       await runtime.activateSession(
         SpeechRuntimeSessionDescriptor(
@@ -536,6 +631,17 @@ class KokoroTtsEngine
     }
 
     try {
+      await prepareDocumentResources(
+        documentId: request.documentId ?? 'unknown-document',
+        revision: requestToken,
+        voiceIds: {
+          _selectedVoiceId,
+          ...?request.chunkPlan?.chunks.map((c) => c.voiceId),
+        },
+        pronunciationProfileId:
+            request.ttsArtifactSet?.selectedProfileId ?? 'kokoro-default',
+      );
+      if (requestToken != _requestToken) return;
       final languageTag = KokoroVoiceCatalog.languageTagForVoice(
         _selectedVoiceId,
       );
@@ -767,13 +873,16 @@ class KokoroTtsEngine
             ),
           ],
         );
-        _remainingPlannedChunkCount =
-            (_remainingPlannedChunkCount - 1).clamp(0, _expectedChunkCount);
+        _remainingPlannedChunkCount = (_remainingPlannedChunkCount - 1).clamp(
+          0,
+          _expectedChunkCount,
+        );
         await Future<void>.delayed(Duration.zero);
       }
     } catch (error) {
       _remainingPlannedChunkCount = 0;
-      if (requestToken == _requestToken && generationId == _activeGenerationId) {
+      if (requestToken == _requestToken &&
+          generationId == _activeGenerationId) {
         _onError?.call('Kokoro could not prepare a later chunk: $error');
       }
     }
@@ -1177,12 +1286,16 @@ class KokoroTtsEngine
       failedChunk.startWordIndex,
     );
 
-    final remainingPending = _pendingChunksById.values
-        .where((chunk) => chunk.generationOrder > failedChunk.generationOrder)
-        .toList(growable: false)
-      ..sort(
-        (left, right) => left.generationOrder.compareTo(right.generationOrder),
-      );
+    final remainingPending =
+        _pendingChunksById.values
+            .where(
+              (chunk) => chunk.generationOrder > failedChunk.generationOrder,
+            )
+            .toList(growable: false)
+          ..sort(
+            (left, right) =>
+                left.generationOrder.compareTo(right.generationOrder),
+          );
 
     final rebuiltPending = <_QueuedChunk>[
       ...recoveryChunks,
@@ -1277,7 +1390,8 @@ class KokoroTtsEngine
     required KokoroRecoveryWordSlice slice,
     required int sliceIndex,
   }) async {
-    final localStartBoundary = failedChunk.wordBoundaries[slice.startWordOffset];
+    final localStartBoundary =
+        failedChunk.wordBoundaries[slice.startWordOffset];
     final localEndBoundary =
         failedChunk.wordBoundaries[slice.endWordOffset - 1];
     final pieceText = failedChunk.text.substring(
@@ -1285,7 +1399,8 @@ class KokoroTtsEngine
       localEndBoundary.end,
     );
     final pieceWordBoundaries = _buildWordBoundaries(pieceText);
-    final pieceStartWordIndex = failedChunk.startWordIndex + slice.startWordOffset;
+    final pieceStartWordIndex =
+        failedChunk.startWordIndex + slice.startWordOffset;
     final pieceEndWordIndex = failedChunk.startWordIndex + slice.endWordOffset;
     final pieceSegmentRanges = _sliceSegmentRanges(
       segmentRanges: failedChunk.segmentRanges,
@@ -1310,8 +1425,9 @@ class KokoroTtsEngine
         normalizationVersion: failedChunk.normalizationVersion,
       ),
       voiceId: failedChunk.voiceId,
-      boundaryClass:
-          sliceIndex == 0 ? failedChunk.boundaryClass : BreakClass.none,
+      boundaryClass: sliceIndex == 0
+          ? failedChunk.boundaryClass
+          : BreakClass.none,
       documentId: failedChunk.documentId,
       normalizationVersion: failedChunk.normalizationVersion,
       text: pieceText,
@@ -1768,7 +1884,9 @@ class KokoroTtsEngine
           );
         case KokoroEnginePayloadUnitKind.explicitSuffixPhoneme:
           await flushPlainTextBuffer();
-          final explicitSuffixPayload = _decodeExplicitSuffixPayload(unit.value);
+          final explicitSuffixPayload = _decodeExplicitSuffixPayload(
+            unit.value,
+          );
           if (explicitSuffixPayload == null) {
             plainTextBuffer.write(unit.value);
             continue;
@@ -1830,9 +1948,7 @@ class KokoroTtsEngine
     await _player.play();
   }
 
-  Future<void> _awaitStartupWarmup({
-    required _PlaybackChunk firstChunk,
-  }) async {
+  Future<void> _awaitStartupWarmup({required _PlaybackChunk firstChunk}) async {
     final deadline = DateTime.now().add(_startupWarmupMaxWait);
     while (_activeGenerationId != null && _activePlaybackToken == null) {
       if (_isStartupWarmEnough(firstChunk)) {
@@ -1917,7 +2033,9 @@ class KokoroTtsEngine
         _stageReadyChunk(playbackChunk);
         return;
       }
-      if (_activeChunks.any((chunk) => chunk.chunkId == playbackChunk.chunkId)) {
+      if (_activeChunks.any(
+        (chunk) => chunk.chunkId == playbackChunk.chunkId,
+      )) {
         return;
       }
 
@@ -2078,7 +2196,7 @@ class KokoroTtsEngine
     unawaited(_positionSubscription?.cancel());
     unawaited(_currentIndexSubscription?.cancel());
     unawaited(_runtimeEventSubscription?.cancel());
-    unawaited(_speechRuntime?.shutdownRuntime());
+    unawaited(shutdownResources());
     _player.dispose();
   }
 
@@ -2106,10 +2224,8 @@ class KokoroTtsEngine
           'state': pressure.name,
           'leadTimeMs': leadTime.inMilliseconds,
           'targetLeadTimeMs': kokoroTargetBufferedLeadTime.inMilliseconds,
-          'lowWaterLeadTimeMs':
-              kokoroLowWaterBufferedLeadTime.inMilliseconds,
-          'criticalLeadTimeMs':
-              kokoroCriticalBufferedLeadTime.inMilliseconds,
+          'lowWaterLeadTimeMs': kokoroLowWaterBufferedLeadTime.inMilliseconds,
+          'criticalLeadTimeMs': kokoroCriticalBufferedLeadTime.inMilliseconds,
         },
       );
       _lastRecordedBufferPressure = pressure;
@@ -2485,7 +2601,9 @@ class _PlaybackChunk {
 }
 
 int _comparePlaybackChunkOrder(_PlaybackChunk left, _PlaybackChunk right) {
-  final startWordComparison = left.startWordIndex.compareTo(right.startWordIndex);
+  final startWordComparison = left.startWordIndex.compareTo(
+    right.startWordIndex,
+  );
   if (startWordComparison != 0) {
     return startWordComparison;
   }
@@ -2500,10 +2618,7 @@ Duration _initialBufferedQueueLeadTime(List<_PlaybackChunk> chunks) {
   if (chunks.isEmpty) {
     return Duration.zero;
   }
-  return chunks.fold(
-    Duration.zero,
-    (total, chunk) => total + chunk.duration,
-  );
+  return chunks.fold(Duration.zero, (total, chunk) => total + chunk.duration);
 }
 
 class _ChunkUnit {
@@ -2607,8 +2722,9 @@ List<_ChunkSegmentRange> _sliceSegmentRanges({
     final overlapStart = startWordIndex > range.startWordIndex
         ? startWordIndex
         : range.startWordIndex;
-    final overlapEnd =
-        endWordIndex < range.endWordIndex ? endWordIndex : range.endWordIndex;
+    final overlapEnd = endWordIndex < range.endWordIndex
+        ? endWordIndex
+        : range.endWordIndex;
     if (overlapStart >= overlapEnd) {
       continue;
     }
@@ -2625,8 +2741,9 @@ List<_ChunkSegmentRange> _sliceSegmentRanges({
     return slicedRanges;
   }
 
-  final fallbackSegmentId =
-      segmentRanges.isEmpty ? 'recovered_segment' : segmentRanges.first.segmentId;
+  final fallbackSegmentId = segmentRanges.isEmpty
+      ? 'recovered_segment'
+      : segmentRanges.first.segmentId;
   return <_ChunkSegmentRange>[
     _ChunkSegmentRange(
       segmentId: fallbackSegmentId,

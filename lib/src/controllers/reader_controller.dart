@@ -12,6 +12,7 @@ import 'package:path/path.dart' as p;
 
 import '../models/document_import_exception.dart';
 import '../models/document_preparation.dart';
+import '../models/prepared_voice_binding.dart';
 import '../models/cast_voice_assignment.dart';
 import '../models/narration_state.dart';
 import '../models/reading_focus_state.dart';
@@ -88,11 +89,16 @@ class ReaderController extends ChangeNotifier {
   int _watchSession = 0;
   bool _disposed = false;
   bool _documentPrepared = true;
+  List<PreparedVoiceBinding> _resourceBindings = const [];
+  List<PreparedVoiceBinding> get resourceBindings => _resourceBindings;
 
   bool get isDisplayReady =>
       _document.displayHtml.isNotEmpty || _document.pdfData != null;
   bool get isDocumentPrepared => _documentPrepared && !_isImporting;
   bool get isAudioReady => _playbackActivity.isPlaying;
+  bool get isResourcesReady =>
+      _ttsEngine is! ResourcePreparationCapable ||
+      (_ttsEngine as ResourcePreparationCapable).resourcesReady;
 
   void _requireRevision(int revision) {
     if (_disposed || revision != _documentRevision) {
@@ -1531,7 +1537,8 @@ class ReaderController extends ChangeNotifier {
     _finalizeActiveSpokenChunk();
     _document = document;
     _preparedDocumentRevision = revision;
-    _documentPrepared = true;
+    _documentPrepared = false;
+    _resourceBindings = const [];
     _currentDocumentPath = (sourcePath == null || sourcePath.trim().isEmpty)
         ? null
         : p.normalize(sourcePath.trim());
@@ -1558,6 +1565,27 @@ class ReaderController extends ChangeNotifier {
     _currentRealization = null;
     _currentChunkPlan = null;
     _primePlaybackPreparation();
+    final resourceEngine = _ttsEngine;
+    if (resourceEngine is ResourcePreparationCapable &&
+        _selectedVoiceId != null) {
+      final assignments = _resolveCastVoiceAssignments(
+        preferredNarratorVoiceId: _selectedVoiceId!,
+      );
+      final bindings = await (resourceEngine as ResourcePreparationCapable)
+          .prepareDocumentResources(
+            documentId: document.displayDocument.documentId,
+            revision: revision,
+            voiceIds: {
+              _selectedVoiceId!,
+              ...?assignments?.assignments.map((v) => v.effectiveVoiceId),
+            },
+            pronunciationProfileId: _selectedPronunciationProfile().profileId,
+          );
+      _requireRevision(revision);
+      _resourceBindings = List.unmodifiable(bindings);
+    }
+    _requireRevision(revision);
+    _documentPrepared = true;
     _clearDocumentLoadStage();
     _statusMessage = statusMessage;
     if (_statusMessage == null && document.wordCount == 0) {

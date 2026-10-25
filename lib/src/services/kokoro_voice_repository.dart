@@ -3,6 +3,7 @@ import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:kokoro_tts_flutter/kokoro_tts_flutter.dart';
+import 'package:crypto/crypto.dart' as crypto;
 
 import '../models/voice_profile.dart';
 import 'kokoro_voice_catalog.dart';
@@ -12,6 +13,14 @@ class KokoroVoiceRepository {
 
   final String voicesDirectory;
   final Map<String, Voice> _voiceCache = <String, Voice>{};
+  int get loadedVoiceCount => _voiceCache.length;
+  int loadCount = 0;
+  final Map<String, String> _digests = {};
+  String digestFor(String voiceId) => _digests[voiceId]!;
+  void clear() {
+    _voiceCache.clear();
+    _digests.clear();
+  }
 
   Future<List<VoiceProfile>> loadInstalledVoiceProfiles() async {
     final directory = Directory(voicesDirectory);
@@ -40,18 +49,21 @@ class KokoroVoiceRepository {
     _voiceCache.remove(voiceId);
   }
 
-  Future<Voice> loadVoice(String voiceId) async {
-    final cached = _voiceCache[voiceId];
-    if (cached != null) {
-      return cached;
+  Future<Voice> loadVoice(String voiceId, {bool validateAsset = false}) async {
+    if (!RegExp(r'^[a-zA-Z0-9_-]+$').hasMatch(voiceId)) {
+      throw FormatException('Invalid voice id: $voiceId');
     }
-
+    final resident = _voiceCache[voiceId];
+    if (resident != null && !validateAsset) return resident;
     final file = File(_voicePathForId(voiceId));
     if (!await file.exists()) {
       throw StateError('Kokoro voice "$voiceId" is not installed.');
     }
 
     final bytes = await file.readAsBytes();
+    final digest = crypto.sha256.convert(bytes).toString();
+    final cached = _voiceCache[voiceId];
+    if (cached != null && _digests[voiceId] == digest) return cached;
     final voiceProfile = KokoroVoiceCatalog.profileForId(voiceId);
     final voice = Voice(
       id: voiceId,
@@ -61,8 +73,14 @@ class KokoroVoiceRepository {
       gender: (voiceProfile.gender ?? VoiceGender.neutral).name,
     );
     _voiceCache[voiceId] = voice;
+    _digests[voiceId] = digest;
+    loadCount++;
     return voice;
   }
+
+  Voice residentVoice(String voiceId) =>
+      _voiceCache[voiceId] ??
+      (throw StateError('Voice was not prepared: $voiceId'));
 
   String _voicePathForId(String voiceId) {
     return '$voicesDirectory${Platform.pathSeparator}$voiceId.npy';
@@ -85,6 +103,11 @@ List<Float32List> _parseStyleVectors(Uint8List bytes) {
   final vectorLength = header.shape
       .skip(1)
       .fold<int>(1, (product, dimension) => product * dimension);
+  if (vectorCount < 1 || vectorCount > 512 || vectorLength != 256) {
+    throw const FormatException(
+      'Expected Kokoro vectors with 256 values and 1..512 rows.',
+    );
+  }
   final totalValues = vectorCount * vectorLength;
   final dataBytes = bytes.length - header.dataOffset;
   if (dataBytes != totalValues * Float32List.bytesPerElement) {
@@ -100,6 +123,9 @@ List<Float32List> _parseStyleVectors(Uint8List bytes) {
     for (var elementIndex = 0; elementIndex < vectorLength; elementIndex += 1) {
       final offset = (baseIndex + elementIndex) * Float32List.bytesPerElement;
       vector[elementIndex] = byteData.getFloat32(offset, Endian.little);
+      if (!vector[elementIndex].isFinite) {
+        throw const FormatException('Kokoro voice contains nonfinite values.');
+      }
     }
     return vector;
   });
@@ -123,6 +149,9 @@ _NpyHeader _parseNpyHeader(Uint8List bytes) {
   };
   final headerOffset = major == 1 ? 10 : 12;
   final dataOffset = headerOffset + headerLength;
+  if (dataOffset > bytes.length) {
+    throw const FormatException('Truncated NumPy header.');
+  }
 
   final headerText = ascii
       .decode(bytes.sublist(headerOffset, dataOffset))

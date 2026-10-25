@@ -13,6 +13,7 @@ import 'package:read_aloud/src/models/spoken_chunk_record.dart';
 import 'package:read_aloud/src/models/spoken_selection.dart';
 import 'package:read_aloud/src/models/voice_preview_state.dart';
 import 'package:read_aloud/src/models/voice_profile.dart';
+import 'package:read_aloud/src/models/prepared_voice_binding.dart';
 import 'package:read_aloud/src/services/document_access_service.dart';
 import 'package:read_aloud/src/services/document_import_service.dart';
 import 'package:read_aloud/src/services/playback_instrumentation_service.dart';
@@ -30,6 +31,34 @@ void main() {
   });
 
   group('ReaderController playback', () {
+    for (final fails in [false, true]) {
+      test(
+        'document speech readiness waits for resource ${fails ? 'failure' : 'success'}',
+        () async {
+          final engine = _ResourceBarrierEngine();
+          final controller = ReaderController(ttsEngine: engine);
+          addTearDown(controller.dispose);
+          await controller.initialize();
+          final loading = controller.loadDocument(ReaderDocument.sample());
+          await engine.started.future;
+          expect(controller.isDisplayReady, isTrue);
+          expect(controller.isDocumentPrepared, isFalse);
+          expect(controller.isResourcesReady, isFalse);
+          if (fails) {
+            engine.barrier.completeError(StateError('corrupted voice asset'));
+          } else {
+            engine.ready = true;
+            engine.barrier.complete(const []);
+          }
+          await loading;
+          expect(controller.isDocumentPrepared, !fails);
+          expect(controller.isResourcesReady, !fails);
+          if (fails) {
+            expect(controller.statusMessage, contains('corrupted voice asset'));
+          }
+        },
+      );
+    }
     for (final mode in ['cancel', 'invalid', 'error', 'superseded']) {
       test(
         'Live Feed picker $mode owns loading cleanup after replacing an import',
@@ -2149,4 +2178,33 @@ class _ControlledPicker extends FilePicker {
     bool lockParentWindow = false,
     bool readSequential = false,
   }) => result.future;
+}
+
+class _ResourceBarrierEngine extends _FakeTtsEngine
+    implements ResourcePreparationCapable {
+  final started = Completer<void>();
+  final barrier = Completer<List<PreparedVoiceBinding>>();
+  bool ready = false;
+  @override
+  bool get resourcesReady => ready;
+  @override
+  Future<List<PreparedVoiceBinding>> prepareDocumentResources({
+    required String documentId,
+    required int revision,
+    required Set<String> voiceIds,
+    required String pronunciationProfileId,
+  }) {
+    if (!started.isCompleted) started.complete();
+    return barrier.future;
+  }
+
+  @override
+  Future<void> releaseDocumentResources() async {
+    ready = false;
+  }
+
+  @override
+  Future<void> shutdownResources() async {
+    ready = false;
+  }
 }

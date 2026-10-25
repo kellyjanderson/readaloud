@@ -6,6 +6,52 @@ import 'package:read_aloud/src/services/speech_worker_pipeline.dart';
 
 void main() {
   group('SpeechWorkerPipeline', () {
+    for (final closing in [false, true]) {
+      test(
+        'full admission unblocks on ${closing ? 'shutdown' : 'cancel'} without starting stale work',
+        () async {
+          final processor = _ControlledSpeechWorkerChunkProcessor(
+            failAfterRelease: false,
+          );
+          final pipeline = SpeechWorkerPipeline(
+            processor: processor,
+            maxPending: 1,
+          );
+          await pipeline.prepareChunk(_request('old', 'held'));
+          await processor.started.future;
+          await pipeline.prepareChunk(_request('old', 'queued'));
+          var admitted = false;
+          final admission = pipeline
+              .preparePlan('old', [
+                _request('old', 'blocked'),
+                _request('old', 'never'),
+              ])
+              .then((_) => admitted = true);
+          await Future<void>.delayed(Duration.zero);
+          expect(admitted, isFalse);
+          expect(pipeline.pendingCount, 1);
+          var shut = false;
+          final terminal = closing
+              ? pipeline.shutdown().then((_) => shut = true)
+              : pipeline.cancelGeneration('old');
+          await admission.timeout(const Duration(seconds: 2));
+          expect(pipeline.pendingCount, 0);
+          expect(processor.processedChunkIds, ['held']);
+          if (closing) {
+            expect(
+              shut,
+              isFalse,
+              reason: 'shutdown must await active native ownership',
+            );
+          }
+          processor.release();
+          await terminal;
+          await pipeline.shutdown();
+          await pipeline.shutdown();
+          expect(processor.processedChunkIds, ['held']);
+        },
+      );
+    }
     test('emits queued and worker stage events for a prepared chunk', () async {
       final processor = _FakeSpeechWorkerChunkProcessor();
       final pipeline = SpeechWorkerPipeline(processor: processor);
@@ -15,14 +61,11 @@ void main() {
       await pipeline.prepareChunk(_request('generation-a', 'chunk-a'));
       await Future<void>.delayed(const Duration(milliseconds: 20));
 
-      expect(
-        events.map((event) => event.type),
-        <SpeechWorkerEventType>[
-          SpeechWorkerEventType.queued,
-          SpeechWorkerEventType.phonemizing,
-          SpeechWorkerEventType.completed,
-        ],
-      );
+      expect(events.map((event) => event.type), <SpeechWorkerEventType>[
+        SpeechWorkerEventType.queued,
+        SpeechWorkerEventType.phonemizing,
+        SpeechWorkerEventType.completed,
+      ]);
       expect(processor.processedChunkIds, <String>['chunk-a']);
 
       await subscription.cancel();
@@ -47,10 +90,12 @@ void main() {
       blocker.complete();
       await Future<void>.delayed(const Duration(milliseconds: 40));
 
-      expect(
-        processor.processedChunkIds,
-        <String>['warmup', 'first', 'late-1', 'late-2'],
-      );
+      expect(processor.processedChunkIds, <String>[
+        'warmup',
+        'first',
+        'late-1',
+        'late-2',
+      ]);
 
       await pipeline.shutdown();
     });
@@ -229,9 +274,8 @@ SpeechWorkerChunkRequest _request(String generationId, String chunkId) {
 }
 
 class _FakeSpeechWorkerChunkProcessor implements SpeechWorkerChunkProcessor {
-  _FakeSpeechWorkerChunkProcessor({
-    Map<String, Completer<void>>? blockers,
-  }) : _blockers = blockers ?? <String, Completer<void>>{};
+  _FakeSpeechWorkerChunkProcessor({Map<String, Completer<void>>? blockers})
+    : _blockers = blockers ?? <String, Completer<void>>{};
 
   final Map<String, Completer<void>> _blockers;
   final List<String> processedChunkIds = <String>[];
