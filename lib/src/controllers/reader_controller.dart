@@ -106,6 +106,7 @@ class ReaderController extends ChangeNotifier {
   int? _activeAssignmentRevision;
   int? _activePlaybackIntent;
   int? _acknowledgedPlaybackIntent;
+  TtsPlaybackResumeAnchor? _pausedVoiceReplayAnchor;
   VoiceAssignmentState get voiceAssignmentState => _voiceAssignments.state;
 
   Future<void> applyPendingVoiceAssignments() async {
@@ -158,10 +159,12 @@ class ReaderController extends ChangeNotifier {
       .whenComplete(() => _startupStop = null);
 
   bool get _isInitialVoiceBuffering =>
-      _applyingVoiceAssignments ||
-      (!_isPlaying && _playbackStartDriver != null) ||
-      (!_isPlaying &&
-          _playbackState == ReaderPlaybackPrimaryState.bufferingFirstChunk);
+      _resumeAfterPreparation &&
+      (_applyingVoiceAssignments ||
+          (_acknowledgedPlaybackIntent != _playbackIntent &&
+              (_playbackStartDriver != null ||
+                  _playbackState ==
+                      ReaderPlaybackPrimaryState.bufferingFirstChunk)));
 
   void _captureRequestedVoiceChoices({bool initialBuffering = false}) {
     final voiceId = _selectedVoiceId;
@@ -1048,6 +1051,15 @@ class ReaderController extends ChangeNotifier {
   Future<void> startPlayback() async {
     if (_disposed || !isDocumentPrepared) return;
     _resumeAfterPreparation = true;
+    final anchor = _pausedVoiceReplayAnchor;
+    if (voiceAssignmentState.hasPending &&
+        anchor != null &&
+        anchor.documentId == _document.displayDocument.documentId) {
+      _assignmentReplayWord ??= anchor.startWordIndex;
+      _currentWordIndex = _assignmentReplayWord!;
+      _playbackEndedAtDocumentEnd = false;
+      _explicitVoiceRebuffer = true;
+    }
     if (voiceAssignmentState.requestedDefaultVoiceId == null) {
       _captureRequestedVoiceChoices(initialBuffering: true);
     }
@@ -1216,6 +1228,15 @@ class ReaderController extends ChangeNotifier {
   }
 
   Future<void> pausePlayback() async {
+    final engine = _ttsEngine;
+    if (engine is VoiceAssignmentPlaybackCapable) {
+      final anchor = (engine as VoiceAssignmentPlaybackCapable)
+          .currentPlaybackResumeAnchor;
+      if (anchor != null &&
+          anchor.documentId == _document.displayDocument.documentId) {
+        _pausedVoiceReplayAnchor = anchor;
+      }
+    }
     ++_playbackIntent;
     _playbackStartPending = false;
     _resumeAfterPreparation = false;
@@ -1830,6 +1851,7 @@ class ReaderController extends ChangeNotifier {
     _finalizeActiveSpokenChunk();
     _document = document;
     _voiceAssignments.resetDocument();
+    _pausedVoiceReplayAnchor = null;
     _assignmentReplayWord = null;
     _explicitVoiceRebuffer = false;
     _preparedDocumentRevision = revision;

@@ -181,6 +181,102 @@ void main() {
   });
 
   test(
+    'paused pending Play uses retained source anchor; no-edit resume keeps saved word',
+    () async {
+      final engine = _AssignmentEngine();
+      final controller = await reader(engine);
+      await controller.startPlayback();
+      engine.acknowledge(engine.requests.last);
+      engine.anchor = TtsPlaybackResumeAnchor(
+        documentId: engine.requests.last.documentId!,
+        chunkId: 'current-source',
+        startWordIndex: 4,
+      );
+      engine.progress?.call(
+        TtsProgressUpdate(
+          startOffset: controller.document.charOffsetForWord(6),
+          endOffset: controller.document.charOffsetForWord(7),
+          word: 'flow',
+          documentId: engine.requests.last.documentId,
+        ),
+      );
+      await controller.pausePlayback();
+      final savedWord = controller.currentWordIndex;
+      expect(savedWord, 7);
+      await controller.startPlayback();
+      expect(
+        controller.currentWordIndex,
+        savedWord,
+        reason: 'ordinary resume is unchanged',
+      );
+      engine.acknowledge(engine.requests.last);
+      await controller.pausePlayback();
+      await controller.selectVoiceById('af_heart');
+      expect(controller.voiceAssignmentState.isInitialBuffering, isFalse);
+      await controller.startPlayback();
+      expect(controller.currentWordIndex, 4);
+      expect(engine.requests.last.chunkPlan!.chunks.first.startWordIndex, 4);
+    },
+  );
+
+  test('an acknowledged underrun keeps assignment edits deferred', () async {
+    final engine = _AssignmentEngine();
+    final controller = await reader(engine);
+    await controller.startPlayback();
+    engine.acknowledge(engine.requests.last);
+    engine.activity?.call(
+      const TtsPlaybackActivity(phase: TtsPlaybackPhase.buffering),
+    );
+    final stops = engine.stops;
+    await controller.selectVoiceById('af_heart');
+    expect(engine.stops, stops);
+    expect(engine.requests, hasLength(1));
+    expect(controller.voiceAssignmentState.isInitialBuffering, isFalse);
+    expect(controller.voiceAssignmentState.phase, VoiceAssignmentPhase.pending);
+  });
+
+  test(
+    'current pre-ack failure retains historical effective choices and retry rejects old attempt ack',
+    () async {
+      final engine = _AssignmentEngine();
+      final controller = await reader(engine);
+      await controller.startPlayback();
+      engine.acknowledge(engine.requests.last);
+      engine.anchor = TtsPlaybackResumeAnchor(
+        documentId: engine.requests.last.documentId!,
+        chunkId: 'audible-source',
+        startWordIndex: 4,
+      );
+      await controller.selectVoiceById('af_heart');
+      await controller.applyPendingVoiceAssignments();
+      final failed = engine.requests.last;
+      engine.activity?.call(const TtsPlaybackActivity.idle());
+      engine.error?.call('current B preparation failed');
+      expect(
+        controller.voiceAssignmentState.phase,
+        VoiceAssignmentPhase.failed,
+      );
+      expect(
+        controller.voiceAssignmentState.effectiveDefaultVoiceId,
+        'af_bella',
+      );
+      expect(controller.voiceAssignmentState.hasPending, isTrue);
+      engine.anchor = null;
+      await controller.retryVoiceAssignments();
+      final retry = engine.requests.last;
+      expect(retry.chunkPlan!.chunks.first.startWordIndex, 4);
+      engine.acknowledge(failed);
+      expect(controller.voiceAssignmentState.hasPending, isTrue);
+      engine.acknowledge(retry);
+      expect(
+        controller.voiceAssignmentState.effectiveDefaultVoiceId,
+        'af_heart',
+      );
+      expect(controller.voiceAssignmentState.hasPending, isFalse);
+    },
+  );
+
+  test(
     'preference owner snapshots maps and coalesces pending writes to latest choices',
     () async {
       final engine = _AssignmentEngine();
@@ -290,6 +386,8 @@ class _AssignmentEngine extends Fake
   bool ready = false;
   void Function()? start;
   void Function(TtsPlaybackActivity)? activity;
+  void Function(TtsProgressUpdate)? progress;
+  void Function(String)? error;
   @override
   Future<void> initialize() async {}
   @override
@@ -405,9 +503,9 @@ class _AssignmentEngine extends Fake
   @override
   set onComplete(void Function()? value) {}
   @override
-  set onError(void Function(String)? value) {}
+  set onError(void Function(String)? value) => error = value;
   @override
-  set onProgress(void Function(TtsProgressUpdate)? value) {}
+  set onProgress(void Function(TtsProgressUpdate)? value) => progress = value;
   @override
   set onDebugTrace(void Function(TtsDebugTraceSnapshot)? value) {}
 }

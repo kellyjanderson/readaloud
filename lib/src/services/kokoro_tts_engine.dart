@@ -47,7 +47,7 @@ class KokoroTtsEngine
        _artifactPins = artifactPins ?? AudioArtifactPins.shared;
   final Future<void> Function()? beforeSynthesis;
   final AudioArtifactPins _artifactPins;
-  final Map<String, AudioArtifactPin> _playbackPins = {};
+  late final _playbackPins = KokoroPlaybackArtifactPins(_artifactPins);
   String _synthesisIdentity = 'uninitialized';
   int get debugPlaybackPinCount => _playbackPins.length;
   @override
@@ -1109,9 +1109,10 @@ class KokoroTtsEngine
             );
           },
           clearStale: () async {
+            final pins = _playbackPins.snapshot(generation: activeGenerationId);
             await _player.stop();
             await _player.clearAudioSources();
-            _releaseAllPlaybackPins();
+            _playbackPins.releaseSnapshot(pins);
           },
         );
         if (!ready) return;
@@ -1455,7 +1456,7 @@ class KokoroTtsEngine
           final pruned = _activeChunks.take(count).toList(growable: false);
           await _player.removeAudioSourceRange(0, count);
           for (final chunk in pruned) {
-            _releasePlaybackPin(chunk.chunkId);
+            _releasePlaybackPin(chunk);
           }
           _activeChunks = _activeChunks.sublist(count);
           _currentQueueBaseIndex = 0;
@@ -1497,6 +1498,7 @@ class KokoroTtsEngine
     } catch (cleanupError) {
       failures.add(cleanupError);
     }
+    final pins = _playbackPins.snapshot();
     _clearPlaybackStateFields();
     // This handler already owns the playlist-mutation slot. It must not call
     // reset(), which joins that same slot and would wait for itself.
@@ -1507,7 +1509,7 @@ class KokoroTtsEngine
     }
     try {
       await _player.clearAudioSources();
-      _releaseAllPlaybackPins();
+      _playbackPins.releaseSnapshot(pins);
     } catch (cleanupError) {
       failures.add(cleanupError);
     }
@@ -1645,11 +1647,8 @@ class KokoroTtsEngine
   }
 
   Future<void> _handleRuntimeChunkReady(SpeechRuntimeEvent event) async {
-    if (event.generationId != null &&
-        _activeGenerationId != null &&
-        event.generationId != _activeGenerationId) {
-      return;
-    }
+    final generation = event.generationId;
+    if (generation == null || generation != _activeGenerationId) return;
     final chunkId = event.chunkId;
     if (chunkId == null) {
       return;
@@ -1659,10 +1658,7 @@ class KokoroTtsEngine
     if (chunk == null || event.audioPath == null || event.duration == null) {
       return;
     }
-    _playbackPins.putIfAbsent(
-      chunkId,
-      () => _artifactPins.pin(event.audioPath!),
-    );
+    _playbackPins.pin(generation, chunkId, event.audioPath!);
     _recordMetric(
       'audioArtifactPinned',
       chunkId: chunkId,
@@ -1674,6 +1670,7 @@ class KokoroTtsEngine
 
     final playbackChunk = _PlaybackChunk(
       chunkId: chunk.chunkId,
+      generationId: generation,
       boundaryClass: chunk.boundaryClass,
       documentId: chunk.documentId,
       segmentIds: chunk.segmentIds,
@@ -1889,7 +1886,7 @@ class KokoroTtsEngine
       (chunk) => chunk.startWordIndex >= failedChunk.startWordIndex,
     );
     for (final chunk in discardedStaged) {
-      _releasePlaybackPin(chunk.chunkId);
+      _releasePlaybackPin(chunk);
     }
     await _discardFutureBufferedChunksFromStartWordIndex(
       failedChunk.startWordIndex,
@@ -2440,10 +2437,11 @@ class KokoroTtsEngine
   Future<void> _resetPlaybackStateInternal() async {
     _activePlaybackToken = null;
     await _audioQueueMutations.drained;
+    final pins = _playbackPins.snapshot();
     _clearPlaybackStateFields();
     await _player.stop();
     await _player.clearAudioSources();
-    _releaseAllPlaybackPins();
+    _playbackPins.releaseSnapshot(pins);
     _emitActivity(const TtsPlaybackActivity.idle());
   }
 
@@ -2469,14 +2467,8 @@ class KokoroTtsEngine
     _stagedReadyChunks.clear();
   }
 
-  void _releasePlaybackPin(String chunkId) =>
-      _playbackPins.remove(chunkId)?.release();
-  void _releaseAllPlaybackPins() {
-    for (final pin in _playbackPins.values) {
-      pin.release();
-    }
-    _playbackPins.clear();
-  }
+  void _releasePlaybackPin(_PlaybackChunk chunk) =>
+      _playbackPins.release(chunk.generationId, chunk.chunkId);
 
   Future<List<int>> _tokenizeSpeakText(
     String text,
@@ -2621,7 +2613,7 @@ class KokoroTtsEngine
   }) async {
     await _mutateAudioQueue(() async {
       if (generationId != _activeGenerationId) {
-        _releasePlaybackPin(playbackChunk.chunkId);
+        _releasePlaybackPin(playbackChunk);
         return;
       }
       if (_activePlaybackToken == null) {
@@ -2722,7 +2714,7 @@ class KokoroTtsEngine
         );
       }
       for (final chunk in prunedChunks) {
-        _releasePlaybackPin(chunk.chunkId);
+        _releasePlaybackPin(chunk);
       }
 
       _recordMetric(
@@ -3127,6 +3119,7 @@ List<ExportedPronunciationArtifact> _exportPronunciationArtifacts(
 class _PlaybackChunk {
   const _PlaybackChunk({
     required this.chunkId,
+    required this.generationId,
     required this.boundaryClass,
     required this.documentId,
     required this.segmentIds,
@@ -3147,6 +3140,7 @@ class _PlaybackChunk {
   });
 
   final String chunkId;
+  final String generationId;
   final BreakClass boundaryClass;
   final String documentId;
   final List<String> segmentIds;

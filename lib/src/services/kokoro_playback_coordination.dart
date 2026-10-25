@@ -1,4 +1,33 @@
 import 'tts_engine.dart';
+import 'audio_artifact_store.dart';
+
+/// Playback ownership is generation + chunk, even when immutable content paths
+/// are reused. Late releases cannot consume a newer generation's pin.
+class KokoroPlaybackArtifactPins {
+  KokoroPlaybackArtifactPins(this.registry);
+  final AudioArtifactPins registry;
+  final Map<String, AudioArtifactPin> _owned = {};
+  int get length => _owned.length;
+  String _key(String generation, String chunk) => '$generation\u0000$chunk';
+  void pin(String generation, String chunk, String path) =>
+      _owned.putIfAbsent(_key(generation, chunk), () => registry.pin(path));
+  void release(String generation, String chunk) =>
+      _owned.remove(_key(generation, chunk))?.release();
+  Map<String, AudioArtifactPin> snapshot({String? generation}) =>
+      Map.unmodifiable({
+        for (final entry in _owned.entries)
+          if (generation == null || entry.key.startsWith('$generation\u0000'))
+            entry.key: entry.value,
+      });
+  void releaseSnapshot(Map<String, AudioArtifactPin> snapshot) {
+    for (final entry in snapshot.entries) {
+      if (identical(_owned[entry.key], entry.value)) {
+        _owned.remove(entry.key);
+        entry.value.release();
+      }
+    }
+  }
+}
 
 /// Runs inside the engine's serialized native mutation slot. Even a platform
 /// install that finishes or fails after supersession must settle its cleanup

@@ -93,8 +93,11 @@ void main() {
             await controller.setMultiVoiceEnabled(
               !controller.isMultiVoiceEnabled,
             );
-            expect(controller.isResourcesReady, isFalse);
-            expect(controller.resourceBindings, isEmpty);
+            // Pending intent preserves the prepared effective resource context
+            // until explicit Apply or the next Play validates replacement.
+            expect(controller.isResourcesReady, isTrue);
+            expect(controller.resourceBindings, isNotEmpty);
+            expect(controller.voiceAssignmentState.hasPending, isTrue);
           }
           if (fails) {
             expect(controller.statusMessage, contains('corrupted voice asset'));
@@ -294,7 +297,7 @@ void main() {
     );
 
     test(
-      'P0 baseline: startup A/B/C selection still accepts the original A start (P4 gap)',
+      'startup A/B/C rejects the original A start and dispatches only latest C',
       () async {
         final engine = _BarrierStartTtsEngine();
         final controller = ReaderController(ttsEngine: engine);
@@ -321,12 +324,20 @@ void main() {
         expect(engine.speakCallCount, 1);
         expect(engine.lastSpeakRequest, same(originalRequest));
 
-        // Characterization, not acceptance: selection changes the UI but does
-        // not replace the pending A request or reject its eventual start.
         engine.release();
         await startup.timeout(const Duration(seconds: 5));
         expect(controller.playbackState, ReaderPlaybackPrimaryState.playing);
         expect(originalRequest.chunkPlan!.chunks.first.voiceId, 'af_heart');
+        expect(originalRequest.isCurrent!(), isFalse);
+        expect(engine.speakCallCount, 2);
+        expect(
+          engine.lastSpeakRequest!.chunkPlan!.chunks.first.voiceId,
+          'am_michael',
+        );
+        expect(
+          controller.voiceAssignmentState.effectiveDefaultVoiceId,
+          'am_michael',
+        );
       },
     );
 
@@ -2028,9 +2039,19 @@ class _BarrierStartTtsEngine extends _FakeTtsEngine {
   @override
   Future<void> speak(TtsSpeakRequest request) async {
     await super.speak(request);
-    started.complete();
+    if (!started.isCompleted) started.complete();
     await _released.future;
-    emitStart();
+    if (request.isCurrent?.call() != false) {
+      request.onPlaybackReady?.call(
+        TtsPlaybackAcknowledgment(
+          documentId: request.documentId!,
+          assignmentRevision: request.assignmentRevision,
+          generationId: 'barrier-latest',
+          bindingFingerprints: const {},
+        ),
+      );
+      emitStart();
+    }
   }
 }
 
