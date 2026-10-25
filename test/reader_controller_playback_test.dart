@@ -30,6 +30,43 @@ void main() {
 
   group('ReaderController playback', () {
     test(
+      'P0 baseline: startup A/B/C selection still accepts the original A start (P4 gap)',
+      () async {
+        final engine = _BarrierStartTtsEngine();
+        final controller = ReaderController(ttsEngine: engine);
+        addTearDown(() {
+          engine.release();
+          controller.dispose();
+        });
+        await controller.initialize();
+        await controller.importPastedText('Alpha beta. Gamma delta.');
+        await controller.selectVoiceById('af_heart');
+
+        final startup = controller.startPlayback();
+        await engine.started.future.timeout(const Duration(seconds: 5));
+        expect(
+          controller.playbackState,
+          ReaderPlaybackPrimaryState.bufferingFirstChunk,
+        );
+        final originalRequest = engine.lastSpeakRequest!;
+        expect(originalRequest.chunkPlan!.chunks.first.voiceId, 'af_heart');
+
+        await controller.selectVoiceById('af_bella');
+        await controller.selectVoiceById('am_michael');
+        expect(controller.selectedVoice!.id, 'am_michael');
+        expect(engine.speakCallCount, 1);
+        expect(engine.lastSpeakRequest, same(originalRequest));
+
+        // Characterization, not acceptance: selection changes the UI but does
+        // not replace the pending A request or reject its eventual start.
+        engine.release();
+        await startup.timeout(const Duration(seconds: 5));
+        expect(controller.playbackState, ReaderPlaybackPrimaryState.playing);
+        expect(originalRequest.chunkPlan!.chunks.first.voiceId, 'af_heart');
+      },
+    );
+
+    test(
       'tracks primary playback state through buffering, playing, and completion',
       () async {
         final engine = _FakeTtsEngine();
@@ -1703,6 +1740,27 @@ class _FakeTtsEngine implements TtsEngine {
 
   void emitDebugTrace(TtsDebugTraceSnapshot trace) {
     _onDebugTrace?.call(trace);
+  }
+}
+
+// Explicit startup barrier: no wall-clock delay decides when audio starts.
+// This fake proves controller acceptance only; it does not render audio.
+class _BarrierStartTtsEngine extends _FakeTtsEngine {
+  _BarrierStartTtsEngine() : super(voices: _multiVoiceTestVoices);
+
+  final started = Completer<void>();
+  final _released = Completer<void>();
+
+  void release() {
+    if (!_released.isCompleted) _released.complete();
+  }
+
+  @override
+  Future<void> speak(TtsSpeakRequest request) async {
+    await super.speak(request);
+    started.complete();
+    await _released.future;
+    emitStart();
   }
 }
 
