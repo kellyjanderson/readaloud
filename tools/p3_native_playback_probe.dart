@@ -85,6 +85,8 @@ Future<void> main(List<String> arguments) async {
       'phase': phase,
       'tickDelayMs': now - lastTick,
       'playing': player.playing,
+      'playerSpeed': player.speed,
+      'synthesisRate': controller.currentSpeed,
       'processing': player.processingState.name,
       'index': player.currentIndex,
       'positionMs': player.position.inMilliseconds,
@@ -123,9 +125,15 @@ Future<void> main(List<String> arguments) async {
       await controller.setVoiceSpeed(speed);
       record('playRequested', {'phase': phase});
       await controller.startPlayback();
+      final startupDeadline = DateTime.now().add(const Duration(seconds: 30));
+      while (!player.playing && DateTime.now().isBefore(startupDeadline)) {
+        await Future<void>.delayed(const Duration(milliseconds: 20));
+      }
       record('playStarted', {
         'phase': phase,
         'playing': player.playing,
+        'playerSpeed': player.speed,
+        'synthesisRate': controller.currentSpeed,
         'sequenceCount': player.sequence.length,
         'status': controller.statusMessage,
       });
@@ -157,6 +165,7 @@ Future<void> main(List<String> arguments) async {
     record('success', {'audioFiles': files.toList()});
   } catch (error, stack) {
     record('failure', {'error': '$error', 'stack': '$stack'});
+    await engine.stop();
     await engine.shutdownResources();
   } finally {
     timer.cancel();
