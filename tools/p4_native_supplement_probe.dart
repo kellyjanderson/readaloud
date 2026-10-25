@@ -20,9 +20,13 @@ class _AssemblyBarrier extends ExportedAudioAssembler {
   _AssemblyBarrier(this.record);
   final void Function(String, Map<String, Object?>) record;
   bool _armed = false;
+  bool _released = false;
   set arm(bool value) {
     _armed = value;
-    if (value) cancelled = false;
+    if (value) {
+      cancelled = false;
+      _released = false;
+    }
   }
 
   bool held = false;
@@ -42,14 +46,19 @@ class _AssemblyBarrier extends ExportedAudioAssembler {
         'chunks': request.chunks.length,
         'diagnosticOnly': true,
       });
-      await _release!.future.timeout(const Duration(minutes: 5));
-      held = false;
+      if (_released) _release!.complete();
+      try {
+        await _release!.future.timeout(const Duration(minutes: 5));
+      } finally {
+        held = false;
+      }
       if (cancelled) throw StateError('Controlled pre-assembly cancellation');
     }
     return super.assemble(request);
   }
 
   void release() {
+    _released = true;
     final gate = _release;
     if (gate != null && !gate.isCompleted) gate.complete();
   }
