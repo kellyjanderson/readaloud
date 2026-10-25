@@ -6,7 +6,7 @@ A local-first Flutter reader for long-form text-to-speech using Kokoro. Import d
 
 macOS is the current functional target. Other Flutter platform folders are retained but are not qualified by the current project review. This repository is pre-release; older release labels and the package version are being reconciled before the next release.
 
-Speaker attribution is heuristic. Document preparation and native inference resource lifetime have known limitations documented in [current architecture](project/architecture/README.md). Planned improvements live in [GitHub design and slice issues](docs/project-management.md).
+Speaker attribution is heuristic. Document preparation, worker planning, resident synthesis resources and requested/effective voice choices are described in [current architecture](project/architecture/README.md), with explicit evidence limits. P4 native assignment and final acceptance remain tracked in [GitHub design and slice issues](docs/project-management.md).
 
 ## Features
 
@@ -31,7 +31,7 @@ Before running, place a compatible model at `assets/kokoro/model/kokoro-v1.0.onn
 flutter run -d macos
 ```
 
-See [development and verification](docs/development.md) for checks and build instructions. The ignored local SDK/build caches are not clean-clone prerequisites.
+See [reading and voice choices](docs/reading-and-voice-choices.md) for Current/Pending behavior and [development and verification](docs/development.md) for checks and build instructions. The ignored local SDK/build caches are not clean-clone prerequisites.
 
 ## Repository guide
 

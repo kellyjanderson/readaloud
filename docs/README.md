@@ -1,5 +1,6 @@
 # Human documentation
 
+- [Reading and voice choices](reading-and-voice-choices.md)
 - [Development and verification](development.md)
 - [Maintenance and GitHub workflow](maintenance.md)
 

@@ -1,7 +1,7 @@
 # Document and Speech Pipeline
 
-Reconciled: October 24, 2026
-Status: P1 source architecture; native responsiveness acceptance tracked in issue #50
+Reconciled: October 25, 2026; P4 source 16310e9
+Status: Implemented P1 preparation/P3 planning; P4/FINAL integrated acceptance pending
 
 ## Implemented structure and limitations
 
@@ -13,7 +13,7 @@ Requests carry owner, revision, operation kind and optional watch session. Succe
 
 `ReaderDocument.preparedSnapshot` retains already computed HTML/text/word spans and freezes nested collections on the worker. The typed graph transfers directly on worker exit: there is no UI-side JSON decode or repeated analysis. `.radoc` serialization includes PDF bytes as base64, remains an inspectable export, and has no reload decoder/cache. `writeToFile` performs JSON encoding in an isolate.
 
-Residual limits are explicit: the controller constructs the small fixed bundled sample synchronously at startup; later sample requests use the worker. `loadDocument` accepts an already constructed complete graph. Headless export/probe runners still call the importer directly and do not host an interactive reader. An injected importer is a controllable test/legacy adapter on the caller isolate, not production-worker proof. Voice realization and cast-aware chunk planning still run in controller publication/playback paths; P3 owns moving them. Framework HTML layout remains on Flutter. Preparation tests and an event-loop heartbeat do not establish running-app responsiveness, native cleanup, or audio continuity.
+Residual limits are explicit: the controller constructs the small fixed bundled sample synchronously at startup; later sample requests use the worker. `loadDocument` accepts an already constructed complete graph. Headless export/probe runners still call the importer directly and do not host an interactive reader. An injected importer is a controllable test/legacy adapter on the caller isolate, not production-worker proof. Runtime realization and cast-aware chunk planning now run in the resident planning worker, with separate playback/export owners and bounded returned windows. Framework HTML layout remains on Flutter. P1 records bounded running-app preparation/input/publication proof; source tests and event-loop heartbeats do not establish universal responsiveness, native cleanup or audio continuity. Later P4 frame/input checks remain pending.
 
 ## Source and tests
 
@@ -29,7 +29,7 @@ Residual limits are explicit: the controller constructs the small fixed bundled 
 
 The focused preparation tests cover worker artifact equality, nested immutability, PDF handoff, queue bounds, timeout, exit, native drain and caller event-loop progress. Controller tests cover overlapping success/failure, readiness, stale publication after engine stop and cancelled watcher installation. Exact run/native evidence is recorded in [P1](https://github.com/kellyjanderson/readaloud/issues/50); use the pinned native arm64 SDK documented in development guidance.
 
-## Proposed changes
+## Design and remaining acceptance
 
 See [prepared document runtime ACD](https://github.com/kellyjanderson/readaloud/issues/48) and its [implementation plan](https://github.com/kellyjanderson/readaloud/issues/48). Historical design prose is preserved in the [architecture snapshot](../archive/architecture/2026-10-24/document-speech-pipeline.md).
 

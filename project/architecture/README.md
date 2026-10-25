@@ -1,6 +1,6 @@
 # Architecture
 
-Current source structure, ownership and known limitations. Proposed changes belong in [GitHub design issues](../../docs/project-management.md), not in descriptions of implemented behavior. October 24 reconciliation is a source review; native tests and installed-app validation remain pending.
+Current source structure, ownership and known limitations. Proposed changes belong in [GitHub design issues](../../docs/project-management.md), not in descriptions of implemented behavior. Reconciled against P4 source `16310e9` on October 25, 2026. Source implementation, bounded native evidence and final acceptance are separate; this index does not qualify an installed release.
 
 - [System Overview](system-overview.md)
 - [Document and Speech Pipeline](document-speech-pipeline.md)
@@ -18,3 +18,14 @@ Current source structure, ownership and known limitations. Proposed changes belo
 - [Reader Interface and Session State](reader-interface-and-session-state.md)
 
 The [legacy contract index](../specifications/README.md) links retained children directly to their owning architecture. Historical design prose is in [the archive](../archive/README.md).
+
+## Evidence and acceptance limits
+
+- [P0 baseline](https://github.com/kellyjanderson/readaloud/issues/49#issuecomment-6393427541): native arm64 toolchain and separated source/bundle/runtime asset provenance; cached runs do not attest fresh inference.
+- [P1 preparation](https://github.com/kellyjanderson/readaloud/issues/50#issuecomment-6393533201): worker/revision tests and native input during a large preparation, replacement, publication and scrolling on bounded fixtures. Observation times are not frame-time bounds.
+- [P2 resources](https://github.com/kellyjanderson/readaloud/issues/51): resident A/B/A resource/cleanup, failure and normal-app replay evidence. Retained handles, memory, emitted PCM and listening answer different questions.
+- [P3 accepted working-branch integration](https://github.com/kellyjanderson/readaloud/issues/52#issuecomment-6395174262): bounded planning/synthesis and native queue/export matrix. The [copied-audio audit](https://github.com/kellyjanderson/readaloud/issues/52#issuecomment-6395019641) verifies complete emitted PCM concatenation; it does not prove acoustic continuity. Eight seconds is an admission threshold plus one in-flight chunk, not a hard maximum.
+- [P4 assignment/cache](https://github.com/kellyjanderson/readaloud/issues/53): current source has requested/effective revisions, explicit replay/rebuffer, immutable cache artifacts and engine pins. Integrated native assignment, stale resident binding, pin drainage, frame/input and comparable audio acceptance remain pending at this reconciliation.
+- [Bounded P4 modal/status smoke](https://github.com/kellyjanderson/readaloud/issues/53#issuecomment-6395513249): real app/control layering and named Close/status dismissal, with an identified status-only probe and API seam. It does not establish final assignment behavior; native Escape remains unproven.
+
+P0–P3 have reached the working integration branch. This P4 source description is not a main merge or feature-completion claim. [FINAL](https://github.com/kellyjanderson/readaloud/issues/54) must reconcile required evidence and delivery before the [parent design](https://github.com/kellyjanderson/readaloud/issues/48) closes. `.radoc` writing remains an inspection export, with no reload decoder/cache.
