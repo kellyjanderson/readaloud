@@ -1,3 +1,5 @@
+import 'dart:convert';
+import 'package:crypto/crypto.dart';
 import 'cast_voice_assignment.dart';
 
 /// Serializable resource identity. Native handles never belong to this record.
@@ -18,8 +20,19 @@ class PreparedVoiceBinding {
   final String pronunciationProfileId;
   final int bindingRevision;
   final String documentId;
-  String get fingerprint =>
-      '$modelDigest:$voiceDigest:$engineVersion:$pronunciationProfileId';
+  String get fingerprint => sha256
+      .convert(
+        utf8.encode(
+          jsonEncode([
+            'prepared-binding-v1',
+            modelDigest,
+            voiceDigest,
+            engineVersion,
+            pronunciationProfileId,
+          ]),
+        ),
+      )
+      .toString();
   Map<String, Object?> toMap() => {
     'voiceId': voiceId,
     'voiceDigest': voiceDigest,

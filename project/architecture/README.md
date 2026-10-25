@@ -11,6 +11,7 @@ Current source structure, ownership and known limitations. Proposed changes belo
 - [English Pronunciation Profiles and Rule Modularity](english-pronunciation-profiles-and-rule-modularity.md)
 - [Engine Pronunciation Expression and Capability Adaptation](engine-pronunciation-expression-and-capability-adaptation.md)
 - [Speech Runtime Messaging Boundary](speech-runtime-messaging-boundary.md)
+- [Audio Artifact Identity and Lifetime](audio-artifact-identity-and-lifetime.md)
 - [Playback Orchestration and Synthesis Boundaries](playback-orchestration-and-synthesis-boundaries.md)
 - [Spoken Text Highlighting and Reading Focus](spoken-text-highlighting-and-reading-focus.md)
 - [Audio Export and Headless Execution](audio-export-and-headless-execution.md)
