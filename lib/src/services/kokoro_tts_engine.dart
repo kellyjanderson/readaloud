@@ -37,7 +37,7 @@ class KokoroTtsEngine
         ResourcePreparationCapable,
         SpeechRateNormalizationCapable {
   KokoroTtsEngine({AudioPlayer? player, this.beforeSynthesis})
-    : _player = player ?? AudioPlayer();
+    : _player = player ?? AudioPlayer(useLazyPreparation: false);
   final Future<void> Function()? beforeSynthesis;
 
   static const String _engineId = 'kokoro';

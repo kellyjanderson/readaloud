@@ -72,7 +72,7 @@ Future<void> main(List<String> arguments) async {
     stdout.writeln('READALOUD_P3 ${jsonEncode(value)}');
   }
 
-  final player = AudioPlayer();
+  final player = AudioPlayer(useLazyPreparation: false);
   var imposedSynthesisDelay = Duration.zero;
   var stressPlaybackStarted = false;
   final engine = KokoroTtsEngine(
