@@ -1,4 +1,6 @@
 import '../services/speech_planning_supervisor.dart';
+import '../services/voice_assignment_coordinator.dart';
+import '../models/voice_assignment_state.dart';
 import 'dart:async';
 import 'dart:developer' as developer;
 import 'dart:io';
@@ -92,6 +94,43 @@ class ReaderController extends ChangeNotifier {
   List<PreparedVoiceBinding> _resourceBindings = const [];
   List<ResolvedPreparedVoiceReference> _resolvedResourceBindings = const [];
   int _resourceBindingIntent = 0;
+  final _voiceAssignments = VoiceAssignmentCoordinator();
+  int? _assignmentReplayWord;
+  bool _applyingVoiceAssignments = false;
+  VoiceAssignmentState get voiceAssignmentState => _voiceAssignments.state;
+
+  Future<void> applyPendingVoiceAssignments() async {
+    if (!voiceAssignmentState.hasPending || _applyingVoiceAssignments) return;
+    final revision = voiceAssignmentState.requestedRevision;
+    final engine = _ttsEngine;
+    final anchor = engine is VoiceAssignmentPlaybackCapable
+        ? (engine as VoiceAssignmentPlaybackCapable).currentPlaybackResumeAnchor
+        : null;
+    if (anchor != null &&
+        anchor.documentId == _document.displayDocument.documentId) {
+      _assignmentReplayWord = anchor.startWordIndex;
+    } else {
+      _assignmentReplayWord ??= _snapWordIndexToSegmentStart(_currentWordIndex);
+    }
+    _applyingVoiceAssignments = true;
+    _voiceAssignments.preparing(revision, initialBuffering: false);
+    notifyListeners();
+    try {
+      await _ttsEngine.stop();
+      if (_disposed || !_voiceAssignments.isCurrent(revision)) return;
+      _isPlaying = false;
+      _currentWordIndex = _assignmentReplayWord!;
+      _invalidateResourceBindings();
+      await startPlayback();
+    } catch (error) {
+      _voiceAssignments.fail(revision, error);
+      notifyListeners();
+    } finally {
+      _applyingVoiceAssignments = false;
+    }
+  }
+
+  Future<void> retryVoiceAssignments() => applyPendingVoiceAssignments();
   List<PreparedVoiceBinding> get resourceBindings =>
       isResourcesReady ? _resourceBindings : const [];
   List<ResolvedPreparedVoiceReference> get resolvedResourceBindings =>
