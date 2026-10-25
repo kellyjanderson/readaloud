@@ -3,6 +3,33 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:read_aloud/src/services/kokoro_playback_coordination.dart';
 
 void main() {
+  test(
+    'tail failure drains cancellation and native reset before reporting',
+    () async {
+      final cancel = Completer<void>();
+      final reset = Completer<void>();
+      final events = <String>[];
+      final terminal = kokoroTerminatePreparationFailure(
+        invalidate: () => events.add('invalidated'),
+        cancel: () {
+          events.add('cancel');
+          return cancel.future;
+        },
+        reset: () {
+          events.add('reset');
+          return reset.future;
+        },
+        report: () => events.add('reported'),
+      );
+      expect(events, ['invalidated', 'cancel']);
+      cancel.complete();
+      await Future<void>.delayed(Duration.zero);
+      expect(events, ['invalidated', 'cancel', 'reset']);
+      reset.complete();
+      await terminal;
+      expect(events, ['invalidated', 'cancel', 'reset', 'reported']);
+    },
+  );
   for (final replacement in [
     'none',
     'document',

@@ -1137,9 +1137,9 @@ class KokoroTtsEngine
       return;
     } catch (error) {
       if (current()) {
-        _remainingPlannedChunkCount = 0;
-        _signalBuffer();
-        _onError?.call('Kokoro could not prepare a later chunk: $error');
+        await _terminatePreparationFailure(
+          'Kokoro could not prepare a later chunk: $error',
+        );
       }
     }
   }
@@ -1211,12 +1211,19 @@ class KokoroTtsEngine
       }
     } catch (error) {
       if (!current()) return;
-      ++_requestToken;
-      await _cancelActiveGeneration();
-      await _resetPlaybackState();
-      _onError?.call('Kokoro could not prepare the remaining text: $error');
+      await _terminatePreparationFailure(
+        'Kokoro could not prepare the remaining text: $error',
+      );
     }
   }
+
+  Future<void> _terminatePreparationFailure(String message) =>
+      kokoroTerminatePreparationFailure(
+        invalidate: () => ++_requestToken,
+        cancel: _cancelActiveGeneration,
+        reset: _resetPlaybackState,
+        report: () => _onError?.call(message),
+      );
 
   @override
   Future<void> pause() async {

@@ -1,5 +1,19 @@
 import 'tts_engine.dart';
 
+/// A preparation producer cannot join its own task drain. Cancel inference and
+/// clear native playback before publishing the terminal failure instead.
+Future<void> kokoroTerminatePreparationFailure({
+  required void Function() invalidate,
+  required Future<void> Function() cancel,
+  required Future<void> Function() reset,
+  required void Function() report,
+}) async {
+  invalidate();
+  await cancel();
+  await reset();
+  report();
+}
+
 /// End-of-document and a new speak request join the same in-flight reset.
 /// A replacement may install sources only after the old stop/clear has drained.
 class KokoroPlaybackResetBarrier {

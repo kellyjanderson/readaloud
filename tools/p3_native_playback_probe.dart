@@ -190,7 +190,7 @@ Future<void> main(List<String> arguments) async {
       final speed = scenario.$1;
       final transportSpeed = scenario.$2;
       imposedSynthesisDelay = transportSpeed == 8
-          ? const Duration(milliseconds: 800)
+          ? const Duration(seconds: 3)
           : Duration.zero;
       await player.setSpeed(1.0);
       phase = 'configure-$speed-player-$transportSpeed';
