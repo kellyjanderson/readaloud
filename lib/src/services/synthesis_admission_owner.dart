@@ -19,9 +19,17 @@ abstract interface class CancellableSynthesisLease
 /// waiting operation per lease. Native handles remain owned by the resident
 /// processor. Export leases cannot close that processor.
 class SynthesisAdmissionOwner {
-  SynthesisAdmissionOwner(this.processor, {required this.exportMayRun});
+  SynthesisAdmissionOwner(
+    this.processor, {
+    required this.exportMayRun,
+    this.beforeProcess,
+  });
   final SpeechWorkerChunkProcessor processor;
   final bool Function() exportMayRun;
+
+  /// Optional controlled-latency/profiling seam. Default runtime work has no
+  /// hook; cancellation is checked again before actual native processing.
+  final Future<void> Function()? beforeProcess;
   final Queue<_Admission> _pending = Queue();
   final Set<_Lease> _leases = {};
   bool _running = false;
@@ -209,9 +217,14 @@ class _Lease implements CancellableSynthesisLease {
     }
 
     final future = owner._submit(
-      () => owner.processor.process(request, (event) {
-        if (current()) emit(event);
-      }),
+      () async {
+        final beforeProcess = owner.beforeProcess;
+        if (beforeProcess != null) await beforeProcess();
+        if (!current()) return;
+        await owner.processor.process(request, (event) {
+          if (current()) emit(event);
+        });
+      },
       export,
       lease: this,
       isCurrent: current,

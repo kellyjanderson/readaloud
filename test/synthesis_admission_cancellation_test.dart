@@ -6,6 +6,37 @@ import 'package:read_aloud/src/services/speech_worker_pipeline.dart';
 import 'package:read_aloud/src/services/synthesis_admission_owner.dart';
 
 void main() {
+  test(
+    'cancellation during imposed pre-process latency never starts native',
+    () async {
+      final processor = _Processor();
+      final started = Completer<void>();
+      final release = Completer<void>();
+      final owner = SynthesisAdmissionOwner(
+        processor,
+        exportMayRun: () => true,
+        beforeProcess: () async {
+          started.complete();
+          await release.future;
+        },
+      );
+      final lease = owner.lease(export: false);
+      final events = <SpeechWorkerEvent>[];
+      final work = lease.process(_request('delayed'), events.add);
+      final cancelled = expectLater(
+        work,
+        throwsA(isA<SynthesisAdmissionCancelled>()),
+      );
+      await started.future;
+      lease.cancelPending();
+      release.complete();
+      await cancelled;
+      expect(processor.order, isEmpty);
+      _expectCancelled(events, 'delayed');
+      await owner.shutdown();
+    },
+  );
+
   test('closed export gate does not hold cancelled queued admission', () async {
     final processor = _Processor();
     var safe = false;

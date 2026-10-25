@@ -21,10 +21,10 @@ void main() {
         release.defer(resourceEpoch: resource, playbackEpoch: playback);
         final completion = () async {
           await exportDrain.future;
-          released = release.takeIfCurrent(
-            resourceEpoch: resource,
-            playbackEpoch: playback,
-            generationActive: active,
+          released = await release.takeIfCurrent(
+            resourceEpoch: () => resource,
+            playbackEpoch: () => playback,
+            generationActive: () => active,
           );
         }();
         if (replacement == 'document') resource++;
@@ -34,10 +34,10 @@ void main() {
         await completion;
         expect(released, replacement == 'none');
         expect(
-          release.takeIfCurrent(
-            resourceEpoch: resource,
-            playbackEpoch: playback,
-            generationActive: false,
+          await release.takeIfCurrent(
+            resourceEpoch: () => resource,
+            playbackEpoch: () => playback,
+            generationActive: () => false,
           ),
           isFalse,
           reason: 'release debt consumed once',
@@ -45,17 +45,59 @@ void main() {
       },
     );
   }
-  test('pause alone never creates end-of-document release debt', () {
+  test('pause alone never creates end-of-document release debt', () async {
     final release = KokoroDeferredResourceRelease();
     expect(
-      release.takeIfCurrent(
-        resourceEpoch: 1,
-        playbackEpoch: 2,
-        generationActive: false,
+      await release.takeIfCurrent(
+        resourceEpoch: () => 1,
+        playbackEpoch: () => 2,
+        generationActive: () => false,
       ),
       isFalse,
     );
   });
+
+  for (final replaced in [false, true]) {
+    test(
+      'export joins old end reset before release (replaced=$replaced)',
+      () async {
+        final reset = Completer<void>();
+        final release = KokoroDeferredResourceRelease();
+        var resource = 1;
+        var playback = 2;
+        var endingGenerationActive = true;
+        var settled = false;
+        release.defer(
+          resourceEpoch: resource,
+          playbackEpoch: playback,
+          resetDrained: reset.future,
+        );
+        final decision = release
+            .takeIfCurrent(
+              resourceEpoch: () => resource,
+              playbackEpoch: () => playback,
+              generationActive: () => endingGenerationActive,
+            )
+            .then((value) {
+              settled = true;
+              return value;
+            });
+        await Future<void>.delayed(Duration.zero);
+        expect(
+          settled,
+          isFalse,
+          reason: 'export completion cannot consume debt before reset',
+        );
+        if (replaced) {
+          resource++;
+          playback++;
+        }
+        endingGenerationActive = false;
+        reset.complete();
+        expect(await decision, !replaced);
+      },
+    );
+  }
 
   test(
     'failed playlist mutation owns cleanup before reset and new sources',

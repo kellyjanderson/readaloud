@@ -36,7 +36,9 @@ class KokoroTtsEngine
         AudioExportCapable,
         ResourcePreparationCapable,
         SpeechRateNormalizationCapable {
-  KokoroTtsEngine({AudioPlayer? player}) : _player = player ?? AudioPlayer();
+  KokoroTtsEngine({AudioPlayer? player, this.beforeSynthesis})
+    : _player = player ?? AudioPlayer();
+  final Future<void> Function()? beforeSynthesis;
 
   static const String _engineId = 'kokoro';
   static const String _engineVersion = '12';
@@ -308,15 +310,21 @@ class KokoroTtsEngine
           unawaited(_resumeAfterUnderrunIfPossible());
           return;
         }
+        final reset = _resetPlaybackState();
         if (_exportingResources) {
           _releaseResourcesAfterExport.defer(
             resourceEpoch: _resourceRequest,
             playbackEpoch: _requestToken,
+            resetDrained: reset,
           );
         } else {
           unawaited(releaseDocumentResources());
         }
-        unawaited(_resetPlaybackState());
+        unawaited(
+          reset.catchError((Object error, StackTrace stack) {
+            _onError?.call('Audio playback cleanup failed: $error');
+          }),
+        );
         _onComplete?.call();
       }
     });
@@ -381,6 +389,7 @@ class KokoroTtsEngine
       _resourceProcessor = await _createWorkerProcessor(rootIsolateToken);
       _admission = SynthesisAdmissionOwner(
         _resourceProcessor!,
+        beforeProcess: beforeSynthesis,
         exportMayRun: () =>
             _exportCancelled ||
             _activeGenerationId == null ||
@@ -494,10 +503,10 @@ class KokoroTtsEngine
       try {
         // A natural document end waits for the export's resource lease. Pause
         // does not set this flag and keeps its prepared context resident.
-        if (_releaseResourcesAfterExport.takeIfCurrent(
-          resourceEpoch: _resourceRequest,
-          playbackEpoch: _requestToken,
-          generationActive: _activeGenerationId != null,
+        if (await _releaseResourcesAfterExport.takeIfCurrent(
+          resourceEpoch: () => _resourceRequest,
+          playbackEpoch: () => _requestToken,
+          generationActive: () => _activeGenerationId != null,
         )) {
           await releaseDocumentResources();
         }

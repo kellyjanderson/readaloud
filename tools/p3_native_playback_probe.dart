@@ -45,7 +45,15 @@ Future<void> main(List<String> arguments) async {
   }
 
   final player = AudioPlayer();
-  final engine = KokoroTtsEngine(player: player);
+  var imposedSynthesisDelay = Duration.zero;
+  final engine = KokoroTtsEngine(
+    player: player,
+    beforeSynthesis: () async {
+      if (imposedSynthesisDelay > Duration.zero) {
+        await Future<void>.delayed(imposedSynthesisDelay);
+      }
+    },
+  );
   final controller = _ProbeController(engine);
   var phase = 'initialize';
   var completion = Completer<void>();
@@ -156,6 +164,9 @@ Future<void> main(List<String> arguments) async {
     for (final scenario in [(1.0, 1.0), (1.5, 1.0), (1.0, 1.5), (1.0, 8.0)]) {
       final speed = scenario.$1;
       final transportSpeed = scenario.$2;
+      imposedSynthesisDelay = transportSpeed == 8
+          ? const Duration(milliseconds: 800)
+          : Duration.zero;
       await player.setSpeed(1.0);
       phase = 'configure-$speed-player-$transportSpeed';
       completion = Completer<void>();
@@ -167,6 +178,7 @@ Future<void> main(List<String> arguments) async {
         'requestedSynthesisRate': speed,
         'effectiveSynthesisRate': controller.currentSpeed,
         'transportSpeed': transportSpeed,
+        'imposedSynthesisDelayMs': imposedSynthesisDelay.inMilliseconds,
       });
       await controller.startPlayback();
       final startupDeadline = DateTime.now().add(const Duration(seconds: 30));

@@ -40,22 +40,36 @@ class KokoroPlaylistMutationQueue {
 /// Natural completion may owe a release to an export lease. That debt belongs
 /// only to its resource/playback epochs, never a replacement or replay context.
 class KokoroDeferredResourceRelease {
-  ({int resource, int playback})? _pending;
-  void defer({required int resourceEpoch, required int playbackEpoch}) {
-    _pending = (resource: resourceEpoch, playback: playbackEpoch);
-  }
-
-  bool takeIfCurrent({
+  ({int resource, int playback, Future<void> resetDrained})? _pending;
+  void defer({
     required int resourceEpoch,
     required int playbackEpoch,
-    required bool generationActive,
+    Future<void>? resetDrained,
   }) {
-    final pending = _pending;
-    _pending = null;
-    return pending != null &&
-        pending.resource == resourceEpoch &&
-        pending.playback == playbackEpoch &&
-        !generationActive;
+    _pending = (
+      resource: resourceEpoch,
+      playback: playbackEpoch,
+      resetDrained: resetDrained ?? Future<void>.value(),
+    );
+  }
+
+  Future<bool> takeIfCurrent({
+    required int Function() resourceEpoch,
+    required int Function() playbackEpoch,
+    required bool Function() generationActive,
+  }) async {
+    while (true) {
+      final pending = _pending;
+      if (pending == null) return false;
+      await pending.resetDrained;
+      // A replay may itself have completed while the previous reset drained.
+      // Join that newer completion rather than consume its debt prematurely.
+      if (pending != _pending) continue;
+      _pending = null;
+      return pending.resource == resourceEpoch() &&
+          pending.playback == playbackEpoch() &&
+          !generationActive();
+    }
   }
 }
 
