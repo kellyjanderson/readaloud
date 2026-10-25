@@ -37,6 +37,28 @@ class KokoroPlaylistMutationQueue {
   Future<void> get drained => _tail;
 }
 
+/// Natural completion may owe a release to an export lease. That debt belongs
+/// only to its resource/playback epochs, never a replacement or replay context.
+class KokoroDeferredResourceRelease {
+  ({int resource, int playback})? _pending;
+  void defer({required int resourceEpoch, required int playbackEpoch}) {
+    _pending = (resource: resourceEpoch, playback: playbackEpoch);
+  }
+
+  bool takeIfCurrent({
+    required int resourceEpoch,
+    required int playbackEpoch,
+    required bool generationActive,
+  }) {
+    final pending = _pending;
+    _pending = null;
+    return pending != null &&
+        pending.resource == resourceEpoch &&
+        pending.playback == playbackEpoch &&
+        !generationActive;
+  }
+}
+
 class KokoroPlaybackQueueSnapshot {
   const KokoroPlaybackQueueSnapshot({
     required this.activeChunkCount,
@@ -90,6 +112,13 @@ const Duration kokoroCriticalBufferedLeadTime = Duration(seconds: 2);
 const Duration kokoroStartupMinimumBufferedLeadTime = Duration(seconds: 4);
 const int kokoroStartupMinimumBufferedChunkCount = 2;
 const int kokoroStartupPreparedChunkWindow = 3;
+
+double kokoroNormalizeSpeechRate(double requested) {
+  if (!requested.isFinite || requested <= 0) {
+    throw ArgumentError.value(requested, 'speechRate');
+  }
+  return requested.clamp(0.7, 1.4).toDouble();
+}
 
 /// PCM duration already incorporates synthesis rate. Only transport speed
 /// changes how long that finalized audio remains playable in wall time.

@@ -214,6 +214,12 @@ abstract interface class AudioExportCapable {
   Future<TtsExportResult> exportAudio(TtsExportRequest request);
 }
 
+/// Engines with a narrower supported range normalize intent before planning.
+/// The resulting effective rate must identify both cache content and inference.
+abstract interface class SpeechRateNormalizationCapable {
+  double normalizeSpeechRate(double requested);
+}
+
 abstract interface class TtsEngine {
   Future<void> initialize();
   Future<List<VoiceProfile>> loadVoices();

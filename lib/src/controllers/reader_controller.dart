@@ -343,7 +343,19 @@ class ReaderController extends ChangeNotifier {
   double get currentSpeed {
     final voiceId = _selectedVoiceId;
     if (voiceId == null) return 1.0;
-    return _voiceSpeeds[voiceId] ?? 1.0;
+    return _effectiveSpeechRate(_voiceSpeeds[voiceId] ?? 1.0);
+  }
+
+  double _effectiveSpeechRate(double requested) {
+    if (!requested.isFinite || requested <= 0) {
+      throw ArgumentError.value(requested, 'speechRate');
+    }
+    final engine = _ttsEngine;
+    return engine is SpeechRateNormalizationCapable
+        ? (engine as SpeechRateNormalizationCapable).normalizeSpeechRate(
+            requested,
+          )
+        : requested;
   }
 
   VoicePreviewState previewStateForVoice(String voiceId) {
@@ -1210,17 +1222,21 @@ class ReaderController extends ChangeNotifier {
   Future<void> setVoiceSpeed(double speed) async {
     final voiceId = _selectedVoiceId;
     if (voiceId == null) return;
+    final effectiveRate = _effectiveSpeechRate(speed);
     final restart = _isPlaying || _playbackActivity.isBuffering;
     if (restart) {
       await _ttsEngine.stop();
       _isPlaying = false;
     }
     _planning.cancel();
-    _voiceSpeeds[voiceId] = speed;
-    await _ttsEngine.setSpeechRate(speed);
-    _wordsPerSecond = _estimateWordsPerSecond(voiceId: voiceId, rate: speed);
+    _voiceSpeeds[voiceId] = effectiveRate;
+    await _ttsEngine.setSpeechRate(effectiveRate);
+    _wordsPerSecond = _estimateWordsPerSecond(
+      voiceId: voiceId,
+      rate: effectiveRate,
+    );
     await _persistPreferences();
-    if (restart && currentSpeed == speed) {
+    if (restart && currentSpeed == effectiveRate) {
       await startPlayback();
       return;
     }

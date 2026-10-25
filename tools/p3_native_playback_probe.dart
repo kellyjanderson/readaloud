@@ -157,11 +157,17 @@ Future<void> main(List<String> arguments) async {
       final speed = scenario.$1;
       final transportSpeed = scenario.$2;
       await player.setSpeed(1.0);
-      phase = 'synthesis-$speed-player-$transportSpeed';
+      phase = 'configure-$speed-player-$transportSpeed';
       completion = Completer<void>();
       phaseFailure = null;
       await controller.setVoiceSpeed(speed);
-      record('playRequested', {'phase': phase});
+      phase = 'synthesis-${controller.currentSpeed}-player-$transportSpeed';
+      record('playRequested', {
+        'phase': phase,
+        'requestedSynthesisRate': speed,
+        'effectiveSynthesisRate': controller.currentSpeed,
+        'transportSpeed': transportSpeed,
+      });
       await controller.startPlayback();
       final startupDeadline = DateTime.now().add(const Duration(seconds: 30));
       while (!player.playing &&
@@ -185,7 +191,7 @@ Future<void> main(List<String> arguments) async {
       await Future<void>.delayed(const Duration(seconds: 2));
       record('exportRequested', {'phase': phase});
       final export = controller.exportAudioToPath(
-        '${output.path}/export-$speed-$transportSpeed.wav',
+        '${output.path}/export-${controller.currentSpeed}-$transportSpeed.wav',
       );
       await completion.future.timeout(const Duration(minutes: 3));
       if (phaseFailure != null) throw StateError(phaseFailure!);

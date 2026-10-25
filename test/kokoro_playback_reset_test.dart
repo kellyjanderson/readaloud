@@ -3,6 +3,60 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:read_aloud/src/services/kokoro_playback_coordination.dart';
 
 void main() {
+  for (final replacement in [
+    'none',
+    'document',
+    'replay',
+    'active generation',
+  ]) {
+    test(
+      'deferred end release respects $replacement while export drains',
+      () async {
+        final exportDrain = Completer<void>();
+        final release = KokoroDeferredResourceRelease();
+        var resource = 1;
+        var playback = 2;
+        var active = false;
+        var released = false;
+        release.defer(resourceEpoch: resource, playbackEpoch: playback);
+        final completion = () async {
+          await exportDrain.future;
+          released = release.takeIfCurrent(
+            resourceEpoch: resource,
+            playbackEpoch: playback,
+            generationActive: active,
+          );
+        }();
+        if (replacement == 'document') resource++;
+        if (replacement == 'replay') playback++;
+        if (replacement == 'active generation') active = true;
+        exportDrain.complete();
+        await completion;
+        expect(released, replacement == 'none');
+        expect(
+          release.takeIfCurrent(
+            resourceEpoch: resource,
+            playbackEpoch: playback,
+            generationActive: false,
+          ),
+          isFalse,
+          reason: 'release debt consumed once',
+        );
+      },
+    );
+  }
+  test('pause alone never creates end-of-document release debt', () {
+    final release = KokoroDeferredResourceRelease();
+    expect(
+      release.takeIfCurrent(
+        resourceEpoch: 1,
+        playbackEpoch: 2,
+        generationActive: false,
+      ),
+      isFalse,
+    );
+  });
+
   test(
     'failed playlist mutation owns cleanup before reset and new sources',
     () async {

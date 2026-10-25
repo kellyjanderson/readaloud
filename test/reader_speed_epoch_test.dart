@@ -4,12 +4,45 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:read_aloud/src/controllers/reader_controller.dart';
 import 'package:read_aloud/src/models/voice_profile.dart';
 import 'package:read_aloud/src/services/tts_engine.dart';
+import 'package:read_aloud/src/services/kokoro_playback_coordination.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 // Public controller contract only; no PCM generation or private planner injection.
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
   setUp(() => SharedPreferences.setMockInitialValues(<String, Object>{}));
+
+  test(
+    'above-supported rate is normalized before plan, synthesis and export',
+    () async {
+      final engine = _RateLimitedEngine();
+      final controller = ReaderController(
+        ttsEngine: engine,
+        enablePlatformIntakeChannels: false,
+      );
+      addTearDown(controller.dispose);
+      await controller.initialize();
+      await controller.startPlayback();
+      await controller.setVoiceSpeed(1.5);
+      expect(controller.currentSpeed, 1.4);
+      expect(engine.ratesAtSpeak.last, 1.4);
+      expect(engine.requests.last.planningContext!.realization.rate, 1.4);
+      final keys = engine.requests.last.chunkPlan!.chunks
+          .map((c) => c.cacheKey)
+          .toList();
+      await controller.setVoiceSpeed(1.4);
+      expect(engine.requests.last.planningContext!.realization.rate, 1.4);
+      expect(
+        engine.requests.last.chunkPlan!.chunks.map((c) => c.cacheKey),
+        keys,
+      );
+      final export = await controller.exportAudioToPath(
+        '/tmp/effective-rate.wav',
+      );
+      expect(export?.rate, 1.4);
+      expect(engine.exports.single.planningContext!.realization.rate, 1.4);
+    },
+  );
 
   test(
     'buffering speed edit restarts with coherent new rate and plan',
@@ -73,6 +106,28 @@ void main() {
       expect(engine.ratesAtSpeak.last, 1.3);
     },
   );
+}
+
+class _RateLimitedEngine extends _RateEngine
+    implements SpeechRateNormalizationCapable, AudioExportCapable {
+  final exports = <TtsExportRequest>[];
+  @override
+  double normalizeSpeechRate(double requested) =>
+      kokoroNormalizeSpeechRate(requested);
+  @override
+  Future<TtsExportResult> exportAudio(TtsExportRequest request) async {
+    exports.add(request);
+    return TtsExportResult(
+      outputPath: request.outputPath,
+      sidecarPath: '${request.outputPath}.json',
+      duration: const Duration(seconds: 1),
+      chunkCount: 1,
+      voiceId: 'af_bella',
+      rate: request.planningContext!.realization.rate,
+      engineId: 'kokoro',
+      engineVersion: 'test',
+    );
+  }
 }
 
 class _StopBarrier {

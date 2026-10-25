@@ -34,7 +34,8 @@ class KokoroTtsEngine
         TtsEngine,
         VoiceLibraryCapable,
         AudioExportCapable,
-        ResourcePreparationCapable {
+        ResourcePreparationCapable,
+        SpeechRateNormalizationCapable {
   KokoroTtsEngine({AudioPlayer? player}) : _player = player ?? AudioPlayer();
 
   static const String _engineId = 'kokoro';
@@ -85,7 +86,7 @@ class KokoroTtsEngine
   Future<void> _resourceTransition = Future<void>.value();
   bool _exportingResources = false;
   bool _exportCancelled = false;
-  bool _releaseResourcesAfterExport = false;
+  final _releaseResourcesAfterExport = KokoroDeferredResourceRelease();
   SpeechRuntime? _exportRuntime;
   String? _exportSession;
   Future<void> _cancelExport() async {
@@ -308,7 +309,10 @@ class KokoroTtsEngine
           return;
         }
         if (_exportingResources) {
-          _releaseResourcesAfterExport = true;
+          _releaseResourcesAfterExport.defer(
+            resourceEpoch: _resourceRequest,
+            playbackEpoch: _requestToken,
+          );
         } else {
           unawaited(releaseDocumentResources());
         }
@@ -435,9 +439,16 @@ class KokoroTtsEngine
   }
 
   @override
+  double normalizeSpeechRate(double requested) =>
+      kokoroNormalizeSpeechRate(requested);
+
+  @override
   Future<void> setSpeechRate(double multiplier) async {
-    if (_activeGenerationId != null && multiplier != _speechRate) await stop();
-    _speechRate = multiplier.clamp(0.7, 1.4).toDouble();
+    final effectiveRate = normalizeSpeechRate(multiplier);
+    if (_activeGenerationId != null && effectiveRate != _speechRate) {
+      await stop();
+    }
+    _speechRate = effectiveRate;
   }
 
   @override
@@ -483,11 +494,14 @@ class KokoroTtsEngine
       try {
         // A natural document end waits for the export's resource lease. Pause
         // does not set this flag and keeps its prepared context resident.
-        if (_releaseResourcesAfterExport && _activeGenerationId == null) {
+        if (_releaseResourcesAfterExport.takeIfCurrent(
+          resourceEpoch: _resourceRequest,
+          playbackEpoch: _requestToken,
+          generationActive: _activeGenerationId != null,
+        )) {
           await releaseDocumentResources();
         }
       } finally {
-        _releaseResourcesAfterExport = false;
         _exportingResources = false;
         _exportDrained!.complete();
         _exportRuntime = null;
@@ -505,6 +519,11 @@ class KokoroTtsEngine
     final planner = SpeechPlanningSupervisor();
     final context = request.planningContext;
     final rate = context?.realization.rate ?? _speechRate;
+    if (normalizeSpeechRate(rate) != rate) {
+      throw StateError(
+        'Export planning must use the effective supported speech rate.',
+      );
+    }
     final voiceId = context?.realization.voiceId ?? _selectedVoiceId;
     final requiredVoices = {
       ...?context?.routes?.castVoiceAssignments.assignments.map(
@@ -739,6 +758,12 @@ class KokoroTtsEngine
     }
 
     try {
+      if (request.planningContext != null &&
+          request.planningContext!.realization.rate != _speechRate) {
+        throw StateError(
+          'Playback plan and effective synthesis rate do not match.',
+        );
+      }
       final requiredVoices = {
         ...?request.planningContext?.routes?.castVoiceAssignments.assignments
             .map((a) => a.effectiveVoiceId),
