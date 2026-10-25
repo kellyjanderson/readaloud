@@ -11,6 +11,33 @@ import 'package:read_aloud/src/models/spoken_chunk_record.dart';
 import 'package:read_aloud/src/services/kokoro_tts_engine.dart';
 import 'package:read_aloud/src/services/playback_instrumentation_service.dart';
 
+/// A previous completed document can notify listeners during rate/resource
+/// configuration. A fresh scenario accepts completion only after its own
+/// request and observed native start; startup failures remain terminal.
+class P3ProbeScenarioGate {
+  final _completion = Completer<void>();
+  bool _requested = false;
+  bool _started = false;
+  String? failure;
+  Future<void> get done => _completion.future;
+  bool get isCompleted => _completion.isCompleted;
+  void request() => _requested = true;
+  void markStarted() => _started = true;
+  String? observe(ReaderPlaybackPrimaryState state, {String? status}) {
+    if (!_requested || _completion.isCompleted) return null;
+    if (state == ReaderPlaybackPrimaryState.failed) {
+      failure = status ?? 'Controller playback failed';
+      _completion.complete();
+      return 'controllerFailure';
+    }
+    if (_started && state == ReaderPlaybackPrimaryState.completed) {
+      _completion.complete();
+      return 'documentCompleted';
+    }
+    return null;
+  }
+}
+
 class _ProbeController extends ReaderController {
   _ProbeController(KokoroTtsEngine engine)
     : super(ttsEngine: engine, enablePlatformIntakeChannels: false);
@@ -56,8 +83,7 @@ Future<void> main(List<String> arguments) async {
   );
   final controller = _ProbeController(engine);
   var phase = 'initialize';
-  var completion = Completer<void>();
-  String? phaseFailure;
+  var scenarioGate = P3ProbeScenarioGate();
   var succeeded = false;
   final files = <String>{};
   final subscriptions = <StreamSubscription<dynamic>>[
@@ -95,19 +121,17 @@ Future<void> main(List<String> arguments) async {
     }),
   ];
   void observeController() {
-    if (controller.playbackState == ReaderPlaybackPrimaryState.failed) {
-      phaseFailure = controller.statusMessage ?? 'Controller playback failed';
-      record('controllerFailure', {'phase': phase, 'error': phaseFailure});
-      if (!completion.isCompleted) completion.complete();
-    } else if (controller.playbackState ==
-            ReaderPlaybackPrimaryState.completed &&
-        !completion.isCompleted) {
-      record('documentCompleted', {
+    final event = scenarioGate.observe(
+      controller.playbackState,
+      status: controller.statusMessage,
+    );
+    if (event != null) {
+      record(event, {
         'phase': phase,
         'wordIndex': controller.currentWordIndex,
         'wordCount': controller.document.wordCount,
+        if (scenarioGate.failure != null) 'error': scenarioGate.failure,
       });
-      completion.complete();
     }
   }
 
@@ -169,9 +193,8 @@ Future<void> main(List<String> arguments) async {
           : Duration.zero;
       await player.setSpeed(1.0);
       phase = 'configure-$speed-player-$transportSpeed';
-      completion = Completer<void>();
-      phaseFailure = null;
       await controller.setVoiceSpeed(speed);
+      scenarioGate = P3ProbeScenarioGate()..request();
       phase = 'synthesis-${controller.currentSpeed}-player-$transportSpeed';
       record('playRequested', {
         'phase': phase,
@@ -183,7 +206,7 @@ Future<void> main(List<String> arguments) async {
       await controller.startPlayback();
       final startupDeadline = DateTime.now().add(const Duration(seconds: 30));
       while (!player.playing &&
-          phaseFailure == null &&
+          scenarioGate.failure == null &&
           DateTime.now().isBefore(startupDeadline)) {
         await Future<void>.delayed(const Duration(milliseconds: 20));
       }
@@ -198,6 +221,8 @@ Future<void> main(List<String> arguments) async {
       if (!player.playing) {
         throw StateError('Playback did not start: ${controller.statusMessage}');
       }
+      scenarioGate.markStarted();
+      observeController();
       await player.setSpeed(transportSpeed);
       record('transportSpeedSet', {'speed': transportSpeed});
       await Future<void>.delayed(const Duration(seconds: 2));
@@ -205,8 +230,8 @@ Future<void> main(List<String> arguments) async {
       final export = controller.exportAudioToPath(
         '${output.path}/export-${controller.currentSpeed}-$transportSpeed.wav',
       );
-      await completion.future.timeout(const Duration(minutes: 3));
-      if (phaseFailure != null) throw StateError(phaseFailure!);
+      await scenarioGate.done.timeout(const Duration(minutes: 3));
+      if (scenarioGate.failure != null) throw StateError(scenarioGate.failure!);
       if (controller.currentWordIndex < controller.document.wordCount - 1) {
         throw StateError('Playback completion omitted a document suffix');
       }
