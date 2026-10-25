@@ -1,7 +1,8 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:isolate';
-import 'package:kokoro_tts_flutter/kokoro_tts_flutter.dart';
+import 'kokoro_asset_tokenizer.dart';
+export 'kokoro_asset_tokenizer.dart' show KokoroTokenizerAssets;
 import '../models/chunk_plan.dart';
 import '../models/engine_capability.dart';
 import '../models/tts_artifact.dart';
@@ -41,23 +42,30 @@ class KokoroTokenizationResult {
 }
 
 /// Pure Dart resident worker: one active request plus one latest pending request.
-/// Tokenizer must already be initialized; only its pure Dart snapshot is copied.
+/// Raw asset strings cross the bridge once; initialization runs in the worker.
 /// Use separate instances for playback and export, which are independent owners.
 class KokoroTokenizationWorker {
   KokoroTokenizationWorker({
-    required Tokenizer tokenizer,
-    required Map<String, String> dictionaryEntries,
+    required KokoroTokenizerAssets assets,
+    Map<String, String> dictionaryEntries = const {},
+    String? rawDictionary,
     EngineCapabilityProfile? capabilityProfile,
     this.ownerId = 'kokoro-tokenization',
     this.timeout = const Duration(seconds: 30),
     this.workerEntryPoint = kokoroTokenizationWorkerEntry,
-  }) : _tokenizer = tokenizer,
+  }) : _assets = assets,
+       _rawDictionary = rawDictionary,
        _dictionary = Map.unmodifiable(dictionaryEntries),
        _capabilityProfile =
            capabilityProfile ??
-           const EngineCapabilityRegistry().lookup(engineId: 'kokoro');
+           const EngineCapabilityRegistry().lookup(engineId: 'kokoro') {
+    if (rawDictionary != null && dictionaryEntries.isNotEmpty) {
+      throw ArgumentError('Provide raw dictionary text or entries, not both.');
+    }
+  }
   final EngineCapabilityProfile _capabilityProfile;
-  final Tokenizer _tokenizer;
+  final KokoroTokenizerAssets _assets;
+  final String? _rawDictionary;
   final Map<String, String> _dictionary;
   final String ownerId;
   final Duration timeout;
@@ -170,7 +178,10 @@ class KokoroTokenizationWorker {
         throw StateError('Tokenization worker returned stale identity.');
       }
       if (response['error'] != null) {
-        throw StateError(response['error']! as String);
+        Error.throwWithStackTrace(
+          StateError(response['error']! as String),
+          StackTrace.fromString(response['stackTrace'] as String? ?? ''),
+        );
       }
       final result = response['result']! as KokoroTokenizationResult;
       if (result.requestId != job.data['requestId'] ||
@@ -214,9 +225,12 @@ class KokoroTokenizationWorker {
         if (!_ready!.isCompleted) _ready!.complete(message);
       } else if (message == null || message is List) {
         final error = StateError('Tokenization worker exited: $message');
-        if (!_ready!.isCompleted) _ready!.completeError(error);
+        final remoteStack = message is List && message.length > 1
+            ? StackTrace.fromString('${message[1]}')
+            : StackTrace.current;
+        if (!_ready!.isCompleted) _ready!.completeError(error, remoteStack);
         if (_response != null && !_response!.isCompleted) {
-          _response!.completeError(error);
+          _response!.completeError(error, remoteStack);
         }
         if (message == null && !_exited!.isCompleted) _exited!.complete();
       } else if (_response != null && !_response!.isCompleted) {
@@ -226,10 +240,11 @@ class KokoroTokenizationWorker {
     _spawning = Isolate.spawn(
       workerEntryPoint,
       KokoroTokenizationWorkerInput(
-        _tokenizer,
+        _assets,
         _dictionary,
         _port!.sendPort,
         _capabilityProfile,
+        _rawDictionary,
       ),
       onExit: _port!.sendPort,
       onError: _port!.sendPort,
@@ -276,21 +291,31 @@ class _TokenJob {
 
 class KokoroTokenizationWorkerInput {
   const KokoroTokenizationWorkerInput(
-    this.tokenizer,
+    this.assets,
     this.dictionaryEntries,
     this.reply,
     this.capabilityProfile,
+    this.rawDictionary,
   );
-  final Tokenizer tokenizer;
+  final KokoroTokenizerAssets assets;
+  final String? rawDictionary;
   final Map<String, String> dictionaryEntries;
   final SendPort reply;
   final EngineCapabilityProfile capabilityProfile;
 }
 
 void kokoroTokenizationWorkerEntry(KokoroTokenizationWorkerInput input) async {
-  EnglishPronunciationDictionaryService.instance.restoreSnapshot(
-    input.dictionaryEntries,
-  );
+  if (input.rawDictionary != null) {
+    EnglishPronunciationDictionaryService.instance.restoreRawDictionary(
+      input.rawDictionary!,
+    );
+  } else {
+    EnglishPronunciationDictionaryService.instance.restoreSnapshot(
+      input.dictionaryEntries,
+    );
+  }
+  final tokenizer = KokoroAssetTokenizer(input.assets);
+  await tokenizer.ensureInitialized();
   final commands = ReceivePort();
   input.reply.send(commands.sendPort);
   await for (final raw in commands) {
@@ -306,12 +331,12 @@ void kokoroTokenizationWorkerEntry(KokoroTokenizationWorkerInput input) async {
             );
       final trace = translated == null
           ? await _tokenizeText(
-              input.tokenizer,
+              tokenizer,
               request['text']! as String,
               request['languageTag']! as String,
             )
           : await _tokenizeTranslatedChunk(
-              input.tokenizer,
+              tokenizer,
               translated,
               request['languageTag']! as String,
             );
@@ -328,8 +353,8 @@ void kokoroTokenizationWorkerEntry(KokoroTokenizationWorkerInput input) async {
         finalPhonemeString: trace.finalPhonemeString,
       );
       input.reply.send({...request, 'result': result});
-    } catch (error) {
-      input.reply.send({...request, 'error': '$error'});
+    } catch (error, stack) {
+      input.reply.send({...request, 'error': '$error', 'stackTrace': '$stack'});
     }
   }
 }
@@ -388,7 +413,7 @@ List<TtsArtifactSegment> _freezeSegments(List<TtsArtifactSegment> segments) =>
     ]);
 
 Future<_TokenizationTrace> _tokenizeText(
-  Tokenizer tokenizer,
+  KokoroAssetTokenizer tokenizer,
   String text,
   String languageTag,
 ) async {
@@ -406,7 +431,7 @@ Future<_TokenizationTrace> _tokenizeText(
 }
 
 Future<_TokenizationTrace> _tokenizeTranslatedChunk(
-  Tokenizer tokenizer,
+  KokoroAssetTokenizer tokenizer,
   KokoroTranslatedChunk translatedChunk,
   String languageTag,
 ) async {
