@@ -14,6 +14,8 @@ ruby tools/check_docs.rb
 
 Run focused tests first when changing one subsystem. Native session lifetime, actual audio output and visible UI responsiveness require running-app/native checks. Pure Dart or widget tests do not establish these. Generated outputs remain ignored under `project/test-artifacts/` and `tmp/`.
 
+For native accessibility checks, launch the exact isolated app bundle in the foreground before acquiring its AX tree. Background acquisition can time out or return stale observations; foreground launch is a diagnostic prerequisite, not proof that the app fixes that behavior. Verify named transport buttons and their state changes through actual actions. Keep native action evidence separate from widget semantics and keyboard tests.
+
 See [architecture](../project/architecture/README.md) for source/test locations and [contributing](../CONTRIBUTING.md) for the GitHub planning workflow. No current fresh test-pass or release qualification is implied by this setup guide.
 
 ## Native baseline diagnostics
