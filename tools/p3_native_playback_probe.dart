@@ -60,6 +60,8 @@ Future<void> main(List<String> arguments) async {
         'processing': state.processingState.name,
         'index': player.currentIndex,
         'positionMs': player.position.inMilliseconds,
+        'wordIndex': controller.currentWordIndex,
+        'wordCount': controller.document.wordCount,
       });
       // A completed native playlist may be an underrun while more source
       // remains. Only the controller's document-complete transition ends a
@@ -76,6 +78,11 @@ Future<void> main(List<String> arguments) async {
         'count': sequence.length,
         'index': player.currentIndex,
         'positionMs': player.position.inMilliseconds,
+        'paths': [
+          for (final source in sequence)
+            if (source is UriAudioSource && source.uri.scheme == 'file')
+              source.uri.toFilePath(),
+        ],
       });
     }),
   ];
@@ -111,6 +118,13 @@ Future<void> main(List<String> arguments) async {
       'index': player.currentIndex,
       'positionMs': player.position.inMilliseconds,
       'sequenceCount': player.sequence.length,
+      'wordIndex': controller.currentWordIndex,
+      'wordCount': controller.document.wordCount,
+      'controllerState': controller.playbackState.name,
+      'currentSource': switch (player.sequenceState.currentSource) {
+        final UriAudioSource source => source.uri.toString(),
+        _ => null,
+      },
       'status': controller.statusMessage,
     });
     lastTick = now;
