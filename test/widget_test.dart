@@ -420,6 +420,7 @@ void main() {
   testWidgets(
     'modal controls cover reader toast and dismissal preserves reader layout',
     (WidgetTester tester) async {
+      final semantics = tester.ensureSemantics();
       final controller = ReaderController(
         preferencesService: _MemoryReaderPreferencesService(),
         ttsEngine: _FakeTtsEngine(),
@@ -442,6 +443,10 @@ void main() {
       expect(find.byKey(const Key('status-toast')).hitTestable(), findsNothing);
       final closeDialog = find.byTooltip('Close voice management');
       expect(closeDialog.hitTestable(), findsOneWidget);
+      expect(
+        tester.getSemantics(closeDialog).label,
+        contains('Close voice management'),
+      );
       await tester.tap(closeDialog);
       await tester.pumpAndSettle();
       expect(find.text('Voice Management'), findsNothing);
@@ -449,9 +454,14 @@ void main() {
         find.byKey(const Key('status-toast')).hitTestable(),
         findsOneWidget,
       );
+      expect(
+        tester.getSemantics(find.byTooltip('Dismiss status message')).label,
+        contains('Dismiss status message'),
+      );
       await tester.tap(find.byTooltip('Dismiss status message'));
       await tester.pump();
       expect(find.byKey(const Key('status-toast')), findsNothing);
+      semantics.dispose();
     },
   );
 
