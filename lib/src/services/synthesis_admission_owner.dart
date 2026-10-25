@@ -24,6 +24,7 @@ class SynthesisAdmissionOwner {
     required this.exportMayRun,
     bool Function()? playbackMayRun,
     this.beforeProcess,
+    this.onPlaybackCompleted,
   }) : playbackMayRun = playbackMayRun ?? _alwaysAllowPlayback;
   final SpeechWorkerChunkProcessor processor;
   final bool Function() exportMayRun;
@@ -36,6 +37,12 @@ class SynthesisAdmissionOwner {
   /// Optional controlled-latency/profiling seam. Default runtime work has no
   /// hook; cancellation is checked again before actual native processing.
   final Future<void> Function()? beforeProcess;
+
+  /// Reserve finalized raw audio before its completion is forwarded and this
+  /// native permit is released. This callback must update state synchronously;
+  /// it must not await publication or drain work which needs the same permit.
+  /// The owner of that state distinguishes reservation from playable lead.
+  final void Function(SpeechWorkerEvent event)? onPlaybackCompleted;
   final Queue<_Admission> _pending = Queue();
   final Set<_Lease> _leases = {};
   bool _running = false;
@@ -235,9 +242,41 @@ class _Lease implements CancellableSynthesisLease {
         final beforeProcess = owner.beforeProcess;
         if (beforeProcess != null) await beforeProcess();
         if (!current()) return;
+        Object? completionFailure;
+        StackTrace? completionFailureStack;
+        var completionObserved = false;
         await owner.processor.process(request, (event) {
-          if (current()) emit(event);
+          if (!current() ||
+              event.sessionId != request.sessionId ||
+              event.generationId != request.generationId ||
+              event.chunkId != request.chunkId ||
+              completionFailure != null) {
+            return;
+          }
+          if (event.type == SpeechWorkerEventType.completed) {
+            if (completionObserved) return;
+            completionObserved = true;
+            if (!export) {
+              try {
+                owner.onPlaybackCompleted?.call(event);
+              } catch (error, stack) {
+                // An event listener is not necessarily inside the processor's
+                // Future error route. Retain the callback failure, let native
+                // work drain, and fail this owned process Future afterwards.
+                completionFailure = error;
+                completionFailureStack = stack;
+                return;
+              }
+            }
+          }
+          emit(event);
         });
+        if (completionFailure != null) {
+          Error.throwWithStackTrace(
+            completionFailure!,
+            completionFailureStack!,
+          );
+        }
       },
       export,
       lease: this,
