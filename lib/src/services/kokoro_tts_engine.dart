@@ -85,6 +85,7 @@ class KokoroTtsEngine
   Future<void> _resourceTransition = Future<void>.value();
   bool _exportingResources = false;
   bool _exportCancelled = false;
+  bool _releaseResourcesAfterExport = false;
   SpeechRuntime? _exportRuntime;
   String? _exportSession;
   Future<void> _cancelExport() async {
@@ -306,7 +307,11 @@ class KokoroTtsEngine
           unawaited(_resumeAfterUnderrunIfPossible());
           return;
         }
-        if (!_exportingResources) unawaited(releaseDocumentResources());
+        if (_exportingResources) {
+          _releaseResourcesAfterExport = true;
+        } else {
+          unawaited(releaseDocumentResources());
+        }
         unawaited(_resetPlaybackState());
         _onComplete?.call();
       }
@@ -475,11 +480,20 @@ class KokoroTtsEngine
     try {
       return await _exportAudioWithResources(request);
     } finally {
-      _exportingResources = false;
-      _exportDrained!.complete();
-      _exportRuntime = null;
-      _exportSession = null;
-      _exportLease = null;
+      try {
+        // A natural document end waits for the export's resource lease. Pause
+        // does not set this flag and keeps its prepared context resident.
+        if (_releaseResourcesAfterExport && _activeGenerationId == null) {
+          await releaseDocumentResources();
+        }
+      } finally {
+        _releaseResourcesAfterExport = false;
+        _exportingResources = false;
+        _exportDrained!.complete();
+        _exportRuntime = null;
+        _exportSession = null;
+        _exportLease = null;
+      }
     }
   }
 
