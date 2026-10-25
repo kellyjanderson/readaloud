@@ -17,6 +17,87 @@ void main() {
       EnglishPronunciationDictionaryService.instance.resetForTesting();
     });
 
+    for (final quoted in <bool>[false, true]) {
+      test(
+        'keeps dictionary replacement on its word after explicit phonemes (quoted=$quoted)',
+        () {
+          EnglishPronunciationDictionaryService.instance
+              .replaceEntriesForTesting(<String, String>{'said': 'sˈɛd'});
+          final result = service.translate(
+            chunkId: 'mixed',
+            capabilityProfile: const EngineCapabilityRegistry().lookup(
+              engineId: 'kokoro',
+              platformFamily: 'macos',
+            ),
+            segments: <TtsArtifactSegment>[
+              TtsArtifactSegment(
+                segmentId: 's_0',
+                speakText: quoted ? '"John said,"' : 'John said,',
+                pronunciationArtifacts: <RealizedPronunciationArtifact>[
+                  _replacement(0, 1, 'phoneme_string', 'dʒˈɑn'),
+                ],
+              ),
+            ],
+          );
+          expect(result.payloadUnits.map((unit) => unit.value), <String>[
+            if (quoted) '"',
+            'dʒˈɑn',
+            ' ',
+            'sˈɛd',
+            quoted ? ',"' : ',',
+          ]);
+          expect(
+            result.payloadUnits
+                .where(
+                  (unit) =>
+                      unit.kind == KokoroEnginePayloadUnitKind.phonemeString,
+                )
+                .map((unit) => unit.value),
+            <String>['dʒˈɑn', 'sˈɛd'],
+          );
+          expect(result.missingFallbackWordCount, 0);
+        },
+      );
+    }
+
+    test(
+      'preserves later dictionary word indexes after a multiword approximation',
+      () {
+        EnglishPronunciationDictionaryService.instance.replaceEntriesForTesting(
+          <String, String>{'said': 'sˈɛd'},
+        );
+        final result = service.translate(
+          chunkId: 'multiword',
+          capabilityProfile: const EngineCapabilityRegistry().lookup(
+            engineId: 'kokoro',
+            platformFamily: 'macos',
+          ),
+          segments: <TtsArtifactSegment>[
+            TtsArtifactSegment(
+              segmentId: 's_0',
+              speakText: 'New York said,',
+              pronunciationArtifacts: <RealizedPronunciationArtifact>[
+                _replacement(0, 2, 'normalized_spoken_text', 'Gotham'),
+              ],
+            ),
+          ],
+        );
+        expect(result.speakText, 'Gotham said,');
+        expect(result.payloadUnits.map((unit) => unit.value), <String>[
+          'Gotham ',
+          'sˈɛd',
+          ',',
+        ]);
+        expect(
+          result.pronunciationArtifacts
+              .singleWhere((artifact) => artifact.artifactId == 'dict_said')
+              .startWord,
+          2,
+        );
+        expect(result.missingFallbackWordCount, 0);
+      },
+    );
+
     test('applies normalized spoken text replacements as approximations', () {
       final result = service.translate(
         chunkId: 'chunk-1',
@@ -417,4 +498,26 @@ void main() {
       },
     );
   });
+}
+
+RealizedPronunciationArtifact _replacement(
+  int start,
+  int end,
+  String type,
+  String value,
+) {
+  return RealizedPronunciationArtifact(
+    artifactId: 'explicit',
+    segmentId: 's_0',
+    startWord: start,
+    endWord: end,
+    resolutionClass: 'direct_resolved',
+    translationIntent: type,
+    selectedRepresentation: PronunciationRepresentation(
+      representationId: 'explicit',
+      representationType: type,
+      representationValue: value,
+      priority: 1,
+    ),
+  );
 }
