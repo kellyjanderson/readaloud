@@ -338,6 +338,9 @@ class KokoroTtsEngine
         config: const TokenizerConfig(lexiconPath: 'assets/lexicon.json'),
       );
       await _tokenizer!.ensureInitialized();
+      // The dependency initializes its G2P lazily even after ensureInitialized.
+      // Finish its asset access on the root isolate before sending the snapshot.
+      await _tokenizer!.phonemizeWithTokens('warmup', 'en-us');
       await EnglishPronunciationDictionaryService.instance.initialize();
       final dictionary =
           EnglishPronunciationDictionaryService.instance.entriesSnapshot;
