@@ -47,3 +47,9 @@ The initial checkout already contained the prior-turn documentation edits and an
 ## Follow-up: external planning authority
 
 The user clarified that document-maintenance work and planning-induced dirty repositories/reconciliation are the two allowance concerns. The ACD/plan cleanup is interim, not rejection of external planning. Inspected the sibling project managment ACD-001/004/005 intentions and current GitHub tracking APIs. Updated docs/maintenance.md with a tentative integration/pilot comparison; savings remain unproven. No migration, service changes or GitHub tracking records were created.
+
+## Direction: GitHub planning, repository architecture
+
+The user selected GitHub services as the short-term direction while the management service is not operational. Final architecture belongs beside implementation; in-progress architectural work belongs in the management tool. Proposed mapping: one design issue carries the ACD, bounded sub-issues carry execution slices, Projects holds status, and implementation PRs update canonical architecture with code and evidence. No mirrored active plan files after migration. This direction supersedes the earlier suggestion that all planning must remain in Git; active instructions/files still need a coordinated migration before this becomes operational.
+
+Reference patterns: [.NET issue-based API proposals](https://github.com/dotnet/runtime/blob/main/docs/project/api-review-process.md), [Rust separate RFC repository](https://github.com/rust-lang/rfcs), and [rust-analyzer architecture discussions](https://rust-analyzer.github.io/book/contributing/) alongside its [architecture guide](https://rust-analyzer.github.io/book/contributing/architecture.html). These demonstrate alternatives, not measured token savings. The issue-first approach best matches the stated short-term goal. This turn records direction and research only; no migration was executed.
