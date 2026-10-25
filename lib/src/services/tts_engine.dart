@@ -5,6 +5,34 @@ import '../models/tts_artifact.dart';
 import '../models/voice_profile.dart';
 import '../models/prepared_voice_binding.dart';
 
+class TtsPlaybackResumeAnchor {
+  const TtsPlaybackResumeAnchor({
+    required this.documentId,
+    required this.chunkId,
+    required this.startWordIndex,
+  });
+  final String documentId;
+  final String chunkId;
+  final int startWordIndex;
+}
+
+class TtsPlaybackAcknowledgment {
+  const TtsPlaybackAcknowledgment({
+    required this.documentId,
+    required this.assignmentRevision,
+    required this.generationId,
+    required this.bindingFingerprints,
+  });
+  final String documentId;
+  final int assignmentRevision;
+  final String generationId;
+  final Set<String> bindingFingerprints;
+}
+
+abstract interface class VoiceAssignmentPlaybackCapable {
+  TtsPlaybackResumeAnchor? get currentPlaybackResumeAnchor;
+}
+
 abstract interface class ResourcePreparationCapable {
   bool get resourcesReady;
   Future<List<PreparedVoiceBinding>> prepareDocumentResources({
@@ -137,6 +165,9 @@ class TtsSpeakRequest {
     this.ttsArtifactSet,
     this.preparedResources,
     this.planningContext,
+    this.assignmentRevision = 0,
+    this.isCurrent,
+    this.onPlaybackReady,
   });
 
   final String text;
@@ -149,6 +180,9 @@ class TtsSpeakRequest {
   final TtsArtifactSet? ttsArtifactSet;
   final List<PreparedVoiceBinding>? preparedResources;
   final SpeechPlanningContext? planningContext;
+  final int assignmentRevision;
+  final bool Function()? isCurrent;
+  final void Function(TtsPlaybackAcknowledgment)? onPlaybackReady;
 }
 
 class TtsExportRequest {
