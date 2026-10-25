@@ -9,9 +9,9 @@ Kokoro playback builds a routed chunk plan, requests generation, stages ready ch
 
 Later chunks append to the active source queue. Current underrun recovery seeks to the next buffered queue index and resumes; it does not rebuild the entire source list in that recovery method. The sole `setAudioSources` call is initial queue setup. Earlier architecture claims about routine rebuilding were stale.
 
-Boundary policy trims/caps silence and treats initial/resumed chunks specially. Its async wrapper invokes synchronous correction, so the call boundary is not proof of CPU offload. Finalized audio and metadata are cached; sidecars validate logical keys, not model/voice byte digests. Model setup accepts a nonempty existing file. Cache retention is independent of pausing.
+Boundary policy trims/caps silence and treats initial/resumed chunks specially. Its async wrapper invokes synchronous correction, so the call boundary is not proof of CPU offload. Finalized audio and metadata are cached; worker cache paths and sidecars include prepared model/voice content identity. Resource preparation validates the model session and voice vectors before synthesis. Cache retention is independent of pausing.
 
-User voice selection currently restarts when playing, but does not handle initial buffering identically. Safe future assignment revision commits, persistent voice contexts and strict contiguous bounded lead guarantees remain ACD work. Ordinary routed character transitions are not user setVoice events.
+User voice selection currently restarts when playing, but does not handle initial buffering identically. Persistent resource contexts are implemented in P2; safe future assignment revision commits and strict contiguous bounded lead guarantees remain P3/P4 work. Ordinary routed character transitions are not user setVoice events.
 
 ## Source and tests
 

@@ -260,6 +260,7 @@ public class FlutterOnnxruntimePlugin: NSObject, FlutterPlugin {
       return
     }
 
+    var createdOutputIds: [String] = []
     do {
       // Get run options if provided
       let optionsDict = args["runOptions"] as? [String: Any] ?? [:]
@@ -323,6 +324,7 @@ public class FlutterOnnxruntimePlugin: NSObject, FlutterPlugin {
       for (outputName, outputTensor) in outputs {
         let valueId = UUID().uuidString
         ortValues[valueId] = outputTensor
+        createdOutputIds.append(valueId)
 
         // Check if output is float16 (ObjC enum doesn't support it, use C++ API)
         if Float16Helper.isFloat16Tensor(outputTensor) {
@@ -340,8 +342,10 @@ public class FlutterOnnxruntimePlugin: NSObject, FlutterPlugin {
       // Return result
       result(flutterOutputs)
     } catch let error as FlutterError {
+      for id in createdOutputIds { ortValues.removeValue(forKey: id) }
       result(error)
     } catch {
+      for id in createdOutputIds { ortValues.removeValue(forKey: id) }
       result(FlutterError(code: "INFERENCE_ERROR", message: error.localizedDescription, details: nil))
     }
   }

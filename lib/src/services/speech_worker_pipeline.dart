@@ -221,8 +221,43 @@ abstract interface class SpeechWorkerChunkProcessor {
 }
 
 class SpeechWorkerPipeline {
-  SpeechWorkerPipeline({required SpeechWorkerChunkProcessor processor})
-    : _processor = processor;
+  SpeechWorkerPipeline({
+    required SpeechWorkerChunkProcessor processor,
+    this.maxPending = 8,
+  }) : _processor = processor;
+  final int maxPending;
+  int get pendingCount => _pending.length;
+  Completer<void> _capacityChanged = Completer<void>();
+  Future<void>? _pumpFuture;
+  Future<void>? _shutdownFuture;
+  void _signalCapacity() {
+    final previous = _capacityChanged;
+    _capacityChanged = Completer<void>();
+    if (!previous.isCompleted) previous.complete();
+  }
+
+  Future<bool> _admit(
+    SpeechWorkerChunkRequest chunk, {
+    required bool priority,
+  }) async {
+    while (_pending.length >= maxPending &&
+        !_isShutdown &&
+        !_isCancelled(chunk.generationId)) {
+      await _capacityChanged.future;
+    }
+    if (_isShutdown || _isCancelled(chunk.generationId)) {
+      _emit(_cancelledEventFor(chunk));
+      return false;
+    }
+    if (priority) {
+      _pending.addFirst(chunk);
+    } else {
+      _pending.addLast(chunk);
+    }
+    _emit(_queuedEventFor(chunk));
+    _ensurePump();
+    return true;
+  }
 
   final SpeechWorkerChunkProcessor _processor;
   final StreamController<SpeechWorkerEvent> _eventsController =
@@ -243,18 +278,16 @@ class SpeechWorkerPipeline {
     switch (command.type) {
       case SpeechWorkerCommandType.prepareChunk:
         final chunk = command.chunks.single;
-        _cancelledGenerationIds.remove(chunk.generationId);
-        _pending.addFirst(chunk);
-        _emit(_queuedEventFor(chunk));
-        _ensurePump();
+        await _admit(chunk, priority: true);
       case SpeechWorkerCommandType.preparePlan:
-        final generationId = command.generationId!;
-        _cancelledGenerationIds.remove(generationId);
-        for (final chunk in command.chunks) {
-          _pending.addLast(chunk);
-          _emit(_queuedEventFor(chunk));
+        for (var index = 0; index < command.chunks.length; index++) {
+          if (!await _admit(command.chunks[index], priority: false)) {
+            for (final remainder in command.chunks.skip(index + 1)) {
+              _emit(_cancelledEventFor(remainder));
+            }
+            break;
+          }
         }
-        _ensurePump();
       case SpeechWorkerCommandType.cancelGeneration:
         await _cancelGeneration(command.generationId!);
       case SpeechWorkerCommandType.shutdown:
@@ -282,18 +315,21 @@ class SpeechWorkerPipeline {
     return dispatch(SpeechWorkerCommand.cancelGeneration(generationId));
   }
 
-  Future<void> shutdown() async {
+  Future<void> shutdown() => _shutdownFuture ??= _shutdown();
+  Future<void> _shutdown() async {
     if (_isShutdown) {
       return;
     }
 
     _isShutdown = true;
+    _signalCapacity();
     final pending = _pending.toList(growable: false);
     _pending.clear();
     for (final chunk in pending) {
       _emit(_cancelledEventFor(chunk));
     }
 
+    await _pumpFuture;
     await _processor.dispose();
     await _eventsController.close();
   }
@@ -308,6 +344,7 @@ class SpeechWorkerPipeline {
       }
     }
     _pending.removeWhere((chunk) => chunk.generationId == generationId);
+    _signalCapacity();
 
     for (final chunk in cancelled) {
       _emit(_cancelledEventFor(chunk));
@@ -318,7 +355,7 @@ class SpeechWorkerPipeline {
     if (_isPumping || _isShutdown) {
       return;
     }
-    unawaited(_pump());
+    _pumpFuture = _pump();
   }
 
   Future<void> _pump() async {
@@ -330,6 +367,7 @@ class SpeechWorkerPipeline {
     try {
       while (!_isShutdown && _pending.isNotEmpty) {
         final chunk = _pending.removeFirst();
+        _signalCapacity();
         if (_isCancelled(chunk.generationId)) {
           _emit(_cancelledEventFor(chunk));
           continue;
