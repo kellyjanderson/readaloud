@@ -675,16 +675,19 @@ class SpeechRuntime {
        capabilities = SpeechRuntimeCapabilities.detectForCurrentPlatform(
          engineId: engineId,
        ),
-       _pipeline = SpeechWorkerPipeline(processor: processor),
        _boundaryCorrectionExecutor =
            boundaryCorrectionExecutor ?? _defaultBoundaryCorrectionExecutor {
+    _pipeline = SpeechWorkerPipeline(
+      processor: processor,
+      onCompleted: _onWorkerCompleted,
+    );
     _workerEventSubscription = _pipeline.events.listen(_handleWorkerEvent);
   }
 
   final String engineId;
   final String runtimeId;
   final SpeechRuntimeCapabilities capabilities;
-  final SpeechWorkerPipeline _pipeline;
+  late final SpeechWorkerPipeline _pipeline;
   final BoundaryCorrectionExecutor _boundaryCorrectionExecutor;
   final Set<Future<void>> _boundaryTasks = {};
   final StreamController<SpeechRuntimeEvent> _eventsController =
@@ -1141,10 +1144,11 @@ class SpeechRuntime {
           ),
         );
       case SpeechWorkerEventType.completed:
-        final task = _handleWorkerCompleted(event);
-        _boundaryTasks.add(task);
-        unawaited(task.whenComplete(() => _boundaryTasks.remove(task)));
+        // Completed work is acknowledged directly through the pipeline hook.
+        // Broadcasting it cannot provide bounded predecessor backpressure.
+        break;
       case SpeechWorkerEventType.failed:
+        _lastTrailingSilenceByGenerationId.remove(event.generationId);
         _pendingChunksById.remove(event.chunkId);
         _emit(
           _runtimeEvent(
@@ -1165,9 +1169,25 @@ class SpeechRuntime {
     }
   }
 
+  Future<void> _onWorkerCompleted(SpeechWorkerEvent event) async {
+    final task = _handleWorkerCompleted(event);
+    _boundaryTasks.add(task);
+    try {
+      await task;
+    } finally {
+      _boundaryTasks.remove(task);
+    }
+  }
+
   Future<void> _handleWorkerCompleted(SpeechWorkerEvent event) async {
     final workItem = _pendingChunksById[event.chunkId];
-    if (workItem == null || event.audioPath == null || event.duration == null) {
+    if (workItem == null ||
+        event.audioPath == null ||
+        event.duration == null ||
+        _activeSessionId != event.sessionId ||
+        _activeGenerationId != event.generationId ||
+        workItem.sessionId != event.sessionId ||
+        workItem.generationId != event.generationId) {
       return;
     }
 
@@ -1255,6 +1275,7 @@ class SpeechRuntime {
           !identical(_pendingChunksById[event.chunkId], workItem)) {
         return;
       }
+      _lastTrailingSilenceByGenerationId.remove(workItem.generationId);
       _pendingChunksById.remove(event.chunkId);
       _emit(
         _runtimeEvent(
