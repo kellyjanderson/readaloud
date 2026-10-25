@@ -1,6 +1,6 @@
 # Audio Export and Headless Execution
 
-Reconciled: October 25, 2026; P4 source 16310e9
+Reconciled: October 25, 2026; P4 production lineage 295677e
 Status: P3 assembly and P4 revision/pin source; integrated P4 responsiveness/native assignment acceptance pending
 
 ## Implemented structure and limitations
