@@ -15,8 +15,8 @@ import 'package:read_aloud/src/services/audio_artifact_store.dart';
 import 'package:read_aloud/src/services/kokoro_tts_engine.dart';
 import 'package:read_aloud/src/services/playback_instrumentation_service.dart';
 
-class _Controller extends ReaderController {
-  _Controller(KokoroTtsEngine engine)
+class P4ProbeController extends ReaderController {
+  P4ProbeController(KokoroTtsEngine engine)
     : super(ttsEngine: engine, enablePlatformIntakeChannels: false);
   Future<void>? _initializing;
   @override
@@ -25,12 +25,15 @@ class _Controller extends ReaderController {
   Future<bool> restoreLastOpenedDocument() async => false;
 }
 
-class _ObservedPins extends AudioArtifactPins {
+class P4ProbePins extends AudioArtifactPins {
   final paths = <String>{};
+  void Function(String path)? onPin;
   @override
   AudioArtifactPin pin(String path) {
     paths.add(path);
-    return super.pin(path);
+    final handle = super.pin(path);
+    onPin?.call(path);
+    return handle;
   }
 
   int get total => paths.fold(0, (sum, path) => sum + pinCount(path));
@@ -65,7 +68,7 @@ Future<void> main(List<String> args) async {
   }
 
   final player = AudioPlayer(useLazyPreparation: false);
-  final pins = _ObservedPins();
+  final pins = P4ProbePins();
   Completer<void>? held;
   Completer<void>? entered;
   var holdNext = false;
@@ -80,7 +83,7 @@ Future<void> main(List<String> args) async {
       await held!.future;
     },
   );
-  final controller = _Controller(engine);
+  final controller = P4ProbeController(engine);
   String? source() => player.sequenceState.currentSource is UriAudioSource
       ? (player.sequenceState.currentSource! as UriAudioSource).uri.toFilePath()
       : null;

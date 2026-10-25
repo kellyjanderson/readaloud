@@ -43,8 +43,10 @@ class KokoroTtsEngine
     AudioPlayer? player,
     this.beforeSynthesis,
     AudioArtifactPins? artifactPins,
+    ExportedAudioAssembler? exportAssembler,
   }) : _player = player ?? AudioPlayer(useLazyPreparation: false),
-       _artifactPins = artifactPins ?? AudioArtifactPins.shared;
+       _artifactPins = artifactPins ?? AudioArtifactPins.shared,
+       _exportAssembler = exportAssembler ?? ExportedAudioAssembler();
   final Future<void> Function()? beforeSynthesis;
   final AudioArtifactPins _artifactPins;
   late final _playbackPins = KokoroPlaybackArtifactPins(_artifactPins);
@@ -81,7 +83,7 @@ class KokoroTtsEngine
   final AudioPlayer _player;
   final PlaybackInstrumentationService _instrumentation =
       PlaybackInstrumentationService.instance;
-  final ExportedAudioAssembler _exportAssembler = ExportedAudioAssembler();
+  final ExportedAudioAssembler _exportAssembler;
 
   void Function()? _onStart;
   void Function(String? message)? _onStatus;
