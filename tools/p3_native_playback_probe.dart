@@ -119,8 +119,11 @@ Future<void> main(List<String> arguments) async {
       '${output.path}/fixture.txt',
     ).writeAsString(paragraphs.join('\n\n'));
     await controller.importPastedText(paragraphs.join('\n\n'));
-    for (final speed in [1.0, 1.5]) {
-      phase = 'speed-$speed';
+    for (final scenario in [(1.0, 1.0), (1.5, 1.0), (1.0, 1.5), (1.0, 8.0)]) {
+      final speed = scenario.$1;
+      final transportSpeed = scenario.$2;
+      await player.setSpeed(1.0);
+      phase = 'synthesis-$speed-player-$transportSpeed';
       completion = Completer<void>();
       await controller.setVoiceSpeed(speed);
       record('playRequested', {'phase': phase});
@@ -140,10 +143,12 @@ Future<void> main(List<String> arguments) async {
       if (!player.playing) {
         throw StateError('Playback did not start: ${controller.statusMessage}');
       }
-      await Future<void>.delayed(const Duration(seconds: 7));
+      await player.setSpeed(transportSpeed);
+      record('transportSpeedSet', {'speed': transportSpeed});
+      await Future<void>.delayed(const Duration(seconds: 2));
       record('exportRequested', {'phase': phase});
       final export = controller.exportAudioToPath(
-        '${output.path}/export-$speed.wav',
+        '${output.path}/export-$speed-$transportSpeed.wav',
       );
       await completion.future.timeout(const Duration(minutes: 3));
       record('playCompleted', {'phase': phase});
