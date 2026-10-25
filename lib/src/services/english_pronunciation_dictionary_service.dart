@@ -70,8 +70,7 @@ class EnglishPronunciationDictionaryService {
 
 Map<String, String> _parseCmudictToIpaEntries(String rawDictionary) {
   final entries = <String, String>{};
-  for (final rawLine in rawDictionary.split('
-')) {
+  for (final rawLine in rawDictionary.split('\n')) {
     final line = rawLine.trim();
     if (line.isEmpty || line.startsWith(';;;')) {
       continue;
