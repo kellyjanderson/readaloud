@@ -1,9 +1,9 @@
 # Contributing to Read Aloud
 
-Start with [setup](docs/development.md), [project navigation](project/README.md) and [AGENTS.md](AGENTS.md). Read Aloud currently targets macOS; other generated Flutter targets are not qualified by this repository review.
+Start with [setup](docs/development.md), [project navigation](project/README.md), [AGENTS.md](AGENTS.md) and the [GitHub workflow](docs/project-management.md). macOS is the current functional target.
 
-Architecture changes use one [ACD](project/acd/README.md) and a same-name [implementation plan](project/planning/README.md). Small fixes that conform to existing architecture can use an issue or dated journal entry. Use one branch/PR per plan; no new nested specification tree is required.
+Propose changes in GitHub issues. A design issue holds the working ACD; native sub-issues and dependencies hold implementation slices. Small fixes need only one issue. Do not create repository-local plans, ACDs, progress files or mirrored issue bodies.
 
-Preserve unrelated changes. Include focused validation and reconcile current architecture and relevant human documentation with the code. Audio changes require emitted-audio verification and user-visible changes require running-app evidence. Distinguish tests not run from tests passed.
+Orchestrator chats may delegate isolated slice branches/worktrees and coordinate multiple PRs. Each assignment names ownership, base and acceptance. Preserve unrelated work. PRs link parent and slice; use Refs for a parent feature until final acceptance and architecture reconciliation are complete.
 
-Submit a PR with the problem, resulting behavior, planning anchor and validation. A maintainer authorizes merging. See the [code of conduct](CODE_OF_CONDUCT.md), [security policy](SECURITY.md) and [support guidance](SUPPORT.md).
+Reconcile architecture and relevant human docs with implementation. Audio changes need emitted-audio evidence; visible changes need running-app verification. Report blocked/unrun checks honestly. Maintainers authorize merges. See [conduct](CODE_OF_CONDUCT.md), [security](SECURITY.md) and [support](SUPPORT.md).

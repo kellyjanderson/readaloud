@@ -9,7 +9,7 @@
 - [audio export and headless execution](../architecture/audio-export-and-headless-execution.md)
 - [playback orchestration and synthesis boundaries](../architecture/playback-orchestration-and-synthesis-boundaries.md)
 
-Retained legacy contract. Final/refinement status is not implementation proof; current behavior is described in the architecture above. New work follows [AGENTS.md](../../AGENTS.md) and the active ACD/plan.
+Retained legacy contract. Final/refinement status is not implementation proof; current behavior is described in the architecture above. New work follows [AGENTS.md](../../AGENTS.md) and the GitHub design issue and slices.
 
 Last updated: October 24, 2026
 Status: Final specification
@@ -84,7 +84,7 @@ Each cached chunk sidecar must include:
 
 Voice and model identity come from the prepared character voice binding, including voice-asset digest, model-manifest digest, engine compatibility and pronunciation-profile identity. The cache key and sidecar must also identify effective pronunciation/delivery realization, adapter and boundary-policy versions. A stable voice name is insufficient when its bytes change. Binding revisions route result ownership; unchanged content fingerprints may reuse audio across revisions.
 
-The runtime validates manifests and publishes assets/audio atomically. Legacy entries without required fingerprints are not reusable under the new contract. Characters reference shared manifests; they do not own cache files or native handles. Disk retention and cleanup remain shared cache-service responsibilities. This amendment does not introduce automatic eviction: any future disk-budget policy must preserve pinned queue/export audio and explicitly revise the retention contract below. See [Document Preparation and Execution Contexts](../acd/prepared-document-runtime.acd).
+The runtime validates manifests and publishes assets/audio atomically. Legacy entries without required fingerprints are not reusable under the new contract. Characters reference shared manifests; they do not own cache files or native handles. Disk retention and cleanup remain shared cache-service responsibilities. This amendment does not introduce automatic eviction: any future disk-budget policy must preserve pinned queue/export audio and explicitly revise the retention contract below. See [Document Preparation and Execution Contexts](https://github.com/kellyjanderson/readaloud/issues/48).
 
 ## Retention Rules
 

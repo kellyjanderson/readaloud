@@ -2,14 +2,20 @@
 
 Problem and resulting behavior:
 
-## Authority
+## Authority and integration
 
-ACD + same-name plan, or issue/journal entry for a small architecture-conforming change:
+Refs parent design issue:
+Slice issue and accepted design revision:
+Base branch/commit and intended integration target:
+Orchestrator/worker ownership (if delegated):
 
 ## Validation
 
-Commands and results; distinguish passed, not run and blocked. Include native/audio evidence when relevant.
+Checks and evidence; distinguish passed, failed, blocked and not run. Include native/audio and running-app evidence where relevant.
 
-## Reconciliation
+## Architecture reconciliation
 
-Architecture and user-doc impact (or why none). For completed plans, link archived ACD/plan. Do not mark runtime acceptance complete based only on source tests.
+Architecture/user-doc changes or why none:
+Remaining feature acceptance or reconciliation work:
+
+Do not auto-close the parent design from an intermediate PR. A merged slice is not proof of final feature acceptance.

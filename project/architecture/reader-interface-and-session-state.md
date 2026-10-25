@@ -26,7 +26,7 @@ The ACD defines prepared document revision ownership and render-ahead assignment
 
 ## Retained child contracts
 
-These legacy contracts describe intended behavior and acceptance; `final` denotes refinement, not verified implementation. New changes use an ACD and plan.
+These legacy contracts describe intended behavior and acceptance; `final` denotes refinement, not verified implementation. New changes use GitHub design and slice issues; final architecture stays in this repository.
 
 - [desktop native menu and mobile overflow navigation](../specifications/desktop-native-menu-and-mobile-overflow-navigation.md)
 - [desktop reader title chrome minimization](../specifications/desktop-reader-title-chrome-minimization.md)

@@ -1,7 +1,3 @@
-# Architectural change documents
+# Architectural change planning
 
-An ACD records the delta from current architecture. Each active ACD has exactly one same-basename implementation plan. Completed, reconciled pairs move to their respective `archive/` directories.
-
-- [Prepared document runtime](prepared-document-runtime.acd) — accepted direction; implementation pending. [Plan](../planning/prepared-document-runtime.plan).
-
-See [AGENTS.md](../../AGENTS.md) and the [template](../../.agents/skills/acd/TEMPLATE.acd).
+Working ACDs now live in [GitHub design issues](https://github.com/kellyjanderson/readaloud/issues/48). Do not create local .acd files. See [the workflow](../../docs/project-management.md). Final architecture remains in [architecture](../architecture/README.md). Original drafts are recoverable in Git history.

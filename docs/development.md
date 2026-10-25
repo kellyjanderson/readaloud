@@ -14,4 +14,4 @@ ruby tools/check_docs.rb
 
 Run focused tests first when changing one subsystem. Native session lifetime, actual audio output and visible UI responsiveness require running-app/native checks. Pure Dart or widget tests do not establish these. Generated outputs remain ignored under `project/test-artifacts/` and `tmp/`.
 
-See [architecture](../project/architecture/README.md) for source/test locations and [contributing](../CONTRIBUTING.md) for the ACD/plan workflow. No current fresh test-pass or release qualification is implied by this setup guide.
+See [architecture](../project/architecture/README.md) for source/test locations and [contributing](../CONTRIBUTING.md) for the GitHub planning workflow. No current fresh test-pass or release qualification is implied by this setup guide.

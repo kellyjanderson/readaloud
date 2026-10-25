@@ -4,7 +4,7 @@
 
 - [character dialogue attribution and voice casting](../architecture/character-dialogue-attribution-and-voice-casting.md)
 
-Retained legacy contract. Final/refinement status is not implementation proof; current behavior is described in the architecture above. New work follows [AGENTS.md](../../AGENTS.md) and the active ACD/plan.
+Retained legacy contract. Final/refinement status is not implementation proof; current behavior is described in the architecture above. New work follows [AGENTS.md](../../AGENTS.md) and the GitHub design issue and slices.
 
 Status: final
 
@@ -54,7 +54,7 @@ When distinct assignments are not possible because compatible voices are unavail
 
 ## Prepared Audio Requirement
 
-Ordinary narrator/character transitions select resident document voice context during render-ahead generation. The player consumes finalized audio and must not stop, seek, rebuild sources or recreate an engine session merely because the next character differs. Whole-document semantic readiness and contiguous audio lead follow [Prepared Document and Buffered Playback](prepared-document-and-buffered-playback.md). User edits to assignments are distinct revision changes, not ordinary character transitions.
+Ordinary narrator/character transitions select resident document voice context during render-ahead generation. The player consumes finalized audio and must not stop, seek, rebuild sources or recreate an engine session merely because the next character differs. Whole-document semantic readiness and contiguous audio lead follow [Prepared Document and Buffered Playback](https://github.com/kellyjanderson/readaloud/issues/48). User edits to assignments are distinct revision changes, not ordinary character transitions.
 
 ## Constraints
 

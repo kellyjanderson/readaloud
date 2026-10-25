@@ -1,19 +1,13 @@
-# Change title implementation plan
-Type: Implementation Plan
-Status: Draft
-Architecture authority: ../acd/same-basename.acd
-Branch: codex/same-basename
+# GitHub slice issue body template
 
-## Goal and constraints
-## Dependencies
-## [ ] P0 — Bounded state change
-Objective:
-Depends on:
-Scope:
-Validation:
-Completion evidence:
+Use in GitHub; do not instantiate in the repository.
 
-## [ ] FINAL — Validate, reconcile and archive
-Run final validation. Reconcile actual implementation into canonical architecture and subject-oriented docs; record docs impact or why none. Remove contradictions, verify links, archive the ACD and this plan, and prepare one PR. Merge requires user authorization.
-Validation:
-Completion evidence:
+Parent design / decision revision:
+Objective and exclusions:
+Dependencies (also use native relationships):
+Owner/chat and file/module scope:
+Base commit, branch/worktree and integration target:
+Validation and acceptance:
+Return contract: result, changed paths, commit/PR, exact checks/evidence, blockers and remaining work.
+
+FINAL: verify required evidence and merged architecture/user-documentation reconciliation before closing parent.

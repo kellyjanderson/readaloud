@@ -1,6 +1,3 @@
-# Implementation planning
+# Planning
 
-- [Prepared document runtime](prepared-document-runtime.plan) — active; paired with its [ACD](../acd/prepared-document-runtime.acd).
-- [Open-source compliance checklist](open-source-compliance-plan.md) — retained release prerequisite; requires owner license/packaging decisions.
-
-Completed plans archive here; old leaf checklists are [historical](archive/progression.md), not current implementation status. Use the [plan template](../../.agents/skills/implementation-plan/TEMPLATE.plan). No separate implementation-specification stage is required.
+Active plans and progress live in [GitHub](../../docs/project-management.md), with native sub-issues and dependencies. This directory retains historical archives only; do not add working plans. The [compliance plan](https://github.com/kellyjanderson/readaloud/issues/55) is also external.

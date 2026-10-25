@@ -9,7 +9,7 @@ body:
       value: |
         Thanks for proposing a feature.
 
-        Architecture changes use an ACD and paired implementation plan; small changes may use this issue.
+        This issue is the working design authority. Use native sub-issues for implementation slices; do not create local planning files.
   - type: textarea
     id: problem
     attributes:
@@ -28,8 +28,8 @@ body:
     id: planning
     attributes:
       label: Related planning
-      description: Link an active ACD/plan when available. Describe the problem before proposing implementation.
-      placeholder: project/acd/... and project/planning/...
+      description: Link affected repository architecture and any parent issue. Include exclusions, migration and execution ownership when relevant.
+      placeholder: Architecture URL, related issues, constraints and unresolved decisions
   - type: textarea
     id: success
     attributes:

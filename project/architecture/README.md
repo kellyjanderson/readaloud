@@ -1,6 +1,6 @@
 # Architecture
 
-Current source structure, ownership and known limitations. Proposed changes belong in [active ACDs](../acd/README.md), not in descriptions of implemented behavior. October 24 reconciliation is a source review; native tests and installed-app validation remain pending.
+Current source structure, ownership and known limitations. Proposed changes belong in [GitHub design issues](../../docs/project-management.md), not in descriptions of implemented behavior. October 24 reconciliation is a source review; native tests and installed-app validation remain pending.
 
 - [System Overview](system-overview.md)
 - [Document and Speech Pipeline](document-speech-pipeline.md)

@@ -6,7 +6,7 @@ A local-first Flutter reader for long-form text-to-speech using Kokoro. Import d
 
 macOS is the current functional target. Other Flutter platform folders are retained but are not qualified by the current project review. This repository is pre-release; older release labels and the package version are being reconciled before the next release.
 
-Speaker attribution is heuristic. Document preparation and native inference resource lifetime have known limitations documented in [current architecture](project/architecture/README.md). Planned improvements live in a separate [ACD and implementation plan](project/acd/README.md).
+Speaker attribution is heuristic. Document preparation and native inference resource lifetime have known limitations documented in [current architecture](project/architecture/README.md). Planned improvements live in [GitHub design and slice issues](docs/project-management.md).
 
 ## Features
 
@@ -41,14 +41,14 @@ See [development and verification](docs/development.md) for checks and build ins
 | `assets/`, `third_party/` | Bundled resources and vendored dependencies |
 | [docs](docs/README.md) | Human setup and maintenance guidance |
 | [architecture](project/architecture/README.md) | Current implementation and evidence locations |
-| [ACDs](project/acd/README.md), [plans](project/planning/README.md) | Proposed changes and bounded implementation work |
+| [GitHub planning](docs/project-management.md) | Working design, execution slices and orchestrator handoffs |
 | [legacy contracts](project/specifications/README.md) | Retained detailed behavior references |
 | [archive](project/archive/README.md) | Superseded specifications and historical snapshots |
 
 ## Contributing and support
 
-Read [CONTRIBUTING.md](CONTRIBUTING.md), [AGENTS.md](AGENTS.md), [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md), [SUPPORT.md](SUPPORT.md) and [SECURITY.md](SECURITY.md). New architecture changes use one ACD and one paired plan, not a recursive specification tree.
+Read [CONTRIBUTING.md](CONTRIBUTING.md), [AGENTS.md](AGENTS.md), [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md), [SUPPORT.md](SUPPORT.md) and [SECURITY.md](SECURITY.md). Working architecture and planning live in GitHub; final architecture is reconciled alongside implementation in this repository.
 
 ## Licensing
 
-A top-level project license has not yet been selected. Do not infer a project license from public repository visibility. Existing third-party notices remain with their components; see the [licensing checklist](project/planning/open-source-compliance-plan.md).
+A top-level project license has not yet been selected. Do not infer a project license from public repository visibility. Existing third-party notices remain with their components; see the [licensing checklist](https://github.com/kellyjanderson/readaloud/issues/55).

@@ -1,10 +1,10 @@
 # Maintenance and GitHub workflow
 
-## Minimal repository workflow
+## Repository and GitHub boundary
 
-The current interim repository workflow keeps architecture in Git, proposed deltas in one ACD, and execution state in its same-name plan. This is not a decision to retain planning authority in Git permanently. Use one PR per plan. Issues capture a bug or user outcome and link to those files; do not duplicate the full plan in an issue, wiki and board. GitHub is useful for tracking and enforcing checks, not as a substitute for architectural ownership and decisions.
+Working design, planning, assignments, blockers and evidence records live in GitHub. Final architecture and human documentation remain in Git and are reconciled with implementation. See [project management](project-management.md) for live entry points and orchestrator handoffs. Multiple isolated worker branches and slice PRs are supported; no duplicate local plan is required.
 
-The documentation workflow runs `ruby tools/check_docs.rb` without a model or Flutter installation. The checker verifies local paths, direct leaf/architecture links and one-to-one active ACD/plan pairing. It cannot establish semantic correctness or runtime conformance.
+The documentation checker validates local paths and reciprocal legacy architecture links, and rejects working files in retired ACD/planning locations. It does not establish semantic correctness or runtime conformance.
 
 ## GitHub options checked October 24, 2026
 
@@ -12,9 +12,9 @@ Read Aloud is a public personal repository. Most useful features below are avail
 
 | Feature | Recommended use | Avoided repeated agent work |
 | --- | --- | --- |
-| Issues and milestones | One issue per outcome/defect, milestone per release; link the ACD/plan | Rediscovering scope and release grouping |
+| Issues and milestones | One design issue per outcome, sub-issues per bounded slice, milestone per release | Rediscovering scope and release grouping |
 | Projects | One board/table with Backlog, Ready, In progress, Review and Done; link issues/PRs | Hand-maintained status reports and duplicate trackers |
-| Built-in Project workflows | Update item status from closed issues/merged PRs; optionally auto-add filtered items | Polling an agent merely to keep status current |
+| Built-in Project workflows | Auto-add related items; retain an explicit evidence/reconciliation gate before Done | Polling an agent merely to keep status current |
 | Pull requests and required checks | Review the exact diff; require deterministic checks before merge | Repeating mechanical review in chat |
 | Actions | Start with documentation checks; add Flutter/native jobs once model acquisition and toolchain are reproducible | Agent tokens spent rerunning predictable validation |
 | Grouped Dependabot updates | Consider weekly or monthly grouped Dart updates with a small PR limit; isolate native inference updates | Repeated package-version searches and many small PRs |
@@ -23,7 +23,7 @@ Read Aloud is a public personal repository. Most useful features below are avail
 
 Pro adds private-repository review/protection features and higher included quotas. It does not increase Codex allowance or include a paid Copilot entitlement. No paid AI reviewer is assumed here. Existing public-repository features are sufficient to start. Exact token savings cannot be promised; avoiding duplicate documents, status polling and repeated deterministic checks is the mechanism.
 
-No Project, billing change, branch protection or Dependabot schedule was enabled by this cleanup. The documentation workflow is committed configuration; it runs after publication according to its event triggers. Choose account-level settings separately.
+A Read Aloud Project and design/slice issues were created during migration. No billing change, branch protection or Dependabot schedule was enabled. The documentation workflow is committed configuration; it runs after publication according to its event triggers. Choose account-level settings separately.
 
 ## Release decisions still needed
 
@@ -41,6 +41,6 @@ The sibling `project managment` prototype defines typed/versioned records (ACD-0
 
 GitHub Issues/sub-issues can hold change proposals and bounded slices; dependencies represent blocking relationships; Projects fields hold status and priority. These records live outside source branches. GitHub supports [dependency APIs and webhooks](https://github.blog/changelog/2025-08-21-dependencies-on-issues/), [Projects REST operations](https://github.blog/changelog/2025-09-11-a-rest-api-for-github-projects-sub-issues-improvements-and-more/) and [built-in automation](https://docs.github.com/en/issues/planning-and-tracking-with-projects/automating-your-project). An adapter would still need to enforce project-specific readiness/evidence rules, stable approved revisions and compact context retrieval. External records do not remove semantic reconciliation with implemented code.
 
-Tentative pilot: compare the current lightweight file workflow with one externally managed change. Use one authority, no bidirectional Markdown mirror, explicit approved revision/hash, and code/PR/evidence links. Export only at deliberate backup or release boundaries. Do not migrate existing authority until the pilot demonstrates acceptable reliability and benefit.
+Selected pilot: the prepared-document feature now uses GitHub design and slice issues. Compare its maintenance cost with the prior lightweight file workflow. Use one authority, no bidirectional Markdown mirror, explicit approved revision/hash, and code/PR/evidence links. Export only at deliberate backup or release boundaries. The user authorized this first migration; do not infer measured savings or migrate other repositories from this decision.
 
 Measure matched planning/replanning/review/closure tasks: input/cached-input/output tokens where available, tool-call count and returned payload volume, planning-only file mutations/commits, conflicts/recovery turns, elapsed time and missed requirements. Include adapter/setup/maintenance cost separately and amortize it over realistic task volume. Hold model, task scope and quality gates comparable; repeated observations are needed. Account allowance changes are a separate coarse observation, not interchangeable with token counts. No numeric savings claim is established.

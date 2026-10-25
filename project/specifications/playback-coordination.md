@@ -9,7 +9,7 @@
 - [audio export and headless execution](../architecture/audio-export-and-headless-execution.md)
 - [playback orchestration and synthesis boundaries](../architecture/playback-orchestration-and-synthesis-boundaries.md)
 
-Retained legacy contract. Final/refinement status is not implementation proof; current behavior is described in the architecture above. New work follows [AGENTS.md](../../AGENTS.md) and the active ACD/plan.
+Retained legacy contract. Final/refinement status is not implementation proof; current behavior is described in the architecture above. New work follows [AGENTS.md](../../AGENTS.md) and the GitHub design issue and slices.
 
 Last updated: October 24, 2026
 Status: Final specification
@@ -81,7 +81,7 @@ Unsupported action:
 
 ## Queue Behavior
 
-- Playback begins after document readiness and contiguous startup lead; [Document Preparation and Execution Contexts](../acd/prepared-document-runtime.acd) defines watermark and short-document semantics.
+- Playback begins after document readiness and contiguous startup lead; [Document Preparation and Execution Contexts](https://github.com/kellyjanderson/readaloud/issues/48) defines watermark and short-document semantics.
 - Audio is generated ahead of the playhead; finalized contiguous chunks append to the active queue without restart.
 - Later routed chunks must continue forward playback without requiring a user pause/play recovery cycle.
 - Pausing playback does not delete completed chunk files.
@@ -123,7 +123,7 @@ No child specifications.
 
 ## Verification Status
 
-The October 24 changes are target behavior, not verified implementation. Paired scenarios are in [Prepared Document and Buffered Playback](../test-specifications/prepared-document-and-buffered-playback.md).
+The October 24 changes are target behavior, not verified implementation. Paired scenarios are in [Prepared Document and Buffered Playback](https://github.com/kellyjanderson/readaloud/issues/54).
 
 ## Acceptance
 

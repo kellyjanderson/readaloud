@@ -1,7 +1,7 @@
 ---
 name: implementation-plan
-description: Plan and execute bounded slices for one active Read Aloud ACD.
+description: Coordinate bounded GitHub implementation slices for a Read Aloud design issue.
 ---
-# Implementation Plans
+# GitHub implementation slices
 
-Read AGENTS.md and the active ACD. Maintain exactly one same-basename .plan under project/planning/. Use TEMPLATE.plan. One branch and one PR cover the entire plan; slices are coherent commits, not separate feature branches. Each slice states objective, dependencies, bounded scope, validation and completion evidence. Do not mark blocked validation passed. Final work reconciles implemented behavior into architecture and docs, checks links and contradictory guidance, then archives the completed ACD and plan. Do not create a journal entry per planned slice or duplicate plan state in GitHub.
+Read AGENTS.md, docs/project-management.md, the parent design and accepted revision. Use native sub-issues/dependencies and Project Status; never create local .plan files or progress journals. TEMPLATE.plan is an issue-body outline only. An orchestrator may delegate independent work to isolated branches/worktrees with scoped ownership, base commit, acceptance and return contract. One PR per plan is not required. Workers preserve other work and report evidence to their slice or orchestrator. The orchestrator is the single dispatcher and integration owner; no duplicate claims or uncoordinated parent edits. FINAL verifies acceptance, merged architecture/user docs and integration target before closing the feature. Batch checkpoints; do not poll or duplicate status in files.

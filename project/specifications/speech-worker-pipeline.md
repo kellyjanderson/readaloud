@@ -8,7 +8,7 @@
 - [system overview](../architecture/system-overview.md)
 - [playback orchestration and synthesis boundaries](../architecture/playback-orchestration-and-synthesis-boundaries.md)
 
-Retained legacy contract. Final/refinement status is not implementation proof; current behavior is described in the architecture above. New work follows [AGENTS.md](../../AGENTS.md) and the active ACD/plan.
+Retained legacy contract. Final/refinement status is not implementation proof; current behavior is described in the architecture above. New work follows [AGENTS.md](../../AGENTS.md) and the GitHub design issue and slices.
 
 Last updated: October 24, 2026
 Status: Final specification
@@ -81,7 +81,7 @@ Every event must include:
 
 The worker consumes a fully analyzed instrumented document and resident character voice bindings. It does not infer speakers while rendering. The runtime worker and model session are long-lived; inference tensors are released per request. Realization, route derivation and chunk planning run in this worker rather than the UI controller.
 
-Scheduling uses bounded contiguous playable-time watermarks, with active refill ahead of export/speculative work. First-chunk priority does not bypass the startup lead gate. Worker exit, timeout, cancellation and shutdown must resolve owned requests. [Document Preparation and Execution Contexts](../acd/prepared-document-runtime.acd) defines execution lanes and handoffs.
+Scheduling uses bounded contiguous playable-time watermarks, with active refill ahead of export/speculative work. First-chunk priority does not bypass the startup lead gate. Worker exit, timeout, cancellation and shutdown must resolve owned requests. [Document Preparation and Execution Contexts](https://github.com/kellyjanderson/readaloud/issues/48) defines execution lanes and handoffs.
 
 ## Stage Rules
 

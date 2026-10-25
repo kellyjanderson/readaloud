@@ -5,7 +5,7 @@
 - [speech enrichment and narration](../architecture/speech-enrichment-and-narration.md)
 - [pronunciation planning and tts artifacts](../architecture/pronunciation-planning-and-tts-artifacts.md)
 
-Retained legacy contract. Final/refinement status is not implementation proof; current behavior is described in the architecture above. New work follows [AGENTS.md](../../AGENTS.md) and the active ACD/plan.
+Retained legacy contract. Final/refinement status is not implementation proof; current behavior is described in the architecture above. New work follows [AGENTS.md](../../AGENTS.md) and the GitHub design issue and slices.
 
 Last updated: April 3, 2026
 Status: Final specification

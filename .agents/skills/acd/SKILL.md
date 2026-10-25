@@ -1,7 +1,7 @@
 ---
 name: acd
-description: Define a bounded architectural delta and its acceptance evidence for Read Aloud.
+description: Define a bounded architectural delta in a Read Aloud GitHub design issue.
 ---
-# Architectural Change Documents
+# Architectural change design issues
 
-Read AGENTS.md, affected canonical architecture, source/tests and the active ACD first. Create or update one project/acd/<change>.acd, paired with project/planning/<change>.plan. Use TEMPLATE.acd. Do not create implementation-spec trees. Distinguish accepted target from implemented facts. Include ownership, execution context, failure/recovery, migration and observable acceptance. Reconcile actual validated behavior into architecture and user documentation before archiving the completed pair. Read only affected documents; archived material is historical context, not an automatic context load.
+Read AGENTS.md, docs/project-management.md, the current issue and affected architecture/source. Author the working ACD in a GitHub issue using TEMPLATE.acd as an issue-body outline, never as a new repository file. Include problem, outcome, exclusions, ownership/concurrency, migration, acceptance and reconciliation targets. Record material decisions with revision identity. Keep the body current and history in comments. Link bounded sub-issues; no recursive spec trees or synchronized Markdown copy. Final architecture is reconciled with implementation in Git; close the design only after accepted evidence and merged reconciliation.

@@ -24,11 +24,11 @@ Tests listed here are existing evidence locations, not a claim that they passed 
 
 ## Proposed changes
 
-See [prepared document runtime ACD](../acd/prepared-document-runtime.acd) and its [implementation plan](../planning/prepared-document-runtime.plan). Historical design prose is preserved in the [architecture snapshot](../archive/architecture/2026-10-24/speech-enrichment-and-narration.md).
+See [prepared document runtime ACD](https://github.com/kellyjanderson/readaloud/issues/48) and its [implementation plan](https://github.com/kellyjanderson/readaloud/issues/48). Historical design prose is preserved in the [architecture snapshot](../archive/architecture/2026-10-24/speech-enrichment-and-narration.md).
 
 ## Retained child contracts
 
-These legacy contracts describe intended behavior and acceptance; `final` denotes refinement, not verified implementation. New changes use an ACD and plan.
+These legacy contracts describe intended behavior and acceptance; `final` denotes refinement, not verified implementation. New changes use GitHub design and slice issues; final architecture stays in this repository.
 
 - [adjacent speaker context attribution](../specifications/adjacent-speaker-context-attribution.md)
 - [append only forward playback queue](../specifications/append-only-forward-playback-queue.md)

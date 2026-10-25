@@ -6,7 +6,7 @@ Existing detailed test specifications remain reference material. New work define
 
 ### Document Preparation and Buffered Playback
 
-- [Prepared Document and Buffered Playback](prepared-document-and-buffered-playback.md)
+- [Prepared Document and Buffered Playback](https://github.com/kellyjanderson/readaloud/issues/54)
 
 ### App Shell And Platform Navigation
 

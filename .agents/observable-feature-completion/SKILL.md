@@ -13,11 +13,11 @@ Internal support work may still be valuable and final.
 
 It must not be reported as completing the user-facing feature unless the intended outcome is visible, audible, or directly interactive in the running app.
 
-## Specification Rule
+## Acceptance Rule
 
-When refining specifications for user-facing work:
+When defining GitHub design and slice acceptance for user-facing work:
 
-* at least one final leaf must capture the surfaced running-app outcome explicitly
-* live settings surfaces, dialogs, or panels should have explicit named UI or specification parent branches
+* the parent feature and final acceptance slice must name the observable running-app outcome
+* live settings surfaces, dialogs, or panels must have clear ownership and linked durable UI/architecture references
 
-Do not leave a live surface represented only by scattered behavior leaves.
+Do not leave a live surface represented only by scattered implementation tasks.

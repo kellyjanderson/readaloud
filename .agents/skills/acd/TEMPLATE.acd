@@ -1,15 +1,14 @@
-# Change title
-Type: Architectural Change Document
-Status: Draft
-Date: YYYY-MM-DD
-Canonical architecture: affected paths
-Implementation plan: ../planning/same-basename.plan
+# GitHub design issue body template
 
-## Current behavior and problem
-## Target delta and invariants
-## Ownership and execution context
-## Compatibility and migration
+Use in GitHub; do not instantiate this file in the repository.
+
+## Problem and outcome
+## Architectural delta and affected architecture
+## Constraints and exclusions
+## Ownership, execution contexts and failure handling
+## Migration and compatibility
 ## Acceptance evidence
 ## Reconciliation targets
-Include canonical architecture and human-facing docs, or justify no docs impact.
-## Non-goals and open questions
+## Decisions and open questions
+
+Use native sub-issues for execution; decision comments identify accepted revisions.

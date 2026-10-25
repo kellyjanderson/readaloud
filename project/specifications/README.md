@@ -1,6 +1,6 @@
 # Retained behavior contracts
 
-These are legacy references, not a mandatory process stage. `final` means a contract was refined, not that its implementation passed acceptance. New changes use [ACDs](../acd/README.md) and [plans](../planning/README.md). Each retained document links directly to current architecture; architecture links to its final children.
+These are legacy references, not a mandatory process stage. `final` means a contract was refined, not that its implementation passed acceptance. New changes use [GitHub design and slice issues](../../docs/project-management.md). Each retained document links directly to current architecture; architecture links to its final children.
 
 ## Final children by architecture
 
@@ -354,7 +354,7 @@ These are legacy references, not a mandatory process stage. `final` means a cont
 - [Playback Progress and Jump Mapping](playback-progress-and-jump-mapping.md)
 - [Playback Quality Instrumentation](playback-quality-instrumentation.md)
 - [PositionMap](position-map.md)
-- [Prepared Document and Buffered Playback](prepared-document-and-buffered-playback.md)
+- [Prepared Document and Buffered Playback](https://github.com/kellyjanderson/readaloud/issues/48)
 - [Primary Reader Control Set](primary-reader-control-set.md)
 - [Pronunciation Artifact Model](pronunciation-artifact-model.md)
 - [Pronunciation Candidate Model](pronunciation-candidate-model.md)

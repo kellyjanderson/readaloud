@@ -25,11 +25,11 @@ Tests listed here are existing evidence locations, not a claim that they passed 
 
 ## Proposed changes
 
-See [prepared document runtime ACD](../acd/prepared-document-runtime.acd) and its [implementation plan](../planning/prepared-document-runtime.plan). Historical design prose is preserved in the [architecture snapshot](../archive/architecture/2026-10-24/system-overview.md).
+See [prepared document runtime ACD](https://github.com/kellyjanderson/readaloud/issues/48) and its [implementation plan](https://github.com/kellyjanderson/readaloud/issues/48). Historical design prose is preserved in the [architecture snapshot](../archive/architecture/2026-10-24/system-overview.md).
 
 ## Retained child contracts
 
-These legacy contracts describe intended behavior and acceptance; `final` denotes refinement, not verified implementation. New changes use an ACD and plan.
+These legacy contracts describe intended behavior and acceptance; `final` denotes refinement, not verified implementation. New changes use GitHub design and slice issues; final architecture stays in this repository.
 
 - [app wide semantic theme token adoption](../specifications/app-wide-semantic-theme-token-adoption.md)
 - [appearance mode selection and system following](../specifications/appearance-mode-selection-and-system-following.md)
@@ -92,7 +92,7 @@ These legacy contracts describe intended behavior and acceptance; `final` denote
 - [playback progress and jump mapping](../specifications/playback-progress-and-jump-mapping.md)
 - [playback quality instrumentation](../specifications/playback-quality-instrumentation.md)
 - [position map](../specifications/position-map.md)
-- [prepared document and buffered playback](../specifications/prepared-document-and-buffered-playback.md)
+- [prepared document and buffered playback](https://github.com/kellyjanderson/readaloud/issues/48)
 - [primary reader control set](../specifications/primary-reader-control-set.md)
 - [pronunciation artifact model](../specifications/pronunciation-artifact-model.md)
 - [pronunciation candidate model](../specifications/pronunciation-candidate-model.md)

@@ -24,15 +24,14 @@ files.reject { |p| historical.call(p) || p.include?('/archive/') || p.include?('
   end
 end
 
-acds = Dir['project/acd/*.acd']
-plans = Dir['project/planning/*.plan']
-acds.each do |p|
-  paired = "project/planning/#{File.basename(p, '.acd')}.plan"
-  errors << "#{p}: missing paired plan" unless plans.include?(paired)
+# These locations are retired for active planning. History and navigation remain.
+Dir['project/{acd,planning}/**/*'].select { |p| File.file?(p) }.each do |p|
+  next if p.include?('/archive/') || p.end_with?('/README.md')
+  errors << "#{p}: working documents belong in GitHub, not the repository"
 end
-plans.each do |p|
-  paired = "project/acd/#{File.basename(p, '.plan')}.acd"
-  errors << "#{p}: missing paired ACD" unless acds.include?(paired)
+Dir['project/**/*.{acd,plan}'].each do |p|
+  next if p.include?('/archive/')
+  errors << "#{p}: active ACD/plan must be a GitHub issue"
 end
 
 Dir['project/specifications/*.md'].reject { |p| p.end_with?('/README.md') }.each do |spec|
@@ -45,7 +44,7 @@ Dir['project/specifications/*.md'].reject { |p| p.end_with?('/README.md') }.each
 end
 
 if errors.empty?
-  puts "Documentation checks passed: local targets, direct leaf ownership and #{acds.length} ACD/plan pair(s)."
+  puts "Documentation checks passed: local targets, direct leaf ownership and GitHub-only active planning."
 else
   warn errors.sort.join("\n")
   abort "Documentation checks failed: #{errors.length} error(s)."
