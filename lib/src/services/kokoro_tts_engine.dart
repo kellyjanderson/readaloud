@@ -5,7 +5,7 @@ import 'audio_artifact_store.dart';
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
-import 'dart:isolate';
+import 'package:flutter/foundation.dart' show compute;
 
 import 'package:crypto/crypto.dart' as crypto;
 import 'package:flutter/services.dart';
@@ -50,6 +50,11 @@ class KokoroTtsEngine
   late final _playbackPins = KokoroPlaybackArtifactPins(_artifactPins);
   String _synthesisIdentity = 'uninitialized';
   int get debugPlaybackPinCount => _playbackPins.length;
+  Duration get debugPlayableBufferedLead => _playableBufferedLeadTime();
+  Duration? get debugCurrentChunkDuration =>
+      _activeChunks.isEmpty || _currentChunkIndex >= _activeChunks.length
+      ? null
+      : _activeChunks[_currentChunkIndex].duration;
   @override
   TtsPlaybackResumeAnchor? get currentPlaybackResumeAnchor {
     if (_activePlaybackToken == null ||
@@ -435,8 +440,9 @@ class KokoroTtsEngine
         rawDictionary: tokenizerSources[4],
         ownerId: 'playback-tokenizer',
       );
-      _synthesisIdentity = await Isolate.run(
-        () => _tokenizerContentDigest(tokenizerSources),
+      _synthesisIdentity = await compute(
+        _tokenizerContentDigest,
+        tokenizerSources,
       );
       _exportTokenizer = KokoroTokenizationWorker(
         assets: tokenizerAssets,
