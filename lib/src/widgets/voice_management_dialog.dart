@@ -104,7 +104,7 @@ class VoiceAssignmentFeedback extends StatelessWidget {
             Semantics(liveRegion: true, child: Text(status)),
             const SizedBox(height: 6),
             const Text(
-              'Applying replays the current chunk and may repeat words.',
+              'Applying replays the current chunk and may repeat words. Apply pending choices before saving audio.',
             ),
             const SizedBox(height: 8),
             Align(
