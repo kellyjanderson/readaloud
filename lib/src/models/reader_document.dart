@@ -69,6 +69,25 @@ class ReaderDocument {
        ),
        wordSpans = _buildWordSpans(speakableText);
 
+  /// Completed worker handoff: all expensive derived fields are retained.
+  ReaderDocument.preparedSnapshot({
+    required ReaderDocument source,
+    required this.normalizedImportResult,
+    required this.basePronunciationArtifacts,
+    required this.pdfData,
+  }) : title = source.title,
+       type = source.type,
+       displayHtml = source.displayHtml,
+       speakableText = source.speakableText,
+       baseSpeechAnnotations = source.baseSpeechAnnotations,
+       dialogueAttributions = source.dialogueAttributions,
+       characterCastRegistry = source.characterCastRegistry,
+       documentVoiceAttribution = source.documentVoiceAttribution,
+       presentation = source.presentation,
+       sourceDescription = source.sourceDescription,
+       attachments = List.unmodifiable(source.attachments),
+       wordSpans = List.unmodifiable(source.wordSpans);
+
   factory ReaderDocument.fromNormalized({
     required String title,
     required ReaderDocumentType type,
