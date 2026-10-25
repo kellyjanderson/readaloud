@@ -1206,7 +1206,7 @@ class SpeechRuntime {
           castId: workItem.chunk.castId,
           dialogueSpanId: workItem.chunk.dialogueSpanId,
           audioPath: event.audioPath,
-          duration: event.duration,
+          duration: Duration(milliseconds: correction['durationMillis']! as int),
           boundaryClass: workItem.chunk.boundaryClass,
           leadingSilenceBefore: Duration(
             milliseconds: correction['leadingSilenceBeforeMs']! as int,
@@ -1455,6 +1455,7 @@ Map<String, Object?> runSpeechRuntimeBoundaryCorrection(
   );
   return <String, Object?>{
     'applied': outcome.applied,
+    'durationMillis': outcome.duration.inMilliseconds,
     'boundaryClass': outcome.candidate.boundaryClass.name,
     'leadingSilenceBeforeMs': outcome.leadingSilenceBefore.inMilliseconds,
     'leadingSilenceAfterMs': outcome.leadingSilenceAfter.inMilliseconds,
