@@ -1,5 +1,56 @@
 import 'tts_engine.dart';
 
+/// Completed native WAVs retain admission credit while boundary correction and
+/// playlist publication are pending. Publication replaces this conservative raw
+/// duration with the corrected duration; it never opens an accounting gap.
+class KokoroProducedAudioCredit {
+  final Map<String, Duration> _durations = {};
+  void reserve(String chunkId, Duration duration) {
+    if (duration <= Duration.zero) throw ArgumentError.value(duration);
+    _durations[chunkId] = duration;
+  }
+
+  Duration unpublishedLead(Iterable<String> representedChunkIds) {
+    final represented = representedChunkIds.toSet();
+    return _durations.entries
+        .where((entry) => !represented.contains(entry.key))
+        .fold(Duration.zero, (sum, entry) => sum + entry.value);
+  }
+
+  void published(Iterable<String> chunkIds) {
+    for (final id in chunkIds) {
+      _durations.remove(id);
+    }
+  }
+
+  void clear() => _durations.clear();
+}
+
+/// A preparation producer cannot join its own task drain. Cancel inference and
+/// clear native playback before publishing the terminal failure instead.
+Future<void> kokoroTerminatePreparationFailure({
+  required void Function() invalidate,
+  required bool Function() isCurrent,
+  required Future<void> Function() cancel,
+  required Future<void> Function() reset,
+  required void Function(List<Object> cleanupErrors) report,
+}) async {
+  invalidate();
+  final cleanupErrors = <Object>[];
+  try {
+    await cancel();
+  } catch (error) {
+    cleanupErrors.add(error);
+  }
+  if (!isCurrent()) return;
+  try {
+    await reset();
+  } catch (error) {
+    cleanupErrors.add(error);
+  }
+  if (isCurrent()) report(cleanupErrors);
+}
+
 /// End-of-document and a new speak request join the same in-flight reset.
 /// A replacement may install sources only after the old stop/clear has drained.
 class KokoroPlaybackResetBarrier {
@@ -8,6 +59,69 @@ class KokoroPlaybackResetBarrier {
   Future<void>? _pending;
   Future<void> reset() =>
       _pending ??= _reset().whenComplete(() => _pending = null);
+}
+
+/// Serial native playlist mutations have an owned failure route. A rejected
+/// mutation is handled before the next operation, and cannot poison the drain
+/// future used by reset/replay. The bool distinguishes handled failure from a
+/// successfully committed mutation.
+class KokoroPlaylistMutationQueue {
+  Future<void> _tail = Future<void>.value();
+
+  Future<bool> run(
+    Future<void> Function() action, {
+    required Future<void> Function(Object, StackTrace) onFailure,
+  }) {
+    final result = _tail.then((_) async {
+      try {
+        await action();
+        return true;
+      } catch (error, stack) {
+        await onFailure(error, stack);
+        return false;
+      }
+    });
+    _tail = result.then<void>((_) {}, onError: (Object _, StackTrace _) {});
+    return result;
+  }
+
+  Future<void> get drained => _tail;
+}
+
+/// Natural completion may owe a release to an export lease. That debt belongs
+/// only to its resource/playback epochs, never a replacement or replay context.
+class KokoroDeferredResourceRelease {
+  ({int resource, int playback, Future<void> resetDrained})? _pending;
+  void defer({
+    required int resourceEpoch,
+    required int playbackEpoch,
+    Future<void>? resetDrained,
+  }) {
+    _pending = (
+      resource: resourceEpoch,
+      playback: playbackEpoch,
+      resetDrained: resetDrained ?? Future<void>.value(),
+    );
+  }
+
+  Future<bool> takeIfCurrent({
+    required int Function() resourceEpoch,
+    required int Function() playbackEpoch,
+    required bool Function() generationActive,
+  }) async {
+    while (true) {
+      final pending = _pending;
+      if (pending == null) return false;
+      await pending.resetDrained;
+      // A replay may itself have completed while the previous reset drained.
+      // Join that newer completion rather than consume its debt prematurely.
+      if (pending != _pending) continue;
+      _pending = null;
+      return pending.resource == resourceEpoch() &&
+          pending.playback == playbackEpoch() &&
+          !generationActive();
+    }
+  }
 }
 
 class KokoroPlaybackQueueSnapshot {
@@ -49,9 +163,9 @@ class KokoroForwardRecoveryPlan {
   const KokoroForwardRecoveryPlan.resumeFromNextBufferedChunk(
     int nextChunkIndex,
   ) : this._(
-         action: KokoroForwardRecoveryAction.resumeFromNextBufferedChunk,
-         nextChunkIndex: nextChunkIndex,
-       );
+        action: KokoroForwardRecoveryAction.resumeFromNextBufferedChunk,
+        nextChunkIndex: nextChunkIndex,
+      );
 
   final KokoroForwardRecoveryAction action;
   final int? nextChunkIndex;
@@ -63,6 +177,37 @@ const Duration kokoroCriticalBufferedLeadTime = Duration(seconds: 2);
 const Duration kokoroStartupMinimumBufferedLeadTime = Duration(seconds: 4);
 const int kokoroStartupMinimumBufferedChunkCount = 2;
 const int kokoroStartupPreparedChunkWindow = 3;
+
+/// Legacy text-only callers can have more chunks than pipeline capacity. Only
+/// this bounded prefix is synchronously admitted before the player may start;
+/// the remainder belongs to a separately cancellable producer.
+class KokoroStartupChunkWindow<T> {
+  KokoroStartupChunkWindow(List<T> chunks)
+    : startup = List.unmodifiable(
+        chunks.take(kokoroStartupPreparedChunkWindow),
+      ),
+      tail = List.unmodifiable(chunks.skip(kokoroStartupPreparedChunkWindow));
+  final List<T> startup;
+  final List<T> tail;
+}
+
+double kokoroNormalizeSpeechRate(double requested) {
+  if (!requested.isFinite || requested <= 0) {
+    throw ArgumentError.value(requested, 'speechRate');
+  }
+  return requested.clamp(0.7, 1.4).toDouble();
+}
+
+/// PCM duration already incorporates synthesis rate. Only transport speed
+/// changes how long that finalized audio remains playable in wall time.
+Duration kokoroPlayableLead(Duration audioLead, {double playerSpeed = 1}) {
+  if (!playerSpeed.isFinite || playerSpeed <= 0) {
+    throw ArgumentError.value(playerSpeed, 'playerSpeed');
+  }
+  return Duration(
+    microseconds: (audioLead.inMicroseconds / playerSpeed).round(),
+  );
+}
 
 TtsBufferPressure kokoroBufferPressureForLeadTime(Duration leadTime) {
   if (leadTime <= kokoroCriticalBufferedLeadTime) {
@@ -79,18 +224,23 @@ bool kokoroIsStartupWarmEnough({
   required Duration bufferedLeadTime,
   required int pendingChunkCount,
   required int remainingPlannedChunkCount,
+  double playerSpeed = 1,
 }) {
+  final effectiveLead = kokoroPlayableLead(
+    bufferedLeadTime,
+    playerSpeed: playerSpeed,
+  );
   final hasFutureWork = pendingChunkCount > 0 || remainingPlannedChunkCount > 0;
   if (!hasFutureWork) {
     return true;
   }
 
-  if (bufferedLeadTime >= kokoroTargetBufferedLeadTime) {
+  if (effectiveLead >= kokoroTargetBufferedLeadTime) {
     return true;
   }
 
   return bufferedChunkCount >= kokoroStartupMinimumBufferedChunkCount &&
-      bufferedLeadTime >= kokoroStartupMinimumBufferedLeadTime;
+      effectiveLead >= kokoroStartupMinimumBufferedLeadTime;
 }
 
 class KokoroRecoveryWordBoundary {
@@ -132,7 +282,8 @@ KokoroForwardRecoveryPlan kokoroPlanForwardRecovery(
       nextChunkIndex,
     );
   }
-  if (snapshot.pendingChunkCount > 0 || snapshot.remainingPlannedChunkCount > 0) {
+  if (snapshot.pendingChunkCount > 0 ||
+      snapshot.remainingPlannedChunkCount > 0) {
     return const KokoroForwardRecoveryPlan.waitForPreparedAudio();
   }
   return const KokoroForwardRecoveryPlan.none();
@@ -203,8 +354,9 @@ List<KokoroRecoveryWordSlice> kokoroPlanRecoverableChunkSlices({
     final maxEnd = (cursor + preferredTargetWords + 2)
         .clamp(minEnd, wordBoundaries.length - minimumSliceWords)
         .toInt();
-    final preferredEnd =
-        (cursor + preferredTargetWords).clamp(minEnd, maxEnd).toInt();
+    final preferredEnd = (cursor + preferredTargetWords)
+        .clamp(minEnd, maxEnd)
+        .toInt();
     final chosenEnd =
         _findRecoveryBoundary(
           wordBoundaries: wordBoundaries,
@@ -223,7 +375,8 @@ List<KokoroRecoveryWordSlice> kokoroPlanRecoverableChunkSlices({
     cursor = chosenEnd;
   }
 
-  if (slices.length <= 1 || slices.any((slice) => slice.wordCount < minimumSliceWords)) {
+  if (slices.length <= 1 ||
+      slices.any((slice) => slice.wordCount < minimumSliceWords)) {
     return const <KokoroRecoveryWordSlice>[];
   }
   return List<KokoroRecoveryWordSlice>.unmodifiable(slices);
@@ -243,18 +396,20 @@ List<T> kokoroBuildInitialPlaybackQueue<T>({
 
   final ordered = chunksById.values.toList(growable: false)
     ..sort((left, right) {
-      final wordComparison =
-          startWordIndexOf(left).compareTo(startWordIndexOf(right));
+      final wordComparison = startWordIndexOf(
+        left,
+      ).compareTo(startWordIndexOf(right));
       if (wordComparison != 0) {
         return wordComparison;
       }
-      final offsetComparison =
-          startOffsetOf(left).compareTo(startOffsetOf(right));
+      final offsetComparison = startOffsetOf(
+        left,
+      ).compareTo(startOffsetOf(right));
       if (offsetComparison != 0) {
         return offsetComparison;
       }
       return chunkIdOf(left).compareTo(chunkIdOf(right));
-  });
+    });
   return ordered;
 }
 
@@ -302,8 +457,9 @@ int _comparePlaybackChunkOrder<T>(
   required int Function(T chunk) startWordIndexOf,
   required int Function(T chunk) startOffsetOf,
 }) {
-  final wordComparison =
-      startWordIndexOf(left).compareTo(startWordIndexOf(right));
+  final wordComparison = startWordIndexOf(
+    left,
+  ).compareTo(startWordIndexOf(right));
   if (wordComparison != 0) {
     return wordComparison;
   }
@@ -370,4 +526,46 @@ int? _terminalPunctuationCodeUnit(String word) {
   }
 
   return null;
+}
+
+/// Hysteresis uses playable wall time. Kokoro's synthesis rate is already baked
+/// into PCM duration; only an independent player speed divides that duration.
+class KokoroBufferAdmission {
+  KokoroBufferAdmission({
+    this.high = kokoroTargetBufferedLeadTime,
+    this.low = kokoroLowWaterBufferedLeadTime,
+    this.maxChunks = 64,
+  }) {
+    if (low >= high || maxChunks < 1) {
+      throw ArgumentError('Invalid buffer policy');
+    }
+  }
+  final Duration high;
+  final Duration low;
+  final int maxChunks;
+  bool _full = false;
+  bool startupCapacityExhausted({
+    required Duration audioLead,
+    required int bufferedChunkCount,
+    required int pendingChunkCount,
+    required int remainingPlannedChunkCount,
+    double playerSpeed = 1,
+  }) {
+    final effective = kokoroPlayableLead(audioLead, playerSpeed: playerSpeed);
+    return bufferedChunkCount >= maxChunks &&
+        pendingChunkCount == 0 &&
+        remainingPlannedChunkCount > 0 &&
+        effective < kokoroStartupMinimumBufferedLeadTime;
+  }
+
+  bool admits({
+    required Duration audioLead,
+    required int outstandingChunks,
+    double playerSpeed = 1,
+  }) {
+    final effective = kokoroPlayableLead(audioLead, playerSpeed: playerSpeed);
+    if (_full && effective <= low) _full = false;
+    if (effective >= high) _full = true;
+    return !_full && outstandingChunks < maxChunks;
+  }
 }

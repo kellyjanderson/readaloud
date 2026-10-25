@@ -21,8 +21,10 @@ class VoiceSessionRealizationInput {
     this.mergedPronunciationResources =
         const MergedPronunciationResources.empty(),
     this.enabledActiveRuleModules = const <PronunciationRuleModule>[],
+    this.segmentLimit,
   });
 
+  final int? segmentLimit;
   final SpeechDocument speechDocument;
   final BaseSpeechAnnotationSet baseAnnotations;
   final BasePronunciationArtifactSet basePronunciationArtifacts;

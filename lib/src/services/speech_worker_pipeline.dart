@@ -224,8 +224,10 @@ class SpeechWorkerPipeline {
   SpeechWorkerPipeline({
     required SpeechWorkerChunkProcessor processor,
     this.maxPending = 8,
+    this.onCompleted,
   }) : _processor = processor;
   final int maxPending;
+  Future<void> Function(SpeechWorkerEvent)? onCompleted;
   int get pendingCount => _pending.length;
   Completer<void> _capacityChanged = Completer<void>();
   Future<void>? _pumpFuture;
@@ -373,13 +375,20 @@ class SpeechWorkerPipeline {
           continue;
         }
 
+        Future<void>? completion;
         try {
           await _processor.process(chunk, (event) {
             if (_isShutdown || _isCancelled(event.generationId)) {
               return;
             }
-            _emit(event);
+            if (event.type == SpeechWorkerEventType.completed &&
+                onCompleted != null) {
+              completion = Future.sync(() => onCompleted!(event));
+            } else {
+              _emit(event);
+            }
           });
+          await completion;
           if (_isCancelled(chunk.generationId)) {
             _emit(_cancelledEventFor(chunk));
           }

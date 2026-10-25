@@ -1,3 +1,4 @@
+import 'speech_planning_supervisor.dart';
 import '../models/chunk_plan.dart';
 import '../models/speech_document.dart';
 import '../models/tts_artifact.dart';
@@ -135,6 +136,7 @@ class TtsSpeakRequest {
     this.speechDocument,
     this.ttsArtifactSet,
     this.preparedResources,
+    this.planningContext,
   });
 
   final String text;
@@ -146,6 +148,7 @@ class TtsSpeakRequest {
   final SpeechDocument? speechDocument;
   final TtsArtifactSet? ttsArtifactSet;
   final List<PreparedVoiceBinding>? preparedResources;
+  final SpeechPlanningContext? planningContext;
 }
 
 class TtsExportRequest {
@@ -160,6 +163,8 @@ class TtsExportRequest {
     this.chunkPlan,
     this.speechDocument,
     this.ttsArtifactSet,
+    this.planningContext,
+    this.preparedResources,
   });
 
   final String text;
@@ -172,6 +177,8 @@ class TtsExportRequest {
   final ChunkPlan? chunkPlan;
   final SpeechDocument? speechDocument;
   final TtsArtifactSet? ttsArtifactSet;
+  final SpeechPlanningContext? planningContext;
+  final List<PreparedVoiceBinding>? preparedResources;
 }
 
 class TtsExportResult {
@@ -205,6 +212,12 @@ abstract interface class VoiceLibraryCapable {
 
 abstract interface class AudioExportCapable {
   Future<TtsExportResult> exportAudio(TtsExportRequest request);
+}
+
+/// Engines with a narrower supported range normalize intent before planning.
+/// The resulting effective rate must identify both cache content and inference.
+abstract interface class SpeechRateNormalizationCapable {
+  double normalizeSpeechRate(double requested);
 }
 
 abstract interface class TtsEngine {

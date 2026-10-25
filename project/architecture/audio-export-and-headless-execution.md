@@ -1,15 +1,23 @@
 # Audio Export and Headless Execution
 
 Reconciled: October 24, 2026
-Status: Current source architecture; runtime validation not refreshed
+Status: P3 export assembly source; integrated playback/export responsiveness remains acceptance work
 
 ## Implemented structure and limitations
 
 Launch options select interactive reading or headless execution. The headless runner imports inputs and uses the TTS engine instead of a separate synthesis implementation. Export assembles finalized chunk WAVs and metadata. Pronunciation and sentence probes exercise speech generation and emit diagnostic artifacts.
 
-The assembler reads and processes audio data and constructs output buffers. Asynchronous file APIs do not establish a dedicated CPU worker for assembly. Interactive export therefore needs execution-context review; headless command completion is not proof of responsive UI export.
+`ExportedAudioAssembler` is a stateful main-isolate supervisor with one active request and no waiting queue. Overlap is rejected. Each accepted request has a monotonic owner-local identity and a dedicated pure Dart isolate; only DTOs, file paths, progress and the terminal result cross the port. The worker scans RIFF sections, verifies matching PCM formats, copies audio in at most 64 KiB blocks and streams one chunk's JSON metadata at a time. It retains the request graph and per-chunk format descriptors, not whole-document PCM. WAV encoding, metadata traversal, file I/O and publication are worker-owned. Source chunks remain read-only.
+
+Cancellation is cooperative between bounded reads/writes and at an explicit staged/commit handshake. `cancel()` suppresses publication before commit authorization; after authorization, the short synchronous publication step completes and returns its result. `shutdown()` closes intake, cancels staging and awaits worker exit and file/temp cleanup. The default five-minute deadline requests cancellation and reports a timeout after drain; it does not pretend an unresponsive filesystem operation was forcibly cancelled. Worker errors/exit become terminal failures; a previous request's callbacks cannot clear a newer request. The engine owns document/session invalidation and must call these lifecycle seams. Progress callbacks are short main-isolate notifications, never assembly work.
+
+Audio and sidecar are flushed to a unique staging directory beside the destination. Publication renames the complete WAV first and sidecar last as its commit marker. Existing outputs are backed up and restored on ordinary publication errors; if rollback itself fails, the error names the retained recovery directory. Each rename is atomic, but two filesystem paths are not crash-atomic as a pair. Cancellation before commit leaves prior outputs intact. No cache chunk may be used as the output path.
+
+Durations come from decoded frame counts rather than the caller's possibly stale duration hints: the result carries microsecond-rounded duration, sidecar milliseconds round to the nearest millisecond, and exact frame counts/sample rate remain recorded. Ancillary RIFF sections and odd chunk padding are parsed; malformed lengths, unsupported/non-PCM formats, incompatible chunk formats and output exceeding the RIFF size limit fail before publication.
 
 Export/probe outputs are local artifacts and are excluded from normal source control. Audio correctness requires comparing emitted output with the intended phrase and routing, not merely a successful process exit. Model availability, native plugin lifetime and toolchain compatibility affect all these routes.
+
+The controller snapshots document, planning context and prepared bindings before export planning, and rejects stale preparation, dispatch and completion revisions. Export owns a separate resident planner/tokenizer/runtime, shares the single native synthesis admission owner with playback, and yields inference admission below playback's low-water lead. It does not stop playback or create a second native model session. Native resource replacement cancels and drains the export owner from initialization onward; direct headless callers prepare their own revision-zero context, while controller requests validate supplied resident bindings. Assembly receives ordered per-chunk metadata after bounded synthesis windows; metadata grows with document length, but whole PCM is never accumulated on the UI isolate.
 
 ## Source and tests
 
@@ -23,7 +31,7 @@ Export/probe outputs are local artifacts and are excluded from normal source con
 - [pronunciation_probe_runner_io_test.dart](../../test/pronunciation_probe_runner_io_test.dart)
 - [sentence_probe_runner_io_test.dart](../../test/sentence_probe_runner_io_test.dart)
 
-Tests listed here are existing evidence locations, not a claim that they passed in this review. The bundled Intel Dart executable cannot run in the current Apple Silicon execution environment.
+Focused tests exercise source-order PCM across block boundaries, ancillary RIFF sections, frame-derived durations, staged cancellation, overlap rejection, deadline/shutdown drain, retry isolation, malformed/mismatched inputs and rollback after sidecar publication failure. They use explicit completion barriers rather than sleep-based synchronization. These source tests do not establish native export/playback competition, frame timing, audible continuity or perceptual quality; integrated running-app acceptance remains in [P3](https://github.com/kellyjanderson/readaloud/issues/52) and [FINAL](https://github.com/kellyjanderson/readaloud/issues/54). Use the pinned native arm64 toolchain in [development guidance](../../docs/development.md).
 
 ## Proposed changes
 
