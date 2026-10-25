@@ -69,7 +69,22 @@ Future<void> main(List<String> args) async {
       await fingerprint(args[2]),
     ];
     final private = Directory('${output.path}/private')..createSync();
-    final model = await File(args[1]).copy('${private.path}/model.onnx');
+    // File.copy preserves source mode on macOS. Bundled model assets can be
+    // read-only; create our own writable file without changing that source.
+    final model = File('${private.path}/model.onnx');
+    final modelCopy = model.openWrite();
+    try {
+      await modelCopy.addStream(File(args[1]).openRead());
+      await modelCopy.flush();
+    } finally {
+      await modelCopy.close();
+    }
+    if ((await fingerprint(model.path))['sha256'] !=
+        sourceBefore.first['sha256']) {
+      throw StateError(
+        'Private model copy differs before intentional mutation',
+      );
+    }
     final voiceDir = Directory('${private.path}/voices')..createSync();
     final voice = await File(args[2]).copy('${voiceDir.path}/fixture.npy');
     final audio = '${output.path}/audio';
