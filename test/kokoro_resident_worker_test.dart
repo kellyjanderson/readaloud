@@ -40,6 +40,11 @@ void slowResident(Map<String, dynamic> input) async {
 
 void exitingResident(Map<String, dynamic> input) => Isolate.exit();
 
+void lateReadyResident(Map<String, dynamic> input) async {
+  await Future<void>.delayed(const Duration(milliseconds: 350));
+  slowResident(input);
+}
+
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
   KokoroSpeechWorkerChunkProcessor processor(
@@ -102,4 +107,16 @@ void main() {
     );
     await worker.dispose().timeout(const Duration(seconds: 3));
   });
+  test(
+    'startup timeout retains late ready channel for awaited shutdown',
+    () async {
+      final worker = processor(lateReadyResident);
+      await expectLater(
+        worker.prepareResources(documentId: 'd', revision: 1, voiceIds: []),
+        throwsA(isA<TimeoutException>()),
+      );
+      await worker.dispose().timeout(const Duration(seconds: 3));
+      await worker.dispose();
+    },
+  );
 }

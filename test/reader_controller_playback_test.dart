@@ -53,6 +53,21 @@ void main() {
           await loading;
           expect(controller.isDocumentPrepared, !fails);
           expect(controller.isResourcesReady, !fails);
+          if (!fails) {
+            expect(controller.resourceBindings, isNotEmpty);
+            expect(controller.resolvedResourceBindings, isNotEmpty);
+            final snapshot = controller.resolvedResourceBindings.first.toMap();
+            expect(
+              snapshot['documentId'],
+              ReaderDocument.sample().displayDocument.documentId,
+            );
+            expect(snapshot['decisionKind'], isNotNull);
+            await controller.setMultiVoiceEnabled(
+              !controller.isMultiVoiceEnabled,
+            );
+            expect(controller.isResourcesReady, isFalse);
+            expect(controller.resourceBindings, isEmpty);
+          }
           if (fails) {
             expect(controller.statusMessage, contains('corrupted voice asset'));
           }
@@ -2195,7 +2210,20 @@ class _ResourceBarrierEngine extends _FakeTtsEngine
     required String pronunciationProfileId,
   }) {
     if (!started.isCompleted) started.complete();
-    return barrier.future;
+    return barrier.future.then(
+      (_) => [
+        for (final voiceId in voiceIds)
+          PreparedVoiceBinding(
+            voiceId: voiceId,
+            voiceDigest: 'voice',
+            modelDigest: 'model',
+            engineVersion: 'test',
+            pronunciationProfileId: pronunciationProfileId,
+            bindingRevision: revision,
+            documentId: documentId,
+          ),
+      ],
+    );
   }
 
   @override

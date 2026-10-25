@@ -9,6 +9,46 @@ import 'package:read_aloud/src/services/speech_runtime.dart';
 import 'package:read_aloud/src/services/speech_worker_pipeline.dart';
 
 void main() {
+  test(
+    'shutdown drains held boundary correction and suppresses stale failure',
+    () async {
+      final started = Completer<void>();
+      final correction = Completer<Map<String, Object?>>();
+      final runtime = SpeechRuntime(
+        engineId: 'kokoro',
+        runtimeId: 'drain',
+        processor: _FakeSpeechWorkerChunkProcessor(),
+        boundaryCorrectionExecutor: (_) {
+          started.complete();
+          return correction.future;
+        },
+      );
+      final events = <SpeechRuntimeEvent>[];
+      runtime.events.listen(events.add);
+      await runtime.initializeRuntime();
+      await runtime.activateSession(_session());
+      await runtime.preparePriorityChunk(
+        sessionId: 'session-a',
+        generationId: 'generation-a',
+        chunk: _chunk('held'),
+      );
+      await started.future;
+      var closed = false;
+      final shutdown = runtime.shutdownRuntime().then((_) => closed = true);
+      await Future<void>.delayed(Duration.zero);
+      expect(closed, isFalse);
+      correction.completeError(StateError('late boundary failure'));
+      await shutdown;
+      expect(
+        events.where(
+          (e) =>
+              e.type == SpeechRuntimeEventType.chunkFailed ||
+              e.type == SpeechRuntimeEventType.chunkReady,
+        ),
+        isEmpty,
+      );
+    },
+  );
   final originalPlatform = defaultTargetPlatform;
 
   setUp(() {

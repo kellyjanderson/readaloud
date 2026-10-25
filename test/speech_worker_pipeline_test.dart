@@ -17,6 +17,8 @@ void main() {
             processor: processor,
             maxPending: 1,
           );
+          final events = <SpeechWorkerEvent>[];
+          pipeline.events.listen(events.add);
           await pipeline.prepareChunk(_request('old', 'held'));
           await processor.started.future;
           await pipeline.prepareChunk(_request('old', 'queued'));
@@ -49,6 +51,12 @@ void main() {
           await pipeline.shutdown();
           await pipeline.shutdown();
           expect(processor.processedChunkIds, ['held']);
+          expect(
+            events
+                .where((e) => e.type == SpeechWorkerEventType.cancelled)
+                .map((e) => e.chunkId),
+            containsAll(['queued', 'blocked', 'never']),
+          );
         },
       );
     }

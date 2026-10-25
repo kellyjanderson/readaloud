@@ -245,7 +245,10 @@ class SpeechWorkerPipeline {
         !_isCancelled(chunk.generationId)) {
       await _capacityChanged.future;
     }
-    if (_isShutdown || _isCancelled(chunk.generationId)) return false;
+    if (_isShutdown || _isCancelled(chunk.generationId)) {
+      _emit(_cancelledEventFor(chunk));
+      return false;
+    }
     if (priority) {
       _pending.addFirst(chunk);
     } else {
@@ -277,8 +280,13 @@ class SpeechWorkerPipeline {
         final chunk = command.chunks.single;
         await _admit(chunk, priority: true);
       case SpeechWorkerCommandType.preparePlan:
-        for (final chunk in command.chunks) {
-          if (!await _admit(chunk, priority: false)) break;
+        for (var index = 0; index < command.chunks.length; index++) {
+          if (!await _admit(command.chunks[index], priority: false)) {
+            for (final remainder in command.chunks.skip(index + 1)) {
+              _emit(_cancelledEventFor(remainder));
+            }
+            break;
+          }
         }
       case SpeechWorkerCommandType.cancelGeneration:
         await _cancelGeneration(command.generationId!);

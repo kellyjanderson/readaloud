@@ -686,6 +686,7 @@ class SpeechRuntime {
   final SpeechRuntimeCapabilities capabilities;
   final SpeechWorkerPipeline _pipeline;
   final BoundaryCorrectionExecutor _boundaryCorrectionExecutor;
+  final Set<Future<void>> _boundaryTasks = {};
   final StreamController<SpeechRuntimeEvent> _eventsController =
       StreamController<SpeechRuntimeEvent>.broadcast();
   final Map<String, _RuntimeChunkWorkItem> _pendingChunksById =
@@ -1027,6 +1028,7 @@ class SpeechRuntime {
     await _cancelActiveSession(reasonCode: 'shutdown');
     await _pipeline.shutdown();
     await _workerEventSubscription?.cancel();
+    await Future.wait(_boundaryTasks.toList());
     _state = SpeechRuntimeLifecycleState.disposed;
 
     _emit(
@@ -1139,7 +1141,9 @@ class SpeechRuntime {
           ),
         );
       case SpeechWorkerEventType.completed:
-        unawaited(_handleWorkerCompleted(event));
+        final task = _handleWorkerCompleted(event);
+        _boundaryTasks.add(task);
+        unawaited(task.whenComplete(() => _boundaryTasks.remove(task)));
       case SpeechWorkerEventType.failed:
         _pendingChunksById.remove(event.chunkId);
         _emit(
@@ -1196,7 +1200,8 @@ class SpeechRuntime {
       });
 
       if (_activeSessionId != workItem.sessionId ||
-          _activeGenerationId != workItem.generationId) {
+          _activeGenerationId != workItem.generationId ||
+          !identical(_pendingChunksById[event.chunkId], workItem)) {
         return;
       }
 

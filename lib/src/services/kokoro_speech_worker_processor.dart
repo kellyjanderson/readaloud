@@ -106,7 +106,13 @@ class KokoroSpeechWorkerChunkProcessor implements SpeechWorkerChunkProcessor {
     if (!closing && (_closing != null || _unhealthy)) {
       throw StateError('Resident worker is closing or unavailable.');
     }
-    await _start();
+    if (closing) {
+      // Startup may have timed out while the quarantined isolate is still
+      // initializing. Its eventual ready signal remains the cleanup channel.
+      await _ready.future;
+    } else {
+      await _start();
+    }
     if (_active != null) {
       throw StateError('Resident worker admission limit reached.');
     }
@@ -233,6 +239,7 @@ Future<void> _residentWorker(Map<String, dynamic> configuration) async {
             await runner!.initialize();
             documentId = command['documentId'] as String;
           }
+          bindings.clear();
           for (final voiceId in (command['voiceIds'] as List).cast<String>()) {
             await repository.loadVoice(voiceId, validateAsset: true);
             final digest = repository.digestFor(voiceId);
@@ -244,6 +251,7 @@ Future<void> _residentWorker(Map<String, dynamic> configuration) async {
               pronunciationProfileId:
                   command['pronunciationProfileId'] as String,
               bindingRevision: command['revision'] as int,
+              documentId: documentId!,
             );
           }
           // ignore: avoid_print

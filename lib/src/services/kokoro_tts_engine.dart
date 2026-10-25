@@ -134,10 +134,12 @@ class KokoroTtsEngine
   Future<void> shutdownResources() =>
       _resourceShutdown ??= _shutdownResources();
   Future<void> _shutdownResources() async {
+    ++_resourceRequest;
     _resourcesReady = false;
     await _exportDrained?.future;
     await _resourceTransition;
     await _speechRuntime?.shutdownRuntime();
+    _resourcesReady = false;
   }
 
   StreamSubscription<PlayerState>? _playerStateSubscription;
@@ -375,8 +377,8 @@ class KokoroTtsEngine
 
   @override
   Future<TtsExportResult> exportAudio(TtsExportRequest request) async {
-    if (_exportingResources) {
-      throw StateError('An export already owns speech resources.');
+    if (_exportingResources || _resourceShutdown != null) {
+      throw StateError('Speech resources are unavailable for export.');
     }
     _exportingResources = true;
     _exportDrained = Completer<void>();

@@ -90,7 +90,17 @@ class ReaderController extends ChangeNotifier {
   bool _disposed = false;
   bool _documentPrepared = true;
   List<PreparedVoiceBinding> _resourceBindings = const [];
-  List<PreparedVoiceBinding> get resourceBindings => _resourceBindings;
+  List<ResolvedPreparedVoiceReference> _resolvedResourceBindings = const [];
+  int _resourceBindingIntent = 0;
+  List<PreparedVoiceBinding> get resourceBindings =>
+      isResourcesReady ? _resourceBindings : const [];
+  List<ResolvedPreparedVoiceReference> get resolvedResourceBindings =>
+      isResourcesReady ? _resolvedResourceBindings : const [];
+  void _invalidateResourceBindings() {
+    ++_resourceBindingIntent;
+    _resourceBindings = const [];
+    _resolvedResourceBindings = const [];
+  }
 
   bool get isDisplayReady =>
       _document.displayHtml.isNotEmpty || _document.pdfData != null;
@@ -98,7 +108,8 @@ class ReaderController extends ChangeNotifier {
   bool get isAudioReady => _playbackActivity.isPlaying;
   bool get isResourcesReady =>
       _ttsEngine is! ResourcePreparationCapable ||
-      (_ttsEngine as ResourcePreparationCapable).resourcesReady;
+      (_resourceBindings.isNotEmpty &&
+          (_ttsEngine as ResourcePreparationCapable).resourcesReady);
 
   void _requireRevision(int revision) {
     if (_disposed || revision != _documentRevision) {
@@ -107,6 +118,7 @@ class ReaderController extends ChangeNotifier {
   }
 
   int _beginDocumentRequest() {
+    _invalidateResourceBindings();
     _preparation.cancel();
     return ++_documentRevision;
   }
@@ -921,6 +933,17 @@ class ReaderController extends ChangeNotifier {
       notifyListeners();
       return;
     }
+    if (!isResourcesReady) {
+      try {
+        await _prepareResourceBindings(_documentRevision);
+      } on _SupersededPreparation {
+        return;
+      } catch (error) {
+        _statusMessage = 'Speech resources unavailable: $error';
+        notifyListeners();
+        return;
+      }
+    }
 
     if (_currentWordIndex >= _document.wordCount && _document.wordCount > 0) {
       _currentWordIndex = 0;
@@ -1056,6 +1079,7 @@ class ReaderController extends ChangeNotifier {
   }
 
   Future<void> selectVoiceById(String? voiceId) async {
+    _invalidateResourceBindings();
     if (voiceId == null) return;
     _selectedVoiceId = voiceId;
     _voiceSpeeds.putIfAbsent(voiceId, () => 1.0);
@@ -1085,6 +1109,7 @@ class ReaderController extends ChangeNotifier {
   }
 
   Future<void> setMultiVoiceEnabled(bool enabled) async {
+    _invalidateResourceBindings();
     if (_isMultiVoiceEnabled == enabled) {
       return;
     }
@@ -1198,6 +1223,7 @@ class ReaderController extends ChangeNotifier {
   }
 
   Future<void> assignVoiceToCast(String castId, String voiceId) async {
+    _invalidateResourceBindings();
     if (_selectedVoiceId == null ||
         _voices.every((voice) => voice.id != voiceId)) {
       return;
@@ -1234,6 +1260,7 @@ class ReaderController extends ChangeNotifier {
   }
 
   Future<void> clearCastVoiceOverride(String castId) async {
+    _invalidateResourceBindings();
     final storedAssignments = _currentStoredCastVoiceAssignments();
     if (!_castVoiceOverrides.containsKey(castId) &&
         !storedAssignments.containsKey(castId)) {
@@ -1524,6 +1551,61 @@ class ReaderController extends ChangeNotifier {
     await _rememberOpenedDocumentPath(sourcePath, revision: revision);
   }
 
+  Future<void> _prepareResourceBindings(int revision) async {
+    final intent = _resourceBindingIntent;
+    final resourceEngine = _ttsEngine;
+    if (resourceEngine is ResourcePreparationCapable &&
+        _selectedVoiceId != null) {
+      final assignments = _resolveCastVoiceAssignments(
+        preferredNarratorVoiceId: _selectedVoiceId!,
+      );
+      final bindings = await (resourceEngine as ResourcePreparationCapable)
+          .prepareDocumentResources(
+            documentId: _document.displayDocument.documentId,
+            revision: revision,
+            voiceIds: {
+              _selectedVoiceId!,
+              ...?assignments?.assignments.map((v) => v.effectiveVoiceId),
+            },
+            pronunciationProfileId: _selectedPronunciationProfile().profileId,
+          )
+          .catchError((Object error) {
+            _requireRevision(revision);
+            if (intent != _resourceBindingIntent) {
+              throw const _SupersededPreparation();
+            }
+            throw error;
+          });
+      _requireRevision(revision);
+      if (intent != _resourceBindingIntent) {
+        throw const _SupersededPreparation();
+      }
+      if (bindings.any(
+        (binding) =>
+            binding.documentId != _document.displayDocument.documentId ||
+            binding.bindingRevision != revision ||
+            binding.pronunciationProfileId !=
+                _selectedPronunciationProfile().profileId,
+      )) {
+        throw StateError(
+          'Prepared resource identity does not match the document.',
+        );
+      }
+      _resourceBindings = List.unmodifiable(bindings);
+      _resolvedResourceBindings = List.unmodifiable([
+        for (final assignment
+            in assignments?.assignments ?? <CastVoiceAssignment>[])
+          for (final binding in bindings)
+            if (binding.voiceId == assignment.effectiveVoiceId)
+              ResolvedPreparedVoiceReference(
+                assignment: assignment,
+                resource: binding,
+                documentRevision: revision,
+              ),
+      ]);
+    }
+  }
+
   Future<void> _replaceDocument(
     ReaderDocument document, {
     required int revision,
@@ -1565,25 +1647,7 @@ class ReaderController extends ChangeNotifier {
     _currentRealization = null;
     _currentChunkPlan = null;
     _primePlaybackPreparation();
-    final resourceEngine = _ttsEngine;
-    if (resourceEngine is ResourcePreparationCapable &&
-        _selectedVoiceId != null) {
-      final assignments = _resolveCastVoiceAssignments(
-        preferredNarratorVoiceId: _selectedVoiceId!,
-      );
-      final bindings = await (resourceEngine as ResourcePreparationCapable)
-          .prepareDocumentResources(
-            documentId: document.displayDocument.documentId,
-            revision: revision,
-            voiceIds: {
-              _selectedVoiceId!,
-              ...?assignments?.assignments.map((v) => v.effectiveVoiceId),
-            },
-            pronunciationProfileId: _selectedPronunciationProfile().profileId,
-          );
-      _requireRevision(revision);
-      _resourceBindings = List.unmodifiable(bindings);
-    }
+    await _prepareResourceBindings(revision);
     _requireRevision(revision);
     _documentPrepared = true;
     _clearDocumentLoadStage();
