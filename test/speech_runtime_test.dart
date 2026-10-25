@@ -1,4 +1,6 @@
 import 'dart:async';
+import 'dart:convert';
+import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -18,6 +20,63 @@ void main() {
   });
 
   group('SpeechRuntime', () {
+    for (final leadingMs in [80, 240]) {
+      test(
+        'ready duration matches corrected PCM for ${leadingMs}ms opening',
+        () async {
+          final directory = await Directory.systemTemp.createTemp(
+            'runtime-duration-',
+          );
+          addTearDown(() => directory.delete(recursive: true));
+          final file = File('${directory.path}/chunk.wav');
+          const sampleRate = 24000;
+          final samples = (leadingMs + 340) * 24;
+          final bytes = Uint8List(44 + samples * 2);
+          final data = ByteData.sublistView(bytes);
+          bytes.setRange(0, 4, ascii.encode('RIFF'));
+          bytes.setRange(8, 16, ascii.encode('WAVEfmt '));
+          bytes.setRange(36, 40, ascii.encode('data'));
+          data.setUint32(4, bytes.length - 8, Endian.little);
+          data.setUint32(16, 16, Endian.little);
+          data.setUint16(20, 1, Endian.little);
+          data.setUint16(22, 1, Endian.little);
+          data.setUint32(24, sampleRate, Endian.little);
+          data.setUint32(28, sampleRate * 2, Endian.little);
+          data.setUint16(32, 2, Endian.little);
+          data.setUint16(34, 16, Endian.little);
+          data.setUint32(40, samples * 2, Endian.little);
+          for (var i = leadingMs * 24; i < (leadingMs + 300) * 24; i++) {
+            data.setInt16(44 + i * 2, 12000, Endian.little);
+          }
+          await file.writeAsBytes(bytes);
+          final runtime = SpeechRuntime(
+            engineId: 'kokoro',
+            runtimeId: 'duration-test',
+            processor: _FakeSpeechWorkerChunkProcessor(audioPath: file.path),
+            boundaryCorrectionExecutor: (input) async =>
+                runSpeechRuntimeBoundaryCorrection(input),
+          );
+          addTearDown(runtime.shutdownRuntime);
+          final ready = runtime.events.firstWhere(
+            (e) => e.type == SpeechRuntimeEventType.chunkReady,
+          );
+          await runtime.initializeRuntime();
+          await runtime.activateSession(_session());
+          await runtime.preparePriorityChunk(
+            sessionId: 'session-a',
+            generationId: 'generation-a',
+            chunk: _chunk('chunk-a'),
+          );
+          final event = await ready.timeout(const Duration(seconds: 5));
+          final retained = await file.readAsBytes();
+          final expectedMs = ((retained.length - 44) / 2 / sampleRate * 1000)
+              .round();
+          expect(event.duration, Duration(milliseconds: expectedMs));
+          expect(event.payload['durationMillis'], expectedMs);
+          expect(expectedMs, leadingMs > 120 ? 460 : 420);
+        },
+      );
+    }
     test(
       'chunk payload preserves pronunciation traceability through payload roundtrip',
       () {
@@ -119,6 +178,7 @@ void main() {
           boundaryCorrectionExecutor: (input) async {
             return <String, Object?>{
               'applied': true,
+              'durationMillis': 820,
               'boundaryClass': BreakClass.sentence.name,
               'leadingSilenceBeforeMs': 120,
               'leadingSilenceAfterMs': 40,
@@ -157,6 +217,7 @@ void main() {
         expect(readyEvent.sessionId, 'session-a');
         expect(readyEvent.generationId, 'generation-a');
         expect(readyEvent.chunkId, 'chunk-a');
+        expect(readyEvent.duration, const Duration(milliseconds: 820));
         expect(readyEvent.boundaryClass, BreakClass.sentence);
         expect(
           readyEvent.leadingSilenceBefore,
@@ -189,6 +250,7 @@ void main() {
           boundaryCorrectionExecutor: (input) async {
             return <String, Object?>{
               'applied': false,
+              'durationMillis': 900,
               'boundaryClass': BreakClass.sentence.name,
               'leadingSilenceBeforeMs': 0,
               'leadingSilenceAfterMs': 0,
@@ -261,10 +323,13 @@ SpeechRuntimeChunkPayload _chunk(String chunkId) {
 }
 
 class _FakeSpeechWorkerChunkProcessor implements SpeechWorkerChunkProcessor {
-  _FakeSpeechWorkerChunkProcessor({Map<String, Completer<void>>? blockers})
-    : _blockers = blockers ?? <String, Completer<void>>{};
+  _FakeSpeechWorkerChunkProcessor({
+    Map<String, Completer<void>>? blockers,
+    this.audioPath,
+  }) : _blockers = blockers ?? <String, Completer<void>>{};
 
   final Map<String, Completer<void>> _blockers;
+  final String? audioPath;
 
   @override
   Future<void> process(
@@ -290,7 +355,7 @@ class _FakeSpeechWorkerChunkProcessor implements SpeechWorkerChunkProcessor {
         chunkId: request.chunkId,
         emittedAt: DateTime.now().toUtc(),
         stage: 'completed',
-        audioPath: '/tmp/${request.chunkId}.wav',
+        audioPath: audioPath ?? '/tmp/${request.chunkId}.wav',
         duration: const Duration(milliseconds: 900),
       ),
     );
