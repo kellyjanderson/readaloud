@@ -8,8 +8,12 @@ class AppDelegate: FlutterAppDelegate {
   private var documentAccessChannel: FlutterMethodChannel?
 
   override func applicationDidFinishLaunching(_ notification: Notification) {
-    super.applicationDidFinishLaunching(notification)
+    // FlutterAppDelegate implements will-finish-launching, but not this optional
+    // NSApplicationDelegate callback. Dispatching it to super raises an exception.
     configureDocumentAccessChannel()
+    if ProcessInfo.processInfo.environment["READALOUD_TRACE_STARTUP"] == "1" {
+      NSLog("[read_aloud.startup] Did finish launching; document access channel configured: \(documentAccessChannel != nil)")
+    }
   }
 
   override func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
