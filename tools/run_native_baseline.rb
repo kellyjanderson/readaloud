@@ -146,13 +146,6 @@ if $PROGRAM_NAME == __FILE__
     asset_snapshots[:runtime_after] = NativeBaselineAssets.snapshot(runtime_assets, model_directory: 'models')
     File.write(File.join(output, 'run.json'), JSON.pretty_generate(metadata))
   end
-  required_assets = ['model/kokoro-v1.0.onnx'] +
-                    (metadata[:routes] || []).map { |route| "voices/#{route.fetch('voiceId')}.npy" }
-  metadata[:asset_comparisons] = NativeBaselineAssets.comparisons(asset_snapshots, required_assets)
-  metadata[:runtime_asset_evidence_complete] = !!NativeBaselineAssets.complete?(
-    metadata[:asset_comparisons], routes: metadata[:routes]
-  )
-  metadata[:inference_observed] = metadata[:native_snapshots].any? { |entry| entry[:method] == 'runInference' }
   trace = File.read(log_path)
   counts = trace.scan(/READALOUD_ORT method=(\w+) sessions=(\d+) tensors=(\d+) error=(\w+)/)
   metadata[:native_snapshots] = counts.map { |method, sessions, tensors, error|
@@ -164,6 +157,13 @@ if $PROGRAM_NAME == __FILE__
       chunk.slice('chunkId', 'voiceId', 'castId', 'durationMillis')
     }
   end
+  required_assets = ['model/kokoro-v1.0.onnx'] +
+                    (metadata[:routes] || []).map { |route| "voices/#{route.fetch('voiceId')}.npy" }
+  metadata[:asset_comparisons] = NativeBaselineAssets.comparisons(asset_snapshots, required_assets)
+  metadata[:runtime_asset_evidence_complete] = !!NativeBaselineAssets.complete?(
+    metadata[:asset_comparisons], routes: metadata[:routes]
+  )
+  metadata[:inference_observed] = metadata[:native_snapshots].any? { |entry| entry[:method] == 'runInference' }
   File.write(File.join(output, 'run.json'), JSON.pretty_generate(metadata))
   puts JSON.pretty_generate(metadata)
   failed = metadata[:timeout] || metadata[:forced_kill] ||
