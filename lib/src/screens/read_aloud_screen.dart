@@ -15,14 +15,7 @@ import '../widgets/document_surface.dart';
 import '../widgets/reading_focus_recenter_button.dart';
 import '../widgets/voice_management_dialog.dart';
 
-enum _AppMenuAction {
-  open,
-  paste,
-  sample,
-  saveAudio,
-  readerOptions,
-  liveFeed,
-}
+enum _AppMenuAction { open, paste, sample, saveAudio, readerOptions, liveFeed }
 
 class ReadAloudScreen extends StatefulWidget {
   const ReadAloudScreen({
@@ -486,36 +479,40 @@ class _ReadAloudScreenState extends State<ReadAloudScreen> {
     return Material(
       color: tokens.elevatedSurface,
       borderRadius: BorderRadius.circular(16),
-      child: InkWell(
-        key: const Key('character-voices-entry'),
-        onTap: canOpen ? _showVoiceManagerDialog : null,
-        borderRadius: BorderRadius.circular(16),
-        child: Ink(
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: tokens.border),
-          ),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
-            child: Row(
-              children: [
-                Icon(
-                  Icons.record_voice_over_outlined,
-                  color: Theme.of(context).colorScheme.primary,
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Text(
-                    'Character Voices',
-                    style: Theme.of(context).textTheme.titleSmall,
+      child: Semantics(
+        button: true,
+        enabled: canOpen,
+        child: InkWell(
+          key: const Key('character-voices-entry'),
+          onTap: canOpen ? _showVoiceManagerDialog : null,
+          borderRadius: BorderRadius.circular(16),
+          child: Ink(
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: tokens.border),
+            ),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
+              child: Row(
+                children: [
+                  Icon(
+                    Icons.record_voice_over_outlined,
+                    color: Theme.of(context).colorScheme.primary,
                   ),
-                ),
-                const SizedBox(width: 8),
-                Icon(
-                  Icons.tune,
-                  color: Theme.of(context).colorScheme.onSurfaceVariant,
-                ),
-              ],
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Text(
+                      'Character Voices',
+                      style: Theme.of(context).textTheme.titleSmall,
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Icon(
+                    Icons.tune,
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  ),
+                ],
+              ),
             ),
           ),
         ),
@@ -1213,6 +1210,7 @@ class _SegmentedTransportCapsule extends StatelessWidget {
                 child: _TransportSegment(
                   key: const Key('transport-back'),
                   icon: Icons.replay_30,
+                  label: 'Back 30 seconds',
                   onPressed: onJumpBack,
                   enabled: enabled,
                   alignment: Alignment.centerLeft,
@@ -1224,6 +1222,8 @@ class _SegmentedTransportCapsule extends StatelessWidget {
                 child: _TransportSegment(
                   key: const Key('transport-center'),
                   icon: isPlaying ? Icons.pause : Icons.play_arrow,
+                  label: isPlaying ? 'Pause' : 'Play',
+                  status: isBuffering ? 'Buffering' : null,
                   onPressed: onTogglePlayback,
                   enabled: enabled,
                   alignment: Alignment.center,
@@ -1245,6 +1245,7 @@ class _SegmentedTransportCapsule extends StatelessWidget {
                 child: _TransportSegment(
                   key: const Key('transport-forward'),
                   icon: Icons.forward_30,
+                  label: 'Forward 30 seconds',
                   onPressed: onJumpForward,
                   enabled: enabled,
                   alignment: Alignment.centerRight,
@@ -1262,14 +1263,18 @@ class _TransportSegment extends StatelessWidget {
   const _TransportSegment({
     super.key,
     required this.icon,
+    required this.label,
     required this.onPressed,
     required this.enabled,
     required this.alignment,
     this.isPrimary = false,
     this.child,
+    this.status,
   });
 
   final IconData icon;
+  final String label;
+  final String? status;
   final VoidCallback? onPressed;
   final bool enabled;
   final Alignment alignment;
@@ -1282,18 +1287,27 @@ class _TransportSegment extends StatelessWidget {
     final foreground = enabled
         ? (isPrimary ? colorScheme.primary : colorScheme.onSurface)
         : colorScheme.onSurface.withValues(alpha: 0.38);
-    return InkWell(
-      onTap: enabled ? onPressed : null,
-      borderRadius: BorderRadius.circular(16),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 12),
-        child: Align(
-          alignment: alignment,
-          child: IconTheme(
-            data: IconThemeData(size: isPrimary ? 28 : 24, color: foreground),
-            child:
-                child ??
-                Icon(icon, semanticLabel: isPrimary ? 'Play or pause' : null),
+    return Semantics(
+      button: true,
+      enabled: enabled && onPressed != null,
+      label: label,
+      value: status,
+      child: InkWell(
+        onTap: enabled ? onPressed : null,
+        borderRadius: BorderRadius.circular(16),
+        child: ExcludeSemantics(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 12),
+            child: Align(
+              alignment: alignment,
+              child: IconTheme(
+                data: IconThemeData(
+                  size: isPrimary ? 28 : 24,
+                  color: foreground,
+                ),
+                child: child ?? Icon(icon),
+              ),
+            ),
           ),
         ),
       ),
