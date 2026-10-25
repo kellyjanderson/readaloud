@@ -1,7 +1,7 @@
 # Engine Pronunciation Expression and Capability Adaptation
 
 Reconciled: October 24, 2026
-Status: Current source architecture; runtime validation not refreshed
+Status: Current source architecture; bounded pronunciation regression checked in #58
 
 ## Implemented structure and limitations
 
@@ -23,7 +23,7 @@ Current adapter work is centered on Kokoro with generic fallback capability beha
 - [kokoro_pronunciation_translation_service_test.dart](../../test/kokoro_pronunciation_translation_service_test.dart)
 - [kokoro_ipa_adapter_test.dart](../../test/kokoro_ipa_adapter_test.dart)
 
-The #58 translation, tokenizer and realization check passed 25 tests on native arm64 Flutter 3.41.5 / Dart 3.11.3. This proves payload/index behavior, not audible speech quality. Comparable native audio and playback evidence and its limits are recorded in #58; broader prepared-runtime acceptance remains separate.
+The #58 translation, tokenizer, realization and boundary checks passed 30 tests on native arm64 Flutter 3.41.5 / Dart 3.11.3. A fresh three-chunk native export used matching fixture/model/voice fingerprints; only the affected first chunk's PCM changed, while the other two chunks remained identical. Local ASR changed from `John said said` to `John said`, corroborating the payload correction; it is not human listening. Agent-driven playback transitioned Play → Pause → Play, and its runtime trace contained one `said`. These bounded checks do not establish general pronunciation quality or prepared-runtime acceptance. Detailed evidence and limits are recorded in #58.
 
 ## Proposed changes
 
