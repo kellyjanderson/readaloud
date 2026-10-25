@@ -1,6 +1,6 @@
 # System Overview
 
-Reconciled: October 25, 2026; P4 source 16310e9
+Reconciled: October 25, 2026; P4 production lineage 295677e
 Status: Implemented source with bounded P0–P3 evidence; integrated P4/FINAL acceptance pending
 
 ## Implemented structure and limitations

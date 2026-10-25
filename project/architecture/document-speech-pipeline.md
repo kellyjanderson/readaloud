@@ -1,6 +1,6 @@
 # Document and Speech Pipeline
 
-Reconciled: October 25, 2026; P4 source 16310e9
+Reconciled: October 25, 2026; P4 production lineage 295677e
 Status: Implemented P1 preparation/P3 planning; P4/FINAL integrated acceptance pending
 
 ## Implemented structure and limitations

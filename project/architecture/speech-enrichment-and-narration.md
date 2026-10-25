@@ -1,6 +1,6 @@
 # Speech Enrichment and Narration
 
-Reconciled: October 25, 2026; P4 source 16310e9
+Reconciled: October 25, 2026; P4 production lineage 295677e
 Status: Current worker-owned source; native P4/FINAL acceptance pending
 
 ## Implemented structure and limitations
