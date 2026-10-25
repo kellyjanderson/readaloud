@@ -22,10 +22,16 @@ class SynthesisAdmissionOwner {
   SynthesisAdmissionOwner(
     this.processor, {
     required this.exportMayRun,
+    bool Function()? playbackMayRun,
     this.beforeProcess,
-  });
+  }) : playbackMayRun = playbackMayRun ?? _alwaysAllowPlayback;
   final SpeechWorkerChunkProcessor processor;
   final bool Function() exportMayRun;
+
+  /// Fresh playable-lead credit, checked when reserving the actual processor
+  /// slot. Previously queued requests do not carry an irrevocable permission.
+  final bool Function() playbackMayRun;
+  static bool _alwaysAllowPlayback() => true;
 
   /// Optional controlled-latency/profiling seam. Default runtime work has no
   /// hook; cancellation is checked again before actual native processing.
@@ -128,10 +134,18 @@ class SynthesisAdmissionOwner {
       return;
     }
     if (_running) return;
-    final candidates = _pending.where((job) => !job.export);
-    final next = candidates.isNotEmpty
-        ? candidates.first
-        : (_pending.isNotEmpty && exportMayRun() ? _pending.first : null);
+    final controls = _pending.where((job) => job.lease == null);
+    final playback = _pending.where((job) => !job.export && job.lease != null);
+    final exports = _pending.where((job) => job.export);
+    // Controls/resources never wait behind audio high-water credit. A gated
+    // playback request also cannot hide an independently permitted export.
+    final next = controls.isNotEmpty
+        ? controls.first
+        : playback.isNotEmpty && playbackMayRun()
+        ? playback.first
+        : exports.isNotEmpty && exportMayRun()
+        ? exports.first
+        : null;
     if (next == null) return;
     _pending.remove(next);
     _running = true;
