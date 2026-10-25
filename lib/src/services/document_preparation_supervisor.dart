@@ -17,7 +17,9 @@ class DocumentPreparationSupervisor {
     PdfTextExtractor? pdfTextExtractor,
     this.testImporter,
     this.workerEntryPoint = documentPreparationWorker,
-  }) : _pdfTextExtractor = pdfTextExtractor ?? const PdfrxPdfTextExtractor();
+  }) : _pdfTextExtractor =
+           pdfTextExtractor ??
+           const PdfrxPdfTextExtractor(deferFormatting: true);
 
   final Duration timeout;
   final PdfTextExtractor _pdfTextExtractor;
@@ -277,6 +279,6 @@ class _ExtractedPdf implements PdfTextExtractor {
     if (result == null) {
       throw StateError('PDF extraction bridge was not supplied.');
     }
-    return result!;
+    return formatPdfExtraction(result!);
   }
 }

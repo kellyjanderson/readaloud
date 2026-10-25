@@ -4,6 +4,8 @@ import 'dart:isolate';
 import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:archive/archive.dart';
+import 'package:pdfrx/pdfrx.dart';
 import 'package:read_aloud/src/models/document_preparation.dart';
 import 'package:read_aloud/src/services/document_import_service.dart';
 import 'package:read_aloud/src/services/document_preparation_supervisor.dart';
@@ -43,6 +45,96 @@ class PdfBarrier implements PdfTextExtractor {
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
+  test(
+    'PDF raw geometry is formatted on the pure worker with existing semantics',
+    () async {
+      final bridge = PdfBarrier();
+      final supervisor = DocumentPreparationSupervisor(
+        pdfTextExtractor: bridge,
+      );
+      addTearDown(supervisor.shutdown);
+      const text = 'Hello world.';
+      final raw = PdfTextExtractionResult(
+        pages: [
+          PdfTextExtractionPage(
+            pageIndex: 0,
+            fullText: text,
+            rawText: PdfPageRawText(
+              text,
+              List.generate(
+                text.length,
+                (i) => PdfRect(i * 8.0, 20, (i + 1) * 8.0, 10),
+              ),
+            ),
+          ),
+        ],
+      );
+      final expected = await formatPdfExtraction(raw);
+      final future = supervisor.prepare(request(1, pdf: true));
+      bridge.release.complete(raw);
+      final result = await future;
+      expect(
+        result.outcome,
+        DocumentPreparationOutcome.ready,
+        reason: result.error,
+      );
+      expect(result.workerName, 'document-preparation-1');
+      expect(
+        result.document!.speakableText,
+        expected.pages.single.fullText.trim(),
+      );
+    },
+  );
+
+  for (final fixture in <String, Map<String, String>>{
+    'book.epub': {
+      'META-INF/container.xml':
+          '<container><rootfiles><rootfile full-path="OEBPS/content.opf"/></rootfiles></container>',
+      'OEBPS/content.opf':
+          '<package><metadata><title>Book</title></metadata><manifest><item id="chapter" href="chapter.xhtml" media-type="application/xhtml+xml"/></manifest><spine><itemref idref="chapter"/></spine></package>',
+      'OEBPS/chapter.xhtml':
+          '<html><body><p>John said, "Come with me."</p></body></html>',
+    },
+    'book.docx': {
+      'word/document.xml':
+          '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body><w:p><w:r><w:t>John said, "Come with me."</w:t></w:r></w:p></w:body></w:document>',
+    },
+  }.entries) {
+    test('worker archive fidelity for ${fixture.key}', () async {
+      final archive = Archive();
+      for (final entry in fixture.value.entries) {
+        archive.addFile(ArchiveFile.string(entry.key, entry.value));
+      }
+      final bytes = Uint8List.fromList(ZipEncoder().encode(archive));
+      final supervisor = DocumentPreparationSupervisor();
+      addTearDown(supervisor.shutdown);
+      final expected = await DocumentImportService().importBytes(
+        fileName: fixture.key,
+        bytes: bytes,
+      );
+      final result = await supervisor.prepare(
+        DocumentPreparationRequest(
+          ownerId: 'archives',
+          revision: 1,
+          kind: DocumentPreparationKind.bytes,
+          fileName: fixture.key,
+          bytes: bytes,
+        ),
+      );
+      expect(
+        result.outcome,
+        DocumentPreparationOutcome.ready,
+        reason: result.error,
+      );
+      expect(
+        result.serializedDocument,
+        const ReaderDocumentSerializationService().serializeToJsonString(
+          expected,
+        ),
+      );
+    });
+  }
+
   test(
     'queued byte request owns a snapshot independent of caller aliases',
     () async {
