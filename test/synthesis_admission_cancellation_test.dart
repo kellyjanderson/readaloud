@@ -7,6 +7,150 @@ import 'package:read_aloud/src/services/synthesis_admission_owner.dart';
 
 void main() {
   test(
+    'fresh lead gate blocks queued burst until explicit low-water wake',
+    () async {
+      final processor = _Processor();
+      var hasCredit = true;
+      var gateChecks = 0;
+      final owner = SynthesisAdmissionOwner(
+        processor,
+        exportMayRun: () => false,
+        playbackMayRun: () {
+          ++gateChecks;
+          return hasCredit;
+        },
+      );
+      final firstLease = owner.lease(export: false);
+      final secondLease = owner.lease(export: false);
+      final active = firstLease.process(_request('held'), (_) {});
+      final second = firstLease.process(_request('second'), (_) {});
+      final third = secondLease.process(_request('third'), (_) {});
+      expect(processor.order, ['held']);
+      // Credit can disappear while one inference is active. Its queued followers
+      // must reevaluate the live lead, rather than use credit from enqueue time.
+      hasCredit = false;
+      processor.gate.complete();
+      await active;
+      await Future<void>.delayed(Duration.zero);
+      expect(processor.order, ['held']);
+      final checksAfterBlocking = gateChecks;
+      await Future<void>.delayed(Duration.zero);
+      expect(
+        gateChecks,
+        checksAfterBlocking,
+        reason: 'No internal gate polling.',
+      );
+      hasCredit = true;
+      await Future<void>.delayed(Duration.zero);
+      expect(processor.order, [
+        'held',
+      ], reason: 'Only owner signal wakes credit.');
+      owner.signal();
+      await Future.wait([second, third]);
+      expect(processor.order, ['held', 'second', 'third']);
+      await firstLease.dispose();
+      await secondLease.dispose();
+      await owner.shutdown();
+    },
+  );
+
+  test(
+    'gated playback permits safe export and ungated exclusive control',
+    () async {
+      final processor = _Processor();
+      final owner = SynthesisAdmissionOwner(
+        processor,
+        playbackMayRun: () => false,
+        exportMayRun: () => true,
+      );
+      final playback = owner.lease(export: false);
+      final export = owner.lease(export: true);
+      final waiting = playback.process(_request('waiting'), (_) {});
+      final cancelled = expectLater(
+        waiting,
+        throwsA(isA<SynthesisAdmissionCancelled>()),
+      );
+      await export.process(_request('export'), (_) {});
+      var controlRan = false;
+      await owner.exclusive(() async {
+        controlRan = true;
+      });
+      expect(controlRan, isTrue);
+      expect(processor.order, ['export']);
+      playback.cancelPending();
+      await cancelled;
+      await playback.dispose();
+      await export.dispose();
+      await owner.shutdown();
+    },
+  );
+
+  test(
+    'exclusive control wins next slot without consuming lead credit',
+    () async {
+      final processor = _Processor();
+      var hasCredit = true;
+      final owner = SynthesisAdmissionOwner(
+        processor,
+        playbackMayRun: () => hasCredit,
+        exportMayRun: () => false,
+      );
+      final playback = owner.lease(export: false);
+      final active = playback.process(_request('held'), (_) {});
+      final waiting = playback.process(_request('waiting'), (_) {});
+      final cancelled = expectLater(
+        waiting,
+        throwsA(isA<SynthesisAdmissionCancelled>()),
+      );
+      var controlRan = false;
+      final control = owner.exclusive(() async {
+        controlRan = true;
+      });
+      hasCredit = false;
+      processor.gate.complete();
+      await Future.wait([active, control]);
+      expect(controlRan, isTrue);
+      expect(processor.order, ['held']);
+      playback.cancelPending();
+      await cancelled;
+      await playback.dispose();
+      await owner.shutdown();
+    },
+  );
+
+  test(
+    'cancel and shutdown settle playback behind both closed credit gates',
+    () async {
+      final processor = _Processor();
+      final owner = SynthesisAdmissionOwner(
+        processor,
+        playbackMayRun: () => false,
+        exportMayRun: () => false,
+      );
+      final playback = owner.lease(export: false);
+      final events = <SpeechWorkerEvent>[];
+      final waiting = playback.process(_request('waiting'), events.add);
+      final cancelled = expectLater(
+        waiting,
+        throwsA(isA<SynthesisAdmissionCancelled>()),
+      );
+      playback.cancelPending();
+      await cancelled;
+      _expectCancelled(events, 'waiting');
+      final export = owner.lease(export: true);
+      final another = playback.process(_request('another'), (_) {});
+      final background = export.process(_request('background'), (_) {});
+      final terminals = [
+        expectLater(another, throwsA(isA<SynthesisAdmissionCancelled>())),
+        expectLater(background, throwsA(isA<SynthesisAdmissionCancelled>())),
+      ];
+      await Future.wait([owner.shutdown(), owner.shutdown(), ...terminals]);
+      expect(processor.order, isEmpty);
+      expect(processor.disposeCount, 1);
+    },
+  );
+
+  test(
     'cancellation during imposed pre-process latency never starts native',
     () async {
       final processor = _Processor();
