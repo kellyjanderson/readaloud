@@ -592,11 +592,7 @@ class ReaderController extends ChangeNotifier {
   }
 
   Future<void> pickAndStartLiveRead() async {
-    final revision = _beginDocumentRequest();
-    _statusMessage = null;
-    notifyListeners();
-
-    try {
+    await _runImportOperation((revision) async {
       final result = await FilePicker.platform.pickFiles(
         type: FileType.custom,
         withData: false,
@@ -605,24 +601,13 @@ class ReaderController extends ChangeNotifier {
         allowedExtensions: DocumentImportService.supportedExtensions,
       );
       _requireRevision(revision);
-      if (result == null || result.files.isEmpty) {
-        return;
-      }
-
+      if (result == null || result.files.isEmpty) return;
       final path = result.files.single.path;
       if (path == null || path.trim().isEmpty) {
-        _statusMessage = 'The selected live read file could not be accessed.';
-        notifyListeners();
-        return;
+        throw StateError('The selected live read file could not be accessed.');
       }
-
       await startLiveReadFromPath(path);
-    } catch (error) {
-      if (_disposed || revision != _documentRevision) return;
-      _statusMessage =
-          'Could not start Live Feed right now. Choose the file again and try again.';
-      notifyListeners();
-    }
+    }, errorSourceLabel: 'Live Feed');
   }
 
   Future<void> startLiveReadFromPath(String sourcePath) async {
@@ -675,7 +660,6 @@ class ReaderController extends ChangeNotifier {
   }
 
   Future<bool> restoreLastOpenedDocument() async {
-    final revision = _beginDocumentRequest();
     final lastPath = _lastOpenedDocumentPath;
     if (lastPath == null || lastPath.trim().isEmpty) {
       _logRestoreDiagnostic(
@@ -684,6 +668,7 @@ class ReaderController extends ChangeNotifier {
       return false;
     }
 
+    final revision = _beginDocumentRequest();
     final requestedPath = p.normalize(lastPath.trim());
     final requestedDirectoryPath = p.normalize(p.dirname(requestedPath));
     var restorePath = requestedPath;
@@ -892,6 +877,11 @@ class ReaderController extends ChangeNotifier {
     } on _SupersededPreparation {
       return false;
     } finally {
+      if (!_disposed && revision == _documentRevision) {
+        _isImporting = false;
+        _clearDocumentLoadStage();
+        notifyListeners();
+      }
       await lease?.close();
       if (!_disposed && revision == _documentRevision) {
         await _persistPreferences();
@@ -2192,6 +2182,9 @@ class ReaderController extends ChangeNotifier {
   /// Call before disposal when a caller needs proof that preparation drained.
   Future<void> shutdownPreparation() async {
     _beginDocumentRequest();
+    _isImporting = false;
+    _clearDocumentLoadStage();
+    if (!_disposed) notifyListeners();
     ++_watchSession;
     await _cancelLiveReadWatch();
     await _preparation.shutdown();

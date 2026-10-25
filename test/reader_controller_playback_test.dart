@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:typed_data';
 import 'package:cross_file/cross_file.dart';
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:read_aloud/src/controllers/reader_controller.dart';
 import 'package:read_aloud/src/models/cast_voice_assignment.dart';
@@ -29,6 +30,97 @@ void main() {
   });
 
   group('ReaderController playback', () {
+    for (final mode in ['cancel', 'invalid', 'error', 'superseded']) {
+      test(
+        'Live Feed picker $mode owns loading cleanup after replacing an import',
+        () async {
+          final picker = _ControlledPicker();
+          FilePicker.platform = picker;
+          final importer = _ControlledPreparationImporter();
+          final controller = ReaderController(
+            importer: importer,
+            ttsEngine: _FakeTtsEngine(),
+          );
+          addTearDown(controller.dispose);
+          await controller.initialize();
+          final a = controller.importDroppedFiles([
+            XFile.fromData(
+              Uint8List.fromList(utf8.encode('Old.')),
+              name: 'old.txt',
+            ),
+          ]);
+          await importer.started(0);
+          final picking = controller.pickAndStartLiveRead();
+          await a;
+          expect(controller.isImporting, isTrue);
+          Future<void>? latest;
+          if (mode == 'superseded') {
+            latest = controller.importDroppedFiles([
+              XFile.fromData(
+                Uint8List.fromList(utf8.encode('Latest.')),
+                name: 'latest.txt',
+              ),
+            ]);
+          }
+          switch (mode) {
+            case 'error':
+              picker.result.completeError(StateError('picker failed'));
+            case 'invalid':
+              picker.result.complete(
+                FilePickerResult([PlatformFile(name: 'missing.txt', size: 0)]),
+              );
+            default:
+              picker.result.complete(null);
+          }
+          await picking;
+          if (mode == 'superseded') {
+            expect(controller.isImporting, isTrue);
+            expect(controller.statusMessage, isNull);
+          } else {
+            expect(controller.isImporting, isFalse);
+            expect(controller.isCastProcessingVisible, isFalse);
+            expect(controller.isDocumentPrepared, isTrue);
+          }
+          importer.results[0].completeError(
+            StateError('old preparation failed'),
+          );
+          if (latest != null) {
+            await importer.started(1);
+            importer.results[1].complete(
+              DocumentImportService().importPastedText('Latest.'),
+            );
+            await latest;
+            expect(controller.document.speakableText, 'Latest.');
+          }
+          await controller.shutdownPreparation();
+        },
+      );
+    }
+
+    test('empty startup restore does not supersede an active import', () async {
+      final importer = _ControlledPreparationImporter();
+      final controller = ReaderController(
+        importer: importer,
+        ttsEngine: _FakeTtsEngine(),
+      );
+      addTearDown(controller.dispose);
+      await controller.initialize();
+      final pending = controller.importDroppedFiles([
+        XFile.fromData(
+          Uint8List.fromList(utf8.encode('Current.')),
+          name: 'current.txt',
+        ),
+      ]);
+      await importer.started(0);
+      expect(await controller.restoreLastOpenedDocument(), isFalse);
+      expect(controller.isImporting, isTrue);
+      importer.results[0].complete(
+        DocumentImportService().importPastedText('Current.'),
+      );
+      await pending;
+      expect(controller.document.speakableText, 'Current.');
+    });
+
     for (final failOld in [false, true]) {
       test(
         'superseded import ${failOld ? 'failure' : 'success'} cannot clear latest state',
@@ -2038,4 +2130,23 @@ class _BarrierStopTtsEngine extends _FakeTtsEngine {
     }
     await super.stop();
   }
+}
+
+class _ControlledPicker extends FilePicker {
+  final result = Completer<FilePickerResult?>();
+  @override
+  Future<FilePickerResult?> pickFiles({
+    String? dialogTitle,
+    String? initialDirectory,
+    FileType type = FileType.any,
+    List<String>? allowedExtensions,
+    Function(FilePickerStatus)? onFileLoading,
+    bool allowCompression = false,
+    int compressionQuality = 0,
+    bool allowMultiple = false,
+    bool withData = false,
+    bool withReadStream = false,
+    bool lockParentWindow = false,
+    bool readSequential = false,
+  }) => result.future;
 }
