@@ -352,7 +352,7 @@ packages:
     source: hosted
     version: "1.3.0"
   malsami:
-    dependency: transitive
+    dependency: "direct main"
     description:
       name: malsami
       sha256: cba7deba23c2b1b6a5dfcb68309f9f1e55575dd4989158ec1f6767eaadede150

@@ -19,6 +19,11 @@ class EnglishPronunciationDictionaryService {
     _initializationFuture = Future<void>.value();
   }
 
+  /// Parse a bridged dictionary in the owning preparation/tokenization isolate.
+  void restoreRawDictionary(String rawDictionary) {
+    restoreSnapshot(_parseCmudictToIpaEntries(rawDictionary));
+  }
+
   bool get isInitialized => _entries.isNotEmpty;
 
   Future<void> initialize() {

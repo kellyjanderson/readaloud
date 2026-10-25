@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:isolate';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:flutter/services.dart';
 import 'package:kokoro_tts_flutter/kokoro_tts_flutter.dart';
 import 'package:read_aloud/src/models/chunk_plan.dart';
 import 'package:read_aloud/src/models/pronunciation_artifact.dart';
@@ -38,20 +39,156 @@ void crashWorker(KokoroTokenizationWorkerInput input) => Isolate.exit();
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
-  late Tokenizer tokenizer;
+  late KokoroTokenizerAssets assets;
   setUpAll(() async {
-    tokenizer = Tokenizer(
+    assets = KokoroTokenizerAssets(
+      vocabularyJson: await rootBundle.loadString(
+        'assets/tokenizer_vocab.json',
+      ),
+      lexiconJson: await rootBundle.loadString('assets/lexicon.json'),
+      goldJson: await rootBundle.loadString('assets/us_gold.json'),
+      silverJson: await rootBundle.loadString('assets/us_silver.json'),
+    );
+  });
+
+  Future<Tokenizer> baseline() async {
+    final tokenizer = Tokenizer(
       config: const TokenizerConfig(lexiconPath: 'assets/lexicon.json'),
     );
     await tokenizer.ensureInitialized();
+    await tokenizer.phonemizeWithTokens('warmup', 'en-us');
+    return tokenizer;
+  }
+
+  for (final text in [
+    'Quizzaciously wuglike xyzzy.',
+    'Are you okay? The morning is quiet.',
+    'John said, "Wait!"\n  café—tea\t123',
+    '[John](/dʒɑn/) and (Mary): don\'t rush.',
+  ]) {
+    test('cold worker-first fallback preserves pinned output: $text', () async {
+      final worker = KokoroTokenizationWorker(assets: assets);
+      addTearDown(worker.shutdown);
+      // This must be the first phonemization on this fresh tokenizer. Computing
+      // a caller expectation first masked lazy rootBundle access in the old test.
+      final actual = await worker.tokenizeText(text, 'en-us');
+      final caller = await baseline();
+      final expected = await caller.phonemize(
+        prepareEnglishSpeechTextForPhonemizer(text),
+        lang: 'en-us',
+      );
+      expect(actual.finalPhonemeString, expected);
+      expect(actual.tokens, caller.tokenize(expected));
+      expect(actual.workerName, isNot(Isolate.current.debugName));
+    });
+  }
+
+  test(
+    'raw CMU dictionary is parsed by worker and preserves translated said',
+    () async {
+      final worker = KokoroTokenizationWorker(
+        assets: assets,
+        rawDictionary: ';;; fixture\nSAID S EH1 D\nSAID(2) S EH0 D\n',
+      );
+      addTearDown(worker.shutdown);
+      final actual = await worker.prepare(_spec(), 'en-us');
+      expect(actual.translatedChunk!.payloadUnits.map((unit) => unit.value), [
+        'dʒˈɑn',
+        ' ',
+        'sˈɛd',
+        ',',
+      ]);
+    },
+  );
+
+  test('startup and request failures preserve remote worker stack', () async {
+    final invalid = KokoroTokenizationWorker(
+      assets: KokoroTokenizerAssets(
+        vocabularyJson: 'malformed json',
+        lexiconJson: assets.lexiconJson,
+        goldJson: assets.goldJson,
+        silverJson: assets.silverJson,
+      ),
+    );
+    try {
+      await invalid.tokenizeText('first', 'en-us');
+      fail('Malformed vocabulary should fail before readiness.');
+    } catch (error, stack) {
+      expect(error, isStateError);
+      expect('$stack', contains('KokoroAssetTokenizer.ensureInitialized'));
+    } finally {
+      await invalid.shutdown();
+    }
+    final worker = KokoroTokenizationWorker(assets: assets);
+    addTearDown(worker.shutdown);
+    try {
+      await worker.tokenizeText('', 'en-us');
+      fail('Empty speech should fail.');
+    } catch (error, stack) {
+      expect(error, isStateError);
+      expect('$stack', contains('_tokenizeText'));
+    }
+    expect(
+      (await worker.tokenizeText('recovered', 'en-us')).tokens,
+      isNotEmpty,
+    );
   });
+
+  test(
+    'optional malformed custom lexicon keeps warmed fallback behavior',
+    () async {
+      final worker = KokoroTokenizationWorker(
+        assets: KokoroTokenizerAssets(
+          vocabularyJson: assets.vocabularyJson,
+          lexiconJson: 'invalid custom lexicon',
+          goldJson: assets.goldJson,
+          silverJson: assets.silverJson,
+        ),
+      );
+      addTearDown(worker.shutdown);
+      final actual = await worker.tokenizeText(
+        'Quizzaciously wuglike.',
+        'en-us',
+      );
+      final caller = Tokenizer(
+        config: const TokenizerConfig(
+          lexiconPath: 'missing-optional-lexicon.json',
+        ),
+      );
+      await caller.ensureInitialized();
+      await caller.phonemizeWithTokens('warmup', 'en-us');
+      final expected = await caller.phonemize(
+        'Quizzaciously wuglike.',
+        lang: 'en-us',
+      );
+      expect(actual.finalPhonemeString, expected);
+      expect(actual.tokens, caller.tokenize(expected));
+    },
+  );
+
+  test(
+    'direct vocabulary token limit and unknown-character filtering are unchanged',
+    () async {
+      final worker = KokoroTokenizationWorker(assets: assets);
+      addTearDown(worker.shutdown);
+      await expectLater(
+        worker.tokenizeText('wuglike ' * 100, 'en-us'),
+        throwsStateError,
+      );
+      final actual = await worker.tokenizeText('hello ☃', 'en-us');
+      final caller = await baseline();
+      final expected = await caller.phonemize('hello ☃', lang: 'en-us');
+      expect(actual.finalPhonemeString, expected);
+      expect(actual.tokens, caller.tokenize(expected));
+    },
+  );
 
   for (final explicitSuffix in [false, true]) {
     test(
       'preserves ${explicitSuffix ? 'explicit suffix' : 's-class allomorph'} phoneme and token sequence',
       () async {
         final worker = KokoroTokenizationWorker(
-          tokenizer: tokenizer,
+          assets: assets,
           dictionaryEntries: const {},
         );
         addTearDown(worker.shutdown);
@@ -66,6 +203,7 @@ void main() {
           ),
           'en-us',
         );
+        final tokenizer = await baseline();
         final base = await tokenizer.phonemize(
           prepareEnglishSpeechTextForPhonemizer('John'),
           lang: 'en-us',
@@ -88,7 +226,7 @@ void main() {
     'shutdown settles active and pending owners and rejects new requests',
     () async {
       final worker = KokoroTokenizationWorker(
-        tokenizer: tokenizer,
+        assets: assets,
         dictionaryEntries: const {},
         workerEntryPoint: fakeWorker,
       );
@@ -121,21 +259,23 @@ void main() {
     'real initialized tokenizer snapshot runs off caller isolate with exact plain tokens',
     () async {
       final worker = KokoroTokenizationWorker(
-        tokenizer: tokenizer,
+        assets: assets,
         dictionaryEntries: const {},
       );
       addTearDown(worker.shutdown);
       const text = 'Are you okay? The morning is quiet.';
-      final expected = await tokenizer.phonemize(
-        prepareEnglishSpeechTextForPhonemizer(text),
-        lang: 'en-us',
-      );
+      // Execute the worker before constructing/priming any caller baseline.
       final result = await worker.tokenizeText(
         text,
         'en-us',
         requestId: 'owner:r7',
         documentRevision: 7,
         bindingRevision: 3,
+      );
+      final tokenizer = await baseline();
+      final expected = await tokenizer.phonemize(
+        prepareEnglishSpeechTextForPhonemizer(text),
+        lang: 'en-us',
       );
       expect(result.tokens, tokenizer.tokenize(expected));
       expect(result.finalPhonemeString, expected);
@@ -153,7 +293,7 @@ void main() {
     'dictionary snapshot preserves explicit-word indexing and trace without duplicated said',
     () async {
       final worker = KokoroTokenizationWorker(
-        tokenizer: tokenizer,
+        assets: assets,
         dictionaryEntries: const {'said': 'sˈɛd'},
       );
       addTearDown(worker.shutdown);
@@ -165,6 +305,7 @@ void main() {
         ',',
       ]);
       expect(result.translatedChunk!.missingFallbackWordCount, 0);
+      final tokenizer = await baseline();
       final punctuation = await tokenizer.phonemize(',', lang: 'en-us');
       final john = adaptStandardIpaToKokoroPhonemes('dʒˈɑn');
       final said = adaptStandardIpaToKokoroPhonemes('sˈɛd');
@@ -189,7 +330,7 @@ void main() {
     'one active and only latest pending settle coalesced request explicitly',
     () async {
       final worker = KokoroTokenizationWorker(
-        tokenizer: tokenizer,
+        assets: assets,
         dictionaryEntries: const {},
         workerEntryPoint: fakeWorker,
       );
@@ -213,7 +354,7 @@ void main() {
     'cancel kills pure active owner, suppresses late result, and permits fresh work',
     () async {
       final worker = KokoroTokenizationWorker(
-        tokenizer: tokenizer,
+        assets: assets,
         dictionaryEntries: const {},
         workerEntryPoint: fakeWorker,
       );
@@ -241,7 +382,7 @@ void main() {
     'mismatched terminal identity fails only its owner and allows recovery',
     () async {
       final worker = KokoroTokenizationWorker(
-        tokenizer: tokenizer,
+        assets: assets,
         dictionaryEntries: const {},
         workerEntryPoint: fakeWorker,
       );
@@ -263,7 +404,7 @@ void main() {
 
   test('timeout drains worker exit before replacement and shutdown', () async {
     final worker = KokoroTokenizationWorker(
-      tokenizer: tokenizer,
+      assets: assets,
       dictionaryEntries: const {},
       workerEntryPoint: fakeWorker,
       timeout: const Duration(milliseconds: 150),
@@ -284,7 +425,7 @@ void main() {
     'worker crash and empty token failure settle without blocking shutdown',
     () async {
       final broken = KokoroTokenizationWorker(
-        tokenizer: tokenizer,
+        assets: assets,
         dictionaryEntries: const {},
         workerEntryPoint: crashWorker,
       );
@@ -294,7 +435,7 @@ void main() {
       );
       await broken.shutdown();
       final worker = KokoroTokenizationWorker(
-        tokenizer: tokenizer,
+        assets: assets,
         dictionaryEntries: const {},
       );
       await expectLater(worker.tokenizeText('', 'en-us'), throwsStateError);
