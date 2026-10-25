@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:collection';
+import 'dart:convert';
 
 import '../models/speech_annotation.dart';
 
@@ -21,7 +22,7 @@ class SpeechWorkerCommand {
     : this._(
         type: SpeechWorkerCommandType.prepareChunk,
         generationId: chunk.generationId,
-        chunks: <SpeechWorkerChunkRequest>[chunk],
+        chunks: <SpeechWorkerChunkRequest>[chunk.snapshot()],
       );
 
   SpeechWorkerCommand.preparePlan({
@@ -30,7 +31,7 @@ class SpeechWorkerCommand {
   }) : this._(
          type: SpeechWorkerCommandType.preparePlan,
          generationId: generationId,
-         chunks: chunks,
+         chunks: List.unmodifiable(chunks.map((chunk) => chunk.snapshot())),
        );
 
   SpeechWorkerCommand.cancelGeneration(String generationId)
@@ -63,6 +64,9 @@ class SpeechWorkerChunkRequest {
     required this.voiceId,
     required this.rate,
     this.capabilityProfileId,
+    this.expectedBindingFingerprint,
+    this.expectedBindingRevision,
+    this.synthesisIdentity = 'legacy-unspecified',
     this.pronunciationArtifacts = const <Map<String, Object?>>[],
     this.missingFallbackWordCount = 0,
   });
@@ -81,8 +85,15 @@ class SpeechWorkerChunkRequest {
   final String voiceId;
   final double rate;
   final String? capabilityProfileId;
+  final String? expectedBindingFingerprint;
+  final int? expectedBindingRevision;
+  final String synthesisIdentity;
   final List<Map<String, Object?>> pronunciationArtifacts;
   final int missingFallbackWordCount;
+
+  SpeechWorkerChunkRequest snapshot() => SpeechWorkerChunkRequest.fromMap(
+    jsonDecode(jsonEncode(toMap())) as Map<String, dynamic>,
+  );
 
   Map<String, dynamic> toMap() {
     return <String, dynamic>{
@@ -100,6 +111,9 @@ class SpeechWorkerChunkRequest {
       'voiceId': voiceId,
       'rate': rate,
       'capabilityProfileId': capabilityProfileId,
+      'expectedBindingFingerprint': expectedBindingFingerprint,
+      'expectedBindingRevision': expectedBindingRevision,
+      'synthesisIdentity': synthesisIdentity,
       'pronunciationArtifacts': pronunciationArtifacts,
       'missingFallbackWordCount': missingFallbackWordCount,
     };
@@ -110,17 +124,21 @@ class SpeechWorkerChunkRequest {
       sessionId: map['sessionId'] as String,
       generationId: map['generationId'] as String,
       chunkId: map['chunkId'] as String,
-      segmentIds: List<String>.from(map['segmentIds'] as List<dynamic>),
+      segmentIds: List<String>.unmodifiable(map['segmentIds'] as List<dynamic>),
       cacheKey: map['cacheKey'] as String,
       boundaryClass: BreakClass.values.byName(map['boundaryClass'] as String),
       documentId: map['documentId'] as String,
       normalizationVersion: map['normalizationVersion'] as String,
       speakText: map['speakText'] as String,
-      tokens: List<int>.from(map['tokens'] as List<dynamic>),
+      tokens: List<int>.unmodifiable(map['tokens'] as List<dynamic>),
       languageTag: map['languageTag'] as String,
       voiceId: map['voiceId'] as String,
       rate: (map['rate'] as num).toDouble(),
       capabilityProfileId: map['capabilityProfileId'] as String?,
+      expectedBindingFingerprint: map['expectedBindingFingerprint'] as String?,
+      expectedBindingRevision: map['expectedBindingRevision'] as int?,
+      synthesisIdentity:
+          map['synthesisIdentity'] as String? ?? 'legacy-unspecified',
       pronunciationArtifacts: List<Map<String, Object?>>.from(
         (map['pronunciationArtifacts'] as List<Object?>? ?? const <Object?>[])
             .map(

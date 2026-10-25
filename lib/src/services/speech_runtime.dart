@@ -186,6 +186,9 @@ class SpeechRuntimeChunkPayload {
     this.castId,
     this.dialogueSpanId,
     this.capabilityProfileId,
+    this.expectedBindingFingerprint,
+    this.expectedBindingRevision,
+    this.synthesisIdentity = 'legacy-unspecified',
     this.pronunciationArtifacts = const <Map<String, Object?>>[],
     this.missingFallbackWordCount = 0,
   });
@@ -197,6 +200,9 @@ class SpeechRuntimeChunkPayload {
   final String documentId;
   final String normalizationVersion;
   final String? capabilityProfileId;
+  final String? expectedBindingFingerprint;
+  final int? expectedBindingRevision;
+  final String synthesisIdentity;
   final String speakText;
   final List<int> tokens;
   final String languageTag;
@@ -219,6 +225,9 @@ class SpeechRuntimeChunkPayload {
       'documentId': documentId,
       'normalizationVersion': normalizationVersion,
       'capabilityProfileId': capabilityProfileId,
+      'expectedBindingFingerprint': expectedBindingFingerprint,
+      'expectedBindingRevision': expectedBindingRevision,
+      'synthesisIdentity': synthesisIdentity,
       'speakText': speakText,
       'tokens': tokens,
       'languageTag': languageTag,
@@ -243,6 +252,10 @@ class SpeechRuntimeChunkPayload {
       documentId: map['documentId']! as String,
       normalizationVersion: map['normalizationVersion']! as String,
       capabilityProfileId: map['capabilityProfileId'] as String?,
+      expectedBindingFingerprint: map['expectedBindingFingerprint'] as String?,
+      expectedBindingRevision: map['expectedBindingRevision'] as int?,
+      synthesisIdentity:
+          map['synthesisIdentity'] as String? ?? 'legacy-unspecified',
       speakText: map['speakText']! as String,
       tokens: List<int>.from(map['tokens']! as List<Object?>),
       languageTag: map['languageTag']! as String,
@@ -694,6 +707,7 @@ class SpeechRuntime {
       StreamController<SpeechRuntimeEvent>.broadcast();
   final Map<String, _RuntimeChunkWorkItem> _pendingChunksById =
       <String, _RuntimeChunkWorkItem>{};
+  final Map<String, String> _lastArtifactByGenerationId = {};
   final Set<String> _cacheHitChunkIds = <String>{};
   final Map<String, Duration> _lastTrailingSilenceByGenerationId =
       <String, Duration>{};
@@ -769,6 +783,7 @@ class SpeechRuntime {
   Future<void> cancelGeneration(String generationId) async {
     await _pipeline.cancelGeneration(generationId);
     _lastTrailingSilenceByGenerationId.remove(generationId);
+    _lastArtifactByGenerationId.remove(generationId);
     _pendingChunksById.removeWhere(
       (_, item) => item.generationId == generationId,
     );
@@ -952,6 +967,9 @@ class SpeechRuntime {
         chunkId: chunk.chunkId,
         segmentIds: chunk.segmentIds,
         cacheKey: chunk.cacheKey,
+        expectedBindingFingerprint: chunk.expectedBindingFingerprint,
+        expectedBindingRevision: chunk.expectedBindingRevision,
+        synthesisIdentity: chunk.synthesisIdentity,
         boundaryClass: chunk.boundaryClass,
         documentId: chunk.documentId,
         normalizationVersion: chunk.normalizationVersion,
@@ -993,6 +1011,9 @@ class SpeechRuntime {
           chunkId: chunk.chunkId,
           segmentIds: chunk.segmentIds,
           cacheKey: chunk.cacheKey,
+          expectedBindingFingerprint: chunk.expectedBindingFingerprint,
+          expectedBindingRevision: chunk.expectedBindingRevision,
+          synthesisIdentity: chunk.synthesisIdentity,
           boundaryClass: chunk.boundaryClass,
           documentId: chunk.documentId,
           normalizationVersion: chunk.normalizationVersion,
@@ -1057,10 +1078,12 @@ class SpeechRuntime {
     if (generationId != null) {
       await _pipeline.cancelGeneration(generationId);
       _lastTrailingSilenceByGenerationId.remove(generationId);
+      _lastArtifactByGenerationId.remove(generationId);
     }
 
     _pendingChunksById.removeWhere((_, item) => item.sessionId == sessionId);
     _cacheHitChunkIds.clear();
+    _lastArtifactByGenerationId.clear();
     _activeSessionId = null;
     _activeGenerationId = null;
     _activeDocumentId = null;
@@ -1149,6 +1172,7 @@ class SpeechRuntime {
         break;
       case SpeechWorkerEventType.failed:
         _lastTrailingSilenceByGenerationId.remove(event.generationId);
+        _lastArtifactByGenerationId.remove(event.generationId);
         _pendingChunksById.remove(event.chunkId);
         _emit(
           _runtimeEvent(
@@ -1212,6 +1236,8 @@ class SpeechRuntime {
         'boundaryClass': workItem.chunk.boundaryClass.name,
         'isInitialChunk': workItem.chunk.isInitialChunk,
         'isResumedChunk': workItem.chunk.isResumedChunk,
+        'previousArtifactIdentity':
+            _lastArtifactByGenerationId[workItem.generationId],
         'previousTrailingSilenceMs':
             workItem.chunk.isInitialChunk || workItem.chunk.isResumedChunk
             ? null
@@ -1226,6 +1252,8 @@ class SpeechRuntime {
       }
 
       _pendingChunksById.remove(event.chunkId);
+      _lastArtifactByGenerationId[workItem.generationId] =
+          correction['audioPath'] as String? ?? event.audioPath!;
       final trailingSilence = Duration(
         milliseconds: correction['trailingSilenceAfterMs']! as int,
       );
@@ -1242,7 +1270,7 @@ class SpeechRuntime {
           routeId: workItem.chunk.routeId,
           castId: workItem.chunk.castId,
           dialogueSpanId: workItem.chunk.dialogueSpanId,
-          audioPath: event.audioPath,
+          audioPath: correction['audioPath'] as String? ?? event.audioPath,
           duration: Duration(
             milliseconds: correction['durationMillis']! as int,
           ),
@@ -1276,6 +1304,7 @@ class SpeechRuntime {
         return;
       }
       _lastTrailingSilenceByGenerationId.remove(workItem.generationId);
+      _lastArtifactByGenerationId.remove(workItem.generationId);
       _pendingChunksById.remove(event.chunkId);
       _emit(
         _runtimeEvent(
@@ -1494,11 +1523,13 @@ Map<String, Object?> runSpeechRuntimeBoundaryCorrection(
     boundaryClass: BreakClass.values.byName(input['boundaryClass']! as String),
     isInitialChunk: input['isInitialChunk']! as bool,
     isResumedChunk: input['isResumedChunk']! as bool,
+    previousArtifactIdentity: input['previousArtifactIdentity'] as String?,
     previousTrailingSilence: previousTrailingSilenceMs == null
         ? null
         : Duration(milliseconds: previousTrailingSilenceMs),
   );
   return <String, Object?>{
+    'audioPath': outcome.audioPath,
     'applied': outcome.applied,
     'durationMillis': outcome.duration.inMilliseconds,
     'boundaryClass': outcome.candidate.boundaryClass.name,
