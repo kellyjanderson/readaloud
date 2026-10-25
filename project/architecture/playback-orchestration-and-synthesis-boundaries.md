@@ -1,7 +1,7 @@
 # Playback Orchestration and Synthesis Boundaries
 
-Reconciled: October 25, 2026; P4 production lineage 295677e
-Status: P3 scheduling evidence accepted on working branch; P4 assignment source/native acceptance pending
+Reconciled: October 25, 2026; P4 source e18c81d (default runtime behavior through 843f6b5)
+Status: Bounded P4 automated native cases accepted; active-export input, listening and integrated acceptance remain open
 
 ## Implemented structure and limitations
 
@@ -25,7 +25,9 @@ Lease cancellation removes queued native admission even when the export lead gat
 
 When synthesis fails with an unplanned suffix, the engine terminates that session with an error rather than rebuilding only admitted chunks and silently truncating the document. Existing bounded fallback recovery remains available only after the entire suffix has been materialized. Policy constants and transport traces are not perceptual continuity guarantees; measured evidence and limitations are recorded in [P3](https://github.com/kellyjanderson/readaloud/issues/52).
 
-The `295677e` automated assignment phases observed a pending full-buffer edit preserving the active source/hash, explicit replay from chunk-start word 8, latest-only initial A/B/C acknowledgment, pause-retained native pins and stop-cleared sources/pins. At the recorded checkpoint the probe was kept alive for listening; supplemental failures, concurrent export-input/frame evidence and terminal acceptance are pending. The separate [accepted resource/cache run](https://github.com/kellyjanderson/readaloud/issues/53#issuecomment-6395918850) does not establish audible continuity.
+Ordinary no-edit Play rebuilds the saved-word tail: the controller captures the current word offset and calls `engine.speak`, which stops the prior generation. This differs from applying pending choices at the retained chunk-start anchor. Native supplemental evidence retained word 293 while replacing the source/resetting player position. The [baseline source comparison](https://github.com/kellyjanderson/readaloud/issues/53#issuecomment-6396190387) found the same word-tail/stop behavior at `694e1c3`; this is not sample-continuous resume proof or a new native baseline comparison.
+
+The [assignment295 prefix](https://github.com/kellyjanderson/readaloud/issues/53#issuecomment-6395976458) observed unchanged current source/hash after editing, first replacement playback at word 8 before acknowledgment, latest-only initial A/B/C success and pause-retained/stop-cleared pins. Its later listening timeout failed the overall run, with final resource cleanup recorded separately. The [e18c81d supplement](https://github.com/kellyjanderson/readaloud/issues/53#issuecomment-6396165816) passed paused pending Play at anchor 292, injected pre-ack failure retaining effective Heart and pending Bella followed by successful retry, and obsolete startup failure leaving latest C effective. Held-export cancellation drained before replacement playback; final sessions/tensors/sources/pins/tasks were zero. These bounded automated cases do not establish human listening, sample continuity or input during active export; the latter had zero actual UI actions.
 
 ## Source and tests
 
