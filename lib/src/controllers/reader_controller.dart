@@ -186,6 +186,13 @@ class ReaderController extends ChangeNotifier {
     _captureRequestedVoiceChoices(initialBuffering: initial);
     notifyListeners();
     if (initial) {
+      final anchor = _pausedVoiceReplayAnchor;
+      if (anchor != null &&
+          anchor.documentId == _document.displayDocument.documentId) {
+        _assignmentReplayWord ??= anchor.startWordIndex;
+        _currentWordIndex = _assignmentReplayWord!;
+        _explicitVoiceRebuffer = true;
+      }
       ++_playbackIntent;
       _invalidateResourceBindings();
       _playbackStartPending = true;
@@ -1211,6 +1218,7 @@ class ReaderController extends ChangeNotifier {
           final expected = _resourceBindings.map((b) => b.fingerprint).toSet();
           if (!setEquals(expected, ack.bindingFingerprints)) return;
           _voiceAssignments.acknowledge(assignmentRevision);
+          _pausedVoiceReplayAnchor = null;
           _acknowledgedPlaybackIntent = playbackIntent;
           _assignmentReplayWord = null;
           _explicitVoiceRebuffer = false;
@@ -1253,6 +1261,9 @@ class ReaderController extends ChangeNotifier {
 
   Future<void> jumpBySeconds(int seconds) async {
     if (_document.wordCount == 0 || _playbackActivity.isBuffering) return;
+    _pausedVoiceReplayAnchor = null;
+    _assignmentReplayWord = null;
+    _explicitVoiceRebuffer = false;
     final deltaWords = (seconds * _wordsPerSecond).round();
     final targetWord = (_currentWordIndex + deltaWords).clamp(
       0,

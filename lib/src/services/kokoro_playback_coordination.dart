@@ -1,6 +1,25 @@
 import 'tts_engine.dart';
 import 'audio_artifact_store.dart';
 
+/// Assembly has already settled before entering this drain. All independent
+/// owners still close if one reports failure; pins release only after all join.
+Future<void> kokoroDrainExportOwners({
+  required Future<void> Function() runtime,
+  required Future<void> Function() subscription,
+  required Future<void> Function() planner,
+  required void Function() releasePins,
+}) async {
+  try {
+    await Future.wait([
+      Future<void>.sync(runtime),
+      Future<void>.sync(subscription),
+      Future<void>.sync(planner),
+    ]);
+  } finally {
+    releasePins();
+  }
+}
+
 /// Playback ownership is generation + chunk, even when immutable content paths
 /// are reused. Late releases cannot consume a newer generation's pin.
 class KokoroPlaybackArtifactPins {

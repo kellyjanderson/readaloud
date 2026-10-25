@@ -5,6 +5,31 @@ import 'package:read_aloud/src/services/audio_artifact_store.dart';
 
 void main() {
   test(
+    'export cleanup failure still joins other owners before releasing pins',
+    () async {
+      final runtime = Completer<void>();
+      final planner = Completer<void>();
+      var subscriptionClosed = false;
+      var pinsReleased = false;
+      final draining = kokoroDrainExportOwners(
+        runtime: () => runtime.future,
+        subscription: () async {
+          subscriptionClosed = true;
+        },
+        planner: () => planner.future,
+        releasePins: () => pinsReleased = true,
+      );
+      final observed = expectLater(draining, throwsStateError);
+      runtime.completeError(StateError('runtime close failed after drain'));
+      await Future<void>.delayed(Duration.zero);
+      expect(subscriptionClosed, isTrue);
+      expect(pinsReleased, isFalse);
+      planner.complete();
+      await observed;
+      expect(pinsReleased, isTrue);
+    },
+  );
+  test(
     'held old mutation cannot release reused chunk pin owned by new generation',
     () async {
       final registry = AudioArtifactPins();

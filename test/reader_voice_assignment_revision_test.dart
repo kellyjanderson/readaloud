@@ -235,6 +235,43 @@ void main() {
     expect(controller.voiceAssignmentState.phase, VoiceAssignmentPhase.pending);
   });
 
+  for (final paused in [false, true]) {
+    test(
+      'pending edit navigation overrides obsolete pause anchor (paused=$paused)',
+      () async {
+        final engine = _AssignmentEngine();
+        final controller = await reader(engine);
+        await controller.startPlayback();
+        engine.acknowledge(engine.requests.last);
+        engine.anchor = TtsPlaybackResumeAnchor(
+          documentId: engine.requests.last.documentId!,
+          chunkId: 'old-pause-source',
+          startWordIndex: 0,
+        );
+        await controller.pausePlayback();
+        await controller.startPlayback();
+        engine.acknowledge(engine.requests.last);
+        engine.progress?.call(
+          TtsProgressUpdate(
+            startOffset: controller.document.charOffsetForWord(8),
+            endOffset: controller.document.charOffsetForWord(9),
+            word: 'Golden',
+            documentId: engine.requests.last.documentId,
+          ),
+        );
+        if (paused) {
+          await controller.pausePlayback();
+        }
+        await controller.selectVoiceById('af_heart');
+        await controller.jumpBySeconds(1);
+        if (paused) {
+          await controller.startPlayback();
+        }
+        expect(engine.requests.last.chunkPlan!.chunks.first.startWordIndex, 8);
+      },
+    );
+  }
+
   test(
     'current pre-ack failure retains historical effective choices and retry rejects old attempt ack',
     () async {

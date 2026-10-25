@@ -846,15 +846,16 @@ class KokoroTtsEngine
         ),
       );
     } finally {
-      try {
-        await runtime.shutdownRuntime();
-        await subscription.cancel();
-        await planner.shutdown();
-      } finally {
-        for (final pin in exportPins) {
-          pin.release();
-        }
-      }
+      await kokoroDrainExportOwners(
+        runtime: runtime.shutdownRuntime,
+        subscription: subscription.cancel,
+        planner: planner.shutdown,
+        releasePins: () {
+          for (final pin in exportPins) {
+            pin.release();
+          }
+        },
+      );
     }
   }
 
@@ -2648,6 +2649,7 @@ class KokoroTtsEngine
             'startWordIndex': playbackChunk.startWordIndex,
           },
         );
+        _releasePlaybackPin(playbackChunk);
         return;
       }
 
