@@ -49,7 +49,9 @@ class BoundaryCorrectionOutcome {
 class SynthesisBoundaryPolicy {
   const SynthesisBoundaryPolicy();
 
-  static const Duration pathologicalLeadingSilence = Duration(milliseconds: 180);
+  static const Duration pathologicalLeadingSilence = Duration(
+    milliseconds: 180,
+  );
   static const Duration initialOpeningCap = Duration(milliseconds: 120);
   static const Duration _minimumRetainedLeadingSilence = Duration(
     milliseconds: 20,
@@ -111,12 +113,8 @@ class SynthesisBoundaryPolicy {
 
     final header = Uint8List.fromList(wavBytes.sublist(0, 44));
     final pcm = Int16List.sublistView(wavBytes, 44);
-    final leadingBefore = _silenceDuration(
-      _leadingSilentSamples(pcm),
-    );
-    final trailingBefore = _silenceDuration(
-      _trailingSilentSamples(pcm),
-    );
+    final leadingBefore = _silenceDuration(_leadingSilentSamples(pcm));
+    final trailingBefore = _silenceDuration(_trailingSilentSamples(pcm));
     final candidate = BoundaryCandidateMetadata(
       chunkId: chunkId,
       boundaryClass: boundaryClass,
@@ -137,12 +135,19 @@ class SynthesisBoundaryPolicy {
       isResumedChunk: isResumedChunk,
     );
     final applied = targetLeading < leadingBefore;
+    var retainedSampleCount = pcm.length;
 
     if (applied) {
       final samplesToTrim = _durationToSamples(
         leadingBefore - targetLeading,
       ).clamp(0, pcm.length);
       final trimmedPcm = Int16List.fromList(pcm.sublist(samplesToTrim));
+      retainedSampleCount = trimmedPcm.length;
+      // These internally generated WAVs use a canonical 44-byte PCM header.
+      // Both RIFF and data sizes must describe the retained payload.
+      final headerData = ByteData.sublistView(header);
+      headerData.setUint32(4, 36 + trimmedPcm.lengthInBytes, Endian.little);
+      headerData.setUint32(40, trimmedPcm.lengthInBytes, Endian.little);
       final rebuilt = BytesBuilder(copy: false)
         ..add(header)
         ..add(trimmedPcm.buffer.asUint8List());
@@ -162,7 +167,13 @@ class SynthesisBoundaryPolicy {
       joinSilenceBefore: joinBefore,
       joinSilenceAfter: joinAfter,
     );
-    _updateSidecarSync(wavFile, outcome, isInitialChunk, isResumedChunk);
+    _updateSidecarSync(
+      wavFile,
+      outcome,
+      isInitialChunk,
+      isResumedChunk,
+      duration: _silenceDuration(retainedSampleCount),
+    );
     return outcome;
   }
 
@@ -246,8 +257,9 @@ class SynthesisBoundaryPolicy {
     File wavFile,
     BoundaryCorrectionOutcome outcome,
     bool isInitialChunk,
-    bool isResumedChunk,
-  ) {
+    bool isResumedChunk, {
+    required Duration duration,
+  }) {
     final sidecarFile = File(
       wavFile.path.replaceFirst(RegExp(r'\.wav$'), '.json'),
     );
@@ -262,6 +274,7 @@ class SynthesisBoundaryPolicy {
       }
 
       raw['chunkId'] = outcome.candidate.chunkId;
+      raw['durationMillis'] = duration.inMilliseconds;
       raw['boundaryClass'] = outcome.candidate.boundaryClass.name;
       raw['boundaryCorrectionApplied'] = outcome.applied;
       raw['joinSilenceBeforeMs'] = outcome.joinSilenceBefore.inMilliseconds;

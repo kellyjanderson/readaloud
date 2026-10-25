@@ -9,6 +9,65 @@ import 'package:read_aloud/src/services/synthesis_boundary_policy.dart';
 
 void main() {
   group('SynthesisBoundaryPolicy', () {
+    for (final leadingMs in [80, 240]) {
+      test(
+        'keeps WAV sizes and duration consistent for ${leadingMs}ms opening',
+        () async {
+          final directory = await Directory.systemTemp.createTemp(
+            'wav-header-',
+          );
+          addTearDown(() => directory.delete(recursive: true));
+          final file = File('${directory.path}/chunk.wav');
+          final sidecar = File('${directory.path}/chunk.json');
+          final original = _buildWav(
+            leadingSilenceMs: leadingMs,
+            speechMs: 300,
+            trailingSilenceMs: 40,
+          );
+          await file.writeAsBytes(original);
+          await sidecar.writeAsString(
+            jsonEncode({
+              'durationMillis': leadingMs + 340,
+              'voiceId': 'fixture',
+            }),
+          );
+          final outcome = await const SynthesisBoundaryPolicy().correctWavFile(
+            chunkId: 'chunk',
+            wavFilePath: file.path,
+            boundaryClass: BreakClass.none,
+            isInitialChunk: true,
+            isResumedChunk: false,
+          );
+          final actual = await file.readAsBytes();
+          final header = ByteData.sublistView(actual);
+          expect(header.getUint32(4, Endian.little), actual.length - 8);
+          expect(header.getUint32(40, Endian.little), actual.length - 44);
+          final removedBytes =
+              _msToSamples(leadingMs > 120 ? leadingMs - 120 : 0) * 2;
+          expect(actual.sublist(44), original.sublist(44 + removedBytes));
+          expect(outcome.applied, leadingMs > 120);
+          if (!outcome.applied) expect(actual, original);
+          final metadata = jsonDecode(await sidecar.readAsString()) as Map;
+          expect(
+            metadata['durationMillis'],
+            ((actual.length - 44) / 2 / sampleRate * 1000).round(),
+          );
+          expect(metadata['voiceId'], 'fixture');
+          await const SynthesisBoundaryPolicy().correctWavFile(
+            chunkId: 'chunk',
+            wavFilePath: file.path,
+            boundaryClass: BreakClass.none,
+            isInitialChunk: true,
+            isResumedChunk: false,
+          );
+          expect(await file.readAsBytes(), actual);
+          expect(
+            (jsonDecode(await sidecar.readAsString()) as Map)['durationMillis'],
+            metadata['durationMillis'],
+          );
+        },
+      );
+    }
     test('caps initial chunk opening silence at 120ms', () async {
       final tempDir = await Directory.systemTemp.createTemp(
         'read-aloud-boundary-',
