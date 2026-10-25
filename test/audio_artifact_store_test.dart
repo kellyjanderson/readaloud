@@ -1,5 +1,7 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'dart:isolate';
 import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
@@ -187,6 +189,86 @@ void main() {
     },
   );
   test(
+    'corrupted reused model snapshot is rejected and never repaired in place',
+    () async {
+      final source = File('${root.path}/source.onnx')
+        ..writeAsBytesSync([1, 2, 3]);
+      final snapshots = Directory('${root.path}/snapshots');
+      final original = await ModelContentSnapshot.capture(
+        source.path,
+        snapshots,
+      );
+      File(original.path).writeAsBytesSync([7, 8, 9]);
+      await expectLater(
+        ModelContentSnapshot.capture(source.path, snapshots),
+        throwsA(
+          isA<StateError>().having(
+            (e) => e.message,
+            'message',
+            contains('snapshot was modified'),
+          ),
+        ),
+      );
+      expect(File(original.path).readAsBytesSync(), [7, 8, 9]);
+      expect(source.readAsBytesSync(), [1, 2, 3]);
+      expect(
+        snapshots.listSync().where(
+          (e) => e.path.split('/').last.startsWith('.stage-'),
+        ),
+        isEmpty,
+      );
+    },
+  );
+  test(
+    'simultaneous isolate publishers leave complete immutable generations',
+    () async {
+      final path = '${root.path}/concurrent';
+      final id = artifactIdentity('shared-content');
+      final ready = ReceivePort();
+      final workers = <SendPort>[];
+      final results = <String>[];
+      final done = Completer<void>();
+      final subscription = ready.listen((message) {
+        if (message is SendPort) {
+          workers.add(message);
+          if (workers.length == 4) {
+            for (final worker in workers) {
+              worker.send(true);
+            }
+          }
+        } else if (message is String) {
+          results.add(message);
+          if (results.length == 4) done.complete();
+        }
+      });
+      try {
+        for (var i = 0; i < 4; i++) {
+          await Isolate.spawn(publishArtifact, [ready.sendPort, path, id]);
+        }
+        await done.future.timeout(const Duration(seconds: 10));
+        final store = AudioArtifactStore(Directory(path));
+        final hit = store.lookup(id)!;
+        expect(hit.frames, 24000);
+        for (final result in results) {
+          expect(File(result).readAsBytesSync(), wav());
+          expect(
+            File('${File(result).parent.path}/manifest.json').existsSync(),
+            isTrue,
+          );
+        }
+        expect(
+          Directory(path).listSync().where(
+            (e) => e.path.split('/').last.startsWith('.stage-'),
+          ),
+          isEmpty,
+        );
+      } finally {
+        await subscription.cancel();
+        ready.close();
+      }
+    },
+  );
+  test(
     'publication failure cleans only owned staging and rejects malformed WAV',
     () {
       final store = AudioArtifactStore(Directory('${root.path}/artifacts'));
@@ -218,6 +300,20 @@ void main() {
       );
     },
   );
+}
+
+void publishArtifact(List<Object> input) async {
+  final reply = input[0] as SendPort;
+  final gate = ReceivePort();
+  reply.send(gate.sendPort);
+  await gate.first;
+  gate.close();
+  final artifact = AudioArtifactStore(Directory(input[1] as String)).publish(
+    identity: input[2] as String,
+    wav: wav(),
+    metadata: {'fixture': 'concurrent'},
+  );
+  Isolate.exit(reply, artifact.audioPath);
 }
 
 PreparedVoiceBinding binding({
