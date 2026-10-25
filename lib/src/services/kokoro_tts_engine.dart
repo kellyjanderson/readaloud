@@ -1792,6 +1792,14 @@ class KokoroTtsEngine
   }
 
   Future<void> _resetPlaybackState() async {
+    await _playbackReset.reset();
+  }
+
+  late final _playbackReset = KokoroPlaybackResetBarrier(
+    _resetPlaybackStateInternal,
+  );
+
+  Future<void> _resetPlaybackStateInternal() async {
     _activePlaybackToken = null;
     _currentChunkIndex = 0;
     _currentQueueBaseIndex = 0;

@@ -1,5 +1,15 @@
 import 'tts_engine.dart';
 
+/// End-of-document and a new speak request join the same in-flight reset.
+/// A replacement may install sources only after the old stop/clear has drained.
+class KokoroPlaybackResetBarrier {
+  KokoroPlaybackResetBarrier(this._reset);
+  final Future<void> Function() _reset;
+  Future<void>? _pending;
+  Future<void> reset() =>
+      _pending ??= _reset().whenComplete(() => _pending = null);
+}
+
 class KokoroPlaybackQueueSnapshot {
   const KokoroPlaybackQueueSnapshot({
     required this.activeChunkCount,
