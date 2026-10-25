@@ -1,0 +1,36 @@
+name: Release coordination
+description: Plan and verify a release using a milestone and working release branch.
+title: "Release: "
+body:
+  - type: textarea
+    id: scope
+    attributes:
+      label: Release intent and scope
+      description: Link the milestone; describe intended user outcomes, exclusions and tentative version. Use milestone membership instead of copying feature plans.
+    validations:
+      required: true
+  - type: textarea
+    id: ownership
+    attributes:
+      label: Ownership and branches
+      description: Release coordinator, release branch created from origin/main, starting commit, feature integration routes and release PR. Preserve existing worker branches.
+    validations:
+      required: true
+  - type: textarea
+    id: readiness
+    attributes:
+      label: Readiness and evidence
+      description: Link feature acceptance and architecture reconciliation; record version decision, candidate commit, integration and packaged-app checks, evidence limits and blockers.
+      value: |
+        - [ ] Feature acceptance and architecture/user docs reconciled
+        - [ ] Version metadata and release notes prepared
+        - [ ] Candidate integration and packaged-app validation accepted
+        - [ ] Release PR stable and merge authorization recorded
+        - [ ] Resulting main commit verified; its release artifacts built and validated
+        - [ ] Publication authorization recorded; immutable tag and release published
+        - [ ] Tag/commit and downloadable artifacts verified
+  - type: textarea
+    id: publication
+    attributes:
+      label: Publication record
+      description: Exact main commit, version/tag, release/artifact links and verification. Leave open if publication fails. Close the issue and milestone only after verification; never move a published tag.
