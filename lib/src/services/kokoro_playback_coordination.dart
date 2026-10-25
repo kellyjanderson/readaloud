@@ -49,9 +49,9 @@ class KokoroForwardRecoveryPlan {
   const KokoroForwardRecoveryPlan.resumeFromNextBufferedChunk(
     int nextChunkIndex,
   ) : this._(
-         action: KokoroForwardRecoveryAction.resumeFromNextBufferedChunk,
-         nextChunkIndex: nextChunkIndex,
-       );
+        action: KokoroForwardRecoveryAction.resumeFromNextBufferedChunk,
+        nextChunkIndex: nextChunkIndex,
+      );
 
   final KokoroForwardRecoveryAction action;
   final int? nextChunkIndex;
@@ -132,7 +132,8 @@ KokoroForwardRecoveryPlan kokoroPlanForwardRecovery(
       nextChunkIndex,
     );
   }
-  if (snapshot.pendingChunkCount > 0 || snapshot.remainingPlannedChunkCount > 0) {
+  if (snapshot.pendingChunkCount > 0 ||
+      snapshot.remainingPlannedChunkCount > 0) {
     return const KokoroForwardRecoveryPlan.waitForPreparedAudio();
   }
   return const KokoroForwardRecoveryPlan.none();
@@ -203,8 +204,9 @@ List<KokoroRecoveryWordSlice> kokoroPlanRecoverableChunkSlices({
     final maxEnd = (cursor + preferredTargetWords + 2)
         .clamp(minEnd, wordBoundaries.length - minimumSliceWords)
         .toInt();
-    final preferredEnd =
-        (cursor + preferredTargetWords).clamp(minEnd, maxEnd).toInt();
+    final preferredEnd = (cursor + preferredTargetWords)
+        .clamp(minEnd, maxEnd)
+        .toInt();
     final chosenEnd =
         _findRecoveryBoundary(
           wordBoundaries: wordBoundaries,
@@ -223,7 +225,8 @@ List<KokoroRecoveryWordSlice> kokoroPlanRecoverableChunkSlices({
     cursor = chosenEnd;
   }
 
-  if (slices.length <= 1 || slices.any((slice) => slice.wordCount < minimumSliceWords)) {
+  if (slices.length <= 1 ||
+      slices.any((slice) => slice.wordCount < minimumSliceWords)) {
     return const <KokoroRecoveryWordSlice>[];
   }
   return List<KokoroRecoveryWordSlice>.unmodifiable(slices);
@@ -243,18 +246,20 @@ List<T> kokoroBuildInitialPlaybackQueue<T>({
 
   final ordered = chunksById.values.toList(growable: false)
     ..sort((left, right) {
-      final wordComparison =
-          startWordIndexOf(left).compareTo(startWordIndexOf(right));
+      final wordComparison = startWordIndexOf(
+        left,
+      ).compareTo(startWordIndexOf(right));
       if (wordComparison != 0) {
         return wordComparison;
       }
-      final offsetComparison =
-          startOffsetOf(left).compareTo(startOffsetOf(right));
+      final offsetComparison = startOffsetOf(
+        left,
+      ).compareTo(startOffsetOf(right));
       if (offsetComparison != 0) {
         return offsetComparison;
       }
       return chunkIdOf(left).compareTo(chunkIdOf(right));
-  });
+    });
   return ordered;
 }
 
@@ -302,8 +307,9 @@ int _comparePlaybackChunkOrder<T>(
   required int Function(T chunk) startWordIndexOf,
   required int Function(T chunk) startOffsetOf,
 }) {
-  final wordComparison =
-      startWordIndexOf(left).compareTo(startWordIndexOf(right));
+  final wordComparison = startWordIndexOf(
+    left,
+  ).compareTo(startWordIndexOf(right));
   if (wordComparison != 0) {
     return wordComparison;
   }
@@ -370,4 +376,54 @@ int? _terminalPunctuationCodeUnit(String word) {
   }
 
   return null;
+}
+
+/// Hysteresis uses playable wall time. Kokoro's synthesis rate is already baked
+/// into PCM duration; only an independent player speed divides that duration.
+class KokoroBufferAdmission {
+  KokoroBufferAdmission({
+    this.high = kokoroTargetBufferedLeadTime,
+    this.low = kokoroLowWaterBufferedLeadTime,
+    this.maxChunks = 64,
+  }) {
+    if (low >= high || maxChunks < 1) {
+      throw ArgumentError('Invalid buffer policy');
+    }
+  }
+  final Duration high;
+  final Duration low;
+  final int maxChunks;
+  bool _full = false;
+  bool startupCapacityExhausted({
+    required Duration audioLead,
+    required int bufferedChunkCount,
+    required int pendingChunkCount,
+    required int remainingPlannedChunkCount,
+    double playerSpeed = 1,
+  }) {
+    if (!playerSpeed.isFinite || playerSpeed <= 0) {
+      throw ArgumentError.value(playerSpeed);
+    }
+    return bufferedChunkCount >= maxChunks &&
+        pendingChunkCount == 0 &&
+        remainingPlannedChunkCount > 0 &&
+        audioLead.inMicroseconds / playerSpeed <
+            kokoroStartupMinimumBufferedLeadTime.inMicroseconds;
+  }
+
+  bool admits({
+    required Duration audioLead,
+    required int outstandingChunks,
+    double playerSpeed = 1,
+  }) {
+    if (!playerSpeed.isFinite || playerSpeed <= 0) {
+      throw ArgumentError.value(playerSpeed);
+    }
+    final effective = Duration(
+      microseconds: (audioLead.inMicroseconds / playerSpeed).round(),
+    );
+    if (_full && effective <= low) _full = false;
+    if (effective >= high) _full = true;
+    return !_full && outstandingChunks < maxChunks;
+  }
 }

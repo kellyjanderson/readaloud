@@ -381,7 +381,8 @@ class SpeechWorkerPipeline {
             if (_isShutdown || _isCancelled(event.generationId)) {
               return;
             }
-            if (event.type == SpeechWorkerEventType.completed && onCompleted != null) {
+            if (event.type == SpeechWorkerEventType.completed &&
+                onCompleted != null) {
               completion = Future.sync(() => onCompleted!(event));
             } else {
               _emit(event);

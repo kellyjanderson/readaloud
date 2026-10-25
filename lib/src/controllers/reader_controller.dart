@@ -1,3 +1,4 @@
+import '../services/speech_planning_supervisor.dart';
 import 'dart:async';
 import 'dart:developer' as developer;
 import 'dart:io';
@@ -31,7 +32,6 @@ import '../models/voice_preview_state.dart';
 import '../models/voice_profile.dart';
 import '../services/cast_aware_speech_route_service.dart';
 import '../services/cast_voice_assignment_service.dart';
-import '../services/chunk_planner_service.dart';
 import '../services/default_tts_engine.dart';
 import '../services/document_access_service.dart';
 import '../services/document_import_service.dart';
@@ -43,7 +43,6 @@ import '../services/reader_preferences_service.dart';
 import '../services/share_intake_service.dart';
 import '../services/spoken_selection_mapper_service.dart';
 import '../services/tts_engine.dart';
-import '../services/voice_session_realization_service.dart';
 
 class ReaderController extends ChangeNotifier {
   static const Duration _healthyFollowerUpdateInterval = Duration(
@@ -75,9 +74,7 @@ class ReaderController extends ChangeNotifier {
        _preferencesService = preferencesService ?? ReaderPreferencesService(),
        _ttsEngine = ttsEngine ?? createDefaultTtsEngine(),
        _enablePlatformIntakeChannels = enablePlatformIntakeChannels,
-       _document = ReaderDocument.sample(),
-       _realizationService = const VoiceSessionRealizationService(),
-       _chunkPlannerService = const ChunkPlannerService();
+       _document = ReaderDocument.sample();
 
   final DocumentPreparationSupervisor _preparation;
   final String _preparationOwner =
@@ -89,6 +86,9 @@ class ReaderController extends ChangeNotifier {
   int _watchSession = 0;
   bool _disposed = false;
   bool _documentPrepared = true;
+  final SpeechPlanningSupervisor _planning = SpeechPlanningSupervisor();
+  SpeechPlanningContext? _currentPlanningContext;
+  SpeechPlanningSupervisor? _exportPlanner;
   List<PreparedVoiceBinding> _resourceBindings = const [];
   List<ResolvedPreparedVoiceReference> _resolvedResourceBindings = const [];
   int _resourceBindingIntent = 0;
@@ -98,6 +98,8 @@ class ReaderController extends ChangeNotifier {
       isResourcesReady ? _resolvedResourceBindings : const [];
   void _invalidateResourceBindings() {
     ++_resourceBindingIntent;
+    _planning.cancel();
+    _exportPlanner?.cancel();
     _resourceBindings = const [];
     _resolvedResourceBindings = const [];
   }
@@ -162,12 +164,8 @@ class ReaderController extends ChangeNotifier {
   final ReaderPreferencesService _preferencesService;
   final TtsEngine _ttsEngine;
   final bool _enablePlatformIntakeChannels;
-  final VoiceSessionRealizationService _realizationService;
-  final ChunkPlannerService _chunkPlannerService;
   final CastVoiceAssignmentService _castVoiceAssignmentService =
       const CastVoiceAssignmentService();
-  final CastAwareSpeechRouteService _castAwareSpeechRouteService =
-      const CastAwareSpeechRouteService();
   final EnglishPronunciationProfileSelector _pronunciationProfileSelector =
       const EnglishPronunciationProfileSelector();
   final PronunciationResourceLayeringService
@@ -968,8 +966,7 @@ class ReaderController extends ChangeNotifier {
       recentRate: currentSpeed,
       localPronunciationChoices: const <String, String>{},
     );
-    _refreshRealizationWindow();
-    _refreshChunkPlan();
+    await _primePlaybackPreparation();
     await _ttsEngine.selectVoice(voice);
     await _ttsEngine.setSpeechRate(currentSpeed);
     await _ttsEngine.setVolume(1.0);
@@ -992,6 +989,7 @@ class ReaderController extends ChangeNotifier {
         sessionId: _narrationState.sessionId,
         normalizationVersion: _document.speechDocument.normalizationVersion,
         chunkPlan: _currentChunkPlan,
+        planningContext: _currentPlanningContext,
         isResumedPlayback: _currentWordIndex > 0,
         speechDocument: _document.speechDocument,
         ttsArtifactSet: _currentRealization?.ttsArtifactSet,
@@ -1094,7 +1092,7 @@ class ReaderController extends ChangeNotifier {
     _narrationState = _narrationState.reset(recentRate: currentSpeed);
     _currentRealization = null;
     _currentChunkPlan = null;
-    _primePlaybackPreparation();
+    await _primePlaybackPreparation();
     _wordsPerSecond = _estimateWordsPerSecond(
       voiceId: voiceId,
       rate: currentSpeed,
@@ -1118,7 +1116,7 @@ class ReaderController extends ChangeNotifier {
     _invalidateResourceBindings();
 
     _isMultiVoiceEnabled = enabled;
-    _refreshChunkPlan();
+    await _primePlaybackPreparation();
     await _persistPreferences();
 
     if (_isPlaying || _playbackActivity.isBuffering) {
@@ -1250,7 +1248,7 @@ class ReaderController extends ChangeNotifier {
     }
     await _persistPreferences();
 
-    _refreshChunkPlan();
+    await _primePlaybackPreparation();
 
     if (_isPlaying) {
       await _ttsEngine.stop();
@@ -1273,7 +1271,7 @@ class ReaderController extends ChangeNotifier {
     _castVoiceOverrides.remove(castId);
     _clearStoredCastVoiceAssignment(castId);
     await _persistPreferences();
-    _refreshChunkPlan();
+    await _primePlaybackPreparation();
 
     if (_isPlaying) {
       await _ttsEngine.stop();
@@ -1396,29 +1394,27 @@ class ReaderController extends ChangeNotifier {
       return null;
     }
 
+    final exportRevision = _documentRevision;
     _isExporting = true;
     _statusMessage = 'Saving audio with ${voice.displayName}...';
     notifyListeners();
 
     try {
-      if (_isPlaying || _playbackActivity.isBuffering) {
-        await _ttsEngine.stop();
-        _finalizeActiveSpokenChunk();
-        _isPlaying = false;
-        _playbackState = ReaderPlaybackPrimaryState.paused;
-        _playbackActivity = const TtsPlaybackActivity.idle();
-      }
+      if (!isResourcesReady) await _prepareResourceBindings(_documentRevision);
 
-      await _ttsEngine.selectVoice(voice);
-      await _ttsEngine.setSpeechRate(currentSpeed);
-      await _ttsEngine.setVolume(1.0);
-
-      final exportRequest = _buildExportRequest(normalizedPath);
+      _requireRevision(exportRevision);
+      final exportRequest = await _buildExportRequest(normalizedPath);
+      _requireRevision(exportRevision);
       final result = await exporter.exportAudio(exportRequest);
-      _statusMessage = 'Saved audio to ${result.outputPath}.';
+      _requireRevision(exportRevision);
+      if (exportRevision == _documentRevision) {
+        _statusMessage = 'Saved audio to ${result.outputPath}.';
+      }
       return result;
     } catch (error) {
-      _statusMessage = 'Could not save audio right now. Try again.';
+      if (exportRevision == _documentRevision) {
+        _statusMessage = 'Could not save audio right now. Try again.';
+      }
       return null;
     } finally {
       _isExporting = false;
@@ -1662,7 +1658,7 @@ class ReaderController extends ChangeNotifier {
     _narrationState = NarrationState.initial(recentRate: currentSpeed);
     _currentRealization = null;
     _currentChunkPlan = null;
-    _primePlaybackPreparation();
+    await _primePlaybackPreparation();
     await _prepareResourceBindings(revision);
     _requireRevision(revision);
     _documentPrepared = true;
@@ -1772,6 +1768,8 @@ class ReaderController extends ChangeNotifier {
 
   @override
   void dispose() {
+    unawaited(_planning.shutdown());
+    unawaited(_exportPlanner?.shutdown());
     _disposed = true;
     ++_documentRevision;
     ++_watchSession;
@@ -2375,89 +2373,64 @@ class ReaderController extends ChangeNotifier {
     return candidates.last.breakClass!.name;
   }
 
-  void _refreshRealizationWindow() {
+  SpeechPlanningContext? _planningContext({bool fromStart = false}) {
     final voiceId = _selectedVoiceId;
-    final startSegment = _document.segmentForWordIndex(_currentWordIndex);
-    if (voiceId == null || startSegment == null) {
-      _currentRealization = null;
-      return;
-    }
-    final selectedProfile = _selectedPronunciationProfile(voiceId: voiceId);
-    final mergedResources = _mergedPronunciationResources(selectedProfile);
-
-    _currentRealization = _realizationService.realize(
-      VoiceSessionRealizationInput(
+    final start = fromStart
+        ? _document.speechDocument.segments.firstOrNull
+        : _document.segmentForWordIndex(_currentWordIndex);
+    if (voiceId == null || start == null) return null;
+    final profile = _selectedPronunciationProfile(voiceId: voiceId);
+    final assignments = _resolveCastVoiceAssignments(
+      preferredNarratorVoiceId: voiceId,
+    );
+    return SpeechPlanningContext(
+      realization: VoiceSessionRealizationInput(
         speechDocument: _document.speechDocument,
         baseAnnotations: _document.baseSpeechAnnotations,
         basePronunciationArtifacts: _document.basePronunciationArtifacts,
-        startSegmentId: startSegment.segmentId,
+        startSegmentId: start.segmentId,
         voiceId: voiceId,
         engineId: _engineId(),
         rate: currentSpeed,
         narrationState: _narrationState,
-        selectedProfile: selectedProfile,
-        mergedPronunciationResources: mergedResources,
+        selectedProfile: profile,
+        mergedPronunciationResources: _mergedPronunciationResources(profile),
       ),
-    );
-  }
-
-  void _refreshChunkPlan() {
-    final voiceId = _selectedVoiceId;
-    final startSegment = _document.segmentForWordIndex(_currentWordIndex);
-    if (voiceId == null || startSegment == null) {
-      _currentChunkPlan = null;
-      return;
-    }
-
-    final castVoiceAssignments = _resolveCastVoiceAssignments(
-      preferredNarratorVoiceId: voiceId,
-    );
-    final castAwareSpeechRoutes = castVoiceAssignments == null
-        ? null
-        : _castAwareSpeechRouteService.build(
-            CastAwareSpeechRouteInput(
+      engineVersion: _engineVersion(),
+      routes: assignments == null
+          ? null
+          : CastAwareSpeechRouteInput(
               documentVoiceAttribution: _document.documentVoiceAttribution,
-              castVoiceAssignments: castVoiceAssignments,
+              castVoiceAssignments: assignments,
             ),
-          );
-
-    _currentChunkPlan = _chunkPlannerService.plan(
-      ChunkPlannerInput(
-        speechDocument: _document.speechDocument,
-        baseAnnotations: _document.baseSpeechAnnotations,
-        ttsArtifactSet:
-            _currentRealization?.ttsArtifactSet ??
-            TtsArtifactSet(
-              documentId: _document.speechDocument.documentId,
-              sessionId: _narrationState.sessionId,
-              engineId: _engineId(),
-              voiceId: voiceId,
-              rate: currentSpeed,
-              selectedProfileId: _selectedPronunciationProfile(
-                voiceId: voiceId,
-              ).profileId,
-              startSegmentId: startSegment.segmentId,
-              endSegmentId: startSegment.segmentId,
-              segments: const <TtsArtifactSegment>[],
-            ),
-        startSegmentId: startSegment.segmentId,
-        voiceId: voiceId,
-        rate: currentSpeed,
-        engineId: _engineId(),
-        engineVersion: _engineVersion(),
-        castAwareSpeechRoutes: castAwareSpeechRoutes,
-      ),
     );
   }
 
-  void _primePlaybackPreparation() {
-    if (_document.wordCount == 0) {
+  Future<void> _primePlaybackPreparation() async {
+    final context = _planningContext();
+    if (context == null) {
       _currentRealization = null;
       _currentChunkPlan = null;
       return;
     }
-    _refreshRealizationWindow();
-    _refreshChunkPlan();
+    final revision = _documentRevision;
+    final intent = _resourceBindingIntent;
+    try {
+      final window = await _planning.plan(
+        context,
+        maxChunks: _engineId() == 'kokoro' ? 3 : 1000000,
+      );
+      if (_disposed ||
+          revision != _documentRevision ||
+          intent != _resourceBindingIntent) {
+        return;
+      }
+      _currentPlanningContext = context;
+      _currentRealization = window.realization;
+      _currentChunkPlan = window.plan;
+    } on PlanningCancelled {
+      return;
+    }
   }
 
   String _engineId() {
@@ -2492,68 +2465,36 @@ class ReaderController extends ChangeNotifier {
     );
   }
 
-  TtsExportRequest _buildExportRequest(String outputPath) {
-    final voiceId = _selectedVoiceId;
-    final firstSegment = _document.speechDocument.segments.firstOrNull;
-    final exportProfile = voiceId == null
-        ? _selectedPronunciationProfile()
-        : _selectedPronunciationProfile(voiceId: voiceId);
-    final exportResources = _mergedPronunciationResources(exportProfile);
-    final exportRealization = firstSegment == null || voiceId == null
-        ? null
-        : _realizationService.realize(
-            VoiceSessionRealizationInput(
-              speechDocument: _document.speechDocument,
-              baseAnnotations: _document.baseSpeechAnnotations,
-              basePronunciationArtifacts: _document.basePronunciationArtifacts,
-              startSegmentId: firstSegment.segmentId,
-              voiceId: voiceId,
-              engineId: _engineId(),
-              rate: currentSpeed,
-              narrationState: NarrationState.initial(recentRate: currentSpeed),
-              selectedProfile: exportProfile,
-              mergedPronunciationResources: exportResources,
-            ),
-          );
-    final castVoiceAssignments = voiceId == null
-        ? null
-        : _resolveCastVoiceAssignments(preferredNarratorVoiceId: voiceId);
-    final castAwareSpeechRoutes = castVoiceAssignments == null
-        ? null
-        : _castAwareSpeechRouteService.build(
-            CastAwareSpeechRouteInput(
-              documentVoiceAttribution: _document.documentVoiceAttribution,
-              castVoiceAssignments: castVoiceAssignments,
-            ),
-          );
-    final chunkPlan = firstSegment == null || voiceId == null
-        ? null
-        : _chunkPlannerService.plan(
-            ChunkPlannerInput(
-              speechDocument: _document.speechDocument,
-              baseAnnotations: _document.baseSpeechAnnotations,
-              ttsArtifactSet: exportRealization!.ttsArtifactSet,
-              startSegmentId: firstSegment.segmentId,
-              voiceId: voiceId,
-              rate: currentSpeed,
-              engineId: _engineId(),
-              engineVersion: _engineVersion(),
-              castAwareSpeechRoutes: castAwareSpeechRoutes,
-            ),
-          );
-
-    return TtsExportRequest(
-      text: _document.speakableText,
-      outputPath: outputPath,
-      documentId: _document.displayDocument.documentId,
-      documentTitle: _document.title,
-      sourceDescription: _document.sourceDescription,
-      sessionId: 'export_${DateTime.now().microsecondsSinceEpoch}',
-      normalizationVersion: _document.speechDocument.normalizationVersion,
-      chunkPlan: chunkPlan,
-      speechDocument: _document.speechDocument,
-      ttsArtifactSet: exportRealization?.ttsArtifactSet,
-    );
+  Future<TtsExportRequest> _buildExportRequest(String outputPath) async {
+    final document = _document;
+    final revision = _documentRevision;
+    final intent = _resourceBindingIntent;
+    final bindings = resourceBindings;
+    final context = _planningContext(fromStart: true);
+    final planner = SpeechPlanningSupervisor();
+    _exportPlanner = planner;
+    try {
+      final window = context == null ? null : await planner.plan(context);
+      _requireRevision(revision);
+      if (intent != _resourceBindingIntent) throw const PlanningCancelled();
+      return TtsExportRequest(
+        text: document.speakableText,
+        outputPath: outputPath,
+        documentId: document.displayDocument.documentId,
+        documentTitle: document.title,
+        sourceDescription: document.sourceDescription,
+        sessionId: 'export_${DateTime.now().microsecondsSinceEpoch}',
+        normalizationVersion: document.speechDocument.normalizationVersion,
+        chunkPlan: window?.plan,
+        speechDocument: document.speechDocument,
+        ttsArtifactSet: window?.realization.ttsArtifactSet,
+        planningContext: context,
+        preparedResources: bindings,
+      );
+    } finally {
+      if (identical(_exportPlanner, planner)) _exportPlanner = null;
+      await planner.shutdown();
+    }
   }
 
   CastVoiceAssignmentSet? _resolveCastVoiceAssignments({

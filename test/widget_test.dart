@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:ui' show SemanticsAction, Tristate;
 
 import 'package:flutter/foundation.dart';
@@ -60,6 +61,7 @@ void main() {
       expect(data.hasAction(SemanticsAction.tap), isTrue, reason: label);
     }
     tester.semantics.tap(find.semantics.byLabel('Play'));
+    await _awaitSpeak(tester, engine);
     await tester.pump();
     expect(engine.speakCount, 1);
     final buffering = tester
@@ -110,6 +112,7 @@ void main() {
     }
     expect(focused, isTrue);
     await tester.sendKeyEvent(LogicalKeyboardKey.space);
+    await _awaitSpeak(tester, engine);
     await tester.pump();
     expect(engine.speakCount, 1);
     debugDefaultTargetPlatformOverride = null;
@@ -666,6 +669,7 @@ class _FakeTtsEngine implements TtsEngine {
 class _AccessibleTtsEngine extends _FakeTtsEngine {
   void Function()? _start;
   void Function(TtsPlaybackActivity)? _activity;
+  final firstSpeak = Completer<void>();
   int speakCount = 0;
   int pauseCount = 0;
 
@@ -679,6 +683,7 @@ class _AccessibleTtsEngine extends _FakeTtsEngine {
   @override
   Future<void> speak(TtsSpeakRequest request) async {
     speakCount += 1;
+    if (!firstSpeak.isCompleted) firstSpeak.complete();
     _activity?.call(
       const TtsPlaybackActivity(phase: TtsPlaybackPhase.buffering),
     );
@@ -710,5 +715,17 @@ class _FakeExportCapableTtsEngine extends _FakeTtsEngine
       engineId: 'fake',
       engineVersion: 'test',
     );
+  }
+}
+
+Future<void> _awaitSpeak(
+  WidgetTester tester,
+  _AccessibleTtsEngine engine,
+) async {
+  for (var attempt = 0; attempt < 300 && engine.speakCount == 0; attempt++) {
+    await tester.runAsync(
+      () => Future<void>.delayed(const Duration(milliseconds: 10)),
+    );
+    await tester.pump();
   }
 }
