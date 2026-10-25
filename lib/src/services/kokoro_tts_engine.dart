@@ -244,6 +244,7 @@ class KokoroTtsEngine
   double _volume = 1.0;
   String _selectedVoiceId = KokoroVoiceCatalog.defaultVoiceId;
   List<_PlaybackChunk> _activeChunks = const <_PlaybackChunk>[];
+  final _producedAudioCredit = KokoroProducedAudioCredit();
   int _currentChunkIndex = 0;
   int _currentQueueBaseIndex = 0;
   bool _pruningHistory = false;
@@ -422,13 +423,25 @@ class KokoroTtsEngine
       _admission = SynthesisAdmissionOwner(
         _resourceProcessor!,
         beforeProcess: beforeSynthesis,
-        playbackMayRun: () =>
-            _activeGenerationId == null ||
-            _nativePlaybackAdmission.admits(
-              audioLead: _preparedLead(),
-              outstandingChunks: 0,
-              playerSpeed: _player.speed,
-            ),
+        onPlaybackCompleted: (event) {
+          if (event.generationId != _activeGenerationId) return;
+          final duration = event.duration;
+          if (duration == null) {
+            throw StateError('Completed playback WAV omitted duration');
+          }
+          _producedAudioCredit.reserve(event.chunkId, duration);
+          _recordMetric(
+            'producedAudioCredit',
+            chunkId: event.chunkId,
+            value: <String, Object?>{
+              'rawDurationMs': duration.inMilliseconds,
+              'admissionPcmLeadMs': _admissionLead().inMilliseconds,
+              'playerSpeed': _player.speed,
+            },
+          );
+          _signalBuffer();
+        },
+        playbackMayRun: _mayAdmitNativePlayback,
         exportMayRun: () =>
             _exportCancelled ||
             _activeGenerationId == null ||
@@ -1028,6 +1041,9 @@ class KokoroTtsEngine
         },
       );
       _activeChunks = initialBufferedChunks;
+      _producedAudioCredit.published(
+        initialBufferedChunks.map((c) => c.chunkId),
+      );
       _currentChunkIndex = 0;
       _currentQueueBaseIndex = 0;
       _waitingForUnderrunRecovery = false;
@@ -1115,7 +1131,7 @@ class KokoroTtsEngine
         }
         if (next == null || request.planningContext == null) break;
         while (current() &&
-            kokoroPlayableLead(_preparedLead(), playerSpeed: _player.speed) >=
+            kokoroPlayableLead(_admissionLead(), playerSpeed: _player.speed) >=
                 kokoroTargetBufferedLeadTime) {
           await _bufferChanged.future;
         }
@@ -1152,13 +1168,52 @@ class KokoroTtsEngine
         : _initialBufferedQueueLeadTime(_startupBufferedChunks(first));
   }
 
+  Duration _admissionLead() {
+    final first = _startupFirstChunk;
+    final represented = _activeChunks.isNotEmpty
+        ? _activeChunks
+        : first == null
+        ? const <_PlaybackChunk>[]
+        : _startupBufferedChunks(first);
+    final base = _activePlaybackToken != null
+        ? _bufferedLeadTime()
+        : _initialBufferedQueueLeadTime(represented);
+    return base +
+        _producedAudioCredit.unpublishedLead(represented.map((c) => c.chunkId));
+  }
+
+  bool _mayAdmitNativePlayback() {
+    if (_activeGenerationId == null) return true;
+    final lead = _admissionLead();
+    final admitted = _nativePlaybackAdmission.admits(
+      audioLead: lead,
+      outstandingChunks: 0,
+      playerSpeed: _player.speed,
+    );
+    if (admitted) {
+      _recordMetric(
+        'nativePlaybackAdmission',
+        value: <String, Object?>{
+          'pcmLeadMs': lead.inMilliseconds,
+          'effectiveLeadMs': kokoroPlayableLead(
+            lead,
+            playerSpeed: _player.speed,
+          ).inMilliseconds,
+          'playerSpeed': _player.speed,
+          'nativePlaylistInstalled': _activeChunks.isNotEmpty,
+        },
+      );
+    }
+    return admitted;
+  }
+
   Future<void> _awaitPlaybackCredit(
     KokoroBufferAdmission policy,
     bool Function() current,
   ) async {
     while (current() &&
         !policy.admits(
-          audioLead: _preparedLead(),
+          audioLead: _admissionLead(),
           outstandingChunks:
               _pendingChunksById.length +
               _stagedReadyChunks.length +
@@ -1771,6 +1826,7 @@ class KokoroTtsEngine
     final newGenerationId =
         '${generationId}_recovery_${DateTime.now().microsecondsSinceEpoch}';
     _activeGenerationId = newGenerationId;
+    _producedAudioCredit.clear();
     if (failedWasPriorityChunk) {
       _firstPendingChunkId = rebuiltWithFreshIds.first.chunkId;
     }
@@ -1950,6 +2006,7 @@ class KokoroTtsEngine
     _playbackLease?.cancelPending();
     await cancellation;
     _activeGenerationId = null;
+    _producedAudioCredit.clear();
     _firstPendingChunkId = null;
     _firstChunkCompleter = null;
     _pendingChunksById = <String, _QueuedChunk>{};
@@ -2253,6 +2310,7 @@ class KokoroTtsEngine
   }
 
   void _clearPlaybackStateFields() {
+    _producedAudioCredit.clear();
     _activePlaybackToken = null;
     _currentChunkIndex = 0;
     _currentQueueBaseIndex = 0;
@@ -2456,6 +2514,7 @@ class KokoroTtsEngine
       final previousActiveChunkCount = _activeChunks.length;
       _activeChunks = List<_PlaybackChunk>.from(_activeChunks)
         ..insert(insertIndex, playbackChunk);
+      _producedAudioCredit.published([playbackChunk.chunkId]);
       final relativeInsertIndex = insertIndex - _currentQueueBaseIndex;
       if (relativeInsertIndex >= previousActiveChunkCount) {
         await _player.addAudioSource(AudioSource.file(playbackChunk.filePath));

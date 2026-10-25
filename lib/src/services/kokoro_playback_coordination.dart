@@ -1,5 +1,31 @@
 import 'tts_engine.dart';
 
+/// Completed native WAVs retain admission credit while boundary correction and
+/// playlist publication are pending. Publication replaces this conservative raw
+/// duration with the corrected duration; it never opens an accounting gap.
+class KokoroProducedAudioCredit {
+  final Map<String, Duration> _durations = {};
+  void reserve(String chunkId, Duration duration) {
+    if (duration <= Duration.zero) throw ArgumentError.value(duration);
+    _durations[chunkId] = duration;
+  }
+
+  Duration unpublishedLead(Iterable<String> representedChunkIds) {
+    final represented = representedChunkIds.toSet();
+    return _durations.entries
+        .where((entry) => !represented.contains(entry.key))
+        .fold(Duration.zero, (sum, entry) => sum + entry.value);
+  }
+
+  void published(Iterable<String> chunkIds) {
+    for (final id in chunkIds) {
+      _durations.remove(id);
+    }
+  }
+
+  void clear() => _durations.clear();
+}
+
 /// A preparation producer cannot join its own task drain. Cancel inference and
 /// clear native playback before publishing the terminal failure instead.
 Future<void> kokoroTerminatePreparationFailure({
