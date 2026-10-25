@@ -7,6 +7,7 @@ import 'package:flutter/widgets.dart';
 import 'package:just_audio/just_audio.dart';
 import 'package:read_aloud/src/app.dart';
 import 'package:read_aloud/src/controllers/reader_controller.dart';
+import 'package:read_aloud/src/models/spoken_chunk_record.dart';
 import 'package:read_aloud/src/services/kokoro_tts_engine.dart';
 import 'package:read_aloud/src/services/playback_instrumentation_service.dart';
 
@@ -48,6 +49,8 @@ Future<void> main(List<String> arguments) async {
   final controller = _ProbeController(engine);
   var phase = 'initialize';
   var completion = Completer<void>();
+  String? phaseFailure;
+  var succeeded = false;
   final files = <String>{};
   final subscriptions = <StreamSubscription<dynamic>>[
     player.playerStateStream.listen((state) {
@@ -58,10 +61,9 @@ Future<void> main(List<String> arguments) async {
         'index': player.currentIndex,
         'positionMs': player.position.inMilliseconds,
       });
-      if (state.processingState == ProcessingState.completed &&
-          !completion.isCompleted) {
-        completion.complete();
-      }
+      // A completed native playlist may be an underrun while more source
+      // remains. Only the controller's document-complete transition ends a
+      // scenario; otherwise the stress case could silently skip the suffix.
     }),
     player.sequenceStream.listen((sequence) {
       for (final source in sequence) {
@@ -77,6 +79,24 @@ Future<void> main(List<String> arguments) async {
       });
     }),
   ];
+  void observeController() {
+    if (controller.playbackState == ReaderPlaybackPrimaryState.failed) {
+      phaseFailure = controller.statusMessage ?? 'Controller playback failed';
+      record('controllerFailure', {'phase': phase, 'error': phaseFailure});
+      if (!completion.isCompleted) completion.complete();
+    } else if (controller.playbackState ==
+            ReaderPlaybackPrimaryState.completed &&
+        !completion.isCompleted) {
+      record('documentCompleted', {
+        'phase': phase,
+        'wordIndex': controller.currentWordIndex,
+        'wordCount': controller.document.wordCount,
+      });
+      completion.complete();
+    }
+  }
+
+  controller.addListener(observeController);
   final seenMetrics = <PlaybackMetricRecord>{};
   var lastTick = watch.elapsedMilliseconds;
   final timer = Timer.periodic(const Duration(milliseconds: 100), (_) {
@@ -125,11 +145,14 @@ Future<void> main(List<String> arguments) async {
       await player.setSpeed(1.0);
       phase = 'synthesis-$speed-player-$transportSpeed';
       completion = Completer<void>();
+      phaseFailure = null;
       await controller.setVoiceSpeed(speed);
       record('playRequested', {'phase': phase});
       await controller.startPlayback();
       final startupDeadline = DateTime.now().add(const Duration(seconds: 30));
-      while (!player.playing && DateTime.now().isBefore(startupDeadline)) {
+      while (!player.playing &&
+          phaseFailure == null &&
+          DateTime.now().isBefore(startupDeadline)) {
         await Future<void>.delayed(const Duration(milliseconds: 20));
       }
       record('playStarted', {
@@ -151,6 +174,10 @@ Future<void> main(List<String> arguments) async {
         '${output.path}/export-$speed-$transportSpeed.wav',
       );
       await completion.future.timeout(const Duration(minutes: 3));
+      if (phaseFailure != null) throw StateError(phaseFailure!);
+      if (controller.currentWordIndex < controller.document.wordCount - 1) {
+        throw StateError('Playback completion omitted a document suffix');
+      }
       record('playCompleted', {'phase': phase});
       final result = await export.timeout(const Duration(minutes: 3));
       record('exportCompleted', {
@@ -168,12 +195,14 @@ Future<void> main(List<String> arguments) async {
     await engine.shutdownResources();
     await controller.shutdownPreparation();
     record('success', {'audioFiles': files.toList()});
+    succeeded = true;
   } catch (error, stack) {
     record('failure', {'error': '$error', 'stack': '$stack'});
     await engine.stop();
     await engine.shutdownResources();
   } finally {
     timer.cancel();
+    controller.removeListener(observeController);
     for (final subscription in subscriptions) {
       await subscription.cancel();
     }
@@ -182,6 +211,6 @@ Future<void> main(List<String> arguments) async {
     ).writeAsString(jsonEncode(files.toList()));
     await sink.flush();
     await sink.close();
-    exit(0);
+    exit(succeeded ? 0 : 1);
   }
 }
