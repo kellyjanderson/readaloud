@@ -2,6 +2,19 @@
 
 This is the authoritative process. Current architecture stays in Git; active design, planning, assignments and evidence records live in GitHub. Local skills are procedures, not competing authorities.
 
+## Non-negotiable product expectations
+
+Apply the [product definition](project/product-definition.md) and [README reading expectations](README.md) to every design, implementation and acceptance decision. They are requirements, not assertions of current conformance; [issue #83](https://github.com/kellyjanderson/readaloud/issues/83) records the present gaps.
+
+- With a document available and Play requested promptly, opening the app to smooth audible speech must take at most two seconds, regardless of document size. Do not hide initialization/preparation time by moving the measurement start.
+- All reading work is dynamic and incremental, including acquisition, parsing, normalization, mapping, analysis, planning, resource binding, synthesis and persistence. Character discovery is only an example. Do not require whole-document completion before first speech; maintain bounded work ahead of playback and explicit revision/cancellation ownership.
+- Keep the interface responsive throughout. Pending playback must be cancellable without waiting for background work to drain; obsolete completion must not trigger speech.
+- Work exceeding one or two seconds requires a dynamic progress bar with real completed-work accounting, truthful stage/total/wait states and actionable failure. No pretend progress or premature 100%.
+- Automatically persist processed input to reusable `.radoc` so valid second runs skip completed preparation. Preserve inflection and other speech directions as content intent; retain the long-term publishing goal independently of current engine support.
+- Prefer maintained packages and platform facilities for general-purpose infrastructure. Evaluate existing solutions before writing bespoke scheduling, queues, cancellation, caching or persistence; document the concrete unmet requirement for custom replacements. Application-specific policy and integration remain project responsibilities.
+
+Demonstrate these expectations in the running app with launch-to-audio timing, input responsiveness, emitted-audio continuity and appropriate human listening. Unit tests, codec round trips and internal readiness flags alone cannot establish conformance. Do not silently weaken requirements to fit the current implementation or expand an already accepted release scope without its coordinator's explicit reconciliation.
+
 ## Start with bounded context
 
 Read README.md, project/README.md and docs/project-management.md. Start issue retrieval with `ruby tools/read_issue_context.rb NUMBER` for the parent and assigned slice; it returns only the maintained current block. On first assignment or a changed design revision, also read the relevant contract sections, linked accepted decisions and affected architecture/source/tests. Routine re-entry reads current blocks and changed evidence only, not full bodies/comment histories. Missing or stale blocks require bounded reconciliation, never assuming readiness. Archived files are historical references only.
