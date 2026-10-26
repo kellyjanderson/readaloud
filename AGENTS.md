@@ -4,20 +4,24 @@ This is the authoritative process. Current architecture stays in Git; active des
 
 ## Start with bounded context
 
-Read README.md, project/README.md, docs/project-management.md, the assigned GitHub issue and affected architecture/source/tests. Fetch the current issue body and relevant decision/handoff comments, not the entire history or legacy tree. Archived files are historical references only.
+Read README.md, project/README.md and docs/project-management.md. Start issue retrieval with `ruby tools/read_issue_context.rb NUMBER` for the parent and assigned slice; it returns only the maintained current block. On first assignment or a changed design revision, also read the relevant contract sections, linked accepted decisions and affected architecture/source/tests. Routine re-entry reads current blocks and changed evidence only, not full bodies/comment histories. Missing or stale blocks require bounded reconciliation, never assuming readiness. Archived files are historical references only.
 
 ## Authority and ownership
 
 - `project/architecture/`: implemented structure, intent, invariants, durable rationale and honest evidence limits. Update with implementation; never promote a proposal to current fact.
 - GitHub design issue: working ACD, scope, alternatives, decisions, acceptance and architecture targets.
 - Native sub-issues/dependencies: implementation slices and readiness. Small fixes may use a single issue.
-- GitHub Project: authoritative status and priority. Issue comments: assignment, handoff, blockers, evidence and reconciliation records.
+- GitHub Project: authoritative status and priority. Marked issue-body blocks: current coordination/work orders and exact evidence pointers. Issue comments: durable decision, handoff and evidence receipts; historical claims do not supersede a reconciled current block without new evidence.
 - `docs/`: durable setup, usage and process guidance. `project/ui/`, legacy specifications/test specifications and research are retained references; new working drafts belong in issues.
 - `project/archive/` and historical journals: preserved history, not active instructions. Do not create local ACDs, plans, progress journals, task checklists or mirrored issue bodies. Ignored `tmp/` may hold disposable tool payloads, never the sole authority.
 
 ## Orchestrator and workers
 
 An orchestrator chat may coordinate multiple workers, worktrees and slice PRs. No single-branch/single-PR rule may prevent safe delegation. The orchestrator owns parent design, dependency readiness, assignment claims, integration and final reconciliation. Workers own their assigned files/modules and report in their slice issue.
+
+Maintain one `<!-- readaloud:current:start -->` / `<!-- readaloud:current:end -->` block at the top of each active issue. Parent target: 400–700 tokens; slice target: 250–500. Update at dispatch, blocker, handoff, integration or decision changes. Include revision, owner, base/target, active ownership/dependencies, next action, model/effort, remaining acceptance and exact decision/evidence links. Keep Project Status authoritative. Preserve the design and historical evidence outside the block; summaries never waive acceptance. Re-fetch before writing and preserve unrelated body changes. Comments record new evidence/decisions, not repeated whole-state copies.
+
+Use a fresh subagent with no inherited conversation (`fork_turns: none`) for each bounded task; keep its focused fix/test cycle together, then retire it. Give compact work orders, not whole histories. The standalone orchestrator uses Luna/medium; workers default to Sol/medium, Sol/high for ambiguous debugging or independent acceptance review, and Luna/low for mechanical checks. Record exact available model IDs and effort. Astra defaults to medium for unresolved architecture only. Obtain human approval before Astra/high or higher, round 3 within one Astra task, consecutive Astra task 3, or total Astra task 4 per orchestration. Count substantive assignments/follow-ups across nested agents and replacements; tool calls/waits are not rounds. Track counters in the parent current block; a fresh chat does not reset them. Approval grants a bounded extension. Do not invent usage/cost figures.
 
 Before dispatch, record the worker/chat identity, design revision, scope/exclusions, exclusive file/module ownership, dependency state, base commit, branch/worktree, target integration branch, acceptance checks and return contract. Workers are not alone: preserve others' changes, do not revert unrelated edits, and coordinate overlap before writing. Use isolated `codex/<feature>-<slice>` branches/worktrees when concurrency would collide. Do not concurrently edit the same checkout/index.
 
