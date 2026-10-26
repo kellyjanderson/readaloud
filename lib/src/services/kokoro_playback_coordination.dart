@@ -1,6 +1,29 @@
 import 'tts_engine.dart';
 import 'audio_artifact_store.dart';
 
+/// Source coverage, independent of chunk/cache names and acoustic quality.
+/// Keeping only the next position bounds state for arbitrarily long sources.
+class KokoroSourceSpanCursor {
+  KokoroSourceSpanCursor(this.nextWord);
+  int nextWord;
+  void admit({required int startWord, required int endWord}) {
+    if (startWord != nextWord || endWord <= startWord) {
+      throw StateError(
+        'Non-contiguous speech span: expected $nextWord, got $startWord..$endWord.',
+      );
+    }
+    nextWord = endWord;
+  }
+
+  void requireEnd(int expectedWord) {
+    if (nextWord != expectedWord) {
+      throw StateError(
+        'Missing speech suffix: expected $expectedWord, got $nextWord.',
+      );
+    }
+  }
+}
+
 /// Assembly has already settled before entering this drain. All independent
 /// owners still close if one reports failure; pins release only after all join.
 Future<void> kokoroDrainExportOwners({

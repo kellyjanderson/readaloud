@@ -141,6 +141,8 @@ class KokoroTtsEngine
   }
 
   final SpeechPlanningSupervisor _refillPlanner = SpeechPlanningSupervisor();
+  Completer<void> _continuationCancelled = Completer<void>();
+  final Map<int, void Function()> _rangeActivations = {};
   Completer<void> _bufferChanged = Completer<void>();
   int _nextReadyWord = 0;
   _PlaybackChunk? _startupFirstChunk;
@@ -993,8 +995,22 @@ class KokoroTtsEngine
       }
       final startupWindow = KokoroStartupChunkWindow(preparedChunks);
       final chunks = startupWindow.startup;
+      final spans = KokoroSourceSpanCursor(chunks.first.startWordIndex);
+      if (hasPlannedChunks) {
+        for (final chunk in chunks) {
+          spans.admit(
+            startWord: chunk.startWordIndex,
+            endWord: chunk.endWordIndex,
+          );
+        }
+      }
 
       final generationId = 'generation_$requestToken';
+      _continuationCancelled = Completer<void>();
+      _rangeActivations.clear();
+      if (request.onRangeActive case final activate?) {
+        _rangeActivations[request.sourceWordOffset] = activate;
+      }
       _activeGenerationId = generationId;
       _firstPendingChunkId = chunks.first.chunkId;
       _nextReadyWord = chunks.first.startWordIndex;
@@ -1017,7 +1033,10 @@ class KokoroTtsEngine
       _remainingPlannedChunkCount = hasPlannedChunks
           ? request.chunkPlan!.chunks.length -
                 chunks.length +
-                (request.chunkPlan!.nextSegmentId == null ? 0 : 1)
+                (request.chunkPlan!.nextSegmentId == null &&
+                        request.continuation == null
+                    ? 0
+                    : 1)
           : startupWindow.tail.length;
 
       _emitActivity(
@@ -1078,7 +1097,8 @@ class KokoroTtsEngine
 
       if (hasPlannedChunks &&
           (request.chunkPlan!.chunks.length > 1 ||
-              request.chunkPlan!.nextSegmentId != null)) {
+              request.chunkPlan!.nextSegmentId != null ||
+              request.continuation != null)) {
         final remainingSpecs = request.chunkPlan!.chunks
             .skip(chunks.length)
             .toList(growable: false);
@@ -1090,6 +1110,7 @@ class KokoroTtsEngine
             languageTag: languageTag,
             specs: remainingSpecs,
             initialSearchOffset: preparedStartupWindow!.nextSearchOffset,
+            spans: spans,
           ),
           requestToken,
         );
@@ -1216,6 +1237,7 @@ class KokoroTtsEngine
     required String languageTag,
     required List<ChunkSpec> specs,
     required int initialSearchOffset,
+    required KokoroSourceSpanCursor spans,
   }) async {
     final runtime = _speechRuntime;
     final sessionId = _activeSessionId;
@@ -1225,6 +1247,7 @@ class KokoroTtsEngine
         generationId == _activeGenerationId &&
         sessionId == _activeSessionId;
     var remaining = specs;
+    var rangeRequest = request;
     var next = request.chunkPlan?.nextSegmentId;
     var offset = initialSearchOffset;
     final policy = KokoroBufferAdmission();
@@ -1236,7 +1259,7 @@ class KokoroTtsEngine
           await _awaitPlaybackCredit(policy, current);
           if (!current()) return;
           final prepared = await _preparePlannedChunk(
-            request: request,
+            request: rangeRequest,
             spec: spec,
             searchOffset: offset,
             languageTag: languageTag,
@@ -1244,6 +1267,10 @@ class KokoroTtsEngine
           if (!current()) return;
           offset = prepared.nextSearchOffset;
           final chunk = prepared.chunk;
+          spans.admit(
+            startWord: chunk.startWordIndex,
+            endWord: chunk.endWordIndex,
+          );
           _pendingChunksById[chunk.chunkId] = chunk;
           _recordPronunciationTrace(chunk);
           await runtime.prepareChunkPlan(
@@ -1261,7 +1288,49 @@ class KokoroTtsEngine
             ],
           );
         }
-        if (next == null || request.planningContext == null) break;
+        if (next == null || rangeRequest.planningContext == null) {
+          final continuation = rangeRequest.continuation;
+          if (rangeRequest.speechDocument case final document?) {
+            spans.requireEnd(
+              rangeRequest.sourceWordOffset + document.totalWordCount,
+            );
+          }
+          if (continuation == null) break;
+          await _awaitPlaybackCredit(policy, current);
+          if (!current()) return;
+          final following = await Future.any([
+            continuation.next(
+              rangeRequest.rangeSequence,
+              _continuationCancelled.future,
+            ),
+            _continuationCancelled.future.then<TtsSpeakRequest?>(
+              (_) => throw const PlanningCancelled(),
+            ),
+          ]);
+          if (!current()) return;
+          if (following == null) break;
+          final expectedWord =
+              rangeRequest.sourceWordOffset +
+              rangeRequest.speechDocument!.totalWordCount;
+          if (following.rangeSequence != rangeRequest.rangeSequence + 1 ||
+              following.sourceWordOffset != expectedWord ||
+              following.documentId != request.documentId ||
+              following.assignmentRevision != request.assignmentRevision ||
+              following.planningContext?.realization.rate != _speechRate ||
+              following.chunkPlan == null ||
+              following.chunkPlan!.chunks.isEmpty) {
+            throw StateError('Non-contiguous or stale prepared range.');
+          }
+          rangeRequest = following;
+          if (following.onRangeActive case final activate?) {
+            _rangeActivations[following.sourceWordOffset] = activate;
+          }
+          remaining = following.chunkPlan!.chunks;
+          next = following.chunkPlan!.nextSegmentId;
+          offset = 0;
+          _expectedChunkCount += remaining.length;
+          continue;
+        }
         while (current() &&
             kokoroPlayableLead(_admissionLead(), playerSpeed: _player.speed) >=
                 kokoroTargetBufferedLeadTime) {
@@ -1269,7 +1338,7 @@ class KokoroTtsEngine
         }
         if (!current()) return;
         final window = await _refillPlanner.plan(
-          request.planningContext!,
+          rangeRequest.planningContext!,
           startSegmentId: next,
         );
         if (!current()) return;
@@ -1589,6 +1658,16 @@ class KokoroTtsEngine
     _lastProgressKey = progressKey;
     final boundary = chunk.wordBoundaries[wordIndex];
     final absoluteWordIndex = chunk.startWordIndex + wordIndex;
+    final eligible =
+        _rangeActivations.keys
+            .where((start) => start <= absoluteWordIndex)
+            .toList()
+          ..sort();
+    if (eligible.isNotEmpty) {
+      final start = eligible.last;
+      _rangeActivations[start]?.call();
+      _rangeActivations.removeWhere((offset, _) => offset < start);
+    }
     final segmentRange = chunk.segmentRangeForWordIndex(absoluteWordIndex);
     _onProgress?.call(
       TtsProgressUpdate(
@@ -2141,6 +2220,7 @@ class KokoroTtsEngine
   }
 
   Future<void> _cancelActiveGeneration() async {
+    if (!_continuationCancelled.isCompleted) _continuationCancelled.complete();
     final sessionId = _activeSessionId;
     if (sessionId == null) {
       _playbackLease?.cancelPending();
@@ -2247,7 +2327,9 @@ class KokoroTtsEngine
       );
       final translatedChunk = tokenization.translatedChunk!;
       final chunk = _QueuedChunk(
-        chunkId: spec.chunkId,
+        chunkId: request.rangeSequence == 0
+            ? spec.chunkId
+            : 'range_${request.rangeSequence}_${spec.chunkId}',
         expectedBinding: _bindingForVoice(bindings, spec.voiceId),
         synthesisIdentity: synthesisIdentity,
         synthesisRate: synthesisRate,
@@ -2317,11 +2399,13 @@ class KokoroTtsEngine
     final translatedChunk = tokenization.translatedChunk!;
     return _PreparedPlannedChunk(
       chunk: _QueuedChunk(
-        chunkId: spec.chunkId,
+        chunkId: request.rangeSequence == 0
+            ? spec.chunkId
+            : 'range_${request.rangeSequence}_${spec.chunkId}',
         expectedBinding: binding,
         synthesisIdentity: synthesisIdentity,
         synthesisRate: synthesisRate,
-        generationOrder: spec.startSegmentIndex,
+        generationOrder: spec.startSegmentIndex + request.sourceWordOffset,
         segmentIds: spec.segmentIds,
         cacheKey: spec.cacheKey,
         voiceId: spec.voiceId,
@@ -2333,9 +2417,17 @@ class KokoroTtsEngine
         capabilityProfileId: translatedChunk.capabilityProfileId,
         engineSpeakText: translatedChunk.speakText,
         startOffset: startOffset,
-        startWordIndex: spec.startWordIndex,
-        endWordIndex: spec.endWordIndex,
-        segmentRanges: _segmentRangesForChunk(spec, request.speechDocument),
+        startWordIndex: spec.startWordIndex + request.sourceWordOffset,
+        endWordIndex: spec.endWordIndex + request.sourceWordOffset,
+        segmentRanges: _segmentRangesForChunk(spec, request.speechDocument)
+            .map(
+              (range) => _ChunkSegmentRange(
+                segmentId: range.segmentId,
+                startWordIndex: range.startWordIndex + request.sourceWordOffset,
+                endWordIndex: range.endWordIndex + request.sourceWordOffset,
+              ),
+            )
+            .toList(growable: false),
         ttsSegments: spec.ttsSegments,
         translatedPronunciationArtifacts:
             translatedChunk.pronunciationArtifacts,

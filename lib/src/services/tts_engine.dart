@@ -153,6 +153,18 @@ class VoiceLibraryEntry {
   final String? statusMessage;
 }
 
+/// Pull-only continuation of one source session. The consumer owns cancellation;
+/// the producer returns null only at verified EOF. A single consumer calls this
+/// once per sequence, after admitting the previous range's plan.
+class TtsRangeContinuation {
+  const TtsRangeContinuation({required this.next});
+  final Future<TtsSpeakRequest?> Function(
+    int previousSequence,
+    Future<void> cancelled,
+  )
+  next;
+}
+
 class TtsSpeakRequest {
   const TtsSpeakRequest({
     required this.text,
@@ -168,6 +180,10 @@ class TtsSpeakRequest {
     this.assignmentRevision = 0,
     this.isCurrent,
     this.onPlaybackReady,
+    this.rangeSequence = 0,
+    this.sourceWordOffset = 0,
+    this.continuation,
+    this.onRangeActive,
   });
 
   final String text;
@@ -183,6 +199,12 @@ class TtsSpeakRequest {
   final int assignmentRevision;
   final bool Function()? isCurrent;
   final void Function(TtsPlaybackAcknowledgment)? onPlaybackReady;
+  final int rangeSequence;
+  final int sourceWordOffset;
+  final TtsRangeContinuation? continuation;
+
+  /// Invoked on actual player progress, never on lookahead preparation.
+  final void Function()? onRangeActive;
 }
 
 class TtsExportRequest {

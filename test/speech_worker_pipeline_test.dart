@@ -6,6 +6,30 @@ import 'package:read_aloud/src/services/speech_worker_pipeline.dart';
 
 void main() {
   group('SpeechWorkerPipeline', () {
+    test(
+      'foreign and duplicate terminals cannot publish or correct another chunk',
+      () async {
+        final corrected = <String>[];
+        final done = Completer<void>();
+        final pipeline = SpeechWorkerPipeline(
+          processor: _ForeignTerminalProcessor(),
+          onCompleted: (event) async {
+            corrected.add(event.chunkId);
+            if (corrected.length == 2) done.complete();
+          },
+        );
+        final events = <SpeechWorkerEvent>[];
+        pipeline.events.listen(events.add);
+        await pipeline.preparePlan('current', [
+          _request('current', 'first'),
+          _request('current', 'second'),
+        ]);
+        await done.future.timeout(const Duration(seconds: 2));
+        await pipeline.shutdown();
+        expect(corrected, ['first', 'second']);
+        expect(events.where((event) => event.sessionId == 'foreign'), isEmpty);
+      },
+    );
     for (final closing in [false, true]) {
       test(
         'full admission unblocks on ${closing ? 'shutdown' : 'cancel'} without starting stale work',
@@ -317,6 +341,35 @@ class _FakeSpeechWorkerChunkProcessor implements SpeechWorkerChunkProcessor {
         duration: const Duration(milliseconds: 800),
       ),
     );
+  }
+
+  @override
+  Future<void> dispose() async {}
+}
+
+class _ForeignTerminalProcessor implements SpeechWorkerChunkProcessor {
+  @override
+  Future<void> process(
+    SpeechWorkerChunkRequest request,
+    void Function(SpeechWorkerEvent) emit,
+  ) async {
+    SpeechWorkerEvent event({
+      String? session,
+      String? generation,
+      String? chunk,
+    }) => SpeechWorkerEvent(
+      type: SpeechWorkerEventType.completed,
+      sessionId: session ?? request.sessionId,
+      generationId: generation ?? request.generationId,
+      chunkId: chunk ?? request.chunkId,
+      emittedAt: DateTime.now().toUtc(),
+      stage: 'completed',
+    );
+    emit(event(session: 'foreign'));
+    emit(event(generation: 'old'));
+    emit(event(chunk: 'other'));
+    emit(event());
+    emit(event());
   }
 
   @override

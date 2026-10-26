@@ -33,6 +33,189 @@ void main() {
   });
 
   group('ReaderController playback', () {
+    test(
+      'early explicit intake waits for preferences but not speech startup',
+      () async {
+        final preferences = _HeldPreferences();
+        final engine = _InitBarrierEngine();
+        final controller = ReaderController(
+          preferencesService: preferences,
+          ttsEngine: engine,
+          enablePlatformIntakeChannels: false,
+        );
+        addTearDown(controller.dispose);
+        final initializing = controller.initialize();
+        var imported = false;
+        final importing = controller
+            .loadDocument(
+              DocumentImportService().importPastedText('Explicit document.'),
+            )
+            .then((_) => imported = true);
+        await Future<void>.delayed(Duration.zero);
+        expect(imported, isFalse);
+        preferences.ready.complete();
+        await controller.intakeReady;
+        await importing;
+        expect(controller.document.speakableText, 'Explicit document.');
+        expect(controller.isInitializing, isTrue);
+        engine.ready.complete();
+        await initializing;
+      },
+    );
+    test(
+      'intake readiness and document import do not await speech startup',
+      () async {
+        final engine = _InitBarrierEngine();
+        final controller = ReaderController(
+          ttsEngine: engine,
+          enablePlatformIntakeChannels: false,
+        );
+        addTearDown(controller.dispose);
+        final initializing = controller.initialize();
+        await controller.intakeReady;
+        expect(controller.isInitializing, isTrue);
+        await controller.loadDocument(ReaderDocument.sample());
+        expect(controller.isDocumentPrepared, isTrue);
+        expect(controller.canRetryDocumentPreparation, isFalse);
+        engine.ready.complete();
+        await initializing;
+      },
+    );
+    test(
+      'public preparation cancellation preserves display and retries exact intake',
+      () async {
+        final importer = _ControlledPreparationImporter();
+        final controller = ReaderController(
+          importer: importer,
+          ttsEngine: _FakeTtsEngine(),
+        );
+        addTearDown(controller.dispose);
+        await controller.initialize();
+        final pending = controller.importDroppedFiles([
+          XFile.fromData(
+            Uint8List.fromList(utf8.encode('Retry source.')),
+            name: 'retry.txt',
+          ),
+        ]);
+        await importer.started(0);
+        final prior = controller.document;
+        await controller.cancelDocumentPreparation();
+        await pending;
+        expect(controller.document, same(prior));
+        expect(controller.isImporting, isFalse);
+        expect(controller.canRetryDocumentPreparation, isTrue);
+        importer.results[0].completeError(StateError('obsolete failure'));
+        final retry = controller.retryDocumentPreparation();
+        await importer.started(1);
+        expect(controller.canRetryDocumentPreparation, isFalse);
+        expect(importer.payloads, ['Retry source.', 'Retry source.']);
+        importer.results[1].complete(
+          DocumentImportService().importPastedText('Retry source.'),
+        );
+        await retry;
+        expect(controller.document.speakableText, 'Retry source.');
+        expect(controller.canRetryDocumentPreparation, isFalse);
+      },
+    );
+    test(
+      'range continuation preserves ordering, active display, EOF and bounded credit',
+      () async {
+        final source = _RangePreparationSupervisor();
+        final engine = _FakeTtsEngine();
+        final controller = ReaderController(
+          preparationSupervisor: source,
+          ttsEngine: engine,
+        );
+        addTearDown(controller.dispose);
+        await controller.initialize();
+        final importing = controller.importPastedText('source');
+        await source.started.future;
+        await source.publish('First source words.');
+        await importing;
+        await controller.startPlayback();
+        final first = engine.lastSpeakRequest!;
+        final cancellation = Completer<void>();
+        expect(first.rangeSequence, 1);
+        await source.publish('Second distinct words.');
+        final second = (await first.continuation!.next(
+          1,
+          cancellation.future,
+        ))!;
+        expect(controller.document.speakableText, 'First source words.');
+        expect(second.sourceWordOffset, 3);
+        expect(second.rangeSequence, 2);
+        await expectLater(
+          first.continuation!.next(1, cancellation.future),
+          throwsStateError,
+        );
+        final thirdPublication = source.publish('Third final words.');
+        expect(controller.preparedRanges.length, 3);
+        second.onRangeActive!();
+        await thirdPublication;
+        expect(controller.document.speakableText, 'Second distinct words.');
+        expect(controller.preparedRanges.map((r) => r.sequence), [2, 3]);
+        engine.emitProgress(
+          TtsProgressUpdate(
+            startOffset: 0,
+            endOffset: 6,
+            word: 'Second',
+            documentId: first.documentId,
+            wordStartIndex: 3,
+            wordEndIndex: 4,
+          ),
+        );
+        expect(controller.currentWordIndex, 1);
+        final third = (await second.continuation!.next(
+          2,
+          cancellation.future,
+        ))!;
+        expect(third.sourceWordOffset, 6);
+        source.finish();
+        expect(await third.continuation!.next(3, cancellation.future), isNull);
+        await controller.pausePlayback();
+        await controller.startPlayback();
+        expect(engine.lastSpeakRequest!.rangeSequence, 2);
+        expect(engine.lastSpeakRequest!.sourceWordOffset, 3);
+      },
+    );
+    for (final terminal in ['failure', 'cancel', 'replacement']) {
+      test(
+        'range demand rejects $terminal without false EOF or stale display',
+        () async {
+          final source = _RangePreparationSupervisor();
+          final engine = _FakeTtsEngine();
+          final controller = ReaderController(
+            preparationSupervisor: source,
+            ttsEngine: engine,
+          );
+          addTearDown(controller.dispose);
+          await controller.initialize();
+          final importing = controller.importPastedText('source');
+          await source.started.future;
+          await source.publish('First source words.');
+          await importing;
+          await controller.startPlayback();
+          final request = engine.lastSpeakRequest!;
+          final cancellation = Completer<void>();
+          final next = request.continuation!.next(1, cancellation.future);
+          final assertion = expectLater(next, throwsA(anything));
+          if (terminal == 'failure') {
+            source.finish(error: 'injected source failure');
+          } else if (terminal == 'cancel') {
+            cancellation.complete();
+          } else {
+            await controller.loadDocument(
+              DocumentImportService().importPastedText('Replacement.'),
+            );
+          }
+          await assertion;
+          if (terminal == 'failure') {
+            expect(controller.canRetryDocumentPreparation, isTrue);
+          }
+          expect(engine.speakCallCount, 1);
+        },
+      );
+    }
     for (final fails in [false, true]) {
       test(
         'resource intent during import converges after stale ${fails ? 'failure' : 'success'}',
@@ -2244,6 +2427,104 @@ class _FakeTtsEngine implements TtsEngine {
 
   void emitDebugTrace(TtsDebugTraceSnapshot trace) {
     _onDebugTrace?.call(trace);
+  }
+}
+
+class _InitBarrierEngine extends _FakeTtsEngine {
+  final ready = Completer<void>();
+  @override
+  Future<void> initialize() => ready.future;
+}
+
+class _HeldPreferences extends ReaderPreferencesService {
+  final ready = Completer<void>();
+  @override
+  Future<ReaderPreferences> load() async {
+    await ready.future;
+    return super.load();
+  }
+}
+
+/// Deterministic source envelope/failure seam; production controller planning,
+/// range credit and intent checks are retained. This emits no acoustic evidence.
+class _RangePreparationSupervisor extends DocumentPreparationSupervisor {
+  final started = Completer<void>();
+  late DocumentPreparationRequest request;
+  late Future<void> Function(DocumentPreparationPublication) publication;
+  final result = Completer<DocumentPreparationResult>();
+  int sequence = 0;
+  int words = 0;
+  int sourceOffset = 0;
+  ReaderDocument? last;
+  @override
+  Future<DocumentPreparationResult> prepareRanges(
+    DocumentPreparationRequest request, {
+    Future<Uint8List> Function()? acquireBytes,
+    required Future<void> Function(DocumentPreparationPublication)
+    onPublication,
+    void Function(PreparationProgress)? onProgress,
+    Future<void> Function()? acquireSource,
+    Future<void> Function()? onDrained,
+  }) {
+    this.request = request;
+    publication = onPublication;
+    started.complete();
+    return result.future;
+  }
+
+  Future<void> publish(String text) {
+    final document = DocumentImportService().importPastedText(text);
+    last = document;
+    final value = DocumentPreparationPublication(
+      request: request.identityOnly,
+      sequence: ++sequence,
+      fragment: document,
+      range: PreparedDocumentRange(
+        sourceStart: sourceOffset,
+        sourceEnd: sourceOffset + text.length,
+        wordStart: words,
+        wordEnd: words + document.wordCount,
+        segmentStart: 0,
+        segmentEnd: document.speechDocument.segments.length,
+      ),
+      coverage: const {
+        PreparationStage.normalization,
+        PreparationStage.mapping,
+        PreparationStage.analysis,
+        PreparationStage.pronunciation,
+      },
+      progress: const [],
+      isLast: false,
+    );
+    words += document.wordCount;
+    sourceOffset += text.length;
+    return publication(value);
+  }
+
+  void finish({String? error}) {
+    if (result.isCompleted) return;
+    result.complete(
+      DocumentPreparationResult(
+        request: request,
+        outcome: error == null
+            ? DocumentPreparationOutcome.ready
+            : DocumentPreparationOutcome.failed,
+        document: error == null ? last : null,
+        error: error,
+      ),
+    );
+  }
+
+  @override
+  void cancel() {
+    if (started.isCompleted && !result.isCompleted) {
+      result.complete(
+        DocumentPreparationResult(
+          request: request,
+          outcome: DocumentPreparationOutcome.cancelled,
+        ),
+      );
+    }
   }
 }
 
