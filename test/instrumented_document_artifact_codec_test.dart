@@ -3,12 +3,14 @@ import 'dart:convert';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:read_aloud/src/services/document_import_service.dart';
 import 'package:read_aloud/src/services/instrumented_document_artifact_codec.dart';
+import 'package:read_aloud/src/services/prepared_document_snapshot.dart';
 
 void main() {
   const codec = InstrumentedDocumentArtifactCodec();
-  final document = DocumentImportService().importPastedText(
+  final imported = DocumentImportService().importPastedText(
     'Mara said, "Read the record carefully." Then she paused.',
   );
+  final document = freezePreparedDocument(imported);
   final id = document.normalizedImportResult.documentId;
   final assignment = <String, Object?>{
     'castId': 'cast_character_mara',
