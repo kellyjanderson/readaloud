@@ -5,11 +5,13 @@ import 'dart:typed_data';
 import 'package:archive/archive.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:read_aloud/src/models/character_cast_registry.dart';
+import 'package:read_aloud/src/models/dialogue_attribution.dart';
 import 'package:read_aloud/src/models/voice_profile.dart';
 import 'package:read_aloud/src/models/display_document.dart';
 import 'package:read_aloud/src/models/document_import_exception.dart';
 import 'package:read_aloud/src/models/import_diagnostic.dart';
 import 'package:read_aloud/src/models/reader_document.dart';
+import 'package:read_aloud/src/models/speech_annotation.dart';
 import 'package:read_aloud/src/services/cast_voice_assignment_service.dart';
 import 'package:read_aloud/src/services/document_import_service.dart';
 import 'package:read_aloud/src/services/kokoro_voice_catalog.dart';
@@ -145,6 +147,85 @@ Second paragraph here.
         );
       },
     );
+
+    test('routes adjacent speaker tags to their following dialogue spans', () {
+      final document = DocumentImportService().importPastedText(
+        'John said, "The quiet river is beautiful today." '
+        'Maria replied, "We can walk home together."',
+      );
+
+      expect(
+        document.speechDocument.segments
+            .map((segment) => segment.normalizedText)
+            .toList(growable: false),
+        <String>[
+          'John said,',
+          '"The quiet river is beautiful today."',
+          'Maria replied,',
+          '"We can walk home together."',
+        ],
+      );
+      final dialogueSpanIds = document.baseSpeechAnnotations.annotations
+          .where(
+            (annotation) =>
+                annotation.kind == SpeechAnnotationKind.dialogueSpan,
+          )
+          .map((annotation) => annotation.dialogueSpanId)
+          .toList(growable: false);
+      expect(dialogueSpanIds, <String>['dlg_s_1', 'dlg_s_3']);
+      expect(
+        document.dialogueAttributions.outcomes
+            .map((outcome) => outcome.speakerReference?.displayLabel)
+            .toList(growable: false),
+        <String>['John', 'Maria'],
+      );
+      expect(
+        document.dialogueAttributions.outcomes
+            .map((outcome) => outcome.ruleUsed)
+            .toList(growable: false),
+        <DialogueAttributionRule>[
+          DialogueAttributionRule.adjacentBefore,
+          DialogueAttributionRule.adjacentBefore,
+        ],
+      );
+      expect(
+        document.characterCastRegistry.entries
+            .map((entry) => entry.displayLabel)
+            .toList(growable: false),
+        <String>['Narrator', 'John', 'Maria'],
+      );
+      expect(
+        document.documentVoiceAttribution.ranges
+            .map((range) => range.castId)
+            .toList(growable: false),
+        <String>[
+          'cast_narrator',
+          'cast_character_john',
+          'cast_narrator',
+          'cast_character_maria',
+        ],
+      );
+
+      final assignments = CastVoiceAssignmentService().resolve(
+        CastVoiceAssignmentInput(
+          characterCastRegistry: document.characterCastRegistry,
+          availableVoices: KokoroVoiceCatalog.profilesForIds(
+            KokoroVoiceCatalog.bundledVoiceIds,
+          ),
+          fallbackVoiceId: 'af_heart',
+          preferredNarratorVoiceId: 'af_heart',
+        ),
+      );
+      final johnVoice = assignments
+          .forCastId('cast_character_john')
+          ?.effectiveVoiceId;
+      final mariaVoice = assignments
+          .forCastId('cast_character_maria')
+          ?.effectiveVoiceId;
+      expect(johnVoice, isNotNull);
+      expect(mariaVoice, isNotNull);
+      expect(johnVoice, isNot(mariaVoice));
+    });
 
     test(
       'keeps quoted exchanges in character voice and speaker tags in narrator voice',

@@ -92,6 +92,7 @@ class SpeakerAttributionService {
     for (final span in spans) {
       final outcome = _attributeDialogueSpan(
         span: span,
+        allSpans: spans,
         speechDocument: speechDocument,
         priorResolvedSpans: resolvedSpans,
       );
@@ -110,6 +111,7 @@ class SpeakerAttributionService {
 
   DialogueAttributionOutcome _attributeDialogueSpan({
     required _DialogueSpanContext span,
+    required List<_DialogueSpanContext> allSpans,
     required SpeechDocument speechDocument,
     required List<_ResolvedDialogueSpan> priorResolvedSpans,
   }) {
@@ -117,11 +119,13 @@ class SpeakerAttributionService {
         _sameSentenceDecision(span) ??
         _adjacentDecision(
           span: span,
+          allSpans: allSpans,
           speechDocument: speechDocument,
           direction: _AdjacentDirection.after,
         ) ??
         _adjacentDecision(
           span: span,
+          allSpans: allSpans,
           speechDocument: speechDocument,
           direction: _AdjacentDirection.before,
         ) ??
@@ -184,6 +188,7 @@ class SpeakerAttributionService {
 
   _AttributionDecision? _adjacentDecision({
     required _DialogueSpanContext span,
+    required List<_DialogueSpanContext> allSpans,
     required SpeechDocument speechDocument,
     required _AdjacentDirection direction,
   }) {
@@ -197,6 +202,19 @@ class SpeakerAttributionService {
 
     final segment = speechDocument.segments[segmentIndex];
     if (!_isLocalEvidenceSegment(span: span, segment: segment)) {
+      return null;
+    }
+
+    // A speaker tag between two dialogue spans belongs to the following
+    // dialogue when it is immediately followed by that span. Do not let it
+    // steal attribution from the preceding quote.
+    if (direction == _AdjacentDirection.after &&
+        segment.normalizedText.trimRight().endsWith(',') &&
+        allSpans.any(
+          (candidate) =>
+              candidate.firstSegmentIndex == segmentIndex + 1 &&
+              candidate.paragraphIndex == span.paragraphIndex,
+        )) {
       return null;
     }
 
