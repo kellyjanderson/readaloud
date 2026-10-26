@@ -46,7 +46,9 @@ void main() {
       await _paste(tester, source);
       await _pumpUntil(
         tester,
-        () => controller.preparedRanges.isNotEmpty && !controller.isImporting,
+        () =>
+            controller.preparedRanges.isNotEmpty &&
+            !controller.isPreparingDocument,
       );
       final oracle =
           jsonDecode(
@@ -134,6 +136,23 @@ void main() {
         controller.castVoiceAssignments!
             .forCastId(last.castId)!
             .effectiveVoiceId,
+        next,
+      );
+      await tester.scrollUntilVisible(
+        card,
+        180,
+        scrollable: find.byType(Scrollable).first,
+      );
+      await tester.ensureVisible(dropdown);
+      expect(
+        tester
+            .widget<DropdownButton<String>>(
+              find.descendant(
+                of: dropdown,
+                matching: find.byType(DropdownButton<String>),
+              ),
+            )
+            .value,
         next,
       );
       expect(tester.takeException(), isNull);
@@ -226,7 +245,7 @@ void main() {
       expect(find.byKey(const Key('cancel-preparation')), findsOneWidget);
       await tester.tap(find.byKey(const Key('cancel-preparation')));
       await tester.pump();
-      expect(controller.isImporting, isFalse);
+      expect(controller.isPreparingDocument, isFalse);
       expect(controller.document.speakableText, firstText);
       expect(controller.canRetryDocumentPreparation, isTrue);
       expect(find.byKey(const Key('retry-preparation')), findsOneWidget);
@@ -271,7 +290,9 @@ void main() {
       );
       await _pumpUntil(
         tester,
-        () => controller.preparedRanges.isNotEmpty && !controller.isImporting,
+        () =>
+            controller.preparedRanges.isNotEmpty &&
+            !controller.isPreparingDocument,
       );
       await tester.tap(find.byKey(const Key('character-voices-entry')));
       await tester.pumpAndSettle();

@@ -348,6 +348,7 @@ void main() {
   testWidgets('reduces to narrator management when no characters exist', (
     WidgetTester tester,
   ) async {
+    String? narratorVoice;
     await tester.pumpWidget(
       MaterialApp(
         home: Scaffold(
@@ -362,6 +363,7 @@ void main() {
             ],
             availableVoices: <VoiceProfile>[
               _voice(id: 'af_bella', label: 'Bella'),
+              _voice(id: 'am_michael', label: 'Michael'),
             ],
             characterCastRegistry: _narratorOnlyRegistry(),
             castVoiceAssignments: CastVoiceAssignmentSet(
@@ -379,7 +381,7 @@ void main() {
             selectedVoiceId: 'af_bella',
             previewStateForVoice: (_) => VoicePreviewState.idle,
             onClose: () {},
-            onSelectLibraryVoice: (_) {},
+            onSelectLibraryVoice: (voiceId) => narratorVoice = voiceId,
             onInstallVoice: (_) {},
             onToggleVoicePreview: (_) {},
             onAssignCastVoice: (_, _) {},
@@ -390,7 +392,25 @@ void main() {
     );
 
     expect(find.text('Narrator'), findsOneWidget);
-    expect(find.text('Characters'), findsNothing);
+    await tester.ensureVisible(
+      find.byType(DropdownButtonFormField<String>).first,
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byType(DropdownButtonFormField<String>).first);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Michael (en-US)').last);
+    await tester.pumpAndSettle();
+    expect(narratorVoice, 'am_michael');
+    await tester.scrollUntilVisible(
+      find.text('Characters'),
+      120,
+      scrollable: find.byType(Scrollable).first,
+    );
+    expect(find.text('Characters'), findsOneWidget);
+    expect(
+      find.textContaining('No dialogue speakers discovered yet'),
+      findsOneWidget,
+    );
   });
 
   testWidgets('uses readable dark-theme card and field surfaces', (

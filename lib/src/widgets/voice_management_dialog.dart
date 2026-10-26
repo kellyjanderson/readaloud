@@ -226,27 +226,30 @@ class VoiceManagementDialog extends StatelessWidget {
                     const SizedBox(height: 12),
                     _VoiceAssignmentCard(
                       label: 'Narrator',
+                      fallbackVoiceId: selectedVoiceId,
                       assignment: castVoiceAssignments?.forCastId(
                         characterCastRegistry.narratorEntry.castId,
                       ),
                       previewStateForVoice: previewStateForVoice,
                       onToggleVoicePreview: onToggleVoicePreview,
                       voices: availableVoices,
-                      onChanged: (voiceId) => onAssignCastVoice(
-                        characterCastRegistry.narratorEntry.castId,
-                        voiceId,
-                      ),
+                      onChanged: (voiceId) => isCharacterModeEnabled
+                          ? onAssignCastVoice(
+                              characterCastRegistry.narratorEntry.castId,
+                              voiceId,
+                            )
+                          : onSelectLibraryVoice(voiceId),
                       onResetToAutomatic: () => onClearCastVoiceOverride(
                         characterCastRegistry.narratorEntry.castId,
                       ),
                     ),
+                    const SizedBox(height: 16),
+                    Text(
+                      'Characters',
+                      style: Theme.of(context).textTheme.titleSmall,
+                    ),
+                    const SizedBox(height: 8),
                     if (characterEntries.isNotEmpty) ...[
-                      const SizedBox(height: 16),
-                      Text(
-                        'Characters',
-                        style: Theme.of(context).textTheme.titleSmall,
-                      ),
-                      const SizedBox(height: 8),
                       for (final entry in characterEntries) ...[
                         _VoiceAssignmentCard(
                           label: entry.displayLabel,
@@ -515,10 +518,12 @@ class _VoiceAssignmentCard extends StatelessWidget {
     required this.voices,
     required this.onChanged,
     required this.onResetToAutomatic,
+    this.fallbackVoiceId,
   });
 
   final String label;
   final CastVoiceAssignment? assignment;
+  final String? fallbackVoiceId;
   final VoicePreviewState Function(String voiceId) previewStateForVoice;
   final ValueChanged<String> onToggleVoicePreview;
   final List<VoiceProfile> voices;
@@ -530,11 +535,10 @@ class _VoiceAssignmentCard extends StatelessWidget {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
     final tokens = readAloudThemeTokens(context);
-    final selectedVoice = assignment == null
-        ? null
-        : voices
-              .where((voice) => voice.id == assignment!.effectiveVoiceId)
-              .firstOrNull;
+    final requestedVoiceId = assignment?.effectiveVoiceId ?? fallbackVoiceId;
+    final selectedVoice = voices
+        .where((voice) => voice.id == requestedVoiceId)
+        .firstOrNull;
     final automaticVoice = assignment?.automaticVoiceId == null
         ? null
         : voices
@@ -585,14 +589,17 @@ class _VoiceAssignmentCard extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 DropdownButtonFormField<String>(
-                  key: ValueKey('$label-${assignment?.effectiveVoiceId}'),
+                  key: ValueKey('$label-$requestedVoiceId'),
                   initialValue:
-                      voices.any(
-                        (voice) => voice.id == assignment?.effectiveVoiceId,
-                      )
-                      ? assignment?.effectiveVoiceId
+                      voices.any((voice) => voice.id == requestedVoiceId)
+                      ? requestedVoiceId
                       : null,
                   isExpanded: true,
+                  hint: Text(
+                    voices.isEmpty
+                        ? 'Waiting for installed voices'
+                        : 'Choose an installed voice',
+                  ),
                   dropdownColor: tokens.dialogSurface,
                   style: theme.textTheme.titleMedium?.copyWith(
                     color: colorScheme.onSurface,
