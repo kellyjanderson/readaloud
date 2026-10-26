@@ -181,6 +181,13 @@ class InstrumentedDocumentArtifactCodec {
       }
       assignmentsByCastId[castId] = raw;
     }
+    if (castIds.length != registryCastIds.length ||
+        !castIds.containsAll(registryCastIds)) {
+      throw const FormatException(
+        'Assignments must cover every cast registry entry.',
+      );
+    }
+    final referenceCastIds = <String>{};
     for (final raw in references) {
       if (raw is! Map<String, Object?>) {
         throw const FormatException('Invalid voice reference.');
@@ -194,6 +201,9 @@ class InstrumentedDocumentArtifactCodec {
       final castId = _requiredString(raw, 'castId');
       if (!castIds.contains(castId)) {
         throw const FormatException('Voice reference has no cast assignment.');
+      }
+      if (!referenceCastIds.add(castId)) {
+        throw const FormatException('Duplicate prepared voice reference.');
       }
       for (final field in [
         'decisionKind',
@@ -239,6 +249,12 @@ class InstrumentedDocumentArtifactCodec {
           'Voice reference does not match its effective assignment.',
         );
       }
+    }
+    if (referenceCastIds.length != castIds.length ||
+        !referenceCastIds.containsAll(castIds)) {
+      throw const FormatException(
+        'Every cast assignment must have a prepared voice reference.',
+      );
     }
     return InstrumentedDocumentArtifactSnapshot._(envelope);
   }

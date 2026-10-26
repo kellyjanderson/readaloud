@@ -17,38 +17,49 @@ void main() {
   final mara = document.characterCastRegistry.entries.firstWhere(
     (entry) => entry.displayLabel == 'Mara',
   );
-  final assignment = CastVoiceAssignment(
-    castId: mara.castId,
-    effectiveVoiceId: 'af_bella',
-    decisionKind: VoiceAssignmentDecisionKind.userOverride,
-    automaticVoiceId: 'af_sarah',
-    userOverrideVoiceId: 'af_bella',
-  );
+  final assignments = document.characterCastRegistry.entries
+      .map((entry) {
+        final isMara = entry.castId == mara.castId;
+        return CastVoiceAssignment(
+          castId: entry.castId,
+          effectiveVoiceId: isMara ? 'af_bella' : 'af_sarah',
+          decisionKind: isMara
+              ? VoiceAssignmentDecisionKind.userOverride
+              : VoiceAssignmentDecisionKind.automatic,
+          automaticVoiceId: 'af_sarah',
+          userOverrideVoiceId: isMara ? 'af_bella' : null,
+        );
+      })
+      .toList(growable: false);
   final assignmentSet = CastVoiceAssignmentSet(
     documentId: id,
     assignmentVersion: 'assignment-v1',
-    assignments: [assignment],
+    assignments: assignments,
   );
-  final reference = ResolvedPreparedVoiceReference(
-    assignment: assignment,
-    resource: PreparedVoiceBinding(
-      voiceId: 'af_bella',
-      voiceDigest: 'voice-sha256',
-      modelDigest: 'model-sha256',
-      engineVersion: 'kokoro-test',
-      pronunciationProfileId: 'en-us-core',
-      bindingRevision: 3,
-      documentId: id,
-    ),
-    documentRevision: 12,
-  );
+  final references = assignments
+      .map((assignment) {
+        return ResolvedPreparedVoiceReference(
+          assignment: assignment,
+          resource: PreparedVoiceBinding(
+            voiceId: assignment.effectiveVoiceId,
+            voiceDigest: 'voice-${assignment.castId}-sha256',
+            modelDigest: 'model-sha256',
+            engineVersion: 'kokoro-test',
+            pronunciationProfileId: 'en-us-core',
+            bindingRevision: 3,
+            documentId: id,
+          ),
+          documentRevision: 12,
+        );
+      })
+      .toList(growable: false);
 
   test('round trips imported instrumented document and binding data', () {
     final first = codec.encode(
       document: document,
       documentRevision: 12,
       castVoiceAssignments: assignmentSet,
-      preparedVoiceReferences: [reference],
+      preparedVoiceReferences: references,
     );
     final snapshot = codec.decode(first);
     final second = codec.reencode(snapshot);
@@ -104,13 +115,22 @@ void main() {
     expect(pronunciation['pronunciationProfileId'], isNotEmpty);
     final artifactAssignments =
         firstJson['castVoiceAssignments'] as Map<String, dynamic>;
-    final assignmentRecord =
-        (artifactAssignments['assignments'] as List<dynamic>).single
-            as Map<String, dynamic>;
+    final assignmentRecords = (artifactAssignments['assignments'] as List)
+        .cast<Map<String, dynamic>>();
+    expect(
+      assignmentRecords,
+      hasLength(document.characterCastRegistry.entries.length),
+    );
+    final assignmentRecord = assignmentRecords.firstWhere(
+      (record) => record['castId'] == mara.castId,
+    );
     expect(assignmentRecord['decisionKind'], 'userOverride');
     final artifactReferences =
         firstJson['preparedVoiceReferences'] as List<dynamic>;
-    final referenceRecord = artifactReferences.single as Map<String, dynamic>;
+    expect(artifactReferences, hasLength(assignmentRecords.length));
+    final referenceRecord = artifactReferences
+        .cast<Map<String, dynamic>>()
+        .firstWhere((record) => record['castId'] == mara.castId);
     expect(referenceRecord['documentRevision'], 12);
     expect(referenceRecord['resource']['bindingRevision'], 3);
     expect(referenceRecord['castId'], mara.castId);
@@ -129,7 +149,7 @@ void main() {
                   document: document,
                   documentRevision: 12,
                   castVoiceAssignments: assignmentSet,
-                  preparedVoiceReferences: [reference],
+                  preparedVoiceReferences: references,
                 ),
               )
               as Map<String, dynamic>;
@@ -159,7 +179,7 @@ void main() {
           jsonDecode(jsonEncode(encoded)) as Map<String, dynamic>;
       final unknownAssignmentSet =
           unknownCast['castVoiceAssignments'] as Map<String, dynamic>;
-      ((unknownAssignmentSet['assignments'] as List).single as Map)['castId'] =
+      ((unknownAssignmentSet['assignments'] as List).first as Map)['castId'] =
           'missing-cast';
       expect(
         () => codec.decode(jsonEncode(unknownCast)),
@@ -169,7 +189,7 @@ void main() {
           jsonDecode(jsonEncode(encoded)) as Map<String, dynamic>;
       final incompleteSet =
           incompleteAssignment['castVoiceAssignments'] as Map<String, dynamic>;
-      ((incompleteSet['assignments'] as List).single as Map).remove(
+      ((incompleteSet['assignments'] as List).first as Map).remove(
         'decisionKind',
       );
       expect(
@@ -179,12 +199,28 @@ void main() {
       final incompleteReference =
           jsonDecode(jsonEncode(encoded)) as Map<String, dynamic>;
       final resource =
-          ((incompleteReference['preparedVoiceReferences'] as List).single
+          ((incompleteReference['preparedVoiceReferences'] as List).first
                   as Map)['resource']
               as Map;
       resource.remove('voiceDigest');
       expect(
         () => codec.decode(jsonEncode(incompleteReference)),
+        throwsFormatException,
+      );
+      final missingAssignment =
+          jsonDecode(jsonEncode(encoded)) as Map<String, dynamic>;
+      final missingAssignmentSet =
+          missingAssignment['castVoiceAssignments'] as Map<String, dynamic>;
+      (missingAssignmentSet['assignments'] as List).removeLast();
+      expect(
+        () => codec.decode(jsonEncode(missingAssignment)),
+        throwsFormatException,
+      );
+      final missingReference =
+          jsonDecode(jsonEncode(encoded)) as Map<String, dynamic>;
+      (missingReference['preparedVoiceReferences'] as List).removeLast();
+      expect(
+        () => codec.decode(jsonEncode(missingReference)),
         throwsFormatException,
       );
       expect(() => codec.decode('{"formatId":'), throwsFormatException);
