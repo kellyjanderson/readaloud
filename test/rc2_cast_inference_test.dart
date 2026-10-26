@@ -414,6 +414,20 @@ void main() {
       ),
     );
     expect(automatic.forCastId('cast_character_alex')!.effectiveVoiceId, 'm');
+    final unavailableMatch = const CastVoiceAssignmentService().resolve(
+      CastVoiceAssignmentInput(
+        characterCastRegistry: registry,
+        availableVoices: voices.where((voice) => voice.id != 'm').toList(),
+        fallbackVoiceId: 'n',
+        preferredNarratorVoiceId: 'n',
+      ),
+    );
+    // Missing preferred metadata cannot fabricate a voice; deterministic
+    // catalog fallback remains selectable and distinct from narrator.
+    expect(
+      unavailableMatch.forCastId('cast_character_alex')!.effectiveVoiceId,
+      'f',
+    );
     final manual = const CastVoiceAssignmentService().resolve(
       CastVoiceAssignmentInput(
         characterCastRegistry: registry,
