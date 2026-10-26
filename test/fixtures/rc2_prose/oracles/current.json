@@ -1,0 +1,64 @@
+{
+  "audit": "https://github.com/kellyjanderson/readaloud/issues/89#issuecomment-6429213427",
+  "sourceSha256": "972e39e002f79607bfed9c359324f842846ccb101e2c94b5e0abfd07fcae23c3",
+  "canonicalCastIds": [
+    "cast_character_quinn",
+    "cast_character_ayo",
+    "cast_character_eren",
+    "cast_character_noor"
+  ],
+  "namedNonSpeakers": [
+    "Ivo"
+  ],
+  "dialogue": [
+    {
+      "text": "We should start where the boards are dry,",
+      "startUtf16": 367,
+      "endUtf16": 408,
+      "castId": "cast_character_quinn"
+    },
+    {
+      "text": "This will be lighter when it dries,",
+      "startUtf16": 802,
+      "endUtf16": 837,
+      "castId": "cast_character_ayo"
+    },
+    {
+      "text": "The middle tin looks closer,",
+      "startUtf16": 1349,
+      "endUtf16": 1377,
+      "castId": "cast_character_eren"
+    },
+    {
+      "text": "We can use that one for the top rail,",
+      "startUtf16": 1433,
+      "endUtf16": 1470,
+      "castId": "cast_character_quinn"
+    },
+    {
+      "text": "I can take the lower rail after lunch,",
+      "startUtf16": 1806,
+      "endUtf16": 1844,
+      "castId": "cast_character_noor"
+    }
+  ],
+  "variantOf": "bridge",
+  "voiceHints": {
+    "cast_character_quinn": {
+      "gender": "female",
+      "source": "pronoun"
+    },
+    "cast_character_ayo": {
+      "gender": "male",
+      "source": "pronoun"
+    },
+    "cast_character_eren": {
+      "gender": null,
+      "source": "unknown"
+    },
+    "cast_character_noor": {
+      "gender": "female",
+      "source": "pronoun"
+    }
+  }
+}

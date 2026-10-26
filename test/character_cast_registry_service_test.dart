@@ -171,54 +171,43 @@ void main() {
       expect(entry.observedAliases, <String>['Jen', 'Jennifer']);
     });
 
-    test(
-      'consolidates obvious longer-name typo variants into one character',
-      () {
-        final registry = service.build(
-          dialogueAttributions: DialogueAttributionSet(
-            documentId: 'doc_1',
-            attributionVersion: 'attr-v1',
-            providerId: 'heuristic',
-            providerVersion: 'v1',
-            outcomes: <DialogueAttributionOutcome>[
-              _outcome(
-                attributionId: 'attr_dlg_0',
-                dialogueSpanId: 'dlg_0',
-                displayLabel: 'Jennifer',
-                normalizedLabel: 'jennifer',
-              ),
-              _outcome(
-                attributionId: 'attr_dlg_1',
-                dialogueSpanId: 'dlg_1',
-                displayLabel: 'Jenifer',
-                normalizedLabel: 'jenifer',
-              ),
-              _outcome(
-                attributionId: 'attr_dlg_2',
-                dialogueSpanId: 'dlg_2',
-                displayLabel: 'Jenefer',
-                normalizedLabel: 'jenefer',
-              ),
-            ],
-          ),
-          speechDocument: _speechDocument(const <SpeechSegment>[]),
-        );
+    test('keeps similar names distinct without explicit alias evidence', () {
+      final registry = service.build(
+        dialogueAttributions: DialogueAttributionSet(
+          documentId: 'doc_1',
+          attributionVersion: 'attr-v1',
+          providerId: 'heuristic',
+          providerVersion: 'v1',
+          outcomes: <DialogueAttributionOutcome>[
+            _outcome(
+              attributionId: 'attr_dlg_0',
+              dialogueSpanId: 'dlg_0',
+              displayLabel: 'Jennifer',
+              normalizedLabel: 'jennifer',
+            ),
+            _outcome(
+              attributionId: 'attr_dlg_1',
+              dialogueSpanId: 'dlg_1',
+              displayLabel: 'Jenifer',
+              normalizedLabel: 'jenifer',
+            ),
+            _outcome(
+              attributionId: 'attr_dlg_2',
+              dialogueSpanId: 'dlg_2',
+              displayLabel: 'Jenefer',
+              normalizedLabel: 'jenefer',
+            ),
+          ],
+        ),
+        speechDocument: _speechDocument(const <SpeechSegment>[]),
+      );
 
-        expect(registry.characterEntries, hasLength(1));
-        final entry = registry.characterEntries.single;
-        expect(entry.displayLabel, 'Jennifer');
-        expect(entry.observedAliases, <String>[
-          'Jenefer',
-          'Jenifer',
-          'Jennifer',
-        ]);
-        expect(entry.attributionIds, <String>[
-          'attr_dlg_0',
-          'attr_dlg_1',
-          'attr_dlg_2',
-        ]);
-      },
-    );
+      expect(registry.characterEntries.map((entry) => entry.castId).toSet(), {
+        'cast_character_jennifer',
+        'cast_character_jenifer',
+        'cast_character_jenefer',
+      });
+    });
 
     test(
       'extracts explicit identity labels and preserves specific categories',

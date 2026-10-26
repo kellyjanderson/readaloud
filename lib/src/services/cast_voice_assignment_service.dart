@@ -23,7 +23,7 @@ class CastVoiceAssignmentInput {
 class CastVoiceAssignmentService {
   const CastVoiceAssignmentService();
 
-  static const assignmentVersion = 'read-aloud-cast-voice-assignments-v1';
+  static const assignmentVersion = 'read-aloud-cast-voice-assignments-v2';
 
   CastVoiceAssignmentSet resolve(CastVoiceAssignmentInput input) {
     final sortedVoices = List<VoiceProfile>.from(input.availableVoices)
@@ -58,7 +58,8 @@ class CastVoiceAssignmentService {
         fallbackPool: characterVoicePool,
       );
       automaticAssignments[character.castId] = automaticVoiceId;
-      if (automaticVoiceId != null && automaticVoiceId != narratorAutomaticVoiceId) {
+      if (automaticVoiceId != null &&
+          automaticVoiceId != narratorAutomaticVoiceId) {
         usedCharacterVoiceIds.add(automaticVoiceId);
       }
     }
@@ -67,11 +68,19 @@ class CastVoiceAssignmentService {
     for (final entry in input.characterCastRegistry.entries) {
       final automaticVoiceId = automaticAssignments[entry.castId];
       final storedVoiceId = _validVoiceId(
-        input.storedAssignments[entry.castId],
+        _choiceForCast(
+          input.storedAssignments,
+          entry.castId,
+          input.characterCastRegistry,
+        ),
         availableVoiceIds,
       );
       final userOverrideVoiceId = _validVoiceId(
-        input.userOverrides[entry.castId],
+        _choiceForCast(
+          input.userOverrides,
+          entry.castId,
+          input.characterCastRegistry,
+        ),
         availableVoiceIds,
       );
 
@@ -110,6 +119,20 @@ class CastVoiceAssignmentService {
     );
   }
 
+  String? _choiceForCast(
+    Map<String, String> choices,
+    String castId,
+    CharacterCastRegistry registry,
+  ) {
+    if (choices.containsKey(castId)) return choices[castId];
+    for (final redirect in registry.castIdRedirects.entries) {
+      if (redirect.value == castId && choices.containsKey(redirect.key)) {
+        return choices[redirect.key];
+      }
+    }
+    return null;
+  }
+
   String? _validVoiceId(String? voiceId, Set<String> availableVoiceIds) {
     if (voiceId == null || voiceId.isEmpty) {
       return null;
@@ -133,11 +156,21 @@ class CastVoiceAssignmentService {
       return narratorVoiceId;
     }
 
-    for (final voice in preferredVoices) {
+    final gender = character.inferredGender;
+    final matching = preferredVoices
+        .where((voice) => voice.gender == gender)
+        .toList();
+    final pool =
+        gender != null && gender != VoiceGender.neutral && matching.isNotEmpty
+        ? matching
+        : preferredVoices;
+    for (final voice in pool) {
       if (!usedCharacterVoiceIds.contains(voice.id)) {
         return voice.id;
       }
     }
+    // Exhausting distinct voices does not erase a reliable matching hint.
+    if (gender != null && matching.isNotEmpty) return matching.first.id;
     if (fallbackPool.isNotEmpty) {
       return fallbackPool.first.id;
     }
@@ -146,9 +179,9 @@ class CastVoiceAssignmentService {
 
   List<VoiceProfile> _prioritizedCharacterVoices(
     List<VoiceProfile> sortedVoices,
-    String? narratorVoiceId,
-    {VoiceGender? preferredGender,}
-  ) {
+    String? narratorVoiceId, {
+    VoiceGender? preferredGender,
+  }) {
     final nonNarratorVoices = sortedVoices
         .where((voice) => voice.id != narratorVoiceId)
         .toList(growable: false);
@@ -157,17 +190,23 @@ class CastVoiceAssignmentService {
         .firstOrNull;
     final prioritized = List<VoiceProfile>.from(nonNarratorVoices);
     prioritized.sort((left, right) {
-      final scoreComparison = _characterVoiceScore(
-        right,
-        narratorVoice: narratorVoice,
-        preferredGender: preferredGender,
-      ).compareTo(
-        _characterVoiceScore(
-          left,
-          narratorVoice: narratorVoice,
-          preferredGender: preferredGender,
-        ),
-      );
+      if (preferredGender != null && preferredGender != VoiceGender.neutral) {
+        final leftMatches = left.gender == preferredGender;
+        final rightMatches = right.gender == preferredGender;
+        if (leftMatches != rightMatches) return leftMatches ? -1 : 1;
+      }
+      final scoreComparison =
+          _characterVoiceScore(
+            right,
+            narratorVoice: narratorVoice,
+            preferredGender: preferredGender,
+          ).compareTo(
+            _characterVoiceScore(
+              left,
+              narratorVoice: narratorVoice,
+              preferredGender: preferredGender,
+            ),
+          );
       if (scoreComparison != 0) {
         return scoreComparison;
       }
@@ -211,9 +250,9 @@ class CastVoiceAssignmentService {
     if (voice.locale.isNotEmpty &&
         narratorVoice.locale.isNotEmpty &&
         _regionalEnglishContrastSuppressed(
-          voice.locale,
-          narratorVoice.locale,
-        ) ==
+              voice.locale,
+              narratorVoice.locale,
+            ) ==
             false &&
         voice.locale != narratorVoice.locale) {
       score += 70;
@@ -235,11 +274,12 @@ class CastVoiceAssignmentService {
   }
 
   int _compareVoices(VoiceProfile left, VoiceProfile right) {
-    final qualityComparison = (_qualityScore(right.qualityGrade) +
-            _usEnglishPreferenceBonus(right))
-        .compareTo(
-          _qualityScore(left.qualityGrade) + _usEnglishPreferenceBonus(left),
-        );
+    final qualityComparison =
+        (_qualityScore(right.qualityGrade) + _usEnglishPreferenceBonus(right))
+            .compareTo(
+              _qualityScore(left.qualityGrade) +
+                  _usEnglishPreferenceBonus(left),
+            );
     if (qualityComparison != 0) {
       return qualityComparison;
     }
