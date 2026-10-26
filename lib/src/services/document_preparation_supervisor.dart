@@ -1,7 +1,10 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 import 'dart:isolate';
 import 'dart:typed_data';
+
+import 'package:crypto/crypto.dart';
 
 import '../models/document_preparation.dart';
 import '../models/document_import_exception.dart';
@@ -9,6 +12,7 @@ import '../models/reader_document.dart';
 import 'document_import_service.dart';
 import 'prepared_document_snapshot.dart';
 import 'reader_document_serialization_service.dart';
+import 'reader_document_repository.dart';
 
 /// Main-isolate owner of one active operation and one latest pending request.
 /// Native PDF extraction drains in its adapter; only pure Dart work is killed.
@@ -17,12 +21,14 @@ class DocumentPreparationSupervisor {
     this.timeout = const Duration(minutes: 2),
     PdfTextExtractor? pdfTextExtractor,
     this.testImporter,
+    this.repository,
     this.workerEntryPoint = documentPreparationWorker,
   }) : _pdfTextExtractor =
            pdfTextExtractor ??
            const PdfrxPdfTextExtractor(deferFormatting: true);
 
   final Duration timeout;
+  final ReaderDocumentRepository? repository;
   final PdfTextExtractor _pdfTextExtractor;
 
   /// Compatibility seam for controllable importer tests; never sent to workers.
@@ -46,6 +52,8 @@ class DocumentPreparationSupervisor {
   Future<DocumentPreparationResult> prepareRanges(
     DocumentPreparationRequest request, {
     Future<Uint8List> Function()? acquireBytes,
+    String? cacheKey,
+    Future<void> Function(DocumentIdentityMigration)? onIdentityMigration,
     required Future<void> Function(DocumentPreparationPublication)
     onPublication,
     void Function(PreparationProgress)? onProgress,
@@ -58,6 +66,8 @@ class DocumentPreparationSupervisor {
     return _admit(
       request,
       acquireBytes: acquireBytes,
+      cacheKey: cacheKey,
+      onIdentityMigration: onIdentityMigration,
       onPublication: onPublication,
       onProgress: onProgress,
       acquireSource: acquireSource,
@@ -68,6 +78,8 @@ class DocumentPreparationSupervisor {
   Future<DocumentPreparationResult> _admit(
     DocumentPreparationRequest request, {
     Future<Uint8List> Function()? acquireBytes,
+    String? cacheKey,
+    Future<void> Function(DocumentIdentityMigration)? onIdentityMigration,
     Future<void> Function(DocumentPreparationPublication)? onPublication,
     void Function(PreparationProgress)? onProgress,
     Future<void> Function()? acquireSource,
@@ -80,6 +92,8 @@ class DocumentPreparationSupervisor {
       onProgress,
       acquireSource,
       onDrained,
+      cacheKey,
+      onIdentityMigration,
     );
     if (_closed) {
       job.finish(DocumentPreparationOutcome.cancelled);
@@ -116,8 +130,69 @@ class DocumentPreparationSupervisor {
   Future<void> _execute(_PreparationJob job) async {
     var timer = Timer(timeout, () => job.cancel(timedOut: true));
     StreamIterator<PdfTextExtractionPage>? pdfPages;
+    ReaderDocumentCheckpoint? checkpoint;
+    _AcquisitionProof? acquisitionProof;
     try {
       var request = job.request;
+      // Cache identity must be supplied by the source owner; a path or prefix
+      // fingerprint alone cannot attest a source revision.
+      if (repository != null &&
+          job.cacheKey != null &&
+          request.sourceRevision != null &&
+          job.onPublication != null) {
+        final cache = await repository!.open(
+          sourceKey: job.cacheKey!,
+          sourceRevision: request.effectiveSourceRevision,
+        );
+        if (job.result.isCompleted) return;
+        if (cache != null && cache.isComplete && cache.rangeCount > 0) {
+          DocumentPreparationPublication? first;
+          try {
+            first = await _readCachedRange(cache, 1, request);
+          } on FormatException {
+            /* rebuild before publishing */
+          }
+          if (job.result.isCompleted) return;
+          if (first != null) {
+            ReaderDocument? last;
+            for (var sequence = 1; sequence <= cache.rangeCount; sequence++) {
+              final publication = sequence == 1
+                  ? first
+                  : await _readCachedRange(cache, sequence, request);
+              if (job.result.isCompleted) return;
+              timer.cancel();
+              await Future.any<void>([
+                Future<void>.sync(() => job.onPublication!(publication)),
+                job.result.future.then<void>((_) {}),
+              ]);
+              if (job.result.isCompleted) return;
+              timer = Timer(timeout, () => job.cancel(timedOut: true));
+              last = publication.fragment;
+            }
+            final migration = cache.identityMigration(request);
+            if (migration != null && job.onIdentityMigration != null) {
+              await Future.any<void>([
+                Future<void>.sync(() => job.onIdentityMigration!(migration)),
+                job.result.future.then<void>((_) {}),
+              ]);
+              if (job.result.isCompleted) return;
+            }
+            job.result.complete(
+              DocumentPreparationResult(
+                request: request.identityOnly,
+                outcome: DocumentPreparationOutcome.ready,
+                document: last,
+                workerName: 'prepared-range-cache',
+              ),
+            );
+            return;
+          }
+        }
+        checkpoint = await repository!.begin(
+          sourceKey: job.cacheKey!,
+          request: request,
+        );
+      }
       if (job.acquireSource != null) await job.acquireSource!();
       if (job.result.isCompleted) return;
       job.onProgress?.call(
@@ -217,6 +292,13 @@ class DocumentPreparationSupervisor {
           return;
         }
 
+        if (message is _AcquisitionProof) {
+          if (!job.result.isCompleted &&
+              _sameReceipt(message.receipt, request)) {
+            acquisitionProof = message;
+          }
+          return;
+        }
         if (message is DocumentPreparationPublication) {
           if (job.result.isCompleted ||
               !_sameRequest(message.request, request) ||
@@ -227,7 +309,21 @@ class DocumentPreparationSupervisor {
           timer.cancel(); // Consumer demand may be paused indefinitely.
           // Exactly one unacknowledged fragment. The consumer controls ahead
           // work by completing its callback; stale callbacks cannot grant credit.
-          Future<void>.sync(() => job.onPublication?.call(message)).then(
+          Future<void>.sync(() async {
+            if (checkpoint != null) {
+              await checkpoint.commit(message);
+              if (job.result.isCompleted) return;
+              job.onProgress?.call(
+                PreparationProgress(
+                  stage: PreparationStage.persistence,
+                  state: PreparationWorkState.working,
+                  completed: message.sequence,
+                  unit: 'ranges',
+                ),
+              );
+            }
+            if (!job.result.isCompleted) await job.onPublication?.call(message);
+          }).then(
             (_) {
               if (!job.result.isCompleted) {
                 timer = Timer(timeout, () => job.cancel(timedOut: true));
@@ -271,6 +367,53 @@ class DocumentPreparationSupervisor {
             message.request.revision == request.revision &&
             message.request.kind == request.kind &&
             message.request.watchSession == request.watchSession) {
+          if (message.outcome == DocumentPreparationOutcome.ready &&
+              checkpoint != null &&
+              acquisitionProof != null) {
+            await checkpoint.complete(
+              receipt: acquisitionProof?.receipt,
+              provisionalDocumentId: acquisitionProof?.provisionalDocumentId,
+            );
+            if (job.result.isCompleted) return;
+            job.onProgress?.call(
+              PreparationProgress(
+                stage: PreparationStage.persistence,
+                state: PreparationWorkState.complete,
+                completed: checkpoint.committedRangeCount,
+                total: checkpoint.committedRangeCount,
+                unit: 'ranges',
+              ),
+            );
+          } else if (checkpoint != null &&
+              message.outcome == DocumentPreparationOutcome.ready) {
+            job.onProgress?.call(
+              PreparationProgress(
+                stage: PreparationStage.persistence,
+                state: PreparationWorkState.waiting,
+                completed: checkpoint.committedRangeCount,
+                unit: 'ranges',
+                waitingReason:
+                    'Source adapter cannot attest complete acquired-byte coverage',
+              ),
+            );
+          }
+          final proof = acquisitionProof;
+          if (message.outcome == DocumentPreparationOutcome.ready &&
+              proof != null &&
+              job.onIdentityMigration != null) {
+            final migration = _migration(
+              proof.receipt,
+              proof.provisionalDocumentId,
+              request,
+            );
+            if (migration != null) {
+              await Future.any<void>([
+                Future<void>.sync(() => job.onIdentityMigration!(migration)),
+                job.result.future.then<void>((_) {}),
+              ]);
+            }
+            if (job.result.isCompleted) return;
+          }
           job.result.complete(message);
         } else {
           job.finish(
@@ -290,6 +433,7 @@ class DocumentPreparationSupervisor {
       job.finish(DocumentPreparationOutcome.failed, error: '$error');
     } finally {
       timer.cancel();
+      checkpoint?.cancel();
       try {
         await pdfPages?.cancel();
       } catch (error) {
@@ -309,6 +453,21 @@ class DocumentPreparationSupervisor {
   }
 }
 
+/// Corruption revokes this generation before surfacing failure. This is one
+/// marker write, independent of book size; retry rebuilds from the source.
+Future<DocumentPreparationPublication> _readCachedRange(
+  ReaderDocumentCache cache,
+  int sequence,
+  DocumentPreparationRequest request,
+) async {
+  try {
+    return await cache.readRange(sequence, request: request);
+  } on FormatException {
+    await cache.invalidate();
+    rethrow;
+  }
+}
+
 class _PreparationJob {
   _PreparationJob(
     this.request,
@@ -317,7 +476,11 @@ class _PreparationJob {
     this.onProgress,
     this.acquireSource,
     this.onDrained,
+    this.cacheKey,
+    this.onIdentityMigration,
   );
+  final Future<void> Function(DocumentIdentityMigration)? onIdentityMigration;
+  final String? cacheKey;
   final Future<void> Function()? acquireSource;
   final Future<void> Function()? onDrained;
   final Future<void> Function(DocumentPreparationPublication)? onPublication;
@@ -414,9 +577,7 @@ void documentPreparationWorker(DocumentPreparationWorkerInput input) async {
     Isolate.exit(
       input.reply,
       DocumentPreparationResult(
-        request: input.incremental
-            ? input.request.identityOnly
-            : input.request,
+        request: input.incremental ? input.request.identityOnly : input.request,
         outcome: DocumentPreparationOutcome.failed,
         error: '$error',
         importFailure: error is DocumentImportException
@@ -506,6 +667,8 @@ Future<void> _publishTextRanges(
   var wordStart = 0;
   var segmentStart = 0;
   ReaderDocument? last;
+  String? firstDocumentId;
+  final acquisition = _AcquisitionHasher(request);
   var effectiveInput = input;
   String? completeSourceFingerprint;
   if (!input.nativePdf) {
@@ -548,7 +711,7 @@ Future<void> _publishTextRanges(
   }
   try {
     await for (final context in _contextUnits(
-      _importUnits(effectiveInput, importer),
+      _importUnits(effectiveInput, importer, acquisition),
     )) {
       final unit = context.unit;
       final text = unit.text;
@@ -586,10 +749,23 @@ Future<void> _publishTextRanges(
       sourceStart += text.length;
       wordStart += document.wordCount;
       segmentStart += document.speechDocument.segments.length;
+      firstDocumentId ??= document.displayDocument.documentId;
       last = document;
     }
     if (last == null) {
       throw StateError('No readable text was found in the source.');
+    }
+    if (!acquisition.finished &&
+        request.bytes != null &&
+        (!input.nativePdf || request.sourcePath == null)) {
+      // Random-access containers can attest the immutable captured bytes they
+      // consumed. File-backed ZIP/PDF adapters cannot attest full raw coverage.
+      acquisition.addBytes(request.bytes!);
+      acquisition.finish(DocumentIdentityIntegrityBasis.completeSourceBytes);
+    }
+    final receipt = acquisition.receipt;
+    if (receipt != null) {
+      input.reply.send(_AcquisitionProof(receipt, firstDocumentId!));
     }
     // EOF is terminal progress, not a second publication of the last fragment.
     input.reply.send(
@@ -669,11 +845,17 @@ DocumentPreparationPublication _publication(
   );
 }
 
-Stream<String> _sourceText(DocumentPreparationRequest request) async* {
+Stream<String> _sourceText(
+  DocumentPreparationRequest request,
+  _AcquisitionHasher acquisition,
+) async* {
   final text = request.text!;
   for (var offset = 0; offset < text.length; offset += 8192) {
-    yield text.substring(offset, (offset + 8192).clamp(0, text.length));
+    final part = text.substring(offset, (offset + 8192).clamp(0, text.length));
+    acquisition.addText(part);
+    yield part;
   }
+  acquisition.finish(DocumentIdentityIntegrityBasis.completeSourceBytes);
 }
 
 class _PdfPageDemand {
@@ -684,6 +866,7 @@ class _PdfPageDemand {
 Stream<DocumentImportUnit> _importUnits(
   DocumentPreparationWorkerInput input,
   DocumentImportService importer,
+  _AcquisitionHasher acquisition,
 ) async* {
   final request = input.request;
   if (input.nativePdf) {
@@ -716,9 +899,15 @@ Stream<DocumentImportUnit> _importUnits(
       fileName: request.fileName!,
       sourcePath: request.bytes == null ? request.sourcePath : null,
       bytes: request.bytes,
+      onAcquiredBytes: acquisition.addBytes,
+      onAcquiredEof: () => acquisition.finish(
+        DocumentIdentityIntegrityBasis.committedAcquiredByteCoverage,
+      ),
     );
   } else {
-    await for (final text in boundedProseUnits(_sourceText(request))) {
+    await for (final text in boundedProseUnits(
+      _sourceText(request, acquisition),
+    )) {
       yield DocumentImportUnit(text: text);
     }
   }
@@ -754,4 +943,104 @@ Stream<_ContextImportUnit> _contextUnits(
   } finally {
     await iterator.cancel();
   }
+}
+
+class _DigestSink implements Sink<Digest> {
+  Digest? value;
+  @override
+  void add(Digest data) {
+    value = data;
+  }
+
+  @override
+  void close() {}
+}
+
+/// Pure worker owns the digest and exact sequential stream. No raw content is
+/// returned to the UI. UTF8's chunked encoder preserves split surrogate pairs.
+class _AcquisitionHasher {
+  _AcquisitionHasher(this.request) {
+    _hash = sha256.startChunkedConversion(_result);
+    _text = utf8.encoder.startChunkedConversion(_ByteCountSink(this));
+  }
+  final DocumentPreparationRequest request;
+  final _result = _DigestSink();
+  late ByteConversionSink _hash;
+  late StringConversionSink _text;
+  int count = 0;
+  bool _usedText = false;
+  bool finished = false;
+  SourceAcquisitionReceipt? receipt;
+  void addBytes(List<int> bytes) {
+    count += bytes.length;
+    _hash.add(bytes);
+  }
+
+  void addText(String text) {
+    _usedText = true;
+    _text.add(text);
+  }
+
+  void finish(DocumentIdentityIntegrityBasis basis) {
+    if (finished) return;
+    if (_usedText) {
+      _text.close();
+    } else {
+      _hash.close();
+    }
+    finished = true;
+    receipt = SourceAcquisitionReceipt(
+      ownerId: request.ownerId,
+      documentRevision: request.revision,
+      sourceRevision: request.effectiveSourceRevision,
+      watchSession: request.watchSession,
+      byteCount: count,
+      sha256: _result.value.toString(),
+      integrityBasis: basis,
+    );
+  }
+}
+
+class _ByteCountSink implements Sink<List<int>> {
+  _ByteCountSink(this.owner);
+  final _AcquisitionHasher owner;
+  @override
+  void add(List<int> bytes) => owner.addBytes(bytes);
+  @override
+  void close() => owner._hash.close();
+}
+
+class _AcquisitionProof {
+  const _AcquisitionProof(this.receipt, this.provisionalDocumentId);
+  final SourceAcquisitionReceipt receipt;
+  final String provisionalDocumentId;
+}
+
+bool _sameReceipt(
+  SourceAcquisitionReceipt receipt,
+  DocumentPreparationRequest request,
+) =>
+    receipt.ownerId == request.ownerId &&
+    receipt.documentRevision == request.revision &&
+    receipt.sourceRevision == request.effectiveSourceRevision &&
+    receipt.watchSession == request.watchSession;
+DocumentIdentityMigration? _migration(
+  SourceAcquisitionReceipt receipt,
+  String provisionalId,
+  DocumentPreparationRequest request,
+) {
+  if (!_sameReceipt(receipt, request)) return null;
+  final canonicalId = receipt.byteCount <= 8192
+      ? provisionalId
+      : 'doc_acquired_${receipt.sha256}';
+  if (canonicalId == provisionalId) return null;
+  return DocumentIdentityMigration(
+    ownerId: request.ownerId,
+    documentRevision: request.revision,
+    sourceRevision: request.effectiveSourceRevision,
+    watchSession: request.watchSession ?? 0,
+    provisionalDocumentId: provisionalId,
+    canonicalDocumentId: canonicalId,
+    integrityBasis: receipt.integrityBasis,
+  );
 }

@@ -86,7 +86,10 @@ void main() {
 
       final decoded =
           jsonDecode(await file.readAsString()) as Map<String, dynamic>;
-      expect(decoded['formatVersion'], 'radoc-v1');
+      expect(
+        decoded['formatVersion'],
+        ReaderDocumentSerializationService.formatVersion,
+      );
       expect(
         (decoded['speechDocument'] as Map<String, dynamic>)['segments'],
         isA<List<dynamic>>(),

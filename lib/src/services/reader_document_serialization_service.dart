@@ -10,12 +10,16 @@ import '../models/position_map.dart';
 import '../models/pronunciation_artifact.dart';
 import '../models/reader_document.dart';
 import '../models/speech_document.dart';
+import 'reader_document_codec.dart';
 
 class ReaderDocumentSerializationService {
   const ReaderDocumentSerializationService();
 
   static const formatId = 'read-aloud-document';
-  static const formatVersion = 'radoc-v1';
+  static const formatVersion = 'radoc-v2';
+
+  ReaderDocument deserializeFromJsonString(String source) =>
+      decodeReaderDocument(source);
   static const fileExtension = '.radoc';
 
   String serializeToJsonString(ReaderDocument document) {
@@ -28,10 +32,19 @@ class ReaderDocumentSerializationService {
     required String outputPath,
   }) async {
     final file = File(outputPath);
-    await file.create(recursive: true);
-    final serialized = await Isolate.run(() => serializeToJsonString(document));
-    await file.writeAsString(serialized);
-    return file;
+    await file.parent.create(recursive: true);
+    final temporary = File(
+      '$outputPath.$pid.${DateTime.now().microsecondsSinceEpoch}.tmp',
+    );
+    try {
+      final serialized = await Isolate.run(
+        () => serializeToJsonString(document),
+      );
+      await temporary.writeAsString(serialized, flush: true);
+      return await temporary.rename(outputPath);
+    } finally {
+      if (await temporary.exists()) await temporary.delete();
+    }
   }
 
   Map<String, Object?> _toEnvelope(ReaderDocument document) {
@@ -72,7 +85,9 @@ class ReaderDocumentSerializationService {
       'displayDocument': _displayDocumentToMap(document.displayDocument),
       'speechDocument': _speechDocumentToMap(document.speechDocument),
       'positionMap': _positionMapToMap(document.positionMap),
-      'baseSpeechAnnotations': document.baseSpeechAnnotations.toJson(),
+      'baseSpeechAnnotations': document.baseSpeechAnnotations.toJson(
+        includePerformanceIntents: true,
+      ),
       'dialogueAttributions': _dialogueAttributionsToMap(
         document.dialogueAttributions,
       ),
@@ -284,6 +299,7 @@ class ReaderDocumentSerializationService {
     return <String, Object?>{
       'documentId': registry.documentId,
       'registryVersion': registry.registryVersion,
+      'castIdRedirects': registry.castIdRedirects,
       'entries': registry.entries
           .map(
             (entry) => <String, Object?>{
@@ -315,10 +331,19 @@ class ReaderDocumentSerializationService {
                               'startUtf16': span.startUtf16,
                               'endUtf16': span.endUtf16,
                               'text': span.text,
+                              'source': _identitySourceName(span.source),
+                              'genderIdentityLabel':
+                                  span.genderIdentityLabel == null
+                                  ? null
+                                  : _identityLabelName(
+                                      span.genderIdentityLabel!,
+                                    ),
                             },
                           )
                           .toList(growable: false),
                       'conflictFlag': entry.identityProfile!.conflictFlag,
+                      'countedSegmentIds':
+                          entry.identityProfile!.countedSegmentIds,
                     },
               'inferredGender': entry.inferredGender?.name,
               'inferredGenderConfidence': entry.inferredGenderConfidence,
