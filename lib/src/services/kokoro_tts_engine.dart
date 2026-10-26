@@ -96,6 +96,8 @@ class KokoroTtsEngine
   TtsDebugTraceSession? _debugTraceSession;
 
   Future<void>? _initializationFuture;
+  bool _initializationClosed = false;
+  bool _initializationMayRetry = true;
   KokoroAssetBundle? _assets;
   KokoroVoiceRepository? _voiceRepository;
   KokoroVoiceManager? _voiceManager;
@@ -252,6 +254,8 @@ class KokoroTtsEngine
   Future<void> shutdownResources() =>
       _resourceShutdown ??= _shutdownResources();
   Future<void> _shutdownResources() async {
+    _initializationClosed = true;
+    await _initializationFuture?.catchError((Object _) {});
     ++_resourceRequest;
     _resourcesReady = false;
     await Future.wait([_cancelExport(), stop()]);
@@ -340,11 +344,23 @@ class KokoroTtsEngine
 
   @override
   Future<void> initialize() {
-    _initializationFuture ??= _initializeInternal();
+    if (_initializationClosed) {
+      return Future.error(StateError('Speech resource owner has shut down.'));
+    }
+    _initializationFuture ??= _initializeInternal().catchError((Object error) {
+      // Failed startup is retryable. Concurrent callers share this attempt;
+      // partial native owners drain before a subsequent attempt is admitted.
+      if (_initializationMayRetry) _initializationFuture = null;
+      throw error;
+    });
     return _initializationFuture!;
   }
 
   Future<void> _initializeInternal() async {
+    await _playerStateSubscription?.cancel();
+    await _positionSubscription?.cancel();
+    await _currentIndexSubscription?.cancel();
+    _requireInitializationOwner();
     _playerStateSubscription = _player.playerStateStream.listen((state) {
       if (_activePlaybackToken == null) {
         return;
@@ -407,9 +423,9 @@ class KokoroTtsEngine
 
     try {
       _assets = await prepareKokoroAssets(onStatus: _onStatus);
+      _requireInitializationOwner();
       if (!(_assets?.isReady ?? false)) {
-        _onError?.call(_assets?.message ?? 'Kokoro is unavailable.');
-        return;
+        throw StateError(_assets?.message ?? 'Kokoro is unavailable.');
       }
 
       _voiceRepository = KokoroVoiceRepository(
@@ -420,6 +436,7 @@ class KokoroTtsEngine
         cacheDirectory: _assets!.cacheDirectory!,
       )..onChanged = () => _onVoiceLibraryChanged?.call();
       await _voiceManager!.initialize();
+      _requireInitializationOwner();
 
       // The platform bridge obtains asset text only. Lexicon JSON decoding,
       // dictionary growth, CMU conversion and lazy G2P initialization all belong
@@ -431,6 +448,7 @@ class KokoroTtsEngine
         rootBundle.loadString('assets/us_silver.json'),
         rootBundle.loadString('assets/cmudict.dict'),
       ]);
+      _requireInitializationOwner();
       final tokenizerAssets = KokoroTokenizerAssets(
         vocabularyJson: tokenizerSources[0],
         lexiconJson: tokenizerSources[1],
@@ -446,6 +464,7 @@ class KokoroTtsEngine
         _tokenizerContentDigest,
         tokenizerSources,
       );
+      _requireInitializationOwner();
       _exportTokenizer = KokoroTokenizationWorker(
         assets: tokenizerAssets,
         rawDictionary: tokenizerSources[4],
@@ -456,6 +475,7 @@ class KokoroTtsEngine
         throw StateError('Kokoro requires a root isolate token.');
       }
       _resourceProcessor = await _createWorkerProcessor(rootIsolateToken);
+      _requireInitializationOwner();
       _admission = SynthesisAdmissionOwner(
         _resourceProcessor!,
         beforeProcess: beforeSynthesis,
@@ -495,18 +515,40 @@ class KokoroTtsEngine
       await _speechRuntime!.initializeRuntime(
         preferredVoiceId: _selectedVoiceId,
       );
+      _requireInitializationOwner();
       if (!_speechRuntime!.capabilities.isEngineSupported) {
-        _onError?.call(
+        throw StateError(
           'Kokoro is not supported on this Flutter platform path.',
         );
-        return;
       }
 
       _emitActivity(const TtsPlaybackActivity.idle());
       _onStatus?.call(null);
     } catch (error) {
+      _initializationMayRetry = false;
       _emitActivity(const TtsPlaybackActivity.idle());
       _onError?.call('Kokoro could not be initialized: $error');
+      await _runtimeEventSubscription?.cancel();
+      _runtimeEventSubscription = null;
+      await _speechRuntime?.shutdownRuntime();
+      _speechRuntime = null;
+      await _playbackTokenizer?.shutdown();
+      await _exportTokenizer?.shutdown();
+      _playbackTokenizer = null;
+      _exportTokenizer = null;
+      await _admission?.shutdown();
+      if (_admission == null) await _resourceProcessor?.dispose();
+      _admission = null;
+      _resourceProcessor = null;
+      _playbackLease = null;
+      _initializationMayRetry = true;
+      rethrow;
+    }
+  }
+
+  void _requireInitializationOwner() {
+    if (_initializationClosed) {
+      throw StateError('Speech startup was cancelled.');
     }
   }
 
@@ -2802,13 +2844,14 @@ class KokoroTtsEngine
 
   @override
   void dispose() {
+    _initializationClosed = true;
+    _onVoiceLibraryChanged = null;
     unawaited(stop());
     unawaited(_playerStateSubscription?.cancel());
     unawaited(_positionSubscription?.cancel());
     unawaited(_currentIndexSubscription?.cancel());
     unawaited(_runtimeEventSubscription?.cancel());
-    unawaited(shutdownResources());
-    _player.dispose();
+    unawaited(shutdownResources().whenComplete(_player.dispose));
   }
 
   void _emitActivity(TtsPlaybackActivity activity) {

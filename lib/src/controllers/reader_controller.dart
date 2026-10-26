@@ -17,6 +17,7 @@ import '../models/document_import_exception.dart';
 import '../models/document_preparation.dart';
 import '../models/prepared_voice_binding.dart';
 import '../models/cast_voice_assignment.dart';
+import '../models/character_cast_registry.dart';
 import '../models/narration_state.dart';
 import '../models/reading_focus_state.dart';
 import '../models/reader_appearance_mode.dart';
@@ -88,6 +89,142 @@ class ReaderController extends ChangeNotifier {
   int _watchSession = 0;
   bool _disposed = false;
   bool _documentPrepared = true;
+  final List<DocumentPreparationPublication> _preparedRanges = [];
+  final Map<String, CastEntry> _discoveredCast = {};
+  final Map<String, String> _castRedirects = {};
+  final Map<PreparationStage, PreparationProgress> _preparationProgress = {};
+  final Map<PreparationStage, int> _stageGenerations = {};
+  Completer<void>? _rangeCredit;
+  bool _preparationComplete = true;
+  bool _hasCompleteDocumentSnapshot = true;
+  int _publicationSequence = 0;
+  String? _sessionDocumentId;
+  final Map<String, String> _documentIdentityRedirects = {};
+  String? _startupError;
+  Future<void>? _engineStartup;
+  int _startupRevision = 0;
+  bool _pendingPlayUntilReady = false;
+
+  List<DocumentPreparationPublication> get preparedRanges =>
+      List.unmodifiable(_preparedRanges);
+  Map<PreparationStage, PreparationProgress> get preparationProgress =>
+      Map.unmodifiable(_preparationProgress);
+  bool get isPreparationComplete => _preparationComplete;
+  bool get hasCompleteDocumentSnapshot =>
+      _documentPrepared && _hasCompleteDocumentSnapshot;
+  String? get startupError => _startupError;
+  bool get hasPendingPlaybackIntent =>
+      _resumeAfterPreparation &&
+      (_pendingPlayUntilReady ||
+          _playbackStartPending ||
+          _playbackStartDriver != null);
+  List<CastEntry> get discoveredCastEntries =>
+      List.unmodifiable(_discoveredCast.values);
+  Map<String, String> get castIdRedirects => Map.unmodifiable(_castRedirects);
+  String get sessionDocumentId =>
+      _sessionDocumentId ?? _document.displayDocument.documentId;
+  Map<String, String> get documentIdentityRedirects =>
+      Map.unmodifiable(_documentIdentityRedirects);
+
+  Future<bool> reconcileDocumentIdentity(
+    DocumentIdentityMigration migration,
+  ) async {
+    if (_disposed ||
+        migration.ownerId != _preparationOwner ||
+        migration.documentRevision != _documentRevision ||
+        migration.sourceRevision != '$_preparationOwner:$_documentRevision' ||
+        migration.watchSession != _watchSession ||
+        migration.provisionalDocumentId != sessionDocumentId ||
+        migration.canonicalDocumentId.isEmpty) {
+      return false;
+    }
+    final previous = sessionDocumentId;
+    final canonical = migration.canonicalDocumentId;
+    final choices = _storedDocumentCastVoiceAssignments[previous];
+    if (choices != null) {
+      _storedDocumentCastVoiceAssignments
+          .putIfAbsent(canonical, () => {})
+          .addAll(choices);
+    }
+    _documentIdentityRedirects[previous] = canonical;
+    _sessionDocumentId = canonical;
+    // Retain the old key until persistence owns checkpoint/recovery. Current
+    // manual overrides and active speech remain intact through the rekey.
+    await _persistPreferences();
+    if (!_disposed) notifyListeners();
+    return true;
+  }
+
+  ReadingStageTicket beginReadingStage(
+    PreparationStage stage, {
+    required String producerId,
+    required String scope,
+  }) => ReadingStageTicket(
+    ownerId: _preparationOwner,
+    producerId: producerId,
+    documentRevision: _documentRevision,
+    sourceRevision: '$_preparationOwner:$_documentRevision',
+    watchSession: _watchSession,
+    stage: stage,
+    generation: _stageGenerations.update(
+      stage,
+      (value) => value + 1,
+      ifAbsent: () => 1,
+    ),
+    scope: scope,
+  );
+
+  /// Main-isolate publication route for planning/resources and the downstream
+  /// synthesis/persistence owners. Counts are supplied by completed work.
+  void publishReadingStage(
+    ReadingStageTicket ticket,
+    PreparationProgress progress,
+  ) {
+    if (_disposed ||
+        ticket.ownerId != _preparationOwner ||
+        ticket.documentRevision != _documentRevision ||
+        ticket.sourceRevision != '$_preparationOwner:$_documentRevision' ||
+        ticket.watchSession != _watchSession ||
+        ticket.stage != progress.stage ||
+        ticket.generation != _stageGenerations[ticket.stage]) {
+      return;
+    }
+    _preparationProgress[ticket.stage] = PreparationProgress(
+      stage: progress.stage,
+      state: progress.state,
+      completed: progress.completed,
+      total: progress.total,
+      unit: progress.unit,
+      discovered: progress.discovered,
+      waitingReason: progress.waitingReason,
+      error: progress.error,
+      workRevision: '${ticket.producerId}:${ticket.generation}',
+      scope: ticket.scope,
+    );
+    notifyListeners();
+  }
+
+  /// C owns consumption. Releasing a committed range grants one producer credit;
+  /// at most three bounded fragments can be resident ahead of playback.
+  void releasePreparedRange(int sequence) {
+    _preparedRanges.removeWhere((range) => range.sequence <= sequence);
+    final credit = _rangeCredit;
+    _rangeCredit = null;
+    if (credit != null && !credit.isCompleted) credit.complete();
+  }
+
+  void _resumePendingPlay() {
+    if (!_pendingPlayUntilReady ||
+        !isDocumentPrepared ||
+        _isInitializing ||
+        _startupError != null ||
+        _disposed) {
+      return;
+    }
+    _pendingPlayUntilReady = false;
+    unawaited(startPlayback());
+  }
+
   final SpeechPlanningSupervisor _planning = SpeechPlanningSupervisor();
   SpeechPlanningContext? _currentPlanningContext;
   SpeechPlanningSupervisor? _exportPlanner;
@@ -217,7 +354,7 @@ class ReaderController extends ChangeNotifier {
 
   bool get isDisplayReady =>
       _document.displayHtml.isNotEmpty || _document.pdfData != null;
-  bool get isDocumentPrepared => _documentPrepared && !_isImporting;
+  bool get isDocumentPrepared => _documentPrepared;
   bool get isAudioReady => _playbackActivity.isPlaying;
   bool get isResourcesReady =>
       _ttsEngine is! ResourcePreparationCapable ||
@@ -235,6 +372,17 @@ class ReaderController extends ChangeNotifier {
     _playbackStartPending = false;
     _invalidateResourceBindings();
     _preparation.cancel();
+    _pendingPlayUntilReady = false;
+    _documentPrepared = false;
+    _preparationComplete = false;
+    _publicationSequence = 0;
+    _preparedRanges.clear();
+    _discoveredCast.clear();
+    _castRedirects.clear();
+    _documentIdentityRedirects.clear();
+    _preparationProgress.clear();
+    _stageGenerations.clear();
+    releasePreparedRange(0);
     return ++_documentRevision;
   }
 
@@ -244,10 +392,29 @@ class ReaderController extends ChangeNotifier {
     String? text,
     String? fileName,
     Uint8List? bytes,
+    String? sourcePath,
     Future<Uint8List> Function()? acquireBytes,
   }) async {
     _requireRevision(revision);
-    final result = await _preparation.prepare(
+    final first = Completer<ReaderDocument>();
+    DocumentAccessLease? sourceLease;
+    var streamedPath =
+        bytes != null || sourcePath == null || sourcePath.trim().isEmpty
+        ? null
+        : p.normalize(sourcePath.trim());
+    // Virtual XFile providers can have a descriptive path without a native
+    // file. Their byte adapter remains the supported acquisition boundary.
+    if (streamedPath != null && !await File(streamedPath).exists()) {
+      streamedPath = null;
+    }
+    _requireRevision(revision);
+    final sourceFilePath = streamedPath;
+    final watchSession = _liveReadFilePath == null ? null : _watchSession;
+    bool current() =>
+        !_disposed &&
+        revision == _documentRevision &&
+        (watchSession == null || watchSession == _watchSession);
+    final completion = _preparation.prepareRanges(
       DocumentPreparationRequest(
         ownerId: _preparationOwner,
         revision: revision,
@@ -255,22 +422,146 @@ class ReaderController extends ChangeNotifier {
         text: text,
         fileName: fileName,
         bytes: bytes,
-        watchSession: _liveReadFilePath == null ? null : _watchSession,
+        sourcePath: streamedPath,
+        watchSession: watchSession,
       ),
       acquireBytes: acquireBytes,
+      acquireSource: sourceFilePath == null
+          ? null
+          : () async {
+              // Check access without reading the book. The lease, if recovery is
+              // needed, belongs to this operation until worker/native drain.
+              try {
+                final handle = await File(sourceFilePath).open();
+                await handle.close();
+              } catch (error) {
+                _requireRevision(revision);
+                if (!_looksLikePermissionIssue(error)) rethrow;
+                sourceLease = await _requestDirectoryAccessAfterReadFailure(
+                  sourceLabel: 'document stream',
+                  sourcePath: sourceFilePath,
+                  initialError: error,
+                  revision: revision,
+                );
+                if (sourceLease == null) rethrow;
+              }
+            },
+      onDrained: () async {
+        await sourceLease?.close();
+      },
+      onProgress: (progress) {
+        if (!current()) return;
+        _preparationProgress[progress.stage] = progress;
+        _documentLoadStageLabel =
+            '${progress.stage.name}: ${progress.completed} ${progress.unit}';
+        _documentLoadStageProgress = progress.fraction;
+        notifyListeners();
+      },
+      onPublication: (publication) async {
+        if (!current() ||
+            publication.request.ownerId != _preparationOwner ||
+            publication.sequence != _publicationSequence + 1) {
+          return;
+        }
+        _publicationSequence = publication.sequence;
+        _preparedRanges.add(publication);
+        final registry = publication.fragment.characterCastRegistry;
+        for (final entry in registry.entries) {
+          _discoveredCast[entry.castId] = entry;
+        }
+        for (final redirect in registry.castIdRedirects.entries) {
+          _castRedirects[redirect.key] = redirect.value;
+          _discoveredCast.remove(redirect.key);
+          // Preserve both explicit choices when they conflict. Future binding
+          // follows the surviving identity; current speech remains unchanged.
+          final priorChoice = _castVoiceOverrides[redirect.key];
+          if (priorChoice != null) {
+            _castVoiceOverrides.putIfAbsent(redirect.value, () => priorChoice);
+          }
+        }
+        for (final progress in publication.progress) {
+          if (publication.coverage.contains(progress.stage) ||
+              !_preparationProgress.containsKey(progress.stage)) {
+            _preparationProgress[progress.stage] = progress;
+          }
+        }
+        _documentLoadStageLabel =
+            'Prepared ${publication.range.wordEnd} words; discovering remaining work';
+        _documentLoadStageProgress = null;
+        if (!first.isCompleted) first.complete(publication.fragment);
+        notifyListeners();
+        if (_preparedRanges.length >= 3) {
+          _preparationProgress[PreparationStage.parsing] = PreparationProgress(
+            stage: PreparationStage.parsing,
+            state: PreparationWorkState.waiting,
+            completed: publication.range.wordEnd,
+            unit: 'words',
+            waitingReason: 'The bounded reading-ahead window is full',
+          );
+          final credit = _rangeCredit = Completer<void>();
+          await credit.future;
+        }
+      },
     );
-    _requireRevision(revision);
-    if (result.outcome == DocumentPreparationOutcome.cancelled) {
-      throw const _SupersededPreparation();
-    }
-    if (result.outcome != DocumentPreparationOutcome.ready ||
-        result.document == null) {
-      if (result.importFailure != null) throw result.importFailure!;
-      throw StateError(
-        result.error ?? 'Document preparation ${result.outcome.name}.',
-      );
-    }
-    return result.document!;
+    unawaited(
+      completion.then((result) {
+        if (!current()) {
+          if (!first.isCompleted) {
+            first.completeError(const _SupersededPreparation());
+          }
+          return;
+        }
+        if (result.outcome == DocumentPreparationOutcome.ready &&
+            result.document != null) {
+          _preparationComplete = true;
+          if (_publicationSequence <= 1) _hasCompleteDocumentSnapshot = true;
+          if (!first.isCompleted) first.complete(result.document);
+          // Completion covers only preparation. Resource/synthesis/persistence
+          // progress belongs to the downstream owner, never this terminal event.
+          for (final stage in const [
+            PreparationStage.acquisition,
+            PreparationStage.parsing,
+            PreparationStage.normalization,
+            PreparationStage.mapping,
+            PreparationStage.analysis,
+            PreparationStage.pronunciation,
+          ]) {
+            final prior = _preparationProgress[stage];
+            if (prior != null) {
+              _preparationProgress[stage] = PreparationProgress(
+                stage: stage,
+                state: PreparationWorkState.complete,
+                completed: prior.completed,
+                total: prior.completed,
+                unit: prior.unit,
+              );
+            }
+          }
+        } else {
+          final error = result.outcome == DocumentPreparationOutcome.cancelled
+              ? const _SupersededPreparation()
+              : result.importFailure ??
+                    StateError(
+                      result.error ?? 'Preparation ${result.outcome.name}',
+                    );
+          if (!first.isCompleted) {
+            first.completeError(error);
+          } else {
+            _statusMessage = '$error';
+            _preparationProgress[PreparationStage.parsing] =
+                PreparationProgress(
+                  stage: PreparationStage.parsing,
+                  state: PreparationWorkState.failed,
+                  completed: _publicationSequence,
+                  unit: 'ranges',
+                  error: '$error',
+                );
+          }
+        }
+        notifyListeners();
+      }),
+    );
+    return first.future;
   }
 
   final DocumentAccessService _documentAccessService;
@@ -557,8 +848,14 @@ class ReaderController extends ChangeNotifier {
         return;
       }
       if (_activePlaybackDocumentId == null) {
+        if (_isInitializing && !_disposed) {
+          _startupError = message;
+          _statusMessage = message;
+          notifyListeners();
+        }
         return;
       }
+
       if (_activePlaybackIntent != _playbackIntent) return;
       _flushPendingFollowerProgress();
       if (voiceAssignmentState.hasPending &&
@@ -642,30 +939,57 @@ class ReaderController extends ChangeNotifier {
     _lastOpenedDirectoryAccessToken =
         preferences.lastOpenedDirectoryAccessToken;
 
+    final startup = retryInitialization();
     if (_enablePlatformIntakeChannels) {
       await _initializeIntakeChannels();
     }
-    await _ttsEngine.initialize();
+    await startup;
+  }
 
+  /// One startup attempt owns all callbacks and publication. Failed attempts
+  /// expose their root cause independently of playback and can be retried.
+  Future<void> retryInitialization() => _engineStartup ??= _initializeEngine()
+      .whenComplete(() => _engineStartup = null);
+
+  Future<void> _initializeEngine() async {
+    final revision = ++_startupRevision;
+    bool current() => !_disposed && revision == _startupRevision;
+    _isInitializing = true;
+    _startupError = null;
+    notifyListeners();
     try {
-      _voices = await _ttsEngine.loadVoices();
+      await _ttsEngine.initialize().timeout(const Duration(seconds: 30));
+      if (!current()) return;
+      final voices = await _ttsEngine.loadVoices();
+      if (!current()) return;
+      _voices = voices;
       _voiceLibrary = _voiceLibraryCapable?.voiceLibrary ?? _voiceLibrary;
-      if (_voices.isNotEmpty) {
-        final initialVoice = _findVoiceById(_selectedVoiceId) ?? _voices.first;
-        _selectedVoiceId = initialVoice.id;
-        _voiceSpeeds.putIfAbsent(_selectedVoiceId!, () => 1.0);
-        await _ttsEngine.selectVoice(initialVoice);
-        await _ttsEngine.setSpeechRate(currentSpeed);
-        await _persistPreferences();
-      } else {
-        _statusMessage ??=
-            'No text-to-speech voices are available on this platform yet.';
+      if (_voices.isEmpty) {
+        throw StateError('No installed speech voices are available.');
       }
-    } on MissingPluginException {
-      _statusMessage = 'Text to speech is unavailable on this platform.';
+      final initialVoice = _findVoiceById(_selectedVoiceId) ?? _voices.first;
+      _selectedVoiceId = initialVoice.id;
+      _voiceSpeeds.putIfAbsent(_selectedVoiceId!, () => 1.0);
+      await _ttsEngine.selectVoice(initialVoice);
+      if (!current()) return;
+      await _ttsEngine.setSpeechRate(currentSpeed);
+      if (!current()) return;
+      _startupError = null;
+      _statusMessage = null;
+      unawaited(_persistPreferences());
+    } catch (error) {
+      if (!current()) return;
+      _startupError = error is MissingPluginException
+          ? 'Text to speech is unavailable on this platform.'
+          : 'Speech startup failed: $error';
+      _statusMessage = _startupError;
+      _pendingPlayUntilReady = false;
     } finally {
-      _isInitializing = false;
-      notifyListeners();
+      if (current()) {
+        _isInitializing = false;
+        notifyListeners();
+        _resumePendingPlay();
+      }
     }
   }
 
@@ -799,6 +1123,7 @@ class ReaderController extends ChangeNotifier {
     ++_watchSession;
     if (cancelPreparation && (wasLive || _isImporting)) {
       _beginDocumentRequest();
+      _documentPrepared = true;
       _isImporting = false;
       _clearDocumentLoadStage();
     }
@@ -1045,7 +1370,8 @@ class ReaderController extends ChangeNotifier {
   }
 
   Future<void> togglePlayback() async {
-    if (_playbackActivity.isBuffering) {
+    if (_playbackActivity.isBuffering || _pendingPlayUntilReady) {
+      await pausePlayback();
       return;
     }
     if (_isPlaying) {
@@ -1056,8 +1382,23 @@ class ReaderController extends ChangeNotifier {
   }
 
   Future<void> startPlayback() async {
-    if (_disposed || !isDocumentPrepared) return;
+    if (_disposed) return;
+    if (!isDocumentPrepared || _isInitializing) {
+      _pendingPlayUntilReady = true;
+      _resumeAfterPreparation = true;
+      _statusMessage = _isInitializing
+          ? 'Preparing speech resources…'
+          : 'Preparing the requested reading range…';
+      notifyListeners();
+      return;
+    }
+    if (_startupError != null) {
+      _statusMessage = _startupError;
+      notifyListeners();
+      return;
+    }
     _resumeAfterPreparation = true;
+
     final anchor = _pausedVoiceReplayAnchor;
     if (voiceAssignmentState.hasPending &&
         anchor != null &&
@@ -1236,6 +1577,7 @@ class ReaderController extends ChangeNotifier {
   }
 
   Future<void> pausePlayback() async {
+    _pendingPlayUntilReady = false;
     final engine = _ttsEngine;
     if (engine is VoiceAssignmentPlaybackCapable) {
       final anchor = (engine as VoiceAssignmentPlaybackCapable)
@@ -1249,6 +1591,12 @@ class ReaderController extends ChangeNotifier {
     _playbackStartPending = false;
     _resumeAfterPreparation = false;
     _flushPendingFollowerProgress();
+    _activePlaybackDocumentId = null;
+    _isPlaying = false;
+    _playbackState = ReaderPlaybackPrimaryState.paused;
+    _playbackActivity = const TtsPlaybackActivity.idle();
+    _readingFocusState = _readingFocusState.copyWith(playbackActive: false);
+    notifyListeners(); // Intent cancellation must not wait for native drain.
     await _ttsEngine.pause();
     await _flushResumePersistence();
     _finalizeActiveSpokenChunk();
@@ -1578,6 +1926,12 @@ class ReaderController extends ChangeNotifier {
   }
 
   Future<TtsExportResult?> exportAudioToPath(String outputPath) async {
+    if (!hasCompleteDocumentSnapshot) {
+      _statusMessage =
+          'A complete document snapshot is required before saving whole-document audio.';
+      notifyListeners();
+      return null;
+    }
     if (voiceAssignmentState.hasPending) {
       _statusMessage = 'Apply pending voice choices before saving audio.';
       notifyListeners();
@@ -1767,6 +2121,7 @@ class ReaderController extends ChangeNotifier {
       fileName: fileName,
       bytes: bytes,
       acquireBytes: acquireBytes,
+      sourcePath: sourcePath,
     );
     await _replaceDocument(
       imported,
@@ -1799,6 +2154,20 @@ class ReaderController extends ChangeNotifier {
       final assignments = _resolveCastVoiceAssignments(
         preferredNarratorVoiceId: _selectedVoiceId!,
       );
+      final ticket = beginReadingStage(
+        PreparationStage.resources,
+        producerId: 'resident-speech-resources',
+        scope: 'Current prepared range voice bindings',
+      );
+      publishReadingStage(
+        ticket,
+        const PreparationProgress(
+          stage: PreparationStage.resources,
+          state: PreparationWorkState.working,
+          completed: 0,
+          unit: 'voices',
+        ),
+      );
       final bindings = await (resourceEngine as ResourcePreparationCapable)
           .prepareDocumentResources(
             documentId: _document.displayDocument.documentId,
@@ -1815,6 +2184,16 @@ class ReaderController extends ChangeNotifier {
                 !_voiceAssignments.isCurrent(assignmentRevision)) {
               throw const _SupersededPreparation();
             }
+            publishReadingStage(
+              ticket,
+              PreparationProgress(
+                stage: PreparationStage.resources,
+                state: PreparationWorkState.failed,
+                completed: 0,
+                unit: 'voices',
+                error: '$error',
+              ),
+            );
             throw error;
           });
       _requireRevision(revision);
@@ -1834,6 +2213,16 @@ class ReaderController extends ChangeNotifier {
         );
       }
       _resourceBindings = List.unmodifiable(bindings);
+      publishReadingStage(
+        ticket,
+        PreparationProgress(
+          stage: PreparationStage.resources,
+          state: PreparationWorkState.complete,
+          completed: bindings.length,
+          total: bindings.length,
+          unit: 'voices',
+        ),
+      );
       _preparedAssignmentRevision = assignmentRevision;
       _resolvedResourceBindings = List.unmodifiable([
         for (final assignment
@@ -1861,6 +2250,10 @@ class ReaderController extends ChangeNotifier {
     _requireRevision(revision);
     _finalizeActiveSpokenChunk();
     _document = document;
+    if (_publicationSequence == 0) _preparationComplete = true;
+    _hasCompleteDocumentSnapshot =
+        _preparationComplete && _publicationSequence <= 1;
+    _sessionDocumentId = document.displayDocument.documentId;
     _voiceAssignments.resetDocument();
     _pausedVoiceReplayAnchor = null;
     _assignmentReplayWord = null;
@@ -1893,10 +2286,10 @@ class ReaderController extends ChangeNotifier {
     _narrationState = NarrationState.initial(recentRate: currentSpeed);
     _currentRealization = null;
     _currentChunkPlan = null;
-    await _primePlaybackPreparation();
-    await _prepareResourceBindings(revision);
-    _requireRevision(revision);
+    // Range mapping/analysis/pronunciation are already prepared by the worker.
+    // Plan/resource binding is demanded by Play rather than gating display.
     _documentPrepared = true;
+
     _clearDocumentLoadStage();
     _statusMessage = statusMessage;
     if (_statusMessage == null && document.wordCount == 0) {
@@ -1904,6 +2297,7 @@ class ReaderController extends ChangeNotifier {
           'Loaded ${document.title}, but no readable text was extracted yet.';
     }
     notifyListeners();
+    _resumePendingPlay();
   }
 
   Future<void> _fadeOutSleepTimer() async {
@@ -2006,6 +2400,7 @@ class ReaderController extends ChangeNotifier {
     unawaited(_planning.shutdown());
     unawaited(_exportPlanner?.shutdown());
     _disposed = true;
+    releasePreparedRange(_publicationSequence);
     ++_documentRevision;
     ++_watchSession;
     unawaited(_preparation.shutdown());
@@ -2401,6 +2796,7 @@ class ReaderController extends ChangeNotifier {
           revision,
           DocumentPreparationKind.bytes,
           fileName: p.basename(sourcePath),
+          sourcePath: sourcePath,
           acquireBytes: () => _readBytesWithAccessRecovery(
             sourceLabel: 'live read file',
             sourcePath: sourcePath,
@@ -2539,6 +2935,7 @@ class ReaderController extends ChangeNotifier {
       // All stale terminal paths, including cleanup, belong to their revision.
     } catch (error) {
       if (!_disposed && current == _documentRevision) {
+        _pendingPlayUntilReady = false;
         final message = errorSourceLabel == null
             ? '$error'
             : _describeImportError(sourceLabel: errorSourceLabel, error: error);
@@ -2551,8 +2948,16 @@ class ReaderController extends ChangeNotifier {
     } finally {
       if (!_disposed && current == _documentRevision) {
         _isImporting = false;
-        _clearDocumentLoadStage();
+        if (_preparedDocumentRevision != current) {
+          // Failed/cancelled intake leaves the previous range usable, but does
+          // not redirect pending Play to the previous document unexpectedly.
+          _documentPrepared = true;
+          _pendingPlayUntilReady = false;
+        }
+
+        if (_preparationComplete) _clearDocumentLoadStage();
         notifyListeners();
+        _resumePendingPlay();
       }
     }
   }
@@ -2687,6 +3092,20 @@ class ReaderController extends ChangeNotifier {
     }
     final revision = _documentRevision;
     final intent = _resourceBindingIntent;
+    final ticket = beginReadingStage(
+      PreparationStage.planning,
+      producerId: 'speech-planning-worker',
+      scope: 'Current playback window',
+    );
+    publishReadingStage(
+      ticket,
+      const PreparationProgress(
+        stage: PreparationStage.planning,
+        state: PreparationWorkState.working,
+        completed: 0,
+        unit: 'chunks',
+      ),
+    );
     try {
       final window = await _planning.plan(
         context,
@@ -2700,6 +3119,16 @@ class ReaderController extends ChangeNotifier {
       _currentPlanningContext = context;
       _currentRealization = window.realization;
       _currentChunkPlan = window.plan;
+      publishReadingStage(
+        ticket,
+        PreparationProgress(
+          stage: PreparationStage.planning,
+          state: PreparationWorkState.complete,
+          completed: window.plan.chunks.length,
+          total: window.plan.chunks.length,
+          unit: 'chunks',
+        ),
+      );
     } on PlanningCancelled {
       return;
     }
@@ -2790,15 +3219,13 @@ class ReaderController extends ChangeNotifier {
 
   Map<String, String> _currentStoredCastVoiceAssignments() {
     return Map<String, String>.unmodifiable(
-      _storedDocumentCastVoiceAssignments[_document
-              .displayDocument
-              .documentId] ??
+      _storedDocumentCastVoiceAssignments[sessionDocumentId] ??
           const <String, String>{},
     );
   }
 
   void _storeCastVoiceAssignment(String castId, String voiceId) {
-    final documentId = _document.displayDocument.documentId;
+    final documentId = sessionDocumentId;
     final assignments =
         _storedDocumentCastVoiceAssignments[documentId] ?? <String, String>{};
     assignments[castId] = voiceId;
@@ -2806,7 +3233,7 @@ class ReaderController extends ChangeNotifier {
   }
 
   void _clearStoredCastVoiceAssignment(String castId) {
-    final documentId = _document.displayDocument.documentId;
+    final documentId = sessionDocumentId;
     final assignments = _storedDocumentCastVoiceAssignments[documentId];
     if (assignments == null) {
       return;
