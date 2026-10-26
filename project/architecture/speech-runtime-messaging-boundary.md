@@ -21,6 +21,8 @@ The optional `ResourcePreparationCapable` engine bridge gates document speech re
 
 The October 24 P2 native run at source commit `3d0366b` passed 333 strict WAV decodes, emitted PCM/duration/provenance checks, 12 session opens/closes and 1,332 tensor releases, with peaks of one session/four tensors and zero retained handles. Recreated-context disposal RSS ranged approximately 1072–1087 MiB over the observed cycles, supporting a bounded plateau for this fixture only. Asset failure/recovery cases also returned to zero handles. Ordinary app Play/Pause/Resume/forward jump/end/replay was exercised separately; these observations do not establish perceptual quality or uninterrupted long-document playback. Detailed immutable build provenance and remaining limits live in #51.
 
+A current integrated-lineage run at `1767ed6` used the isolated arm64 P2 bundle and the corrected probe request identity, then completed 306 uncached inferences over three resource contexts. Three sessions opened/closed, 1,224 tensors were released, peak counts were one session/four tensors, final counts were zero/zero, and all 306 WAVs passed strict format/hash/duration validation. Repeated same-voice PCM was bit-identical for this fixed utterance. One-second RSS sampling peaked at 1,235.4 MiB across the whole run; during the first context's post-warm 300-chunk interval it ranged 915.2–1,147.7 MiB, falling from 1,144.8 MiB to 929.2 MiB. Runtime model/voice hashes matched the bundle. This supports bounded resource use for this fixture, not a universal memory threshold or long-duration live-playback stability. The [current P2 evidence](https://github.com/kellyjanderson/readaloud/issues/53#issuecomment-6407243488) preserves provenance and artifacts. Two earlier harness attempts failed before the full run because the probe omitted required binding metadata and then reused cached content; both cleaned up to zero handles. The request factory now supplies binding fingerprint/revision and unique synthesis identity, with focused test coverage.
+
 ## Source and tests
 
 - [speech_runtime.dart](../../lib/src/services/speech_runtime.dart)
@@ -30,6 +32,7 @@ The October 24 P2 native run at source commit `3d0366b` passed 333 strict WAV de
 - [FlutterOnnxruntimePlugin.swift](../../third_party/flutter_onnxruntime/macos/Classes/FlutterOnnxruntimePlugin.swift)
 - [speech_runtime_test.dart](../../test/speech_runtime_test.dart)
 - [speech_worker_pipeline_test.dart](../../test/speech_worker_pipeline_test.dart)
+- [p2_native_probe_test.dart](../../test/p2_native_probe_test.dart)
 
 P0 ran the focused runtime/pipeline tests and full suite on native arm64 Flutter 3.41.5 / Dart 3.11.3. The full run passed 241 tests with one existing PDF integration smoke skip. Deterministic failure/startup fixtures characterize current behavior; they do not establish audible continuity, resource drain, or responsiveness. See P0 for commands, baseline assets and remaining acceptance. The original ignored Intel SDK remains unsuitable for this arm64 host.
 

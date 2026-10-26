@@ -9,12 +9,41 @@ import 'package:crypto/crypto.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 import 'package:kokoro_tts_flutter/kokoro_tts_flutter.dart';
+import 'package:read_aloud/src/models/prepared_voice_binding.dart';
 import 'package:read_aloud/src/models/speech_annotation.dart';
 import 'package:read_aloud/src/services/kokoro_assets.dart';
 import 'package:read_aloud/src/services/kokoro_speech_worker_processor.dart';
 import 'package:read_aloud/src/services/kokoro_voice_manager.dart';
 import 'package:read_aloud/src/services/kokoro_voice_repository.dart';
 import 'package:read_aloud/src/services/speech_worker_pipeline.dart';
+
+SpeechWorkerChunkRequest buildP2ProbeChunkRequest({
+  required PreparedVoiceBinding binding,
+  required String cycle,
+  required String chunkId,
+  required String outputDirectory,
+  required String text,
+  required List<int> tokens,
+}) {
+  return SpeechWorkerChunkRequest(
+    sessionId: 'p2-probe-$cycle',
+    generationId: 'generation-$cycle',
+    chunkId: chunkId,
+    segmentIds: [chunkId],
+    cacheKey: '$outputDirectory:$chunkId',
+    boundaryClass: BreakClass.none,
+    documentId: binding.documentId,
+    normalizationVersion: 'p2-probe-v1',
+    speakText: text,
+    tokens: tokens,
+    languageTag: 'en-us',
+    voiceId: binding.voiceId,
+    rate: 1,
+    synthesisIdentity: 'p2-probe-invocation-$cycle-$chunkId',
+    expectedBindingFingerprint: binding.fingerprint,
+    expectedBindingRevision: binding.bindingRevision,
+  );
+}
 
 Future<void> main(List<String> arguments) async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -136,6 +165,9 @@ Future<void> main(List<String> arguments) async {
             {...binding.toMap(), 'fingerprint': binding.fingerprint},
         ],
       });
+      final bindingByVoice = {
+        for (final binding in bindings) binding.voiceId: binding,
+      };
       final count = cycle == 0 ? 300 : 3;
       for (var index = 0; index < count; index++) {
         final voice = index % 3 == 1 ? voiceIds[1] : voiceIds[0];
@@ -143,20 +175,13 @@ Future<void> main(List<String> arguments) async {
         final emitted = <SpeechWorkerEvent>[];
         final watch = Stopwatch()..start();
         await processor.process(
-          SpeechWorkerChunkRequest(
-            sessionId: 'p2-probe-$cycle',
-            generationId: 'generation-$cycle',
+          buildP2ProbeChunkRequest(
+            binding: bindingByVoice[voice]!,
+            cycle: '$cycle',
             chunkId: chunk,
-            segmentIds: [chunk],
-            cacheKey: '${output.path}:$chunk',
-            boundaryClass: BreakClass.none,
-            documentId: documentId,
-            normalizationVersion: 'p2-probe-v1',
-            speakText: text,
+            outputDirectory: output.path,
+            text: text,
             tokens: tokens,
-            languageTag: 'en-us',
-            voiceId: voice,
-            rate: 1,
           ),
           emitted.add,
         );
