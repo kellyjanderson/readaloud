@@ -5,9 +5,9 @@ import '../models/speech_document.dart';
 class SpeakerAttributionService {
   const SpeakerAttributionService();
 
-  static const attributionVersion = 'read-aloud-speaker-attribution-v5';
+  static const attributionVersion = 'read-aloud-speaker-attribution-v6';
   static const providerId = 'heuristic_speaker_attribution';
-  static const providerVersion = 'v5';
+  static const providerVersion = 'v6';
   static const _minimumAttributionConfidence = 0.75;
 
   static const _speechVerbPattern =
@@ -129,6 +129,7 @@ class SpeakerAttributionService {
           speechDocument: speechDocument,
           direction: _AdjacentDirection.before,
         ) ??
+        _actionBeatDecision(span: span, speechDocument: speechDocument) ??
         _paragraphOwnershipDecision(
           span: span,
           priorResolvedSpans: priorResolvedSpans,
@@ -226,6 +227,53 @@ class SpeakerAttributionService {
           : DialogueAttributionRule.adjacentBefore,
       exactConfidence: direction == _AdjacentDirection.after ? 0.90 : 0.88,
       looseConfidence: direction == _AdjacentDirection.after ? 0.84 : 0.82,
+    );
+  }
+
+  _AttributionDecision? _actionBeatDecision({
+    required _DialogueSpanContext span,
+    required SpeechDocument speechDocument,
+  }) {
+    final first = speechDocument.segments[span.firstSegmentIndex];
+    final candidates = <SpeechSegment>[first];
+    if (span.firstSegmentIndex > 0) {
+      final previous = speechDocument.segments[span.firstSegmentIndex - 1];
+      if (previous.paragraphIndex == span.paragraphIndex &&
+          previous.blockId == span.blockId) {
+        candidates.add(previous);
+      }
+    }
+    for (final segment in candidates) {
+      final text = _withoutQuotedText(segment.normalizedText);
+      final match = RegExp(
+        r"^\s*([A-Z][A-Za-z'’-]+)\s+(?:lifted|set|placed|turned|stepped|nodded|shook|looked|held|opened|closed|leaned|reached|paused|smiled|frowned)\b",
+      ).firstMatch(text);
+      if (match == null || !_isLikelySpeakerLabel(match.group(1))) continue;
+      // An action by several named people is not a unique ownership cue.
+      final names = RegExp(
+        r"\b[A-Z][A-Za-z'’-]+\b",
+      ).allMatches(text).map((entry) => entry.group(0)!).toSet();
+      if (names.length != 1) continue;
+      return _AttributionDecision(
+        label: match.group(1)!,
+        confidence: 0.81,
+        ruleUsed: DialogueAttributionRule.actionBinding,
+        evidenceSpan: _evidenceSpanForGroup(
+          match: match,
+          groupIndex: 1,
+          sourceSegmentId: segment.segmentId,
+        ),
+      );
+    }
+    return null;
+  }
+
+  // Preserve UTF-16 coordinates while preventing a name/verb inside speech
+  // from masquerading as its narrator's attribution tag.
+  String _withoutQuotedText(String text) {
+    return text.replaceAllMapped(
+      RegExp(r'"[^"\n]*"|“[^”\n]*”'),
+      (match) => ' ' * match.group(0)!.length,
     );
   }
 
@@ -438,7 +486,7 @@ class SpeakerAttributionService {
     required double looseConfidence,
   }) {
     final candidates = _extractSpeakerCandidates(
-      text,
+      _withoutQuotedText(text),
       sourceSegmentId: sourceSegmentId,
       ruleUsed: ruleUsed,
       exactConfidence: exactConfidence,
@@ -498,7 +546,7 @@ class SpeakerAttributionService {
     required _DialogueSpanContext span,
     required SpeechSegment segment,
   }) {
-    return segment.paragraphIndex == span.paragraphIndex ||
+    return segment.paragraphIndex == span.paragraphIndex &&
         segment.blockId == span.blockId;
   }
 

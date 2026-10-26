@@ -7,11 +7,12 @@ import '../models/speech_document.dart';
 class CharacterCastRegistryService {
   const CharacterCastRegistryService();
 
-  static const registryVersion = 'read-aloud-character-cast-registry-v2';
+  static const registryVersion = 'read-aloud-character-cast-registry-v3';
 
   CharacterCastRegistry build({
     required DialogueAttributionSet dialogueAttributions,
     required SpeechDocument speechDocument,
+    CharacterCastRegistry? previousRegistry,
   }) {
     final entries = <CastEntry>[
       CastEntry(
@@ -23,6 +24,24 @@ class CharacterCastRegistryService {
       ),
     ];
 
+    final redirects = <String, String>{...?previousRegistry?.castIdRedirects};
+    final previous =
+        previousRegistry?.characterEntries.toList() ?? <CastEntry>[];
+    final declaredAliases = <String, Set<String>>{};
+    for (final segment in speechDocument.segments) {
+      final narrative = segment.normalizedText.replaceAllMapped(
+        RegExp(r'"[^"\n]*"|“[^”\n]*”'),
+        (match) => ' ' * match.group(0)!.length,
+      );
+      for (final match in RegExp(
+        r"\b([A-Z][A-Za-z'’-]+),\s+(?:also\s+)?known\s+as\s+([A-Z][A-Za-z'’-]+)\b",
+      ).allMatches(narrative)) {
+        final group = <String>{match.group(1)!, match.group(2)!};
+        for (final alias in group) {
+          declaredAliases[alias.toLowerCase()] = group;
+        }
+      }
+    }
     final groupedOutcomes = <String, List<DialogueAttributionOutcome>>{};
     for (final outcome in dialogueAttributions.outcomes) {
       if (outcome.resolution !=
@@ -30,7 +49,9 @@ class CharacterCastRegistryService {
           outcome.speakerReference == null) {
         continue;
       }
-      final key = outcome.speakerReference!.normalizedLabel;
+      final normalized = outcome.speakerReference!.normalizedLabel;
+      final key =
+          declaredAliases[normalized]?.first.toLowerCase() ?? normalized;
       groupedOutcomes
           .putIfAbsent(key, () => <DialogueAttributionOutcome>[])
           .add(outcome);
@@ -38,33 +59,92 @@ class CharacterCastRegistryService {
 
     final consolidated = _consolidateGroupedOutcomes(groupedOutcomes);
     for (final cluster in consolidated) {
-      final aliases = cluster.aliases.toList(growable: false)..sort();
+      final aliases = <String>{
+        ...cluster.aliases,
+        for (final alias in cluster.aliases)
+          ...?declaredAliases[alias.toLowerCase()],
+      }.toList()..sort();
       final attributionIds = cluster.attributionIds.toList(growable: false)
         ..sort();
       final confidence = cluster.averageConfidence;
-      final identityProfile = _extractIdentityProfileForCluster(
+      final priorMatches = previous
+          .where(
+            (entry) => entry.observedAliases.any(
+              (alias) => aliases.any(
+                (current) => _shouldMergeNormalizedLabels(
+                  alias.toLowerCase(),
+                  current.toLowerCase(),
+                ),
+              ),
+            ),
+          )
+          .toList();
+      final prior = priorMatches.isEmpty ? null : priorMatches.first;
+      for (final retired in priorMatches.skip(1)) {
+        redirects[retired.castId] = prior!.castId;
+      }
+      final identityProfile = inferIdentity(
         speechDocument: speechDocument,
         aliases: aliases,
+        previousProfile: _mergeProfiles(
+          priorMatches
+              .map((entry) => entry.identityProfile)
+              .whereType<CharacterIdentityProfile>()
+              .toList(),
+        ),
       );
       entries.add(
         CastEntry(
-          castId: _castIdForNormalizedLabel(cluster.canonicalNormalizedLabel),
+          castId:
+              prior?.castId ??
+              _castIdForNormalizedLabel(
+                cluster.primaryOutcome.speakerReference!.normalizedLabel,
+              ),
           roleKind: CastEntryRoleKind.character,
           displayLabel: cluster.displayLabel,
           confidence: confidence,
           provenance: castEntryProvenanceForAttribution(
             cluster.primaryOutcome.provenance,
           ),
-          observedAliases: aliases,
-          attributionIds: attributionIds,
+          observedAliases: <String>{
+            ...priorMatches.expand((entry) => entry.observedAliases),
+            ...aliases,
+          }.toList(),
+          attributionIds: <String>{
+            ...?prior?.attributionIds,
+            ...attributionIds,
+          }.toList().reversed.take(32).toList().reversed.toList(),
           identityProfile: identityProfile,
         ),
       );
     }
 
+    final presentIds = entries.map((entry) => entry.castId).toSet();
+    for (final entry in previous) {
+      if (!presentIds.contains(entry.castId) &&
+          !redirects.containsKey(entry.castId)) {
+        entries.add(
+          CastEntry(
+            castId: entry.castId,
+            roleKind: entry.roleKind,
+            displayLabel: entry.displayLabel,
+            confidence: entry.confidence,
+            provenance: entry.provenance,
+            observedAliases: entry.observedAliases,
+            attributionIds: entry.attributionIds,
+            identityProfile: inferIdentity(
+              speechDocument: speechDocument,
+              aliases: entry.observedAliases,
+              previousProfile: entry.identityProfile,
+            ),
+          ),
+        );
+      }
+    }
     return CharacterCastRegistry(
       documentId: dialogueAttributions.documentId,
       registryVersion: registryVersion,
+      castIdRedirects: redirects,
       entries: entries,
     );
   }
@@ -76,10 +156,35 @@ class CharacterCastRegistryService {
     return 'cast_character_${slug.isEmpty ? 'unknown' : slug}';
   }
 
+  CharacterIdentityProfile? _mergeProfiles(
+    List<CharacterIdentityProfile> profiles,
+  ) {
+    if (profiles.isEmpty) return null;
+    if (profiles.length == 1) return profiles.single;
+    final counts = <String, int>{};
+    for (final profile in profiles) {
+      for (final entry in profile.pronounProfile.counts.entries) {
+        counts[entry.key] = (counts[entry.key] ?? 0) + entry.value;
+      }
+    }
+    return CharacterIdentityProfile(
+      genderIdentityLabel: CharacterGenderIdentityLabel.unknown,
+      genderConfidence: 0,
+      genderSource: counts.isEmpty
+          ? CharacterGenderEvidenceSource.unknown
+          : CharacterGenderEvidenceSource.pronoun,
+      pronounProfile: CharacterPronounProfile(counts: counts),
+      evidenceSpans: profiles
+          .expand((profile) => profile.evidenceSpans)
+          .toList(),
+      conflictFlag: profiles.any((profile) => profile.conflictFlag),
+    );
+  }
+
   List<_OutcomeCluster> _consolidateGroupedOutcomes(
     Map<String, List<DialogueAttributionOutcome>> groupedOutcomes,
   ) {
-    final sortedKeys = groupedOutcomes.keys.toList(growable: false)..sort();
+    final sortedKeys = groupedOutcomes.keys.toList(growable: false);
     final clusters = <_OutcomeCluster>[];
 
     for (final key in sortedKeys) {
@@ -110,66 +215,14 @@ class CharacterCastRegistryService {
     return clusters;
   }
 
-  bool _shouldMergeNormalizedLabels(String left, String right) {
-    if (left == right) {
-      return true;
-    }
+  bool _shouldMergeNormalizedLabels(String left, String right) => left == right;
 
-    final leftTokens = left.split(' ');
-    final rightTokens = right.split(' ');
-    if (leftTokens.length != rightTokens.length || leftTokens.length != 1) {
-      return false;
-    }
-
-    final leftToken = leftTokens.single;
-    final rightToken = rightTokens.single;
-    if (leftToken.length < 6 ||
-        rightToken.length < 6 ||
-        leftToken[0] != rightToken[0]) {
-      return false;
-    }
-
-    final distance = _levenshteinDistance(leftToken, rightToken);
-    final allowedDistance = math.max(leftToken.length, rightToken.length) >= 8
-        ? 2
-        : 1;
-    return distance <= allowedDistance;
-  }
-
-  int _levenshteinDistance(String left, String right) {
-    if (left == right) {
-      return 0;
-    }
-    if (left.isEmpty) {
-      return right.length;
-    }
-    if (right.isEmpty) {
-      return left.length;
-    }
-
-    final previous = List<int>.generate(right.length + 1, (index) => index);
-    final current = List<int>.filled(right.length + 1, 0);
-
-    for (var leftIndex = 0; leftIndex < left.length; leftIndex += 1) {
-      current[0] = leftIndex + 1;
-      for (var rightIndex = 0; rightIndex < right.length; rightIndex += 1) {
-        final substitutionCost = left[leftIndex] == right[rightIndex] ? 0 : 1;
-        current[rightIndex + 1] = math.min(
-          math.min(current[rightIndex] + 1, previous[rightIndex + 1] + 1),
-          previous[rightIndex] + substitutionCost,
-        );
-      }
-      for (var index = 0; index < current.length; index += 1) {
-        previous[index] = current[index];
-      }
-    }
-
-    return previous.last;
-  }
-
-  CharacterIdentityProfile _extractIdentityProfileForCluster({
+  /// Analyzes only the supplied bounded fragment; callers retain the returned
+  /// registry rather than retaining or reanalyzing a growing text prefix.
+  CharacterIdentityProfile inferIdentity({
     required SpeechDocument speechDocument,
     required List<String> aliases,
+    CharacterIdentityProfile? previousProfile,
   }) {
     final normalizedAliases = aliases
         .map((alias) => alias.trim().toLowerCase())
@@ -179,8 +232,22 @@ class CharacterCastRegistryService {
       return const CharacterIdentityProfile.unknown();
     }
 
-    final identityCandidates = <_IdentityCandidate>[];
-    final pronounCounts = <String, int>{};
+    final identityCandidates = <_IdentityCandidate>[
+      for (final span
+          in previousProfile?.evidenceSpans ??
+              <CharacterIdentityEvidenceSpan>[])
+        if (span.source != CharacterGenderEvidenceSource.pronoun &&
+            span.genderIdentityLabel != null)
+          _IdentityCandidate(
+            label: span.genderIdentityLabel!,
+            confidence: 0.78,
+            source: span.source,
+            evidenceSpan: span,
+          ),
+    ];
+    final pronounCounts = <String, int>{
+      ...?previousProfile?.pronounProfile.counts,
+    };
     final pronounEvidenceSpans = <CharacterIdentityEvidenceSpan>[];
 
     for (final segment in speechDocument.segments) {
@@ -229,32 +296,90 @@ class CharacterCastRegistryService {
       }
     }
 
-    final pronounProfile = CharacterPronounProfile(counts: pronounCounts);
-    final explicitResolution = _resolveIdentityCandidates(
-      identityCandidates.where((candidate) => candidate.isExplicit).toList(),
-      pronounProfile: pronounProfile,
-    );
-    if (explicitResolution != null) {
-      return explicitResolution;
-    }
-
-    final descriptorResolution = _resolveIdentityCandidates(
-      identityCandidates
+    for (var index = 1; index < speechDocument.segments.length; index++) {
+      final segment = speechDocument.segments[index];
+      final previous = speechDocument.segments[index - 1];
+      if (segment.paragraphIndex != previous.paragraphIndex ||
+          segment.blockId != previous.blockId)
+        continue;
+      final match = RegExp(
+        r'^\s*(He|She|They)\b',
+      ).firstMatch(segment.normalizedText);
+      if (match == null) continue;
+      final names = RegExp(r"\b[A-Z][A-Za-z'’-]+\b")
+          .allMatches(previous.normalizedText)
+          .map((match) => match.group(0)!.toLowerCase())
           .where(
-            (candidate) =>
-                candidate.source == CharacterGenderEvidenceSource.descriptor,
+            (name) => !<String>{
+              'the',
+              'a',
+              'an',
+              'he',
+              'she',
+              'they',
+              'i',
+              'we',
+            }.contains(name),
           )
-          .toList(),
-      pronounProfile: pronounProfile,
-    );
-    if (descriptorResolution != null) {
-      return descriptorResolution;
+          .toSet();
+      if (names.length != 1 || !normalizedAliases.contains(names.single))
+        continue;
+      final token = match.group(1)!;
+      final start = match.end - token.length;
+      pronounCounts[token.toLowerCase()] =
+          (pronounCounts[token.toLowerCase()] ?? 0) + 1;
+      pronounEvidenceSpans.add(
+        CharacterIdentityEvidenceSpan(
+          segmentId: segment.segmentId,
+          startUtf16: start,
+          endUtf16: match.end,
+          text: token,
+          source: CharacterGenderEvidenceSource.pronoun,
+        ),
+      );
     }
-
-    return _resolvePronounIdentity(
+    final pronounProfile = CharacterPronounProfile(counts: pronounCounts);
+    final pronoun = _resolvePronounIdentity(
       pronounProfile: pronounProfile,
-      pronounEvidenceSpans: pronounEvidenceSpans,
+      pronounEvidenceSpans: <CharacterIdentityEvidenceSpan>[
+        if (previousProfile?.genderSource ==
+            CharacterGenderEvidenceSource.pronoun)
+          ...previousProfile!.evidenceSpans.where(
+            (span) =>
+                span.source == CharacterGenderEvidenceSource.pronoun ||
+                span.source == CharacterGenderEvidenceSource.unknown,
+          ),
+        ...pronounEvidenceSpans,
+      ],
     );
+    final contextual =
+        _resolveIdentityCandidates(
+          identityCandidates,
+          pronounProfile: pronounProfile,
+        ) ??
+        (previousProfile?.genderSource != CharacterGenderEvidenceSource.pronoun
+            ? previousProfile
+            : null);
+    if (pronoun.genderSource == CharacterGenderEvidenceSource.pronoun ||
+        pronoun.conflictFlag) {
+      final conflict =
+          pronoun.conflictFlag ||
+          (contextual != null &&
+              contextual.preferredVoiceGender != null &&
+              contextual.preferredVoiceGender != pronoun.preferredVoiceGender);
+      return CharacterIdentityProfile(
+        genderIdentityLabel: pronoun.genderIdentityLabel,
+        genderConfidence: pronoun.genderConfidence,
+        genderSource: CharacterGenderEvidenceSource.pronoun,
+        pronounProfile: pronounProfile,
+        evidenceSpans: <CharacterIdentityEvidenceSpan>[
+          ...pronoun.evidenceSpans,
+          ...?contextual?.evidenceSpans,
+        ],
+        conflictFlag: conflict || (previousProfile?.conflictFlag ?? false),
+      );
+    }
+    return contextual ?? pronoun;
   }
 
   List<_IdentityCandidate> _extractExplicitIdentityCandidates({
@@ -281,6 +406,8 @@ class CharacterCastRegistryService {
               startUtf16: match.start,
               endUtf16: match.end,
               text: match.group(0)!,
+              source: CharacterGenderEvidenceSource.explicitIdentity,
+              genderIdentityLabel: entry.value,
             ),
           ),
         );
@@ -311,6 +438,8 @@ class CharacterCastRegistryService {
               startUtf16: match.start,
               endUtf16: match.end,
               text: match.group(0)!,
+              source: CharacterGenderEvidenceSource.explicitApposition,
+              genderIdentityLabel: entry.value,
             ),
           ),
         );
@@ -342,6 +471,8 @@ class CharacterCastRegistryService {
               startUtf16: match.start,
               endUtf16: match.end,
               text: match.group(0)!,
+              source: CharacterGenderEvidenceSource.descriptor,
+              genderIdentityLabel: entry.value,
             ),
           ),
         );
@@ -362,6 +493,8 @@ class CharacterCastRegistryService {
               startUtf16: match.start,
               endUtf16: match.end,
               text: match.group(0)!,
+              source: CharacterGenderEvidenceSource.descriptor,
+              genderIdentityLabel: entry.value,
             ),
           ),
         );
@@ -379,51 +512,54 @@ class CharacterCastRegistryService {
     required List<CharacterIdentityEvidenceSpan> pronounEvidenceSpans,
   }) {
     for (final aliasMatch in aliasMatches) {
-      final windowStart = aliasMatch.start;
-      final hardWindowEnd = math.min(
-        aliasMatch.end + 96,
-        lowerSegmentText.length,
+      // A competing name or conjunction makes within-clause coreference weak.
+      final tail = segmentText.substring(aliasMatch.end);
+      final competing = RegExp(
+        r"\b[A-Z][A-Za-z'’-]+\b|\b(?:and|but)\b",
+      ).firstMatch(tail);
+      var end = competing == null
+          ? segmentText.length
+          : aliasMatch.end + competing.start;
+      final sentenceEnd = RegExp(r'[.!?]').firstMatch(tail);
+      if (sentenceEnd != null) {
+        end = math.min(end, aliasMatch.end + sentenceEnd.end);
+      }
+      final local = segmentText.substring(aliasMatch.end, end);
+      final possessive = RegExp(
+        r'\b(his|her|their)\s+(?:[a-z]+\s+)?(?:coat|voice|arm|arms|hand|hands|head|sleeve|wrist|eyes|pocket|face|shoulder|shoulders|hat|bag|boots|gloves)\b|\b(himself|herself|themself|themselves)\b',
+        caseSensitive: false,
       );
-      var windowEnd = hardWindowEnd;
-      for (var index = aliasMatch.end; index < hardWindowEnd; index += 1) {
-        final codeUnit = segmentText.codeUnitAt(index);
-        if (codeUnit == 10 ||
-            codeUnit == 33 ||
-            codeUnit == 46 ||
-            codeUnit == 63) {
-          windowEnd = index + 1;
-          break;
-        }
+      void add(String token, int start, int finish) {
+        final normalized = switch (token.toLowerCase()) {
+          'himself' => 'he',
+          'herself' => 'she',
+          'themself' || 'themselves' => 'they',
+          'their' => 'theirs',
+          _ => token.toLowerCase(),
+        };
+        pronounCounts[normalized] = (pronounCounts[normalized] ?? 0) + 1;
+        pronounEvidenceSpans.add(
+          CharacterIdentityEvidenceSpan(
+            segmentId: segment.segmentId,
+            startUtf16: start,
+            endUtf16: finish,
+            text: segmentText.substring(start, finish),
+            source: CharacterGenderEvidenceSource.pronoun,
+          ),
+        );
       }
-      final trailingText = segmentText.substring(aliasMatch.end, windowEnd);
-      final nextCapitalizedToken = RegExp(
-        r"\b[A-Z][A-Za-z'’-]+\b",
-      ).firstMatch(trailingText);
-      if (nextCapitalizedToken != null) {
-        windowEnd = aliasMatch.end + nextCapitalizedToken.start;
+
+      for (final match in possessive.allMatches(local)) {
+        final token = match.group(1) ?? match.group(2)!;
+        final offset = match.group(0)!.indexOf(token);
+        add(
+          token,
+          aliasMatch.end + match.start + offset,
+          aliasMatch.end + match.start + offset + token.length,
+        );
       }
-      if (windowEnd <= windowStart) {
-        continue;
-      }
-      final window = lowerSegmentText.substring(windowStart, windowEnd);
-      for (final entry in _pronounPatternByToken.entries) {
-        for (final match in entry.value.allMatches(window)) {
-          pronounCounts[entry.key] = (pronounCounts[entry.key] ?? 0) + 1;
-          final absoluteStart = windowStart + match.start;
-          final absoluteEnd = windowStart + match.end;
-          pronounEvidenceSpans.add(
-            CharacterIdentityEvidenceSpan(
-              segmentId: segment.segmentId,
-              startUtf16: absoluteStart,
-              endUtf16: absoluteEnd,
-              text: segment.normalizedText.substring(
-                absoluteStart,
-                absoluteEnd,
-              ),
-            ),
-          );
-        }
-      }
+      // Subject pronouns in the immediately following segment are admitted only
+      // by inferIdentity's explicit unique-subject pass below, not nearest name.
     }
   }
 
@@ -522,25 +658,6 @@ class CharacterCastRegistryService {
         evidenceSpans: pronounEvidenceSpans,
       );
     }
-    if (heCount >= 2 && heCount >= sheCount * 2) {
-      return CharacterIdentityProfile(
-        genderIdentityLabel: CharacterGenderIdentityLabel.male,
-        genderConfidence: math.min(0.8, 0.45 + (heCount * 0.08)),
-        genderSource: CharacterGenderEvidenceSource.pronoun,
-        pronounProfile: pronounProfile,
-        evidenceSpans: pronounEvidenceSpans,
-      );
-    }
-    if (sheCount >= 2 && sheCount >= heCount * 2) {
-      return CharacterIdentityProfile(
-        genderIdentityLabel: CharacterGenderIdentityLabel.female,
-        genderConfidence: math.min(0.8, 0.45 + (sheCount * 0.08)),
-        genderSource: CharacterGenderEvidenceSource.pronoun,
-        pronounProfile: pronounProfile,
-        evidenceSpans: pronounEvidenceSpans,
-      );
-    }
-
     return CharacterIdentityProfile(
       genderIdentityLabel: CharacterGenderIdentityLabel.unknown,
       genderConfidence: 0.0,
