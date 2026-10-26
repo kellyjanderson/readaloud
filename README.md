@@ -6,7 +6,7 @@ A local-first Flutter reader for long-form text-to-speech using Kokoro. Import d
 
 macOS is the current functional target. Other Flutter platform folders are retained but are not qualified by the current project review. This repository is pre-release; older release labels and the package version are being reconciled before the next release.
 
-Speaker attribution is heuristic. Document preparation, worker planning, resident synthesis resources and requested/effective voice choices are described in [current architecture](project/architecture/README.md), with explicit evidence limits. P4 has bounded native assignment/cache evidence; input during active export, human listening and final acceptance remain tracked in [GitHub design and slice issues](docs/project-management.md).
+Speaker attribution is heuristic. Document preparation, worker planning, resident synthesis resources and requested/effective voice choices are described in [current architecture](project/architecture/README.md), with explicit evidence limits. The prepared-runtime feature branch has bounded native assignment/cache evidence and automated A/B/A artifact checks. Human acceptance on the current integrated build, long-run memory and permanently hung-native teardown remain open in [GitHub design and slice issues](docs/project-management.md). A user-reported single-choice character voice selector is tracked for a future release in [issue #78](https://github.com/kellyjanderson/readaloud/issues/78).
 
 ## Features
 
