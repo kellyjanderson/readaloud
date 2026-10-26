@@ -147,6 +147,27 @@ enum DocumentIdentityIntegrityBasis {
   committedAcquiredByteCoverage,
 }
 
+/// Proof from the exact bytes consumed by one acquisition owner. Never inferred
+/// from extracted text coordinates or a later reread of a mutable source path.
+class SourceAcquisitionReceipt {
+  const SourceAcquisitionReceipt({
+    required this.ownerId,
+    required this.documentRevision,
+    required this.sourceRevision,
+    required this.watchSession,
+    required this.byteCount,
+    required this.sha256,
+    required this.integrityBasis,
+  });
+  final String ownerId;
+  final int documentRevision;
+  final String sourceRevision;
+  final int? watchSession;
+  final int byteCount;
+  final String sha256;
+  final DocumentIdentityIntegrityBasis integrityBasis;
+}
+
 /// The persistence/source owner emits this only after verifying complete
 /// acquired-byte coverage. A partial-prefix digest cannot authorize migration.
 class DocumentIdentityMigration {

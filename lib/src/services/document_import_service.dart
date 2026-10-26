@@ -283,11 +283,17 @@ class DocumentImportService {
     required String fileName,
     String? sourcePath,
     Uint8List? bytes,
+    void Function(List<int>)? onAcquiredBytes,
+    void Function()? onAcquiredEof,
   }) async* {
+    // Observer sees the same sequential bytes yielded to the decoder. ZIP
+    // random-access readers intentionally make no full-byte receipt claim.
     final extension = _extensionOf(fileName);
     Stream<String> decoded() => _importByteStream(
       sourcePath,
       bytes,
+      onBytes: onAcquiredBytes,
+      onEof: onAcquiredEof,
     ).transform(const Utf8Decoder(allowMalformed: true));
     if (extension == 'html' || extension == 'htm') {
       yield* _htmlUnits(decoded(), locator: fileName);
@@ -2734,14 +2740,28 @@ String _stableHash(String input) {
   return crypto.sha256.convert(utf8.encode(input)).toString();
 }
 
-Stream<List<int>> _importByteStream(String? path, Uint8List? bytes) async* {
+Stream<List<int>> _importByteStream(
+  String? path,
+  Uint8List? bytes, {
+  void Function(List<int>)? onBytes,
+  void Function()? onEof,
+}) async* {
   if (path != null) {
-    yield* io.File(path).openRead();
-    return;
+    await for (final chunk in io.File(path).openRead()) {
+      onBytes?.call(chunk);
+      yield chunk;
+    }
+  } else {
+    for (var offset = 0; offset < bytes!.length; offset += 8192) {
+      final chunk = bytes.sublist(
+        offset,
+        math.min(offset + 8192, bytes.length),
+      );
+      onBytes?.call(chunk);
+      yield chunk;
+    }
   }
-  for (var offset = 0; offset < bytes!.length; offset += 8192) {
-    yield bytes.sublist(offset, math.min(offset + 8192, bytes.length));
-  }
+  onEof?.call();
 }
 
 Stream<String> _archiveText(ArchiveFile entry) async* {

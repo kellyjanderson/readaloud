@@ -69,6 +69,39 @@ class ReaderDocument {
        ),
        wordSpans = _buildWordSpans(speakableText);
 
+  /// Restores an already derived snapshot without normalization or inference.
+  factory ReaderDocument.restored({
+    required String title,
+    required ReaderDocumentType type,
+    required String displayHtml,
+    required String speakableText,
+    required NormalizedImportResult normalizedImportResult,
+    required BaseSpeechAnnotationSet baseSpeechAnnotations,
+    required DialogueAttributionSet dialogueAttributions,
+    required CharacterCastRegistry characterCastRegistry,
+    required DocumentVoiceAttributionSet documentVoiceAttribution,
+    required BasePronunciationArtifactSet basePronunciationArtifacts,
+    required ReaderDocumentPresentation presentation,
+    Uint8List? pdfData,
+    String? sourceDescription,
+    List<ReaderAttachment> attachments = const [],
+  }) => ReaderDocument._(
+    title: title,
+    type: type,
+    displayHtml: displayHtml,
+    speakableText: speakableText,
+    normalizedImportResult: normalizedImportResult,
+    baseSpeechAnnotations: baseSpeechAnnotations,
+    dialogueAttributions: dialogueAttributions,
+    characterCastRegistry: characterCastRegistry,
+    documentVoiceAttribution: documentVoiceAttribution,
+    basePronunciationArtifacts: basePronunciationArtifacts,
+    presentation: presentation,
+    pdfData: pdfData,
+    sourceDescription: sourceDescription,
+    attachments: List.unmodifiable(attachments),
+  );
+
   /// Completed worker handoff: all expensive derived fields are retained.
   ReaderDocument.preparedSnapshot({
     required ReaderDocument source,
