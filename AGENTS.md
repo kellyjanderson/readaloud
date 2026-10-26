@@ -31,6 +31,8 @@ Read the latest design revision before starting and before integration. A materi
 
 ## Delivery and completion
 
+The user has no budget for GitHub Actions. Keep repository Actions disabled; do not enable, dispatch, or add automatic workflows. Run bounded checks locally and report their results. Do not require new remote CI runs for integration; historical CI is evidence only. Any paid service/execution or change to this constraint requires explicit user approval.
+
 Use scoped branches, preserve WIP, stage intentional paths. Link slice and parent in every PR; use `Refs` for the parent so an intermediate merge cannot close the feature. Declare the actual PR base. The orchestrator may integrate slice PRs into a feature branch or directly into main when authorized; always identify what has and has not reached main. No merge or push directly to main without explicit user authorization.
 
 Run bounded relevant checks; report passed, failed, blocked and not run distinctly. Checkpoints report result, changed paths, commit/PR, base, evidence and remaining work. Batch meaningful updates; no heartbeat comments, repeated whole-plan rewrites or routine agent polling.
