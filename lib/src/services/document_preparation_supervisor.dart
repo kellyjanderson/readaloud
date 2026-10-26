@@ -414,7 +414,9 @@ void documentPreparationWorker(DocumentPreparationWorkerInput input) async {
     Isolate.exit(
       input.reply,
       DocumentPreparationResult(
-        request: input.request,
+        request: input.incremental
+            ? input.request.identityOnly
+            : input.request,
         outcome: DocumentPreparationOutcome.failed,
         error: '$error',
         importFailure: error is DocumentImportException

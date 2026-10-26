@@ -96,7 +96,14 @@ void main() {
         },
       );
       expect(result.outcome, DocumentPreparationOutcome.failed);
+      expect(result.request.ownerId, 'rtf-depth');
+      expect(result.request.revision, 1);
+      expect(result.request.kind, DocumentPreparationKind.bytes);
+      expect(result.request.fileName, 'deep.rtf');
+      expect(result.request.bytes, isNull);
+      expect(result.request.text, isNull);
       expect(result.importFailure?.code, 'rtf_nesting_limit');
+      expect(result.importFailure?.message, isNotEmpty);
       expect(result.importFailure?.fileName, 'deep.rtf');
       expect(publications, 0);
     },
