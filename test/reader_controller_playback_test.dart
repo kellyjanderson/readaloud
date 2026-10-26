@@ -42,6 +42,8 @@ void main() {
           addTearDown(controller.dispose);
           await controller.initialize();
           final loading = controller.loadDocument(ReaderDocument.sample());
+          await loading;
+          final playing = controller.startPlayback();
           await engine.started.future;
           await controller.setMultiVoiceEnabled(
             !controller.isMultiVoiceEnabled,
@@ -52,7 +54,7 @@ void main() {
           } else {
             engine.barrier.complete(const []);
           }
-          await loading;
+          await playing;
           expect(engine.preparations, 2);
           expect(controller.isDocumentPrepared, isTrue);
           expect(controller.isResourcesReady, isTrue);
@@ -63,16 +65,18 @@ void main() {
     }
     for (final fails in [false, true]) {
       test(
-        'document speech readiness waits for resource ${fails ? 'failure' : 'success'}',
+        'prepared range remains ready while playback waits for resource ${fails ? 'failure' : 'success'}',
         () async {
           final engine = _ResourceBarrierEngine();
           final controller = ReaderController(ttsEngine: engine);
           addTearDown(controller.dispose);
           await controller.initialize();
           final loading = controller.loadDocument(ReaderDocument.sample());
+          await loading;
+          final playing = controller.startPlayback();
           await engine.started.future;
           expect(controller.isDisplayReady, isTrue);
-          expect(controller.isDocumentPrepared, isFalse);
+          expect(controller.isDocumentPrepared, isTrue);
           expect(controller.isResourcesReady, isFalse);
           if (fails) {
             engine.barrier.completeError(StateError('corrupted voice asset'));
@@ -80,8 +84,8 @@ void main() {
             engine.ready = true;
             engine.barrier.complete(const []);
           }
-          await loading;
-          expect(controller.isDocumentPrepared, !fails);
+          await playing;
+          expect(controller.isDocumentPrepared, isTrue);
           expect(controller.isResourcesReady, !fails);
           if (!fails) {
             expect(controller.resourceBindings, isNotEmpty);
@@ -445,7 +449,10 @@ void main() {
           }
           await importer.started(1);
           expect(controller.isImporting, isTrue);
-          expect(controller.statusMessage, isNull);
+          expect(
+            controller.statusMessage,
+            contains('Preparing the requested reading range'),
+          );
           importer.results[1].complete(
             DocumentImportService().importPastedText('Second.'),
           );
@@ -1657,7 +1664,10 @@ void main() {
           controller.readingFocusState.followMode,
           ReadingFocusFollowMode.following,
         );
-        expect(controller.readingFocusState.activeDisplayBlockId, 'b_0');
+        expect(
+          controller.readingFocusState.activeDisplayBlockId,
+          secondSegment.blockId,
+        );
         expect(controller.readingFocusState.shouldAutoFollow, isTrue);
 
         controller.suspendReaderFollow();
@@ -1672,7 +1682,10 @@ void main() {
         await controller.pausePlayback();
 
         expect(controller.readingFocusState.playbackActive, isFalse);
-        expect(controller.readingFocusState.activeDisplayBlockId, 'b_0');
+        expect(
+          controller.readingFocusState.activeDisplayBlockId,
+          secondSegment.blockId,
+        );
         expect(controller.readingFocusState.canRecenter, isTrue);
 
         controller.resumeReaderFollow();

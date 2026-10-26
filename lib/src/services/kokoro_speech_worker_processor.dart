@@ -206,13 +206,20 @@ Future<void> _residentWorker(Map<String, dynamic> configuration) async {
   final bindings = <String, PreparedVoiceBinding>{};
   String? documentId;
   String? modelDigest;
-  Future<void> release() async {
-    await runner?.dispose();
-    runner = null;
+  // Installation owner captures verified private bytes once. A new document
+  // changes bindings, never the model installation/session identity. Explicit
+  // engine replacement is the boundary for observing changed model assets.
+  ModelContentSnapshot? installationSnapshot;
+  Future<void> release({bool disposeInstallation = false}) async {
+    if (disposeInstallation) {
+      await runner?.dispose();
+      runner = null;
+      modelDigest = null;
+      installationSnapshot = null;
+    }
     repository.clear();
     bindings.clear();
     documentId = null;
-    modelDigest = null;
     // ignore: avoid_print
     print(
       'READALOUD_RESOURCE ${jsonEncode({'event': 'released', 'loadedVoiceCount': repository.loadedVoiceCount, 'loadCount': repository.loadCount})}',
@@ -226,22 +233,19 @@ Future<void> _residentWorker(Map<String, dynamic> configuration) async {
     try {
       switch (command['kind']) {
         case 'prepare':
-          if (documentId != command['documentId']) await release();
-          final snapshot = await ModelContentSnapshot.capture(
-            configuration['modelPath'] as String,
-            Directory(
-              '${configuration['generatedAudioDirectory']}/model-snapshots',
-            ),
-          );
-          if (modelDigest != null && modelDigest != snapshot.digest) {
-            await release();
-          }
+          final snapshot = installationSnapshot ??=
+              await ModelContentSnapshot.capture(
+                configuration['modelPath'] as String,
+                Directory(
+                  '${configuration['generatedAudioDirectory']}/model-snapshots',
+                ),
+              );
           if (runner == null) {
             modelDigest = snapshot.digest;
             runner = KokoroModelRunner(modelPath: snapshot.path);
             await runner!.initialize();
-            documentId = command['documentId'] as String;
           }
+          documentId = command['documentId'] as String;
           bindings.clear();
           for (final voiceId in (command['voiceIds'] as List).cast<String>()) {
             await repository.loadVoice(voiceId, validateAsset: true);
@@ -291,7 +295,7 @@ Future<void> _residentWorker(Map<String, dynamic> configuration) async {
           await release();
           reply.send({'kind': 'done', 'id': id});
         case 'shutdown':
-          await release();
+          await release(disposeInstallation: true);
           commands.close();
           // BackgroundIsolateBinaryMessenger owns a live receive port. Returning
           // from this entry point does not exit the isolate. Native disposal has
@@ -305,7 +309,7 @@ Future<void> _residentWorker(Map<String, dynamic> configuration) async {
           command['kind'] == 'release' || command['kind'] == 'shutdown';
       if (command['kind'] == 'prepare') {
         try {
-          await release();
+          await release(disposeInstallation: true);
         } catch (_) {
           quarantined = true;
         }
