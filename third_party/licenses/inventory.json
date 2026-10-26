@@ -1,0 +1,1261 @@
+{
+  "schema": 1,
+  "scope": "Conservative pubspec.lock superset, source grants and native notices; not release clearance",
+  "lockfiles": {
+    "pubspec.lock": "a822fa801e1f78fb31f6c59a76f701d24349ea32c0d560952f9e143aeb3b3b21",
+    "macos/Podfile.lock": "c4c97b9cdfbdf488ab0e163009f2a7840c141d545522f24532662abd025874cf"
+  },
+  "packages": [
+    {
+      "id": "asset:cmudict",
+      "notice": "assets/cmudict-LICENSE",
+      "sha256": "bd4ce8e44170a5f9f481310ca85c51de3c4f851a65e679b40e603b143bd3542a",
+      "source": "third_party/cmudict/LICENSE"
+    },
+    {
+      "id": "dart:archive",
+      "notice": "dart/archive/LICENSE",
+      "sha256": "32f97d332eae7453ec4079858e6f1d74be85beeb6d3881068b47d02a379cccea",
+      "source": "https://pub.dev/api/archives/archive-4.0.9.tar.gz",
+      "version": "4.0.9",
+      "dependency": "direct main",
+      "package_source": "hosted",
+      "archive_sha256": "a96e8b390886ee8abb49b7bd3ac8df6f451c621619f52a26e815fdcf568959ff"
+    },
+    {
+      "id": "dart:archive",
+      "notice": "dart/archive/LICENSE-other.md",
+      "sha256": "ebe5a199af245d7e3e761673fbf3db341427060407e50713861ab24bb2cb1552",
+      "source": "https://pub.dev/api/archives/archive-4.0.9.tar.gz",
+      "version": "4.0.9",
+      "dependency": "direct main",
+      "package_source": "hosted",
+      "archive_sha256": "a96e8b390886ee8abb49b7bd3ac8df6f451c621619f52a26e815fdcf568959ff"
+    },
+    {
+      "id": "dart:args",
+      "notice": "dart/args/LICENSE",
+      "sha256": "dfb09c74e29386cd3e2719f32d4995d59526179753931d31840757c77fbf2791",
+      "source": "https://pub.dev/api/archives/args-2.7.0.tar.gz",
+      "version": "2.7.0",
+      "dependency": "direct main",
+      "package_source": "hosted",
+      "archive_sha256": "d0481093c50b1da8910eb0bb301626d4d8eb7284aa739614d2b394ee09e3ea04"
+    },
+    {
+      "id": "dart:async",
+      "notice": "dart/async/LICENSE",
+      "sha256": "ff15faa32a2e638107b7789592b14426162a75ba620044ee2340a20ec6ce5e73",
+      "source": "https://pub.dev/api/archives/async-2.13.0.tar.gz",
+      "version": "2.13.0",
+      "dependency": "transitive",
+      "package_source": "hosted",
+      "archive_sha256": "758e6d74e971c3e5aceb4110bfd6698efc7f501675bcfe0c775459a8140750eb"
+    },
+    {
+      "id": "dart:audio_session",
+      "notice": "dart/audio_session/LICENSE",
+      "sha256": "2568490c678ba27cc8a405238637c4ba76adc632232f05dc1c36cbf59381dba4",
+      "source": "https://pub.dev/api/archives/audio_session-0.2.3.tar.gz",
+      "version": "0.2.3",
+      "dependency": "transitive",
+      "package_source": "hosted",
+      "archive_sha256": "7217b229db57cc4dc577a8abb56b7429a5a212b978517a5be578704bfe5e568b"
+    },
+    {
+      "id": "dart:boolean_selector",
+      "notice": "dart/boolean_selector/LICENSE",
+      "sha256": "b71519245009a3b8f126196a5408ec031e216e8e0d985085958c6543f82a8a2a",
+      "source": "https://pub.dev/api/archives/boolean_selector-2.1.2.tar.gz",
+      "version": "2.1.2",
+      "dependency": "transitive",
+      "package_source": "hosted",
+      "archive_sha256": "8aab1771e1243a5063b8b0ff68042d67334e3feab9e95b9490f9a6ebf73b42ea"
+    },
+    {
+      "id": "dart:characters",
+      "notice": "dart/characters/LICENSE",
+      "sha256": "0371d1da6a57fb791db29d29b95333429205f51f3cb2eb3a0c12d91838a38744",
+      "source": "https://pub.dev/api/archives/characters-1.4.1.tar.gz",
+      "version": "1.4.1",
+      "dependency": "transitive",
+      "package_source": "hosted",
+      "archive_sha256": "faf38497bda5ead2a8c7615f4f7939df04333478bf32e4173fcb06d428b5716b"
+    },
+    {
+      "id": "dart:clock",
+      "notice": "dart/clock/LICENSE",
+      "sha256": "58d1e17ffe5109a7ae296caafcadfdbe6a7d176f0bc4ab01e12a689b0499d8bd",
+      "source": "https://pub.dev/api/archives/clock-1.1.2.tar.gz",
+      "version": "1.1.2",
+      "dependency": "transitive",
+      "package_source": "hosted",
+      "archive_sha256": "fddb70d9b5277016c77a80201021d40a2247104d9f4aa7bab7157b7e3f05b84b"
+    },
+    {
+      "id": "dart:code_assets",
+      "notice": "dart/code_assets/LICENSE",
+      "sha256": "21ae23b0b9ff67a2dc75ab085d1e8db8ac548c5faf370af17f28dd2ef3b52b7b",
+      "source": "https://pub.dev/api/archives/code_assets-1.0.0.tar.gz",
+      "version": "1.0.0",
+      "dependency": "transitive",
+      "package_source": "hosted",
+      "archive_sha256": "83ccdaa064c980b5596c35dd64a8d3ecc68620174ab9b90b6343b753aa721687"
+    },
+    {
+      "id": "dart:collection",
+      "notice": "dart/collection/LICENSE",
+      "sha256": "ff15faa32a2e638107b7789592b14426162a75ba620044ee2340a20ec6ce5e73",
+      "source": "https://pub.dev/api/archives/collection-1.19.1.tar.gz",
+      "version": "1.19.1",
+      "dependency": "transitive",
+      "package_source": "hosted",
+      "archive_sha256": "2f5709ae4d3d59dd8f7cd309b4e023046b57d8a6c82130785d2b0e5868084e76"
+    },
+    {
+      "id": "dart:cross_file",
+      "notice": "dart/cross_file/LICENSE",
+      "sha256": "420f7739f169097f0aad1242045169cd643c8f1d94e62866fad265ae4c369b7d",
+      "source": "https://pub.dev/api/archives/cross_file-0.3.5+2.tar.gz",
+      "version": "0.3.5+2",
+      "dependency": "direct main",
+      "package_source": "hosted",
+      "archive_sha256": "28bb3ae56f117b5aec029d702a90f57d285cd975c3c5c281eaca38dbc47c5937"
+    },
+    {
+      "id": "dart:crypto",
+      "notice": "dart/crypto/LICENSE",
+      "sha256": "ad6a71997da90924b2cfb1fb47ec46537f70faf469efe016168794ae45ed6888",
+      "source": "https://pub.dev/api/archives/crypto-3.0.7.tar.gz",
+      "version": "3.0.7",
+      "dependency": "direct main",
+      "package_source": "hosted",
+      "archive_sha256": "c8ea0233063ba03258fbcf2ca4d6dadfefe14f02fab57702265467a19f27fadf"
+    },
+    {
+      "id": "dart:csslib",
+      "notice": "dart/csslib/LICENSE",
+      "sha256": "dfb09c74e29386cd3e2719f32d4995d59526179753931d31840757c77fbf2791",
+      "source": "https://pub.dev/api/archives/csslib-1.0.2.tar.gz",
+      "version": "1.0.2",
+      "dependency": "transitive",
+      "package_source": "hosted",
+      "archive_sha256": "09bad715f418841f976c77db72d5398dc1253c21fb9c0c7f0b0b985860b2d58e"
+    },
+    {
+      "id": "dart:cupertino_icons",
+      "notice": "dart/cupertino_icons/LICENSE",
+      "sha256": "310d6ab6483280280c9db122bded0a63c09558bc5743720f61dbcbb494db370a",
+      "source": "https://pub.dev/api/archives/cupertino_icons-1.0.8.tar.gz",
+      "version": "1.0.8",
+      "dependency": "direct main",
+      "package_source": "hosted",
+      "archive_sha256": "ba631d1c7f7bef6b729a622b7b752645a2d076dba9976925b8f25725a30e1ee6"
+    },
+    {
+      "id": "dart:dbus",
+      "notice": "dart/dbus/LICENSE",
+      "sha256": "1f256ecad192880510e84ad60474eab7589218784b9a50bc7ceee34c2b91f1d5",
+      "source": "https://pub.dev/api/archives/dbus-0.7.12.tar.gz",
+      "version": "0.7.12",
+      "dependency": "transitive",
+      "package_source": "hosted",
+      "archive_sha256": "d0c98dcd4f5169878b6cf8f6e0a52403a9dff371a3e2f019697accbf6f44a270"
+    },
+    {
+      "id": "dart:desktop_drop",
+      "notice": "dart/desktop_drop/LICENSE",
+      "sha256": "54bb187c3c4d8d9e74475f69b63a70798fb80581c334b2da487d1c4c70f68155",
+      "source": "https://pub.dev/api/archives/desktop_drop-0.7.0.tar.gz",
+      "version": "0.7.0",
+      "dependency": "direct main",
+      "package_source": "hosted",
+      "archive_sha256": "e70b46b2d61f1af7a81a40d1f79b43c28a879e30a4ef31e87e9c27bea4d784e8"
+    },
+    {
+      "id": "dart:fake_async",
+      "notice": "dart/fake_async/LICENSE",
+      "sha256": "58d1e17ffe5109a7ae296caafcadfdbe6a7d176f0bc4ab01e12a689b0499d8bd",
+      "source": "https://pub.dev/api/archives/fake_async-1.3.3.tar.gz",
+      "version": "1.3.3",
+      "dependency": "transitive",
+      "package_source": "hosted",
+      "archive_sha256": "5368f224a74523e8d2e7399ea1638b37aecfca824a3cc4dfdf77bf1fa905ac44"
+    },
+    {
+      "id": "dart:ffi",
+      "notice": "dart/ffi/LICENSE",
+      "sha256": "0371d1da6a57fb791db29d29b95333429205f51f3cb2eb3a0c12d91838a38744",
+      "source": "https://pub.dev/api/archives/ffi-2.2.0.tar.gz",
+      "version": "2.2.0",
+      "dependency": "transitive",
+      "package_source": "hosted",
+      "archive_sha256": "6d7fd89431262d8f3125e81b50d3847a091d846eafcd4fdb88dd06f36d705a45"
+    },
+    {
+      "id": "dart:file",
+      "notice": "dart/file/LICENSE",
+      "sha256": "f6df86b1412172537273e8e80ee2fb8a66aa7307ce0b39ea5ddab47ca41b8c49",
+      "source": "https://pub.dev/api/archives/file-7.0.1.tar.gz",
+      "version": "7.0.1",
+      "dependency": "transitive",
+      "package_source": "hosted",
+      "archive_sha256": "a3b4f84adafef897088c160faf7dfffb7696046cb13ae90b508c2cbc95d3b8d4"
+    },
+    {
+      "id": "dart:file_open",
+      "notice": "dart/file_open/LICENSE",
+      "sha256": "732caaffec77a82a8a314be2dff6953c960236469a42bcb4af778172600eeeb7",
+      "source": "https://pub.dev/api/archives/file_open-0.1.0.tar.gz",
+      "version": "0.1.0",
+      "dependency": "direct main",
+      "package_source": "hosted",
+      "archive_sha256": "725f22c7230f2e289045d01f4fae120755578966760fa426ce6af079f67f0456"
+    },
+    {
+      "id": "dart:file_picker",
+      "notice": "dart/file_picker/LICENSE",
+      "sha256": "6278994817bd65fa32404e53c3a62a09d824d3f9a71f7fadcaca3e4f02641d66",
+      "source": "https://pub.dev/api/archives/file_picker-10.3.10.tar.gz",
+      "version": "10.3.10",
+      "dependency": "direct main",
+      "package_source": "hosted",
+      "archive_sha256": "57d9a1dd5063f85fa3107fb42d1faffda52fdc948cefd5fe5ea85267a5fc7343"
+    },
+    {
+      "id": "dart:fixnum",
+      "notice": "dart/fixnum/LICENSE",
+      "sha256": "ff0b91d4f3c32b25cb6ec84985e8da89b0ba2a2b2f7eef353cda5e5423a20390",
+      "source": "https://pub.dev/api/archives/fixnum-1.1.1.tar.gz",
+      "version": "1.1.1",
+      "dependency": "transitive",
+      "package_source": "hosted",
+      "archive_sha256": "b6dc7065e46c974bc7c5f143080a6764ec7a4be6da1285ececdc37be96de53be"
+    },
+    {
+      "id": "dart:flutter_html",
+      "notice": "dart/flutter_html/LICENSE",
+      "sha256": "35620e82f006faaef90edd4644d5882a485ae62d3e2446fcf420226e138c31c7",
+      "source": "https://pub.dev/api/archives/flutter_html-3.0.0.tar.gz",
+      "version": "3.0.0",
+      "dependency": "direct main",
+      "package_source": "hosted",
+      "archive_sha256": "38a2fd702ffdf3243fb7441ab58aa1bc7e6922d95a50db76534de8260638558d"
+    },
+    {
+      "id": "dart:flutter_lints",
+      "notice": "dart/flutter_lints/LICENSE",
+      "sha256": "89519eca6f7b9529b35bdddd623a58c3af06a88c458dbd6531ddb4675acf75a9",
+      "source": "https://pub.dev/api/archives/flutter_lints-6.0.0.tar.gz",
+      "version": "6.0.0",
+      "dependency": "direct dev",
+      "package_source": "hosted",
+      "archive_sha256": "3105dc8492f6183fb076ccf1f351ac3d60564bff92e20bfc4af9cc1651f4e7e1"
+    },
+    {
+      "id": "dart:flutter_onnxruntime",
+      "notice": "dart/flutter_onnxruntime/LICENSE",
+      "sha256": "07e01db95f34e75e3a1aaffd8c6ac102c4519bba5b222752d424a96cacd5923c",
+      "source": "third_party/flutter_onnxruntime/LICENSE",
+      "version": "1.6.3",
+      "dependency": "direct main",
+      "package_source": "path",
+      "archive_sha256": null
+    },
+    {
+      "id": "dart:flutter_plugin_android_lifecycle",
+      "notice": "dart/flutter_plugin_android_lifecycle/LICENSE",
+      "sha256": "420f7739f169097f0aad1242045169cd643c8f1d94e62866fad265ae4c369b7d",
+      "source": "https://pub.dev/api/archives/flutter_plugin_android_lifecycle-2.0.33.tar.gz",
+      "version": "2.0.33",
+      "dependency": "transitive",
+      "package_source": "hosted",
+      "archive_sha256": "ee8068e0e1cd16c4a82714119918efdeed33b3ba7772c54b5d094ab53f9b7fd1"
+    },
+    {
+      "id": "dart:flutter_tts",
+      "notice": "dart/flutter_tts/LICENSE",
+      "sha256": "3c9e7afed8c30af40f8501faaaecd996922ac0847446e6084720297fad361622",
+      "source": "https://pub.dev/api/archives/flutter_tts-4.2.5.tar.gz",
+      "version": "4.2.5",
+      "dependency": "direct main",
+      "package_source": "hosted",
+      "archive_sha256": "ce5eb209b40e95f2f4a1397116c87ab2fcdff32257d04ed7a764e75894c03775"
+    },
+    {
+      "id": "dart:glob",
+      "notice": "dart/glob/LICENSE",
+      "sha256": "3c32b53167c7dae9190c38dab5dd9fe1789c53623ebc7d1babcb29914c5b3f16",
+      "source": "https://pub.dev/api/archives/glob-2.1.3.tar.gz",
+      "version": "2.1.3",
+      "dependency": "transitive",
+      "package_source": "hosted",
+      "archive_sha256": "c3f1ee72c96f8f78935e18aa8cecced9ab132419e8625dc187e1c2408efc20de"
+    },
+    {
+      "id": "dart:hooks",
+      "notice": "dart/hooks/LICENSE",
+      "sha256": "21ae23b0b9ff67a2dc75ab085d1e8db8ac548c5faf370af17f28dd2ef3b52b7b",
+      "source": "https://pub.dev/api/archives/hooks-1.0.2.tar.gz",
+      "version": "1.0.2",
+      "dependency": "transitive",
+      "package_source": "hosted",
+      "archive_sha256": "e79ed1e8e1929bc6ecb6ec85f0cb519c887aa5b423705ded0d0f2d9226def388"
+    },
+    {
+      "id": "dart:html",
+      "notice": "dart/html/LICENSE",
+      "sha256": "6ed8a26ed0f30589422f86356eed53bb6dacffc3e2fd4feddc944c4331945151",
+      "source": "https://pub.dev/api/archives/html-0.15.6.tar.gz",
+      "version": "0.15.6",
+      "dependency": "direct main",
+      "package_source": "hosted",
+      "archive_sha256": "6d1264f2dffa1b1101c25a91dff0dc2daee4c18e87cd8538729773c073dbf602"
+    },
+    {
+      "id": "dart:http",
+      "notice": "dart/http/LICENSE",
+      "sha256": "3c32b53167c7dae9190c38dab5dd9fe1789c53623ebc7d1babcb29914c5b3f16",
+      "source": "https://pub.dev/api/archives/http-1.6.0.tar.gz",
+      "version": "1.6.0",
+      "dependency": "transitive",
+      "package_source": "hosted",
+      "archive_sha256": "87721a4a50b19c7f1d49001e51409bddc46303966ce89a65af4f4e6004896412"
+    },
+    {
+      "id": "dart:http_parser",
+      "notice": "dart/http_parser/LICENSE",
+      "sha256": "3c32b53167c7dae9190c38dab5dd9fe1789c53623ebc7d1babcb29914c5b3f16",
+      "source": "https://pub.dev/api/archives/http_parser-4.1.2.tar.gz",
+      "version": "4.1.2",
+      "dependency": "transitive",
+      "package_source": "hosted",
+      "archive_sha256": "178d74305e7866013777bab2c3d8726205dc5a4dd935297175b19a23a2e66571"
+    },
+    {
+      "id": "dart:image",
+      "notice": "dart/image/LICENSE",
+      "sha256": "f3c17da84e0780e1c334325c73098257c32221d62498ed55ef3c1361904925aa",
+      "source": "https://pub.dev/api/archives/image-4.8.0.tar.gz",
+      "version": "4.8.0",
+      "dependency": "transitive",
+      "package_source": "hosted",
+      "archive_sha256": "f9881ff4998044947ec38d098bc7c8316ae1186fa786eddffdb867b9bc94dfce"
+    },
+    {
+      "id": "dart:image",
+      "notice": "dart/image/LICENSE-other.md",
+      "sha256": "dea0e9e446e57c0987d241d5471e47e7b66796fb286706ec993c3fa6696cb08e",
+      "source": "https://pub.dev/api/archives/image-4.8.0.tar.gz",
+      "version": "4.8.0",
+      "dependency": "transitive",
+      "package_source": "hosted",
+      "archive_sha256": "f9881ff4998044947ec38d098bc7c8316ae1186fa786eddffdb867b9bc94dfce"
+    },
+    {
+      "id": "dart:just_audio",
+      "notice": "dart/just_audio/LICENSE",
+      "sha256": "63ce4443e916b27424700d7fe970003add9f54944daf732f2dbcc1d8caf1bbad",
+      "source": "https://pub.dev/api/archives/just_audio-0.10.5.tar.gz",
+      "version": "0.10.5",
+      "dependency": "direct main",
+      "package_source": "hosted",
+      "archive_sha256": "9694e4734f515f2a052493d1d7e0d6de219ee0427c7c29492e246ff32a219908"
+    },
+    {
+      "id": "dart:just_audio_platform_interface",
+      "notice": "dart/just_audio_platform_interface/LICENSE",
+      "sha256": "2568490c678ba27cc8a405238637c4ba76adc632232f05dc1c36cbf59381dba4",
+      "source": "https://pub.dev/api/archives/just_audio_platform_interface-4.6.0.tar.gz",
+      "version": "4.6.0",
+      "dependency": "transitive",
+      "package_source": "hosted",
+      "archive_sha256": "2532c8d6702528824445921c5ff10548b518b13f808c2e34c2fd54793b999a6a"
+    },
+    {
+      "id": "dart:just_audio_web",
+      "notice": "dart/just_audio_web/LICENSE",
+      "sha256": "2568490c678ba27cc8a405238637c4ba76adc632232f05dc1c36cbf59381dba4",
+      "source": "https://pub.dev/api/archives/just_audio_web-0.4.16.tar.gz",
+      "version": "0.4.16",
+      "dependency": "transitive",
+      "package_source": "hosted",
+      "archive_sha256": "6ba8a2a7e87d57d32f0f7b42856ade3d6a9fbe0f1a11fabae0a4f00bb73f0663"
+    },
+    {
+      "id": "dart:kokoro_tts_flutter",
+      "notice": "dart/kokoro_tts_flutter/LICENSE",
+      "sha256": "9b476efbf796cb7fc5cccef55acc38aaf243ddc8f4dbe9d57890c468a04710b3",
+      "source": "https://pub.dev/api/archives/kokoro_tts_flutter-0.2.0+1.tar.gz",
+      "version": "0.2.0+1",
+      "dependency": "direct main",
+      "package_source": "hosted",
+      "archive_sha256": "e97033f43254b00874f018e297ddd4a8b948af283d9e160edc7c835405b4f5a7",
+      "archive_text_verified": true
+    },
+    {
+      "id": "dart:leak_tracker",
+      "notice": "dart/leak_tracker/LICENSE",
+      "sha256": "08a004aa8956c3cf3b24f7f69c966247233953e18e6afaa61191ea47b7eb70f6",
+      "source": "https://pub.dev/api/archives/leak_tracker-11.0.2.tar.gz",
+      "version": "11.0.2",
+      "dependency": "transitive",
+      "package_source": "hosted",
+      "archive_sha256": "33e2e26bdd85a0112ec15400c8cbffea70d0f9c3407491f672a2fad47915e2de"
+    },
+    {
+      "id": "dart:leak_tracker_flutter_testing",
+      "notice": "dart/leak_tracker_flutter_testing/LICENSE",
+      "sha256": "08a004aa8956c3cf3b24f7f69c966247233953e18e6afaa61191ea47b7eb70f6",
+      "source": "https://pub.dev/api/archives/leak_tracker_flutter_testing-3.0.10.tar.gz",
+      "version": "3.0.10",
+      "dependency": "transitive",
+      "package_source": "hosted",
+      "archive_sha256": "1dbc140bb5a23c75ea9c4811222756104fbcd1a27173f0c34ca01e16bea473c1"
+    },
+    {
+      "id": "dart:leak_tracker_testing",
+      "notice": "dart/leak_tracker_testing/LICENSE",
+      "sha256": "08a004aa8956c3cf3b24f7f69c966247233953e18e6afaa61191ea47b7eb70f6",
+      "source": "https://pub.dev/api/archives/leak_tracker_testing-3.0.2.tar.gz",
+      "version": "3.0.2",
+      "dependency": "transitive",
+      "package_source": "hosted",
+      "archive_sha256": "8d5a2d49f4a66b49744b23b018848400d23e54caf9463f4eb20df3eb8acb2eb1"
+    },
+    {
+      "id": "dart:lints",
+      "notice": "dart/lints/LICENSE",
+      "sha256": "421fe78c3b5df297f8b4ab2c74f2450a274ee6d245a113091f6b9f90570af193",
+      "source": "https://pub.dev/api/archives/lints-6.1.0.tar.gz",
+      "version": "6.1.0",
+      "dependency": "transitive",
+      "package_source": "hosted",
+      "archive_sha256": "12f842a479589fea194fe5c5a3095abc7be0c1f2ddfa9a0e76aed1dbd26a87df"
+    },
+    {
+      "id": "dart:list_counter",
+      "notice": "dart/list_counter/LICENSE",
+      "sha256": "dd90dbdc0f884919cda63739bd046f70e54a7c0051be2f812a6dd4f6cdd32d90",
+      "source": "https://pub.dev/api/archives/list_counter-1.0.2.tar.gz",
+      "version": "1.0.2",
+      "dependency": "transitive",
+      "package_source": "hosted",
+      "archive_sha256": "c447ae3dfcd1c55f0152867090e67e219d42fe6d4f2807db4bbe8b8d69912237"
+    },
+    {
+      "id": "dart:logging",
+      "notice": "dart/logging/LICENSE",
+      "sha256": "dfb09c74e29386cd3e2719f32d4995d59526179753931d31840757c77fbf2791",
+      "source": "https://pub.dev/api/archives/logging-1.3.0.tar.gz",
+      "version": "1.3.0",
+      "dependency": "transitive",
+      "package_source": "hosted",
+      "archive_sha256": "c8245ada5f1717ed44271ed1c26b8ce85ca3228fd2ffdb75468ab01979309d61"
+    },
+    {
+      "id": "dart:malsami",
+      "notice": "dart/malsami/LICENSE",
+      "sha256": "9b476efbf796cb7fc5cccef55acc38aaf243ddc8f4dbe9d57890c468a04710b3",
+      "source": "https://pub.dev/api/archives/malsami-0.0.3.tar.gz",
+      "version": "0.0.3",
+      "dependency": "direct main",
+      "package_source": "hosted",
+      "archive_sha256": "cba7deba23c2b1b6a5dfcb68309f9f1e55575dd4989158ec1f6767eaadede150",
+      "archive_text_verified": true
+    },
+    {
+      "id": "dart:matcher",
+      "notice": "dart/matcher/LICENSE",
+      "sha256": "3c32b53167c7dae9190c38dab5dd9fe1789c53623ebc7d1babcb29914c5b3f16",
+      "source": "https://pub.dev/api/archives/matcher-0.12.19.tar.gz",
+      "version": "0.12.19",
+      "dependency": "transitive",
+      "package_source": "hosted",
+      "archive_sha256": "dc0b7dc7651697ea4ff3e69ef44b0407ea32c487a39fff6a4004fa585e901861"
+    },
+    {
+      "id": "dart:material_color_utilities",
+      "notice": "dart/material_color_utilities/LICENSE",
+      "sha256": "d103f246ef4c18dab8af0c1dcf6a8af884e5cff554da7261a48ac43c17d98f2e",
+      "source": "https://pub.dev/api/archives/material_color_utilities-0.13.0.tar.gz",
+      "version": "0.13.0",
+      "dependency": "transitive",
+      "package_source": "hosted",
+      "archive_sha256": "9c337007e82b1889149c82ed242ed1cb24a66044e30979c44912381e9be4c48b"
+    },
+    {
+      "id": "dart:meta",
+      "notice": "dart/meta/LICENSE",
+      "sha256": "b71519245009a3b8f126196a5408ec031e216e8e0d985085958c6543f82a8a2a",
+      "source": "https://pub.dev/api/archives/meta-1.17.0.tar.gz",
+      "version": "1.17.0",
+      "dependency": "transitive",
+      "package_source": "hosted",
+      "archive_sha256": "23f08335362185a5ea2ad3a4e597f1375e78bce8a040df5c600c8d3552ef2394"
+    },
+    {
+      "id": "dart:native_toolchain_c",
+      "notice": "dart/native_toolchain_c/LICENSE",
+      "sha256": "aa81abb1ac43e40d2f5a606385edd37e974a5858d4109f7f439dd43d964487a7",
+      "source": "https://pub.dev/api/archives/native_toolchain_c-0.17.6.tar.gz",
+      "version": "0.17.6",
+      "dependency": "transitive",
+      "package_source": "hosted",
+      "archive_sha256": "6ba77bb18063eebe9de401f5e6437e95e1438af0a87a3a39084fbd37c90df572"
+    },
+    {
+      "id": "dart:objective_c",
+      "notice": "dart/objective_c/LICENSE",
+      "sha256": "1cda25a8de6880c5338de0b4a06ee89e8537c213eb1379c16a4c035bfd198b5c",
+      "source": "https://pub.dev/api/archives/objective_c-9.3.0.tar.gz",
+      "version": "9.3.0",
+      "dependency": "transitive",
+      "package_source": "hosted",
+      "archive_sha256": "100a1c87616ab6ed41ec263b083c0ef3261ee6cd1dc3b0f35f8ddfa4f996fe52"
+    },
+    {
+      "id": "dart:path",
+      "notice": "dart/path/LICENSE",
+      "sha256": "3c32b53167c7dae9190c38dab5dd9fe1789c53623ebc7d1babcb29914c5b3f16",
+      "source": "https://pub.dev/api/archives/path-1.9.1.tar.gz",
+      "version": "1.9.1",
+      "dependency": "direct main",
+      "package_source": "hosted",
+      "archive_sha256": "75cca69d1490965be98c73ceaea117e8a04dd21217b37b292c9ddbec0d955bc5"
+    },
+    {
+      "id": "dart:path_provider",
+      "notice": "dart/path_provider/LICENSE",
+      "sha256": "89519eca6f7b9529b35bdddd623a58c3af06a88c458dbd6531ddb4675acf75a9",
+      "source": "https://pub.dev/api/archives/path_provider-2.1.5.tar.gz",
+      "version": "2.1.5",
+      "dependency": "direct main",
+      "package_source": "hosted",
+      "archive_sha256": "50c5dd5b6e1aaf6fb3a78b33f6aa3afca52bf903a8a5298f53101fdaee55bbcd"
+    },
+    {
+      "id": "dart:path_provider_android",
+      "notice": "dart/path_provider_android/LICENSE",
+      "sha256": "420f7739f169097f0aad1242045169cd643c8f1d94e62866fad265ae4c369b7d",
+      "source": "https://pub.dev/api/archives/path_provider_android-2.2.23.tar.gz",
+      "version": "2.2.23",
+      "dependency": "transitive",
+      "package_source": "hosted",
+      "archive_sha256": "149441ca6e4f38193b2e004c0ca6376a3d11f51fa5a77552d8bd4d2b0c0912ba"
+    },
+    {
+      "id": "dart:path_provider_foundation",
+      "notice": "dart/path_provider_foundation/LICENSE",
+      "sha256": "420f7739f169097f0aad1242045169cd643c8f1d94e62866fad265ae4c369b7d",
+      "source": "https://pub.dev/api/archives/path_provider_foundation-2.6.0.tar.gz",
+      "version": "2.6.0",
+      "dependency": "transitive",
+      "package_source": "hosted",
+      "archive_sha256": "2a376b7d6392d80cd3705782d2caa734ca4727776db0b6ec36ef3f1855197699"
+    },
+    {
+      "id": "dart:path_provider_linux",
+      "notice": "dart/path_provider_linux/LICENSE",
+      "sha256": "89519eca6f7b9529b35bdddd623a58c3af06a88c458dbd6531ddb4675acf75a9",
+      "source": "https://pub.dev/api/archives/path_provider_linux-2.2.1.tar.gz",
+      "version": "2.2.1",
+      "dependency": "transitive",
+      "package_source": "hosted",
+      "archive_sha256": "f7a1fe3a634fe7734c8d3f2766ad746ae2a2884abe22e241a8b301bf5cac3279"
+    },
+    {
+      "id": "dart:path_provider_platform_interface",
+      "notice": "dart/path_provider_platform_interface/LICENSE",
+      "sha256": "89519eca6f7b9529b35bdddd623a58c3af06a88c458dbd6531ddb4675acf75a9",
+      "source": "https://pub.dev/api/archives/path_provider_platform_interface-2.1.2.tar.gz",
+      "version": "2.1.2",
+      "dependency": "transitive",
+      "package_source": "hosted",
+      "archive_sha256": "88f5779f72ba699763fa3a3b06aa4bf6de76c8e5de842cf6f29e2e06476c2334"
+    },
+    {
+      "id": "dart:path_provider_windows",
+      "notice": "dart/path_provider_windows/LICENSE",
+      "sha256": "89519eca6f7b9529b35bdddd623a58c3af06a88c458dbd6531ddb4675acf75a9",
+      "source": "https://pub.dev/api/archives/path_provider_windows-2.3.0.tar.gz",
+      "version": "2.3.0",
+      "dependency": "transitive",
+      "package_source": "hosted",
+      "archive_sha256": "bd6f00dbd873bfb70d0761682da2b3a2c2fccc2b9e84c495821639601d81afe7"
+    },
+    {
+      "id": "dart:pdfium_dart",
+      "notice": "dart/pdfium_dart/LICENSE",
+      "sha256": "16f4c11b53a761752b6150fba4bfe9e6b99534be555611d56e09b763bca39273",
+      "source": "https://pub.dev/api/archives/pdfium_dart-0.1.3.tar.gz",
+      "version": "0.1.3",
+      "dependency": "transitive",
+      "package_source": "hosted",
+      "archive_sha256": "f1683b9070ddc5c9189c6ee008c285791da66328ce1b882c7162d3393f3a4a74"
+    },
+    {
+      "id": "dart:pdfium_flutter",
+      "notice": "dart/pdfium_flutter/LICENSE",
+      "sha256": "567f9f1ce8a40a384765361ac0d204efdc355be53caed412cf8a0e6158d470bf",
+      "source": "https://pub.dev/api/archives/pdfium_flutter-0.1.9.tar.gz",
+      "version": "0.1.9",
+      "dependency": "transitive",
+      "package_source": "hosted",
+      "archive_sha256": "0c8b7d5d11d20a1486eade599648e907067568955bd14a1b06de076a968b60a1"
+    },
+    {
+      "id": "dart:pdfrx",
+      "notice": "dart/pdfrx/LICENSE",
+      "sha256": "050ccfd8256df03e5ccaec222c0f87a4e5e2069c69515f027b534a63fb00fe23",
+      "source": "https://pub.dev/api/archives/pdfrx-2.2.24.tar.gz",
+      "version": "2.2.24",
+      "dependency": "direct main",
+      "package_source": "hosted",
+      "archive_sha256": "e32e0c786528eec2b3c56b43f59ef1debce3a27c7accd862b95413f949afcfa9"
+    },
+    {
+      "id": "dart:pdfrx_engine",
+      "notice": "dart/pdfrx_engine/LICENSE",
+      "sha256": "050ccfd8256df03e5ccaec222c0f87a4e5e2069c69515f027b534a63fb00fe23",
+      "source": "https://pub.dev/api/archives/pdfrx_engine-0.3.9.tar.gz",
+      "version": "0.3.9",
+      "dependency": "transitive",
+      "package_source": "hosted",
+      "archive_sha256": "a8914433d1f6188b903c53d36b9d7dc908bfa89131591a9db22f1a22470d3a48"
+    },
+    {
+      "id": "dart:petitparser",
+      "notice": "dart/petitparser/LICENSE",
+      "sha256": "d2e8ffdbe89acbc10d5d1f2b03e7dbddf0a9f1742e809176682b62ef3d573b3e",
+      "source": "https://pub.dev/api/archives/petitparser-7.0.2.tar.gz",
+      "version": "7.0.2",
+      "dependency": "transitive",
+      "package_source": "hosted",
+      "archive_sha256": "91bd59303e9f769f108f8df05e371341b15d59e995e6806aefab827b58336675"
+    },
+    {
+      "id": "dart:platform",
+      "notice": "dart/platform/LICENSE",
+      "sha256": "143839f62c9b7f88143ea9f688361c27050888acde7696b34e04414bd254fafc",
+      "source": "https://pub.dev/api/archives/platform-3.1.6.tar.gz",
+      "version": "3.1.6",
+      "dependency": "transitive",
+      "package_source": "hosted",
+      "archive_sha256": "5d6b1b0036a5f331ebc77c850ebc8506cbc1e9416c27e59b439f917a902a4984"
+    },
+    {
+      "id": "dart:plugin_platform_interface",
+      "notice": "dart/plugin_platform_interface/LICENSE",
+      "sha256": "89519eca6f7b9529b35bdddd623a58c3af06a88c458dbd6531ddb4675acf75a9",
+      "source": "https://pub.dev/api/archives/plugin_platform_interface-2.1.8.tar.gz",
+      "version": "2.1.8",
+      "dependency": "transitive",
+      "package_source": "hosted",
+      "archive_sha256": "4820fbfdb9478b1ebae27888254d445073732dae3d6ea81f0b7e06d5dedc3f02"
+    },
+    {
+      "id": "dart:posix",
+      "notice": "dart/posix/LICENSE",
+      "sha256": "aaf6271abd048deb3125828613f1797b7556472de6c7acd7103bd43e9cb6a84b",
+      "source": "https://pub.dev/api/archives/posix-6.5.0.tar.gz",
+      "version": "6.5.0",
+      "dependency": "transitive",
+      "package_source": "hosted",
+      "archive_sha256": "185ef7606574f789b40f289c233efa52e96dead518aed988e040a10737febb07"
+    },
+    {
+      "id": "dart:pub_semver",
+      "notice": "dart/pub_semver/LICENSE",
+      "sha256": "3c32b53167c7dae9190c38dab5dd9fe1789c53623ebc7d1babcb29914c5b3f16",
+      "source": "https://pub.dev/api/archives/pub_semver-2.2.0.tar.gz",
+      "version": "2.2.0",
+      "dependency": "transitive",
+      "package_source": "hosted",
+      "archive_sha256": "5bfcf68ca79ef689f8990d1160781b4bad40a3bd5e5218ad4076ddb7f4081585"
+    },
+    {
+      "id": "dart:rxdart",
+      "notice": "dart/rxdart/LICENSE",
+      "sha256": "c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4",
+      "source": "https://pub.dev/api/archives/rxdart-0.28.0.tar.gz",
+      "version": "0.28.0",
+      "dependency": "transitive",
+      "package_source": "hosted",
+      "archive_sha256": "5c3004a4a8dbb94bd4bf5412a4def4acdaa12e12f269737a5751369e12d1a962"
+    },
+    {
+      "id": "dart:share_intent_package",
+      "notice": "dart/share_intent_package/LICENSE",
+      "sha256": "5e1f0f7fa217f707e234a5594a628329b5d6ba4a493926c9a2bc2bd4db7d1fb2",
+      "source": "https://pub.dev/api/archives/share_intent_package-1.0.29.tar.gz",
+      "version": "1.0.29",
+      "dependency": "direct main",
+      "package_source": "hosted",
+      "archive_sha256": "3ff375a849ae83841f1b2ce54b684f424ea4a8dca691c2c5a624a202ee905e6e"
+    },
+    {
+      "id": "dart:shared_preferences",
+      "notice": "dart/shared_preferences/LICENSE",
+      "sha256": "420f7739f169097f0aad1242045169cd643c8f1d94e62866fad265ae4c369b7d",
+      "source": "https://pub.dev/api/archives/shared_preferences-2.5.5.tar.gz",
+      "version": "2.5.5",
+      "dependency": "direct main",
+      "package_source": "hosted",
+      "archive_sha256": "c3025c5534b01739267eb7d76959bbc25a6d10f6988e1c2a3036940133dd10bf"
+    },
+    {
+      "id": "dart:shared_preferences_android",
+      "notice": "dart/shared_preferences_android/LICENSE",
+      "sha256": "420f7739f169097f0aad1242045169cd643c8f1d94e62866fad265ae4c369b7d",
+      "source": "https://pub.dev/api/archives/shared_preferences_android-2.4.23.tar.gz",
+      "version": "2.4.23",
+      "dependency": "transitive",
+      "package_source": "hosted",
+      "archive_sha256": "e8d4762b1e2e8578fc4d0fd548cebf24afd24f49719c08974df92834565e2c53"
+    },
+    {
+      "id": "dart:shared_preferences_foundation",
+      "notice": "dart/shared_preferences_foundation/LICENSE",
+      "sha256": "420f7739f169097f0aad1242045169cd643c8f1d94e62866fad265ae4c369b7d",
+      "source": "https://pub.dev/api/archives/shared_preferences_foundation-2.5.6.tar.gz",
+      "version": "2.5.6",
+      "dependency": "transitive",
+      "package_source": "hosted",
+      "archive_sha256": "4e7eaffc2b17ba398759f1151415869a34771ba11ebbccd1b0145472a619a64f"
+    },
+    {
+      "id": "dart:shared_preferences_linux",
+      "notice": "dart/shared_preferences_linux/LICENSE",
+      "sha256": "89519eca6f7b9529b35bdddd623a58c3af06a88c458dbd6531ddb4675acf75a9",
+      "source": "https://pub.dev/api/archives/shared_preferences_linux-2.4.1.tar.gz",
+      "version": "2.4.1",
+      "dependency": "transitive",
+      "package_source": "hosted",
+      "archive_sha256": "580abfd40f415611503cae30adf626e6656dfb2f0cee8f465ece7b6defb40f2f"
+    },
+    {
+      "id": "dart:shared_preferences_platform_interface",
+      "notice": "dart/shared_preferences_platform_interface/LICENSE",
+      "sha256": "420f7739f169097f0aad1242045169cd643c8f1d94e62866fad265ae4c369b7d",
+      "source": "https://pub.dev/api/archives/shared_preferences_platform_interface-2.4.2.tar.gz",
+      "version": "2.4.2",
+      "dependency": "transitive",
+      "package_source": "hosted",
+      "archive_sha256": "649dc798a33931919ea356c4305c2d1f81619ea6e92244070b520187b5140ef9"
+    },
+    {
+      "id": "dart:shared_preferences_web",
+      "notice": "dart/shared_preferences_web/LICENSE",
+      "sha256": "89519eca6f7b9529b35bdddd623a58c3af06a88c458dbd6531ddb4675acf75a9",
+      "source": "https://pub.dev/api/archives/shared_preferences_web-2.4.3.tar.gz",
+      "version": "2.4.3",
+      "dependency": "transitive",
+      "package_source": "hosted",
+      "archive_sha256": "c49bd060261c9a3f0ff445892695d6212ff603ef3115edbb448509d407600019"
+    },
+    {
+      "id": "dart:shared_preferences_windows",
+      "notice": "dart/shared_preferences_windows/LICENSE",
+      "sha256": "89519eca6f7b9529b35bdddd623a58c3af06a88c458dbd6531ddb4675acf75a9",
+      "source": "https://pub.dev/api/archives/shared_preferences_windows-2.4.1.tar.gz",
+      "version": "2.4.1",
+      "dependency": "transitive",
+      "package_source": "hosted",
+      "archive_sha256": "94ef0f72b2d71bc3e700e025db3710911bd51a71cefb65cc609dd0d9a982e3c1"
+    },
+    {
+      "id": "dart:source_span",
+      "notice": "dart/source_span/LICENSE",
+      "sha256": "3c32b53167c7dae9190c38dab5dd9fe1789c53623ebc7d1babcb29914c5b3f16",
+      "source": "https://pub.dev/api/archives/source_span-1.10.2.tar.gz",
+      "version": "1.10.2",
+      "dependency": "transitive",
+      "package_source": "hosted",
+      "archive_sha256": "56a02f1f4cd1a2d96303c0144c93bd6d909eea6bee6bf5a0e0b685edbd4c47ab"
+    },
+    {
+      "id": "dart:stack_trace",
+      "notice": "dart/stack_trace/LICENSE",
+      "sha256": "ff0b91d4f3c32b25cb6ec84985e8da89b0ba2a2b2f7eef353cda5e5423a20390",
+      "source": "https://pub.dev/api/archives/stack_trace-1.12.1.tar.gz",
+      "version": "1.12.1",
+      "dependency": "transitive",
+      "package_source": "hosted",
+      "archive_sha256": "8b27215b45d22309b5cddda1aa2b19bdfec9df0e765f2de506401c071d38d1b1"
+    },
+    {
+      "id": "dart:stream_channel",
+      "notice": "dart/stream_channel/LICENSE",
+      "sha256": "ff15faa32a2e638107b7789592b14426162a75ba620044ee2340a20ec6ce5e73",
+      "source": "https://pub.dev/api/archives/stream_channel-2.1.4.tar.gz",
+      "version": "2.1.4",
+      "dependency": "transitive",
+      "package_source": "hosted",
+      "archive_sha256": "969e04c80b8bcdf826f8f16579c7b14d780458bd97f56d107d3950fdbeef059d"
+    },
+    {
+      "id": "dart:string_scanner",
+      "notice": "dart/string_scanner/LICENSE",
+      "sha256": "3c32b53167c7dae9190c38dab5dd9fe1789c53623ebc7d1babcb29914c5b3f16",
+      "source": "https://pub.dev/api/archives/string_scanner-1.4.1.tar.gz",
+      "version": "1.4.1",
+      "dependency": "transitive",
+      "package_source": "hosted",
+      "archive_sha256": "921cd31725b72fe181906c6a94d987c78e3b98c2e205b397ea399d4054872b43"
+    },
+    {
+      "id": "dart:synchronized",
+      "notice": "dart/synchronized/LICENSE",
+      "sha256": "6d07c6bb60afb906049d507e19fcc4c6b59e35c0dd0f8a7302e87b3fb0576900",
+      "source": "https://pub.dev/api/archives/synchronized-3.4.0.tar.gz",
+      "version": "3.4.0",
+      "dependency": "transitive",
+      "package_source": "hosted",
+      "archive_sha256": "c254ade258ec8282947a0acbbc90b9575b4f19673533ee46f2f6e9b3aeefd7c0"
+    },
+    {
+      "id": "dart:term_glyph",
+      "notice": "dart/term_glyph/LICENSE",
+      "sha256": "ea97a7558a7bd7cee4e2355f7529e3cbebb0dcbb546ddb9a90f10c9eb6b08da5",
+      "source": "https://pub.dev/api/archives/term_glyph-1.2.2.tar.gz",
+      "version": "1.2.2",
+      "dependency": "transitive",
+      "package_source": "hosted",
+      "archive_sha256": "7f554798625ea768a7518313e58f83891c7f5024f88e46e7182a4558850a4b8e"
+    },
+    {
+      "id": "dart:test_api",
+      "notice": "dart/test_api/LICENSE",
+      "sha256": "ff1b9f0df9036c04be424b1e3ce12789bea880ad5ffc3a48e069ae2d40a087a4",
+      "source": "https://pub.dev/api/archives/test_api-0.7.10.tar.gz",
+      "version": "0.7.10",
+      "dependency": "transitive",
+      "package_source": "hosted",
+      "archive_sha256": "8161c84903fd860b26bfdefb7963b3f0b68fee7adea0f59ef805ecca346f0c7a"
+    },
+    {
+      "id": "dart:typed_data",
+      "notice": "dart/typed_data/LICENSE",
+      "sha256": "ff15faa32a2e638107b7789592b14426162a75ba620044ee2340a20ec6ce5e73",
+      "source": "https://pub.dev/api/archives/typed_data-1.4.0.tar.gz",
+      "version": "1.4.0",
+      "dependency": "transitive",
+      "package_source": "hosted",
+      "archive_sha256": "f9049c039ebfeb4cf7a7104a675823cd72dba8297f264b6637062516699fa006"
+    },
+    {
+      "id": "dart:universal_platform",
+      "notice": "dart/universal_platform/LICENSE",
+      "sha256": "8a135e09d6288f03171b04f07f00eb5ee04e54f2f5e9c9b952f6adbd1de48c3f",
+      "source": "https://pub.dev/api/archives/universal_platform-1.1.0.tar.gz",
+      "version": "1.1.0",
+      "dependency": "transitive",
+      "package_source": "hosted",
+      "archive_sha256": "64e16458a0ea9b99260ceb5467a214c1f298d647c659af1bff6d3bf82536b1ec"
+    },
+    {
+      "id": "dart:url_launcher",
+      "notice": "dart/url_launcher/LICENSE",
+      "sha256": "89519eca6f7b9529b35bdddd623a58c3af06a88c458dbd6531ddb4675acf75a9",
+      "source": "https://pub.dev/api/archives/url_launcher-6.3.2.tar.gz",
+      "version": "6.3.2",
+      "dependency": "transitive",
+      "package_source": "hosted",
+      "archive_sha256": "f6a7e5c4835bb4e3026a04793a4199ca2d14c739ec378fdfe23fc8075d0439f8"
+    },
+    {
+      "id": "dart:url_launcher_android",
+      "notice": "dart/url_launcher_android/LICENSE",
+      "sha256": "420f7739f169097f0aad1242045169cd643c8f1d94e62866fad265ae4c369b7d",
+      "source": "https://pub.dev/api/archives/url_launcher_android-6.3.29.tar.gz",
+      "version": "6.3.29",
+      "dependency": "transitive",
+      "package_source": "hosted",
+      "archive_sha256": "3bb000251e55d4a209aa0e2e563309dc9bb2befea2295fd0cec1f51760aac572"
+    },
+    {
+      "id": "dart:url_launcher_ios",
+      "notice": "dart/url_launcher_ios/LICENSE",
+      "sha256": "420f7739f169097f0aad1242045169cd643c8f1d94e62866fad265ae4c369b7d",
+      "source": "https://pub.dev/api/archives/url_launcher_ios-6.4.1.tar.gz",
+      "version": "6.4.1",
+      "dependency": "transitive",
+      "package_source": "hosted",
+      "archive_sha256": "580fe5dfb51671ae38191d316e027f6b76272b026370708c2d898799750a02b0"
+    },
+    {
+      "id": "dart:url_launcher_linux",
+      "notice": "dart/url_launcher_linux/LICENSE",
+      "sha256": "420f7739f169097f0aad1242045169cd643c8f1d94e62866fad265ae4c369b7d",
+      "source": "https://pub.dev/api/archives/url_launcher_linux-3.2.2.tar.gz",
+      "version": "3.2.2",
+      "dependency": "transitive",
+      "package_source": "hosted",
+      "archive_sha256": "d5e14138b3bc193a0f63c10a53c94b91d399df0512b1f29b94a043db7482384a"
+    },
+    {
+      "id": "dart:url_launcher_macos",
+      "notice": "dart/url_launcher_macos/LICENSE",
+      "sha256": "420f7739f169097f0aad1242045169cd643c8f1d94e62866fad265ae4c369b7d",
+      "source": "https://pub.dev/api/archives/url_launcher_macos-3.2.5.tar.gz",
+      "version": "3.2.5",
+      "dependency": "transitive",
+      "package_source": "hosted",
+      "archive_sha256": "368adf46f71ad3c21b8f06614adb38346f193f3a59ba8fe9a2fd74133070ba18"
+    },
+    {
+      "id": "dart:url_launcher_platform_interface",
+      "notice": "dart/url_launcher_platform_interface/LICENSE",
+      "sha256": "89519eca6f7b9529b35bdddd623a58c3af06a88c458dbd6531ddb4675acf75a9",
+      "source": "https://pub.dev/api/archives/url_launcher_platform_interface-2.3.2.tar.gz",
+      "version": "2.3.2",
+      "dependency": "transitive",
+      "package_source": "hosted",
+      "archive_sha256": "552f8a1e663569be95a8190206a38187b531910283c3e982193e4f2733f01029"
+    },
+    {
+      "id": "dart:url_launcher_web",
+      "notice": "dart/url_launcher_web/LICENSE",
+      "sha256": "701685f06531252f28c562b28066133393fbd9bdfb27dec7237e8c09391964df",
+      "source": "https://pub.dev/api/archives/url_launcher_web-2.4.2.tar.gz",
+      "version": "2.4.2",
+      "dependency": "transitive",
+      "package_source": "hosted",
+      "archive_sha256": "d0412fcf4c6b31ecfdb7762359b7206ffba3bbffd396c6d9f9c4616ece476c1f"
+    },
+    {
+      "id": "dart:url_launcher_windows",
+      "notice": "dart/url_launcher_windows/LICENSE",
+      "sha256": "420f7739f169097f0aad1242045169cd643c8f1d94e62866fad265ae4c369b7d",
+      "source": "https://pub.dev/api/archives/url_launcher_windows-3.1.5.tar.gz",
+      "version": "3.1.5",
+      "dependency": "transitive",
+      "package_source": "hosted",
+      "archive_sha256": "712c70ab1b99744ff066053cbe3e80c73332b38d46e5e945c98689b2e66fc15f"
+    },
+    {
+      "id": "dart:uuid",
+      "notice": "dart/uuid/LICENSE",
+      "sha256": "ad3e5523e51004e94ba9ce728805b1b4242dbccdb65e62b523800e35a8a7cfdc",
+      "source": "https://pub.dev/api/archives/uuid-4.5.3.tar.gz",
+      "version": "4.5.3",
+      "dependency": "transitive",
+      "package_source": "hosted",
+      "archive_sha256": "1fef9e8e11e2991bb773070d4656b7bd5d850967a2456cfc83cf47925ba79489"
+    },
+    {
+      "id": "dart:vector_math",
+      "notice": "dart/vector_math/LICENSE",
+      "sha256": "b5d856a1e27e9ebea4957fc3526f1c65782a04894b113c6b3b0fb1321dbdec55",
+      "source": "https://pub.dev/api/archives/vector_math-2.2.0.tar.gz",
+      "version": "2.2.0",
+      "dependency": "transitive",
+      "package_source": "hosted",
+      "archive_sha256": "d530bd74fea330e6e364cda7a85019c434070188383e1cd8d9777ee586914c5b"
+    },
+    {
+      "id": "dart:vm_service",
+      "notice": "dart/vm_service/LICENSE",
+      "sha256": "ad6a71997da90924b2cfb1fb47ec46537f70faf469efe016168794ae45ed6888",
+      "source": "https://pub.dev/api/archives/vm_service-15.0.2.tar.gz",
+      "version": "15.0.2",
+      "dependency": "transitive",
+      "package_source": "hosted",
+      "archive_sha256": "45caa6c5917fa127b5dbcfbd1fa60b14e583afdc08bfc96dda38886ca252eb60"
+    },
+    {
+      "id": "dart:web",
+      "notice": "dart/web/LICENSE",
+      "sha256": "aa913ff50d7542eb8cc35b9f48a80928ac6819ba9057f85d424655e3e8dc271c",
+      "source": "https://pub.dev/api/archives/web-1.1.1.tar.gz",
+      "version": "1.1.1",
+      "dependency": "transitive",
+      "package_source": "hosted",
+      "archive_sha256": "868d88a33d8a87b18ffc05f9f030ba328ffefba92d6c127917a2ba740f9cfe4a"
+    },
+    {
+      "id": "dart:win32",
+      "notice": "dart/win32/LICENSE",
+      "sha256": "87ef8bccdd619f2345ba5b9026cf1d6cccb305e36ab83849a8a3af9293abde7e",
+      "source": "https://pub.dev/api/archives/win32-5.15.0.tar.gz",
+      "version": "5.15.0",
+      "dependency": "transitive",
+      "package_source": "hosted",
+      "archive_sha256": "d7cb55e04cd34096cd3a79b3330245f54cb96a370a1c27adb3c84b917de8b08e"
+    },
+    {
+      "id": "dart:xdg_directories",
+      "notice": "dart/xdg_directories/LICENSE",
+      "sha256": "89519eca6f7b9529b35bdddd623a58c3af06a88c458dbd6531ddb4675acf75a9",
+      "source": "https://pub.dev/api/archives/xdg_directories-1.1.0.tar.gz",
+      "version": "1.1.0",
+      "dependency": "transitive",
+      "package_source": "hosted",
+      "archive_sha256": "7a3f37b05d989967cdddcbb571f1ea834867ae2faa29725fd085180e0883aa15"
+    },
+    {
+      "id": "dart:xml",
+      "notice": "dart/xml/LICENSE",
+      "sha256": "1f18a2e5a5c57381d93efa92df86477eb1205689b345417c90fcfdc09fa4fa1f",
+      "source": "https://pub.dev/api/archives/xml-6.6.1.tar.gz",
+      "version": "6.6.1",
+      "dependency": "direct main",
+      "package_source": "hosted",
+      "archive_sha256": "971043b3a0d3da28727e40ed3e0b5d18b742fa5a68665cca88e74b7876d5e025"
+    },
+    {
+      "id": "dart:yaml",
+      "notice": "dart/yaml/LICENSE",
+      "sha256": "d47b93335401b052d79a2f5a3710e4cf7b5aed782faedf84d40fbdd6eb934ec7",
+      "source": "https://pub.dev/api/archives/yaml-3.1.3.tar.gz",
+      "version": "3.1.3",
+      "dependency": "transitive",
+      "package_source": "hosted",
+      "archive_sha256": "b9da305ac7c39faa3f030eccd175340f968459dae4af175130b3fc47e40d76ce"
+    },
+    {
+      "id": "font:ibmplexmono",
+      "notice": "fonts/ibmplexmono-OFL.txt",
+      "sha256": "7e6b2818edbd8f6a01ae80641cc8f16a51080d08fb4e532be3a0b6f74adb07da",
+      "source": "https://raw.githubusercontent.com/google/fonts/e7db6ca603fd4862010383ff17ffd6cc4ffac1c0/ofl/ibmplexmono/OFL.txt",
+      "qualification": "OFL grant; all bundled family font files byte-match the pinned Google Fonts revision recorded under assets."
+    },
+    {
+      "id": "font:sourcesans3",
+      "notice": "fonts/sourcesans3-OFL.txt",
+      "sha256": "09746787287a289323b0ec3cff4d1a4a801331b82b7207c1e186f5d26619a392",
+      "source": "https://raw.githubusercontent.com/google/fonts/e7db6ca603fd4862010383ff17ffd6cc4ffac1c0/ofl/sourcesans3/OFL.txt",
+      "qualification": "OFL grant; all bundled family font files byte-match the pinned Google Fonts revision recorded under assets."
+    },
+    {
+      "id": "font:sourceserif4",
+      "notice": "fonts/sourceserif4-OFL.txt",
+      "sha256": "5f94c3fd3a23131a417ab5a0c8452de57e70c3cfb9f604d88241f7065ebf9fd9",
+      "source": "https://raw.githubusercontent.com/google/fonts/e7db6ca603fd4862010383ff17ffd6cc4ffac1c0/ofl/sourceserif4/OFL.txt",
+      "qualification": "OFL grant; all bundled family font files byte-match the pinned Google Fonts revision recorded under assets."
+    },
+    {
+      "id": "native:onnxruntime",
+      "notice": "native/onnxruntime-1.22.0/LICENSE",
+      "sha256": "2f07c72751aed99790b8a4869cf2311df85a860b22ded05fa22803587a48922c",
+      "source": "https://raw.githubusercontent.com/microsoft/onnxruntime/v1.22.0/LICENSE",
+      "version": "1.22.0"
+    },
+    {
+      "id": "native:onnxruntime",
+      "notice": "native/onnxruntime-1.22.0/ThirdPartyNotices.txt",
+      "sha256": "e9e90971a8e75a9a8ac0c6412e29c1202d079998389915aa485f46c816c3b4cc",
+      "source": "https://raw.githubusercontent.com/microsoft/onnxruntime/v1.22.0/ThirdPartyNotices.txt",
+      "version": "1.22.0"
+    },
+    {
+      "id": "native:pdfium",
+      "notice": "native/pdfium-7520/LICENSE",
+      "sha256": "1fe9dea718fbd75cf149adaf4d8a22a4335604d964ddb76d1b45383dec8668c9",
+      "source": "https://pdfium.googlesource.com/pdfium/+/refs/heads/chromium/7520/LICENSE?format=TEXT",
+      "qualification": "Root PDFium grant only; transitive build notices unresolved",
+      "archive_url": "https://github.com/espresso3389/pdfium-xcframework/releases/download/v144.0.7520.0-20251111-190355/PDFium-chromium-7520-20251111-190355.xcframework.zip",
+      "archive_sha256": "bd2a9542f13c78b06698c7907936091ceee2713285234cbda2e16bc03c64810b"
+    },
+    {
+      "id": "reference:apache-2.0",
+      "notice": "assets/Apache-2.0.txt",
+      "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30",
+      "source": "https://www.apache.org/licenses/LICENSE-2.0.txt",
+      "qualification": "Reference grant for upstream Kokoro Apache-2.0 declaration; not evidence of exact ONNX/voice origin"
+    },
+    {
+      "id": "sdk:flutter",
+      "notice": "sdk/LICENSE",
+      "sha256": "a598db94b6290ffbe10b5ecf911057b6a943351c727fdda9e5f2891d68700a20",
+      "source": "Flutter SDK 2c9eb20739dfec95e2c74bd3dfa4601b0a8a36aa/LICENSE",
+      "qualification": "SDK source snapshot only; actual arm64 candidate engine notices must be collected at packaging"
+    },
+    {
+      "id": "sdk:flutter",
+      "notice": "sdk/PATENT_GRANT",
+      "sha256": "e33767403dfe88f4a0786ebaa8b44d27d2427112ca9aef68d74bc443938df606",
+      "source": "Flutter SDK 2c9eb20739dfec95e2c74bd3dfa4601b0a8a36aa/PATENT_GRANT",
+      "qualification": "SDK source snapshot only; actual arm64 candidate engine notices must be collected at packaging"
+    },
+    {
+      "id": "sdk:flutter",
+      "notice": "sdk/bin_cache_artifacts_material_fonts_MaterialIcons_LICENSE.txt",
+      "sha256": "be698262aecd042c0de6f886cc0af622f8def446462026992cc530275d8a9e74",
+      "source": "Flutter SDK 2c9eb20739dfec95e2c74bd3dfa4601b0a8a36aa/bin/cache/artifacts/material_fonts/MaterialIcons_LICENSE.txt",
+      "qualification": "SDK source snapshot only; actual arm64 candidate engine notices must be collected at packaging"
+    },
+    {
+      "id": "sdk:flutter",
+      "notice": "sdk/bin_cache_artifacts_material_fonts_Roboto_LICENSE.txt",
+      "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30",
+      "source": "Flutter SDK 2c9eb20739dfec95e2c74bd3dfa4601b0a8a36aa/bin/cache/artifacts/material_fonts/Roboto_LICENSE.txt",
+      "qualification": "SDK source snapshot only; actual arm64 candidate engine notices must be collected at packaging"
+    },
+    {
+      "id": "sdk:flutter",
+      "notice": "sdk/bin_cache_dart-sdk_LICENSE",
+      "sha256": "2cfa3ee8e7512e6d44c854b986510810fadc815f93f890373b3a81c1b6ccd256",
+      "source": "Flutter SDK 2c9eb20739dfec95e2c74bd3dfa4601b0a8a36aa/bin/cache/dart-sdk/LICENSE",
+      "qualification": "SDK source snapshot only; actual arm64 candidate engine notices must be collected at packaging"
+    }
+  ],
+  "assets": [
+    {
+      "path": "assets/cmudict.dict",
+      "size": 3618488,
+      "sha256": "81917843c7f44ce2b094ac63873c2c7a4cf802040792c455ba3ca406891c3d22"
+    },
+    {
+      "path": "assets/fonts/IBMPlexMono-Medium.ttf",
+      "size": 136704,
+      "sha256": "a9b4c49bb299e05b5f6c481e7fb5e78943d2793249a0c8874ab574a2d1ea6755",
+      "comparison_source": "https://raw.githubusercontent.com/google/fonts/e7db6ca603fd4862010383ff17ffd6cc4ffac1c0/ofl/ibmplexmono/IBMPlexMono-Medium.ttf",
+      "comparison_sha256": "a9b4c49bb299e05b5f6c481e7fb5e78943d2793249a0c8874ab574a2d1ea6755",
+      "matches_comparison": true
+    },
+    {
+      "path": "assets/fonts/IBMPlexMono-Regular.ttf",
+      "size": 135580,
+      "sha256": "6a3412f058c7d8dfd9170c41e85ade48e5156ecb89356110ca57a0a27734af46",
+      "comparison_source": "https://raw.githubusercontent.com/google/fonts/e7db6ca603fd4862010383ff17ffd6cc4ffac1c0/ofl/ibmplexmono/IBMPlexMono-Regular.ttf",
+      "comparison_sha256": "6a3412f058c7d8dfd9170c41e85ade48e5156ecb89356110ca57a0a27734af46",
+      "matches_comparison": true
+    },
+    {
+      "path": "assets/fonts/IBMPlexMono-SemiBold.ttf",
+      "size": 140216,
+      "sha256": "d3c38e55c78f5b0f28009fddba4834ec503278936a5986032424c9bd2d23aa46",
+      "comparison_source": "https://raw.githubusercontent.com/google/fonts/e7db6ca603fd4862010383ff17ffd6cc4ffac1c0/ofl/ibmplexmono/IBMPlexMono-SemiBold.ttf",
+      "comparison_sha256": "d3c38e55c78f5b0f28009fddba4834ec503278936a5986032424c9bd2d23aa46",
+      "matches_comparison": true
+    },
+    {
+      "path": "assets/fonts/SourceSans3[wght].ttf",
+      "size": 646340,
+      "sha256": "042fe2cc0b933e328410d7acbd0aa6a1873dca5aef81875f4bc214b08825c7b9",
+      "comparison_source": "https://raw.githubusercontent.com/google/fonts/e7db6ca603fd4862010383ff17ffd6cc4ffac1c0/ofl/sourcesans3/SourceSans3%5Bwght%5D.ttf",
+      "comparison_sha256": "042fe2cc0b933e328410d7acbd0aa6a1873dca5aef81875f4bc214b08825c7b9",
+      "matches_comparison": true
+    },
+    {
+      "path": "assets/fonts/SourceSerif4[opsz,wght].ttf",
+      "size": 1209508,
+      "sha256": "97b2d4da6e3cb494b5a1e66ae176914d852ccabef49e0c02c0df25f3e39aca0b",
+      "comparison_source": "https://raw.githubusercontent.com/google/fonts/e7db6ca603fd4862010383ff17ffd6cc4ffac1c0/ofl/sourceserif4/SourceSerif4%5Bopsz%2Cwght%5D.ttf",
+      "comparison_sha256": "97b2d4da6e3cb494b5a1e66ae176914d852ccabef49e0c02c0df25f3e39aca0b",
+      "matches_comparison": true
+    },
+    {
+      "path": "assets/gb_gold.json",
+      "size": 2838552,
+      "sha256": "29e62f4b60261c88f7f3c2c7811ca3825978948090b72d2b27d565b729282f71",
+      "comparison_source": "https://pub.dev/api/archives/malsami-0.0.3.tar.gz#assets/gb_gold.json",
+      "comparison_sha256": "29e62f4b60261c88f7f3c2c7811ca3825978948090b72d2b27d565b729282f71",
+      "matches_comparison": true,
+      "comparison_archive_sha256_verified": true
+    },
+    {
+      "path": "assets/gb_silver.json",
+      "size": 3663898,
+      "sha256": "48131e2d92ccc41655f4543e87e0f938e71463eb5a54be7f0693bb712ebb6bce",
+      "comparison_source": "https://pub.dev/api/archives/malsami-0.0.3.tar.gz#assets/gb_silver.json",
+      "comparison_sha256": "48131e2d92ccc41655f4543e87e0f938e71463eb5a54be7f0693bb712ebb6bce",
+      "matches_comparison": true,
+      "comparison_archive_sha256_verified": true
+    },
+    {
+      "path": "assets/kokoro/model/README.md",
+      "size": 688,
+      "sha256": "501d7356d50d047b0db5f398ffeb3ef90f3a6e3f6a4abb6ddab9e06c9f4fee89"
+    },
+    {
+      "path": "assets/kokoro/voices/af_bella.npy",
+      "size": 522368,
+      "sha256": "adf92f9d074ce202966ac1aecd25c5f0eb9e8395d8d3ccb519f77ab321c98952"
+    },
+    {
+      "path": "assets/kokoro/voices/af_heart.npy",
+      "size": 522368,
+      "sha256": "0212418aafafb1e9878f3300787937aa401ac937cff8c0310ffa32963d96c77b"
+    },
+    {
+      "path": "assets/kokoro/voices/am_fenrir.npy",
+      "size": 522368,
+      "sha256": "6940b7633234b3bba450d2adc08b2431ce6f7b4b51ad60f588ba197907a005b9"
+    },
+    {
+      "path": "assets/kokoro/voices/am_michael.npy",
+      "size": 522368,
+      "sha256": "bbb62b3eae08e060f2fcf972d5434144add02bc5f2cc592403f90cab40ae1f4f"
+    },
+    {
+      "path": "assets/kokoro/voices/am_puck.npy",
+      "size": 522368,
+      "sha256": "836a9be38c297f8cae74c32dcfe142c88b5decbce448949db75494cb002a1628"
+    },
+    {
+      "path": "assets/lexicon.json",
+      "size": 1044,
+      "sha256": "16daf88d2c22858dfc4d96fcccc85caada84b687c21fddf7c1730f1f7d8c430c",
+      "comparison_source": "https://pub.dev/api/archives/kokoro_tts_flutter-0.2.0+1.tar.gz#assets/lexicon.json",
+      "comparison_sha256": "6e3d4d9ddc401b5da14ac503c92b6f592246e9ae55043d7611ff3107508e9c13",
+      "matches_comparison": false,
+      "comparison_archive_sha256_verified": true
+    },
+    {
+      "path": "assets/tokenizer_vocab.json",
+      "size": 1381,
+      "sha256": "123650fd1232dde6c12311a4708fb4fd4e992bb3b4ffba9f4551348821dc1e2b",
+      "comparison_source": "https://pub.dev/api/archives/kokoro_tts_flutter-0.2.0+1.tar.gz#assets/tokenizer_vocab.json",
+      "comparison_sha256": "123650fd1232dde6c12311a4708fb4fd4e992bb3b4ffba9f4551348821dc1e2b",
+      "matches_comparison": true,
+      "comparison_archive_sha256_verified": true
+    },
+    {
+      "path": "assets/us_gold.json",
+      "size": 3000566,
+      "sha256": "f940372e6ee4ff3db54aef74c37e5ee76e50491801265ed39602d218b8ca39c1",
+      "comparison_source": "https://pub.dev/api/archives/malsami-0.0.3.tar.gz#assets/us_gold.json",
+      "comparison_sha256": "f940372e6ee4ff3db54aef74c37e5ee76e50491801265ed39602d218b8ca39c1",
+      "matches_comparison": true,
+      "comparison_archive_sha256_verified": true
+    },
+    {
+      "path": "assets/us_silver.json",
+      "size": 3099678,
+      "sha256": "f4ed0e7a0ba8cbebe2a5cdc4ef012522a1a3d14dbda6acd1015fe88b4176acb3",
+      "comparison_source": "https://pub.dev/api/archives/malsami-0.0.3.tar.gz#assets/us_silver.json",
+      "comparison_sha256": "f4ed0e7a0ba8cbebe2a5cdc4ef012522a1a3d14dbda6acd1015fe88b4176acb3",
+      "matches_comparison": true,
+      "comparison_archive_sha256_verified": true
+    }
+  ],
+  "blockers": [
+    {
+      "id": "project-grant",
+      "detail": "No top-level project license selected; owner must choose intended distribution permission. Public source visibility is not a grant."
+    },
+    {
+      "id": "asset-origin",
+      "detail": "Exact ONNX model/voice source revisions, transformations, grants and NOTICE propagation unestablished. Four regional tables and tokenizer_vocab byte-match SHA-256-verified locked package archives. Local lexicon differs from kokoro_tts_flutter 0.2.0+1 (40 versus 35 top-level entries); document modifications and upstream data attribution. Identify actual packaged model bytes; no asset changed."
+    },
+    {
+      "id": "pdfium-transitive",
+      "detail": "Pinned PDFium chromium-7520 root license collected; full notices for transitive code compiled into upstream XCFramework remain unverified."
+    },
+    {
+      "id": "candidate-sdk",
+      "detail": "Collect actual native arm64 SDK/Flutter engine notices and compare candidate native binary versions to pinned lockfiles. Source SDK snapshot alone is insufficient."
+    },
+    {
+      "id": "in-app-notices",
+      "detail": "Open Source Notices UI/asset access not implemented by this worker; #78 owns UI handoff."
+    },
+    {
+      "id": "distribution-signing",
+      "detail": "Distribution identity, Developer ID/notarization authorization and entitlements validation not established. No keychain/signing/config changes authorized; local candidate may be ad hoc and must disclose assessment."
+    }
+  ]
+}
