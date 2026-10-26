@@ -49,6 +49,7 @@ class ReaderDocumentRepository {
         }
         final generation = m['generation'] as String;
         if (!RegExp(r'^[0-9]+-[0-9]+$').hasMatch(generation)) return null;
+        if (await File('$path/$generation/invalidated').exists()) return null;
         final count = m['count'] as int;
         if (count < 0 ||
             m['sourceEnd'] is! int ||
@@ -125,6 +126,13 @@ class ReaderDocumentCache {
 
   String get sourceRevision => manifest['sourceRevision'] as String;
 
+  /// Revokes only this immutable generation. A stale reader cannot remove a
+  /// newer manifest: each generation has its own persistent invalidation marker.
+  /// Recovery deliberately rebuilds from source, rather than resuming a prefix.
+  Future<void> invalidate() async {
+    await File('$path/invalidated').writeAsString('invalid', flush: true);
+  }
+
   bool _reading = false;
 
   Future<DocumentPreparationPublication> readRange(
@@ -155,6 +163,9 @@ class ReaderDocumentCache {
     final identity = request.identityOnly;
     return Isolate.run(() async {
       try {
+        if (await File('$path/invalidated').exists()) {
+          throw const FormatException('Cache generation was invalidated');
+        }
         final f = File('$path/$sequence.json');
         if (await f.length() > ReaderDocumentCheckpoint.maxChunkBytes) {
           throw const FormatException('Oversized cache range');

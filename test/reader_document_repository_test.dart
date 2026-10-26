@@ -588,15 +588,35 @@ void main() {
   );
 
   test(
-    'later corrupt range fails explicitly after valid prefix; never claims EOF',
+    'later corruption invalidates generation before failure; retry rebuilds source',
     () async {
       final supervisor = DocumentPreparationSupervisor(repository: repository);
       addTearDown(supervisor.shutdown);
-      await supervisor.prepareRanges(
-        request(1, text: 'A sentence. ' * 1600),
+      final text = List.generate(
+        1000,
+        (index) => 'Section $index has its own sentence.',
+      ).join('\n\n');
+      final source = File('${directory.path}/source.txt');
+      await source.writeAsString(text);
+      DocumentPreparationRequest sourceRequest(int revision) =>
+          DocumentPreparationRequest(
+            ownerId: 'reader',
+            revision: revision,
+            kind: DocumentPreparationKind.bytes,
+            fileName: 'source.txt',
+            sourcePath: source.path,
+            sourceRevision: 'source-v1',
+            watchSession: 5,
+          );
+      final original = <DocumentPreparationPublication>[];
+      final prepared = await supervisor.prepareRanges(
+        sourceRequest(1),
         cacheKey: 'book',
-        onPublication: (_) async {},
+        onPublication: (p) async {
+          original.add(p);
+        },
       );
+      expect(prepared.outcome, DocumentPreparationOutcome.ready);
       final cache = (await repository.open(
         sourceKey: 'book',
         sourceRevision: 'source-v1',
@@ -604,7 +624,7 @@ void main() {
       await File('${cache.path}/2.json').writeAsString('corrupt');
       var published = 0;
       final result = await supervisor.prepareRanges(
-        request(2),
+        sourceRequest(2),
         cacheKey: 'book',
         onPublication: (p) async {
           published++;
@@ -614,6 +634,113 @@ void main() {
       expect(result.outcome, DocumentPreparationOutcome.failed);
       expect(result.error, contains('Unreadable cache range 2'));
       expect(published, 1);
+      expect(
+        await repository.open(sourceKey: 'book', sourceRevision: 'source-v1'),
+        isNull,
+      );
+      expect(await File('${cache.path}/invalidated').exists(), isTrue);
+
+      final rebuilt = <DocumentPreparationPublication>[];
+      final retry = await supervisor.prepareRanges(
+        sourceRequest(3),
+        cacheKey: 'book',
+        onPublication: (p) async {
+          rebuilt.add(p);
+        },
+      );
+      expect(retry.outcome, DocumentPreparationOutcome.ready);
+      expect(retry.workerName, isNot('prepared-range-cache'));
+      final replacement = (await repository.open(
+        sourceKey: 'book',
+        sourceRevision: 'source-v1',
+      ))!;
+      expect(replacement.path, isNot(cache.path));
+      expect(replacement.isComplete, isTrue);
+      expect(rebuilt.map((p) => p.sequence), original.map((p) => p.sequence));
+      expect(
+        rebuilt.map((p) => p.range.sourceStart),
+        original.map((p) => p.range.sourceStart),
+      );
+      expect(
+        rebuilt.map((p) => p.range.sourceEnd),
+        original.map((p) => p.range.sourceEnd),
+      );
+      String normalized(String value) =>
+          value.replaceAll(RegExp(r'\s+'), ' ').trim();
+      expect(
+        normalized(rebuilt.map((p) => p.fragment.speakableText).join(' ')),
+        normalized(text),
+      );
+      expect(await source.readAsString(), text);
+    },
+  );
+
+  test(
+    'invalidating an older generation cannot revoke its replacement',
+    () async {
+      final first = await repository.begin(
+        sourceKey: 'book',
+        request: request(1),
+      );
+      await first.commit(publication(request(1)));
+      await first.complete();
+      final old = (await repository.open(
+        sourceKey: 'book',
+        sourceRevision: 'source-v1',
+      ))!;
+      final latest = await repository.begin(
+        sourceKey: 'book',
+        request: request(2),
+      );
+      await latest.commit(publication(request(2)));
+      await latest.complete();
+      await old.invalidate();
+      final replacement = (await repository.open(
+        sourceKey: 'book',
+        sourceRevision: 'source-v1',
+      ))!;
+      expect(replacement.path, latest.path);
+      expect(
+        (await replacement.readRange(1, request: request(3))).isLast,
+        isTrue,
+      );
+      await expectLater(
+        old.readRange(1, request: request(3)),
+        throwsFormatException,
+      );
+    },
+  );
+
+  test(
+    'partial cache recovery restarts from source instead of resuming prefix',
+    () async {
+      final partial = await repository.begin(
+        sourceKey: 'book',
+        request: request(1),
+      );
+      await partial.commit(publication(request(1, text: 'Discarded prefix.')));
+      partial.cancel();
+      final supervisor = DocumentPreparationSupervisor(repository: repository);
+      addTearDown(supervisor.shutdown);
+      final fragments = <String>[];
+      final result = await supervisor.prepareRanges(
+        request(2),
+        cacheKey: 'book',
+        onPublication: (p) async {
+          fragments.add(p.fragment.speakableText);
+        },
+      );
+      expect(result.outcome, DocumentPreparationOutcome.ready);
+      expect(
+        fragments.join(' '),
+        publication(request(2)).fragment.speakableText,
+      );
+      final complete = (await repository.open(
+        sourceKey: 'book',
+        sourceRevision: 'source-v1',
+      ))!;
+      expect(complete.isComplete, isTrue);
+      expect(complete.path, isNot(partial.path));
     },
   );
 

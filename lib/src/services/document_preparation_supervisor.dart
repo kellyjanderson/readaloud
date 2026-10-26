@@ -148,7 +148,7 @@ class DocumentPreparationSupervisor {
         if (cache != null && cache.isComplete && cache.rangeCount > 0) {
           DocumentPreparationPublication? first;
           try {
-            first = await cache.readRange(1, request: request);
+            first = await _readCachedRange(cache, 1, request);
           } on FormatException {
             /* rebuild before publishing */
           }
@@ -158,7 +158,7 @@ class DocumentPreparationSupervisor {
             for (var sequence = 1; sequence <= cache.rangeCount; sequence++) {
               final publication = sequence == 1
                   ? first
-                  : await cache.readRange(sequence, request: request);
+                  : await _readCachedRange(cache, sequence, request);
               if (job.result.isCompleted) return;
               timer.cancel();
               await Future.any<void>([
@@ -450,6 +450,21 @@ class DocumentPreparationSupervisor {
       _pending = null;
       if (next != null && !_closed) _launch(next);
     }
+  }
+}
+
+/// Corruption revokes this generation before surfacing failure. This is one
+/// marker write, independent of book size; retry rebuilds from the source.
+Future<DocumentPreparationPublication> _readCachedRange(
+  ReaderDocumentCache cache,
+  int sequence,
+  DocumentPreparationRequest request,
+) async {
+  try {
+    return await cache.readRange(sequence, request: request);
+  } on FormatException {
+    await cache.invalidate();
+    rethrow;
   }
 }
 
