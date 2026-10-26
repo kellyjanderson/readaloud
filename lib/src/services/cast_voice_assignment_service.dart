@@ -23,7 +23,7 @@ class CastVoiceAssignmentInput {
 class CastVoiceAssignmentService {
   const CastVoiceAssignmentService();
 
-  static const assignmentVersion = 'read-aloud-cast-voice-assignments-v1';
+  static const assignmentVersion = 'read-aloud-cast-voice-assignments-v2';
 
   CastVoiceAssignmentSet resolve(CastVoiceAssignmentInput input) {
     final sortedVoices = List<VoiceProfile>.from(input.availableVoices)

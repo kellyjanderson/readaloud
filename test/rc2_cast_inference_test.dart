@@ -5,9 +5,151 @@ import 'package:read_aloud/src/models/voice_profile.dart';
 import 'package:read_aloud/src/services/character_cast_registry_service.dart';
 import 'package:read_aloud/src/services/cast_voice_assignment_service.dart';
 import 'package:read_aloud/src/services/document_import_service.dart';
+import 'package:read_aloud/src/services/speaker_attribution_service.dart';
+
+List<SpeechSegment> halo(String prefix, List<SpeechSegment> segments) => [
+  for (final segment in segments)
+    SpeechSegment(
+      segmentId: '${prefix}_${segment.segmentId}',
+      blockId: '${prefix}_${segment.blockId}',
+      ordinal: segment.ordinal,
+      paragraphIndex: segment.paragraphIndex,
+      sentenceIndex: segment.sentenceIndex,
+      normalizedText: segment.normalizedText,
+      wordCount: segment.wordCount,
+      sourceRange: segment.sourceRange,
+      displayAnchor: segment.displayAnchor,
+      wordSpans: segment.wordSpans,
+    ),
+];
 
 void main() {
   const service = CharacterCastRegistryService();
+  test(
+    'bounded preceding halo resolves first pronoun without promoting named non-speakers',
+    () {
+      final importer = DocumentImportService();
+      final before = importer.importPastedText(
+        'Beatrice stood with a tin against her chest. Ada had left a ladder.',
+      );
+      final current = importer.importPastedText('“Wait,” she said.');
+      final attribution = const SpeakerAttributionService().attribute(
+        speechDocument: current.speechDocument,
+        baseAnnotations: current.baseSpeechAnnotations,
+        contextSegments: halo('before', before.speechDocument.segments),
+      );
+      expect(
+        attribution.outcomes.single.speakerReference!.displayLabel,
+        'Beatrice',
+      );
+      final registry = service.build(
+        dialogueAttributions: attribution,
+        speechDocument: current.speechDocument,
+        previousRegistry: before.characterCastRegistry,
+        contextSegments: halo('before', before.speechDocument.segments),
+      );
+      expect(
+        registry.characterEntries.single.castId,
+        'cast_character_beatrice',
+      );
+      expect(
+        registry.characterEntries.single.inferredGender,
+        VoiceGender.female,
+      );
+    },
+  );
+  test(
+    'bounded following tag belongs to current quote but not a subsequent quotation',
+    () {
+      final importer = DocumentImportService();
+      final current = importer.importPastedText('“Wait.”');
+      final after = importer.importPastedText('Mara said.');
+      final attributed = const SpeakerAttributionService().attribute(
+        speechDocument: current.speechDocument,
+        baseAnnotations: current.baseSpeechAnnotations,
+        followingContextSegments: halo('after', after.speechDocument.segments),
+      );
+      expect(attributed.outcomes.single.speakerReference!.displayLabel, 'Mara');
+      final followingTurn = importer.importPastedText('Mara said, “Go.”');
+      final unresolved = const SpeakerAttributionService().attribute(
+        speechDocument: current.speechDocument,
+        baseAnnotations: current.baseSpeechAnnotations,
+        followingContextSegments: halo(
+          'following',
+          followingTurn.speechDocument.segments,
+        ),
+      );
+      expect(unresolved.outcomes, hasLength(1));
+      expect(unresolved.outcomes.single.speakerReference, isNull);
+    },
+  );
+  test(
+    'later alias merge retains first encounter, both evidence sets and redirects',
+    () {
+      final importer = DocumentImportService();
+      final first = importer.importPastedText(
+        'Lex lifted her hand. “Wait,” Lex said.\n\nAlex touched his coat. “Ready,” Alex replied.',
+      );
+      final later = importer.importPastedText(
+        'Alex, known as Lex, looked outside. “Listen,” Lex said.',
+      );
+      final registry = service.build(
+        dialogueAttributions: later.dialogueAttributions,
+        speechDocument: later.speechDocument,
+        previousRegistry: first.characterCastRegistry,
+      );
+      final entry = registry.characterEntries.single;
+      expect(entry.castId, 'cast_character_lex');
+      expect(registry.castIdRedirects['cast_character_alex'], entry.castId);
+      expect(entry.identityProfile!.conflictFlag, isTrue);
+      expect(entry.inferredGender, isNull);
+      expect(
+        entry.identityProfile!.evidenceSpans.map((e) => e.text).toSet(),
+        containsAll({'his', 'her'}),
+      );
+      expect(
+        entry.attributionIds.toSet(),
+        containsAll(
+          first.dialogueAttributions.outcomes.map((o) => o.attributionId),
+        ),
+      );
+    },
+  );
+  test(
+    'two compatible antecedents do not become a nearest-name attribution',
+    () {
+      final doc = DocumentImportService().importPastedText(
+        'Mara lifted her hand. Saira folded her arms. “Wait,” she said.',
+      );
+      expect(doc.dialogueAttributions.outcomes.single.speakerReference, isNull);
+    },
+  );
+  test(
+    'explicit later alias declaration preserves original canonical ID and evidence',
+    () {
+      final importer = DocumentImportService();
+      final first = importer.importPastedText(
+        'Alex lifted his hand. “Wait,” Alex said.',
+      );
+      final later = importer.importPastedText(
+        'Alex, known as Lex, opened the gate. “Ready,” Lex said.',
+      );
+      final registry = service.build(
+        dialogueAttributions: later.dialogueAttributions,
+        speechDocument: later.speechDocument,
+        previousRegistry: first.characterCastRegistry,
+      );
+      expect(registry.characterEntries, hasLength(1));
+      final entry = registry.characterEntries.single;
+      expect(entry.castId, 'cast_character_alex');
+      expect(entry.observedAliases.toSet(), {'Alex', 'Lex'});
+      expect(entry.inferredGender, VoiceGender.male);
+      expect(
+        entry.identityProfile!.evidenceSpans.map((e) => e.text),
+        contains('his'),
+      );
+    },
+  );
   CharacterIdentityProfile infer(
     String prose,
     String name, {
