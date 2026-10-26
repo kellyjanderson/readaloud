@@ -48,7 +48,7 @@ module ReleaseNotices
       path = File.join(root, 'third_party/licenses', item.fetch('notice'))
       body = File.read(path, encoding: 'UTF-8').scrub.lines.map(&:rstrip).join("\n")
       ["=" * 72, "#{item.fetch('id')} #{item['version']}".rstrip, "Source: #{item.fetch('source')}", item['qualification'], '', body].compact.join("\n")
-    end.join("\n\n") + "\n"
+    end.join("\n\n").rstrip + "\n"
   end
 end
 

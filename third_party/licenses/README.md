@@ -29,8 +29,10 @@ source of other assets, local lexicon modifications or upstream data
 attribution. The CMUdict grant is retained separately.
 
 PDFium's Chromium-7520 root grant is included. Its full transitive native notice
-set remains unresolved. The collected Flutter/Dart/material-font texts are a
-source SDK snapshot, not the actual arm64 release engine notice set. See the
+set remains unresolved. Flutter/Dart/material-font texts and the full `sky_engine`
+license bundle plus macOS release license pointer are collected for Flutter
+3.41.5 from the coordinator-verified arm64 SDK. The final app's correspondence
+to that SDK remains to be verified. See the
 [release compliance guide](../../docs/release-compliance.md) for exact limits.
 The reference Apache 2.0 text is not proof of the origin or permission of any
 particular model or voice asset. No top-level Read Aloud license is inferred.

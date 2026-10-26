@@ -69,8 +69,9 @@ is explicitly an unverified local review candidate.
 - Obtain the complete notices for code compiled into the pinned PDFium
   `v144.0.7520.0-20251111-190355` XCFramework. Its root BSD grant and the plugin's
   MIT grant alone do not cover all Chromium/PDFium transitive components.
-- Collect engine notices from the actual arm64 release SDK and reconcile actual
-  linked runtime versions with the locks. Existing source SDK texts are partial.
+- Flutter 3.41.5 engine notices are collected from the coordinator-verified arm64
+  SDK, including its full `sky_engine` license bundle. Reconcile the actual
+  candidate's SDK/engine and linked runtime versions with these notices and locks.
 - #78 must provide discoverable in-app access to the notice text and wire the
   asset into Flutter. This worker provides `third_party/licenses/NOTICES.txt`;
   it does not alter UI or `pubspec.yaml`. Packaging sidecars alone do not satisfy

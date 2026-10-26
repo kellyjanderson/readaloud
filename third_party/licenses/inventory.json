@@ -1099,6 +1099,20 @@
       "sha256": "2cfa3ee8e7512e6d44c854b986510810fadc815f93f890373b3a81c1b6ccd256",
       "source": "Flutter SDK 2c9eb20739dfec95e2c74bd3dfa4601b0a8a36aa/bin/cache/dart-sdk/LICENSE",
       "qualification": "SDK source snapshot only; actual arm64 candidate engine notices must be collected at packaging"
+    },
+    {
+      "id": "sdk:flutter-engine",
+      "notice": "sdk/macos-release-LICENSE.artifacts.md",
+      "sha256": "3230714194e10cf75dbbaf45966ba97498d200e3a092810b5054235126601e78",
+      "source": "Flutter 3.41.5 2c9eb20739dfec95e2c74bd3dfa4601b0a8a36aa / engine 052f31d115eceda8cbff1b3481fcde4330c4ae12 / bin/cache/artifacts/engine/darwin-x64-release/LICENSE.artifacts.md",
+      "qualification": "Collected from coordinator-verified arm64 SDK; engine notices are a conservative superset. Actual candidate-to-SDK identity still requires build provenance."
+    },
+    {
+      "id": "sdk:flutter-engine",
+      "notice": "sdk/sky_engine-LICENSE",
+      "sha256": "1d531df6b9d1142fa3f6abc518cfab21adc6570ae11631c40a7ba366c93d2eaa",
+      "source": "Flutter 3.41.5 2c9eb20739dfec95e2c74bd3dfa4601b0a8a36aa / engine 052f31d115eceda8cbff1b3481fcde4330c4ae12 / bin/cache/pkg/sky_engine/LICENSE",
+      "qualification": "Collected from coordinator-verified arm64 SDK; engine notices are a conservative superset. Actual candidate-to-SDK identity still requires build provenance."
     }
   ],
   "assets": [
@@ -1247,7 +1261,7 @@
     },
     {
       "id": "candidate-sdk",
-      "detail": "Collect actual native arm64 SDK/Flutter engine notices and compare candidate native binary versions to pinned lockfiles. Source SDK snapshot alone is insufficient."
+      "detail": "Flutter 3.41.5 engine notices collected from coordinator-verified arm64 SDK. Match actual candidate SDK/engine/native versions and lockfiles at packaging; no integrated candidate exists yet."
     },
     {
       "id": "in-app-notices",
