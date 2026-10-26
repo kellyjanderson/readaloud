@@ -60,6 +60,7 @@ class VoiceSessionRealizationService {
     final realizedBoundaryIntents = <RealizedBoundaryIntent>[];
     final realizedEmphasisIntents = <RealizedEmphasisIntent>[];
     final ttsSegments = <TtsArtifactSegment>[];
+    final performanceIntents = <RealizedPerformanceIntent>[];
 
     for (final segment in windowSegments) {
       final segmentAnnotations = input.baseAnnotations
@@ -85,7 +86,16 @@ class VoiceSessionRealizationService {
         input: input,
         segment: segment,
       );
+      final segmentPerformanceIntents = segmentAnnotations
+          .where((annotation) => annotation.isPerformanceIntent)
+          .map(
+            (annotation) => RealizedPerformanceIntent(annotation: annotation),
+          )
+          .toList(growable: false);
+      performanceIntents.addAll(segmentPerformanceIntents);
       final segmentDiagnosticCodes = <String>{
+        for (final intent in segmentPerformanceIntents)
+          ...intent.diagnosticCodes,
         for (final intent in segmentBoundaryIntents) ...intent.diagnosticCodes,
         for (final intent in segmentEmphasisIntents) ...intent.diagnosticCodes,
       };
@@ -99,6 +109,7 @@ class VoiceSessionRealizationService {
           pronunciationArtifacts: segmentArtifacts,
           boundaryIntents: segmentBoundaryIntents,
           emphasisIntents: segmentEmphasisIntents,
+          performanceIntents: List.unmodifiable(segmentPerformanceIntents),
           diagnosticCodes: segmentDiagnosticCodes.toList(growable: false),
         ),
       );
@@ -147,6 +158,7 @@ class VoiceSessionRealizationService {
       artifacts: realizedArtifacts,
       boundaryIntents: realizedBoundaryIntents,
       emphasisIntents: realizedEmphasisIntents,
+      performanceIntents: List.unmodifiable(performanceIntents),
       ttsArtifactSet: ttsArtifactSet,
     );
   }
@@ -595,6 +607,15 @@ String _realizationId({
       [
         input.speechDocument.normalizationVersion,
         input.baseAnnotations.annotationVersion,
+        if (input.baseAnnotations.annotations.any(
+          (annotation) => annotation.isPerformanceIntent,
+        ))
+          jsonEncode(
+            input.baseAnnotations.annotations
+                .where((annotation) => annotation.isPerformanceIntent)
+                .map((annotation) => annotation.toJson())
+                .toList(growable: false),
+          ),
         input.startSegmentId,
         input.voiceId,
         input.engineId,
