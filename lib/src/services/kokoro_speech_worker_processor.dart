@@ -3,15 +3,18 @@ import 'dart:convert';
 import 'dart:isolate';
 import 'dart:io';
 import 'dart:typed_data';
-
-import 'package:crypto/crypto.dart' as crypto;
 import 'package:flutter/services.dart';
 import 'package:kokoro_tts_flutter/kokoro_tts_flutter.dart';
-
+import '../models/prepared_voice_binding.dart';
 import 'kokoro_model_runner.dart';
+import 'model_content_snapshot.dart';
+import 'audio_artifact_store.dart';
+import 'kokoro_audio_identity.dart';
 import 'kokoro_voice_repository.dart';
 import 'speech_worker_pipeline.dart';
 
+/// One resident isolate; one command at a time. A timeout quarantines this
+/// owner until native work drains: it never starts a replacement session.
 class KokoroSpeechWorkerChunkProcessor implements SpeechWorkerChunkProcessor {
   KokoroSpeechWorkerChunkProcessor({
     required RootIsolateToken rootIsolateToken,
@@ -20,91 +23,324 @@ class KokoroSpeechWorkerChunkProcessor implements SpeechWorkerChunkProcessor {
     required String generatedAudioDirectory,
     required String engineId,
     required String engineVersion,
-  }) : _rootIsolateToken = rootIsolateToken,
-       _modelPath = modelPath,
-       _voicesDirectory = voicesDirectory,
-       _generatedAudioDirectory = generatedAudioDirectory,
-       _engineId = engineId,
-       _engineVersion = engineVersion;
+    this.timeout = const Duration(minutes: 2),
+    this.workerEntryPoint = _residentWorker,
+  }) : _configuration = {
+         'rootIsolateToken': rootIsolateToken,
+         'modelPath': modelPath,
+         'voicesDirectory': voicesDirectory,
+         'generatedAudioDirectory': generatedAudioDirectory,
+         'engineId': engineId,
+         'engineVersion': engineVersion,
+       };
+  final Map<String, dynamic> _configuration;
+  final Duration timeout;
+  final void Function(Map<String, dynamic>) workerEntryPoint;
+  final ReceivePort _port = ReceivePort();
+  final Completer<SendPort> _ready = Completer<SendPort>();
+  final Completer<void> _exited = Completer<void>();
+  Future<void>? _starting;
+  Future<void>? _closing;
+  StreamSubscription<dynamic>? _subscription;
+  Completer<Map<String, dynamic>>? _active;
+  void Function(SpeechWorkerEvent)? _emit;
+  bool _unhealthy = false;
+  bool _exiting = false;
+  int _sequence = 0;
+  int? _activeId;
 
-  final RootIsolateToken _rootIsolateToken;
-  final String _modelPath;
-  final String _voicesDirectory;
-  final String _generatedAudioDirectory;
-  final String _engineId;
-  final String _engineVersion;
+  Future<void> _start() => _starting ??= _spawn();
+  Future<void> _spawn() async {
+    _subscription = _port.listen((raw) {
+      if (raw == null || raw is List) {
+        _exiting = true;
+        _unhealthy = true;
+        final error = StateError('Resident synthesis worker exited: $raw');
+        if (!_ready.isCompleted) _ready.completeError(error);
+        if (_active != null && !_active!.isCompleted) {
+          _active!.completeError(error);
+        }
+        _active = null;
+        _emit = null;
+        if (raw == null && !_exited.isCompleted) _exited.complete();
+        return;
+      }
+      final message = Map<String, dynamic>.from(raw as Map);
+      if (message['kind'] == 'ready') {
+        _ready.complete(message['port'] as SendPort);
+        return;
+      }
+      if (message['id'] != _activeId) return;
+      if (message['kind'] == 'event') {
+        _emit?.call(SpeechWorkerEvent.fromMap(message));
+      } else if (message['kind'] == 'done') {
+        if (message['quarantined'] == true) _unhealthy = true;
+        final active = _active;
+        _active = null;
+        _emit = null;
+        if (message['error'] != null) {
+          active?.completeError(StateError(message['error'] as String));
+        } else {
+          active?.complete(message);
+        }
+      }
+    });
+    try {
+      await Isolate.spawn(
+        workerEntryPoint,
+        {..._configuration, 'reply': _port.sendPort},
+        onError: _port.sendPort,
+        onExit: _port.sendPort,
+        debugName: 'kokoro-resident',
+      );
+      await _ready.future.timeout(timeout);
+    } catch (_) {
+      _unhealthy = true;
+      rethrow;
+    }
+  }
+
+  Future<Map<String, dynamic>> _command(
+    Map<String, dynamic> command, {
+    void Function(SpeechWorkerEvent)? emit,
+    bool closing = false,
+  }) async {
+    if (!closing && (_closing != null || _unhealthy)) {
+      throw StateError('Resident worker is closing or unavailable.');
+    }
+    if (closing) {
+      // Startup may have timed out while the quarantined isolate is still
+      // initializing. Its eventual ready signal remains the cleanup channel.
+      await _ready.future;
+    } else {
+      await _start();
+    }
+    if (_active != null) {
+      throw StateError('Resident worker admission limit reached.');
+    }
+    final completion = Completer<Map<String, dynamic>>();
+    _active = completion;
+    _emit = emit;
+    _activeId = ++_sequence;
+    (await _ready.future).send({...command, 'id': _activeId});
+    try {
+      return await (closing
+          ? completion.future
+          : completion.future.timeout(timeout));
+    } on TimeoutException {
+      _unhealthy = true;
+      _emit = null;
+      rethrow;
+    }
+  }
+
+  Future<List<PreparedVoiceBinding>> prepareResources({
+    required String documentId,
+    required int revision,
+    required Iterable<String> voiceIds,
+    String pronunciationProfileId = 'kokoro-default',
+  }) async {
+    final response = await _command({
+      'kind': 'prepare',
+      'documentId': documentId,
+      'revision': revision,
+      'voiceIds': voiceIds.toSet().toList(),
+      'pronunciationProfileId': pronunciationProfileId,
+    });
+    return List.unmodifiable(
+      (response['bindings'] as List).map(
+        (v) => PreparedVoiceBinding.fromMap(v as Map),
+      ),
+    );
+  }
+
+  Future<void> releaseResources() async {
+    await drain();
+    if (_starting != null && !_exited.isCompleted) {
+      await _command({'kind': 'release'}, closing: true);
+    }
+  }
+
+  Future<void> drain() async {
+    try {
+      await _active?.future;
+    } catch (_) {}
+  }
 
   @override
   Future<void> process(
     SpeechWorkerChunkRequest request,
-    void Function(SpeechWorkerEvent event) emit,
+    void Function(SpeechWorkerEvent) emit,
   ) async {
-    final receivePort = ReceivePort();
-    final isolate = await Isolate.spawn<Map<String, dynamic>>(
-      _kokoroWorkerEntryPoint,
-      <String, dynamic>{
-        'sendPort': receivePort.sendPort,
-        'rootIsolateToken': _rootIsolateToken,
-        'request': request.toMap(),
-        'modelPath': _modelPath,
-        'voicesDirectory': _voicesDirectory,
-        'generatedAudioDirectory': _generatedAudioDirectory,
-        'engineId': _engineId,
-        'engineVersion': _engineVersion,
-      },
-    );
-
-    final completion = Completer<void>();
-    late final StreamSubscription<dynamic> subscription;
-    subscription = receivePort.listen((message) async {
-      if (message is! Map<Object?, Object?>) {
-        return;
-      }
-      final payload = message.map(
-        (key, value) => MapEntry(key.toString(), value),
-      );
-      if (payload['kind'] == 'event') {
-        final event = SpeechWorkerEvent.fromMap(payload);
-        emit(event);
-        return;
-      }
-      if (payload['kind'] == 'done' && !completion.isCompleted) {
-        completion.complete();
-      }
-    });
-
-    try {
-      await completion.future;
-    } finally {
-      isolate.kill(priority: Isolate.immediate);
-      await subscription.cancel();
-      receivePort.close();
-    }
+    await _command({'kind': 'chunk', 'request': request.toMap()}, emit: emit);
   }
 
   @override
-  Future<void> dispose() async {}
+  Future<void> dispose() => _closing ??= _dispose();
+  Future<void> _dispose() async {
+    if (_starting == null) {
+      _port.close();
+      return;
+    }
+    await drain();
+    if (_exiting) await _exited.future;
+    if (!_exited.isCompleted) {
+      await _command({'kind': 'shutdown'}, closing: true);
+      await _exited.future;
+    }
+    await _subscription?.cancel();
+    _port.close();
+  }
 }
 
-Future<void> _kokoroWorkerEntryPoint(Map<String, dynamic> message) async {
-  final sendPort = message['sendPort'] as SendPort;
-  final rootIsolateToken = message['rootIsolateToken'] as RootIsolateToken;
-  final request = SpeechWorkerChunkRequest.fromMap(
-    Map<String, dynamic>.from(message['request'] as Map<dynamic, dynamic>),
+Future<void> _residentWorker(Map<String, dynamic> configuration) async {
+  BackgroundIsolateBinaryMessenger.ensureInitialized(
+    configuration['rootIsolateToken'] as RootIsolateToken,
   );
-  final modelPath = message['modelPath'] as String;
-  final voicesDirectory = message['voicesDirectory'] as String;
-  final generatedAudioDirectory = message['generatedAudioDirectory'] as String;
-  final engineId = message['engineId'] as String;
-  final engineVersion = message['engineVersion'] as String;
+  final reply = configuration['reply'] as SendPort;
+  final commands = ReceivePort();
+  KokoroModelRunner? runner;
+  final repository = KokoroVoiceRepository(
+    voicesDirectory: configuration['voicesDirectory'] as String,
+  );
+  final bindings = <String, PreparedVoiceBinding>{};
+  String? documentId;
+  String? modelDigest;
+  Future<void> release() async {
+    await runner?.dispose();
+    runner = null;
+    repository.clear();
+    bindings.clear();
+    documentId = null;
+    modelDigest = null;
+    // ignore: avoid_print
+    print(
+      'READALOUD_RESOURCE ${jsonEncode({'event': 'released', 'loadedVoiceCount': repository.loadedVoiceCount, 'loadCount': repository.loadCount})}',
+    );
+  }
 
-  BackgroundIsolateBinaryMessenger.ensureInitialized(rootIsolateToken);
+  reply.send({'kind': 'ready', 'port': commands.sendPort});
+  await for (final raw in commands) {
+    final command = Map<String, dynamic>.from(raw as Map);
+    final id = command['id'];
+    try {
+      switch (command['kind']) {
+        case 'prepare':
+          if (documentId != command['documentId']) await release();
+          final snapshot = await ModelContentSnapshot.capture(
+            configuration['modelPath'] as String,
+            Directory(
+              '${configuration['generatedAudioDirectory']}/model-snapshots',
+            ),
+          );
+          if (modelDigest != null && modelDigest != snapshot.digest) {
+            await release();
+          }
+          if (runner == null) {
+            modelDigest = snapshot.digest;
+            runner = KokoroModelRunner(modelPath: snapshot.path);
+            await runner!.initialize();
+            documentId = command['documentId'] as String;
+          }
+          bindings.clear();
+          for (final voiceId in (command['voiceIds'] as List).cast<String>()) {
+            await repository.loadVoice(voiceId, validateAsset: true);
+            final digest = repository.digestFor(voiceId);
+            bindings[voiceId] = PreparedVoiceBinding(
+              voiceId: voiceId,
+              voiceDigest: digest,
+              modelDigest: modelDigest!,
+              engineVersion: configuration['engineVersion'] as String,
+              pronunciationProfileId:
+                  command['pronunciationProfileId'] as String,
+              bindingRevision: command['revision'] as int,
+              documentId: documentId!,
+            );
+          }
+          // ignore: avoid_print
+          print(
+            'READALOUD_RESOURCE ${jsonEncode({'event': 'prepared', 'documentId': documentId, 'revision': command['revision'], 'loadedVoiceCount': repository.loadedVoiceCount, 'loadCount': repository.loadCount, 'modelDigest': modelDigest})}',
+          );
+          reply.send({
+            'kind': 'done',
+            'id': id,
+            'bindings': bindings.values.map((v) => v.toMap()).toList(),
+          });
+        case 'chunk':
+          final request = SpeechWorkerChunkRequest.fromMap(
+            Map<String, dynamic>.from(command['request'] as Map),
+          );
+          final binding = bindings[request.voiceId];
+          if (runner == null ||
+              binding == null ||
+              documentId != request.documentId) {
+            throw StateError(
+              'Chunk resources were not prepared for this document and voice.',
+            );
+          }
+          validateExpectedBinding(request, binding);
+          await _processResidentChunk(
+            request,
+            configuration,
+            runner!,
+            repository,
+            binding,
+            (message) => reply.send({...message, 'id': id}),
+          );
+        case 'release':
+          await release();
+          reply.send({'kind': 'done', 'id': id});
+        case 'shutdown':
+          await release();
+          commands.close();
+          // BackgroundIsolateBinaryMessenger owns a live receive port. Returning
+          // from this entry point does not exit the isolate. Native disposal has
+          // completed before the final message and supervisor onExit signal.
+          Isolate.exit(reply, {'kind': 'done', 'id': id});
+        default:
+          throw StateError('Unknown resident command.');
+      }
+    } catch (error) {
+      var quarantined =
+          command['kind'] == 'release' || command['kind'] == 'shutdown';
+      if (command['kind'] == 'prepare') {
+        try {
+          await release();
+        } catch (_) {
+          quarantined = true;
+        }
+      }
+      reply.send({
+        'kind': 'done',
+        'id': id,
+        'error': '$error',
+        'quarantined': quarantined,
+      });
+    }
+  }
+}
 
-  final cacheFiles = _cacheFilesForChunk(
+Future<void> _processResidentChunk(
+  SpeechWorkerChunkRequest request,
+  Map<String, dynamic> configuration,
+  KokoroModelRunner modelRunner,
+  KokoroVoiceRepository voiceRepository,
+  PreparedVoiceBinding binding,
+  void Function(Map<String, dynamic>) send,
+) async {
+  var quarantined = false;
+  final generatedAudioDirectory =
+      configuration['generatedAudioDirectory'] as String;
+  final engineId = configuration['engineId'] as String;
+  final engineVersion = configuration['engineVersion'] as String;
+  final store = AudioArtifactStore(
+    Directory('$generatedAudioDirectory/raw-v1'),
+  );
+  final identity = kokoroRawAudioIdentity(
     request,
-    generatedAudioDirectory: generatedAudioDirectory,
-    engineId: engineId,
-    engineVersion: engineVersion,
+    binding,
+    engineId,
+    engineVersion,
   );
 
   Future<void> emitEvent(
@@ -115,38 +351,35 @@ Future<void> _kokoroWorkerEntryPoint(Map<String, dynamic> message) async {
     String? message,
     int? elapsedMillis,
   }) async {
-    sendPort.send(
-      <String, dynamic>{
-        'kind': 'event',
-        'type': type.name,
-        'sessionId': request.sessionId,
-        'generationId': request.generationId,
-        'chunkId': request.chunkId,
-        'emittedAtMillis': DateTime.now().toUtc().millisecondsSinceEpoch,
-        'stage': stage,
-        'audioPath': audioPath,
-        'durationMillis': duration?.inMilliseconds,
-        'message': message,
-        'elapsedMillis': elapsedMillis,
-      },
-    );
+    send(<String, dynamic>{
+      'kind': 'event',
+      'type': type.name,
+      'sessionId': request.sessionId,
+      'generationId': request.generationId,
+      'chunkId': request.chunkId,
+      'emittedAtMillis': DateTime.now().toUtc().millisecondsSinceEpoch,
+      'stage': stage,
+      'audioPath': audioPath,
+      'durationMillis': duration?.inMilliseconds,
+      'message': message,
+      'elapsedMillis': elapsedMillis,
+    });
   }
 
-  KokoroModelRunner? modelRunner;
   try {
-    final cachedDuration = await _cachedDurationForChunk(cacheFiles, request);
-    if (cachedDuration != null) {
+    final cached = store.lookup(identity);
+    if (cached != null) {
       await emitEvent(
         SpeechWorkerEventType.cacheHit,
         stage: 'cacheLookup',
-        audioPath: cacheFiles.wavFile.path,
-        duration: cachedDuration,
+        audioPath: cached.audioPath,
+        duration: cached.duration,
       );
       await emitEvent(
         SpeechWorkerEventType.completed,
         stage: 'completed',
-        audioPath: cacheFiles.wavFile.path,
-        duration: cachedDuration,
+        audioPath: cached.audioPath,
+        duration: cached.duration,
       );
       return;
     }
@@ -157,18 +390,10 @@ Future<void> _kokoroWorkerEntryPoint(Map<String, dynamic> message) async {
     }
 
     final inferenceWatch = Stopwatch()..start();
-    await emitEvent(
-      SpeechWorkerEventType.inferencing,
-      stage: 'inferencing',
-    );
-    final voiceRepository = KokoroVoiceRepository(
-      voicesDirectory: voicesDirectory,
-    );
-    final voice = await voiceRepository.loadVoice(request.voiceId);
+    await emitEvent(SpeechWorkerEventType.inferencing, stage: 'inferencing');
+    final voice = voiceRepository.residentVoice(request.voiceId);
     final styleVector = voice.getStyleVectorForTokens(tokens.length);
 
-    modelRunner = KokoroModelRunner(modelPath: modelPath);
-    await modelRunner.initialize();
     final audio = await modelRunner.runInference(
       tokens: tokens,
       voice: styleVector,
@@ -186,20 +411,15 @@ Future<void> _kokoroWorkerEntryPoint(Map<String, dynamic> message) async {
       stage: 'serializing',
       elapsedMillis: inferenceWatch.elapsedMilliseconds,
     );
-    await cacheFiles.wavFile.parent.create(recursive: true);
-    await cacheFiles.wavFile.writeAsBytes(
-      _buildWavFile(_audioToPcm16(audio), sampleRate),
-      flush: true,
-    );
-    final duration = Duration(
-      milliseconds: (audio.length / sampleRate * 1000).round(),
-    );
-    await cacheFiles.sidecarFile.writeAsString(
-      jsonEncode(<String, dynamic>{
+    final published = store.publish(
+      identity: identity,
+      wav: _buildWavFile(_audioToPcm16(audio), sampleRate),
+      metadata: <String, dynamic>{
         'chunkId': request.chunkId,
         'cacheKey': request.cacheKey,
         'engineId': engineId,
         'engineVersion': engineVersion,
+        'binding': binding.toMap(),
         'capabilityProfileId': request.capabilityProfileId,
         'voiceId': request.voiceId,
         'rate': request.rate,
@@ -212,92 +432,28 @@ Future<void> _kokoroWorkerEntryPoint(Map<String, dynamic> message) async {
         'tokens': request.tokens,
         'pronunciationArtifacts': request.pronunciationArtifacts,
         'missingFallbackWordCount': request.missingFallbackWordCount,
-        'durationMillis': duration.inMilliseconds,
         'createdAt': DateTime.now().toUtc().toIso8601String(),
-      }),
-      flush: true,
+      },
     );
     serializationWatch.stop();
 
     await emitEvent(
       SpeechWorkerEventType.completed,
       stage: 'completed',
-      audioPath: cacheFiles.wavFile.path,
-      duration: duration,
+      audioPath: published.audioPath,
+      duration: published.duration,
       elapsedMillis: serializationWatch.elapsedMilliseconds,
     );
   } catch (error) {
+    quarantined = error is KokoroResourceCleanupError;
     await emitEvent(
       SpeechWorkerEventType.failed,
       stage: 'failed',
       message: '$error',
     );
   } finally {
-    await modelRunner?.dispose();
-    sendPort.send(<String, dynamic>{'kind': 'done'});
+    send(<String, dynamic>{'kind': 'done', 'quarantined': quarantined});
   }
-}
-
-_ChunkCacheFiles _cacheFilesForChunk(
-  SpeechWorkerChunkRequest request, {
-  required String generatedAudioDirectory,
-  required String engineId,
-  required String engineVersion,
-}) {
-  final rateKey =
-      'rate_${(request.rate * 100).round().toString().padLeft(3, '0')}';
-  final cacheDirectory = Directory(
-    [
-      generatedAudioDirectory,
-      engineId,
-      engineVersion,
-      request.voiceId,
-      rateKey,
-    ].join(Platform.pathSeparator),
-  );
-  final chunkHash = crypto.sha256
-      .convert(utf8.encode(request.cacheKey))
-      .toString();
-  return _ChunkCacheFiles(
-    wavFile: File('${cacheDirectory.path}${Platform.pathSeparator}$chunkHash.wav'),
-    sidecarFile: File(
-      '${cacheDirectory.path}${Platform.pathSeparator}$chunkHash.json',
-    ),
-  );
-}
-
-Future<Duration?> _cachedDurationForChunk(
-  _ChunkCacheFiles cacheFiles,
-  SpeechWorkerChunkRequest request,
-) async {
-  if (!await cacheFiles.wavFile.exists() ||
-      !await cacheFiles.sidecarFile.exists() ||
-      await cacheFiles.wavFile.length() <= 44) {
-    return null;
-  }
-
-  try {
-    final raw = jsonDecode(await cacheFiles.sidecarFile.readAsString());
-    if (raw is! Map<String, dynamic>) {
-      return null;
-    }
-    if (raw['cacheKey'] != request.cacheKey ||
-        raw['voiceId'] != request.voiceId ||
-        raw['normalizationVersion'] != request.normalizationVersion) {
-      return null;
-    }
-    final durationMillis = raw['durationMillis'];
-    if (durationMillis is int && durationMillis > 0) {
-      return Duration(milliseconds: durationMillis);
-    }
-  } catch (_) {
-    return null;
-  }
-
-  final length = await cacheFiles.wavFile.length();
-  final dataBytes = (length - 44).clamp(0, length);
-  final sampleCount = dataBytes ~/ Int16List.bytesPerElement;
-  return Duration(milliseconds: (sampleCount / sampleRate * 1000).round());
 }
 
 Int16List _audioToPcm16(List<num> audio) {
@@ -346,14 +502,4 @@ Uint8List _buildWavFile(Int16List pcm, int wavSampleRate) {
   bytes.add(pcm.buffer.asUint8List());
 
   return bytes.takeBytes();
-}
-
-class _ChunkCacheFiles {
-  const _ChunkCacheFiles({
-    required this.wavFile,
-    required this.sidecarFile,
-  });
-
-  final File wavFile;
-  final File sidecarFile;
 }

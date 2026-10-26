@@ -14,6 +14,7 @@ class ChunkPlannerInput {
     required this.engineId,
     required this.engineVersion,
     this.castAwareSpeechRoutes,
+    this.maxChunks,
   });
 
   final SpeechDocument speechDocument;
@@ -25,10 +26,17 @@ class ChunkPlannerInput {
   final String engineId;
   final String engineVersion;
   final CastAwareSpeechRouteSet? castAwareSpeechRoutes;
+  final int? maxChunks;
 }
 
 class ChunkPlan {
-  const ChunkPlan({required this.planId, required this.chunks});
+  const ChunkPlan({
+    required this.planId,
+    required this.chunks,
+    this.nextSegmentId,
+  });
+
+  final String? nextSegmentId;
 
   final String planId;
   final List<ChunkSpec> chunks;

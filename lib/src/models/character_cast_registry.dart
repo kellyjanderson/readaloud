@@ -322,8 +322,8 @@ class CastEntry {
       displayLabel: displayLabel.trim(),
       confidence: confidence,
       provenance: provenance,
-      observedAliases: normalizedAliases,
-      attributionIds: normalizedAttributionIds,
+      observedAliases: List.unmodifiable(normalizedAliases),
+      attributionIds: List.unmodifiable(normalizedAttributionIds),
       identityProfile: resolvedIdentityProfile,
     );
   }

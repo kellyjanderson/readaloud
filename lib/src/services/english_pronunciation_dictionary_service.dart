@@ -12,6 +12,18 @@ class EnglishPronunciationDictionaryService {
   Map<String, String> _entries = const <String, String>{};
   Future<void>? _initializationFuture;
 
+  Map<String, String> get entriesSnapshot => Map.unmodifiable(_entries);
+
+  void restoreSnapshot(Map<String, String> entries) {
+    _entries = Map.unmodifiable(entries);
+    _initializationFuture = Future<void>.value();
+  }
+
+  /// Parse a bridged dictionary in the owning preparation/tokenization isolate.
+  void restoreRawDictionary(String rawDictionary) {
+    restoreSnapshot(_parseCmudictToIpaEntries(rawDictionary));
+  }
+
   bool get isInitialized => _entries.isNotEmpty;
 
   Future<void> initialize() {

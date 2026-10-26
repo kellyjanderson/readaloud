@@ -15,22 +15,39 @@ class ChunkPlannerService {
   static const _steadyChunkSoftTargetWords = 42;
   static const _hardChunkWordCap = 75;
 
+  ChunkPlan plan(ChunkPlannerInput input) => ChunkPlannerGraph(
+    input.speechDocument,
+    input.castAwareSpeechRoutes,
+  ).plan(input);
+}
+
+/// Document-wide indexes built once per retained immutable planning graph.
+class ChunkPlannerGraph {
+  ChunkPlannerGraph(this.document, CastAwareSpeechRouteSet? routes)
+    : _offsets = List.unmodifiable(_globalWordOffsets(document)),
+      _routes = Map.unmodifiable(_routingContextBySegmentId(routes));
+  final SpeechDocument document;
+  final List<int> _offsets;
+  final Map<String, _ChunkRoutingContext> _routes;
+
   ChunkPlan plan(ChunkPlannerInput input) {
+    if (!identical(input.speechDocument, document)) {
+      throw ArgumentError("Planning input does not belong to retained graph.");
+    }
     final speechDocument = input.speechDocument;
     final startSegmentIndex =
         speechDocument.segmentIndexById[input.startSegmentId] ?? 0;
     final chunks = <ChunkSpec>[];
-    final globalWordOffsets = _globalWordOffsets(speechDocument);
-    final routingContextBySegmentId = _routingContextBySegmentId(
-      input.castAwareSpeechRoutes,
-    );
+    final globalWordOffsets = _offsets;
+    final routingContextBySegmentId = _routes;
 
     var cursor = startSegmentIndex;
-    while (cursor < speechDocument.segments.length) {
+    while (cursor < speechDocument.segments.length &&
+        (input.maxChunks == null || chunks.length < input.maxChunks!)) {
       final isFirstChunk = chunks.isEmpty;
       final softTarget = isFirstChunk
-          ? _firstChunkSoftTargetWords
-          : _steadyChunkSoftTargetWords;
+          ? ChunkPlannerService._firstChunkSoftTargetWords
+          : ChunkPlannerService._steadyChunkSoftTargetWords;
 
       final built = _buildChunk(
         speechDocument: speechDocument,
@@ -57,7 +74,7 @@ class ChunkPlannerService {
         [
           input.startSegmentId,
           input.voiceId,
-          input.rate.toStringAsFixed(2),
+          input.rate.toString(),
           input.engineId,
           input.engineVersion,
           chunks.map((chunk) => chunk.cacheKey).join('|'),
@@ -68,6 +85,9 @@ class ChunkPlannerService {
     return ChunkPlan(
       planId: 'plan_${planDigest.toString().substring(0, 16)}',
       chunks: chunks,
+      nextSegmentId: cursor < speechDocument.segments.length
+          ? speechDocument.segments[cursor].segmentId
+          : null,
     );
   }
 }
@@ -260,7 +280,7 @@ ChunkSpec _finalizeChunk({
     input.engineId,
     input.engineVersion,
     built.voiceId,
-    input.rate.toStringAsFixed(2),
+    input.rate.toString(),
     speechDocument.normalizationVersion,
     speakHash,
     pronunciationFingerprint,

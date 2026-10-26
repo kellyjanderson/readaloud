@@ -186,6 +186,9 @@ class SpeechRuntimeChunkPayload {
     this.castId,
     this.dialogueSpanId,
     this.capabilityProfileId,
+    this.expectedBindingFingerprint,
+    this.expectedBindingRevision,
+    this.synthesisIdentity = 'legacy-unspecified',
     this.pronunciationArtifacts = const <Map<String, Object?>>[],
     this.missingFallbackWordCount = 0,
   });
@@ -197,6 +200,9 @@ class SpeechRuntimeChunkPayload {
   final String documentId;
   final String normalizationVersion;
   final String? capabilityProfileId;
+  final String? expectedBindingFingerprint;
+  final int? expectedBindingRevision;
+  final String synthesisIdentity;
   final String speakText;
   final List<int> tokens;
   final String languageTag;
@@ -219,6 +225,9 @@ class SpeechRuntimeChunkPayload {
       'documentId': documentId,
       'normalizationVersion': normalizationVersion,
       'capabilityProfileId': capabilityProfileId,
+      'expectedBindingFingerprint': expectedBindingFingerprint,
+      'expectedBindingRevision': expectedBindingRevision,
+      'synthesisIdentity': synthesisIdentity,
       'speakText': speakText,
       'tokens': tokens,
       'languageTag': languageTag,
@@ -243,6 +252,10 @@ class SpeechRuntimeChunkPayload {
       documentId: map['documentId']! as String,
       normalizationVersion: map['normalizationVersion']! as String,
       capabilityProfileId: map['capabilityProfileId'] as String?,
+      expectedBindingFingerprint: map['expectedBindingFingerprint'] as String?,
+      expectedBindingRevision: map['expectedBindingRevision'] as int?,
+      synthesisIdentity:
+          map['synthesisIdentity'] as String? ?? 'legacy-unspecified',
       speakText: map['speakText']! as String,
       tokens: List<int>.from(map['tokens']! as List<Object?>),
       languageTag: map['languageTag']! as String,
@@ -675,27 +688,33 @@ class SpeechRuntime {
        capabilities = SpeechRuntimeCapabilities.detectForCurrentPlatform(
          engineId: engineId,
        ),
-       _pipeline = SpeechWorkerPipeline(processor: processor),
        _boundaryCorrectionExecutor =
            boundaryCorrectionExecutor ?? _defaultBoundaryCorrectionExecutor {
+    _pipeline = SpeechWorkerPipeline(
+      processor: processor,
+      onCompleted: _onWorkerCompleted,
+    );
     _workerEventSubscription = _pipeline.events.listen(_handleWorkerEvent);
   }
 
   final String engineId;
   final String runtimeId;
   final SpeechRuntimeCapabilities capabilities;
-  final SpeechWorkerPipeline _pipeline;
+  late final SpeechWorkerPipeline _pipeline;
   final BoundaryCorrectionExecutor _boundaryCorrectionExecutor;
+  final Set<Future<void>> _boundaryTasks = {};
   final StreamController<SpeechRuntimeEvent> _eventsController =
       StreamController<SpeechRuntimeEvent>.broadcast();
   final Map<String, _RuntimeChunkWorkItem> _pendingChunksById =
       <String, _RuntimeChunkWorkItem>{};
+  final Map<String, String> _lastArtifactByGenerationId = {};
   final Set<String> _cacheHitChunkIds = <String>{};
   final Map<String, Duration> _lastTrailingSilenceByGenerationId =
       <String, Duration>{};
 
   StreamSubscription<SpeechWorkerEvent>? _workerEventSubscription;
   Future<void> _commandQueue = Future<void>.value();
+  Future<void>? _shutdownFuture;
   SpeechRuntimeLifecycleState _state =
       SpeechRuntimeLifecycleState.uninitialized;
   String? _activeSessionId;
@@ -764,6 +783,7 @@ class SpeechRuntime {
   Future<void> cancelGeneration(String generationId) async {
     await _pipeline.cancelGeneration(generationId);
     _lastTrailingSilenceByGenerationId.remove(generationId);
+    _lastArtifactByGenerationId.remove(generationId);
     _pendingChunksById.removeWhere(
       (_, item) => item.generationId == generationId,
     );
@@ -793,11 +813,20 @@ class SpeechRuntime {
   }
 
   Future<void> dispatch(SpeechRuntimeCommand command) {
-    _commandQueue = _commandQueue.then((_) => _dispatchInternal(command));
-    return _commandQueue;
+    if (command.type == SpeechRuntimeCommandType.cancelSession ||
+        command.type == SpeechRuntimeCommandType.shutdownRuntime) {
+      return _dispatchInternal(command);
+    }
+    final operation = _commandQueue.then((_) => _dispatchInternal(command));
+    _commandQueue = operation.catchError((Object _) {});
+    return operation;
   }
 
   Future<void> _dispatchInternal(SpeechRuntimeCommand command) async {
+    if (_shutdownFuture != null &&
+        command.type != SpeechRuntimeCommandType.shutdownRuntime) {
+      throw StateError('Speech runtime is shutting down.');
+    }
     if (_state == SpeechRuntimeLifecycleState.disposed &&
         command.type != SpeechRuntimeCommandType.shutdownRuntime) {
       throw StateError('Speech runtime has already been disposed.');
@@ -938,6 +967,9 @@ class SpeechRuntime {
         chunkId: chunk.chunkId,
         segmentIds: chunk.segmentIds,
         cacheKey: chunk.cacheKey,
+        expectedBindingFingerprint: chunk.expectedBindingFingerprint,
+        expectedBindingRevision: chunk.expectedBindingRevision,
+        synthesisIdentity: chunk.synthesisIdentity,
         boundaryClass: chunk.boundaryClass,
         documentId: chunk.documentId,
         normalizationVersion: chunk.normalizationVersion,
@@ -961,38 +993,41 @@ class SpeechRuntime {
     _ensureActiveSession(sessionId);
     _activeGenerationId = generationId;
     for (final chunk in chunks) {
+      if (_activeSessionId != sessionId ||
+          _activeGenerationId != generationId ||
+          _state != SpeechRuntimeLifecycleState.sessionActive) {
+        return;
+      }
       _pendingChunksById[chunk.chunkId] = _RuntimeChunkWorkItem(
         sessionId: sessionId,
         generationId: generationId,
         chunk: chunk,
       );
       _cacheHitChunkIds.remove(chunk.chunkId);
+      await _pipeline.preparePlan(generationId, [
+        SpeechWorkerChunkRequest(
+          sessionId: sessionId,
+          generationId: generationId,
+          chunkId: chunk.chunkId,
+          segmentIds: chunk.segmentIds,
+          cacheKey: chunk.cacheKey,
+          expectedBindingFingerprint: chunk.expectedBindingFingerprint,
+          expectedBindingRevision: chunk.expectedBindingRevision,
+          synthesisIdentity: chunk.synthesisIdentity,
+          boundaryClass: chunk.boundaryClass,
+          documentId: chunk.documentId,
+          normalizationVersion: chunk.normalizationVersion,
+          speakText: chunk.speakText,
+          tokens: chunk.tokens,
+          languageTag: chunk.languageTag,
+          voiceId: chunk.voiceId,
+          rate: chunk.rate,
+          capabilityProfileId: chunk.capabilityProfileId,
+          pronunciationArtifacts: chunk.pronunciationArtifacts,
+          missingFallbackWordCount: chunk.missingFallbackWordCount,
+        ),
+      ]);
     }
-    await _pipeline.preparePlan(
-      generationId,
-      chunks
-          .map(
-            (chunk) => SpeechWorkerChunkRequest(
-              sessionId: sessionId,
-              generationId: generationId,
-              chunkId: chunk.chunkId,
-              segmentIds: chunk.segmentIds,
-              cacheKey: chunk.cacheKey,
-              boundaryClass: chunk.boundaryClass,
-              documentId: chunk.documentId,
-              normalizationVersion: chunk.normalizationVersion,
-              speakText: chunk.speakText,
-              tokens: chunk.tokens,
-              languageTag: chunk.languageTag,
-              voiceId: chunk.voiceId,
-              rate: chunk.rate,
-              capabilityProfileId: chunk.capabilityProfileId,
-              pronunciationArtifacts: chunk.pronunciationArtifacts,
-              missingFallbackWordCount: chunk.missingFallbackWordCount,
-            ),
-          )
-          .toList(growable: false),
-    );
   }
 
   Future<void> _handleCancelSession(
@@ -1005,7 +1040,9 @@ class SpeechRuntime {
     await _cancelActiveSession(reasonCode: reasonCode ?? 'cancelled');
   }
 
-  Future<void> _handleShutdownRuntime() async {
+  Future<void> _handleShutdownRuntime() =>
+      _shutdownFuture ??= _shutdownRuntimeInternal();
+  Future<void> _shutdownRuntimeInternal() async {
     if (_state == SpeechRuntimeLifecycleState.disposed ||
         _state == SpeechRuntimeLifecycleState.shuttingDown) {
       return;
@@ -1015,6 +1052,7 @@ class SpeechRuntime {
     await _cancelActiveSession(reasonCode: 'shutdown');
     await _pipeline.shutdown();
     await _workerEventSubscription?.cancel();
+    await Future.wait(_boundaryTasks.toList());
     _state = SpeechRuntimeLifecycleState.disposed;
 
     _emit(
@@ -1040,10 +1078,12 @@ class SpeechRuntime {
     if (generationId != null) {
       await _pipeline.cancelGeneration(generationId);
       _lastTrailingSilenceByGenerationId.remove(generationId);
+      _lastArtifactByGenerationId.remove(generationId);
     }
 
     _pendingChunksById.removeWhere((_, item) => item.sessionId == sessionId);
     _cacheHitChunkIds.clear();
+    _lastArtifactByGenerationId.clear();
     _activeSessionId = null;
     _activeGenerationId = null;
     _activeDocumentId = null;
@@ -1127,8 +1167,12 @@ class SpeechRuntime {
           ),
         );
       case SpeechWorkerEventType.completed:
-        unawaited(_handleWorkerCompleted(event));
+        // Completed work is acknowledged directly through the pipeline hook.
+        // Broadcasting it cannot provide bounded predecessor backpressure.
+        break;
       case SpeechWorkerEventType.failed:
+        _lastTrailingSilenceByGenerationId.remove(event.generationId);
+        _lastArtifactByGenerationId.remove(event.generationId);
         _pendingChunksById.remove(event.chunkId);
         _emit(
           _runtimeEvent(
@@ -1149,9 +1193,25 @@ class SpeechRuntime {
     }
   }
 
+  Future<void> _onWorkerCompleted(SpeechWorkerEvent event) async {
+    final task = _handleWorkerCompleted(event);
+    _boundaryTasks.add(task);
+    try {
+      await task;
+    } finally {
+      _boundaryTasks.remove(task);
+    }
+  }
+
   Future<void> _handleWorkerCompleted(SpeechWorkerEvent event) async {
     final workItem = _pendingChunksById[event.chunkId];
-    if (workItem == null || event.audioPath == null || event.duration == null) {
+    if (workItem == null ||
+        event.audioPath == null ||
+        event.duration == null ||
+        _activeSessionId != event.sessionId ||
+        _activeGenerationId != event.generationId ||
+        workItem.sessionId != event.sessionId ||
+        workItem.generationId != event.generationId) {
       return;
     }
 
@@ -1176,6 +1236,8 @@ class SpeechRuntime {
         'boundaryClass': workItem.chunk.boundaryClass.name,
         'isInitialChunk': workItem.chunk.isInitialChunk,
         'isResumedChunk': workItem.chunk.isResumedChunk,
+        'previousArtifactIdentity':
+            _lastArtifactByGenerationId[workItem.generationId],
         'previousTrailingSilenceMs':
             workItem.chunk.isInitialChunk || workItem.chunk.isResumedChunk
             ? null
@@ -1184,11 +1246,14 @@ class SpeechRuntime {
       });
 
       if (_activeSessionId != workItem.sessionId ||
-          _activeGenerationId != workItem.generationId) {
+          _activeGenerationId != workItem.generationId ||
+          !identical(_pendingChunksById[event.chunkId], workItem)) {
         return;
       }
 
       _pendingChunksById.remove(event.chunkId);
+      _lastArtifactByGenerationId[workItem.generationId] =
+          correction['audioPath'] as String? ?? event.audioPath!;
       final trailingSilence = Duration(
         milliseconds: correction['trailingSilenceAfterMs']! as int,
       );
@@ -1205,8 +1270,10 @@ class SpeechRuntime {
           routeId: workItem.chunk.routeId,
           castId: workItem.chunk.castId,
           dialogueSpanId: workItem.chunk.dialogueSpanId,
-          audioPath: event.audioPath,
-          duration: event.duration,
+          audioPath: correction['audioPath'] as String? ?? event.audioPath,
+          duration: Duration(
+            milliseconds: correction['durationMillis']! as int,
+          ),
           boundaryClass: workItem.chunk.boundaryClass,
           leadingSilenceBefore: Duration(
             milliseconds: correction['leadingSilenceBeforeMs']! as int,
@@ -1231,6 +1298,13 @@ class SpeechRuntime {
         ),
       );
     } catch (error) {
+      if (_activeSessionId != workItem.sessionId ||
+          _activeGenerationId != workItem.generationId ||
+          !identical(_pendingChunksById[event.chunkId], workItem)) {
+        return;
+      }
+      _lastTrailingSilenceByGenerationId.remove(workItem.generationId);
+      _lastArtifactByGenerationId.remove(workItem.generationId);
       _pendingChunksById.remove(event.chunkId);
       _emit(
         _runtimeEvent(
@@ -1449,12 +1523,15 @@ Map<String, Object?> runSpeechRuntimeBoundaryCorrection(
     boundaryClass: BreakClass.values.byName(input['boundaryClass']! as String),
     isInitialChunk: input['isInitialChunk']! as bool,
     isResumedChunk: input['isResumedChunk']! as bool,
+    previousArtifactIdentity: input['previousArtifactIdentity'] as String?,
     previousTrailingSilence: previousTrailingSilenceMs == null
         ? null
         : Duration(milliseconds: previousTrailingSilenceMs),
   );
   return <String, Object?>{
+    'audioPath': outcome.audioPath,
     'applied': outcome.applied,
+    'durationMillis': outcome.duration.inMilliseconds,
     'boundaryClass': outcome.candidate.boundaryClass.name,
     'leadingSilenceBeforeMs': outcome.leadingSilenceBefore.inMilliseconds,
     'leadingSilenceAfterMs': outcome.leadingSilenceAfter.inMilliseconds,

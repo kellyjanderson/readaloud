@@ -55,11 +55,45 @@ Sentence nine. Sentence ten. Sentence eleven. Sentence twelve.
       );
       expect(
         plan.chunks.every(
-          (chunk) => chunk.cacheKey.startsWith('kokoro:1:af_bella:1.00:'),
+          (chunk) => chunk.cacheKey.startsWith('kokoro:1:af_bella:1.0:'),
         ),
         isTrue,
       );
       expect(plan.chunks.first.ttsSegments, isNotEmpty);
+    });
+
+    test('does not round nearby effective rates into one planner identity', () {
+      final document = DocumentImportService().importPastedText(
+        'John said hello.',
+      );
+      final realization = const VoiceSessionRealizationService().realize(
+        VoiceSessionRealizationInput(
+          speechDocument: document.speechDocument,
+          baseAnnotations: document.baseSpeechAnnotations,
+          basePronunciationArtifacts: document.basePronunciationArtifacts,
+          startSegmentId: document.speechDocument.segments.first.segmentId,
+          voiceId: 'af_bella',
+          engineId: 'kokoro',
+          rate: 1,
+          narrationState: NarrationState.initial(),
+        ),
+      );
+      ChunkPlan plan(double rate) => ChunkPlannerService().plan(
+        ChunkPlannerInput(
+          speechDocument: document.speechDocument,
+          baseAnnotations: document.baseSpeechAnnotations,
+          ttsArtifactSet: realization.ttsArtifactSet,
+          startSegmentId: document.speechDocument.segments.first.segmentId,
+          voiceId: 'af_bella',
+          rate: rate,
+          engineId: 'kokoro',
+          engineVersion: '12',
+        ),
+      );
+      expect(
+        plan(1.001).chunks.single.cacheKey,
+        isNot(plan(1.002).chunks.single.cacheKey),
+      );
     });
 
     test('can restart planning from an arbitrary segment id', () {

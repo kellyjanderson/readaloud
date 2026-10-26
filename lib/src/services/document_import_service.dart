@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:isolate';
 import 'dart:math' as math;
 import 'dart:typed_data';
 
@@ -43,14 +44,17 @@ class PdfTextExtractionPage {
   const PdfTextExtractionPage({
     required this.pageIndex,
     required this.fullText,
+    this.rawText,
   });
 
   final int pageIndex;
   final String fullText;
+  final PdfPageRawText? rawText;
 }
 
 class PdfrxPdfTextExtractor implements PdfTextExtractor {
-  const PdfrxPdfTextExtractor();
+  const PdfrxPdfTextExtractor({this.deferFormatting = false});
+  final bool deferFormatting;
 
   @override
   Future<PdfTextExtractionResult> extract({
@@ -68,19 +72,57 @@ class PdfrxPdfTextExtractor implements PdfTextExtractor {
         pageIndex += 1
       ) {
         final page = document.pages[pageIndex];
-        final pageText = await page.loadStructuredText();
+        final pageText = await page.loadText();
         pages.add(
           PdfTextExtractionPage(
             pageIndex: pageIndex,
-            fullText: pageText.fullText,
+            fullText: pageText?.fullText ?? '',
+            rawText: pageText,
           ),
         );
       }
-      return PdfTextExtractionResult(pages: pages);
+      final raw = PdfTextExtractionResult(pages: pages);
+      return deferFormatting
+          ? raw
+          : await Isolate.run(() => formatPdfExtraction(raw));
     } finally {
       await document?.dispose();
     }
   }
+}
+
+/// Uses pdfrx's existing reading-order formatter with data only. Native PDF
+/// objects never cross this boundary. Called by the preparation worker.
+Future<PdfTextExtractionResult> formatPdfExtraction(
+  PdfTextExtractionResult raw,
+) async {
+  final pages = <PdfTextExtractionPage>[];
+  for (final page in raw.pages) {
+    final text = page.rawText == null
+        ? page.fullText
+        : (await _ExtractedPdfPage(
+            page.pageIndex + 1,
+            page.rawText!,
+          ).loadStructuredText()).fullText;
+    pages.add(PdfTextExtractionPage(pageIndex: page.pageIndex, fullText: text));
+  }
+  return PdfTextExtractionResult(pages: List.unmodifiable(pages));
+}
+
+/// The pinned pdfrx formatter consumes only pageNumber and loadText. Any future
+/// attempt to reach a native/rendering API fails visibly rather than crossing
+/// thread affinity. This adapter deliberately owns no native handle.
+class _ExtractedPdfPage implements PdfPage {
+  const _ExtractedPdfPage(this.pageNumber, this.raw);
+  @override
+  final int pageNumber;
+  final PdfPageRawText raw;
+  @override
+  Future<PdfPageRawText?> loadText() async => raw;
+  @override
+  dynamic noSuchMethod(Invocation invocation) => throw UnsupportedError(
+    'Prepared PDF text adapter: ${invocation.memberName}',
+  );
 }
 
 class DocumentImportService {
@@ -1593,7 +1635,9 @@ class _NormalizedDocumentFactory {
             ),
           );
           if (block == null ||
-              !_normalizeImportedText(block.plainText).contains(fragment.text)) {
+              !_normalizeImportedText(
+                block.plainText,
+              ).contains(fragment.text)) {
             workingDiagnostics.add(
               ImportDiagnostic(
                 severity: ImportDiagnosticSeverity.warning,
@@ -2485,7 +2529,9 @@ List<_TextRange> _quotedRanges(String text) {
     nonQuotedText.write(text.substring(cursor));
   }
 
-  return nonQuotedText.toString().trim().isEmpty ? const <_TextRange>[] : ranges;
+  return nonQuotedText.toString().trim().isEmpty
+      ? const <_TextRange>[]
+      : ranges;
 }
 
 _SpeechFragment? _trimmedFragment(

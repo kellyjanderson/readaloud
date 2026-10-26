@@ -1,3 +1,6 @@
+import 'dart:async';
+import 'dart:ui' show SemanticsAction, Tristate;
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -6,6 +9,7 @@ import 'package:read_aloud/src/controllers/reader_controller.dart';
 import 'package:read_aloud/src/models/reader_appearance_mode.dart';
 import 'package:read_aloud/src/models/reader_resume_state.dart';
 import 'package:read_aloud/src/models/voice_profile.dart';
+import 'package:read_aloud/src/models/voice_assignment_state.dart';
 import 'package:read_aloud/src/screens/read_aloud_screen.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -28,6 +32,90 @@ void main() {
 
   tearDown(() {
     binding.defaultBinaryMessenger.setMockMethodCallHandler(menuChannel, null);
+    debugDefaultTargetPlatformOverride = null;
+  });
+
+  testWidgets('transport exposes actions and state through semantics', (
+    tester,
+  ) async {
+    final engine = _AccessibleTtsEngine();
+    final controller = ReaderController(
+      preferencesService: _MemoryReaderPreferencesService(),
+      ttsEngine: engine,
+      enablePlatformIntakeChannels: false,
+    );
+    addTearDown(controller.dispose);
+    await tester.pumpWidget(ReadAloudApp(controller: controller));
+    await tester.pump();
+
+    for (final label in [
+      'Play',
+      'Back 30 seconds',
+      'Forward 30 seconds',
+      'Character Voices',
+    ]) {
+      final data = tester
+          .getSemantics(find.bySemanticsLabel(label))
+          .getSemanticsData();
+      expect(data.flagsCollection.isButton, isTrue, reason: label);
+      expect(data.flagsCollection.isEnabled, Tristate.isTrue, reason: label);
+      expect(data.hasAction(SemanticsAction.tap), isTrue, reason: label);
+    }
+    tester.semantics.tap(find.semantics.byLabel('Play'));
+    await _awaitSpeak(tester, engine);
+    await tester.pump();
+    expect(engine.speakCount, 1);
+    final buffering = tester
+        .getSemantics(find.bySemanticsLabel('Play'))
+        .getSemanticsData();
+    expect(buffering.value, 'Buffering');
+    expect(buffering.flagsCollection.isEnabled, Tristate.isFalse);
+    expect(buffering.hasAction(SemanticsAction.tap), isFalse);
+
+    engine.start();
+    await tester.pump();
+    expect(find.bySemanticsLabel('Pause'), findsOneWidget);
+    tester.semantics.tap(find.semantics.byLabel('Pause'));
+    await tester.pump();
+    expect(engine.pauseCount, 1);
+    expect(find.bySemanticsLabel('Play'), findsOneWidget);
+
+    tester.semantics.tap(find.semantics.byLabel('Character Voices'));
+    await tester.pump(const Duration(milliseconds: 500));
+    expect(find.text('Voice Management'), findsOneWidget);
+  });
+
+  testWidgets('transport supports keyboard focus and activation', (
+    tester,
+  ) async {
+    debugDefaultTargetPlatformOverride = TargetPlatform.macOS;
+    final engine = _AccessibleTtsEngine();
+    final controller = ReaderController(
+      preferencesService: _MemoryReaderPreferencesService(),
+      ttsEngine: engine,
+      enablePlatformIntakeChannels: false,
+    );
+    addTearDown(controller.dispose);
+    await tester.pumpWidget(ReadAloudApp(controller: controller));
+    await tester.pump();
+    var focused = false;
+    for (var step = 0; step < 10; step += 1) {
+      await tester.sendKeyEvent(LogicalKeyboardKey.tab);
+      await tester.pump();
+      focused =
+          tester
+              .getSemantics(find.bySemanticsLabel('Play'))
+              .getSemanticsData()
+              .flagsCollection
+              .isFocused ==
+          Tristate.isTrue;
+      if (focused) break;
+    }
+    expect(focused, isTrue);
+    await tester.sendKeyEvent(LogicalKeyboardKey.space);
+    await _awaitSpeak(tester, engine);
+    await tester.pump();
+    expect(engine.speakCount, 1);
     debugDefaultTargetPlatformOverride = null;
   });
 
@@ -232,6 +320,48 @@ void main() {
     expect(find.text('Document Source'), findsOneWidget);
   });
 
+  testWidgets(
+    'reader and dialog bind requested-effective feedback and named recovery actions',
+    (tester) async {
+      final controller = _AssignmentUiController();
+      addTearDown(controller.dispose);
+      await tester.pumpWidget(ReadAloudApp(controller: controller));
+      await tester.pump(const Duration(milliseconds: 300));
+      controller.updateAssignment(VoiceAssignmentPhase.pending);
+      await tester.pump();
+      expect(
+        find.text('Pending voice change — open Character Voices to apply'),
+        findsOneWidget,
+      );
+      await tester.tap(find.byKey(const Key('character-voices-entry')));
+      await tester.pumpAndSettle();
+      expect(find.text('Current: Bella (en-US)'), findsOneWidget);
+      expect(find.text('Pending: am_michael'), findsOneWidget);
+      await tester.tap(find.text('Apply and replay current chunk'));
+      await tester.pump();
+      expect(controller.applyCalls, 1);
+      controller.updateAssignment(
+        VoiceAssignmentPhase.preparing,
+        initial: true,
+      );
+      await tester.pump();
+      expect(
+        tester
+            .widget<FilledButton>(
+              find.byKey(const Key('apply-voice-assignments')),
+            )
+            .onPressed,
+        isNull,
+      );
+      controller.updateAssignment(VoiceAssignmentPhase.failed);
+      await tester.pump();
+      await tester.tap(find.text('Retry voice change'));
+      expect(controller.retryCalls, 1);
+      expect(controller.applyCalls, 1);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
   testWidgets('status toast uses a floating themed feedback surface', (
     WidgetTester tester,
   ) async {
@@ -287,29 +417,53 @@ void main() {
     expect(find.byType(SnackBar), findsNothing);
   });
 
-  testWidgets('status toast stays visible while the voice dialog is open', (
-    WidgetTester tester,
-  ) async {
-    final controller = ReaderController(
-      preferencesService: _MemoryReaderPreferencesService(),
-      ttsEngine: _FakeTtsEngine(),
-      enablePlatformIntakeChannels: false,
-    );
-    addTearDown(controller.dispose);
+  testWidgets(
+    'modal controls cover reader toast and dismissal preserves reader layout',
+    (WidgetTester tester) async {
+      final semantics = tester.ensureSemantics();
+      final controller = ReaderController(
+        preferencesService: _MemoryReaderPreferencesService(),
+        ttsEngine: _FakeTtsEngine(),
+        enablePlatformIntakeChannels: false,
+      );
+      addTearDown(controller.dispose);
 
-    await tester.pumpWidget(ReadAloudApp(controller: controller));
-    await tester.pump(const Duration(milliseconds: 300));
+      await tester.pumpWidget(ReadAloudApp(controller: controller));
+      await tester.pump(const Duration(milliseconds: 300));
 
-    await tester.tap(find.byKey(const Key('character-voices-entry')));
-    await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('character-voices-entry')));
+      await tester.pumpAndSettle();
 
-    controller.showStatusMessage('Temporary message');
-    await tester.pump();
+      controller.showStatusMessage('Temporary message');
+      await tester.pump();
 
-    expect(find.text('Voice Management'), findsOneWidget);
-    expect(find.byKey(const Key('status-toast')), findsOneWidget);
-    expect(find.text('Temporary message'), findsOneWidget);
-  });
+      expect(find.text('Voice Management'), findsOneWidget);
+      expect(find.byKey(const Key('status-toast')), findsOneWidget);
+      expect(find.text('Temporary message'), findsOneWidget);
+      expect(find.byKey(const Key('status-toast')).hitTestable(), findsNothing);
+      final closeDialog = find.byTooltip('Close voice management');
+      expect(closeDialog.hitTestable(), findsOneWidget);
+      expect(
+        tester.getSemantics(closeDialog).label,
+        contains('Close voice management'),
+      );
+      await tester.tap(closeDialog);
+      await tester.pumpAndSettle();
+      expect(find.text('Voice Management'), findsNothing);
+      expect(
+        find.byKey(const Key('status-toast')).hitTestable(),
+        findsOneWidget,
+      );
+      expect(
+        tester.getSemantics(find.byTooltip('Dismiss status message')).label,
+        contains('Dismiss status message'),
+      );
+      await tester.tap(find.byTooltip('Dismiss status message'));
+      await tester.pump();
+      expect(find.byKey(const Key('status-toast')), findsNothing);
+      semantics.dispose();
+    },
+  );
 
   testWidgets('dark appearance uses a dark reader surface shell', (
     WidgetTester tester,
@@ -484,7 +638,8 @@ class _MemoryReaderPreferencesService extends ReaderPreferencesService {
     required ReaderAppearanceMode appearanceMode,
     required bool multiVoiceEnabled,
     required Map<String, double> voiceSpeeds,
-    required Map<String, Map<String, String>> storedDocumentCastVoiceAssignments,
+    required Map<String, Map<String, String>>
+    storedDocumentCastVoiceAssignments,
     ReaderResumeState? resumeState,
     String? selectedVoiceId,
     String? lastOpenedDocumentPath,
@@ -578,6 +733,41 @@ class _FakeTtsEngine implements TtsEngine {
   }
 }
 
+class _AccessibleTtsEngine extends _FakeTtsEngine {
+  void Function()? _start;
+  void Function(TtsPlaybackActivity)? _activity;
+  final firstSpeak = Completer<void>();
+  int speakCount = 0;
+  int pauseCount = 0;
+
+  @override
+  set onStart(void Function()? callback) => _start = callback;
+
+  @override
+  set onActivity(void Function(TtsPlaybackActivity)? callback) =>
+      _activity = callback;
+
+  @override
+  Future<void> speak(TtsSpeakRequest request) async {
+    speakCount += 1;
+    if (!firstSpeak.isCompleted) firstSpeak.complete();
+    _activity?.call(
+      const TtsPlaybackActivity(phase: TtsPlaybackPhase.buffering),
+    );
+  }
+
+  void start() {
+    _activity?.call(const TtsPlaybackActivity(phase: TtsPlaybackPhase.playing));
+    _start?.call();
+  }
+
+  @override
+  Future<void> pause() async {
+    pauseCount += 1;
+    _activity?.call(const TtsPlaybackActivity.idle());
+  }
+}
+
 class _FakeExportCapableTtsEngine extends _FakeTtsEngine
     implements AudioExportCapable {
   @override
@@ -592,5 +782,52 @@ class _FakeExportCapableTtsEngine extends _FakeTtsEngine
       engineId: 'fake',
       engineVersion: 'test',
     );
+  }
+}
+
+Future<void> _awaitSpeak(
+  WidgetTester tester,
+  _AccessibleTtsEngine engine,
+) async {
+  for (var attempt = 0; attempt < 300 && engine.speakCount == 0; attempt++) {
+    await tester.runAsync(
+      () => Future<void>.delayed(const Duration(milliseconds: 10)),
+    );
+    await tester.pump();
+  }
+}
+
+class _AssignmentUiController extends ReaderController {
+  _AssignmentUiController()
+    : super(
+        preferencesService: _MemoryReaderPreferencesService(),
+        ttsEngine: _FakeTtsEngine(),
+        enablePlatformIntakeChannels: false,
+      );
+  VoiceAssignmentState snapshot = VoiceAssignmentState();
+  int applyCalls = 0;
+  int retryCalls = 0;
+  @override
+  VoiceAssignmentState get voiceAssignmentState => snapshot;
+  void updateAssignment(VoiceAssignmentPhase phase, {bool initial = false}) {
+    snapshot = VoiceAssignmentState(
+      requestedRevision: 2,
+      effectiveRevision: 1,
+      requestedDefaultVoiceId: 'am_michael',
+      effectiveDefaultVoiceId: 'af_bella',
+      phase: phase,
+      isInitialBuffering: initial,
+    );
+    notifyListeners();
+  }
+
+  @override
+  Future<void> applyPendingVoiceAssignments() async {
+    applyCalls++;
+  }
+
+  @override
+  Future<void> retryVoiceAssignments() async {
+    retryCalls++;
   }
 }

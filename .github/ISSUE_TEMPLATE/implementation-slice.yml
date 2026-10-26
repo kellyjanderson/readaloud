@@ -20,8 +20,18 @@ body:
   - type: textarea
     id: dispatch
     attributes:
-      label: Orchestrator handoff
-      description: Owner/chat, prerequisite evidence, base commit, branch/worktree, and intended integration target. Leave unassigned until claimed by the orchestrator.
+      label: Current task
+      description: Maintain this block at dispatch/handoff. Include exact model/effort and evidence links; follow docs/project-management.md. Move the block to the top after creation.
+      value: |
+        <!-- readaloud:current:start -->
+        ## Current task
+        Authority: parent and accepted revision link
+        Owner: unassigned; no dispatch authorized by this template
+        Delivery: base, branch/worktree and integration target pending
+        Readiness / next action: orchestrator must verify native dependencies
+        Execution: model/effort and exclusive paths/lane pending
+        Acceptance / evidence: link checks, blockers and latest result
+        <!-- readaloud:current:end -->
   - type: textarea
     id: acceptance
     attributes:

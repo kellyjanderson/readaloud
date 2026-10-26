@@ -30,7 +30,42 @@ Give the orchestrator the parent issue URL and intended delivery target. It read
 
 The orchestrator owns assignment and parent updates. Workers may report to their slice when authorized; otherwise the orchestrator publishes their returned results. No worker needs to create or rewrite local planning documents. An isolated worktree per concurrent writer avoids index and checkout collisions; sequential work may reuse a safe checkout. The orchestrator decides integration order and resolves conflicts. A slice branch merged into a feature branch is not yet delivered to main.
 
-For re-entry, read the latest coordination checkpoint and linked slice results. Record a checkpoint at dispatch, meaningful blocker, handoff or integration—not every tool call. Include current owner, active assignments, branches/commits and next safe action. Chat summaries are convenience; GitHub is durable authority. Do not depend on another chat being open to reconstruct ownership.
+For re-entry, read the marked current blocks and their linked changed results. Update the blocks at dispatch, meaningful blocker, handoff or integration—not every tool call. Record new evidence/decisions in comments and link them from the block instead of copying the whole checkpoint to several issues. Chat summaries are convenience; GitHub is durable authority. Do not depend on another chat being open to reconstruct ownership.
+
+## Compact issue reads and updates
+
+Each active parent/slice begins with exactly one block using the markers below. The parent heading is `Current orchestration`; a slice uses `Current task`. Target 400–700 tokens for a parent and 250–500 for a slice; these are writing budgets, not measured billing limits. Keep full design/acceptance material below the block. Never compress away an unresolved constraint or replace accepted contracts with a summary.
+
+```markdown
+<!-- readaloud:current:start -->
+## Current task
+Updated: timestamp; based on: exact checkpoint link
+Authority: parent + accepted revision/decision links
+Owner: coordinator/chat; worker identity and exclusive files/lane
+Delivery: base commit, branch/worktree, PR and actual integration target
+Readiness: dependency evidence; next action; blockers
+Execution: exact model/effort; escalation condition
+Acceptance: passed/failed/blocked/not-run boundaries; remaining checks
+Evidence: exact decision, result and handoff comment links
+<!-- readaloud:current:end -->
+```
+
+Parent blocks additionally index active slices and track Astra rounds/consecutive/total task counters. Child blocks link the parent policy rather than repeat it. Project Status/priority and native dependency edges retain authority; the block records actionable readiness and evidence, not a competing lifecycle tracker.
+
+Use the [read helper](../tools/read_issue_context.rb) before returning issue text to model context:
+
+```sh
+ruby tools/read_issue_context.rb 48
+ruby tools/read_issue_context.rb 54 --headings
+ruby tools/read_issue_context.rb 54 --section 'Scenarios'
+ruby tools/read_issue_context.rb 48 --comment 6392370567
+```
+
+The default never loads comments and fails if the block is absent/malformed. `--headings` lists contract headings; `--section` returns one exact heading including nested headings; `--comment` fetches one numeric REST comment ID from its issuecomment URL and verifies the issue. `--full` is an explicit first-assignment/revision-review escape hatch. A block is an index, not enough by itself for implementation or acceptance review. Fetch accepted revision and relevant contracts once per task, and again if they change. Do not routinely request `gh issue view --comments` or all-comment connector output. Collapsed Markdown still costs tokens if returned by a tool.
+
+The orchestrator is the single block writer. Before updating, re-fetch the body, preserve all material outside the managed block, and reconcile newer comments/decisions. GitHub issue-body updates do not provide a transactional merge here: serialize ownership and verify the written result. A timestamp alone does not prove freshness; use linked checkpoint/revision plus current dependencies. If stale or missing, inspect bounded recent comments and explicit referenced decisions, repair the block, and report unresolved ownership rather than guessing. Keep old comments intact. No synchronized local copies or separate orchestration documents.
+
+Project text/number/select fields may hold small filterable metadata when access exists; do not mirror the full block there. Issue-body blocks work with repository access and do not depend on Projects permissions. Fresh-task/model/effort and Astra review thresholds are defined in AGENTS.md. Publish a bounded approval receipt before changing those thresholds; unknown counters require reconciliation before further Astra use.
 
 ## Completion and reconciliation
 
@@ -43,5 +78,7 @@ On October 24, 2026 the ACD at commit 62a16f3 moved to #48; its complete slice p
 The documentation checker rejects local working files in the retired ACD/planning directories and checks local documentation links/legacy architecture ownership. It does not contact GitHub or prove live issue state. Track planning-only mutations, maintenance/recovery effort and available token usage across actual changes; allowance savings remain unproven.
 
 ## Access and automation
+
+GitHub Actions is disabled at the repository level at the user's request: there is no budget for Actions. Keep it disabled and use local documentation, source and runtime checks as appropriate. Do not dispatch workflows, enable Actions, add automatic CI, or treat a new Actions run as an integration prerequisite. Existing completed checks are historical evidence; record local commands/results on new PRs. Paid execution requires explicit user approval. If a repository rule blocks merging without Actions, report that conflict rather than enabling Actions or bypassing the rule silently.
 
 The board enables auto-add for open Read Aloud issues, auto-add for sub-issues and an initial Proposed status. Auto-close, close-to-Done, merge-to-Done and linked-PR-to-In-Progress shortcuts are disabled. The orchestrator owns lifecycle transitions. Repository issue/PR API access and Projects access are separate permissions: CLI Project operations require the project scope; use the authenticated GitHub browser if it is unavailable. Do not silently fall back to local plan files.

@@ -21,8 +21,10 @@ class VoiceSessionRealizationInput {
     this.mergedPronunciationResources =
         const MergedPronunciationResources.empty(),
     this.enabledActiveRuleModules = const <PronunciationRuleModule>[],
+    this.segmentLimit,
   });
 
+  final int? segmentLimit;
   final SpeechDocument speechDocument;
   final BaseSpeechAnnotationSet baseAnnotations;
   final BasePronunciationArtifactSet basePronunciationArtifacts;
@@ -48,6 +50,7 @@ class VoiceSessionRealization {
     required this.artifacts,
     required this.boundaryIntents,
     required this.emphasisIntents,
+    this.performanceIntents = const <RealizedPerformanceIntent>[],
     required this.ttsArtifactSet,
   });
 
@@ -61,5 +64,6 @@ class VoiceSessionRealization {
   final List<RealizedPronunciationArtifact> artifacts;
   final List<RealizedBoundaryIntent> boundaryIntents;
   final List<RealizedEmphasisIntent> emphasisIntents;
+  final List<RealizedPerformanceIntent> performanceIntents;
   final TtsArtifactSet ttsArtifactSet;
 }

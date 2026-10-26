@@ -6,6 +6,60 @@ import 'package:read_aloud/src/services/speech_worker_pipeline.dart';
 
 void main() {
   group('SpeechWorkerPipeline', () {
+    for (final closing in [false, true]) {
+      test(
+        'full admission unblocks on ${closing ? 'shutdown' : 'cancel'} without starting stale work',
+        () async {
+          final processor = _ControlledSpeechWorkerChunkProcessor(
+            failAfterRelease: false,
+          );
+          final pipeline = SpeechWorkerPipeline(
+            processor: processor,
+            maxPending: 1,
+          );
+          final events = <SpeechWorkerEvent>[];
+          pipeline.events.listen(events.add);
+          await pipeline.prepareChunk(_request('old', 'held'));
+          await processor.started.future;
+          await pipeline.prepareChunk(_request('old', 'queued'));
+          var admitted = false;
+          final admission = pipeline
+              .preparePlan('old', [
+                _request('old', 'blocked'),
+                _request('old', 'never'),
+              ])
+              .then((_) => admitted = true);
+          await Future<void>.delayed(Duration.zero);
+          expect(admitted, isFalse);
+          expect(pipeline.pendingCount, 1);
+          var shut = false;
+          final terminal = closing
+              ? pipeline.shutdown().then((_) => shut = true)
+              : pipeline.cancelGeneration('old');
+          await admission.timeout(const Duration(seconds: 2));
+          expect(pipeline.pendingCount, 0);
+          expect(processor.processedChunkIds, ['held']);
+          if (closing) {
+            expect(
+              shut,
+              isFalse,
+              reason: 'shutdown must await active native ownership',
+            );
+          }
+          processor.release();
+          await terminal;
+          await pipeline.shutdown();
+          await pipeline.shutdown();
+          expect(processor.processedChunkIds, ['held']);
+          expect(
+            events
+                .where((e) => e.type == SpeechWorkerEventType.cancelled)
+                .map((e) => e.chunkId),
+            containsAll(['queued', 'blocked', 'never']),
+          );
+        },
+      );
+    }
     test('emits queued and worker stage events for a prepared chunk', () async {
       final processor = _FakeSpeechWorkerChunkProcessor();
       final pipeline = SpeechWorkerPipeline(processor: processor);
@@ -15,14 +69,11 @@ void main() {
       await pipeline.prepareChunk(_request('generation-a', 'chunk-a'));
       await Future<void>.delayed(const Duration(milliseconds: 20));
 
-      expect(
-        events.map((event) => event.type),
-        <SpeechWorkerEventType>[
-          SpeechWorkerEventType.queued,
-          SpeechWorkerEventType.phonemizing,
-          SpeechWorkerEventType.completed,
-        ],
-      );
+      expect(events.map((event) => event.type), <SpeechWorkerEventType>[
+        SpeechWorkerEventType.queued,
+        SpeechWorkerEventType.phonemizing,
+        SpeechWorkerEventType.completed,
+      ]);
       expect(processor.processedChunkIds, <String>['chunk-a']);
 
       await subscription.cancel();
@@ -47,10 +98,12 @@ void main() {
       blocker.complete();
       await Future<void>.delayed(const Duration(milliseconds: 40));
 
-      expect(
-        processor.processedChunkIds,
-        <String>['warmup', 'first', 'late-1', 'late-2'],
-      );
+      expect(processor.processedChunkIds, <String>[
+        'warmup',
+        'first',
+        'late-1',
+        'late-2',
+      ]);
 
       await pipeline.shutdown();
     });
@@ -82,7 +135,132 @@ void main() {
       await subscription.cancel();
       await pipeline.shutdown();
     });
+    for (final failAfterRelease in <bool>[false, true]) {
+      test(
+        'cancels queued work and suppresses delayed ${failAfterRelease ? 'failure' : 'success'} before the next generation',
+        () async {
+          final processor = _ControlledSpeechWorkerChunkProcessor(
+            failAfterRelease: failAfterRelease,
+          );
+          final pipeline = SpeechWorkerPipeline(processor: processor);
+          final events = <SpeechWorkerEvent>[];
+          final subscription = pipeline.events.listen(events.add);
+          addTearDown(() async {
+            processor.release();
+            await subscription.cancel();
+            await pipeline.shutdown();
+          });
+          final nextCompleted = pipeline.events
+              .firstWhere(
+                (event) => event.chunkId == 'fresh' && event.isTerminal,
+              )
+              .timeout(const Duration(seconds: 5));
+
+          await pipeline.preparePlan('old', <SpeechWorkerChunkRequest>[
+            _request('old', 'held'),
+            _request('old', 'never-started'),
+          ]);
+          await processor.started.future.timeout(const Duration(seconds: 5));
+          await pipeline.cancelGeneration('old');
+          await pipeline.prepareChunk(_request('new', 'fresh'));
+          expect(processor.processedChunkIds, <String>['held']);
+
+          processor.release();
+          expect((await nextCompleted).type, SpeechWorkerEventType.completed);
+          expect(processor.processedChunkIds, <String>['held', 'fresh']);
+          final oldTerminalEvents = events.where(
+            (event) => event.generationId == 'old' && event.isTerminal,
+          );
+          expect(
+            oldTerminalEvents.map((event) => event.chunkId),
+            unorderedEquals(<String>['held', 'never-started']),
+          );
+          expect(
+            oldTerminalEvents.map((event) => event.type),
+            everyElement(SpeechWorkerEventType.cancelled),
+          );
+        },
+      );
+    }
+
+    test(
+      'delayed processor failure retains request identity and drains the queue',
+      () async {
+        final processor = _ControlledSpeechWorkerChunkProcessor(
+          failAfterRelease: true,
+        );
+        final pipeline = SpeechWorkerPipeline(processor: processor);
+        final events = <SpeechWorkerEvent>[];
+        final subscription = pipeline.events.listen(events.add);
+        addTearDown(() async {
+          processor.release();
+          await subscription.cancel();
+          await pipeline.shutdown();
+        });
+        final nextCompleted = pipeline.events
+            .firstWhere((event) => event.chunkId == 'fresh' && event.isTerminal)
+            .timeout(const Duration(seconds: 5));
+
+        await pipeline.prepareChunk(_request('old', 'held'));
+        await processor.started.future.timeout(const Duration(seconds: 5));
+        await pipeline.prepareChunk(_request('new', 'fresh'));
+        processor.release();
+        await nextCompleted;
+
+        final failure = events.singleWhere(
+          (event) => event.type == SpeechWorkerEventType.failed,
+        );
+        expect(failure.sessionId, 'session-old');
+        expect(failure.generationId, 'old');
+        expect(failure.chunkId, 'held');
+        expect(failure.message, contains('controlled worker failure'));
+        expect(processor.processedChunkIds, <String>['held', 'fresh']);
+      },
+    );
   });
+}
+
+// The test owns both barriers on its isolate. Only the first request waits;
+// release permits either a success or a thrown failure. A terminal event from
+// the queued successor proves the pipeline has consumed that outcome.
+class _ControlledSpeechWorkerChunkProcessor
+    implements SpeechWorkerChunkProcessor {
+  _ControlledSpeechWorkerChunkProcessor({required this.failAfterRelease});
+
+  final bool failAfterRelease;
+  final processedChunkIds = <String>[];
+  final started = Completer<void>();
+  final _released = Completer<void>();
+
+  void release() {
+    if (!_released.isCompleted) _released.complete();
+  }
+
+  @override
+  Future<void> process(
+    SpeechWorkerChunkRequest request,
+    void Function(SpeechWorkerEvent event) emit,
+  ) async {
+    processedChunkIds.add(request.chunkId);
+    if (request.chunkId == 'held') {
+      started.complete();
+      await _released.future;
+      if (failAfterRelease) throw StateError('controlled worker failure');
+    }
+    emit(
+      SpeechWorkerEvent(
+        type: SpeechWorkerEventType.completed,
+        sessionId: request.sessionId,
+        generationId: request.generationId,
+        chunkId: request.chunkId,
+        emittedAt: DateTime.now().toUtc(),
+        stage: 'completed',
+      ),
+    );
+  }
+
+  @override
+  Future<void> dispose() async {}
 }
 
 SpeechWorkerChunkRequest _request(String generationId, String chunkId) {
@@ -104,9 +282,8 @@ SpeechWorkerChunkRequest _request(String generationId, String chunkId) {
 }
 
 class _FakeSpeechWorkerChunkProcessor implements SpeechWorkerChunkProcessor {
-  _FakeSpeechWorkerChunkProcessor({
-    Map<String, Completer<void>>? blockers,
-  }) : _blockers = blockers ?? <String, Completer<void>>{};
+  _FakeSpeechWorkerChunkProcessor({Map<String, Completer<void>>? blockers})
+    : _blockers = blockers ?? <String, Completer<void>>{};
 
   final Map<String, Completer<void>> _blockers;
   final List<String> processedChunkIds = <String>[];

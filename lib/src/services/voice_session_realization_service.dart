@@ -21,6 +21,7 @@ class VoiceSessionRealizationService {
     final windowSegments = _selectWindowSegments(
       input.speechDocument,
       startIndex,
+      input.segmentLimit,
     );
     if (windowSegments.isEmpty) {
       final emptySet = TtsArtifactSet(
@@ -59,6 +60,7 @@ class VoiceSessionRealizationService {
     final realizedBoundaryIntents = <RealizedBoundaryIntent>[];
     final realizedEmphasisIntents = <RealizedEmphasisIntent>[];
     final ttsSegments = <TtsArtifactSegment>[];
+    final performanceIntents = <RealizedPerformanceIntent>[];
 
     for (final segment in windowSegments) {
       final segmentAnnotations = input.baseAnnotations
@@ -84,7 +86,16 @@ class VoiceSessionRealizationService {
         input: input,
         segment: segment,
       );
+      final segmentPerformanceIntents = segmentAnnotations
+          .where((annotation) => annotation.isPerformanceIntent)
+          .map(
+            (annotation) => RealizedPerformanceIntent(annotation: annotation),
+          )
+          .toList(growable: false);
+      performanceIntents.addAll(segmentPerformanceIntents);
       final segmentDiagnosticCodes = <String>{
+        for (final intent in segmentPerformanceIntents)
+          ...intent.diagnosticCodes,
         for (final intent in segmentBoundaryIntents) ...intent.diagnosticCodes,
         for (final intent in segmentEmphasisIntents) ...intent.diagnosticCodes,
       };
@@ -98,6 +109,7 @@ class VoiceSessionRealizationService {
           pronunciationArtifacts: segmentArtifacts,
           boundaryIntents: segmentBoundaryIntents,
           emphasisIntents: segmentEmphasisIntents,
+          performanceIntents: List.unmodifiable(segmentPerformanceIntents),
           diagnosticCodes: segmentDiagnosticCodes.toList(growable: false),
         ),
       );
@@ -146,6 +158,7 @@ class VoiceSessionRealizationService {
       artifacts: realizedArtifacts,
       boundaryIntents: realizedBoundaryIntents,
       emphasisIntents: realizedEmphasisIntents,
+      performanceIntents: List.unmodifiable(performanceIntents),
       ttsArtifactSet: ttsArtifactSet,
     );
   }
@@ -256,6 +269,7 @@ List<RealizedEmphasisIntent> _realizeEmphasisIntents({
 List<SpeechSegment> _selectWindowSegments(
   SpeechDocument speechDocument,
   int startIndex,
+  int? segmentLimit,
 ) {
   if (speechDocument.segments.isEmpty) {
     return const <SpeechSegment>[];
@@ -264,6 +278,12 @@ List<SpeechSegment> _selectWindowSegments(
     return <SpeechSegment>[speechDocument.segments.last];
   }
 
+  if (segmentLimit != null) {
+    return speechDocument.segments
+        .skip(startIndex)
+        .take(segmentLimit)
+        .toList(growable: false);
+  }
   final selected = <SpeechSegment>[speechDocument.segments[startIndex]];
   final anchorParagraph = speechDocument.segments[startIndex].paragraphIndex;
   for (
@@ -587,6 +607,15 @@ String _realizationId({
       [
         input.speechDocument.normalizationVersion,
         input.baseAnnotations.annotationVersion,
+        if (input.baseAnnotations.annotations.any(
+          (annotation) => annotation.isPerformanceIntent,
+        ))
+          jsonEncode(
+            input.baseAnnotations.annotations
+                .where((annotation) => annotation.isPerformanceIntent)
+                .map((annotation) => annotation.toJson())
+                .toList(growable: false),
+          ),
         input.startSegmentId,
         input.voiceId,
         input.engineId,

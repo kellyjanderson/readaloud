@@ -202,14 +202,39 @@ _TranslatedSegment _translateSegment(
   final traceUnits = tokenMatches
       .map((match) => segment.speakText.substring(match.start, match.end))
       .toList(growable: true);
-  final payloadUnits = traceUnits
+  // Keep one slot per original word until all explicit and dictionary
+  // replacements are complete. A word may expand to several payload units,
+  // but that must never shift another word's replacement index.
+  final payloadUnitsByWord = traceUnits
       .map(
-        (unit) => KokoroEnginePayloadUnit(
-          kind: KokoroEnginePayloadUnitKind.plainText,
-          value: unit,
-        ),
+        (unit) => <KokoroEnginePayloadUnit>[
+          KokoroEnginePayloadUnit(
+            kind: KokoroEnginePayloadUnitKind.plainText,
+            value: unit,
+          ),
+        ],
       )
       .toList(growable: true);
+  void replacePayloadRange(
+    int start,
+    int end,
+    Iterable<KokoroEnginePayloadUnit> replacement,
+  ) {
+    RangeError.checkValidRange(start, end, payloadUnitsByWord.length);
+    payloadUnitsByWord[start] = replacement.toList(growable: false);
+    for (var index = start + 1; index < end; index += 1) {
+      payloadUnitsByWord[index] = const <KokoroEnginePayloadUnit>[];
+    }
+  }
+
+  void replaceTraceRange(int start, int end, String replacement) {
+    RangeError.checkValidRange(start, end, traceUnits.length);
+    traceUnits[start] = replacement;
+    for (var index = start + 1; index < end; index += 1) {
+      traceUnits[index] = '';
+    }
+  }
+
   final coveredWordIndexes = <int>{};
   final translatedArtifacts = <KokoroTranslatedPronunciationArtifact>[];
 
@@ -225,12 +250,13 @@ _TranslatedSegment _translateSegment(
     KokoroPronunciationTranslationOutcome translationOutcome;
     if (_isEnglishSClassAllomorphArtifact(artifact) &&
         selectedRepresentation?.representationType != 'phoneme_string' &&
-        selectedRepresentation?.representationType != 'explicit_suffix_phoneme') {
-        translationOutcome = KokoroPronunciationTranslationOutcome.direct;
-      final clampedEnd = artifact.endWord > payloadUnits.length
-          ? payloadUnits.length
+        selectedRepresentation?.representationType !=
+            'explicit_suffix_phoneme') {
+      translationOutcome = KokoroPronunciationTranslationOutcome.direct;
+      final clampedEnd = artifact.endWord > payloadUnitsByWord.length
+          ? payloadUnitsByWord.length
           : artifact.endWord;
-      payloadUnits.replaceRange(
+      replacePayloadRange(
         artifact.startWord,
         clampedEnd,
         _buildEnglishSClassPayloadUnits(
@@ -242,15 +268,15 @@ _TranslatedSegment _translateSegment(
       );
     } else if (selectedRepresentation == null) {
       translationOutcome = KokoroPronunciationTranslationOutcome.deferred;
-      } else if (capabilityProfile.supportsDirectRepresentation(
-        selectedRepresentation.representationType,
-      )) {
-        translationOutcome = KokoroPronunciationTranslationOutcome.direct;
-        if (selectedRepresentation.representationType == 'phoneme_string') {
-        final clampedEnd = artifact.endWord > payloadUnits.length
-            ? payloadUnits.length
+    } else if (capabilityProfile.supportsDirectRepresentation(
+      selectedRepresentation.representationType,
+    )) {
+      translationOutcome = KokoroPronunciationTranslationOutcome.direct;
+      if (selectedRepresentation.representationType == 'phoneme_string') {
+        final clampedEnd = artifact.endWord > payloadUnitsByWord.length
+            ? payloadUnitsByWord.length
             : artifact.endWord;
-        payloadUnits.replaceRange(
+        replacePayloadRange(
           artifact.startWord,
           clampedEnd,
           _buildDirectPhonemePayloadUnits(
@@ -259,27 +285,27 @@ _TranslatedSegment _translateSegment(
             endWord: artifact.endWord,
             phonemeString: selectedRepresentation.representationValue,
             artifactId: artifact.artifactId,
-            ),
-          );
-        } else if (selectedRepresentation.representationType ==
-            'explicit_suffix_phoneme') {
-          final clampedEnd = artifact.endWord > payloadUnits.length
-              ? payloadUnits.length
-              : artifact.endWord;
-          payloadUnits.replaceRange(
-            artifact.startWord,
-            clampedEnd,
-            _buildExplicitSuffixPayloadUnits(
-              units: traceUnits,
-              startWord: artifact.startWord,
-              endWord: artifact.endWord,
-              suffixPhoneme: selectedRepresentation.representationValue,
-              artifactId: artifact.artifactId,
-            ),
-          );
-        } else {
-          final replacementUnit = _buildReplacementUnit(
+          ),
+        );
+      } else if (selectedRepresentation.representationType ==
+          'explicit_suffix_phoneme') {
+        final clampedEnd = artifact.endWord > payloadUnitsByWord.length
+            ? payloadUnitsByWord.length
+            : artifact.endWord;
+        replacePayloadRange(
+          artifact.startWord,
+          clampedEnd,
+          _buildExplicitSuffixPayloadUnits(
             units: traceUnits,
+            startWord: artifact.startWord,
+            endWord: artifact.endWord,
+            suffixPhoneme: selectedRepresentation.representationValue,
+            artifactId: artifact.artifactId,
+          ),
+        );
+      } else {
+        final replacementUnit = _buildReplacementUnit(
+          units: traceUnits,
           startWord: artifact.startWord,
           endWord: artifact.endWord,
           replacement: selectedRepresentation.representationValue,
@@ -287,10 +313,8 @@ _TranslatedSegment _translateSegment(
         final clampedEnd = artifact.endWord > traceUnits.length
             ? traceUnits.length
             : artifact.endWord;
-        traceUnits.replaceRange(artifact.startWord, clampedEnd, <String>[
-          replacementUnit,
-        ]);
-        payloadUnits.replaceRange(
+        replaceTraceRange(artifact.startWord, clampedEnd, replacementUnit);
+        replacePayloadRange(
           artifact.startWord,
           clampedEnd,
           <KokoroEnginePayloadUnit>[
@@ -315,10 +339,8 @@ _TranslatedSegment _translateSegment(
       final clampedEnd = artifact.endWord > traceUnits.length
           ? traceUnits.length
           : artifact.endWord;
-      traceUnits.replaceRange(artifact.startWord, clampedEnd, <String>[
-        replacementUnit,
-      ]);
-      payloadUnits.replaceRange(
+      replaceTraceRange(artifact.startWord, clampedEnd, replacementUnit);
+      replacePayloadRange(
         artifact.startWord,
         clampedEnd,
         <KokoroEnginePayloadUnit>[
@@ -361,8 +383,10 @@ _TranslatedSegment _translateSegment(
       continue;
     }
 
-    final clampedEnd = index + 1 > payloadUnits.length ? payloadUnits.length : index + 1;
-    payloadUnits.replaceRange(
+    final clampedEnd = index + 1 > payloadUnitsByWord.length
+        ? payloadUnitsByWord.length
+        : index + 1;
+    replacePayloadRange(
       index,
       clampedEnd,
       _buildDirectPhonemePayloadUnits(
@@ -397,7 +421,9 @@ _TranslatedSegment _translateSegment(
 
   return _TranslatedSegment(
     speakText: traceUnits.join().trim(),
-    payloadUnits: payloadUnits,
+    payloadUnits: payloadUnitsByWord
+        .expand((units) => units)
+        .toList(growable: false),
     pronunciationArtifacts: translatedArtifacts.reversed.toList(
       growable: false,
     ),

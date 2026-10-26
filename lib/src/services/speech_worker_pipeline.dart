@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:collection';
+import 'dart:convert';
 
 import '../models/speech_annotation.dart';
 
@@ -21,7 +22,7 @@ class SpeechWorkerCommand {
     : this._(
         type: SpeechWorkerCommandType.prepareChunk,
         generationId: chunk.generationId,
-        chunks: <SpeechWorkerChunkRequest>[chunk],
+        chunks: <SpeechWorkerChunkRequest>[chunk.snapshot()],
       );
 
   SpeechWorkerCommand.preparePlan({
@@ -30,7 +31,7 @@ class SpeechWorkerCommand {
   }) : this._(
          type: SpeechWorkerCommandType.preparePlan,
          generationId: generationId,
-         chunks: chunks,
+         chunks: List.unmodifiable(chunks.map((chunk) => chunk.snapshot())),
        );
 
   SpeechWorkerCommand.cancelGeneration(String generationId)
@@ -63,6 +64,9 @@ class SpeechWorkerChunkRequest {
     required this.voiceId,
     required this.rate,
     this.capabilityProfileId,
+    this.expectedBindingFingerprint,
+    this.expectedBindingRevision,
+    this.synthesisIdentity = 'legacy-unspecified',
     this.pronunciationArtifacts = const <Map<String, Object?>>[],
     this.missingFallbackWordCount = 0,
   });
@@ -81,8 +85,15 @@ class SpeechWorkerChunkRequest {
   final String voiceId;
   final double rate;
   final String? capabilityProfileId;
+  final String? expectedBindingFingerprint;
+  final int? expectedBindingRevision;
+  final String synthesisIdentity;
   final List<Map<String, Object?>> pronunciationArtifacts;
   final int missingFallbackWordCount;
+
+  SpeechWorkerChunkRequest snapshot() => SpeechWorkerChunkRequest.fromMap(
+    jsonDecode(jsonEncode(toMap())) as Map<String, dynamic>,
+  );
 
   Map<String, dynamic> toMap() {
     return <String, dynamic>{
@@ -100,6 +111,9 @@ class SpeechWorkerChunkRequest {
       'voiceId': voiceId,
       'rate': rate,
       'capabilityProfileId': capabilityProfileId,
+      'expectedBindingFingerprint': expectedBindingFingerprint,
+      'expectedBindingRevision': expectedBindingRevision,
+      'synthesisIdentity': synthesisIdentity,
       'pronunciationArtifacts': pronunciationArtifacts,
       'missingFallbackWordCount': missingFallbackWordCount,
     };
@@ -110,17 +124,21 @@ class SpeechWorkerChunkRequest {
       sessionId: map['sessionId'] as String,
       generationId: map['generationId'] as String,
       chunkId: map['chunkId'] as String,
-      segmentIds: List<String>.from(map['segmentIds'] as List<dynamic>),
+      segmentIds: List<String>.unmodifiable(map['segmentIds'] as List<dynamic>),
       cacheKey: map['cacheKey'] as String,
       boundaryClass: BreakClass.values.byName(map['boundaryClass'] as String),
       documentId: map['documentId'] as String,
       normalizationVersion: map['normalizationVersion'] as String,
       speakText: map['speakText'] as String,
-      tokens: List<int>.from(map['tokens'] as List<dynamic>),
+      tokens: List<int>.unmodifiable(map['tokens'] as List<dynamic>),
       languageTag: map['languageTag'] as String,
       voiceId: map['voiceId'] as String,
       rate: (map['rate'] as num).toDouble(),
       capabilityProfileId: map['capabilityProfileId'] as String?,
+      expectedBindingFingerprint: map['expectedBindingFingerprint'] as String?,
+      expectedBindingRevision: map['expectedBindingRevision'] as int?,
+      synthesisIdentity:
+          map['synthesisIdentity'] as String? ?? 'legacy-unspecified',
       pronunciationArtifacts: List<Map<String, Object?>>.from(
         (map['pronunciationArtifacts'] as List<Object?>? ?? const <Object?>[])
             .map(
@@ -221,8 +239,45 @@ abstract interface class SpeechWorkerChunkProcessor {
 }
 
 class SpeechWorkerPipeline {
-  SpeechWorkerPipeline({required SpeechWorkerChunkProcessor processor})
-    : _processor = processor;
+  SpeechWorkerPipeline({
+    required SpeechWorkerChunkProcessor processor,
+    this.maxPending = 8,
+    this.onCompleted,
+  }) : _processor = processor;
+  final int maxPending;
+  Future<void> Function(SpeechWorkerEvent)? onCompleted;
+  int get pendingCount => _pending.length;
+  Completer<void> _capacityChanged = Completer<void>();
+  Future<void>? _pumpFuture;
+  Future<void>? _shutdownFuture;
+  void _signalCapacity() {
+    final previous = _capacityChanged;
+    _capacityChanged = Completer<void>();
+    if (!previous.isCompleted) previous.complete();
+  }
+
+  Future<bool> _admit(
+    SpeechWorkerChunkRequest chunk, {
+    required bool priority,
+  }) async {
+    while (_pending.length >= maxPending &&
+        !_isShutdown &&
+        !_isCancelled(chunk.generationId)) {
+      await _capacityChanged.future;
+    }
+    if (_isShutdown || _isCancelled(chunk.generationId)) {
+      _emit(_cancelledEventFor(chunk));
+      return false;
+    }
+    if (priority) {
+      _pending.addFirst(chunk);
+    } else {
+      _pending.addLast(chunk);
+    }
+    _emit(_queuedEventFor(chunk));
+    _ensurePump();
+    return true;
+  }
 
   final SpeechWorkerChunkProcessor _processor;
   final StreamController<SpeechWorkerEvent> _eventsController =
@@ -243,18 +298,16 @@ class SpeechWorkerPipeline {
     switch (command.type) {
       case SpeechWorkerCommandType.prepareChunk:
         final chunk = command.chunks.single;
-        _cancelledGenerationIds.remove(chunk.generationId);
-        _pending.addFirst(chunk);
-        _emit(_queuedEventFor(chunk));
-        _ensurePump();
+        await _admit(chunk, priority: true);
       case SpeechWorkerCommandType.preparePlan:
-        final generationId = command.generationId!;
-        _cancelledGenerationIds.remove(generationId);
-        for (final chunk in command.chunks) {
-          _pending.addLast(chunk);
-          _emit(_queuedEventFor(chunk));
+        for (var index = 0; index < command.chunks.length; index++) {
+          if (!await _admit(command.chunks[index], priority: false)) {
+            for (final remainder in command.chunks.skip(index + 1)) {
+              _emit(_cancelledEventFor(remainder));
+            }
+            break;
+          }
         }
-        _ensurePump();
       case SpeechWorkerCommandType.cancelGeneration:
         await _cancelGeneration(command.generationId!);
       case SpeechWorkerCommandType.shutdown:
@@ -282,18 +335,21 @@ class SpeechWorkerPipeline {
     return dispatch(SpeechWorkerCommand.cancelGeneration(generationId));
   }
 
-  Future<void> shutdown() async {
+  Future<void> shutdown() => _shutdownFuture ??= _shutdown();
+  Future<void> _shutdown() async {
     if (_isShutdown) {
       return;
     }
 
     _isShutdown = true;
+    _signalCapacity();
     final pending = _pending.toList(growable: false);
     _pending.clear();
     for (final chunk in pending) {
       _emit(_cancelledEventFor(chunk));
     }
 
+    await _pumpFuture;
     await _processor.dispose();
     await _eventsController.close();
   }
@@ -308,6 +364,7 @@ class SpeechWorkerPipeline {
       }
     }
     _pending.removeWhere((chunk) => chunk.generationId == generationId);
+    _signalCapacity();
 
     for (final chunk in cancelled) {
       _emit(_cancelledEventFor(chunk));
@@ -318,7 +375,7 @@ class SpeechWorkerPipeline {
     if (_isPumping || _isShutdown) {
       return;
     }
-    unawaited(_pump());
+    _pumpFuture = _pump();
   }
 
   Future<void> _pump() async {
@@ -330,18 +387,26 @@ class SpeechWorkerPipeline {
     try {
       while (!_isShutdown && _pending.isNotEmpty) {
         final chunk = _pending.removeFirst();
+        _signalCapacity();
         if (_isCancelled(chunk.generationId)) {
           _emit(_cancelledEventFor(chunk));
           continue;
         }
 
+        Future<void>? completion;
         try {
           await _processor.process(chunk, (event) {
             if (_isShutdown || _isCancelled(event.generationId)) {
               return;
             }
-            _emit(event);
+            if (event.type == SpeechWorkerEventType.completed &&
+                onCompleted != null) {
+              completion = Future.sync(() => onCompleted!(event));
+            } else {
+              _emit(event);
+            }
           });
+          await completion;
           if (_isCancelled(chunk.generationId)) {
             _emit(_cancelledEventFor(chunk));
           }

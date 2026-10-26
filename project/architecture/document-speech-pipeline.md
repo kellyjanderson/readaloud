@@ -1,29 +1,38 @@
 # Document and Speech Pipeline
 
-Reconciled: October 24, 2026
-Status: Current source architecture; runtime validation not refreshed
+Reconciled: October 25, 2026; P4 production lineage 295677e
+Status: Implemented P1 preparation/P3 planning; P4/FINAL integrated acceptance pending
 
 ## Implemented structure and limitations
 
-`DocumentImportService` parses text/Markdown, HTML, EPUB, PDF, DOCX and RTF. Its document builder synchronously constructs normalized display/speech representations, position mapping, base annotations, heuristic dialogue attribution, a cast registry, document voice ranges and pronunciation artifacts. PDF extraction awaits the native PDF API; making import asynchronous does not offload its synchronous analysis passes.
+`DocumentImportService` retains parsing and semantic rules for text/Markdown, HTML, EPUB, PDF, DOCX and RTF. Interactive intake now calls `DocumentPreparationSupervisor`: the main-isolate controller owns intake/revision state; a pure Dart worker owns decode/decompression, parse, normalization, mapping, annotations, heuristic attribution, cast construction, pronunciation artifacts, display HTML, word spans, freezing and JSON serialization. No partially analyzed new document is published.
 
-The controller derives a voice/session realization window and cast-aware chunk plan. Kokoro adapts pronunciation payloads and submits generation requests through the speech runtime. Finalized WAV chunks feed playback or export. The serializer writes an inspectable `.radoc` JSON envelope; it is not a demonstrated persistent prepared-document reload cache.
+The supervisor admits one active operation and one latest pending descriptor. File byte acquisition occurs only after admission; access recovery remains a small platform bridge. Replacement cancels pending requests and suppresses old outcomes immediately. A native PDF extraction runs through pdfrx's existing native worker and owns document disposal in `finally`; only raw text/character rectangles cross into the pure worker, where a data-only page adapter runs pdfrx's existing reading-order formatter; the Dart supervisor waits for that adapter to drain before admitting the replacement. Pure Dart workers are killed on cancellation/timeout and their exit is awaited. A two-minute default deadline emits a terminal timeout; non-cancellable file/native bridges may keep the active slot until they drain. Shutdown stops intake, cancels pending work and awaits that drain. `ReaderController.shutdownPreparation()` exposes awaitable preparation cleanup; synchronous Flutter `dispose()` invalidates identities immediately and starts cleanup, without claiming that native teardown has already finished.
 
-There is existing whole-document analysis, but no separate supervised document-preparation worker or immutable prepared-revision protocol. Realization is windowed, not a fully pre-rendered audiobook. The ACD extends this structure with explicit readiness gates, worker ownership and versioned character voice contexts; it does not require replacing the normalized models.
+Requests carry owner, revision, operation kind and optional watch session. Success, failure and cleanup are accepted only for the current identity, including after engine-stop, bookmark and access awaits. File watchers have separate session ownership. The controller preserves the previously displayed document while preparing its replacement; `isDisplayReady`, `isDocumentPrepared` and transport-derived `isAudioReady` are distinct. `startPlayback` refuses entry during preparation. Display and preparation become ready together for a new document in this slice. The published `preparedDocumentRevision` and `preparationOwnerId` identify the accepted graph for subsequent resource ownership. Cast voice IDs remain available through the existing assignment resolver; resident-resource readiness belongs to P2, not these preparation flags.
+
+`ReaderDocument.preparedSnapshot` retains already computed HTML/text/word spans and freezes nested collections on the worker. The typed graph transfers directly on worker exit: there is no UI-side JSON decode or repeated analysis. The existing `.radoc` (`radoc-v1`) serialization is unchanged, includes PDF bytes as base64 and remains write-only. The separate `.radoc-v2` artifact codec serializes the instrumented graph plus caller-supplied document revision, a complete assignment for every cast registry entry and a matching prepared voice reference for each assignment. Its decoder returns a recursively immutable JSON snapshot only; it does not recreate a `ReaderDocument`, reopen a source, hydrate runtime/cache resources or include embedded PDF/asset bytes or native handles. Identity, revision, cast coverage and reference consistency are checked during decode. This is an inspection/data round trip, not an application restore format. `SpeechAnnotation` also represents optional span-level delivery intent (`whispered`, `shouted`, `spoken`, `sung`) and inflection intent (`rising`, `falling`, `level`). Each intent carries its own explicit-source/user provenance and confidence; unknown remains absent. The inference service accepts caller-supplied explicit intents with validated speech-word ranges; it does not infer performance or emotion from prose, punctuation or dialogue tags. Importers and UI do not yet supply these intents automatically. V2 preserves these canonical values and rejects invalid vocabulary, provenance, confidence or spans during decode; V1 omits the new kinds to preserve its existing output. Voice-session realization retains each intent and records `unsupported` with `engine_default` fallback in the session/segment diagnostics for every current engine adapter; it does not claim or alter acoustic delivery. Intent data participates in realization identity. This is model/serialization/fallback evidence, not audible delivery acceptance. See [R3 slice #79](https://github.com/kellyjanderson/readaloud/issues/79). `writeToFile` for v1 performs JSON encoding in an isolate.
+
+Residual limits are explicit: the controller constructs the small fixed bundled sample synchronously at startup; later sample requests use the worker. `loadDocument` accepts an already constructed complete graph. Headless export/probe runners still call the importer directly and do not host an interactive reader. An injected importer is a controllable test/legacy adapter on the caller isolate, not production-worker proof. Runtime realization and cast-aware chunk planning now run in the resident planning worker, with separate playback/export owners and bounded returned windows. Framework HTML layout remains on Flutter. P1 records bounded running-app preparation/input/publication proof; source tests and event-loop heartbeats do not establish universal responsiveness, native cleanup or audio continuity. Later P4 frame/input checks remain pending.
 
 ## Source and tests
 
+- [document_preparation_supervisor.dart](../../lib/src/services/document_preparation_supervisor.dart)
+- [document_preparation_supervisor_test.dart](../../test/document_preparation_supervisor_test.dart)
 - [document_import_service.dart](../../lib/src/services/document_import_service.dart)
 - [reader_controller.dart](../../lib/src/controllers/reader_controller.dart)
 - [chunk_planner_service.dart](../../lib/src/services/chunk_planner_service.dart)
 - [reader_document_serialization_service.dart](../../lib/src/services/reader_document_serialization_service.dart)
+- [instrumented_document_artifact_codec.dart](../../lib/src/services/instrumented_document_artifact_codec.dart)
 - [document_import_service_test.dart](../../test/document_import_service_test.dart)
 - [chunk_planner_service_test.dart](../../test/chunk_planner_service_test.dart)
 - [reader_document_serialization_service_test.dart](../../test/reader_document_serialization_service_test.dart)
+- [instrumented_document_artifact_codec_test.dart](../../test/instrumented_document_artifact_codec_test.dart)
+- [performance_intent_test.dart](../../test/performance_intent_test.dart)
 
-Tests listed here are existing evidence locations, not a claim that they passed in this review. The bundled Intel Dart executable cannot run in the current Apple Silicon execution environment.
+The focused preparation tests cover worker artifact equality, nested immutability, PDF handoff, queue bounds, timeout, exit, native drain and caller event-loop progress. Controller tests cover overlapping success/failure, readiness, stale publication after engine stop and cancelled watcher installation. Exact run/native evidence is recorded in [P1](https://github.com/kellyjanderson/readaloud/issues/50); use the pinned native arm64 SDK documented in development guidance.
 
-## Proposed changes
+## Design and remaining acceptance
 
 See [prepared document runtime ACD](https://github.com/kellyjanderson/readaloud/issues/48) and its [implementation plan](https://github.com/kellyjanderson/readaloud/issues/48). Historical design prose is preserved in the [architecture snapshot](../archive/architecture/2026-10-24/document-speech-pipeline.md).
 

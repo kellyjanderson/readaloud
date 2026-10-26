@@ -1,7 +1,49 @@
+import 'speech_planning_supervisor.dart';
 import '../models/chunk_plan.dart';
 import '../models/speech_document.dart';
 import '../models/tts_artifact.dart';
 import '../models/voice_profile.dart';
+import '../models/prepared_voice_binding.dart';
+
+class TtsPlaybackResumeAnchor {
+  const TtsPlaybackResumeAnchor({
+    required this.documentId,
+    required this.chunkId,
+    required this.startWordIndex,
+  });
+  final String documentId;
+  final String chunkId;
+  final int startWordIndex;
+}
+
+class TtsPlaybackAcknowledgment {
+  const TtsPlaybackAcknowledgment({
+    required this.documentId,
+    required this.assignmentRevision,
+    required this.generationId,
+    required this.bindingFingerprints,
+  });
+  final String documentId;
+  final int assignmentRevision;
+  final String generationId;
+  final Set<String> bindingFingerprints;
+}
+
+abstract interface class VoiceAssignmentPlaybackCapable {
+  TtsPlaybackResumeAnchor? get currentPlaybackResumeAnchor;
+}
+
+abstract interface class ResourcePreparationCapable {
+  bool get resourcesReady;
+  Future<List<PreparedVoiceBinding>> prepareDocumentResources({
+    required String documentId,
+    required int revision,
+    required Set<String> voiceIds,
+    required String pronunciationProfileId,
+  });
+  Future<void> releaseDocumentResources();
+  Future<void> shutdownResources();
+}
 
 class TtsProgressUpdate {
   const TtsProgressUpdate({
@@ -40,6 +82,7 @@ class TtsProgressUpdate {
 }
 
 enum TtsPlaybackPhase { idle, buffering, playing }
+
 enum TtsBufferPressure { none, healthy, lowWater, critical }
 
 class TtsPlaybackActivity {
@@ -120,6 +163,11 @@ class TtsSpeakRequest {
     this.isResumedPlayback = false,
     this.speechDocument,
     this.ttsArtifactSet,
+    this.preparedResources,
+    this.planningContext,
+    this.assignmentRevision = 0,
+    this.isCurrent,
+    this.onPlaybackReady,
   });
 
   final String text;
@@ -130,6 +178,11 @@ class TtsSpeakRequest {
   final bool isResumedPlayback;
   final SpeechDocument? speechDocument;
   final TtsArtifactSet? ttsArtifactSet;
+  final List<PreparedVoiceBinding>? preparedResources;
+  final SpeechPlanningContext? planningContext;
+  final int assignmentRevision;
+  final bool Function()? isCurrent;
+  final void Function(TtsPlaybackAcknowledgment)? onPlaybackReady;
 }
 
 class TtsExportRequest {
@@ -144,6 +197,8 @@ class TtsExportRequest {
     this.chunkPlan,
     this.speechDocument,
     this.ttsArtifactSet,
+    this.planningContext,
+    this.preparedResources,
   });
 
   final String text;
@@ -156,6 +211,8 @@ class TtsExportRequest {
   final ChunkPlan? chunkPlan;
   final SpeechDocument? speechDocument;
   final TtsArtifactSet? ttsArtifactSet;
+  final SpeechPlanningContext? planningContext;
+  final List<PreparedVoiceBinding>? preparedResources;
 }
 
 class TtsExportResult {
@@ -189,6 +246,12 @@ abstract interface class VoiceLibraryCapable {
 
 abstract interface class AudioExportCapable {
   Future<TtsExportResult> exportAudio(TtsExportRequest request);
+}
+
+/// Engines with a narrower supported range normalize intent before planning.
+/// The resulting effective rate must identify both cache content and inference.
+abstract interface class SpeechRateNormalizationCapable {
+  double normalizeSpeechRate(double requested);
 }
 
 abstract interface class TtsEngine {

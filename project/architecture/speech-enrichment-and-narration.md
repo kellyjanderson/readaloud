@@ -1,15 +1,15 @@
 # Speech Enrichment and Narration
 
-Reconciled: October 24, 2026
-Status: Current source architecture; runtime validation not refreshed
+Reconciled: October 25, 2026; P4 production lineage 295677e
+Status: Current worker-owned source; native P4/FINAL acceptance pending
 
 ## Implemented structure and limitations
 
 Base annotation inference attaches speech-side hints to normalized segments. The model covers boundaries, pause/emphasis candidates, discourse, pronunciation, say-as and dialogue. Annotations preserve provenance and ranges; source text remains separate from derived intent.
 
-`NarrationState` carries session continuity and local realization choices. `VoiceSessionRealizationService` realizes a bounded segment window (preferred lookahead: two segments), combining annotations, pronunciation resources and profile selection into TTS artifacts. The controller currently calls this service synchronously.
+`NarrationState` carries session continuity and local realization choices. A resident `SpeechPlanningSupervisor` worker owns `VoiceSessionRealizationService` and cast-aware chunk planning. It retains a frozen document/routing context and accepts bounded scalar window requests. Realization expands to cover all segments in each returned chunk window, combining annotations, pronunciation resources and profile selection into TTS artifacts. The main isolate accepts identity-checked results and updates UI/control state; it does not perform this runtime realization synchronously.
 
-Speaker attribution and character casting are implemented upstream during import; earlier architecture saying they were absent was stale. Rich delivery intent in a data model does not guarantee audible engine support. Current emphasis/prosody remains constrained by the adapter and Kokoro capabilities. The active ACD specifies full-document semantic readiness and worker-owned render-ahead realization without claiming those changes are complete.
+Speaker attribution and character casting are implemented upstream during import; earlier architecture saying they were absent was stale. Rich delivery intent in a data model does not guarantee audible engine support. Current emphasis/prosody remains constrained by the adapter and Kokoro capabilities. Whole-document semantic preparation and worker-owned render-ahead realization are implemented. Data coverage does not establish correct attribution or audible delivery; provider selection and acoustic evaluation remain separate.
 
 ## Source and tests
 
@@ -20,9 +20,9 @@ Speaker attribution and character casting are implemented upstream during import
 - [base_speech_annotation_inference_service_test.dart](../../test/base_speech_annotation_inference_service_test.dart)
 - [voice_session_realization_service_test.dart](../../test/voice_session_realization_service_test.dart)
 
-Tests listed here are existing evidence locations, not a claim that they passed in this review. The bundled Intel Dart executable cannot run in the current Apple Silicon execution environment.
+Tests listed here are evidence locations, not a claim that every case was rerun for this page. The pinned native arm64 Flutter 3.41.5 / Dart 3.11.3 toolchain is runnable; the earlier Intel SDK failure is historical. See the [evidence index](README.md#evidence-and-acceptance-limits) for bounded source/native results.
 
-## Proposed changes
+## Design and remaining acceptance
 
 See [prepared document runtime ACD](https://github.com/kellyjanderson/readaloud/issues/48) and its [implementation plan](https://github.com/kellyjanderson/readaloud/issues/48). Historical design prose is preserved in the [architecture snapshot](../archive/architecture/2026-10-24/speech-enrichment-and-narration.md).
 

@@ -10,19 +10,13 @@ import 'package:flutter/services.dart';
 import '../controllers/reader_controller.dart';
 import '../models/reader_appearance_mode.dart';
 import '../models/reader_document.dart';
+import '../models/voice_assignment_state.dart';
 import '../theme/read_aloud_theme.dart';
 import '../widgets/document_surface.dart';
 import '../widgets/reading_focus_recenter_button.dart';
 import '../widgets/voice_management_dialog.dart';
 
-enum _AppMenuAction {
-  open,
-  paste,
-  sample,
-  saveAudio,
-  readerOptions,
-  liveFeed,
-}
+enum _AppMenuAction { open, paste, sample, saveAudio, readerOptions, liveFeed }
 
 class ReadAloudScreen extends StatefulWidget {
   const ReadAloudScreen({
@@ -133,6 +127,7 @@ class _ReadAloudScreenState extends State<ReadAloudScreen> {
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     _buildPrimaryVoiceSelector(context),
+                    _buildAssignmentStatus(context),
                     const SizedBox(height: 8),
                     _SegmentedTransportCapsule(
                       isBuffering: isBuffering,
@@ -421,6 +416,38 @@ class _ReadAloudScreenState extends State<ReadAloudScreen> {
     );
   }
 
+  Widget _buildAssignmentStatus(BuildContext context) {
+    final state = _controller.voiceAssignmentState;
+    final managerLabel = _controller.isMultiVoiceEnabled
+        ? 'Character Voices'
+        : 'Voice options';
+    final label = switch (state.phase) {
+      VoiceAssignmentPhase.current => 'Current voice choices',
+      VoiceAssignmentPhase.pending =>
+        'Pending voice change — open $managerLabel to apply',
+      VoiceAssignmentPhase.preparing =>
+        state.isInitialBuffering
+            ? 'Preparing latest voice choices before playback'
+            : 'Preparing voice change',
+      VoiceAssignmentPhase.applying => 'Applying voice change and rebuffering',
+      VoiceAssignmentPhase.failed =>
+        'Voice change failed — open $managerLabel to retry',
+    };
+    return SizedBox(
+      height: math.max(40, MediaQuery.textScalerOf(context).scale(14) * 2.8),
+      child: Align(
+        alignment: Alignment.centerLeft,
+        child: Semantics(
+          liveRegion: true,
+          child: Tooltip(
+            message: label,
+            child: Text(label, maxLines: 2, overflow: TextOverflow.ellipsis),
+          ),
+        ),
+      ),
+    );
+  }
+
   Widget _buildPrimaryVoiceSelector(BuildContext context) {
     if (_controller.isMultiVoiceEnabled) {
       return _buildCastEntrypoint(context);
@@ -486,36 +513,40 @@ class _ReadAloudScreenState extends State<ReadAloudScreen> {
     return Material(
       color: tokens.elevatedSurface,
       borderRadius: BorderRadius.circular(16),
-      child: InkWell(
-        key: const Key('character-voices-entry'),
-        onTap: canOpen ? _showVoiceManagerDialog : null,
-        borderRadius: BorderRadius.circular(16),
-        child: Ink(
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: tokens.border),
-          ),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
-            child: Row(
-              children: [
-                Icon(
-                  Icons.record_voice_over_outlined,
-                  color: Theme.of(context).colorScheme.primary,
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Text(
-                    'Character Voices',
-                    style: Theme.of(context).textTheme.titleSmall,
+      child: Semantics(
+        button: true,
+        enabled: canOpen,
+        child: InkWell(
+          key: const Key('character-voices-entry'),
+          onTap: canOpen ? _showVoiceManagerDialog : null,
+          borderRadius: BorderRadius.circular(16),
+          child: Ink(
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: tokens.border),
+            ),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
+              child: Row(
+                children: [
+                  Icon(
+                    Icons.record_voice_over_outlined,
+                    color: Theme.of(context).colorScheme.primary,
                   ),
-                ),
-                const SizedBox(width: 8),
-                Icon(
-                  Icons.tune,
-                  color: Theme.of(context).colorScheme.onSurfaceVariant,
-                ),
-              ],
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Text(
+                      'Character Voices',
+                      style: Theme.of(context).textTheme.titleSmall,
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Icon(
+                    Icons.tune,
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  ),
+                ],
+              ),
             ),
           ),
         ),
@@ -952,6 +983,13 @@ class _ReadAloudScreenState extends State<ReadAloudScreen> {
               characterCastRegistry: _controller.document.characterCastRegistry,
               castVoiceAssignments: _controller.castVoiceAssignments,
               selectedVoiceId: _controller.selectedVoice?.id,
+              assignmentState: _controller.voiceAssignmentState,
+              onApplyAssignments: () {
+                unawaited(_controller.applyPendingVoiceAssignments());
+              },
+              onRetryAssignments: () {
+                unawaited(_controller.retryVoiceAssignments());
+              },
               previewStateForVoice: _controller.previewStateForVoice,
               onClose: Navigator.of(context).pop,
               onSelectLibraryVoice: (voiceId) {
@@ -1213,6 +1251,7 @@ class _SegmentedTransportCapsule extends StatelessWidget {
                 child: _TransportSegment(
                   key: const Key('transport-back'),
                   icon: Icons.replay_30,
+                  label: 'Back 30 seconds',
                   onPressed: onJumpBack,
                   enabled: enabled,
                   alignment: Alignment.centerLeft,
@@ -1224,6 +1263,8 @@ class _SegmentedTransportCapsule extends StatelessWidget {
                 child: _TransportSegment(
                   key: const Key('transport-center'),
                   icon: isPlaying ? Icons.pause : Icons.play_arrow,
+                  label: isPlaying ? 'Pause' : 'Play',
+                  status: isBuffering ? 'Buffering' : null,
                   onPressed: onTogglePlayback,
                   enabled: enabled,
                   alignment: Alignment.center,
@@ -1245,6 +1286,7 @@ class _SegmentedTransportCapsule extends StatelessWidget {
                 child: _TransportSegment(
                   key: const Key('transport-forward'),
                   icon: Icons.forward_30,
+                  label: 'Forward 30 seconds',
                   onPressed: onJumpForward,
                   enabled: enabled,
                   alignment: Alignment.centerRight,
@@ -1262,14 +1304,18 @@ class _TransportSegment extends StatelessWidget {
   const _TransportSegment({
     super.key,
     required this.icon,
+    required this.label,
     required this.onPressed,
     required this.enabled,
     required this.alignment,
     this.isPrimary = false,
     this.child,
+    this.status,
   });
 
   final IconData icon;
+  final String label;
+  final String? status;
   final VoidCallback? onPressed;
   final bool enabled;
   final Alignment alignment;
@@ -1282,18 +1328,27 @@ class _TransportSegment extends StatelessWidget {
     final foreground = enabled
         ? (isPrimary ? colorScheme.primary : colorScheme.onSurface)
         : colorScheme.onSurface.withValues(alpha: 0.38);
-    return InkWell(
-      onTap: enabled ? onPressed : null,
-      borderRadius: BorderRadius.circular(16),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 12),
-        child: Align(
-          alignment: alignment,
-          child: IconTheme(
-            data: IconThemeData(size: isPrimary ? 28 : 24, color: foreground),
-            child:
-                child ??
-                Icon(icon, semanticLabel: isPrimary ? 'Play or pause' : null),
+    return Semantics(
+      button: true,
+      enabled: enabled && onPressed != null,
+      label: label,
+      value: status,
+      child: InkWell(
+        onTap: enabled ? onPressed : null,
+        borderRadius: BorderRadius.circular(16),
+        child: ExcludeSemantics(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 12),
+            child: Align(
+              alignment: alignment,
+              child: IconTheme(
+                data: IconThemeData(
+                  size: isPrimary ? 28 : 24,
+                  color: foreground,
+                ),
+                child: child ?? Icon(icon),
+              ),
+            ),
           ),
         ),
       ),

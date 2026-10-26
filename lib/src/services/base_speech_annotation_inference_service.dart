@@ -10,6 +10,7 @@ class BaseSpeechAnnotationInferenceService {
   BaseSpeechAnnotationSet infer({
     required SpeechDocument speechDocument,
     required DisplayDocument displayDocument,
+    List<SpeechAnnotation> explicitIntents = const [],
   }) {
     final blockById = {
       for (final block in displayDocument.blocks) block.blockId: block,
@@ -172,6 +173,19 @@ class BaseSpeechAnnotationInferenceService {
       }
     }
 
+    // Never derive delivery/emotion or pitch contours from prose. A caller must
+    // supply explicit metadata/user input already mapped to a speech word span.
+    for (final intent in explicitIntents) {
+      final segmentIndex = speechDocument.segmentIndexById[intent.segmentId];
+      if (!intent.isPerformanceIntent ||
+          segmentIndex == null ||
+          intent.endWord > speechDocument.segments[segmentIndex].wordCount) {
+        throw ArgumentError(
+          'Explicit intent must reference a valid speech span.',
+        );
+      }
+      annotations.add(intent);
+    }
     return BaseSpeechAnnotationSet(
       documentId: speechDocument.documentId,
       annotationVersion: annotationVersion,
