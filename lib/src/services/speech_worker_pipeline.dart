@@ -394,23 +394,37 @@ class SpeechWorkerPipeline {
         }
 
         Future<void>? completion;
+        var terminalObserved = false;
+        var terminalPublished = false;
         try {
           await _processor.process(chunk, (event) {
-            if (_isShutdown || _isCancelled(event.generationId)) {
+            if (_isShutdown ||
+                _isCancelled(chunk.generationId) ||
+                event.sessionId != chunk.sessionId ||
+                event.generationId != chunk.generationId ||
+                event.chunkId != chunk.chunkId ||
+                terminalObserved) {
               return;
             }
+            if (event.isTerminal) terminalObserved = true;
             if (event.type == SpeechWorkerEventType.completed &&
                 onCompleted != null) {
               completion = Future.sync(() => onCompleted!(event));
             } else {
               _emit(event);
+              if (event.isTerminal) terminalPublished = true;
             }
           });
           await completion;
           if (_isCancelled(chunk.generationId)) {
             _emit(_cancelledEventFor(chunk));
+          } else if (!terminalObserved && !_isShutdown) {
+            throw StateError(
+              'Speech processor returned without a terminal event.',
+            );
           }
         } catch (error) {
+          if (terminalPublished) continue;
           if (_isCancelled(chunk.generationId)) {
             _emit(_cancelledEventFor(chunk));
           } else {

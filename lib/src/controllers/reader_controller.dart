@@ -104,6 +104,63 @@ class ReaderController extends ChangeNotifier {
   Future<void>? _engineStartup;
   int _startupRevision = 0;
   bool _pendingPlayUntilReady = false;
+  final Completer<void> _intakeReady = Completer<void>();
+  final Completer<void> _preferencesReady = Completer<void>();
+  bool _initializationStarted = false;
+  Future<void> get intakeReady => _intakeReady.future;
+  Future<void> Function()? _retryPreparation;
+  bool _preparationFailed = false;
+  Object? _preparationError;
+  Completer<void> _rangesChanged = Completer<void>();
+  DocumentPreparationPublication? _activePreparedRange;
+  bool get canRetryDocumentPreparation =>
+      !_disposed &&
+      !_isImporting &&
+      _preparationFailed &&
+      _retryPreparation != null;
+  bool get isPreparingDocument =>
+      _isImporting ||
+      (!_preparationComplete &&
+          !_preparationFailed &&
+          _publicationSequence > 0);
+
+  void _signalRanges() {
+    final changed = _rangesChanged;
+    _rangesChanged = Completer<void>();
+    if (!changed.isCompleted) changed.complete();
+  }
+
+  Future<void> cancelDocumentPreparation() async {
+    if (_disposed || (!_isImporting && _preparationComplete)) return;
+    ++_documentRevision;
+    ++_playbackIntent;
+    _preparation.cancel();
+    _planning.cancel();
+    _preparationFailed = true;
+    _preparationError = StateError('Document preparation cancelled.');
+    _pendingPlayUntilReady = false;
+    _playbackStartPending = false;
+    _resumeAfterPreparation = false;
+    _activePlaybackDocumentId = null;
+    _isPlaying = false;
+    _isImporting = false;
+    _documentPrepared = true;
+    _playbackState = ReaderPlaybackPrimaryState.paused;
+    _playbackActivity = const TtsPlaybackActivity.idle();
+    _statusMessage = 'Document preparation cancelled. Retry to continue.';
+    final credit = _rangeCredit;
+    _rangeCredit = null;
+    if (credit != null && !credit.isCompleted) credit.complete();
+    _signalRanges();
+    notifyListeners();
+    await _ttsEngine.stop();
+  }
+
+  Future<void> retryDocumentPreparation() async {
+    if (!canRetryDocumentPreparation) return;
+    _preparationFailed = false;
+    await _retryPreparation!();
+  }
 
   List<DocumentPreparationPublication> get preparedRanges =>
       List.unmodifiable(_preparedRanges);
@@ -246,13 +303,28 @@ class ReaderController extends ChangeNotifier {
   TtsPlaybackResumeAnchor? _pausedVoiceReplayAnchor;
   VoiceAssignmentState get voiceAssignmentState => _voiceAssignments.state;
 
+  TtsPlaybackResumeAnchor? _localPlaybackResumeAnchor() {
+    final engine = _ttsEngine;
+    if (engine is! VoiceAssignmentPlaybackCapable) return null;
+    final anchor =
+        (engine as VoiceAssignmentPlaybackCapable).currentPlaybackResumeAnchor;
+    if (anchor == null) return null;
+    if (_activePreparedRange != null &&
+        anchor.documentId == _activePlaybackDocumentId) {
+      return TtsPlaybackResumeAnchor(
+        documentId: _document.displayDocument.documentId,
+        chunkId: anchor.chunkId,
+        startWordIndex:
+            anchor.startWordIndex - _activePreparedRange!.range.wordStart,
+      );
+    }
+    return anchor;
+  }
+
   Future<void> applyPendingVoiceAssignments() async {
     if (!voiceAssignmentState.hasPending || _applyingVoiceAssignments) return;
     final revision = voiceAssignmentState.requestedRevision;
-    final engine = _ttsEngine;
-    final anchor = engine is VoiceAssignmentPlaybackCapable
-        ? (engine as VoiceAssignmentPlaybackCapable).currentPlaybackResumeAnchor
-        : null;
+    final anchor = _localPlaybackResumeAnchor();
     if (anchor != null &&
         anchor.documentId == _document.displayDocument.documentId) {
       _assignmentReplayWord = anchor.startWordIndex;
@@ -375,6 +447,10 @@ class ReaderController extends ChangeNotifier {
     _pendingPlayUntilReady = false;
     _documentPrepared = false;
     _preparationComplete = false;
+    _preparationFailed = false;
+    _preparationError = null;
+    _activePreparedRange = null;
+    _signalRanges();
     _publicationSequence = 0;
     _preparedRanges.clear();
     _discoveredCast.clear();
@@ -396,6 +472,22 @@ class ReaderController extends ChangeNotifier {
     Future<Uint8List> Function()? acquireBytes,
   }) async {
     _requireRevision(revision);
+    _retryPreparation = () => _runImportOperation((retryRevision) async {
+      final document = await _prepare(
+        retryRevision,
+        kind,
+        text: text,
+        fileName: fileName,
+        bytes: bytes,
+        sourcePath: sourcePath,
+        acquireBytes: acquireBytes,
+      );
+      await _replaceDocument(
+        document,
+        revision: retryRevision,
+        sourcePath: sourcePath,
+      );
+    }, errorSourceLabel: fileName);
     final first = Completer<ReaderDocument>();
     DocumentAccessLease? sourceLease;
     var streamedPath =
@@ -465,6 +557,7 @@ class ReaderController extends ChangeNotifier {
         }
         _publicationSequence = publication.sequence;
         _preparedRanges.add(publication);
+        _signalRanges();
         final registry = publication.fragment.characterCastRegistry;
         for (final entry in registry.entries) {
           _discoveredCast[entry.castId] = entry;
@@ -514,6 +607,7 @@ class ReaderController extends ChangeNotifier {
         if (result.outcome == DocumentPreparationOutcome.ready &&
             result.document != null) {
           _preparationComplete = true;
+          _signalRanges();
           if (_publicationSequence <= 1) _hasCompleteDocumentSnapshot = true;
           if (!first.isCompleted) first.complete(result.document);
           // Completion covers only preparation. Resource/synthesis/persistence
@@ -544,6 +638,9 @@ class ReaderController extends ChangeNotifier {
                     StateError(
                       result.error ?? 'Preparation ${result.outcome.name}',
                     );
+          _preparationError = error;
+          _preparationFailed = true;
+          _signalRanges();
           if (!first.isCompleted) {
             first.completeError(error);
           } else {
@@ -779,6 +876,7 @@ class ReaderController extends ChangeNotifier {
   }
 
   Future<void> initialize() async {
+    _initializationStarted = true;
     _ttsEngine.onStart = () {
       if (_activePreviewVoiceId != null) {
         _isVoicePreviewLoading = false;
@@ -938,11 +1036,13 @@ class ReaderController extends ChangeNotifier {
     _lastOpenedDirectoryPath = preferences.lastOpenedDirectoryPath;
     _lastOpenedDirectoryAccessToken =
         preferences.lastOpenedDirectoryAccessToken;
+    if (!_preferencesReady.isCompleted) _preferencesReady.complete();
 
     final startup = retryInitialization();
     if (_enablePlatformIntakeChannels) {
       await _initializeIntakeChannels();
     }
+    if (!_intakeReady.isCompleted) _intakeReady.complete();
     await startup;
   }
 
@@ -1475,7 +1575,11 @@ class ReaderController extends ChangeNotifier {
       notifyListeners();
       return;
     }
-    if (_preparedAssignmentRevision != assignmentRevision) {
+    if (_preparedAssignmentRevision != assignmentRevision ||
+        _resourceBindings.any(
+          (binding) =>
+              binding.documentId != _document.displayDocument.documentId,
+        )) {
       _invalidateResourceBindings();
     }
     if (!isResourcesReady) {
@@ -1536,6 +1640,22 @@ class ReaderController extends ChangeNotifier {
     _activeAssignmentRevision = assignmentRevision;
     _activePlaybackIntent = playbackIntent;
     _acknowledgedPlaybackIntent = null;
+    final initialRange = _activePreparedRange;
+    final playbackDocumentId = _activePlaybackDocumentId!;
+    final continuation = initialRange == null
+        ? null
+        : _rangeContinuation(
+            initialRange: initialRange,
+            playbackDocumentId: playbackDocumentId,
+            assignmentRevision: assignmentRevision,
+            voiceId: voice.id,
+            rate: requestedRate,
+            current: () =>
+                !_disposed &&
+                _resumeAfterPreparation &&
+                documentRevision == _documentRevision &&
+                playbackIntent == _playbackIntent,
+          );
 
     final speakableTail = _document.speakableText.substring(
       _utteranceStartOffset,
@@ -1549,6 +1669,9 @@ class ReaderController extends ChangeNotifier {
         chunkPlan: _currentChunkPlan,
         planningContext: _currentPlanningContext,
         assignmentRevision: assignmentRevision,
+        rangeSequence: initialRange?.sequence ?? 0,
+        sourceWordOffset: initialRange?.range.wordStart ?? 0,
+        continuation: continuation,
         isCurrent: current,
         onPlaybackReady: (ack) {
           if (!current() ||
@@ -1576,18 +1699,153 @@ class ReaderController extends ChangeNotifier {
     notifyListeners();
   }
 
+  TtsRangeContinuation _rangeContinuation({
+    required DocumentPreparationPublication initialRange,
+    required String playbackDocumentId,
+    required int assignmentRevision,
+    required String voiceId,
+    required double rate,
+    required bool Function() current,
+  }) {
+    // One snapshot of transport-effective choices. Pending user edits cannot
+    // silently alter the currently playing generation's future ranges.
+    final overrides = Map<String, String>.of(_castVoiceOverrides);
+    final stored = _currentStoredCastVoiceAssignments();
+    final multiVoice = _isMultiVoiceEnabled;
+    var sequence = initialRange.sequence;
+    var wordEnd = initialRange.range.wordEnd;
+    var pulling = false;
+    late TtsRangeContinuation continuation;
+    continuation = TtsRangeContinuation(
+      next: (previous, cancelled) async {
+        if (pulling || previous != sequence) {
+          throw StateError('Duplicate or out-of-order prepared range demand.');
+        }
+        pulling = true;
+        try {
+          DocumentPreparationPublication? publication;
+          while (current()) {
+            publication = _preparedRanges
+                .where((range) => range.sequence == sequence + 1)
+                .firstOrNull;
+            if (publication != null) break;
+            if (_preparationError case final error?) throw error;
+            if (_preparationComplete) return null;
+            await Future.any([
+              _rangesChanged.future,
+              cancelled.then<void>((_) => throw const PlanningCancelled()),
+            ]);
+          }
+          if (!current() || publication == null) {
+            throw const PlanningCancelled();
+          }
+          final range = publication;
+          if (range.request.ownerId != _preparationOwner ||
+              range.request.revision != _documentRevision ||
+              range.range.wordStart != wordEnd ||
+              range.range.wordEnd <= range.range.wordStart ||
+              !range.isPreparationReady) {
+            throw StateError(
+              'Prepared range has missing or stale source coverage.',
+            );
+          }
+          final context = _planningContext(
+            fromStart: true,
+            document: range.fragment,
+            voiceId: voiceId,
+            rate: rate,
+            overrides: overrides,
+            stored: stored,
+            multiVoice: multiVoice,
+          );
+          if (context == null) {
+            throw StateError('Prepared range has no speech.');
+          }
+          final window = await _planning.plan(context, maxChunks: 3);
+          if (!current()) throw const PlanningCancelled();
+          final requiredVoices = {
+            voiceId,
+            ...?context.routes?.castVoiceAssignments.assignments.map(
+              (assignment) => assignment.effectiveVoiceId,
+            ),
+          };
+          final resourceEngine = _ttsEngine;
+          if (resourceEngine is ResourcePreparationCapable &&
+              requiredVoices.any(
+                (voice) => !_resourceBindings.any(
+                  (binding) => binding.voiceId == voice,
+                ),
+              )) {
+            final bindings =
+                await (resourceEngine as ResourcePreparationCapable)
+                    .prepareDocumentResources(
+                      documentId: playbackDocumentId,
+                      revision: assignmentRevision,
+                      voiceIds: {
+                        ..._resourceBindings.map((b) => b.voiceId),
+                        ...requiredVoices,
+                      },
+                      pronunciationProfileId:
+                          context.realization.selectedProfile.profileId,
+                    );
+            if (!current()) throw const PlanningCancelled();
+            _resourceBindings = List.unmodifiable(bindings);
+          }
+          sequence = range.sequence;
+          wordEnd = range.range.wordEnd;
+          return TtsSpeakRequest(
+            text: range.fragment.speakableText,
+            documentId: playbackDocumentId,
+            sessionId: _narrationState.sessionId,
+            normalizationVersion:
+                range.fragment.speechDocument.normalizationVersion,
+            speechDocument: range.fragment.speechDocument,
+            chunkPlan: window.plan,
+            planningContext: context,
+            ttsArtifactSet: window.realization.ttsArtifactSet,
+            preparedResources: resourceEngine is ResourcePreparationCapable
+                ? resourceBindings
+                : null,
+            assignmentRevision: assignmentRevision,
+            rangeSequence: range.sequence,
+            sourceWordOffset: range.range.wordStart,
+            continuation: continuation,
+            isCurrent: current,
+            onRangeActive: () {
+              if (!current() || identical(_activePreparedRange, range)) return;
+              _flushPendingFollowerProgress();
+              _finalizeActiveSpokenChunk();
+              _document = range.fragment;
+              _activePreparedRange = range;
+              _currentWordIndex = 0;
+              _utteranceStartOffset = 0;
+              _currentPlanningContext = context;
+              _currentChunkPlan = window.plan;
+              _currentRealization = window.realization;
+              releasePreparedRange(range.sequence - 1);
+              notifyListeners();
+            },
+          );
+        } finally {
+          pulling = false;
+        }
+      },
+    );
+    return continuation;
+  }
+
   Future<void> pausePlayback() async {
     _pendingPlayUntilReady = false;
     final engine = _ttsEngine;
     if (engine is VoiceAssignmentPlaybackCapable) {
-      final anchor = (engine as VoiceAssignmentPlaybackCapable)
-          .currentPlaybackResumeAnchor;
+      final anchor = _localPlaybackResumeAnchor();
       if (anchor != null &&
           anchor.documentId == _document.displayDocument.documentId) {
         _pausedVoiceReplayAnchor = anchor;
       }
     }
     ++_playbackIntent;
+    _planning.cancel();
     _playbackStartPending = false;
     _resumeAfterPreparation = false;
     _flushPendingFollowerProgress();
@@ -2250,6 +2508,9 @@ class ReaderController extends ChangeNotifier {
     _requireRevision(revision);
     _finalizeActiveSpokenChunk();
     _document = document;
+    _activePreparedRange = _preparedRanges
+        .where((range) => identical(range.fragment, document))
+        .firstOrNull;
     if (_publicationSequence == 0) _preparationComplete = true;
     _hasCompleteDocumentSnapshot =
         _preparationComplete && _publicationSequence <= 1;
@@ -2363,6 +2624,28 @@ class ReaderController extends ChangeNotifier {
     if (updateDocumentId != null &&
         updateDocumentId != activePlaybackDocumentId) {
       return;
+    }
+    final wordOffset = _activePreparedRange?.range.wordStart ?? 0;
+    if (wordOffset != 0 && update.wordStartIndex != null) {
+      update = TtsProgressUpdate(
+        startOffset: update.startOffset,
+        endOffset: update.endOffset,
+        word: update.word,
+        documentId: update.documentId,
+        chunkId: update.chunkId,
+        segmentId: update.segmentId,
+        wordStartIndex: update.wordStartIndex! - wordOffset,
+        wordEndIndex: update.wordEndIndex == null
+            ? null
+            : update.wordEndIndex! - wordOffset,
+        elapsedInChunk: update.elapsedInChunk,
+        chunkAudioDuration: update.chunkAudioDuration,
+        voiceId: update.voiceId,
+        rate: update.rate,
+        routeId: update.routeId,
+        castId: update.castId,
+        dialogueSpanId: update.dialogueSpanId,
+      );
     }
     _recordProgress(update);
     final globalOffset = _utteranceStartOffset + update.endOffset;
@@ -2922,6 +3205,12 @@ class ReaderController extends ChangeNotifier {
     String? errorSourceLabel,
     bool surfaceErrors = true,
   }) async {
+    // Explicit user intake may arrive while startup is still loading settings.
+    // It waits only for settings, never model/voice initialization, so delayed
+    // preferences cannot overwrite newly imported session/assignment state.
+    if (_initializationStarted && !_preferencesReady.isCompleted) {
+      await _preferencesReady.future;
+    }
     final current = revision ?? _beginDocumentRequest();
     if (_disposed || current != _documentRevision) return;
     _isImporting = true;
@@ -3050,25 +3339,44 @@ class ReaderController extends ChangeNotifier {
     return candidates.last.breakClass!.name;
   }
 
-  SpeechPlanningContext? _planningContext({bool fromStart = false}) {
-    final voiceId = _selectedVoiceId;
+  SpeechPlanningContext? _planningContext({
+    bool fromStart = false,
+    ReaderDocument? document,
+    String? voiceId,
+    double? rate,
+    Map<String, String>? overrides,
+    Map<String, String>? stored,
+    bool? multiVoice,
+  }) {
+    document ??= _document;
+    voiceId ??= _selectedVoiceId;
     final start = fromStart
-        ? _document.speechDocument.segments.firstOrNull
-        : _document.segmentForWordIndex(_currentWordIndex);
+        ? document.speechDocument.segments.firstOrNull
+        : document.segmentForWordIndex(_currentWordIndex);
     if (voiceId == null || start == null) return null;
     final profile = _selectedPronunciationProfile(voiceId: voiceId);
-    final assignments = _resolveCastVoiceAssignments(
-      preferredNarratorVoiceId: voiceId,
-    );
+    final assignments =
+        (multiVoice ?? _isMultiVoiceEnabled) && _voices.isNotEmpty
+        ? _castVoiceAssignmentService.resolve(
+            CastVoiceAssignmentInput(
+              characterCastRegistry: document.characterCastRegistry,
+              availableVoices: _voices,
+              fallbackVoiceId: voiceId,
+              preferredNarratorVoiceId: voiceId,
+              storedAssignments: stored ?? _currentStoredCastVoiceAssignments(),
+              userOverrides: overrides ?? _castVoiceOverrides,
+            ),
+          )
+        : null;
     return SpeechPlanningContext(
       realization: VoiceSessionRealizationInput(
-        speechDocument: _document.speechDocument,
-        baseAnnotations: _document.baseSpeechAnnotations,
-        basePronunciationArtifacts: _document.basePronunciationArtifacts,
+        speechDocument: document.speechDocument,
+        baseAnnotations: document.baseSpeechAnnotations,
+        basePronunciationArtifacts: document.basePronunciationArtifacts,
         startSegmentId: start.segmentId,
         voiceId: voiceId,
         engineId: _engineId(),
-        rate: currentSpeed,
+        rate: rate ?? currentSpeed,
         narrationState: _narrationState,
         selectedProfile: profile,
         mergedPronunciationResources: _mergedPronunciationResources(profile),
@@ -3077,7 +3385,7 @@ class ReaderController extends ChangeNotifier {
       routes: assignments == null
           ? null
           : CastAwareSpeechRouteInput(
-              documentVoiceAttribution: _document.documentVoiceAttribution,
+              documentVoiceAttribution: document.documentVoiceAttribution,
               castVoiceAssignments: assignments,
             ),
     );
