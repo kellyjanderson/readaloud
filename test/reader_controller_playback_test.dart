@@ -34,6 +34,66 @@ void main() {
 
   group('ReaderController playback', () {
     test(
+      'real large-source parser feeds every bounded range once before EOF',
+      () async {
+        final sourceText = List.generate(
+          1200,
+          (index) => 'Ledger item $index ends with marker$index.',
+        ).join('\n');
+        expect(sourceText.length, greaterThan(8192 * 3));
+        final engine = _FakeTtsEngine();
+        final controller = ReaderController(
+          ttsEngine: engine,
+          enablePlatformIntakeChannels: false,
+        );
+        addTearDown(controller.dispose);
+        await controller.initialize();
+        await controller.importPastedText(sourceText);
+        expect(
+          controller.isPreparationComplete,
+          isFalse,
+          reason:
+              'first fragment must be usable before bounded producer reaches EOF',
+        );
+        await controller.startPlayback();
+        var request = engine.lastSpeakRequest!;
+        final cancelled = Completer<void>();
+        final emittedText = <String>[];
+        var nextWord = 0;
+        var sequences = 0;
+        while (true) {
+          expect(request.rangeSequence, ++sequences);
+          expect(request.sourceWordOffset, nextWord);
+          expect(controller.preparedRanges.length, lessThanOrEqualTo(3));
+          emittedText.add(request.text);
+          nextWord += request.speechDocument!.totalWordCount;
+          request.onRangeActive?.call();
+          final next = await request.continuation!
+              .next(request.rangeSequence, cancelled.future)
+              .timeout(const Duration(seconds: 30));
+          if (next == null) break;
+          request = next;
+        }
+        List<String> words(String text) => RegExp(
+          r'\S+',
+        ).allMatches(text).map((match) => match.group(0)!).toList();
+        expect(sequences, greaterThan(3));
+        expect(
+          words(emittedText.join(' ')),
+          words(sourceText),
+          reason:
+              'distinct marker words expose source boundary omissions/repeats',
+        );
+        expect(controller.isPreparationComplete, isTrue);
+        expect(
+          engine.speakCallCount,
+          1,
+          reason: 'continuation stays in the existing playback request',
+        );
+        await controller.shutdownPreparation();
+      },
+    );
+    test(
       'early explicit intake waits for preferences but not speech startup',
       () async {
         final preferences = _HeldPreferences();
