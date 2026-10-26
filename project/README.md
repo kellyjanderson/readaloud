@@ -3,6 +3,7 @@
 Read [AGENTS.md](../AGENTS.md) for the lightweight process. Current architecture describes source behavior; GitHub design issues describe proposed changes. A final legacy specification is not a completion record.
 
 - [Architecture](architecture/README.md): current components, source/tests and limitations.
+- [Product expectations](product-definition.md): mandatory two-second opening-to-speech, responsive dynamic reading, honest progress and reusable voice-directed `.radoc`; requirements are distinct from current conformance.
 - [GitHub planning and orchestration](../docs/project-management.md): active designs, native sub-issues and dependency graph.
 - [Human documentation](../docs/README.md): development and maintenance.
 - [Legacy contracts](specifications/README.md): retained children with direct architecture ownership; no new spec-tree workflow.

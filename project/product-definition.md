@@ -1,7 +1,29 @@
 # Read Aloud Product Definition
 
-Last updated: March 29, 2026
-Status: Active product definition
+Last updated: October 25, 2026
+Status: Standing product requirements; current implementation does not yet meet all requirements
+
+## Mandatory Reading Experience
+
+With the intended document available and Play requested promptly, the user must hear smooth, uninterrupted speech within **two seconds of opening the app, regardless of document size**. Measure opening-to-audible-output, including initialization and preparation. Record Play separately; do not autoplay to satisfy timing. For documents opened after launch, also measure document-open-to-audio. Human delay, missing inputs/assets and access failures must be reported honestly rather than disguised as successful latency results. Cold-process, warm-process and reusable-document runs require separate evidence; document size is not an exemption.
+
+The interface must always feel responsive: scrolling, menus, voice selection, pause/cancel and document replacement must remain usable during preparation, inference, persistence and export. A pending Play must be visible and cancellable immediately at the intent level even if native work takes longer to drain. Old requests must never start unexpected speech. Smooth speech means sustained playback without starvation, missing or duplicated words, or unintended replay; authored pauses are preserved.
+
+**All work involved in reading text is dynamic and incremental.** This includes source acquisition where supported, parsing, normalization, display and speech mapping, semantic analysis, pronunciation and delivery planning, voice/resource binding, synthesis, buffering and persistence. Character discovery is one example, not a separate exception. Prepare only the bounded material needed to begin, continue ahead of playback, prioritize the current listening position and invalidate only affected work. Whole-book parsing, analysis, cast completion, serialization or cache validation must not become a hidden first-audio gate. Format-specific acquisition constraints must be exposed and addressed, not silently used to relax the experience requirement.
+
+Characters and other derived knowledge evolve as content is encountered. Keep stable content identities and positions, provenance and uncertainty; retain explicit user choices when new evidence arrives. Late discoveries must not silently rewrite already-spoken material or override newer playback intent. A jump prioritizes the new position rather than waiting for all preceding background work.
+
+Every operation exceeding one or two seconds must show a dynamic progress bar driven by actual completed work. Show the operation/stage, completed units and honest totals; disclose unknown or expanding totals. Distinguish work, waiting, stalled/failed and completed states. Do not invent percentages, leave the only feedback motionless without explanation, or show 100% while required downstream work is still pending. Progress does not excuse UI blocking or replace the two-second startup requirement.
+
+These are user requirements, not proof of present capability. The source-linked [issue #83 report](https://github.com/kellyjanderson/readaloud/issues/83) owns active findings and acceptance work. Current architecture remains the authority for implemented behavior. Current-release scope remains with its existing coordinator.
+
+## Prepared Documents and Voice-Directed Publishing
+
+`.radoc` is the reusable prepared-document format. After processing input, the app automatically writes the processed result so a second run does not repeat valid preparation. Processing and persistence must cooperate incrementally for long documents, with safe checkpoints, explicit completeness and atomic publication/recovery. Preserve the source; never treat an interrupted write as complete. Version and dependency validation must distinguish reusable results from stale ones and recompute only invalid portions without introducing a whole-document startup barrier.
+
+The format must preserve stable content/position anchors, derived analysis and its provenance, character identities and user choices, plus annotations for inflection and other speech directions. Canonical direction belongs to the document, independently of voice packages, engine capabilities or generated audio. Unsupported directions must survive loading/saving and engine fallback without being discarded or falsely claimed as realized.
+
+The long-term goal is a publishing tool and portable document format through which books can be published with voice direction. Published content must not depend on local absolute paths, process handles or private cache state. Versioned interchange, authoring and direction fidelity require explicit design and acceptance; this declaration does not claim a complete publishing tool exists today. A data-only codec round trip is not proof of application reopen, second-run acceleration or usable annotation authoring.
 
 ## Product Summary
 
@@ -32,7 +54,7 @@ The product is not primarily for:
 
 - team collaboration
 - shared cloud libraries
-- audiobook publishing
+- a complete audiobook publishing workflow in the current release; voice-directed publishing through `.radoc` is a long-term goal
 - full document editing workflows
 
 ## Core User Jobs
@@ -173,7 +195,7 @@ The product goal is not perfect fidelity to every source format. The goal is a u
 - its own iCloud document library
 - built-in cloud sync
 - collaborative features
-- advanced annotation workflows
+- advanced annotation authoring workflows in the current release; preserving direction in `.radoc` and future authoring remain product goals
 - deep semantic document metadata features
 - a product promise of non-English local TTS support
 - a destructive stop action in playback
