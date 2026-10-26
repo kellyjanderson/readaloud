@@ -79,4 +79,6 @@ The documentation checker rejects local working files in the retired ACD/plannin
 
 ## Access and automation
 
+GitHub Actions is disabled at the repository level at the user's request: there is no budget for Actions. Keep it disabled and use local documentation, source and runtime checks as appropriate. Do not dispatch workflows, enable Actions, add automatic CI, or treat a new Actions run as an integration prerequisite. Existing completed checks are historical evidence; record local commands/results on new PRs. Paid execution requires explicit user approval. If a repository rule blocks merging without Actions, report that conflict rather than enabling Actions or bypassing the rule silently.
+
 The board enables auto-add for open Read Aloud issues, auto-add for sub-issues and an initial Proposed status. Auto-close, close-to-Done, merge-to-Done and linked-PR-to-In-Progress shortcuts are disabled. The orchestrator owns lifecycle transitions. Repository issue/PR API access and Projects access are separate permissions: CLI Project operations require the project scope; use the authenticated GitHub browser if it is unavailable. Do not silently fall back to local plan files.
