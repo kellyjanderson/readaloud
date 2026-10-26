@@ -115,12 +115,12 @@ class _ReadAloudScreenState extends State<ReadAloudScreen> {
                     children: [
                       PreparationStatus(
                         progress: _controller.preparationProgress.values,
-                        isImporting: _controller.isImporting,
+                        isImporting: _controller.isPreparingDocument,
                         isInitializing: _controller.isInitializing,
                         isComplete: _controller.isPreparationComplete,
                         startupError: _controller.startupError,
                         message: _controller.statusMessage,
-                        onCancel: _controller.isImporting
+                        onCancel: _controller.isPreparingDocument
                             ? () => unawaited(
                                 _controller.cancelDocumentPreparation(),
                               )
