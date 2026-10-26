@@ -25,6 +25,99 @@ List<SpeechSegment> halo(String prefix, List<SpeechSegment> segments) => [
 
 void main() {
   const service = CharacterCastRegistryService();
+  test('neutral evidence improves without losing earlier referring spans', () {
+    final importer = DocumentImportService();
+    final firstDoc = importer.importPastedText(
+      'Alex opened the gate. They waited.',
+    );
+    final first = service.inferIdentity(
+      speechDocument: firstDoc.speechDocument,
+      aliases: ['Alex'],
+    );
+    final next = importer.importPastedText('Alex lifted their hand.');
+    final second = service.inferIdentity(
+      speechDocument: next.speechDocument,
+      aliases: ['Alex'],
+      previousProfile: first,
+    );
+    expect(second.preferredVoiceGender, isNull);
+    expect(second.pronounProfile.countFor('they'), 1);
+    expect(second.pronounProfile.countFor('theirs'), 1);
+    expect(
+      second.evidenceSpans.map((span) => span.text),
+      containsAll(['They', 'their']),
+    );
+  });
+  test('stable halo segment dedup survives evidence projection eviction', () {
+    final importer = DocumentImportService();
+    final current = importer.importPastedText('“Wait,” Mara said.');
+    final next = importer.importPastedText(
+      '${'Mara lifted her hand; ' * 50} then waited.',
+    );
+    final nextSegments = halo('dense', next.speechDocument.segments);
+    expect(nextSegments.length, lessThanOrEqualTo(12));
+    final first = service.build(
+      dialogueAttributions: current.dialogueAttributions,
+      speechDocument: current.speechDocument,
+      followingContextSegments: nextSegments,
+    );
+    final before = first.characterEntries.single.identityProfile!;
+    expect(before.pronounProfile.countFor('her'), 50);
+    expect(before.evidenceSpans, hasLength(32));
+    final repeated = service.inferIdentity(
+      speechDocument: SpeechDocument(
+        documentId: 'dense',
+        sourceType: 'text',
+        languageTag: 'en-US',
+        segments: nextSegments,
+        segmentIndexById: {
+          for (var i = 0; i < nextSegments.length; i++)
+            nextSegments[i].segmentId: i,
+        },
+        totalWordCount: next.speechDocument.totalWordCount,
+        normalizationVersion: next.speechDocument.normalizationVersion,
+      ),
+      aliases: ['Mara'],
+      previousProfile: before,
+    );
+    expect(repeated.pronounProfile.countFor('her'), 50);
+    expect(repeated.countedSegmentIds.length, lessThanOrEqualTo(24));
+  });
+  test(
+    'following halo evidence is not counted again when its stable range becomes current',
+    () {
+      final importer = DocumentImportService();
+      final current = importer.importPastedText('“Wait,” Mara said.');
+      final next = importer.importPastedText('Mara lifted her hand.');
+      final nextSegments = halo('next', next.speechDocument.segments);
+      final first = service.build(
+        dialogueAttributions: current.dialogueAttributions,
+        speechDocument: current.speechDocument,
+        followingContextSegments: nextSegments,
+      );
+      final before = first.characterEntries.single.identityProfile!;
+      final repeated = service.inferIdentity(
+        speechDocument: SpeechDocument(
+          documentId: 'next',
+          sourceType: 'text',
+          languageTag: 'en-US',
+          segments: nextSegments,
+          segmentIndexById: {
+            for (var i = 0; i < nextSegments.length; i++)
+              nextSegments[i].segmentId: i,
+          },
+          totalWordCount: next.speechDocument.totalWordCount,
+          normalizationVersion: next.speechDocument.normalizationVersion,
+        ),
+        aliases: ['Mara'],
+        previousProfile: before,
+      );
+      expect(before.pronounProfile.countFor('her'), 1);
+      expect(repeated.pronounProfile.countFor('her'), 1);
+      expect(repeated.genderConfidence, before.genderConfidence);
+      expect(repeated.evidenceSpans, hasLength(before.evidenceSpans.length));
+    },
+  );
   test(
     'bounded preceding halo resolves first pronoun without promoting named non-speakers',
     () {
