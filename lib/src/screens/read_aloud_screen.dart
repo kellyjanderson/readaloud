@@ -13,6 +13,7 @@ import '../models/reader_document.dart';
 import '../models/voice_assignment_state.dart';
 import '../theme/read_aloud_theme.dart';
 import '../widgets/document_surface.dart';
+import '../widgets/preparation_status.dart';
 import '../widgets/reading_focus_recenter_button.dart';
 import '../widgets/voice_management_dialog.dart';
 
@@ -36,6 +37,7 @@ class _ReadAloudScreenState extends State<ReadAloudScreen> {
   late final ReaderController _controller;
   late final ScrollController _ttsTraceScrollController;
   bool _isDraggingFiles = false;
+  int _intakeIntent = 0;
 
   @override
   void initState() {
@@ -62,8 +64,12 @@ class _ReadAloudScreenState extends State<ReadAloudScreen> {
         final usesDesktopNativeMenus = _usesDesktopNativeMenus();
         final tokens = readAloudThemeTokens(context);
         final isBuffering = _controller.isBufferingPlayback;
+        final pendingPlayback =
+            isBuffering || _controller.hasPendingPlaybackIntent;
         final transportEnabled =
-            _controller.document.wordCount > 0 && !isBuffering;
+            _controller.document.wordCount > 0 ||
+            _controller.isImporting ||
+            pendingPlayback;
         final reader = _buildReader(context);
 
         final scaffold = Scaffold(
@@ -90,6 +96,7 @@ class _ReadAloudScreenState extends State<ReadAloudScreen> {
                   onDragEntered: (_) => setState(() => _isDraggingFiles = true),
                   onDragExited: (_) => setState(() => _isDraggingFiles = false),
                   onDragDone: (detail) {
+                    ++_intakeIntent;
                     setState(() => _isDraggingFiles = false);
                     _controller.importDroppedFiles(detail.files);
                   },
@@ -106,8 +113,26 @@ class _ReadAloudScreenState extends State<ReadAloudScreen> {
                   padding: const EdgeInsets.fromLTRB(20, 8, 20, 20),
                   child: Column(
                     children: [
-                      if (_controller.isInitializing)
-                        const LinearProgressIndicator(minHeight: 2),
+                      PreparationStatus(
+                        progress: _controller.preparationProgress.values,
+                        isImporting: _controller.isImporting,
+                        isInitializing: _controller.isInitializing,
+                        isComplete: _controller.isPreparationComplete,
+                        startupError: _controller.startupError,
+                        message: _controller.statusMessage,
+                        onCancel: _controller.isImporting
+                            ? () => unawaited(
+                                _controller.cancelDocumentPreparation(),
+                              )
+                            : null,
+                        onRetry: _controller.canRetryDocumentPreparation
+                            ? () => unawaited(
+                                _controller.retryDocumentPreparation(),
+                              )
+                            : null,
+                        onRetryStartup: () =>
+                            unawaited(_controller.retryInitialization()),
+                      ),
                       const SizedBox(height: 12),
                       Expanded(child: intakeSurface),
                     ],
@@ -130,16 +155,16 @@ class _ReadAloudScreenState extends State<ReadAloudScreen> {
                     _buildAssignmentStatus(context),
                     const SizedBox(height: 8),
                     _SegmentedTransportCapsule(
-                      isBuffering: isBuffering,
+                      isBuffering: pendingPlayback,
                       isPlaying: _controller.isPlaying,
                       enabled: transportEnabled,
-                      onJumpBack: transportEnabled
+                      onJumpBack: transportEnabled && !pendingPlayback
                           ? () => _controller.jumpBySeconds(-30)
                           : null,
                       onTogglePlayback: transportEnabled
                           ? _controller.togglePlayback
                           : null,
-                      onJumpForward: transportEnabled
+                      onJumpForward: transportEnabled && !pendingPlayback
                           ? () => _controller.jumpBySeconds(30)
                           : null,
                     ),
@@ -164,8 +189,9 @@ class _ReadAloudScreenState extends State<ReadAloudScreen> {
   }
 
   Future<void> _initializeController() async {
-    await _controller.initialize();
-    if (!mounted) {
+    unawaited(_controller.initialize());
+    await _controller.intakeReady;
+    if (!mounted || _intakeIntent != 0) {
       return;
     }
     if (widget.initialInputPaths.isNotEmpty) {
@@ -173,7 +199,7 @@ class _ReadAloudScreenState extends State<ReadAloudScreen> {
       return;
     }
     await WidgetsBinding.instance.endOfFrame;
-    if (!mounted) {
+    if (!mounted || _intakeIntent != 0) {
       return;
     }
     await _controller.restoreLastOpenedDocument();
@@ -372,13 +398,13 @@ class _ReadAloudScreenState extends State<ReadAloudScreen> {
   Future<void> _handleAppMenuAction(_AppMenuAction action) async {
     switch (action) {
       case _AppMenuAction.open:
-        if (_controller.isImporting) {
-          return;
-        }
+        ++_intakeIntent;
         await _controller.importDocument();
       case _AppMenuAction.paste:
+        ++_intakeIntent;
         await _showPasteDialog();
       case _AppMenuAction.sample:
+        ++_intakeIntent;
         await _controller.loadSampleDocument();
       case _AppMenuAction.saveAudio:
         if (_controller.isExporting || !_controller.canExportAudio) {
@@ -508,17 +534,19 @@ class _ReadAloudScreenState extends State<ReadAloudScreen> {
 
   Widget _buildCastEntrypoint(BuildContext context) {
     final tokens = readAloudThemeTokens(context);
-    final canOpen = _controller.voices.isNotEmpty;
 
     return Material(
       color: tokens.elevatedSurface,
       borderRadius: BorderRadius.circular(16),
       child: Semantics(
         button: true,
-        enabled: canOpen,
+        enabled: true,
         child: InkWell(
           key: const Key('character-voices-entry'),
-          onTap: canOpen ? _showVoiceManagerDialog : null,
+          onTap: _showVoiceManagerDialog,
+          focusColor: Theme.of(
+            context,
+          ).colorScheme.primary.withValues(alpha: 0.24),
           borderRadius: BorderRadius.circular(16),
           child: Ink(
             decoration: BoxDecoration(
@@ -919,13 +947,6 @@ class _ReadAloudScreenState extends State<ReadAloudScreen> {
                   onPressed: _controller.resumeReaderFollow,
                 ),
               ),
-            if (_controller.isCastProcessingVisible)
-              Positioned.fill(
-                child: _CastProcessingOverlay(
-                  stageLabel: _controller.documentLoadStageLabel,
-                  progress: _controller.documentLoadStageProgress,
-                ),
-              ),
           ],
         ),
       ),
@@ -935,7 +956,7 @@ class _ReadAloudScreenState extends State<ReadAloudScreen> {
   Future<void> _showPasteDialog() async {
     final controller = TextEditingController();
 
-    await showDialog<void>(
+    final route = DialogRoute<void>(
       context: context,
       builder: (context) {
         return AlertDialog(
@@ -943,9 +964,11 @@ class _ReadAloudScreenState extends State<ReadAloudScreen> {
           content: SizedBox(
             width: 640,
             child: TextField(
+              autofocus: true,
               controller: controller,
               maxLines: 16,
               decoration: const InputDecoration(
+                labelText: 'Document text',
                 hintText: 'Paste a document, article, or chapter here…',
                 border: OutlineInputBorder(),
               ),
@@ -967,6 +990,9 @@ class _ReadAloudScreenState extends State<ReadAloudScreen> {
         );
       },
     );
+    await Navigator.of(context).push(route);
+    await route.completed;
+    controller.dispose();
   }
 
   Future<void> _showVoiceManagerDialog() async {
@@ -1049,84 +1075,6 @@ class _DropOverlay extends StatelessWidget {
                   textAlign: TextAlign.center,
                 ),
               ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _CastProcessingOverlay extends StatelessWidget {
-  const _CastProcessingOverlay({
-    required this.stageLabel,
-    required this.progress,
-  });
-
-  final String stageLabel;
-  final double? progress;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final tokens = readAloudThemeTokens(context);
-    return IgnorePointer(
-      child: Container(
-        key: const Key('cast-processing-overlay'),
-        decoration: BoxDecoration(
-          color: tokens.processingScrim,
-          borderRadius: BorderRadius.circular(24),
-        ),
-        margin: const EdgeInsets.all(8),
-        child: Center(
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 420),
-            child: DecoratedBox(
-              decoration: BoxDecoration(
-                color: tokens.processingSurface,
-                borderRadius: BorderRadius.circular(24),
-                border: Border.all(color: tokens.processingBorder),
-                boxShadow: [
-                  BoxShadow(
-                    blurRadius: 24,
-                    color: tokens.surfaceShadow,
-                    offset: const Offset(0, 12),
-                  ),
-                ],
-              ),
-              child: Padding(
-                padding: const EdgeInsets.all(20),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        Icon(
-                          Icons.auto_awesome_motion_outlined,
-                          color: theme.colorScheme.primary,
-                        ),
-                        const SizedBox(width: 10),
-                        Expanded(
-                          child: Text(
-                            'Preparing Multi-Voice Reading',
-                            style: theme.textTheme.titleMedium,
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 12),
-                    Text(stageLabel, style: theme.textTheme.bodyMedium),
-                    const SizedBox(height: 14),
-                    LinearProgressIndicator(value: progress),
-                    const SizedBox(height: 14),
-                    Text(
-                      'We are scanning dialogue, consolidating characters, and materializing narrator-versus-cast routing before playback starts.',
-                      style: theme.textTheme.bodySmall,
-                    ),
-                  ],
-                ),
-              ),
             ),
           ),
         ),
@@ -1262,9 +1210,19 @@ class _SegmentedTransportCapsule extends StatelessWidget {
                 flex: 5,
                 child: _TransportSegment(
                   key: const Key('transport-center'),
-                  icon: isPlaying ? Icons.pause : Icons.play_arrow,
-                  label: isPlaying ? 'Pause' : 'Play',
-                  status: isBuffering ? 'Buffering' : null,
+                  icon: isBuffering
+                      ? Icons.close
+                      : isPlaying
+                      ? Icons.pause
+                      : Icons.play_arrow,
+                  label: isBuffering
+                      ? 'Cancel pending Play'
+                      : isPlaying
+                      ? 'Pause'
+                      : 'Play',
+                  status: isBuffering
+                      ? 'Waiting for speech; activate to cancel'
+                      : null,
                   onPressed: onTogglePlayback,
                   enabled: enabled,
                   alignment: Alignment.center,
@@ -1272,7 +1230,7 @@ class _SegmentedTransportCapsule extends StatelessWidget {
                   child: AnimatedSwitcher(
                     duration: const Duration(milliseconds: 180),
                     child: isBuffering
-                        ? const _LoadingDots(key: ValueKey('buffering'))
+                        ? const Icon(Icons.close, key: ValueKey('buffering'))
                         : Icon(
                             isPlaying ? Icons.pause : Icons.play_arrow,
                             key: ValueKey<bool>(isPlaying),
@@ -1325,16 +1283,18 @@ class _TransportSegment extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
-    final foreground = enabled
+    final available = enabled && onPressed != null;
+    final foreground = available
         ? (isPrimary ? colorScheme.primary : colorScheme.onSurface)
         : colorScheme.onSurface.withValues(alpha: 0.38);
     return Semantics(
       button: true,
-      enabled: enabled && onPressed != null,
+      enabled: available,
       label: label,
       value: status,
       child: InkWell(
-        onTap: enabled ? onPressed : null,
+        onTap: available ? onPressed : null,
+        focusColor: colorScheme.primary.withValues(alpha: 0.24),
         borderRadius: BorderRadius.circular(16),
         child: ExcludeSemantics(
           child: Padding(
@@ -1402,46 +1362,6 @@ class _OverflowMenuSectionLabelState extends State<_OverflowMenuSectionLabel> {
           ),
         ),
       ),
-    );
-  }
-}
-
-class _LoadingDots extends StatefulWidget {
-  const _LoadingDots({super.key});
-
-  @override
-  State<_LoadingDots> createState() => _LoadingDotsState();
-}
-
-class _LoadingDotsState extends State<_LoadingDots>
-    with SingleTickerProviderStateMixin {
-  late final AnimationController _controller = AnimationController(
-    vsync: this,
-    duration: const Duration(milliseconds: 900),
-  )..repeat();
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return AnimatedBuilder(
-      animation: _controller,
-      builder: (context, _) {
-        final phase = (_controller.value * 3).floor() % 3;
-        final dots = List<String>.generate(3, (index) {
-          return index <= phase ? '•' : '·';
-        }).join(' ');
-        return Text(
-          dots,
-          style: Theme.of(
-            context,
-          ).textTheme.titleMedium?.copyWith(color: IconTheme.of(context).color),
-        );
-      },
     );
   }
 }

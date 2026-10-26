@@ -66,11 +66,11 @@ void main() {
     await tester.pump();
     expect(engine.speakCount, 1);
     final buffering = tester
-        .getSemantics(find.bySemanticsLabel('Play'))
+        .getSemantics(find.bySemanticsLabel('Cancel pending Play'))
         .getSemanticsData();
-    expect(buffering.value, 'Buffering');
-    expect(buffering.flagsCollection.isEnabled, Tristate.isFalse);
-    expect(buffering.hasAction(SemanticsAction.tap), isFalse);
+    expect(buffering.value, 'Waiting for speech; activate to cancel');
+    expect(buffering.flagsCollection.isEnabled, Tristate.isTrue);
+    expect(buffering.hasAction(SemanticsAction.tap), isTrue);
 
     engine.start();
     await tester.pump();
