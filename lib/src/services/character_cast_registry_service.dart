@@ -410,8 +410,11 @@ class CharacterCastRegistryService {
       }
       final token = match.group(1)!;
       final start = match.end - token.length;
-      if (!seenPronounEvidence.add('${segment.segmentId}:$start:${match.end}'))
+      if (!seenPronounEvidence.add(
+        '${segment.segmentId}:$start:${match.end}',
+      )) {
         continue;
+      }
       pronounCounts[token.toLowerCase()] =
           (pronounCounts[token.toLowerCase()] ?? 0) + 1;
       pronounEvidenceSpans.add(
@@ -646,8 +649,9 @@ class CharacterCastRegistryService {
         caseSensitive: false,
       );
       void add(String token, int start, int finish) {
-        if (!seenPronounEvidence.add('${segment.segmentId}:$start:$finish'))
+        if (!seenPronounEvidence.add('${segment.segmentId}:$start:$finish')) {
           return;
+        }
         final normalized = switch (token.toLowerCase()) {
           'himself' => 'he',
           'herself' => 'she',
