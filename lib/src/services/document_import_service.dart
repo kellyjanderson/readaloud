@@ -294,7 +294,7 @@ class DocumentImportService {
       return;
     }
     if (extension == 'rtf') {
-      final decoder = _IncrementalRtfDecoder();
+      final decoder = _IncrementalRtfDecoder(fileName: fileName);
       Stream<String> text() async* {
         await for (final part in decoded()) {
           yield decoder.add(part);
@@ -381,6 +381,10 @@ class DocumentImportService {
   }
 
   static const _normalizationVersion = 'read-aloud-normalization-v1';
+
+  /// Maximum source RTF groups, excluding the decoder's synthetic root.
+  /// Excess nesting is a typed import refusal before another group is retained.
+  static const maxRtfGroupNesting = 256;
   static const supportedExtensions = <String>[
     'txt',
     'text',
@@ -750,7 +754,9 @@ class DocumentImportService {
     _ImportSourceDescriptor sourceDescriptor,
   ) {
     final raw = utf8.decode(bytes, allowMalformed: true);
-    final recovered = _recoverPlainTextStructure(_decodeRtf(raw));
+    final recovered = _recoverPlainTextStructure(
+      _decodeRtf(raw, fileName: fileName),
+    );
     return _buildReaderDocument(
       title: fileName,
       type: ReaderDocumentType.plainText,
@@ -1323,8 +1329,9 @@ _DocxParagraphContent? _extractDocxParagraph(XmlElement paragraph) {
   );
 }
 
-String _decodeRtf(String raw) =>
-    _normalizeRtfDecodedText(_IncrementalRtfDecoder().add(raw, isLast: true));
+String _decodeRtf(String raw, {String? fileName}) => _normalizeRtfDecodedText(
+  _IncrementalRtfDecoder(fileName: fileName).add(raw, isLast: true),
+);
 
 String _normalizeRtfDecodedText(String text) {
   final punctuationNormalized = normalizeEnglishSpeechText(text)
@@ -3028,6 +3035,8 @@ Stream<DocumentImportUnit> _htmlUnits(
 }
 
 class _IncrementalRtfDecoder {
+  _IncrementalRtfDecoder({this.fileName});
+  final String? fileName;
   final groups = <_RtfGroupState>[_RtfGroupState.root()];
   var unicodeFallbackLength = 1;
   var carry = '';
@@ -3048,6 +3057,15 @@ class _IncrementalRtfDecoder {
       final char = raw[index];
 
       if (char == '{') {
+        if (groups.length - 1 >= DocumentImportService.maxRtfGroupNesting) {
+          throw DocumentImportException(
+            code: 'rtf_nesting_limit',
+            message:
+                'RTF nesting exceeds the bounded parser limit of '
+                '${DocumentImportService.maxRtfGroupNesting} source groups.',
+            fileName: fileName,
+          );
+        }
         groups.add(_RtfGroupState.childOf(group));
         continue;
       }

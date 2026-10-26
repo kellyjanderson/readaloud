@@ -7,6 +7,7 @@ import 'package:archive/archive.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:read_aloud/src/controllers/reader_controller.dart';
 import 'package:read_aloud/src/models/document_preparation.dart';
+import 'package:read_aloud/src/models/document_import_exception.dart';
 import 'package:read_aloud/src/models/voice_profile.dart';
 import 'package:read_aloud/src/services/document_import_service.dart';
 import 'package:read_aloud/src/services/document_preparation_supervisor.dart';
@@ -19,6 +20,87 @@ void main() {
     180,
     (i) => 'Paragraph $i follows the road ahead.',
   ).join('\n\n');
+
+  test('RTF supports the documented 256-group nesting boundary', () async {
+    const depth = DocumentImportService.maxRtfGroupNesting;
+    final source =
+        '${List.filled(depth, '{').join()}\\rtf1 Boundary text.'
+        '${List.filled(depth, '}').join()}';
+    final bytes = Uint8List.fromList(utf8.encode(source));
+    final importer = DocumentImportService();
+    final units = await importer
+        .streamUnits(fileName: 'boundary.rtf', bytes: bytes)
+        .toList();
+    expect(units.single.text, 'Boundary text.');
+    expect(
+      (await importer.importBytes(
+        fileName: 'boundary.rtf',
+        bytes: bytes,
+      )).speakableText,
+      'Boundary text.',
+    );
+  });
+
+  test(
+    'RTF over-cap source refuses with typed failure before publication',
+    () async {
+      const depth = DocumentImportService.maxRtfGroupNesting + 1;
+      final source =
+          '${List.filled(depth, '{').join()}\\rtf1 Too deep.'
+          '${List.filled(depth, '}').join()}';
+      final importer = DocumentImportService();
+      final refusal = isA<DocumentImportException>()
+          .having((error) => error.code, 'code', 'rtf_nesting_limit')
+          .having((error) => error.fileName, 'fileName', 'too-deep.rtf');
+      await expectLater(
+        importer
+            .streamUnits(
+              fileName: 'too-deep.rtf',
+              bytes: Uint8List.fromList(utf8.encode(source)),
+            )
+            .toList(),
+        throwsA(refusal),
+      );
+      await expectLater(
+        importer.importBytes(
+          fileName: 'too-deep.rtf',
+          bytes: Uint8List.fromList(utf8.encode(source)),
+        ),
+        throwsA(refusal),
+      );
+
+      final directory = await Directory.systemTemp.createTemp('rc2-rtf-depth-');
+      addTearDown(() => directory.delete(recursive: true));
+      // Large unread remainder: the interactive producer must reject at the
+      // nesting boundary rather than retain a book-sized parser stack or wait
+      // for decoded output/EOF. The supervisor deadline distinguishes refusal
+      // from its generic timeout result; no wall-clock latency claim is made.
+      final file = await File('${directory.path}/deep.rtf').writeAsString(
+        '${List.filled(1000000, '{').join()}\\rtf1 Unreached text.',
+      );
+      final supervisor = DocumentPreparationSupervisor(
+        timeout: const Duration(seconds: 2),
+      );
+      addTearDown(supervisor.shutdown);
+      var publications = 0;
+      final result = await supervisor.prepareRanges(
+        DocumentPreparationRequest(
+          ownerId: 'rtf-depth',
+          revision: 1,
+          kind: DocumentPreparationKind.bytes,
+          fileName: 'deep.rtf',
+          sourcePath: file.path,
+        ),
+        onPublication: (_) async {
+          publications++;
+        },
+      );
+      expect(result.outcome, DocumentPreparationOutcome.failed);
+      expect(result.importFailure?.code, 'rtf_nesting_limit');
+      expect(result.importFailure?.fileName, 'deep.rtf');
+      expect(publications, 0);
+    },
+  );
 
   test(
     'bounded importer halos resolve opening pronoun and following tag with stable source IDs',
