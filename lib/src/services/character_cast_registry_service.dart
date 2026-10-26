@@ -13,7 +13,37 @@ class CharacterCastRegistryService {
     required DialogueAttributionSet dialogueAttributions,
     required SpeechDocument speechDocument,
     CharacterCastRegistry? previousRegistry,
+    List<SpeechSegment> contextSegments = const [],
+    List<SpeechSegment> followingContextSegments = const [],
   }) {
+    if (contextSegments.length > 12 || followingContextSegments.length > 12) {
+      throw ArgumentError(
+        "Cast evidence halos must contain at most 12 segments each.",
+      );
+    }
+    final allSegments = <String, SpeechSegment>{
+      for (final segment in [
+        ...contextSegments,
+        ...speechDocument.segments,
+        ...followingContextSegments,
+      ])
+        segment.segmentId: segment,
+    }.values.toList();
+    final identityDocument = SpeechDocument(
+      documentId: speechDocument.documentId,
+      sourceType: speechDocument.sourceType,
+      languageTag: speechDocument.languageTag,
+      normalizationVersion: speechDocument.normalizationVersion,
+      segments: allSegments,
+      segmentIndexById: {
+        for (var index = 0; index < allSegments.length; index++)
+          allSegments[index].segmentId: index,
+      },
+      totalWordCount: allSegments.fold<int>(
+        0,
+        (count, segment) => count + segment.wordCount,
+      ),
+    );
     final entries = <CastEntry>[
       CastEntry(
         castId: 'cast_narrator',
@@ -28,7 +58,7 @@ class CharacterCastRegistryService {
     final previous =
         previousRegistry?.characterEntries.toList() ?? <CastEntry>[];
     final declaredAliases = <String, Set<String>>{};
-    for (final segment in speechDocument.segments) {
+    for (final segment in identityDocument.segments) {
       final narrative = segment.normalizedText.replaceAllMapped(
         RegExp(r'"[^"\n]*"|“[^”\n]*”'),
         (match) => ' ' * match.group(0)!.length,
@@ -84,7 +114,9 @@ class CharacterCastRegistryService {
         redirects[retired.castId] = prior!.castId;
       }
       final identityProfile = inferIdentity(
-        speechDocument: speechDocument,
+        speechDocument: priorMatches.isEmpty
+            ? identityDocument
+            : speechDocument,
         aliases: aliases,
         previousProfile: _mergeProfiles(
           priorMatches
@@ -111,9 +143,15 @@ class CharacterCastRegistryService {
             ...aliases,
           }.toList(),
           attributionIds: <String>{
-            ...?prior?.attributionIds,
+            ...priorMatches
+                .expand((entry) => entry.attributionIds)
+                .toList()
+                .reversed
+                .take(32)
+                .toList()
+                .reversed,
             ...attributionIds,
-          }.toList().reversed.take(32).toList().reversed.toList(),
+          }.toList(),
           identityProfile: identityProfile,
         ),
       );
@@ -141,11 +179,28 @@ class CharacterCastRegistryService {
         );
       }
     }
+    // Retain encounter order even when a later fragment mentions only a later
+    // character. It determines the surviving ID if evidence merges identities.
+    final remaining = {for (final entry in entries) entry.castId: entry};
+    final ordered = <CastEntry>[remaining.remove('cast_narrator')!];
+    for (final entry in previous) {
+      final retained = remaining.remove(entry.castId);
+      if (retained != null) ordered.add(retained);
+    }
+    ordered.addAll(remaining.values);
+    for (final key in redirects.keys.toList()) {
+      final seen = <String>{key};
+      var target = redirects[key]!;
+      while (redirects.containsKey(target) && seen.add(target)) {
+        target = redirects[target]!;
+      }
+      redirects[key] = target;
+    }
     return CharacterCastRegistry(
       documentId: dialogueAttributions.documentId,
       registryVersion: registryVersion,
       castIdRedirects: redirects,
-      entries: entries,
+      entries: ordered,
     );
   }
 
@@ -207,11 +262,6 @@ class CharacterCastRegistryService {
       cluster.finalizeCanonicalLabel();
     }
 
-    clusters.sort(
-      (left, right) => left.canonicalNormalizedLabel.compareTo(
-        right.canonicalNormalizedLabel,
-      ),
-    );
     return clusters;
   }
 
@@ -300,8 +350,9 @@ class CharacterCastRegistryService {
       final segment = speechDocument.segments[index];
       final previous = speechDocument.segments[index - 1];
       if (segment.paragraphIndex != previous.paragraphIndex ||
-          segment.blockId != previous.blockId)
+          segment.blockId != previous.blockId) {
         continue;
+      }
       final match = RegExp(
         r'^\s*(He|She|They)\b',
       ).firstMatch(segment.normalizedText);
@@ -319,11 +370,25 @@ class CharacterCastRegistryService {
               'they',
               'i',
               'we',
+              'near',
+              'before',
+              'after',
+              'shortly',
+              'later',
+              'then',
+              'outside',
+              'inside',
+              'by',
+              'at',
+              'for',
+              'in',
+              'on',
             }.contains(name),
           )
           .toSet();
-      if (names.length != 1 || !normalizedAliases.contains(names.single))
+      if (names.length != 1 || !normalizedAliases.contains(names.single)) {
         continue;
+      }
       final token = match.group(1)!;
       final start = match.end - token.length;
       pronounCounts[token.toLowerCase()] =
@@ -364,6 +429,7 @@ class CharacterCastRegistryService {
         pronoun.conflictFlag) {
       final conflict =
           pronoun.conflictFlag ||
+          (contextual?.conflictFlag ?? false) ||
           (contextual != null &&
               contextual.preferredVoiceGender != null &&
               contextual.preferredVoiceGender != pronoun.preferredVoiceGender);
@@ -526,7 +592,7 @@ class CharacterCastRegistryService {
       }
       final local = segmentText.substring(aliasMatch.end, end);
       final possessive = RegExp(
-        r'\b(his|her|their)\s+(?:[a-z]+\s+)?(?:coat|voice|arm|arms|hand|hands|head|sleeve|wrist|eyes|pocket|face|shoulder|shoulders|hat|bag|boots|gloves)\b|\b(himself|herself|themself|themselves)\b',
+        r'\b(his|her|their)\s+(?:[a-z]+\s+)?(?:coat|voice|chest|heel|sleeves|arm|arms|hand|hands|head|sleeve|wrist|eyes|pocket|face|shoulder|shoulders|hat|bag|boots|gloves)\b|\b(himself|herself|themself|themselves)\b',
         caseSensitive: false,
       );
       void add(String token, int start, int finish) {
@@ -746,29 +812,6 @@ class CharacterCastRegistryService {
         'sister': CharacterGenderIdentityLabel.female,
         'mother': CharacterGenderIdentityLabel.female,
       };
-
-  static final Map<String, RegExp> _pronounPatternByToken = <String, RegExp>{
-    'he': RegExp(r'\bhe\b'),
-    'him': RegExp(r'\bhim\b'),
-    'his': RegExp(r'\bhis\b'),
-    'she': RegExp(r'\bshe\b'),
-    'her': RegExp(r'\bher\b'),
-    'hers': RegExp(r'\bhers\b'),
-    'they': RegExp(r'\bthey\b'),
-    'them': RegExp(r'\bthem\b'),
-    'theirs': RegExp(r'\btheirs\b'),
-    'xe': RegExp(r'\bxe\b'),
-    'xem': RegExp(r'\bxem\b'),
-    'xyr': RegExp(r'\bxyr\b'),
-    'ze': RegExp(r'\bze\b'),
-    'zir': RegExp(r'\bzir\b'),
-    'hir': RegExp(r'\bhir\b'),
-    'fae': RegExp(r'\bfae\b'),
-    'faer': RegExp(r'\bfaer\b'),
-    'ey': RegExp(r'\bey\b'),
-    'em': RegExp(r'\bem\b'),
-    'eir': RegExp(r'\beir\b'),
-  };
 }
 
 class _OutcomeCluster {
@@ -893,8 +936,4 @@ class _IdentityCandidate {
   final double confidence;
   final CharacterGenderEvidenceSource source;
   final CharacterIdentityEvidenceSpan evidenceSpan;
-
-  bool get isExplicit =>
-      source == CharacterGenderEvidenceSource.explicitIdentity ||
-      source == CharacterGenderEvidenceSource.explicitApposition;
 }

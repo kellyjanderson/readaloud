@@ -271,7 +271,7 @@ Second paragraph here.
     );
 
     test(
-      'imports Love.txt with consolidated character aliases and inferred cast gender',
+      'imports Love.txt with inferred gender and retains unproved spelling identities',
       () async {
         final service = DocumentImportService();
         final file = File('project/testdocs/Love.txt');
@@ -291,9 +291,17 @@ Second paragraph here.
         );
 
         expect(jennifer, isNotNull);
+        // The source plausibly contains typos, but edit distance cannot prove
+        // co-reference. In particular, the later standalone Jenefer paragraph
+        // has no explicit alias evidence. Keep this uncertainty visible.
+        expect(jennifer!.observedAliases, <String>['Jennifer']);
         expect(
-          jennifer!.observedAliases,
-          containsAll(<String>['Jennifer', 'Jenifer', 'Jenefer']),
+          document.characterCastRegistry.forCastId('cast_character_jenifer'),
+          isNotNull,
+        );
+        expect(
+          document.characterCastRegistry.forCastId('cast_character_jenefer'),
+          isNotNull,
         );
         expect(
           jennifer.identityProfile?.genderIdentityLabel,
