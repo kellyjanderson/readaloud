@@ -55,6 +55,10 @@ class PreparationStatus extends StatelessWidget {
                               ? 'Ready to read'
                               : 'Partial document — more ranges are available as you read.'),
                     ),
+                    if (startupError != null &&
+                        message != null &&
+                        message != startupError)
+                      Text(message!),
                     if (isInitializing) ...[
                       const SizedBox(height: 4),
                       const LinearProgressIndicator(
