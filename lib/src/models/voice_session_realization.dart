@@ -50,6 +50,7 @@ class VoiceSessionRealization {
     required this.artifacts,
     required this.boundaryIntents,
     required this.emphasisIntents,
+    this.performanceIntents = const <RealizedPerformanceIntent>[],
     required this.ttsArtifactSet,
   });
 
@@ -63,5 +64,6 @@ class VoiceSessionRealization {
   final List<RealizedPronunciationArtifact> artifacts;
   final List<RealizedBoundaryIntent> boundaryIntents;
   final List<RealizedEmphasisIntent> emphasisIntents;
+  final List<RealizedPerformanceIntent> performanceIntents;
   final TtsArtifactSet ttsArtifactSet;
 }

@@ -6,6 +6,8 @@ enum SpeechAnnotationKind {
   sayAsCandidate,
   discourseRole,
   dialogueSpan,
+  deliveryIntent,
+  inflectionIntent,
 }
 
 enum SpeechAnnotationSource {
@@ -14,6 +16,11 @@ enum SpeechAnnotationSource {
   explicitSourceMetadata,
   userOverride,
 }
+
+/// Canonical requests, independent of engine capabilities. Unknown stays absent.
+enum DeliveryIntent { whispered, shouted, spoken, sung }
+
+enum InflectionIntent { rising, falling, level }
 
 enum BreakClass { none, weak, sentence, paragraph, section }
 
@@ -90,11 +97,17 @@ class BaseSpeechAnnotationSet {
         (annotation) => annotation.dialogueSpanId == dialogueSpanId,
       );
 
-  Map<String, Object?> toJson() {
+  /// Defaults to the legacy V1 vocabulary. V2 explicitly opts into canonical
+  /// performance intent; this does not change the in-memory annotation set.
+  Map<String, Object?> toJson({bool includePerformanceIntents = false}) {
     return <String, Object?>{
       'documentId': documentId,
       'annotationVersion': annotationVersion,
       'annotations': annotations
+          .where(
+            (annotation) =>
+                includePerformanceIntents || !annotation.isPerformanceIntent,
+          )
           .map((annotation) => annotation.toJson())
           .toList(growable: false),
     };
@@ -110,6 +123,8 @@ class SpeechAnnotation {
     required int endWord,
     required double confidence,
     required SpeechAnnotationSource source,
+    DeliveryIntent? deliveryIntent,
+    InflectionIntent? inflectionIntent,
     BreakClass? breakClass,
     PronunciationCandidatePayload? pronunciationCandidate,
     String? sayAsClass,
@@ -117,6 +132,19 @@ class SpeechAnnotation {
     String? dialogueSpanId,
     String? dialogueSpanClass,
   }) {
+    if ((kind == SpeechAnnotationKind.deliveryIntent) !=
+            (deliveryIntent != null) ||
+        (kind == SpeechAnnotationKind.inflectionIntent) !=
+            (inflectionIntent != null)) {
+      throw ArgumentError('Intent payload must match its annotation kind.');
+    }
+    if ((deliveryIntent != null || inflectionIntent != null) &&
+        source != SpeechAnnotationSource.explicitSourceMetadata &&
+        source != SpeechAnnotationSource.userOverride) {
+      throw ArgumentError(
+        'Performance intent requires explicit source metadata or user input.',
+      );
+    }
     final normalizedDiscourseRole = discourseRole?.trim();
     final normalizedDialogueSpanId = dialogueSpanId?.trim();
     final normalizedDialogueSpanClass = dialogueSpanClass?.trim();
@@ -153,7 +181,9 @@ class SpeechAnnotation {
     final normalizedConfidence = source == SpeechAnnotationSource.userOverride
         ? 1.0
         : confidence;
-    if (normalizedConfidence < 0.0 || normalizedConfidence > 1.0) {
+    if (!normalizedConfidence.isFinite ||
+        normalizedConfidence < 0.0 ||
+        normalizedConfidence > 1.0) {
       throw ArgumentError.value(
         confidence,
         'confidence',
@@ -253,6 +283,8 @@ class SpeechAnnotation {
       endWord: endWord,
       confidence: normalizedConfidence,
       source: source,
+      deliveryIntent: deliveryIntent,
+      inflectionIntent: inflectionIntent,
       breakClass: breakClass,
       pronunciationCandidate: pronunciationCandidate,
       sayAsClass: normalizedSayAsClass,
@@ -270,6 +302,8 @@ class SpeechAnnotation {
     required this.endWord,
     required this.confidence,
     required this.source,
+    this.deliveryIntent,
+    this.inflectionIntent,
     this.breakClass,
     this.pronunciationCandidate,
     this.sayAsClass,
@@ -285,12 +319,19 @@ class SpeechAnnotation {
   final int endWord;
   final double confidence;
   final SpeechAnnotationSource source;
+  final DeliveryIntent? deliveryIntent;
+  final InflectionIntent? inflectionIntent;
   final BreakClass? breakClass;
+
   final PronunciationCandidatePayload? pronunciationCandidate;
   final String? sayAsClass;
   final String? discourseRole;
   final String? dialogueSpanId;
   final String? dialogueSpanClass;
+
+  bool get isPerformanceIntent =>
+      kind == SpeechAnnotationKind.deliveryIntent ||
+      kind == SpeechAnnotationKind.inflectionIntent;
 
   bool get isBoundaryAnnotation =>
       kind == SpeechAnnotationKind.phraseBoundary ||
@@ -305,6 +346,8 @@ class SpeechAnnotation {
       'endWord': endWord,
       'confidence': confidence,
       'source': source.name,
+      if (deliveryIntent != null) 'deliveryIntent': deliveryIntent!.name,
+      if (inflectionIntent != null) 'inflectionIntent': inflectionIntent!.name,
       'breakClass': breakClass?.name,
       'pronunciationCandidate': pronunciationCandidate?.toJson(),
       'sayAsClass': sayAsClass,

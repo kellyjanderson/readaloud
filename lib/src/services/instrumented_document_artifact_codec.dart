@@ -3,6 +3,7 @@ import 'dart:convert';
 import '../models/cast_voice_assignment.dart';
 import '../models/prepared_voice_binding.dart';
 import '../models/reader_document.dart';
+import '../models/speech_annotation.dart';
 import 'reader_document_serialization_service.dart';
 
 /// Immutable, data-only inspection snapshot decoded from `.radoc-v2`.
@@ -44,6 +45,10 @@ class InstrumentedDocumentArtifactCodec {
             )
             as Map<String, Object?>;
     legacy.remove('pdfDataBase64');
+    // V1 stays unchanged; only V2 carries the extended intent vocabulary.
+    legacy['baseSpeechAnnotations'] = document.baseSpeechAnnotations.toJson(
+      includePerformanceIntents: true,
+    );
     final documentId = document.normalizedImportResult.documentId;
     if (castVoiceAssignments.documentId != documentId) {
       throw ArgumentError('Assignment set belongs to a different document.');
@@ -100,6 +105,7 @@ class InstrumentedDocumentArtifactCodec {
       );
     }
     _validateNestedDocumentIds(prepared, id);
+    _validatePerformanceIntents(prepared);
     for (final key in [
       'displayDocument',
       'speechDocument',
@@ -257,6 +263,65 @@ class InstrumentedDocumentArtifactCodec {
       );
     }
     return InstrumentedDocumentArtifactSnapshot._(envelope);
+  }
+
+  static void _validatePerformanceIntents(Map<String, Object?> prepared) {
+    final set = prepared['baseSpeechAnnotations'];
+    if (set is! Map || set['annotations'] is! List) {
+      throw const FormatException('Annotations must be a list.');
+    }
+    final speech = prepared['speechDocument'];
+    final segments = speech is Map ? speech['segments'] : null;
+    for (final raw in set['annotations'] as List) {
+      if (raw is! Map) throw const FormatException('Invalid annotation.');
+      final delivery = raw['kind'] == 'deliveryIntent';
+      final inflection = raw['kind'] == 'inflectionIntent';
+      if (!delivery &&
+          !inflection &&
+          raw['deliveryIntent'] == null &&
+          raw['inflectionIntent'] == null) {
+        continue;
+      }
+      final confidence = raw['confidence'];
+      final start = raw['startWord'];
+      final end = raw['endWord'];
+      final source = raw['source'];
+      final validSpan =
+          segments is List &&
+          segments.any(
+            (segment) =>
+                segment is Map &&
+                segment['segmentId'] == raw['segmentId'] &&
+                segment['wordCount'] is int &&
+                end is int &&
+                end <= (segment['wordCount'] as int),
+          );
+      if (delivery == inflection ||
+          (delivery &&
+              (!DeliveryIntent.values.any(
+                    (value) => value.name == raw['deliveryIntent'],
+                  ) ||
+                  raw['inflectionIntent'] != null)) ||
+          (inflection &&
+              (!InflectionIntent.values.any(
+                    (value) => value.name == raw['inflectionIntent'],
+                  ) ||
+                  raw['deliveryIntent'] != null)) ||
+          (source != 'explicitSourceMetadata' && source != 'userOverride') ||
+          confidence is! num ||
+          !confidence.isFinite ||
+          confidence < 0 ||
+          confidence > 1 ||
+          (source == 'userOverride' && confidence != 1) ||
+          start is! int ||
+          end is! int ||
+          start < 0 ||
+          end <= start ||
+          !validSpan ||
+          !_isNonEmptyString(raw['annotationId'])) {
+        throw const FormatException('Invalid delivery or inflection intent.');
+      }
+    }
   }
 
   static Map<String, Object?> _assignmentToMap(

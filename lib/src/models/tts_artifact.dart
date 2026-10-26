@@ -1,4 +1,5 @@
 import 'pronunciation_artifact.dart';
+import 'speech_annotation.dart';
 
 class TtsArtifactSet {
   const TtsArtifactSet({
@@ -40,6 +41,7 @@ class TtsArtifactSegment {
     required this.pronunciationArtifacts,
     this.boundaryIntents = const <RealizedBoundaryIntent>[],
     this.emphasisIntents = const <RealizedEmphasisIntent>[],
+    this.performanceIntents = const <RealizedPerformanceIntent>[],
     this.diagnosticCodes = const <String>[],
   });
 
@@ -48,6 +50,7 @@ class TtsArtifactSegment {
   final List<RealizedPronunciationArtifact> pronunciationArtifacts;
   final List<RealizedBoundaryIntent> boundaryIntents;
   final List<RealizedEmphasisIntent> emphasisIntents;
+  final List<RealizedPerformanceIntent> performanceIntents;
   final List<String> diagnosticCodes;
 }
 
@@ -117,4 +120,17 @@ class RealizedPronunciationArtifact {
   final List<String> diagnosticCodes;
 
   String get spanKey => '$segmentId:$startWord:$endWord';
+}
+
+/// Retains canonical intent even though no current adapter can apply it.
+class RealizedPerformanceIntent {
+  const RealizedPerformanceIntent({required this.annotation});
+
+  final SpeechAnnotation annotation;
+  String get engineTreatment => 'unsupported';
+  String get fallback => 'engine_default';
+  List<String> get diagnosticCodes => List.unmodifiable([
+    '${annotation.kind.name}.unsupported',
+    '${annotation.kind.name}.fallback.engine_default',
+  ]);
 }
