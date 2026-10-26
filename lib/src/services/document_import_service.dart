@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:io' as io;
 import 'dart:isolate';
 import 'dart:math' as math;
 import 'dart:typed_data';
@@ -9,7 +10,9 @@ import 'package:html/parser.dart' as html_parser;
 import 'package:html/dom.dart' as html_dom;
 import 'package:pdfrx/pdfrx.dart';
 import 'package:xml/xml.dart';
+import 'package:xml/xml_events.dart';
 
+import '../models/character_cast_registry.dart';
 import '../models/display_document.dart';
 import '../models/document_import_exception.dart';
 import '../models/import_diagnostic.dart';
@@ -52,9 +55,50 @@ class PdfTextExtractionPage {
   final PdfPageRawText? rawText;
 }
 
+/// Bounded importer output before normalization/analysis. Container locators
+/// identify the member/page; offsets within it are decoded UTF-16 coordinates.
+class DocumentImportUnit {
+  const DocumentImportUnit({
+    required this.text,
+    this.html,
+    this.locator,
+    this.type = ReaderDocumentType.plainText,
+  });
+  final String text;
+  final String? html;
+  final String? locator;
+  final ReaderDocumentType type;
+}
+
 class PdfrxPdfTextExtractor implements PdfTextExtractor {
   const PdfrxPdfTextExtractor({this.deferFormatting = false});
   final bool deferFormatting;
+
+  Stream<PdfTextExtractionPage> streamPages({
+    required String fileName,
+    String? sourcePath,
+    Uint8List? bytes,
+  }) async* {
+    PdfDocument? document;
+    try {
+      await pdfrxFlutterInitialize();
+      document = sourcePath != null
+          ? await PdfDocument.openFile(sourcePath, useProgressiveLoading: true)
+          : await PdfDocument.openData(bytes!, sourceName: fileName);
+      for (var index = 0; index < document.pages.length; index++) {
+        final text = await document.pages[index].loadText();
+        yield PdfTextExtractionPage(
+          pageIndex: index,
+          fullText: text?.fullText ?? '',
+          rawText: text,
+        );
+      }
+    } finally {
+      // Cancellation stops new pages; an in-flight native page is drained
+      // before document disposal and before the supervisor admits a successor.
+      await document?.dispose();
+    }
+  }
 
   @override
   Future<PdfTextExtractionResult> extract({
@@ -64,6 +108,7 @@ class PdfrxPdfTextExtractor implements PdfTextExtractor {
     PdfDocument? document;
 
     try {
+      await pdfrxFlutterInitialize();
       document = await PdfDocument.openData(bytes, sourceName: fileName);
       final pages = <PdfTextExtractionPage>[];
       for (
@@ -155,6 +200,185 @@ class DocumentImportService {
            pronunciationResourceLayeringService ??
            const PronunciationResourceLayeringService(),
        _pdfTextExtractor = pdfTextExtractor ?? const PdfrxPdfTextExtractor();
+
+  CharacterCastRegistry? _incrementalRegistry;
+  List<SpeechSegment> _precedingSegments = const [];
+  String? _incrementalSession;
+  bool _buildingFragment = false;
+  List<SpeechSegment> _followingSegments = const [];
+  String _fragmentIdentityNamespace = '';
+
+  /// Worker-owned bounded adapter. Range-local IDs never alias earlier ranges.
+  /// The publication envelope carries global coordinates without re-importing
+  /// a growing prefix. The registry carries identities, not the source text.
+  ReaderDocument importTextFragment({
+    required String text,
+    required String title,
+    required String sessionId,
+    required int sourceStart,
+    DocumentImportUnit? unit,
+    DocumentImportUnit? followingUnit,
+    String? completeSourceFingerprint,
+  }) {
+    if (_incrementalSession != sessionId) {
+      _incrementalSession = sessionId;
+      _incrementalRegistry = null;
+      _precedingSegments = const [];
+    }
+    final recovered = _recoverPlainTextStructure(text);
+    _followingSegments = const [];
+    if (followingUnit != null) {
+      final next = _recoverPlainTextStructure(followingUnit.text);
+      _followingSegments = _NormalizedDocumentFactory(
+        title: title,
+        type: followingUnit.type,
+        sourceUri: null,
+        identityNamespace: 'r${sourceStart + text.length}_',
+        sourceFingerprint:
+            '${completeSourceFingerprint ?? sessionId}:range:${sourceStart + text.length}',
+        displayHtml: followingUnit.html ?? next.displayHtml,
+        speakableText: next.speakableText,
+        normalizationVersion: _normalizationVersion,
+        diagnostics: const [],
+      ).build().speechDocument.segments.take(12).toList(growable: false);
+    }
+    _fragmentIdentityNamespace = 'r${sourceStart}_';
+    _buildingFragment = true;
+    try {
+      return _buildReaderDocument(
+        title: title,
+        type: unit?.type ?? ReaderDocumentType.plainText,
+        displayHtml: unit?.html ?? recovered.displayHtml,
+        speakableText: recovered.speakableText,
+        sourceDescriptor: _ImportSourceDescriptor(
+          sourceFingerprint:
+              sourceStart == 0 && completeSourceFingerprint != null
+              ? completeSourceFingerprint
+              : '${completeSourceFingerprint ?? sessionId}:range:$sourceStart',
+        ),
+        sourceDescription: 'Incremental source range at $sourceStart',
+      );
+    } finally {
+      _buildingFragment = false;
+      _followingSegments = const [];
+    }
+  }
+
+  String completeBytesFingerprint(String fileName, Uint8List bytes) =>
+      _sourceDescriptorForBytes(
+        fileName: fileName,
+        bytes: bytes,
+      ).sourceFingerprint;
+  String completeTextFingerprint(String text, {required bool shared}) =>
+      _sourceDescriptorForText(
+        title: shared ? 'Shared Text' : 'Pasted Text',
+        text: text,
+        mode: shared ? 'shared-text' : 'pasted-text',
+      ).sourceFingerprint;
+
+  /// Uses the pinned archive directory reader, platform streaming DEFLATE and
+  /// xml event decoder. Only metadata precedes the first container member;
+  /// members, XML paragraphs and HTML blocks advance under consumer demand.
+  Stream<DocumentImportUnit> streamUnits({
+    required String fileName,
+    String? sourcePath,
+    Uint8List? bytes,
+  }) async* {
+    final extension = _extensionOf(fileName);
+    Stream<String> decoded() => _importByteStream(
+      sourcePath,
+      bytes,
+    ).transform(const Utf8Decoder(allowMalformed: true));
+    if (extension == 'html' || extension == 'htm') {
+      yield* _htmlUnits(decoded(), locator: fileName);
+      return;
+    }
+    if (extension == 'rtf') {
+      final decoder = _IncrementalRtfDecoder();
+      Stream<String> text() async* {
+        await for (final part in decoded()) {
+          yield decoder.add(part);
+        }
+        yield decoder.add('', isLast: true);
+      }
+
+      await for (final part in boundedProseUnits(text())) {
+        yield DocumentImportUnit(text: part, locator: fileName);
+      }
+      return;
+    }
+    if (extension != 'docx' && extension != 'epub') {
+      await for (final part in boundedProseUnits(decoded())) {
+        yield DocumentImportUnit(text: part, locator: fileName);
+      }
+      return;
+    }
+    final InputStream input = sourcePath != null
+        ? InputFileStream(sourcePath)
+        : InputMemoryStream(bytes!);
+    try {
+      final archive = ZipDecoder().decodeStream(input);
+      final entries = {
+        for (final entry in archive.files)
+          _normalizeArchivePath(entry.name): entry,
+      };
+      if (extension == 'docx') {
+        final entry = entries['word/document.xml'];
+        if (entry == null) {
+          throw StateError('DOCX word/document.xml is missing.');
+        }
+        yield* _docxUnits(_archiveText(entry), locator: entry.name);
+      } else {
+        final container = entries['META-INF/container.xml'];
+        if (container == null) {
+          throw StateError('EPUB container.xml is missing.');
+        }
+        final containerXml = XmlDocument.parse(
+          await _archiveText(container).join(),
+        );
+        final root = containerXml.descendants
+            .whereType<XmlElement>()
+            .firstWhere((element) => element.name.local == 'rootfile');
+        final packagePath = root.getAttribute('full-path');
+        final package = entries[packagePath];
+        if (packagePath == null || package == null) {
+          throw StateError('EPUB package document is missing.');
+        }
+        final assets = <String, _EpubAsset>{};
+        // Stream package metadata too: first spine item can be read before the
+        // remainder of an unusually large package metadata document is parsed.
+        await for (final events in _archiveText(package).toXmlEvents()) {
+          for (final event in events) {
+            if (event is! XmlStartElementEvent) continue;
+            final attributes = {
+              for (final a in event.attributes) a.name: a.value,
+            };
+            if (event.localName == 'item') {
+              final id = attributes['id'];
+              final href = attributes['href'];
+              if (id != null && href != null) {
+                assets[id] = _EpubAsset(
+                  href: _resolveArchivePath(packagePath, href),
+                  mediaType: attributes['media-type'] ?? '',
+                  properties: attributes['properties'] ?? '',
+                );
+              }
+            } else if (event.localName == 'itemref') {
+              final asset = assets[attributes['idref']];
+              if (asset == null || asset.isNavigationDocument) continue;
+              final chapter = entries[asset.href];
+              if (chapter == null) {
+                throw StateError('EPUB member ${asset.href} is missing.');
+              }
+              yield* _htmlUnits(_archiveText(chapter), locator: asset.href);
+            }
+          }
+        }
+      }
+    } finally {
+      await input.close();
+    }
+  }
 
   static const _normalizationVersion = 'read-aloud-normalization-v1';
   static const supportedExtensions = <String>[
@@ -782,6 +1006,7 @@ class DocumentImportService {
   }) {
     final normalized = _NormalizedDocumentFactory(
       title: title,
+      identityNamespace: _buildingFragment ? _fragmentIdentityNamespace : '',
       type: type,
       sourceUri: sourceDescriptor.sourceUri,
       sourceFingerprint: sourceDescriptor.sourceFingerprint,
@@ -797,11 +1022,63 @@ class DocumentImportService {
     final dialogueAttributions = _speakerAttributionService.attribute(
       speechDocument: normalized.speechDocument,
       baseAnnotations: baseSpeechAnnotations,
+      contextSegments: _buildingFragment ? _precedingSegments : const [],
+      followingContextSegments: _buildingFragment
+          ? _followingSegments
+          : const [],
     );
-    final characterCastRegistry = _characterCastRegistryService.build(
+    var characterCastRegistry = _characterCastRegistryService.build(
       dialogueAttributions: dialogueAttributions,
       speechDocument: normalized.speechDocument,
+      previousRegistry: _buildingFragment ? _incrementalRegistry : null,
+      contextSegments: _buildingFragment ? _precedingSegments : const [],
+      followingContextSegments: _buildingFragment
+          ? _followingSegments
+          : const [],
     );
+    if (_buildingFragment) {
+      _incrementalRegistry = characterCastRegistry;
+      // The publication contains current identities/evidence upserts, rather
+      // than transferring the growing complete registry on every range.
+      final currentIds = normalized.speechDocument.segments
+          .map((s) => s.segmentId)
+          .toSet();
+      final labels = dialogueAttributions.outcomes
+          .map((o) => o.speakerReference?.normalizedLabel)
+          .whereType<String>()
+          .toSet();
+      final localEntries = characterCastRegistry.entries
+          .where(
+            (entry) =>
+                entry.roleKind == CastEntryRoleKind.narrator ||
+                entry.observedAliases.any(
+                  (alias) => labels.contains(alias.toLowerCase()),
+                ) ||
+                (entry.identityProfile?.evidenceSpans.any(
+                      (span) => currentIds.contains(span.segmentId),
+                    ) ??
+                    false),
+          )
+          .toList(growable: false);
+      final localIds = localEntries.map((entry) => entry.castId).toSet();
+      characterCastRegistry = CharacterCastRegistry(
+        documentId: characterCastRegistry.documentId,
+        registryVersion: characterCastRegistry.registryVersion,
+        entries: localEntries,
+        castIdRedirects: Map.fromEntries(
+          characterCastRegistry.castIdRedirects.entries.where(
+            (entry) => localIds.contains(entry.value),
+          ),
+        ),
+      );
+      final context = [
+        ..._precedingSegments,
+        ...normalized.speechDocument.segments,
+      ];
+      _precedingSegments = List.unmodifiable(
+        context.skip(math.max(0, context.length - 12)),
+      );
+    }
     final documentVoiceAttribution = _documentVoiceAttributionService.build(
       DocumentVoiceAttributionInput(
         speechDocument: normalized.speechDocument,
@@ -1046,169 +1323,8 @@ _DocxParagraphContent? _extractDocxParagraph(XmlElement paragraph) {
   );
 }
 
-String _decodeRtf(String raw) {
-  final output = StringBuffer();
-  final groups = <_RtfGroupState>[_RtfGroupState.root()];
-  var unicodeFallbackLength = 1;
-
-  for (var index = 0; index < raw.length; index += 1) {
-    final group = groups.last;
-    final char = raw[index];
-
-    if (char == '{') {
-      groups.add(_RtfGroupState.childOf(group));
-      continue;
-    }
-
-    if (char == '}') {
-      if (groups.length > 1) {
-        groups.removeLast();
-      }
-      continue;
-    }
-
-    if (char == '\\') {
-      if (index + 1 >= raw.length) {
-        break;
-      }
-
-      final next = raw[index + 1];
-      if (next == '\\' || next == '{' || next == '}') {
-        group.markContentSeen();
-        if (!group.ignorable) {
-          output.write(next);
-        }
-        index += 1;
-        continue;
-      }
-
-      if (next == '\'') {
-        final hexEnd = index + 4;
-        if (hexEnd <= raw.length) {
-          final hex = raw.substring(index + 2, index + 4);
-          final value = int.tryParse(hex, radix: 16);
-          group.markContentSeen();
-          if (!group.ignorable && value != null) {
-            output.write(_decodeRtfHexByte(value));
-          }
-          index += 3;
-          continue;
-        }
-      }
-
-      if (next == '*') {
-        group.pendingStarDestination = true;
-        index += 1;
-        continue;
-      }
-
-      if (!_isAsciiLetter(next)) {
-        group.markContentSeen();
-        if (!group.ignorable) {
-          final symbolText = _rtfControlSymbolText(next);
-          if (symbolText != null) {
-            output.write(symbolText);
-          }
-        }
-        index += 1;
-        continue;
-      }
-
-      var cursor = index + 1;
-      while (cursor < raw.length && _isAsciiLetter(raw[cursor])) {
-        cursor += 1;
-      }
-      final word = raw.substring(index + 1, cursor);
-
-      final parameterStart = cursor;
-      if (cursor < raw.length &&
-          (raw[cursor] == '-' || _isAsciiDigit(raw[cursor]))) {
-        cursor += 1;
-        while (cursor < raw.length && _isAsciiDigit(raw[cursor])) {
-          cursor += 1;
-        }
-      }
-      final parameter = parameterStart == cursor
-          ? null
-          : int.tryParse(raw.substring(parameterStart, cursor));
-
-      if (cursor < raw.length && raw[cursor] == ' ') {
-        cursor += 1;
-      }
-
-      final marksIgnorable =
-          group.atGroupStart &&
-          (group.pendingStarDestination ||
-              _rtfIgnoredDestinationWords.contains(word));
-      if (marksIgnorable) {
-        group.ignorable = true;
-      }
-      group.markContentSeen();
-      index = cursor - 1;
-
-      if (group.ignorable) {
-        continue;
-      }
-
-      switch (word) {
-        case 'uc':
-          unicodeFallbackLength = parameter ?? unicodeFallbackLength;
-        case 'u':
-          if (parameter == null) {
-            continue;
-          }
-          final normalized = parameter < 0 ? parameter + 65536 : parameter;
-          output.write(String.fromCharCode(normalized));
-          index =
-              _skipRtfUnicodeFallback(raw, cursor, unicodeFallbackLength) - 1;
-        case 'par':
-        case 'pard':
-        case 'page':
-        case 'sect':
-          _appendRtfParagraphBreak(output);
-        case 'line':
-          output.write('\n');
-        case 'tab':
-          output.write('\t');
-        case 'emdash':
-          output.write('—');
-        case 'endash':
-          output.write('–');
-        case 'lquote':
-        case 'rquote':
-          output.write("'");
-        case 'ldblquote':
-        case 'rdblquote':
-          output.write('"');
-        case 'bullet':
-          output.write('•');
-        case 'cell':
-          output.write('\t');
-        case 'row':
-        case 'nestrow':
-          output.write('\n');
-      }
-      continue;
-    }
-
-    if (char == '\r' || char == '\n') {
-      if (!group.ignorable && !group.atGroupStart) {
-        output.write(' ');
-      }
-      continue;
-    }
-
-    if ((char == ' ' || char == '\t') && group.atGroupStart) {
-      continue;
-    }
-
-    group.markContentSeen();
-    if (!group.ignorable) {
-      output.write(char);
-    }
-  }
-  return _normalizeRtfDecodedText(output.toString());
-}
+String _decodeRtf(String raw) =>
+    _normalizeRtfDecodedText(_IncrementalRtfDecoder().add(raw, isLast: true));
 
 String _normalizeRtfDecodedText(String text) {
   final punctuationNormalized = normalizeEnglishSpeechText(text)
@@ -1481,6 +1597,7 @@ bool _looksLikeHyphenatedWrap(String previous, String next) {
 class _NormalizedDocumentFactory {
   _NormalizedDocumentFactory({
     required this.title,
+    this.identityNamespace = '',
     required this.type,
     required this.sourceUri,
     required this.sourceFingerprint,
@@ -1491,6 +1608,7 @@ class _NormalizedDocumentFactory {
   });
 
   final String title;
+  final String identityNamespace;
   final ReaderDocumentType type;
   final Uri? sourceUri;
   final String sourceFingerprint;
@@ -1505,6 +1623,7 @@ class _NormalizedDocumentFactory {
     final parsed = html_parser.parse(displayHtml);
     final displayBuilder = _DisplayDocumentBuilder(
       documentId: documentId,
+      identityNamespace: identityNamespace,
       sourceType: type.name,
       title: title,
       normalizationVersion: normalizationVersion,
@@ -1562,7 +1681,8 @@ class _NormalizedDocumentFactory {
         if (sentence.isEmpty) {
           continue;
         }
-        final displayBlockId = block?.blockId ?? 'b_$paragraphIndex';
+        final displayBlockId =
+            block?.blockId ?? '${identityNamespace}b_$paragraphIndex';
         final matchStart = nextDisplaySearchOffset[displayBlockId] ?? 0;
         final sentenceDisplayStart = block == null
             ? 0
@@ -1578,7 +1698,7 @@ class _NormalizedDocumentFactory {
         final fragments = _splitMixedDialogueSentence(sentence);
 
         for (final fragment in fragments) {
-          final segmentId = 's_$segmentOrdinal';
+          final segmentId = '${identityNamespace}s_$segmentOrdinal';
           final words = RegExp(
             r'\S+',
           ).allMatches(fragment.text).toList(growable: false);
@@ -1618,7 +1738,7 @@ class _NormalizedDocumentFactory {
 
           positionEntries.add(
             PositionMapEntry(
-              entryId: 'pm_$segmentOrdinal',
+              entryId: '${identityNamespace}pm_$segmentOrdinal',
               displayBlockId: displayBlockId,
               speechSegmentId: segmentId,
               displayStart: math.max(0, displayStart),
@@ -1704,6 +1824,7 @@ class _NormalizedDocumentFactory {
 class _DisplayDocumentBuilder {
   _DisplayDocumentBuilder({
     required this.documentId,
+    this.identityNamespace = '',
     required this.sourceType,
     required this.title,
     required this.normalizationVersion,
@@ -1711,6 +1832,7 @@ class _DisplayDocumentBuilder {
   });
 
   final String documentId;
+  final String identityNamespace;
   final String sourceType;
   final String title;
   final String normalizationVersion;
@@ -1950,7 +2072,7 @@ class _DisplayDocumentBuilder {
     }
     blocks.add(
       DisplayBlock(
-        blockId: 'b_${_blockOrdinal++}',
+        blockId: '${identityNamespace}b_${_blockOrdinal++}',
         kind: kind,
         inlines: [
           DisplayInline(
@@ -1972,7 +2094,7 @@ class _DisplayDocumentBuilder {
     Map<String, String> attributes = const <String, String>{},
     String? parentBlockId,
   }) {
-    final blockId = 'b_${_blockOrdinal++}';
+    final blockId = '${identityNamespace}b_${_blockOrdinal++}';
     blocks.add(
       DisplayBlock(
         blockId: blockId,
@@ -2014,7 +2136,7 @@ class _DisplayDocumentBuilder {
       );
       return;
     }
-    final assetId = 'a_${_assetOrdinal++}';
+    final assetId = '${identityNamespace}a_${_assetOrdinal++}';
     assets[assetId] = DisplayAsset(
       assetId: assetId,
       kind: assetKind,
@@ -2024,7 +2146,7 @@ class _DisplayDocumentBuilder {
     );
     blocks.add(
       DisplayBlock(
-        blockId: 'b_${_blockOrdinal++}',
+        blockId: '${identityNamespace}b_${_blockOrdinal++}',
         kind: kind,
         inlines: const [],
         attributes: metadata,
@@ -2603,4 +2725,483 @@ String? _suffixFor(String sentence) {
 
 String _stableHash(String input) {
   return crypto.sha256.convert(utf8.encode(input)).toString();
+}
+
+Stream<List<int>> _importByteStream(String? path, Uint8List? bytes) async* {
+  if (path != null) {
+    yield* io.File(path).openRead();
+    return;
+  }
+  for (var offset = 0; offset < bytes!.length; offset += 8192) {
+    yield bytes.sublist(offset, math.min(offset + 8192, bytes.length));
+  }
+}
+
+Stream<String> _archiveText(ArchiveFile entry) async* {
+  final content = entry.rawContent;
+  if (content == null) return;
+  final raw = content.getStream(decompress: false);
+  Stream<List<int>> compressed() async* {
+    while (!raw.isEOS) {
+      yield raw.readBytes(math.min(8192, raw.length)).toUint8List();
+    }
+  }
+
+  Stream<List<int>> decoded;
+  if (entry.compression == CompressionType.deflate) {
+    decoded = compressed().transform(io.ZLibDecoder(raw: true));
+  } else if (entry.compression == CompressionType.none) {
+    decoded = compressed();
+  } else {
+    throw UnsupportedError(
+      'Streaming ZIP compression ${entry.compression} is unavailable.',
+    );
+  }
+  var crc = 0;
+  var count = 0;
+  Stream<List<int>> verified() async* {
+    await for (final bytes in decoded) {
+      crc = getCrc32(bytes, crc);
+      count += bytes.length;
+      yield bytes;
+    }
+    if (count != entry.size || crc != entry.crc32) {
+      throw StateError('Archive member integrity failed: ${entry.name}');
+    }
+  }
+
+  yield* verified().transform(const Utf8Decoder(allowMalformed: true));
+}
+
+/// Application range policy on top of the platform decoder. Prefer a complete
+/// paragraph/sentence, carry one bounded halo when no boundary has arrived.
+Stream<String> boundedProseUnits(Stream<String> source) async* {
+  var pending = '';
+  await for (final chunk in source) {
+    pending += chunk;
+    while (pending.length >= 4096) {
+      var end = pending.lastIndexOf('\n\n', 4096);
+      if (end > 0) {
+        end += 2;
+      } else {
+        final boundaries = RegExp(
+          r'[.!?][”"\x27]?\s',
+        ).allMatches(pending.substring(0, 4096));
+        end = boundaries.isEmpty ? -1 : boundaries.last.end;
+      }
+      if (end <= 0 && pending.length < 8192) break;
+      if (end <= 0) {
+        end = 8192;
+        final code = pending.codeUnitAt(end - 1);
+        if (code >= 0xd800 && code <= 0xdbff) end--;
+      }
+      yield pending.substring(0, end);
+      pending = pending.substring(end);
+    }
+  }
+  if (pending.trim().isNotEmpty) yield pending;
+}
+
+Stream<DocumentImportUnit> _docxUnits(
+  Stream<String> source, {
+  required String locator,
+}) async* {
+  var inText = false;
+  var paragraph = StringBuffer();
+  var paragraphNumber = 0;
+  String tag = 'p';
+  await for (final events in source.toXmlEvents(validateNesting: true)) {
+    for (final event in events) {
+      if (event is XmlStartElementEvent) {
+        if (event.localName == 't') inText = !event.isSelfClosing;
+        if (event.localName == 'tab') paragraph.write('\t');
+        if (event.localName == 'br') paragraph.write('\n');
+        if (event.localName == 'pStyle') {
+          final style =
+              event.attributes
+                  .where((a) => a.localName == 'val')
+                  .firstOrNull
+                  ?.value ??
+              '';
+          final heading = RegExp(
+            r'^Heading([1-6])$',
+            caseSensitive: false,
+          ).firstMatch(style);
+          if (heading != null) tag = 'h${heading.group(1)}';
+        }
+      } else if (event is XmlTextEvent && inText) {
+        paragraph.write(event.value);
+      } else if (event is XmlEndElementEvent) {
+        if (event.localName == 't') inText = false;
+        if (event.localName == 'p') {
+          final text = paragraph.toString();
+          if (text.trim().isNotEmpty) {
+            await for (final part in boundedProseUnits(Stream.value(text))) {
+              yield DocumentImportUnit(
+                text: part,
+                html: '<$tag>${const HtmlEscape().convert(part)}</$tag>',
+                locator: '$locator:p${paragraphNumber++}',
+                type: ReaderDocumentType.html,
+              );
+            }
+          }
+          paragraph = StringBuffer();
+          tag = 'p';
+        }
+      }
+      // An unusually long paragraph is split under the same bounded policy.
+      if (paragraph.length >= 8192) {
+        final text = paragraph.toString();
+        paragraph = StringBuffer();
+        await for (final part in boundedProseUnits(Stream.value(text))) {
+          yield DocumentImportUnit(
+            text: part,
+            html: '<$tag>${const HtmlEscape().convert(part)}</$tag>',
+            locator: '$locator:p${paragraphNumber++}',
+            type: ReaderDocumentType.html,
+          );
+        }
+      }
+    }
+  }
+}
+
+/// html has no resumable public DOM API. This boundary adapter retains the open
+/// inline/block stack, excludes non-content raw-text destinations, then lets the
+/// maintained parser normalize each bounded fragment. Tags/entities are never
+/// split. Open formatting is carried across a long paragraph publication.
+Stream<DocumentImportUnit> _htmlUnits(
+  Stream<String> source, {
+  required String locator,
+}) async* {
+  var pending = '';
+  var block = StringBuffer();
+  final open = <String>[];
+  final tagNames = <String>[];
+  String? suppressed;
+  var ordinal = 0;
+  const voidTags = {
+    'area',
+    'base',
+    'br',
+    'col',
+    'embed',
+    'hr',
+    'img',
+    'input',
+    'link',
+    'meta',
+    'param',
+    'source',
+    'track',
+    'wbr',
+  };
+  const boundaries = {
+    'p',
+    'div',
+    'section',
+    'article',
+    'li',
+    'h1',
+    'h2',
+    'h3',
+    'h4',
+    'h5',
+    'h6',
+    'blockquote',
+    'tr',
+  };
+  DocumentImportUnit? flush() {
+    if (block.isEmpty) return null;
+    final raw =
+        '${block.toString()}${tagNames.reversed.map((tag) => '</$tag>').join()}';
+    final parsed = html_parser.parseFragment(raw);
+    final wrapper = html_dom.Element.tag('article')
+      ..nodes.addAll(parsed.nodes.toList());
+    _pruneHtmlForNormalization(wrapper, diagnostics: <ImportDiagnostic>[]);
+    final text = _normalizeReadableText(wrapper.text);
+    block = StringBuffer()..writeAll(open);
+    if (text.isEmpty) return null;
+    return DocumentImportUnit(
+      text: text,
+      html: wrapper.outerHtml,
+      locator: '$locator:block${ordinal++}',
+      type: ReaderDocumentType.html,
+    );
+  }
+
+  await for (final chunk in source) {
+    pending += chunk;
+    while (pending.isNotEmpty) {
+      if (suppressed != null) {
+        final end = pending.toLowerCase().indexOf('</$suppressed');
+        if (end < 0) {
+          // Keep only enough raw text to recognize a closing tag across input.
+          pending = pending.substring(
+            math.max(0, pending.length - suppressed.length - 4),
+          );
+          break;
+        }
+        pending = pending.substring(end);
+        suppressed = null;
+      }
+      if (pending.startsWith('<!--')) {
+        final end = pending.indexOf('-->');
+        if (end < 0) break;
+        pending = pending.substring(end + 3);
+        continue;
+      }
+      if (pending.startsWith('<')) {
+        var end = -1;
+        String? quote;
+        for (var i = 1; i < pending.length; i++) {
+          final c = pending[i];
+          if (quote != null) {
+            if (c == quote) quote = null;
+          } else if (c == '"' || c == "'") {
+            quote = c;
+          } else if (c == '>') {
+            end = i + 1;
+            break;
+          }
+        }
+        if (end < 0) break;
+        final raw = pending.substring(0, end);
+        pending = pending.substring(end);
+        final match = RegExp(r'^<\s*(/?)\s*([a-zA-Z0-9]+)').firstMatch(raw);
+        if (match == null) continue;
+        final tag = match.group(2)!.toLowerCase();
+        final closing = match.group(1) == '/';
+        if (!closing &&
+            const {'head', 'script', 'style', 'nav'}.contains(tag)) {
+          suppressed = tag;
+          continue;
+        }
+        if (closing) {
+          final index = tagNames.lastIndexOf(tag);
+          if (index >= 0) {
+            block.write(raw);
+            if (boundaries.contains(tag)) block.write('\n\n');
+            tagNames.removeRange(index, tagNames.length);
+            open.removeRange(index, open.length);
+          }
+        } else {
+          block.write(raw);
+          if (tag == 'br') block.write('\n');
+          if (!voidTags.contains(tag) && !raw.endsWith('/>')) {
+            tagNames.add(tag);
+            open.add(raw);
+          }
+        }
+        if (closing && boundaries.contains(tag) && block.length >= 1024) {
+          final unit = flush();
+          if (unit != null) yield unit;
+        }
+      } else {
+        var end = pending.indexOf('<');
+        if (end < 0) end = pending.length;
+        end = math.min(end, 4096);
+        // Preserve an entity that straddles a stream/fragment boundary.
+        final amp = pending.lastIndexOf('&', end - 1);
+        if (amp >= 0 && !pending.substring(amp, end).contains(';')) {
+          if (amp == 0 && pending.length < 64) break;
+          if (amp > 0) end = amp;
+        }
+        if (end == 0) break;
+        block.write(pending.substring(0, end));
+        pending = pending.substring(end);
+        if (block.length >= 4096) {
+          final unit = flush();
+          if (unit != null) yield unit;
+        }
+      }
+    }
+    if (pending.length > 65536 || open.length > 256) {
+      throw const FormatException(
+        'HTML token or nesting exceeds bounded parser capacity.',
+      );
+    }
+  }
+  if (pending.isNotEmpty && suppressed == null) block.write(pending);
+  final unit = flush();
+  if (unit != null) yield unit;
+}
+
+class _IncrementalRtfDecoder {
+  final groups = <_RtfGroupState>[_RtfGroupState.root()];
+  var unicodeFallbackLength = 1;
+  var carry = '';
+  var _outputTail = '';
+  String add(String chunk, {bool isLast = false}) {
+    final raw = carry + chunk;
+    var limit = isLast ? raw.length : math.max(0, raw.length - 256);
+    if (!isLast) {
+      final slash = raw.lastIndexOf('\\', limit);
+      if (slash >= math.max(0, limit - 64)) limit = slash;
+    }
+    // Paragraph controls at a chunk boundary must see the previous output;
+    // only the new suffix is emitted, so this neither drops nor repeats text.
+    final prefixLength = _outputTail.length;
+    final output = StringBuffer(_outputTail);
+    for (var index = 0; index < limit; index += 1) {
+      final group = groups.last;
+      final char = raw[index];
+
+      if (char == '{') {
+        groups.add(_RtfGroupState.childOf(group));
+        continue;
+      }
+
+      if (char == '}') {
+        if (groups.length > 1) {
+          groups.removeLast();
+        }
+        continue;
+      }
+
+      if (char == '\\') {
+        if (index + 1 >= raw.length) {
+          break;
+        }
+
+        final next = raw[index + 1];
+        if (next == '\\' || next == '{' || next == '}') {
+          group.markContentSeen();
+          if (!group.ignorable) {
+            output.write(next);
+          }
+          index += 1;
+          continue;
+        }
+
+        if (next == '\'') {
+          final hexEnd = index + 4;
+          if (hexEnd <= raw.length) {
+            final hex = raw.substring(index + 2, index + 4);
+            final value = int.tryParse(hex, radix: 16);
+            group.markContentSeen();
+            if (!group.ignorable && value != null) {
+              output.write(_decodeRtfHexByte(value));
+            }
+            index += 3;
+            continue;
+          }
+        }
+
+        if (next == '*') {
+          group.pendingStarDestination = true;
+          index += 1;
+          continue;
+        }
+
+        if (!_isAsciiLetter(next)) {
+          group.markContentSeen();
+          if (!group.ignorable) {
+            final symbolText = _rtfControlSymbolText(next);
+            if (symbolText != null) {
+              output.write(symbolText);
+            }
+          }
+          index += 1;
+          continue;
+        }
+
+        var cursor = index + 1;
+        while (cursor < raw.length && _isAsciiLetter(raw[cursor])) {
+          cursor += 1;
+        }
+        final word = raw.substring(index + 1, cursor);
+
+        final parameterStart = cursor;
+        if (cursor < raw.length &&
+            (raw[cursor] == '-' || _isAsciiDigit(raw[cursor]))) {
+          cursor += 1;
+          while (cursor < raw.length && _isAsciiDigit(raw[cursor])) {
+            cursor += 1;
+          }
+        }
+        final parameter = parameterStart == cursor
+            ? null
+            : int.tryParse(raw.substring(parameterStart, cursor));
+
+        if (cursor < raw.length && raw[cursor] == ' ') {
+          cursor += 1;
+        }
+
+        final marksIgnorable =
+            group.atGroupStart &&
+            (group.pendingStarDestination ||
+                _rtfIgnoredDestinationWords.contains(word));
+        if (marksIgnorable) {
+          group.ignorable = true;
+        }
+        group.markContentSeen();
+        index = cursor - 1;
+
+        if (group.ignorable) {
+          continue;
+        }
+
+        switch (word) {
+          case 'uc':
+            unicodeFallbackLength = parameter ?? unicodeFallbackLength;
+          case 'u':
+            if (parameter == null) {
+              continue;
+            }
+            final normalized = parameter < 0 ? parameter + 65536 : parameter;
+            output.write(String.fromCharCode(normalized));
+            index =
+                _skipRtfUnicodeFallback(raw, cursor, unicodeFallbackLength) - 1;
+          case 'par':
+          case 'pard':
+          case 'page':
+          case 'sect':
+            _appendRtfParagraphBreak(output);
+          case 'line':
+            output.write('\n');
+          case 'tab':
+            output.write('\t');
+          case 'emdash':
+            output.write('—');
+          case 'endash':
+            output.write('–');
+          case 'lquote':
+          case 'rquote':
+            output.write("'");
+          case 'ldblquote':
+          case 'rdblquote':
+            output.write('"');
+          case 'bullet':
+            output.write('•');
+          case 'cell':
+            output.write('\t');
+          case 'row':
+          case 'nestrow':
+            output.write('\n');
+        }
+        continue;
+      }
+
+      if (char == '\r' || char == '\n') {
+        if (!group.ignorable && !group.atGroupStart) {
+          output.write(' ');
+        }
+        continue;
+      }
+
+      if ((char == ' ' || char == '\t') && group.atGroupStart) {
+        continue;
+      }
+
+      group.markContentSeen();
+      if (!group.ignorable) {
+        output.write(char);
+      }
+    }
+    carry = raw.substring(limit);
+    final text = output.toString();
+    _outputTail = text.substring(math.max(0, text.length - 2));
+    return text.substring(prefixLength);
+  }
 }

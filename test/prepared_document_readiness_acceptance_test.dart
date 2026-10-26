@@ -21,7 +21,7 @@ void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
   test(
-    'whole-document semantics precede resource and speech eligibility',
+    'first-range semantics precede speech while resource readiness remains separate',
     () async {
       SharedPreferences.setMockInitialValues(<String, Object>{});
       final preparation = _ObservedPreparationSupervisor();
@@ -64,7 +64,7 @@ void main() {
       file.bytes.complete(Uint8List.fromList(utf8.encode(source)));
       await engine.started.future;
 
-      final result = preparation.result!;
+      final result = await preparation.completed.future;
       expect(
         result.outcome,
         DocumentPreparationOutcome.ready,
@@ -73,7 +73,10 @@ void main() {
       expect(result.workerName, startsWith('document-preparation-'));
       expect(result.request.ownerId, controller.preparationOwnerId);
       final document = controller.document;
-      expect(document, same(result.document));
+      expect(
+        document.displayDocument.documentId,
+        result.document!.displayDocument.documentId,
+      );
       expect(document.speakableText, source);
       expect(document.displayHtml, contains('WHO IS THERE?'));
       expect(document.positionMap.entries, isNotEmpty);
@@ -133,15 +136,12 @@ void main() {
       );
       expect(() => pronunciation.artifacts.clear(), throwsUnsupportedError);
 
-      // The new document is viewable, but complete semantics alone still cannot
-      // start speech until its binding resources finish preparing.
+      // Range readiness is independent of resources. The explicit pending
+      // Play is retained until bindings finish; it does not require another click.
       expect(controller.isDisplayReady, isTrue);
-      expect(controller.isDocumentPrepared, isFalse);
+      expect(controller.isDocumentPrepared, isTrue);
       expect(controller.isResourcesReady, isFalse);
       expect(controller.isAudioReady, isFalse);
-      await controller.startPlayback();
-      expect(engine.speakCalls, 0);
-
       engine.release();
       await importing;
       expect(controller.isDocumentPrepared, isTrue);
@@ -152,8 +152,7 @@ void main() {
         controller.resourceBindings.map((binding) => binding.documentId),
         everyElement(document.speechDocument.documentId),
       );
-      expect(engine.speakCalls, 0);
-      await controller.startPlayback();
+      await engine.firstSpoken.future;
       expect(engine.speakCalls, 1);
     },
   );
@@ -175,13 +174,28 @@ class _ByteBarrierFile extends XFile {
 
 class _ObservedPreparationSupervisor extends DocumentPreparationSupervisor {
   DocumentPreparationResult? result;
+  final completed = Completer<DocumentPreparationResult>();
 
   @override
-  Future<DocumentPreparationResult> prepare(
+  Future<DocumentPreparationResult> prepareRanges(
     DocumentPreparationRequest request, {
     Future<Uint8List> Function()? acquireBytes,
+    required Future<void> Function(DocumentPreparationPublication)
+    onPublication,
+    void Function(PreparationProgress)? onProgress,
+    Future<void> Function()? acquireSource,
+    Future<void> Function()? onDrained,
   }) async {
-    return result = await super.prepare(request, acquireBytes: acquireBytes);
+    result = await super.prepareRanges(
+      request,
+      acquireBytes: acquireBytes,
+      onPublication: onPublication,
+      onProgress: onProgress,
+      acquireSource: acquireSource,
+      onDrained: onDrained,
+    );
+    completed.complete(result);
+    return result!;
   }
 }
 
@@ -189,6 +203,7 @@ class _ResourceBarrierEngine implements TtsEngine, ResourcePreparationCapable {
   final started = Completer<void>();
   final _completion = Completer<void>();
   var speakCalls = 0;
+  final firstSpoken = Completer<void>();
   var _ready = false;
   void release() {
     if (!_completion.isCompleted) _completion.complete();
@@ -242,6 +257,7 @@ class _ResourceBarrierEngine implements TtsEngine, ResourcePreparationCapable {
   @override
   Future<void> speak(TtsSpeakRequest request) async {
     speakCalls++;
+    if (!firstSpoken.isCompleted) firstSpoken.complete();
   }
 
   @override
