@@ -170,6 +170,10 @@ class VoiceManagementDialog extends StatelessWidget {
       growable: false,
     )..sort((left, right) => left.displayLabel.compareTo(right.displayLabel));
     final tokens = readAloudThemeTokens(context);
+    final assignmentTargets = [
+      characterCastRegistry.narratorEntry,
+      ...characterEntries,
+    ];
 
     return Dialog(
       backgroundColor: tokens.dialogSurface,
@@ -201,42 +205,51 @@ class VoiceManagementDialog extends StatelessWidget {
                 ],
               ),
               const SizedBox(height: 8),
-              Text(
-                'Manage narrator and character assignments without crowding the primary reading surface.',
-                style: Theme.of(context).textTheme.bodyMedium,
-              ),
-              const SizedBox(height: 16),
               Expanded(
                 child: ListView(
                   children: [
+                    Text(
+                      'Manage narrator and character assignments without crowding the primary reading surface.',
+                      style: Theme.of(context).textTheme.bodyMedium,
+                    ),
+                    const SizedBox(height: 16),
                     Text(
                       'Cast Assignments',
                       style: Theme.of(context).textTheme.titleMedium,
                     ),
                     const SizedBox(height: 12),
+                    Text(
+                      availableVoices.isEmpty
+                          ? 'Speech voices are loading. You can inspect the cast now.'
+                          : '${availableVoices.length} installed voice choices per speaker. Download more in Voice Library below.',
+                    ),
+                    const SizedBox(height: 12),
                     _VoiceAssignmentCard(
                       label: 'Narrator',
+                      fallbackVoiceId: selectedVoiceId,
                       assignment: castVoiceAssignments?.forCastId(
                         characterCastRegistry.narratorEntry.castId,
                       ),
                       previewStateForVoice: previewStateForVoice,
                       onToggleVoicePreview: onToggleVoicePreview,
                       voices: availableVoices,
-                      onChanged: (voiceId) => onAssignCastVoice(
-                        characterCastRegistry.narratorEntry.castId,
-                        voiceId,
-                      ),
+                      onChanged: (voiceId) => isCharacterModeEnabled
+                          ? onAssignCastVoice(
+                              characterCastRegistry.narratorEntry.castId,
+                              voiceId,
+                            )
+                          : onSelectLibraryVoice(voiceId),
                       onResetToAutomatic: () => onClearCastVoiceOverride(
                         characterCastRegistry.narratorEntry.castId,
                       ),
                     ),
+                    const SizedBox(height: 16),
+                    Text(
+                      'Characters',
+                      style: Theme.of(context).textTheme.titleSmall,
+                    ),
+                    const SizedBox(height: 8),
                     if (characterEntries.isNotEmpty) ...[
-                      const SizedBox(height: 16),
-                      Text(
-                        'Characters',
-                        style: Theme.of(context).textTheme.titleSmall,
-                      ),
-                      const SizedBox(height: 8),
                       for (final entry in characterEntries) ...[
                         _VoiceAssignmentCard(
                           label: entry.displayLabel,
@@ -254,6 +267,13 @@ class VoiceManagementDialog extends StatelessWidget {
                         const SizedBox(height: 12),
                       ],
                     ],
+                    if (characterEntries.isEmpty)
+                      const Padding(
+                        padding: EdgeInsets.symmetric(vertical: 12),
+                        child: Text(
+                          'No dialogue speakers discovered yet. Characters appear here as reading ranges are prepared.',
+                        ),
+                      ),
                     const Divider(height: 32),
                     Text(
                       'Voice Library',
@@ -270,18 +290,10 @@ class VoiceManagementDialog extends StatelessWidget {
                       index < voiceLibrary.length;
                       index += 1
                     ) ...[
-                      VoiceLibraryRow(
-                        entry: voiceLibrary[index],
-                        previewState: previewStateForVoice(
-                          voiceLibrary[index].voice.id,
-                        ),
-                        onTogglePreview: () =>
-                            onToggleVoicePreview(voiceLibrary[index].voice.id),
-                        trailing: _buildLibraryTrailing(
-                          context,
-                          voiceLibrary[index],
-                          characterEntries,
-                        ),
+                      _buildLibraryEntry(
+                        context,
+                        voiceLibrary[index],
+                        assignmentTargets,
                       ),
                       if (index < voiceLibrary.length - 1)
                         const Divider(height: 1),
@@ -305,6 +317,64 @@ class VoiceManagementDialog extends StatelessWidget {
           ),
         ),
       ),
+    );
+  }
+
+  Widget _buildLibraryEntry(
+    BuildContext context,
+    VoiceLibraryEntry entry,
+    List<CastEntry> targets,
+  ) {
+    final voice = entry.voice;
+    final actions = _buildLibraryTrailing(context, entry, targets);
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        if (constraints.maxWidth >= 620 &&
+            MediaQuery.textScalerOf(context).scale(14) <= 20) {
+          return VoiceLibraryRow(
+            entry: entry,
+            previewState: previewStateForVoice(voice.id),
+            onTogglePreview: () => onToggleVoicePreview(voice.id),
+            trailing: actions,
+          );
+        }
+        return Padding(
+          padding: const EdgeInsets.symmetric(vertical: 12),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text(
+                voice.displayName,
+                style: Theme.of(context).textTheme.titleMedium,
+              ),
+              Text(
+                entry.statusMessage ??
+                    (entry.isInstalled
+                        ? 'Installed locally'
+                        : 'Available to download'),
+              ),
+              if (voice.description != null) Text(voice.description!),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                crossAxisAlignment: WrapCrossAlignment.center,
+                children: [
+                  if (voice.qualityGrade != null)
+                    VoiceMetadataBadge(label: voice.qualityGrade!),
+                  if (voice.gender != null)
+                    VoiceMetadataPill(label: _genderLabel(voice.gender!)),
+                  VoicePreviewButton(
+                    state: previewStateForVoice(voice.id),
+                    onPressed: () => onToggleVoicePreview(voice.id),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              Align(alignment: Alignment.centerLeft, child: actions),
+            ],
+          ),
+        );
+      },
     );
   }
 
@@ -335,7 +405,7 @@ class VoiceManagementDialog extends StatelessWidget {
     }
 
     if (entry.isInstalled) {
-      if (isCharacterModeEnabled && characterEntries.isNotEmpty) {
+      if (isCharacterModeEnabled) {
         return _VoiceLibraryCharacterAssignControl(
           key: Key('voice-library-assign-control-${entry.voice.id}'),
           voiceId: entry.voice.id,
@@ -388,14 +458,31 @@ class _VoiceLibraryCharacterAssignControlState
   String? _selectedCastId;
 
   @override
+  void didUpdateWidget(
+    covariant _VoiceLibraryCharacterAssignControl oldWidget,
+  ) {
+    super.didUpdateWidget(oldWidget);
+    if (!widget.characterEntries.any(
+      (entry) => entry.castId == _selectedCastId,
+    )) {
+      _selectedCastId = null;
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
     return SizedBox(
       width: 220,
       child: DropdownButtonFormField<String>(
-        key: Key('voice-library-assign-target-${widget.voiceId}'),
+        key: ValueKey(
+          'voice-library-assign-target-${widget.voiceId}-${_selectedCastId ?? 'none'}',
+        ),
         initialValue: _selectedCastId,
         isExpanded: true,
-        decoration: const InputDecoration(isDense: true, hintText: 'Assign'),
+        decoration: const InputDecoration(
+          isDense: true,
+          labelText: 'Assign to speaker',
+        ),
         hint: const Text('Assign'),
         items: widget.characterEntries
             .map(
@@ -431,10 +518,12 @@ class _VoiceAssignmentCard extends StatelessWidget {
     required this.voices,
     required this.onChanged,
     required this.onResetToAutomatic,
+    this.fallbackVoiceId,
   });
 
   final String label;
   final CastVoiceAssignment? assignment;
+  final String? fallbackVoiceId;
   final VoicePreviewState Function(String voiceId) previewStateForVoice;
   final ValueChanged<String> onToggleVoicePreview;
   final List<VoiceProfile> voices;
@@ -446,11 +535,10 @@ class _VoiceAssignmentCard extends StatelessWidget {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
     final tokens = readAloudThemeTokens(context);
-    final selectedVoice = assignment == null
-        ? null
-        : voices
-              .where((voice) => voice.id == assignment!.effectiveVoiceId)
-              .firstOrNull;
+    final requestedVoiceId = assignment?.effectiveVoiceId ?? fallbackVoiceId;
+    final selectedVoice = voices
+        .where((voice) => voice.id == requestedVoiceId)
+        .firstOrNull;
     final automaticVoice = assignment?.automaticVoiceId == null
         ? null
         : voices
@@ -497,71 +585,88 @@ class _VoiceAssignmentCard extends StatelessWidget {
               ),
               const SizedBox(height: 12),
             ],
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.center,
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                Expanded(
-                  child: DropdownButtonFormField<String>(
-                    key: ValueKey('$label-${assignment?.effectiveVoiceId}'),
-                    initialValue: assignment?.effectiveVoiceId,
-                    dropdownColor: tokens.dialogSurface,
-                    style: theme.textTheme.titleMedium?.copyWith(
-                      color: colorScheme.onSurface,
+                DropdownButtonFormField<String>(
+                  key: ValueKey('$label-$requestedVoiceId'),
+                  initialValue:
+                      voices.any((voice) => voice.id == requestedVoiceId)
+                      ? requestedVoiceId
+                      : null,
+                  isExpanded: true,
+                  hint: Text(
+                    voices.isEmpty
+                        ? 'Waiting for installed voices'
+                        : 'Choose an installed voice',
+                  ),
+                  dropdownColor: tokens.dialogSurface,
+                  style: theme.textTheme.titleMedium?.copyWith(
+                    color: colorScheme.onSurface,
+                  ),
+                  iconEnabledColor: colorScheme.onSurfaceVariant,
+                  decoration: InputDecoration(
+                    labelText: 'Requested voice for $label',
+                    labelStyle: theme.textTheme.bodyMedium?.copyWith(
+                      color: colorScheme.onSurfaceVariant,
                     ),
-                    iconEnabledColor: colorScheme.onSurfaceVariant,
-                    decoration: InputDecoration(
-                      labelText: 'Requested voice for $label',
-                      labelStyle: theme.textTheme.bodyMedium?.copyWith(
-                        color: colorScheme.onSurfaceVariant,
-                      ),
-                    ),
-                    items: voices
-                        .map(
-                          (voice) => DropdownMenuItem<String>(
-                            value: voice.id,
-                            child: Text(
-                              voice.displayName,
-                              overflow: TextOverflow.ellipsis,
-                            ),
+                  ),
+                  items: voices
+                      .map(
+                        (voice) => DropdownMenuItem<String>(
+                          value: voice.id,
+                          child: Text(
+                            voice.displayName,
+                            overflow: TextOverflow.ellipsis,
                           ),
-                        )
-                        .toList(growable: false),
-                    onChanged: (voiceId) {
-                      if (voiceId == null) {
-                        return;
-                      }
-                      onChanged(voiceId);
-                    },
-                  ),
+                        ),
+                      )
+                      .toList(growable: false),
+                  onChanged: voices.isEmpty
+                      ? null
+                      : (voiceId) {
+                          if (voiceId == null) {
+                            return;
+                          }
+                          onChanged(voiceId);
+                        },
                 ),
-                if (qualityLabel != null) ...[
-                  const SizedBox(width: 8),
-                  VoiceMetadataBadge(label: qualityLabel),
-                ],
-                if (selectedVoice?.gender != null) ...[
-                  const SizedBox(width: 8),
-                  VoiceMetadataPill(
-                    label: _genderLabel(selectedVoice!.gender!),
-                  ),
-                ],
-                if (selectedVoice != null) ...[
-                  const SizedBox(width: 4),
-                  VoicePreviewButton(
-                    state: previewStateForVoice(selectedVoice.id),
-                    onPressed: () => onToggleVoicePreview(selectedVoice.id),
-                  ),
-                ],
-                if (selectedVoice != null &&
-                    (selectedVoice.traits.isNotEmpty ||
-                        (selectedVoice.description?.trim().isNotEmpty ??
-                            false) ||
-                        (selectedVoice.trainingDurationLabel
-                                ?.trim()
-                                .isNotEmpty ??
-                            false))) ...[
-                  const SizedBox(width: 4),
-                  VoiceMetadataInfoButton(voice: selectedVoice),
-                ],
+                const SizedBox(height: 8),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  crossAxisAlignment: WrapCrossAlignment.center,
+                  children: [
+                    if (qualityLabel != null) ...[
+                      const SizedBox(width: 8),
+                      VoiceMetadataBadge(label: qualityLabel),
+                    ],
+                    if (selectedVoice?.gender != null) ...[
+                      const SizedBox(width: 8),
+                      VoiceMetadataPill(
+                        label: _genderLabel(selectedVoice!.gender!),
+                      ),
+                    ],
+                    if (selectedVoice != null) ...[
+                      const SizedBox(width: 4),
+                      VoicePreviewButton(
+                        state: previewStateForVoice(selectedVoice.id),
+                        onPressed: () => onToggleVoicePreview(selectedVoice.id),
+                      ),
+                    ],
+                    if (selectedVoice != null &&
+                        (selectedVoice.traits.isNotEmpty ||
+                            (selectedVoice.description?.trim().isNotEmpty ??
+                                false) ||
+                            (selectedVoice.trainingDurationLabel
+                                    ?.trim()
+                                    .isNotEmpty ??
+                                false))) ...[
+                      const SizedBox(width: 4),
+                      VoiceMetadataInfoButton(voice: selectedVoice),
+                    ],
+                  ],
+                ),
               ],
             ),
             if (selectedVoice != null) ...[
@@ -607,12 +712,12 @@ class _VoiceAssignmentCard extends StatelessWidget {
       VoiceAssignmentDecisionKind.fallback => 'Fallback',
     };
   }
+}
 
-  String _genderLabel(VoiceGender gender) {
-    return switch (gender) {
-      VoiceGender.female => 'Female',
-      VoiceGender.male => 'Male',
-      VoiceGender.neutral => 'Neutral',
-    };
-  }
+String _genderLabel(VoiceGender gender) {
+  return switch (gender) {
+    VoiceGender.female => 'Female',
+    VoiceGender.male => 'Male',
+    VoiceGender.neutral => 'Neutral',
+  };
 }
