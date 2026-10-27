@@ -180,6 +180,8 @@ class _ObservedPreparationSupervisor extends DocumentPreparationSupervisor {
   Future<DocumentPreparationResult> prepareRanges(
     DocumentPreparationRequest request, {
     Future<Uint8List> Function()? acquireBytes,
+    String? cacheKey,
+    Future<void> Function(DocumentIdentityMigration)? onIdentityMigration,
     required Future<void> Function(DocumentPreparationPublication)
     onPublication,
     void Function(PreparationProgress)? onProgress,
@@ -189,6 +191,8 @@ class _ObservedPreparationSupervisor extends DocumentPreparationSupervisor {
     result = await super.prepareRanges(
       request,
       acquireBytes: acquireBytes,
+      cacheKey: cacheKey,
+      onIdentityMigration: onIdentityMigration,
       onPublication: onPublication,
       onProgress: onProgress,
       acquireSource: acquireSource,
