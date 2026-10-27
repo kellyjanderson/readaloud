@@ -80,6 +80,7 @@ flutter:
   uses-material-design: true
 
   assets:
+    - third_party/licenses/NOTICES.txt
     - assets/cmudict.dict
     - assets/tokenizer_vocab.json
     - assets/lexicon.json
