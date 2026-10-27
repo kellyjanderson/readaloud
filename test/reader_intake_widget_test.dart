@@ -1,9 +1,11 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:file_picker/file_picker.dart';
 import 'package:read_aloud/src/controllers/reader_controller.dart';
 import 'package:read_aloud/src/models/document_preparation.dart';
 import 'package:read_aloud/src/models/voice_profile.dart';
@@ -11,12 +13,166 @@ import 'package:read_aloud/src/screens/read_aloud_screen.dart';
 import 'package:read_aloud/src/services/reader_preferences_service.dart';
 import 'package:read_aloud/src/services/document_preparation_supervisor.dart';
 import 'package:read_aloud/src/services/reader_document_repository.dart';
+import 'package:read_aloud/src/services/reader_document_serialization_service.dart';
 import 'package:read_aloud/src/services/tts_engine.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:read_aloud/src/widgets/voice_management_dialog.dart';
 
 void main() {
-  setUp(() => SharedPreferences.setMockInitialValues({}));
+  setUp(() {
+    SharedPreferences.setMockInitialValues({});
+    FilePicker.platform = _UiFilePicker();
+  });
+
+  testWidgets(
+    'Open Document imports actual radoc bytes without source analysis',
+    (tester) async {
+      await tester.binding.setSurfaceSize(const Size(1000, 1100));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      final picker = _UiFilePicker();
+      FilePicker.platform = picker;
+
+      final source = File(
+        'test/fixtures/rc2_prose/text/orchard.txt',
+      ).readAsStringSync();
+      final cold = ReaderController(
+        ttsEngine: _UiEngine(),
+        enablePlatformIntakeChannels: false,
+      );
+      addTearDown(cold.dispose);
+      await tester.pumpWidget(
+        MaterialApp(home: ReadAloudScreen(controller: cold)),
+      );
+      await _pumpUntil(tester, () => !cold.isInitializing);
+      await _paste(tester, source);
+      await _pumpUntil(
+        tester,
+        () => cold.isPreparationComplete && cold.preparedRanges.isNotEmpty,
+      );
+      final expectedText = cold.document.speakableText;
+      final expectedCast = cold.document.characterCastRegistry.entries
+          .map((entry) => entry.castId)
+          .toSet();
+      await tester.tap(find.byKey(const Key('character-voices-entry')));
+      await _pumpUi(tester);
+      final narratorCard = find.byKey(
+        const Key('voice-assignment-card-Narrator'),
+      );
+      final narratorDropdown = find.descendant(
+        of: narratorCard,
+        matching: find.byType(DropdownButtonFormField<String>),
+      );
+      await tester.ensureVisible(narratorDropdown);
+      await _pumpUi(tester);
+      final initialNarrator = cold.castVoiceAssignments!
+          .forCastId('cast_narrator')!
+          .effectiveVoiceId;
+      final chosenNarrator = initialNarrator == 'af_bella'
+          ? 'am_michael'
+          : 'af_bella';
+      await tester.tap(narratorDropdown);
+      await _pumpUi(tester);
+      await tester.tap(
+        find
+            .text(
+              chosenNarrator == 'af_bella'
+                  ? 'Bella (en-US)'
+                  : 'Michael (en-US)',
+            )
+            .last,
+      );
+      await _pumpUi(tester);
+      await tester.tap(find.byTooltip('Close voice management'));
+      await _pumpUi(tester);
+      final radoc = const ReaderDocumentSerializationService()
+          .serializeToJsonString(cold.document);
+      final radocBytes = Uint8List.fromList(utf8.encode(radoc));
+      await _finish(tester, cold);
+
+      final warm = ReaderController(
+        preparationSupervisor: DocumentPreparationSupervisor(
+          workerEntryPoint: _rejectUnexpectedSourcePreparation,
+        ),
+        ttsEngine: _UiEngine(),
+        enablePlatformIntakeChannels: false,
+      );
+      addTearDown(warm.dispose);
+      await tester.pumpWidget(
+        MaterialApp(home: ReadAloudScreen(controller: warm)),
+      );
+      await _pumpUntil(tester, () => !warm.isInitializing);
+      picker.nextResult = FilePickerResult([
+        PlatformFile(
+          name: 'orchard.radoc',
+          size: radocBytes.length,
+          bytes: radocBytes,
+        ),
+      ]);
+      await _openDocument(tester);
+      await _pumpUntil(tester, () => warm.isPreparationComplete);
+      expect(warm.document.speakableText, expectedText);
+      expect(
+        warm.document.characterCastRegistry.entries
+            .map((entry) => entry.castId)
+            .toSet(),
+        expectedCast,
+      );
+      await tester.tap(find.byKey(const Key('character-voices-entry')));
+      await _pumpUi(tester);
+      final reopenedDropdown = find.descendant(
+        of: find.byKey(const Key('voice-assignment-card-Narrator')),
+        matching: find.byType(DropdownButton<String>),
+      );
+      await tester.ensureVisible(reopenedDropdown);
+      await _pumpUi(tester);
+      expect(
+        tester.widget<DropdownButton<String>>(reopenedDropdown).value,
+        chosenNarrator,
+      );
+      await tester.tap(find.byTooltip('Close voice management'));
+      await _pumpUi(tester);
+      expect(warm.isPreparingDocument, isFalse);
+      expect(tester.takeException(), isNull);
+      await _finish(tester, warm);
+    },
+  );
+
+  testWidgets('Open Document reports malformed radoc and keeps current text', (
+    tester,
+  ) async {
+    final picker = _UiFilePicker();
+    FilePicker.platform = picker;
+    final controller = ReaderController(
+      ttsEngine: _UiEngine(),
+      enablePlatformIntakeChannels: false,
+    );
+    addTearDown(controller.dispose);
+    await tester.pumpWidget(
+      MaterialApp(home: ReadAloudScreen(controller: controller)),
+    );
+    await _pumpUntil(tester, () => !controller.isInitializing);
+    await _paste(tester, 'Keep this text when an invalid file is opened.');
+    await _pumpUntil(
+      tester,
+      () =>
+          controller.preparedRanges.isNotEmpty &&
+          !controller.isPreparingDocument,
+    );
+    final existingText = controller.document.speakableText;
+    picker.nextResult = FilePickerResult([
+      PlatformFile(
+        name: 'broken.radoc',
+        size: 4,
+        bytes: Uint8List.fromList(utf8.encode('{bad')),
+      ),
+    ]);
+    await _openDocument(tester);
+    await _pumpUntil(tester, () => controller.statusMessage != null);
+    expect(controller.document.speakableText, existingText);
+    expect(controller.statusMessage, contains('malformed'));
+    expect(tester.takeException(), isNull);
+    await _finish(tester, controller);
+  });
 
   testWidgets(
     'normal pasted source reopens its automatic radoc checkpoint and retained cast choices without analysis',
@@ -549,6 +705,13 @@ Future<void> _paste(WidgetTester tester, String text) async {
   await tester.pump(const Duration(milliseconds: 400));
 }
 
+Future<void> _openDocument(WidgetTester tester) async {
+  await tester.tap(find.byKey(const Key('reader-overflow-menu')));
+  await _pumpUi(tester);
+  await tester.tap(find.text('Open Document'));
+  await _pumpUi(tester);
+}
+
 Future<void> _pumpUntil(WidgetTester tester, bool Function() ready) async {
   for (var i = 0; i < 300; i++) {
     if (ready()) return;
@@ -619,6 +782,26 @@ class _DelayedPreferences extends ReaderPreferencesService {
     await ready.future;
     return super.load();
   }
+}
+
+class _UiFilePicker extends FilePicker {
+  FilePickerResult? nextResult;
+
+  @override
+  Future<FilePickerResult?> pickFiles({
+    String? dialogTitle,
+    String? initialDirectory,
+    FileType type = FileType.any,
+    List<String>? allowedExtensions,
+    Function(FilePickerStatus)? onFileLoading,
+    bool allowCompression = false,
+    int compressionQuality = 0,
+    bool allowMultiple = false,
+    bool withData = false,
+    bool withReadStream = false,
+    bool lockParentWindow = false,
+    bool readSequential = false,
+  }) async => nextResult;
 }
 
 void _rejectUnexpectedSourcePreparation(DocumentPreparationWorkerInput input) {
