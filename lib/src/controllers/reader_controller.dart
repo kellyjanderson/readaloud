@@ -596,18 +596,9 @@ class ReaderController extends ChangeNotifier {
         !_disposed &&
         revision == _documentRevision &&
         watchSession == _watchSession;
-    // Only immutable captured intake can attest a stable revision here. A
-    // mutable path/stat/prefix is deliberately insufficient for cache admission.
-    if (streamedPath == null &&
-        text == null &&
-        capturedBytes == null &&
-        byteAcquisition != null) {
-      capturedBytes = Uint8List.fromList(
-        await byteAcquisition(),
-      ).asUnmodifiableView();
-      byteAcquisition = null;
-      _requireRevision(revision);
-    }
+    // Callback-acquired bytes have no stable source identity until admission.
+    // Keep acquisition under supervisor ownership; without a captured immutable
+    // input, skip repository cache lookup for this request.
     final snapshotText = text;
     final snapshotBytes = capturedBytes;
     final sourceRevision =
