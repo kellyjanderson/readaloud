@@ -10,8 +10,8 @@
 <body>
   <header class="topbar">
     <div>
-      <p class="eyebrow">READ ALOUD · RC2</p>
-      <h1>Human acceptance session</h1>
+      <p class="eyebrow">READ ALOUD</p>
+      <h1>Try Read Aloud</h1>
     </div>
     <div class="session-actions">
       <button id="export-session" class="button secondary">Export results</button>
@@ -23,24 +23,19 @@
     <section class="session-card" aria-labelledby="session-heading">
       <div class="section-heading">
         <div>
-          <p class="eyebrow">SESSION SETUP</p>
-          <h2 id="session-heading">Identify the build under test</h2>
+          <p class="eyebrow">BEFORE YOU BEGIN</p>
+          <h2 id="session-heading">Open the test version</h2>
         </div>
         <p class="autosave" role="status" aria-live="polite" id="save-status">Saved on this device</p>
       </div>
       <div class="setup-grid">
-        <label>Build or app path
-          <input id="build-path" autocomplete="off" value="/tmp/readaloud-rc2-final-9ed4532/build/macos/Build/Products/Release/read_aloud.app" placeholder="/path/to/read_aloud.app or build ID">
+        <label>Read Aloud app
+          <span class="path-control"><input id="build-path" autocomplete="off" readonly value="/tmp/readaloud-rc2-final-9ed4532/build/macos/Build/Products/Release/read_aloud.app"><button id="copy-build-path" class="button secondary" type="button">Copy path</button></span>
         </label>
-        <label>Source revision
-          <input id="source-revision" autocomplete="off" value="9ed45329215b8858959eef15509fc2eaf9f1b69f" placeholder="commit or branch">
+        <label>Your name (optional)
+          <input id="tester" autocomplete="name" placeholder="Name">
         </label>
-        <label>Tester
-          <input id="tester" autocomplete="name" placeholder="Name or initials">
-        </label>
-        <label>Device / OS
-          <input id="device" autocomplete="off" placeholder="Mac model and macOS version">
-        </label>
+        <p class="start-instruction">In Finder, press ⌘⇧G, paste the app path, then open Read Aloud. Each test will give you a passage and tell you what to try. Quit Read Aloud (⌘Q) after each test.</p>
       </div>
     </section>
 
@@ -48,7 +43,7 @@
       <nav class="test-nav" aria-label="Acceptance tests">
         <div class="nav-heading"><h2>Test cases</h2><span id="progress-count"></span></div>
         <ol id="test-list"></ol>
-        <div class="nav-legend"><span class="dot pending"></span>Not recorded <span class="dot passed"></span>Pass <span class="dot failed"></span>Fail / blocked</div>
+        <div class="nav-legend"><span class="dot pending"></span>Ready <span class="dot passed"></span>Went well <span class="dot failed"></span>Problem noted</div>
       </nav>
 
       <section class="test-panel" aria-labelledby="case-title">
@@ -56,6 +51,7 @@
       </section>
     </div>
   </main>
+  <script src="passages.js"></script>
   <script src="scenarios.js"></script>
   <script src="runner.js"></script>
 </body>

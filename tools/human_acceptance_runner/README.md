@@ -1,19 +1,19 @@
-# Human acceptance runner
+# Read Aloud human test session
 
-Open `index.html` in a local browser. The runner uses no network services or external packages. Session fields and case results autosave to that browser's local storage; use **Export results** to download a JSON record before clearing browser data or switching devices.
+Open `index.html` in a local browser. The runner shows one short, user-facing test at a time. It includes the exact story passage for each case; the tester copies it into Read Aloud with **File → Paste Text**, tries the app, and records a plain-language judgment.
 
-The build path and source revision start with the latest locally verified RC2 candidate (`9ed4532`). Replace them when qualifying a different build; previously saved session values take precedence.
+## How to run a session
 
-## Test workflow
+1. Open the prefilled Read Aloud app from Finder. The page shows the app path and has a **Copy path** button.
+2. Select **Start this test**. Copy the story passage shown on the page, paste it into Read Aloud, and follow the simple steps.
+3. Choose **It worked for me**, **I noticed a problem**, or **Skip this test**. Add a short note if useful.
+4. Quit Read Aloud with **Read Aloud → Quit** or **⌘Q**. When its window is gone, confirm **I quit Read Aloud**. The next test stays locked until then.
+5. After the final case, download the results and send them to the person coordinating the test.
 
-1. Enter the exact app/build identity, source revision, tester and device/OS.
-2. Review one case at a time and select **Start this test** before launching the build. Other cases stay locked until the app is closed. Follow its preparation, steps and expected result. Fixture cases show an absolute path and a copy button; open the fixture in Read Aloud through its ordinary File → Open Document action.
-3. Select Pass, Fail, Blocked or Not run. Record observations and evidence paths. Use Blocked when setup or a dependency prevents a valid result; do not mark a missing or unrun check as passed.
-4. Quit Read Aloud with **Read Aloud → Quit** or **⌘Q**, then confirm the exact test process has exited in Activity Monitor. If the case was not run, confirm the test build is not running. Check **App is closed** only after verification; this is required before the case counts as recorded or the runner advances. Pass/Fail also requires starting the test; use Blocked or Not run when no test execution occurred.
-5. Export the session JSON and retain it with the referenced evidence.
+The session is about how reading, voices and playback feel to the person using Read Aloud. It does not ask the tester to measure timings, inspect logs, analyze audio files, or diagnose defects. Those checks belong to engineering. The page cannot launch the native app itself, so it gives the app path and launch instructions.
 
-The page cannot launch or inspect the native app process from a browser. It gives the exact test steps and fixture path; the tester launches the recorded build and confirms closure. It does not replace issue contracts, automated checks, audio analysis or human judgment. A result is a tester record, not an attestation that release criteria are met.
+## Provided passages
 
-## Case sources
+The runner includes the five frozen, reviewed RC2 prose passages P0–P4 from `test/fixtures/rc2_prose/text/` (352–378 words each). They cover narrator-only reading and stories with one through four speaking characters. The text shown to the tester is the same text covered by the source-level attribution fixtures; the production app receives only the passage text, never the expected cast list.
 
-Scenarios are derived from the RC2 acceptance contracts in GitHub issues [#83](https://github.com/kellyjanderson/readaloud/issues/83), [#86](https://github.com/kellyjanderson/readaloud/issues/86), [#88](https://github.com/kellyjanderson/readaloud/issues/88), [#90](https://github.com/kellyjanderson/readaloud/issues/90) and [#78](https://github.com/kellyjanderson/readaloud/issues/78). Update `scenarios.js` when those accepted contracts change; preserve separate pass/fail/blocked/not-run results per test.
+The cases follow the user-facing part of RC2 acceptance in [issue #83](https://github.com/kellyjanderson/readaloud/issues/83) and the voice-choice report in [issue #78](https://github.com/kellyjanderson/readaloud/issues/78). Technical timing, continuity, `.radoc` integrity and resource checks remain engineering acceptance work.
