@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:typed_data';
 import 'package:cross_file/cross_file.dart';
+import 'package:crypto/crypto.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:read_aloud/src/controllers/reader_controller.dart';
@@ -20,6 +21,7 @@ import 'package:read_aloud/src/services/document_import_service.dart';
 import 'package:read_aloud/src/services/document_preparation_supervisor.dart';
 import 'package:read_aloud/src/services/playback_instrumentation_service.dart';
 import 'package:read_aloud/src/services/reader_preferences_service.dart';
+import 'package:read_aloud/src/services/reader_document_repository.dart';
 import 'dart:io';
 import 'package:read_aloud/src/services/tts_engine.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -33,6 +35,322 @@ void main() {
   });
 
   group('ReaderController playback', () {
+    test(
+      'repository constructor injection caches captured byte intake',
+      () async {
+        final directory = await Directory.systemTemp.createTemp(
+          'controller-byte-cache-',
+        );
+        addTearDown(() => directory.delete(recursive: true));
+        final engine = _FakeTtsEngine();
+        final controller = ReaderController(
+          documentRepository: ReaderDocumentRepository(directory.path),
+          ttsEngine: engine,
+        );
+        addTearDown(controller.dispose);
+        await controller.initialize();
+        final text = _cacheProse();
+        await controller.importDroppedFiles([
+          _CapturedXFile('captured.txt', Uint8List.fromList(utf8.encode(text))),
+        ]);
+        expect(_words(await _consumeRanges(controller, engine)), _words(text));
+        final manifests = await directory
+            .list(recursive: true)
+            .where((entry) => entry.path.endsWith('/manifest.json'))
+            .toList();
+        expect(manifests, hasLength(1));
+        final envelope =
+            jsonDecode(await File(manifests.single.path).readAsString()) as Map;
+        final manifest = jsonDecode(envelope['payload'] as String) as Map;
+        expect(manifest['complete'], isTrue);
+        final receipt = manifest['acquisition'] as Map;
+        expect(receipt['byteCount'], utf8.encode(text).length);
+        expect(receipt['sha256'], sha256.convert(utf8.encode(text)).toString());
+        expect(manifest['sourceRevision'], contains(':bytes:"captured.txt":'));
+        await controller.shutdownPreparation();
+      },
+    );
+
+    test(
+      'cancel and replacement during manifest lookup reject its stale success',
+      () async {
+        final directory = await Directory.systemTemp.createTemp(
+          'controller-held-cache-',
+        );
+        addTearDown(() => directory.delete(recursive: true));
+        final repository = _HeldOpenRepository(directory.path);
+        final engine = _FakeTtsEngine();
+        final controller = ReaderController(
+          documentRepository: repository,
+          ttsEngine: engine,
+        );
+        addTearDown(controller.dispose);
+        await controller.initialize();
+        final importing = controller.importPastedText(_cacheProse());
+        await repository.started.future;
+        await controller.cancelDocumentPreparation();
+        await controller.importPastedText('Current replacement.');
+        final currentId = controller.sessionDocumentId;
+        repository.release.complete();
+        await importing;
+        expect(controller.document.speakableText, 'Current replacement.');
+        expect(controller.sessionDocumentId, currentId);
+        expect(controller.documentIdentityRedirects, isEmpty);
+        expect(controller.canRetryDocumentPreparation, isFalse);
+        expect(
+          await _consumeRanges(controller, engine),
+          'Current replacement.',
+        );
+        await controller.shutdownPreparation();
+      },
+    );
+    test(
+      'repository cold checkpoint and warm replay preserve exact ranges and canonical choices',
+      () async {
+        final directory = await Directory.systemTemp.createTemp(
+          'controller-radoc-',
+        );
+        addTearDown(() => directory.delete(recursive: true));
+        final repository = ReaderDocumentRepository(directory.path);
+        final text = _cacheProse();
+        final canonical = 'doc_acquired_${sha256.convert(utf8.encode(text))}';
+        SharedPreferences.setMockInitialValues({
+          'reader.storedDocumentCastVoiceAssignments': jsonEncode({
+            canonical: {'cast_narrator': 'am_michael'},
+          }),
+        });
+        final cold = _RecordingPreparationSupervisor(repository);
+        final engine = _FakeTtsEngine(voices: _multiVoiceTestVoices);
+        final controller = ReaderController(
+          preparationSupervisor: cold,
+          ttsEngine: engine,
+        );
+        addTearDown(controller.dispose);
+        await controller.initialize();
+        await controller.importPastedText(text);
+        expect(controller.isPreparationComplete, isFalse);
+        expect(controller.hasCompleteDocumentSnapshot, isFalse);
+        final provisional = controller.sessionDocumentId;
+        await controller.assignVoiceToCast('cast_narrator', 'af_bella');
+        expect(_words(await _consumeRanges(controller, engine)), _words(text));
+        expect(controller.sessionDocumentId, canonical);
+        expect(
+          controller.castVoiceAssignments!
+              .forCastId('cast_narrator')!
+              .effectiveVoiceId,
+          'af_bella',
+        );
+        expect(controller.documentIdentityRedirects[provisional], canonical);
+        final cache = await repository.open(
+          sourceKey: cold.cacheKeys.single!,
+          sourceRevision: cold.requests.single.sourceRevision!,
+        );
+        expect(cache!.isComplete, isTrue);
+        expect(cache.rangeCount, greaterThan(3));
+        expect(controller.hasCompleteDocumentSnapshot, isFalse);
+        final migrated = await ReaderPreferencesService().load();
+        expect(
+          migrated
+              .storedDocumentCastVoiceAssignments[canonical]?['cast_narrator'],
+          'af_bella',
+        );
+        // Deliberately retain the old provisional assignment while editing the
+        // canonical one. Reopen must not let the old key overwrite this choice.
+        await controller.assignVoiceToCast('cast_narrator', 'am_michael');
+        final stored = await ReaderPreferencesService().load();
+        expect(
+          stored
+              .storedDocumentCastVoiceAssignments[provisional]?['cast_narrator'],
+          'af_bella',
+        );
+        expect(
+          stored
+              .storedDocumentCastVoiceAssignments[canonical]?['cast_narrator'],
+          'am_michael',
+        );
+        await controller.shutdownPreparation();
+
+        final warm = _RecordingPreparationSupervisor(repository);
+        final warmEngine = _FakeTtsEngine(voices: _multiVoiceTestVoices);
+        final reopened = ReaderController(
+          preparationSupervisor: warm,
+          ttsEngine: warmEngine,
+        );
+        addTearDown(reopened.dispose);
+        await reopened.initialize();
+        await reopened.importPastedText(text);
+        expect(reopened.isPreparationComplete, isFalse);
+        expect(reopened.sessionDocumentId, canonical);
+        expect(
+          reopened.castVoiceAssignments!
+              .forCastId('cast_narrator')!
+              .effectiveVoiceId,
+          'am_michael',
+        );
+        expect(
+          _words(await _consumeRanges(reopened, warmEngine)),
+          _words(text),
+        );
+        expect(warm.results.single.workerName, 'prepared-range-cache');
+        expect(
+          warm.requests.single.sourceRevision,
+          cold.requests.single.sourceRevision,
+        );
+        expect(
+          reopened.castVoiceAssignments!
+              .forCastId('cast_narrator')!
+              .effectiveVoiceId,
+          'am_michael',
+        );
+        final after = await ReaderPreferencesService().load();
+        expect(
+          after.storedDocumentCastVoiceAssignments[canonical]?['cast_narrator'],
+          'am_michael',
+        );
+        await reopened.shutdownPreparation();
+      },
+    );
+
+    test(
+      'corrupt later cached range fails after valid prefix and retry rebuilds exact source',
+      () async {
+        final directory = await Directory.systemTemp.createTemp(
+          'controller-corrupt-',
+        );
+        addTearDown(() => directory.delete(recursive: true));
+        final repository = ReaderDocumentRepository(directory.path);
+        final text = _cacheProse();
+        final source = _RecordingPreparationSupervisor(repository);
+        final engine = _FakeTtsEngine();
+        final controller = ReaderController(
+          preparationSupervisor: source,
+          ttsEngine: engine,
+        );
+        addTearDown(controller.dispose);
+        await controller.initialize();
+        await controller.importPastedText(text);
+        await _consumeRanges(controller, engine);
+        final cache = await repository.open(
+          sourceKey: source.cacheKeys.single!,
+          sourceRevision: source.requests.single.sourceRevision!,
+        );
+        final rangeFiles = await Directory(
+          cache!.path,
+        ).list().where((file) => file.path.endsWith('.json')).toList();
+        expect(rangeFiles.length, cache.rangeCount);
+        rangeFiles.sort((a, b) => a.path.compareTo(b.path));
+        await File(rangeFiles.last.path).writeAsString('corrupt later range');
+        await controller.importPastedText(text);
+        expect(controller.document.speakableText, isNotEmpty);
+        await expectLater(_consumeRanges(controller, engine), throwsStateError);
+        expect(controller.isPreparationComplete, isFalse);
+        expect(controller.hasCompleteDocumentSnapshot, isFalse);
+        expect(controller.canRetryDocumentPreparation, isTrue);
+        expect(
+          await controller.exportAudioToPath('${directory.path}/partial.wav'),
+          isNull,
+        );
+        expect(
+          await repository.open(
+            sourceKey: source.cacheKeys.first!,
+            sourceRevision: source.requests.first.sourceRevision!,
+          ),
+          isNull,
+        );
+        await controller.retryDocumentPreparation();
+        expect(_words(await _consumeRanges(controller, engine)), _words(text));
+        expect(controller.isPreparationComplete, isTrue);
+        expect(controller.canRetryDocumentPreparation, isFalse);
+        expect(source.results.last.workerName, isNot('prepared-range-cache'));
+        await controller.shutdownPreparation();
+      },
+    );
+
+    test(
+      'repository cancellation leaves partial checkpoint and replacement rejects stale migration',
+      () async {
+        final directory = await Directory.systemTemp.createTemp(
+          'controller-cancel-cache-',
+        );
+        addTearDown(() => directory.delete(recursive: true));
+        final repository = ReaderDocumentRepository(directory.path);
+        final source = _RecordingPreparationSupervisor(repository);
+        final engine = _FakeTtsEngine();
+        final controller = ReaderController(
+          preparationSupervisor: source,
+          ttsEngine: engine,
+        );
+        addTearDown(controller.dispose);
+        await controller.initialize();
+        final text = _cacheProse();
+        await controller.importPastedText(text);
+        final oldRequest = source.requests.single;
+        final oldId = controller.sessionDocumentId;
+        await controller.cancelDocumentPreparation();
+        expect(controller.canRetryDocumentPreparation, isTrue);
+        await controller.importPastedText('Replacement source.');
+        final replacement = controller.sessionDocumentId;
+        await source.migrationCallbacks.first!(
+          DocumentIdentityMigration(
+            ownerId: oldRequest.ownerId,
+            documentRevision: oldRequest.revision,
+            sourceRevision: oldRequest.effectiveSourceRevision,
+            watchSession: oldRequest.watchSession ?? 0,
+            provisionalDocumentId: oldId,
+            canonicalDocumentId: 'obsolete-canonical',
+            integrityBasis: DocumentIdentityIntegrityBasis.completeSourceBytes,
+          ),
+        );
+        expect(controller.sessionDocumentId, replacement);
+        expect(controller.documentIdentityRedirects, isNot(contains(oldId)));
+        await _consumeRanges(controller, engine);
+        final partial = await repository.open(
+          sourceKey: source.cacheKeys.first!,
+          sourceRevision: oldRequest.sourceRevision!,
+        );
+        expect(partial!.isComplete, isFalse);
+        await controller.importPastedText(text);
+        expect(_words(await _consumeRanges(controller, engine)), _words(text));
+        expect(source.results.last.workerName, isNot('prepared-range-cache'));
+        await controller.shutdownPreparation();
+      },
+    );
+
+    test(
+      'mutable file-backed intake has no cache revision or invented canonical identity',
+      () async {
+        final directory = await Directory.systemTemp.createTemp(
+          'controller-file-cache-',
+        );
+        addTearDown(() => directory.delete(recursive: true));
+        final source = _RecordingPreparationSupervisor(
+          ReaderDocumentRepository('${directory.path}/cache'),
+        );
+        final engine = _FakeTtsEngine();
+        final controller = ReaderController(
+          preparationSupervisor: source,
+          ttsEngine: engine,
+        );
+        addTearDown(controller.dispose);
+        await controller.initialize();
+        final text = _cacheProse();
+        final file = await File(
+          '${directory.path}/book.txt',
+        ).writeAsString(text);
+        await controller.importFilePaths([file.path]);
+        expect(source.requests.single.sourceRevision, isNull);
+        expect(source.cacheKeys.single, isNull);
+        expect(_words(await _consumeRanges(controller, engine)), _words(text));
+        // Sequential acquisition may prove identity at EOF, but no path/stat
+        // cache revision was invented before reading the source.
+        expect(
+          controller.sessionDocumentId,
+          'doc_acquired_${sha256.convert(utf8.encode(text))}',
+        );
+        expect(await Directory('${directory.path}/cache').exists(), isFalse);
+        await controller.shutdownPreparation();
+      },
+    );
     test(
       'real large-source parser feeds every bounded range once before EOF',
       () async {
@@ -2496,6 +2814,108 @@ class _InitBarrierEngine extends _FakeTtsEngine {
   Future<void> initialize() => ready.future;
 }
 
+String _cacheProse() => List.generate(
+  1000,
+  (index) => 'Ledger item $index ends with marker$index.',
+).join('\n');
+
+List<String> _words(String text) =>
+    RegExp(r'\S+').allMatches(text).map((match) => match.group(0)!).toList();
+
+Future<String> _consumeRanges(
+  ReaderController controller,
+  _FakeTtsEngine engine,
+) async {
+  await controller.startPlayback();
+  var request = engine.lastSpeakRequest!;
+  var nextWord = 0;
+  var sequence = 0;
+  final output = <String>[];
+  final cancelled = Completer<void>();
+  while (true) {
+    expect(request.rangeSequence, ++sequence);
+    expect(request.sourceWordOffset, nextWord);
+    expect(controller.preparedRanges.length, lessThanOrEqualTo(3));
+    output.add(request.text);
+    nextWord += request.speechDocument!.totalWordCount;
+    request.onRangeActive?.call();
+    final next = await request.continuation!
+        .next(request.rangeSequence, cancelled.future)
+        .timeout(const Duration(seconds: 30));
+    if (next == null) break;
+    request = next;
+  }
+  return output.join(' ');
+}
+
+class _CapturedXFile extends XFile {
+  _CapturedXFile(String fileName, this.payload)
+    : super('/virtual-intake/$fileName');
+  final Uint8List payload;
+  @override
+  Future<Uint8List> readAsBytes() async => payload;
+}
+
+class _HeldOpenRepository extends ReaderDocumentRepository {
+  _HeldOpenRepository(super.rootPath);
+  final started = Completer<void>();
+  final release = Completer<void>();
+  @override
+  Future<ReaderDocumentCache?> open({
+    required String sourceKey,
+    required String sourceRevision,
+    String dependencies = ReaderDocumentRepository.dependencyVersion,
+  }) async {
+    if (!started.isCompleted) {
+      started.complete();
+      await release.future;
+    }
+    return super.open(
+      sourceKey: sourceKey,
+      sourceRevision: sourceRevision,
+      dependencies: dependencies,
+    );
+  }
+}
+
+class _RecordingPreparationSupervisor extends DocumentPreparationSupervisor {
+  _RecordingPreparationSupervisor(ReaderDocumentRepository repository)
+    : super(repository: repository);
+  final requests = <DocumentPreparationRequest>[];
+  final cacheKeys = <String?>[];
+  final results = <DocumentPreparationResult>[];
+  final migrationCallbacks =
+      <Future<void> Function(DocumentIdentityMigration)?>[];
+  @override
+  Future<DocumentPreparationResult> prepareRanges(
+    DocumentPreparationRequest request, {
+    Future<Uint8List> Function()? acquireBytes,
+    String? cacheKey,
+    Future<void> Function(DocumentIdentityMigration)? onIdentityMigration,
+    required Future<void> Function(DocumentPreparationPublication)
+    onPublication,
+    void Function(PreparationProgress)? onProgress,
+    Future<void> Function()? acquireSource,
+    Future<void> Function()? onDrained,
+  }) async {
+    requests.add(request.identityOnly);
+    cacheKeys.add(cacheKey);
+    migrationCallbacks.add(onIdentityMigration);
+    final result = await super.prepareRanges(
+      request,
+      acquireBytes: acquireBytes,
+      cacheKey: cacheKey,
+      onIdentityMigration: onIdentityMigration,
+      onPublication: onPublication,
+      onProgress: onProgress,
+      acquireSource: acquireSource,
+      onDrained: onDrained,
+    );
+    results.add(result);
+    return result;
+  }
+}
+
 class _HeldPreferences extends ReaderPreferencesService {
   final ready = Completer<void>();
   @override
@@ -2520,6 +2940,8 @@ class _RangePreparationSupervisor extends DocumentPreparationSupervisor {
   Future<DocumentPreparationResult> prepareRanges(
     DocumentPreparationRequest request, {
     Future<Uint8List> Function()? acquireBytes,
+    String? cacheKey,
+    Future<void> Function(DocumentIdentityMigration)? onIdentityMigration,
     required Future<void> Function(DocumentPreparationPublication)
     onPublication,
     void Function(PreparationProgress)? onProgress,

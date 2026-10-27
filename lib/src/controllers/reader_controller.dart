@@ -2,16 +2,20 @@ import '../services/speech_planning_supervisor.dart';
 import '../services/voice_assignment_coordinator.dart';
 import '../models/voice_assignment_state.dart';
 import 'dart:async';
+import 'dart:convert';
 import 'dart:developer' as developer;
 import 'dart:io';
+import 'dart:isolate';
 import 'dart:math' as math;
 
 import 'package:cross_file/cross_file.dart';
+import 'package:crypto/crypto.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:file_open/file_open.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:path/path.dart' as p;
+import 'package:path_provider/path_provider.dart';
 
 import '../models/document_import_exception.dart';
 import '../models/document_preparation.dart';
@@ -43,6 +47,7 @@ import '../services/english_pronunciation_profile_selector.dart';
 import '../services/playback_instrumentation_service.dart';
 import '../services/pronunciation_resource_layering_service.dart';
 import '../services/reader_preferences_service.dart';
+import '../services/reader_document_repository.dart';
 import '../services/share_intake_service.dart';
 import '../services/spoken_selection_mapper_service.dart';
 import '../services/tts_engine.dart';
@@ -65,13 +70,21 @@ class ReaderController extends ChangeNotifier {
   ReaderController({
     DocumentImportService? importer,
     DocumentPreparationSupervisor? preparationSupervisor,
+    ReaderDocumentRepository? documentRepository,
     DocumentAccessService? documentAccessService,
     ReaderPreferencesService? preferencesService,
     TtsEngine? ttsEngine,
     bool enablePlatformIntakeChannels = true,
   }) : _preparation =
            preparationSupervisor ??
-           DocumentPreparationSupervisor(testImporter: importer),
+           DocumentPreparationSupervisor(
+             testImporter: importer,
+             repository: documentRepository,
+           ),
+       _useDefaultRepository =
+           preparationSupervisor == null &&
+           importer == null &&
+           documentRepository == null,
        _documentAccessService =
            documentAccessService ?? createDocumentAccessService(),
        _preferencesService = preferencesService ?? ReaderPreferencesService(),
@@ -79,7 +92,61 @@ class ReaderController extends ChangeNotifier {
        _enablePlatformIntakeChannels = enablePlatformIntakeChannels,
        _document = ReaderDocument.sample();
 
-  final DocumentPreparationSupervisor _preparation;
+  DocumentPreparationSupervisor _preparation;
+  final bool _useDefaultRepository;
+  Future<void>? _repositoryInitialization;
+  bool _preparationClosed = false;
+  String? _activeSourceRevision;
+  Future<String>? _sourceRevisionWork;
+
+  Future<String> _snapshotRevision(
+    int revision,
+    DocumentPreparationKind kind,
+    String? fileName,
+    String? text,
+    Uint8List? bytes,
+  ) async {
+    // A replaced request may drain one finite hash. Waiting callers recheck
+    // ownership before admission, so only the latest can start another worker.
+    while (_sourceRevisionWork != null) {
+      try {
+        await _sourceRevisionWork;
+      } catch (_) {
+        // An older request's hash failure cannot fail its replacement.
+      }
+      _requireRevision(revision);
+    }
+    _requireRevision(revision);
+    final work = _sourceRevisionWork = _capturedSourceRevision(
+      kind,
+      fileName,
+      text,
+      bytes,
+    );
+    try {
+      return await work;
+    } finally {
+      if (identical(_sourceRevisionWork, work)) _sourceRevisionWork = null;
+    }
+  }
+
+  Future<void> _initializeRepository() async {
+    if (!_useDefaultRepository) return;
+    await (_repositoryInitialization ??= () async {
+      try {
+        final support = await getApplicationSupportDirectory();
+        if (_disposed || _preparationClosed) return;
+        _preparation = DocumentPreparationSupervisor(
+          repository: ReaderDocumentRepository(
+            p.join(support.path, 'prepared-documents'),
+          ),
+        );
+      } on MissingPluginException {
+        // A platform-free harness has no persistent application directory.
+      }
+    }());
+  }
+
   final String _preparationOwner =
       'reader-${DateTime.now().microsecondsSinceEpoch}';
   int _documentRevision = 0;
@@ -189,7 +256,9 @@ class ReaderController extends ChangeNotifier {
     if (_disposed ||
         migration.ownerId != _preparationOwner ||
         migration.documentRevision != _documentRevision ||
-        migration.sourceRevision != '$_preparationOwner:$_documentRevision' ||
+        migration.sourceRevision !=
+            (_activeSourceRevision ??
+                '$_preparationOwner:$_documentRevision') ||
         migration.watchSession != _watchSession ||
         migration.provisionalDocumentId != sessionDocumentId ||
         migration.canonicalDocumentId.isEmpty) {
@@ -199,14 +268,25 @@ class ReaderController extends ChangeNotifier {
     final canonical = migration.canonicalDocumentId;
     final choices = _storedDocumentCastVoiceAssignments[previous];
     if (choices != null) {
-      _storedDocumentCastVoiceAssignments
-          .putIfAbsent(canonical, () => {})
-          .addAll(choices);
+      final canonicalChoices = _storedDocumentCastVoiceAssignments.putIfAbsent(
+        canonical,
+        () => {},
+      );
+      for (final choice in choices.entries) {
+        final currentEdit = _preparedDocumentRevision == _documentRevision
+            ? _castVoiceOverrides[choice.key]
+            : null;
+        if (currentEdit != null) {
+          canonicalChoices[choice.key] = currentEdit;
+        } else {
+          canonicalChoices.putIfAbsent(choice.key, () => choice.value);
+        }
+      }
     }
     _documentIdentityRedirects[previous] = canonical;
     _sessionDocumentId = canonical;
-    // Retain the old key until persistence owns checkpoint/recovery. Current
-    // manual overrides and active speech remain intact through the rekey.
+    // Retain provisional keys for recovery; canonical preferences take
+    // precedence on replay. Current overrides and active speech remain intact.
     await _persistPreferences();
     if (!_disposed) notifyListeners();
     return true;
@@ -447,6 +527,9 @@ class ReaderController extends ChangeNotifier {
     _pendingPlayUntilReady = false;
     _documentPrepared = false;
     _preparationComplete = false;
+    _hasCompleteDocumentSnapshot = false;
+    _activeSourceRevision = null;
+    _sessionDocumentId = null;
     _preparationFailed = false;
     _preparationError = null;
     _activePreparedRange = null;
@@ -472,15 +555,21 @@ class ReaderController extends ChangeNotifier {
     Future<Uint8List> Function()? acquireBytes,
   }) async {
     _requireRevision(revision);
+    await _initializeRepository();
+    _requireRevision(revision);
+    var capturedBytes = bytes == null
+        ? null
+        : Uint8List.fromList(bytes).asUnmodifiableView();
+    var byteAcquisition = acquireBytes;
     _retryPreparation = () => _runImportOperation((retryRevision) async {
       final document = await _prepare(
         retryRevision,
         kind,
         text: text,
         fileName: fileName,
-        bytes: bytes,
+        bytes: capturedBytes,
         sourcePath: sourcePath,
-        acquireBytes: acquireBytes,
+        acquireBytes: byteAcquisition,
       );
       await _replaceDocument(
         document,
@@ -501,23 +590,67 @@ class ReaderController extends ChangeNotifier {
     }
     _requireRevision(revision);
     final sourceFilePath = streamedPath;
-    final watchSession = _liveReadFilePath == null ? null : _watchSession;
+    final watchSession = _watchSession;
     bool current() =>
         !_disposed &&
         revision == _documentRevision &&
-        (watchSession == null || watchSession == _watchSession);
+        watchSession == _watchSession;
+    // Only immutable captured intake can attest a stable revision here. A
+    // mutable path/stat/prefix is deliberately insufficient for cache admission.
+    if (streamedPath == null &&
+        text == null &&
+        capturedBytes == null &&
+        byteAcquisition != null) {
+      capturedBytes = Uint8List.fromList(
+        await byteAcquisition(),
+      ).asUnmodifiableView();
+      byteAcquisition = null;
+      _requireRevision(revision);
+    }
+    final snapshotText = text;
+    final snapshotBytes = capturedBytes;
+    final sourceRevision =
+        _preparation.repository == null ||
+            streamedPath != null ||
+            (snapshotText == null && snapshotBytes == null)
+        ? null
+        : await _snapshotRevision(
+            revision,
+            kind,
+            fileName,
+            snapshotText,
+            snapshotBytes,
+          );
+    _requireRevision(revision);
+    _activeSourceRevision = sourceRevision;
+    final request = DocumentPreparationRequest(
+      ownerId: _preparationOwner,
+      revision: revision,
+      kind: kind,
+      text: text,
+      fileName: fileName,
+      bytes: capturedBytes,
+      sourcePath: streamedPath,
+      sourceRevision: sourceRevision,
+      watchSession: watchSession,
+    );
+    final repository = _preparation.repository;
+    final cache = repository == null || sourceRevision == null
+        ? null
+        : await repository.open(
+            sourceKey: sourceRevision,
+            sourceRevision: sourceRevision,
+          );
+    _requireRevision(revision);
+    final cachedMigration = cache?.identityMigration(request);
     final completion = _preparation.prepareRanges(
-      DocumentPreparationRequest(
-        ownerId: _preparationOwner,
-        revision: revision,
-        kind: kind,
-        text: text,
-        fileName: fileName,
-        bytes: bytes,
-        sourcePath: streamedPath,
-        watchSession: watchSession,
-      ),
-      acquireBytes: acquireBytes,
+      request,
+      cacheKey: sourceRevision,
+      onIdentityMigration: (migration) async {
+        if (!current()) return;
+        await reconcileDocumentIdentity(migration);
+      },
+      acquireBytes: byteAcquisition,
       acquireSource: sourceFilePath == null
           ? null
           : () async {
@@ -552,8 +685,20 @@ class ReaderController extends ChangeNotifier {
       onPublication: (publication) async {
         if (!current() ||
             publication.request.ownerId != _preparationOwner ||
+            publication.request.revision != revision ||
+            publication.request.effectiveSourceRevision !=
+                request.effectiveSourceRevision ||
+            publication.request.watchSession != watchSession ||
             publication.sequence != _publicationSequence + 1) {
           return;
+        }
+        if (_publicationSequence == 0) {
+          _sessionDocumentId = publication.fragment.displayDocument.documentId;
+          if (cachedMigration != null &&
+              cachedMigration.provisionalDocumentId == _sessionDocumentId) {
+            await reconcileDocumentIdentity(cachedMigration);
+            if (!current()) return;
+          }
         }
         _publicationSequence = publication.sequence;
         _preparedRanges.add(publication);
@@ -2514,7 +2659,8 @@ class ReaderController extends ChangeNotifier {
     if (_publicationSequence == 0) _preparationComplete = true;
     _hasCompleteDocumentSnapshot =
         _preparationComplete && _publicationSequence <= 1;
-    _sessionDocumentId = document.displayDocument.documentId;
+    final initialId = document.displayDocument.documentId;
+    _sessionDocumentId = _documentIdentityRedirects[initialId] ?? initialId;
     _voiceAssignments.resetDocument();
     _pausedVoiceReplayAnchor = null;
     _assignmentReplayWord = null;
@@ -3253,6 +3399,7 @@ class ReaderController extends ChangeNotifier {
 
   /// Call before disposal when a caller needs proof that preparation drained.
   Future<void> shutdownPreparation() async {
+    _preparationClosed = true;
     _beginDocumentRequest();
     _isImporting = false;
     _clearDocumentLoadStage();
@@ -3260,6 +3407,7 @@ class ReaderController extends ChangeNotifier {
     ++_watchSession;
     await _cancelLiveReadWatch();
     await _preparation.shutdown();
+    await _sourceRevisionWork;
   }
 
   void _clearDocumentLoadStage() {
@@ -3999,3 +4147,15 @@ class _FollowerSyncPolicy {
 class _SupersededPreparation implements Exception {
   const _SupersededPreparation();
 }
+
+// Keep the isolate closure outside the controller's async scope: it must never
+// capture UI state, source leases, completers or the supervisor itself.
+Future<String> _capturedSourceRevision(
+  DocumentPreparationKind kind,
+  String? fileName,
+  String? text,
+  Uint8List? bytes,
+) => Isolate.run(() {
+  final digest = sha256.convert(bytes ?? utf8.encode(text!));
+  return 'captured-v1:${kind.name}:${jsonEncode(fileName)}:$digest';
+});
