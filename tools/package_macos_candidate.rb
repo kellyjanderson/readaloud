@@ -148,7 +148,11 @@ module MacosCandidate
     end
     bundled = validate_assets(File.join(app, ASSET_ROOT), assets.keys)
     raise 'Bundle assets differ from preflight inputs' unless bundled == assets
-    signature = capture('/usr/bin/codesign', '--verify', '--deep', '--strict', '--verbose=2', app).gsub(app, '<APP>')
+    # codesign emits nested bundle checks in filesystem-dependent order. Keep
+    # the verified messages as receipt evidence, but canonicalize their order
+    # so staging the same signed bundle does not appear to change its identity.
+    signature = capture('/usr/bin/codesign', '--verify', '--deep', '--strict', '--verbose=2', app)
+      .gsub(app, '<APP>').lines.map(&:strip).sort.join("\n")
     files = tree(app)
     { 'tree_sha256' => digest(files), 'files' => files, 'executable' => executable,
       'bundle_identifier' => identifier, 'minimum_system_version' => minimum_os,

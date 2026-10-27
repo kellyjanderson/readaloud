@@ -347,12 +347,16 @@ class MacosCandidateTest < Minitest::Test
     identities = MacosCandidate.validate_assets(@root, ['assets/tokenizer_vocab.json'])
     archs = 'arm64'
     identifier = @bundle['bundle_identifier']
+    reverse_signature_output = false
     inspector = lambda do |*command|
       case command.first
       when '/usr/libexec/PlistBuddy'
         { 'Print :CFBundleExecutable' => 'fixture', 'Print :CFBundleIdentifier' => identifier, 'Print :LSMinimumSystemVersion' => '11.0' }.fetch(command[2])
       when '/usr/bin/lipo' then archs
-      when '/usr/bin/codesign' then "#{command.last}: valid on disk"
+      when '/usr/bin/codesign'
+        lines = ["--validated: #{command.last}", "#{command.last}: valid on disk"]
+        lines.reverse! if reverse_signature_output
+        lines.join("\n")
       else raise "Unexpected fixture inspection: #{command.inspect}"
       end
     end
@@ -360,6 +364,7 @@ class MacosCandidateTest < Minitest::Test
       original = MacosCandidate.bundle(@app, identities)
       copy = File.join(@root, 'Copied.app')
       FileUtils.cp_r(@app, copy)
+      reverse_signature_output = true
       assert_equal original, MacosCandidate.bundle(copy, identities)
       archs = 'arm64 x86_64'
       assert_match(/arm64-only/, assert_raises(RuntimeError) { MacosCandidate.bundle(copy, identities) }.message)
