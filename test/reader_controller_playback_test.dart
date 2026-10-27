@@ -181,24 +181,113 @@ void main() {
     });
 
     test(
-      'repository constructor injection caches captured byte intake',
+      'callback byte intake is admitted before acquisition and skips cache identity',
       () async {
         final directory = await Directory.systemTemp.createTemp(
           'controller-byte-cache-',
         );
         addTearDown(() => directory.delete(recursive: true));
         final engine = _FakeTtsEngine();
+        final repository = ReaderDocumentRepository(directory.path);
+        final supervisor = _ObservedRepositoryPreparationSupervisor(repository);
         final controller = ReaderController(
-          documentRepository: ReaderDocumentRepository(directory.path),
+          preparationSupervisor: supervisor,
           ttsEngine: engine,
         );
         addTearDown(controller.dispose);
         await controller.initialize();
         final text = _cacheProse();
-        await controller.importDroppedFiles([
-          _CapturedXFile('captured.txt', Uint8List.fromList(utf8.encode(text))),
-        ]);
+        final file = _ByteBarrierXFile('captured.txt');
+        final importing = controller.importDroppedFiles([file]);
+        await file.started.future;
+        expect(supervisor.activeCount, 1);
+        expect(supervisor.lastRequest?.sourceRevision, isNull);
+        expect(supervisor.lastRequest?.sourcePath, isNull);
+        file.bytes.complete(Uint8List.fromList(utf8.encode(text)));
+        await importing;
         expect(_words(await _consumeRanges(controller, engine)), _words(text));
+        final repeatedFile = _ByteBarrierXFile('captured.txt');
+        final repeatedImport = controller.importDroppedFiles([repeatedFile]);
+        await repeatedFile.started.future;
+        expect(supervisor.activeCount, 1);
+        repeatedFile.bytes.complete(Uint8List.fromList(utf8.encode(text)));
+        await repeatedImport;
+        expect(_words(await _consumeRanges(controller, engine)), _words(text));
+        expect(
+          await directory
+              .list(recursive: true)
+              .where((entry) => entry.path.endsWith('/manifest.json'))
+              .toList(),
+          isEmpty,
+        );
+        await controller.shutdownPreparation();
+      },
+    );
+
+    test('direct immutable text intake remains cacheable', () async {
+      final directory = await Directory.systemTemp.createTemp(
+        'controller-text-cache-',
+      );
+      addTearDown(() => directory.delete(recursive: true));
+      final engine = _FakeTtsEngine();
+      final controller = ReaderController(
+        documentRepository: ReaderDocumentRepository(directory.path),
+        ttsEngine: engine,
+      );
+      addTearDown(controller.dispose);
+      await controller.initialize();
+      final text = _cacheProse();
+      await controller.importPastedText(text);
+      expect(_words(await _consumeRanges(controller, engine)), _words(text));
+      final manifests = await directory
+          .list(recursive: true)
+          .where((entry) => entry.path.endsWith('/manifest.json'))
+          .toList();
+      expect(manifests, hasLength(1));
+      final envelope =
+          jsonDecode(await File(manifests.single.path).readAsString()) as Map;
+      final manifest = jsonDecode(envelope['payload'] as String) as Map;
+      expect(manifest['complete'], isTrue);
+      expect(manifest['sourceRevision'], contains(':pastedText:null:'));
+      await controller.importPastedText(text);
+      expect(_words(await _consumeRanges(controller, engine)), _words(text));
+      await controller.shutdownPreparation();
+    });
+
+    test(
+      'picker captured bytes create and warm-replay the repository cache',
+      () async {
+        final directory = await Directory.systemTemp.createTemp(
+          'controller-picker-byte-cache-',
+        );
+        addTearDown(() => directory.delete(recursive: true));
+        final repository = _CountingReaderDocumentRepository(directory.path);
+        final engine = _FakeTtsEngine();
+        final controller = ReaderController(
+          documentRepository: repository,
+          ttsEngine: engine,
+        );
+        addTearDown(controller.dispose);
+        await controller.initialize();
+        final text = _cacheProse();
+        final bytes = Uint8List.fromList(utf8.encode(text));
+
+        final firstPicker = _ControlledPicker();
+        FilePicker.platform = firstPicker;
+        final firstImport = controller.importDocument();
+        firstPicker.result.complete(
+          FilePickerResult([
+            PlatformFile(
+              name: 'captured.txt',
+              size: bytes.length,
+              bytes: bytes,
+            ),
+          ]),
+        );
+        await firstImport;
+        expect(_words(await _consumeRanges(controller, engine)), _words(text));
+        expect(repository.beginCalls, 1);
+
         final manifests = await directory
             .list(recursive: true)
             .where((entry) => entry.path.endsWith('/manifest.json'))
@@ -208,10 +297,23 @@ void main() {
             jsonDecode(await File(manifests.single.path).readAsString()) as Map;
         final manifest = jsonDecode(envelope['payload'] as String) as Map;
         expect(manifest['complete'], isTrue);
-        final receipt = manifest['acquisition'] as Map;
-        expect(receipt['byteCount'], utf8.encode(text).length);
-        expect(receipt['sha256'], sha256.convert(utf8.encode(text)).toString());
         expect(manifest['sourceRevision'], contains(':bytes:"captured.txt":'));
+
+        final secondPicker = _ControlledPicker();
+        FilePicker.platform = secondPicker;
+        final secondImport = controller.importDocument();
+        secondPicker.result.complete(
+          FilePickerResult([
+            PlatformFile(
+              name: 'captured.txt',
+              size: bytes.length,
+              bytes: bytes,
+            ),
+          ]),
+        );
+        await secondImport;
+        expect(_words(await _consumeRanges(controller, engine)), _words(text));
+        expect(repository.beginCalls, 1);
         await controller.shutdownPreparation();
       },
     );
@@ -2993,12 +3095,69 @@ Future<String> _consumeRanges(
   return output.join(' ');
 }
 
-class _CapturedXFile extends XFile {
-  _CapturedXFile(String fileName, this.payload)
-    : super('/virtual-intake/$fileName');
-  final Uint8List payload;
+class _ByteBarrierXFile extends XFile {
+  _ByteBarrierXFile(String fileName) : super('/virtual-intake/$fileName');
+  final started = Completer<void>();
+  final bytes = Completer<Uint8List>();
+
   @override
-  Future<Uint8List> readAsBytes() async => payload;
+  Future<Uint8List> readAsBytes() {
+    started.complete();
+    return bytes.future;
+  }
+}
+
+class _ObservedRepositoryPreparationSupervisor
+    extends DocumentPreparationSupervisor {
+  _ObservedRepositoryPreparationSupervisor(ReaderDocumentRepository repository)
+    : super(repository: repository);
+
+  DocumentPreparationRequest? lastRequest;
+
+  @override
+  Future<DocumentPreparationResult> prepareRanges(
+    DocumentPreparationRequest request, {
+    Future<Uint8List> Function()? acquireBytes,
+    String? cacheKey,
+    Future<void> Function(DocumentIdentityMigration)? onIdentityMigration,
+    required Future<void> Function(DocumentPreparationPublication)
+    onPublication,
+    void Function(PreparationProgress)? onProgress,
+    Future<void> Function()? acquireSource,
+    Future<void> Function()? onDrained,
+  }) {
+    lastRequest = request;
+    return super.prepareRanges(
+      request,
+      acquireBytes: acquireBytes,
+      cacheKey: cacheKey,
+      onIdentityMigration: onIdentityMigration,
+      onPublication: onPublication,
+      onProgress: onProgress,
+      acquireSource: acquireSource,
+      onDrained: onDrained,
+    );
+  }
+}
+
+class _CountingReaderDocumentRepository extends ReaderDocumentRepository {
+  _CountingReaderDocumentRepository(super.rootPath);
+
+  var beginCalls = 0;
+
+  @override
+  Future<ReaderDocumentCheckpoint> begin({
+    required String sourceKey,
+    required DocumentPreparationRequest request,
+    String dependencies = ReaderDocumentRepository.dependencyVersion,
+  }) {
+    beginCalls += 1;
+    return super.begin(
+      sourceKey: sourceKey,
+      request: request,
+      dependencies: dependencies,
+    );
+  }
 }
 
 class _HeldOpenRepository extends ReaderDocumentRepository {
