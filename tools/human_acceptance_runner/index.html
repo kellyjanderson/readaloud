@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light dark">
+  <title>Read Aloud — Human acceptance runner</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header class="topbar">
+    <div>
+      <p class="eyebrow">READ ALOUD · RC2</p>
+      <h1>Human acceptance session</h1>
+    </div>
+    <div class="session-actions">
+      <button id="export-session" class="button secondary">Export results</button>
+      <button id="reset-session" class="button quiet">Reset session</button>
+    </div>
+  </header>
+
+  <main>
+    <section class="session-card" aria-labelledby="session-heading">
+      <div class="section-heading">
+        <div>
+          <p class="eyebrow">SESSION SETUP</p>
+          <h2 id="session-heading">Identify the build under test</h2>
+        </div>
+        <p class="autosave" role="status" aria-live="polite" id="save-status">Saved on this device</p>
+      </div>
+      <div class="setup-grid">
+        <label>Build or app path
+          <input id="build-path" autocomplete="off" placeholder="/path/to/read_aloud.app or build ID">
+        </label>
+        <label>Source revision
+          <input id="source-revision" autocomplete="off" placeholder="commit or branch">
+        </label>
+        <label>Tester
+          <input id="tester" autocomplete="name" placeholder="Name or initials">
+        </label>
+        <label>Device / OS
+          <input id="device" autocomplete="off" placeholder="Mac model and macOS version">
+        </label>
+      </div>
+    </section>
+
+    <div class="workspace">
+      <nav class="test-nav" aria-label="Acceptance tests">
+        <div class="nav-heading"><h2>Test cases</h2><span id="progress-count"></span></div>
+        <ol id="test-list"></ol>
+        <div class="nav-legend"><span class="dot pending"></span>Not recorded <span class="dot passed"></span>Pass <span class="dot failed"></span>Fail / blocked</div>
+      </nav>
+
+      <section class="test-panel" aria-labelledby="case-title">
+        <div id="case-content"></div>
+      </section>
+    </div>
+  </main>
+  <script src="scenarios.js"></script>
+  <script src="runner.js"></script>
+</body>
+</html>

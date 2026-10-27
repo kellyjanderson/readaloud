@@ -58,4 +58,6 @@ Every asynchronous producer names its owner, execution context, bounded queue, r
 
 Audio changes need comparable emitted-audio evidence; source tests, hashes, listening and native runtime checks answer different questions. User-facing acceptance requires the running app. Keep automatic speaker routing distinct from user assignment edits and preserve uncertainty. macOS is the current functional target; verify SDK architecture before use. Never report unrun tests as passed.
 
+Any agent that launches the application for UI, native, audio, or acceptance testing must quit the application when that test session ends, including when the test fails or is blocked. Use the app's normal Quit action, then verify its process has exited before finishing the test or development task. Do not leave a test build running between cases. Record inability to close or verify as a test blocker. Automated test commands that launch a UI app must likewise clean up their owned process before returning.
+
 GitHub outages or missing access do not justify a second local planning authority. Preserve code work, report the blocker and resume publication when access returns. Do not alter model assets, user data, signing or installed apps during a process-only change.
