@@ -402,6 +402,7 @@ class DocumentImportService {
     'pdf',
     'docx',
     'rtf',
+    'radoc',
   ];
 
   final BaseSpeechAnnotationInferenceService _annotationInferenceService;
