@@ -2,6 +2,8 @@
 
 Open `index.html` in a local browser. The runner uses no network services or external packages. Session fields and case results autosave to that browser's local storage; use **Export results** to download a JSON record before clearing browser data or switching devices.
 
+The build path and source revision start with the latest locally verified RC2 candidate (`9ed4532`). Replace them when qualifying a different build; previously saved session values take precedence.
+
 ## Test workflow
 
 1. Enter the exact app/build identity, source revision, tester and device/OS.

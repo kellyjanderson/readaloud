@@ -102,7 +102,8 @@
   };
   const bindMetadata = () => {
     for (const [id, field] of [['build-path','buildPath'], ['source-revision','sourceRevision'], ['tester','tester'], ['device','device']]) {
-      $(id).value = state.metadata[field] || '';
+      const initialValue = $(id).value;
+      $(id).value = state.metadata[field] || initialValue;
       $(id).oninput = (event) => { state.metadata[field] = event.target.value; persist(); };
     }
   };
