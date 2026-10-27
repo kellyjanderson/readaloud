@@ -45,6 +45,8 @@ class MacosCandidateTest < Minitest::Test
     assert_equal 5, production.count { |path| path.end_with?('.npy') }
     assert_includes production, MacosCandidate::MODEL
     assert_includes production, 'assets/tokenizer_vocab.json'
+    shipped = production.reject { |path| path == MacosCandidate::MODEL }
+    assert_equal shipped.sort, MacosCandidate.validate_assets(ReleaseNotices::ROOT, shipped).keys.sort
   end
 
   def test_missing_empty_and_corrupt_model_rejected

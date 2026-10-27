@@ -82,7 +82,7 @@ module MacosCandidate
           raise "Nonfinite/empty voice NPY: #{relative}" unless values.all?(&:finite?) && values.any? { |v| !v.zero? }
         end
       elsif relative.end_with?('.dict')
-        raise 'Invalid pronunciation dictionary' unless File.foreach(path).any? { |line| line.match?(/^[A-Za-z][^\s]*\s{2,}[A-Z]/) }
+        raise 'Invalid pronunciation dictionary' unless File.foreach(path).any? { |line| line.match?(/^[^\s]+\s+[A-Z][A-Z0-2]*(?:\s|$)/) }
       end
       [relative, identity]
     end
