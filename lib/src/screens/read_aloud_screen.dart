@@ -119,7 +119,10 @@ class _ReadAloudScreenState extends State<ReadAloudScreen> {
                         isInitializing: _controller.isInitializing,
                         isComplete: _controller.isPreparationComplete,
                         startupError: _controller.startupError,
-                        message: _controller.statusMessage,
+                        message:
+                            _controller.isPreparingDocument || pendingPlayback
+                            ? _controller.statusMessage
+                            : null,
                         onCancel: _controller.isPreparingDocument
                             ? () => unawaited(
                                 _controller.cancelDocumentPreparation(),
@@ -1227,14 +1230,12 @@ class _SegmentedTransportCapsule extends StatelessWidget {
                   enabled: enabled,
                   alignment: Alignment.center,
                   isPrimary: true,
-                  child: AnimatedSwitcher(
-                    duration: const Duration(milliseconds: 180),
-                    child: isBuffering
-                        ? const Icon(Icons.close, key: ValueKey('buffering'))
-                        : Icon(
-                            isPlaying ? Icons.pause : Icons.play_arrow,
-                            key: ValueKey<bool>(isPlaying),
-                          ),
+                  child: Icon(
+                    isBuffering
+                        ? Icons.close
+                        : isPlaying
+                        ? Icons.pause
+                        : Icons.play_arrow,
                   ),
                 ),
               ),
