@@ -80,6 +80,46 @@ void main() {
       expect(controller.hasCompleteDocumentSnapshot, isTrue);
     });
 
+    test('cancels .radoc replacement while engine stop is pending', () async {
+      final engine = _BarrierStopTtsEngine();
+      final controller = ReaderController(ttsEngine: engine);
+      addTearDown(controller.dispose);
+      await controller.initialize();
+      await controller.importPastedText('Keep the current document.');
+
+      final replacement = DocumentImportService().importPastedText(
+        'This prepared replacement must not commit.',
+      );
+      final serialized = const ReaderDocumentSerializationService()
+          .serializeToJsonString(replacement);
+      final bytes = Uint8List.fromList(utf8.encode(serialized));
+      final picker = _ControlledPicker();
+      FilePicker.platform = picker;
+      engine.holdNext = true;
+      final importing = controller.importDocument();
+      picker.result.complete(
+        FilePickerResult([
+          PlatformFile(
+            name: 'replacement.radoc',
+            size: bytes.length,
+            bytes: bytes,
+          ),
+        ]),
+      );
+      await engine.stopped.future;
+
+      await controller.cancelDocumentPreparation();
+      expect(controller.document.speakableText, 'Keep the current document.');
+
+      engine.release.complete();
+      await importing;
+      expect(controller.document.speakableText, 'Keep the current document.');
+      expect(
+        controller.document.displayDocument.documentId,
+        isNot(replacement.displayDocument.documentId),
+      );
+    });
+
     test('opens legacy radoc v1 without source importer analysis', () async {
       final importer = _ControlledPreparationImporter();
       final controller = ReaderController(importer: importer);
