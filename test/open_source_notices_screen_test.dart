@@ -129,6 +129,78 @@ void main() {
   );
 
   testWidgets(
+    'timeout keeps retry disabled across reopen until active job settles',
+    (tester) async {
+      final pending = Completer<ByteData>();
+      final bundle = _Bundle(() => pending.future);
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Builder(
+            builder: (context) => Scaffold(
+              body: FilledButton(
+                onPressed: () => Navigator.of(context).push(
+                  MaterialPageRoute<void>(
+                    builder: (_) => OpenSourceNoticesScreen(bundle: bundle),
+                  ),
+                ),
+                child: const Text('Reader'),
+              ),
+            ),
+          ),
+        ),
+      );
+      Future<void> open() async {
+        await tester.tap(find.text('Reader'));
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 350));
+      }
+
+      await open();
+      await tester.pump(const Duration(seconds: 61));
+      await tester.pump();
+      expect(find.text('Loading notices timed out.'), findsOneWidget);
+      expect(
+        tester
+            .widget<FilledButton>(find.widgetWithText(FilledButton, 'Retry'))
+            .onPressed,
+        isNull,
+      );
+      await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+      await tester.pumpAndSettle();
+      expect(find.text('Reader'), findsOneWidget);
+      await open();
+      expect(bundle.loads, 1);
+      await tester.pump(const Duration(seconds: 61));
+      pending.complete(_data('expired successful result'));
+      await tester.runAsync(() async {
+        await Future<void>.delayed(const Duration(milliseconds: 150));
+      });
+      await tester.pumpAndSettle();
+      expect(find.text('Loading notices timed out.'), findsOneWidget);
+      expect(find.text('expired successful result'), findsNothing);
+      expect(
+        tester
+            .widget<FilledButton>(find.widgetWithText(FilledButton, 'Retry'))
+            .onPressed,
+        isNotNull,
+      );
+      final replacement = Completer<ByteData>();
+      bundle.read = () => replacement.future;
+      await tester.tap(find.text('Retry'));
+      await tester.pump();
+      expect(bundle.loads, 2);
+      replacement.complete(_data('fresh notice result'));
+      await tester.runAsync(() async {
+        await Future<void>.delayed(const Duration(milliseconds: 150));
+      });
+      await tester.pumpAndSettle();
+      expect(find.text('fresh notice result'), findsOneWidget);
+      expect(find.text('Loading notices timed out.'), findsNothing);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets(
     'slow load stays single, terminal failure permits retry, stale completion is harmless',
     (tester) async {
       final pending = Completer<ByteData>();

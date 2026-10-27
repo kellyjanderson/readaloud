@@ -7,10 +7,24 @@ import 'package:flutter/services.dart';
 
 const openSourceNoticesAsset = 'third_party/licenses/NOTICES.txt';
 const _maximumNoticeBytes = 4 * 1024 * 1024;
+final _activeNoticeLoads = Expando<Future<List<String>>>('notice asset jobs');
 
 /// Reads the complete bundled snapshot. Decoding and sectioning run off the
 /// native UI isolate; only bounded, visible sections are laid out by Flutter.
-Future<List<String>> loadOpenSourceNoticeSections(AssetBundle bundle) async {
+Future<List<String>> loadOpenSourceNoticeSections(AssetBundle bundle) {
+  final active = _activeNoticeLoads[bundle];
+  if (active != null) return active;
+  late final Future<List<String>> job;
+  job = _readNoticeSections(bundle).whenComplete(() {
+    if (identical(_activeNoticeLoads[bundle], job)) {
+      _activeNoticeLoads[bundle] = null;
+    }
+  });
+  _activeNoticeLoads[bundle] = job;
+  return job;
+}
+
+Future<List<String>> _readNoticeSections(AssetBundle bundle) async {
   final bytes = await bundle.load(openSourceNoticesAsset);
   if (bytes.lengthInBytes == 0 || bytes.lengthInBytes > _maximumNoticeBytes) {
     throw const FormatException(
@@ -59,7 +73,9 @@ class _OpenSourceNoticesScreenState extends State<OpenSourceNoticesScreen> {
   final _scrollFocus = FocusNode(debugLabel: 'Open Source Notices text');
   Future<List<String>>? _sections;
   Timer? _slowTimer;
+  Timer? _timeoutTimer;
   bool _takingLonger = false;
+  bool _timedOut = false;
   int _generation = 0;
 
   @override
@@ -71,20 +87,33 @@ class _OpenSourceNoticesScreenState extends State<OpenSourceNoticesScreen> {
   void _load() {
     final generation = ++_generation;
     _takingLonger = false;
+    _timedOut = false;
     _slowTimer?.cancel();
+    _timeoutTimer?.cancel();
     _slowTimer = Timer(const Duration(seconds: 15), () {
       if (mounted && generation == _generation) {
         setState(() => _takingLonger = true);
       }
     });
-    // One job per route, with no replacement while it is pending. A slow job
-    // stays pending; Retry is exposed only after terminal failure. Pop cancels
-    // consumption, not the finite worker; stale success/failure never mutates UI.
+    _timeoutTimer = Timer(const Duration(seconds: 60), () {
+      if (mounted && generation == _generation) {
+        setState(() => _timedOut = true);
+      }
+    });
+    // Timeout/pop cancel result consumption best-effort. AssetBundle.load and
+    // compute cannot be interrupted here: the capped finite job retains its
+    // own lifetime until completion, then releases the bundle's active slot.
+    // Reopening attaches to that same job; Retry cannot overlap it. Results
+    // after timeout never replace the timeout state, and disposed routes ignore
+    // both successes and failures. Application shutdown terminates the worker.
     _sections =
         loadOpenSourceNoticeSections(
           widget.bundle ?? DefaultAssetBundle.of(context),
         ).whenComplete(() {
-          if (mounted && generation == _generation) _slowTimer?.cancel();
+          if (mounted && generation == _generation) {
+            _slowTimer?.cancel();
+            _timeoutTimer?.cancel();
+          }
         });
   }
 
@@ -92,6 +121,7 @@ class _OpenSourceNoticesScreenState extends State<OpenSourceNoticesScreen> {
   void dispose() {
     ++_generation;
     _slowTimer?.cancel();
+    _timeoutTimer?.cancel();
     _scrollController.dispose();
     _scrollFocus.dispose();
     super.dispose();
@@ -113,6 +143,37 @@ class _OpenSourceNoticesScreenState extends State<OpenSourceNoticesScreen> {
           child: FutureBuilder<List<String>>(
             future: _sections,
             builder: (context, snapshot) {
+              if (_timedOut) {
+                final settled =
+                    snapshot.connectionState == ConnectionState.done;
+                return Center(
+                  child: SingleChildScrollView(
+                    padding: const EdgeInsets.all(24),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Text('Loading notices timed out.'),
+                        const SizedBox(height: 16),
+                        Text(
+                          settled
+                              ? 'You can retry or return to the reader.'
+                              : 'The previous load is still active. Retry will be available when it finishes.',
+                        ),
+                        const SizedBox(height: 16),
+                        FilledButton(
+                          onPressed: settled ? () => setState(_load) : null,
+                          child: const Text('Retry'),
+                        ),
+                        TextButton(
+                          autofocus: true,
+                          onPressed: () => Navigator.of(context).pop(),
+                          child: const Text('Return to reader'),
+                        ),
+                      ],
+                    ),
+                  ),
+                );
+              }
               if (snapshot.connectionState != ConnectionState.done) {
                 return Center(
                   child: Padding(
