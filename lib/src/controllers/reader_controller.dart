@@ -48,6 +48,7 @@ import '../services/playback_instrumentation_service.dart';
 import '../services/pronunciation_resource_layering_service.dart';
 import '../services/reader_preferences_service.dart';
 import '../services/reader_document_repository.dart';
+import '../services/reader_document_serialization_service.dart';
 import '../services/share_intake_service.dart';
 import '../services/spoken_selection_mapper_service.dart';
 import '../services/tts_engine.dart';
@@ -2518,6 +2519,40 @@ class ReaderController extends ChangeNotifier {
     Future<Uint8List> Function()? acquireBytes,
     String? sourcePath,
   }) async {
+    if (p.extension(fileName).toLowerCase() == '.radoc') {
+      final serializedBytes = bytes ?? await acquireBytes!();
+      _requireRevision(revision);
+      late final ReaderDocument document;
+      try {
+        final serialized = utf8.decode(serializedBytes, allowMalformed: false);
+        document = await Isolate.run(
+          () => const ReaderDocumentSerializationService()
+              .deserializeFromJsonString(serialized),
+        );
+      } catch (error) {
+        throw DocumentImportException(
+          code: 'invalid_radoc',
+          fileName: fileName,
+          message:
+              'This .radoc file is malformed or uses an unsupported format. '
+              'Re-export it with a compatible Read Aloud version and try again.',
+          cause: error,
+        );
+      }
+      _requireRevision(revision);
+      _preparationComplete = true;
+      _hasCompleteDocumentSnapshot = true;
+      _preparedRanges.clear();
+      _publicationSequence = 0;
+      await _replaceDocument(
+        document,
+        sourcePath: sourcePath,
+        revision: revision,
+      );
+      _requireRevision(revision);
+      await _rememberOpenedDocumentPath(sourcePath, revision: revision);
+      return;
+    }
     final imported = await _prepare(
       revision,
       DocumentPreparationKind.bytes,

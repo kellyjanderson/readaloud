@@ -22,6 +22,7 @@ import 'package:read_aloud/src/services/document_preparation_supervisor.dart';
 import 'package:read_aloud/src/services/playback_instrumentation_service.dart';
 import 'package:read_aloud/src/services/reader_preferences_service.dart';
 import 'package:read_aloud/src/services/reader_document_repository.dart';
+import 'package:read_aloud/src/services/reader_document_serialization_service.dart';
 import 'dart:io';
 import 'package:read_aloud/src/services/tts_engine.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -35,6 +36,110 @@ void main() {
   });
 
   group('ReaderController playback', () {
+    test('opens .radoc directly without source importer analysis', () async {
+      final importer = _ControlledPreparationImporter();
+      final controller = ReaderController(importer: importer);
+      addTearDown(controller.dispose);
+      await controller.initialize();
+
+      final source = DocumentImportService().importPastedText(
+        'Mara said, “We should leave now.”',
+      );
+      final serialized = const ReaderDocumentSerializationService()
+          .serializeToJsonString(source);
+      final picker = _ControlledPicker();
+      FilePicker.platform = picker;
+      final importing = controller.importDocument();
+      picker.result.complete(
+        FilePickerResult([
+          PlatformFile(
+            name: 'prepared.radoc',
+            size: utf8.encode(serialized).length,
+            bytes: Uint8List.fromList(utf8.encode(serialized)),
+          ),
+        ]),
+      );
+      await importing;
+
+      expect(importer.results, isEmpty);
+      expect(
+        controller.document.displayDocument.documentId,
+        source.displayDocument.documentId,
+      );
+      expect(
+        controller.document.baseSpeechAnnotations.toJson(),
+        source.baseSpeechAnnotations.toJson(),
+      );
+      expect(
+        const ReaderDocumentSerializationService().serializeToJsonString(
+          controller.document,
+        ),
+        serialized,
+      );
+      expect(controller.isPreparationComplete, isTrue);
+      expect(controller.hasCompleteDocumentSnapshot, isTrue);
+    });
+
+    test('opens legacy radoc v1 without source importer analysis', () async {
+      final importer = _ControlledPreparationImporter();
+      final controller = ReaderController(importer: importer);
+      addTearDown(controller.dispose);
+      await controller.initialize();
+
+      final source = DocumentImportService().importPastedText(
+        'Legacy prepared document with preserved direction.',
+      );
+      final envelope =
+          jsonDecode(
+                const ReaderDocumentSerializationService()
+                    .serializeToJsonString(source),
+              )
+              as Map<String, dynamic>;
+      envelope['formatVersion'] = 'radoc-v1';
+      final bytes = Uint8List.fromList(utf8.encode(jsonEncode(envelope)));
+      final picker = _ControlledPicker();
+      FilePicker.platform = picker;
+      final importing = controller.importDocument();
+      picker.result.complete(
+        FilePickerResult([
+          PlatformFile(name: 'legacy.radoc', size: bytes.length, bytes: bytes),
+        ]),
+      );
+      await importing;
+
+      expect(importer.results, isEmpty);
+      expect(
+        controller.document.displayDocument.documentId,
+        source.displayDocument.documentId,
+      );
+      expect(controller.document.speakableText, source.speakableText);
+    });
+
+    test('refuses malformed .radoc with an actionable status', () async {
+      final importer = _ControlledPreparationImporter();
+      final controller = ReaderController(importer: importer);
+      addTearDown(controller.dispose);
+      await controller.initialize();
+
+      final picker = _ControlledPicker();
+      FilePicker.platform = picker;
+      final importing = controller.importDocument();
+      picker.result.complete(
+        FilePickerResult([
+          PlatformFile(
+            name: 'broken.radoc',
+            size: 2,
+            bytes: Uint8List.fromList([0xff, 0x00]),
+          ),
+        ]),
+      );
+      await importing;
+
+      expect(importer.results, isEmpty);
+      expect(controller.statusMessage, contains('malformed'));
+      expect(controller.statusMessage, contains('Re-export'));
+    });
+
     test(
       'repository constructor injection caches captured byte intake',
       () async {
