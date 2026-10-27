@@ -16,8 +16,17 @@ import '../widgets/document_surface.dart';
 import '../widgets/preparation_status.dart';
 import '../widgets/reading_focus_recenter_button.dart';
 import '../widgets/voice_management_dialog.dart';
+import 'open_source_notices_screen.dart';
 
-enum _AppMenuAction { open, paste, sample, saveAudio, readerOptions, liveFeed }
+enum _AppMenuAction {
+  open,
+  paste,
+  sample,
+  saveAudio,
+  readerOptions,
+  liveFeed,
+  notices,
+}
 
 class ReadAloudScreen extends StatefulWidget {
   const ReadAloudScreen({
@@ -38,6 +47,7 @@ class _ReadAloudScreenState extends State<ReadAloudScreen> {
   late final ScrollController _ttsTraceScrollController;
   bool _isDraggingFiles = false;
   int _intakeIntent = 0;
+  bool _noticesOpen = false;
 
   @override
   void initState() {
@@ -250,6 +260,12 @@ class _ReadAloudScreenState extends State<ReadAloudScreen> {
         value: _AppMenuAction.readerOptions,
         child: Text('Reader Options'),
       ),
+      const PopupMenuDivider(),
+      const _OverflowMenuSectionLabel(label: 'Help'),
+      const PopupMenuItem<_AppMenuAction>(
+        value: _AppMenuAction.notices,
+        child: Text('Open Source Notices'),
+      ),
     ];
   }
 
@@ -260,6 +276,16 @@ class _ReadAloudScreenState extends State<ReadAloudScreen> {
         menus: _buildDesktopApplicationMenuItems(),
       ),
       PlatformMenu(label: 'File', menus: _buildDesktopFileMenuItems()),
+      PlatformMenu(
+        label: 'Help',
+        menus: [
+          PlatformMenuItem(
+            label: 'Open Source Notices',
+            onSelected: () =>
+                unawaited(_handleAppMenuAction(_AppMenuAction.notices)),
+          ),
+        ],
+      ),
     ];
   }
 
@@ -400,6 +426,18 @@ class _ReadAloudScreenState extends State<ReadAloudScreen> {
 
   Future<void> _handleAppMenuAction(_AppMenuAction action) async {
     switch (action) {
+      case _AppMenuAction.notices:
+        if (_noticesOpen) return;
+        _noticesOpen = true;
+        try {
+          await Navigator.of(context).push<void>(
+            MaterialPageRoute<void>(
+              builder: (_) => const OpenSourceNoticesScreen(),
+            ),
+          );
+        } finally {
+          _noticesOpen = false;
+        }
       case _AppMenuAction.open:
         ++_intakeIntent;
         await _controller.importDocument();

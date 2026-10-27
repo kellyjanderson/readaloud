@@ -11,6 +11,7 @@ import 'package:read_aloud/src/models/reader_resume_state.dart';
 import 'package:read_aloud/src/models/voice_profile.dart';
 import 'package:read_aloud/src/models/voice_assignment_state.dart';
 import 'package:read_aloud/src/screens/read_aloud_screen.dart';
+import 'package:read_aloud/src/screens/open_source_notices_screen.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:read_aloud/src/app.dart';
@@ -270,8 +271,18 @@ void main() {
     expect(find.text('Output'), findsOneWidget);
     expect(find.text('Live Input'), findsOneWidget);
     expect(find.text('Settings'), findsOneWidget);
+    expect(find.text('Help'), findsOneWidget);
+    expect(find.text('Open Source Notices'), findsOneWidget);
     expect(find.text('Workspace'), findsNothing);
     expect(find.byType(PopupMenuDivider), findsAtLeastNWidgets(3));
+    final document = controller.document;
+    await tester.tap(find.text('Open Source Notices'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 350));
+    expect(find.byType(OpenSourceNoticesScreen), findsOneWidget);
+    await tester.tap(find.byType(BackButton));
+    await tester.pumpAndSettle();
+    expect(identical(controller.document, document), isTrue);
   });
 
   testWidgets('reader options are grouped into named sections', (
@@ -572,6 +583,21 @@ void main() {
       expect(labels, contains('Load Sample'));
       expect(labels, contains('Save Audio...'));
       expect(labels, contains('Reader Options...'));
+      expect(labels, contains('Help'));
+      expect(labels, contains('Open Source Notices'));
+
+      final help = menuBar.menus.whereType<PlatformMenu>().singleWhere(
+        (menu) => menu.label == 'Help',
+      );
+      help.menus.single.onSelected!();
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 350));
+      expect(find.byType(OpenSourceNoticesScreen), findsOneWidget);
+      final document = controller.document;
+      await tester.tap(find.byType(BackButton));
+      await tester.pumpAndSettle();
+      expect(find.byType(OpenSourceNoticesScreen), findsNothing);
+      expect(identical(controller.document, document), isTrue);
 
       debugDefaultTargetPlatformOverride = null;
     },
