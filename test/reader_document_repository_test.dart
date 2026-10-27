@@ -12,6 +12,7 @@ import 'package:read_aloud/src/services/document_import_service.dart';
 import 'package:read_aloud/src/services/document_preparation_supervisor.dart';
 import 'package:read_aloud/src/services/reader_document_repository.dart';
 import 'package:read_aloud/src/services/reader_document_serialization_service.dart';
+import 'package:read_aloud/src/services/file_source_revision.dart';
 
 DocumentPreparationRequest request(
   int revision, {
@@ -65,6 +66,296 @@ void main() {
     repository = ReaderDocumentRepository(directory.path);
   });
   tearDown(() => directory.delete(recursive: true));
+
+  Future<ReaderDocumentCache> prepareBook({bool addDirections = false}) async {
+    final text = List.generate(
+      550,
+      (i) => 'John said, "Line $i." He smiled.',
+    ).join('\n\n');
+    final q = request(1, text: text);
+    final checkpoint = await repository.begin(sourceKey: 'book', request: q);
+    final supervisor = DocumentPreparationSupervisor();
+    addTearDown(supervisor.shutdown);
+    final result = await supervisor.prepareRanges(
+      q,
+      onPublication: (p) async {
+        var fragment = p.fragment;
+        if (addDirections) {
+          const codec = ReaderDocumentSerializationService();
+          final data =
+              jsonDecode(codec.serializeToJsonString(fragment))
+                  as Map<String, dynamic>;
+          (data['baseSpeechAnnotations']['annotations'] as List).add({
+            'annotationId': 'direction_${p.sequence}',
+            'segmentId': fragment.speechDocument.segments.first.segmentId,
+            'kind': 'deliveryIntent',
+            'startWord': 0,
+            'endWord': 1,
+            'confidence': 1.0,
+            'source': 'userOverride',
+            'deliveryIntent': 'whispered',
+          });
+          fragment = codec.deserializeFromJsonString(jsonEncode(data));
+        }
+        await checkpoint.commit(
+          DocumentPreparationPublication(
+            request: p.request,
+            sequence: p.sequence,
+            range: p.range,
+            fragment: fragment,
+            coverage: p.coverage,
+            progress: p.progress,
+            isLast: false,
+          ),
+        );
+      },
+    );
+    expect(result.outcome, DocumentPreparationOutcome.ready);
+    await checkpoint.complete();
+    return (await repository.open(
+      sourceKey: 'book',
+      sourceRevision: 'source-v1',
+    ))!;
+  }
+
+  test(
+    'export covers every committed range and retains directions and evidence',
+    () async {
+      final cache = await prepareBook(addDirections: true);
+      expect(cache.rangeCount, greaterThan(1));
+      final original = <DocumentPreparationPublication>[];
+      for (var i = 1; i <= cache.rangeCount; i++) {
+        original.add(await cache.readRange(i, request: request(2)));
+      }
+      final output = await cache.exportToFile(
+        request: request(2),
+        documentId: 'complete-book',
+        outputPath: '${directory.path}/book.radoc',
+        userVoiceAssignments: const {'cast_narrator': 'am_michael'},
+      );
+      const codec = ReaderDocumentSerializationService();
+      final restored = codec.deserializeFromJsonString(
+        await output.readAsString(),
+      );
+      expect(restored.displayDocument.documentId, 'complete-book');
+      expect(
+        (jsonDecode(await output.readAsString())
+            as Map)['userVoiceAssignments'],
+        {'cast_narrator': 'am_michael'},
+      );
+      expect(restored.wordCount, cache.manifest['wordEnd']);
+      expect(
+        restored.speechDocument.segments.map((s) => s.segmentId),
+        original.expand(
+          (p) => p.fragment.speechDocument.segments.map((s) => s.segmentId),
+        ),
+      );
+      expect(
+        restored.baseSpeechAnnotations.toJson(
+          includePerformanceIntents: true,
+        )['annotations'],
+        [
+          for (final p in original)
+            for (final annotation
+                in p.fragment.baseSpeechAnnotations.toJson(
+                      includePerformanceIntents: true,
+                    )['annotations']
+                    as List)
+              {
+                ...annotation as Map,
+                'annotationId':
+                    'range${p.sequence}:${annotation['annotationId']}',
+              },
+        ],
+      );
+      expect(
+        restored.dialogueAttributions.outcomes.map((o) => o.attributionId),
+        original.expand(
+          (p) => p.fragment.dialogueAttributions.outcomes.map(
+            (o) => o.attributionId,
+          ),
+        ),
+      );
+      expect(
+        restored.documentVoiceAttribution.ranges.last.endWordIndex,
+        cache.manifest['wordEnd'],
+      );
+      expect(
+        restored.speechDocument.segments.last.normalizedText,
+        contains('smiled'),
+      );
+    },
+  );
+
+  test(
+    'cancel, corruption and partial export preserve existing output',
+    () async {
+      final cache = await prepareBook();
+      final output = await File(
+        '${directory.path}/book.radoc',
+      ).writeAsString('prior export');
+      var checks = 0;
+      await expectLater(
+        cache.exportToFile(
+          request: request(2),
+          documentId: 'book',
+          outputPath: output.path,
+          isCurrent: () => ++checks < 3,
+        ),
+        throwsStateError,
+      );
+      expect(await output.readAsString(), 'prior export');
+      final partial = await repository.begin(
+        sourceKey: 'partial',
+        request: request(2),
+      );
+      await partial.commit(publication(request(2)));
+      final partialCache = (await repository.open(
+        sourceKey: 'partial',
+        sourceRevision: 'source-v1',
+      ))!;
+      await expectLater(
+        partialCache.exportToFile(
+          request: request(2),
+          documentId: 'book',
+          outputPath: output.path,
+        ),
+        throwsStateError,
+      );
+      await File(
+        '${cache.path}/${cache.rangeCount}.json',
+      ).writeAsString('truncated');
+      await expectLater(
+        cache.exportToFile(
+          request: request(2),
+          documentId: 'book',
+          outputPath: output.path,
+        ),
+        throwsFormatException,
+      );
+      expect(await output.readAsString(), 'prior export');
+      expect(
+        await repository.open(sourceKey: 'book', sourceRevision: 'source-v1'),
+        isNull,
+      );
+      expect(
+        await directory
+            .list(recursive: true)
+            .where((f) => f.path.endsWith('.tmp'))
+            .toList(),
+        isEmpty,
+      );
+    },
+  );
+
+  test(
+    'path mutation during preparation leaves only a partial checkpoint',
+    () async {
+      final file = await File(
+        '${directory.path}/source.txt',
+      ).writeAsString('A sentence. ' * 2200);
+      final revision = (await fileSourceRevision(file.path))!;
+      final q = DocumentPreparationRequest(
+        ownerId: 'reader',
+        revision: 1,
+        kind: DocumentPreparationKind.bytes,
+        fileName: 'source.txt',
+        sourcePath: file.path,
+        sourceRevision: revision,
+      );
+      final supervisor = DocumentPreparationSupervisor(repository: repository);
+      addTearDown(supervisor.shutdown);
+      var changed = false;
+      final result = await supervisor.prepareRanges(
+        q,
+        cacheKey: 'book',
+        onPublication: (_) async {
+          if (!changed) {
+            changed = true;
+            await file.writeAsString('An external edit.');
+          }
+        },
+      );
+      expect(result.outcome, DocumentPreparationOutcome.failed);
+      expect(result.error, contains('source file changed'));
+      expect(
+        (await repository.open(
+          sourceKey: 'book',
+          sourceRevision: revision,
+        ))!.isComplete,
+        isFalse,
+      );
+      expect(await file.readAsString(), 'An external edit.');
+    },
+  );
+
+  test(
+    'trusted file-backed ZIP completes and warm replay skips source adapter',
+    () async {
+      final archive = Archive()
+        ..add(
+          ArchiveFile.string(
+            'word/document.xml',
+            '<w:document xmlns:w="w"><w:body><w:p><w:r><w:t>${'A sentence. ' * 1800}</w:t></w:r></w:p></w:body></w:document>',
+          ),
+        );
+      final bytes = Uint8List.fromList(ZipEncoder().encode(archive));
+      final source = await File(
+        '${directory.path}/book.docx',
+      ).writeAsBytes(bytes);
+      final revision = (await fileSourceRevision(source.path))!;
+      DocumentPreparationRequest q(int rev) => DocumentPreparationRequest(
+        ownerId: 'reader',
+        revision: rev,
+        kind: DocumentPreparationKind.bytes,
+        fileName: 'book.docx',
+        sourcePath: source.path,
+        sourceRevision: revision,
+      );
+      final supervisor = DocumentPreparationSupervisor(repository: repository);
+      addTearDown(supervisor.shutdown);
+      final original = <String>[];
+      final cold = await supervisor.prepareRanges(
+        q(1),
+        cacheKey: 'book',
+        onPublication: (p) async => original.add(p.fragment.speakableText),
+      );
+      expect(cold.outcome, DocumentPreparationOutcome.ready);
+      final cache = (await repository.open(
+        sourceKey: 'book',
+        sourceRevision: revision,
+      ))!;
+      expect(cache.isComplete, isTrue);
+      expect(cache.manifest['acquisition'], isNull);
+      final repeated = <String>[];
+      final warm = await supervisor.prepareRanges(
+        q(2),
+        cacheKey: 'book',
+        acquireSource: () async => throw StateError('Must not reacquire'),
+        onPublication: (p) async => repeated.add(p.fragment.speakableText),
+      );
+      expect(warm.outcome, DocumentPreparationOutcome.ready);
+      expect(warm.workerName, 'prepared-range-cache');
+      expect(repeated, original);
+      await expectLater(
+        cache.exportToFile(
+          request: q(2),
+          documentId: 'book',
+          outputPath: '${cache.path}/1.json',
+        ),
+        throwsArgumentError,
+      );
+      await expectLater(
+        cache.exportToFile(
+          request: q(2),
+          documentId: 'book',
+          outputPath: source.path,
+        ),
+        throwsArgumentError,
+      );
+      expect(await source.readAsBytes(), bytes);
+    },
+  );
 
   test(
     'round trip retains evidence, redirect, counted IDs and explicit intent',

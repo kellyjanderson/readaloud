@@ -1,6 +1,6 @@
 # Audio Export and Headless Execution
 
-Reconciled: October 25, 2026; P4 source e18c81d
+Reconciled: October 26, 2026; RC2 #90 complete-range export source, retained P4 native evidence e18c81d
 Status: Bounded P4 native export/cancellation evidence; active-export input and human listening unverified
 
 ## Implemented structure and limitations
@@ -18,6 +18,8 @@ Durations come from decoded frame counts rather than the caller's possibly stale
 Export/probe outputs are local artifacts and are excluded from normal source control. Audio correctness requires comparing emitted output with the intended phrase and routing, not merely a successful process exit. Model availability, native plugin lifetime and toolchain compatibility affect all these routes.
 
 A new controller export is refused while voice choices are pending, with an apply-first message. Accepted export work snapshots document, planning context, exact realization/resource identity and assignment revision before planning, and guards document/assignment ownership at preparation and dispatch. Already dispatched work uses its captured references rather than borrowing later requested choices. Export owns a separate resident planner/tokenizer/runtime, shares the single native synthesis admission owner with playback, and yields inference admission below playback's low-water lead. It does not stop playback or create a second native model session. Native resource replacement cancels and drains the export owner from initialization onward; direct headless callers prepare their own revision-zero context, while controller requests validate supplied resident bindings. Accepted corrected artifacts remain pinned through assembly and runtime/planner drain, including cancellation/failure. Assembly receives ordered per-chunk metadata after bounded synthesis windows; metadata grows with document length, but whole PCM is never accumulated on the UI isolate.
+
+RC2 #90 also accepts a complete committed multi-range checkpoint. The controller reads all its ranges, validates their contiguous coverage/totals and merges existing derived data on a worker before planning export from the beginning. Global word offsets and source ordering cover the full book, even when playback currently displays its last fragment. Required cast resources are prepared against the complete graph while retaining the resident playback document identity. Partial, cancelled or corrupt checkpoints cannot dispatch an audio export. Whole-document graph metadata is materialized for explicit export; ordinary opening/replay remains incremental. Source tests with a recording engine establish request coverage and failure boundaries, not synthesized or live audio. Current-candidate native export/playback/resource competition remains an acceptance requirement.
 
 ## Bounded P4 native evidence
 

@@ -1,9 +1,11 @@
 import 'dart:convert';
 import 'dart:io';
 import 'dart:isolate';
+import 'package:path/path.dart' as p;
 
 import '../models/character_cast_registry.dart';
 import '../models/dialogue_attribution.dart';
+import '../models/document_preparation.dart';
 import '../models/display_document.dart';
 import '../models/document_voice_attribution.dart';
 import '../models/position_map.dart';
@@ -22,29 +24,218 @@ class ReaderDocumentSerializationService {
       decodeReaderDocument(source);
   static const fileExtension = '.radoc';
 
-  String serializeToJsonString(ReaderDocument document) {
+  String serializeToJsonString(
+    ReaderDocument document, {
+    Map<String, String> userVoiceAssignments = const {},
+  }) {
     const encoder = JsonEncoder.withIndent('  ');
-    return encoder.convert(_toEnvelope(document));
+    final envelope = _toEnvelope(document);
+    if (userVoiceAssignments.isNotEmpty) {
+      envelope['userVoiceAssignments'] = validateReaderDocumentVoiceAssignments(
+        userVoiceAssignments,
+        document,
+      );
+    }
+    return encoder.convert(envelope);
   }
 
   Future<File> writeToFile({
     required ReaderDocument document,
     required String outputPath,
+    bool Function()? isCurrent,
+    Map<String, String> userVoiceAssignments = const {},
+    String? sourcePath,
   }) async {
+    await requirePreservedDocumentExportPath(
+      outputPath,
+      sourcePath: sourcePath,
+    );
     final file = File(outputPath);
     await file.parent.create(recursive: true);
     final temporary = File(
       '$outputPath.$pid.${DateTime.now().microsecondsSinceEpoch}.tmp',
     );
     try {
-      final serialized = await Isolate.run(
-        () => serializeToJsonString(document),
+      final serialized = await _serializeDocumentOnWorker(
+        document,
+        Map.unmodifiable(userVoiceAssignments),
       );
+      if (isCurrent != null && !isCurrent()) {
+        throw StateError('Document export cancelled');
+      }
       await temporary.writeAsString(serialized, flush: true);
+      if (isCurrent != null && !isCurrent()) {
+        throw StateError('Document export cancelled');
+      }
       return await temporary.rename(outputPath);
     } finally {
       if (await temporary.exists()) await temporary.delete();
     }
+  }
+
+  /// Explicit export work only. Call on a worker: merging derived graphs must
+  /// never accumulate or re-analyse a growing book on the opening isolate.
+  ReaderDocument combinePreparedRanges(
+    List<DocumentPreparationPublication> ranges, {
+    required String documentId,
+  }) {
+    if (ranges.isEmpty || !ranges.last.isLast) {
+      throw const FormatException('A complete checkpoint is required');
+    }
+    final first = ranges.first.fragment;
+    final output = _toEnvelope(first);
+    final maps = ranges.map((p) => _toEnvelope(p.fragment)).toList();
+    var sourceEnd = 0;
+    var wordEnd = 0;
+    var segmentEnd = 0;
+    var blockEnd = 0;
+    var paragraphEnd = 0;
+    final cast = <String, Map<String, Object?>>{};
+    final redirects = <String, String>{};
+    Map<String, Object?> graph(Map<String, Object?> m, String name) =>
+        m[name] as Map<String, Object?>;
+    List<Map<String, Object?>> rows(
+      Map<String, Object?> m,
+      String g,
+      String k,
+    ) => (graph(m, g)[k] as List).cast<Map<String, Object?>>();
+    const lists = {
+      'displayDocument': 'blocks',
+      'speechDocument': 'segments',
+      'positionMap': 'entries',
+      'baseSpeechAnnotations': 'annotations',
+      'dialogueAttributions': 'outcomes',
+      'documentVoiceAttribution': 'ranges',
+      'basePronunciationArtifacts': 'artifacts',
+      'normalizedImportResult': 'diagnostics',
+    };
+    for (var index = 0; index < ranges.length; index++) {
+      final publication = ranges[index];
+      final r = publication.range;
+      if (publication.sequence != index + 1 ||
+          publication.request.effectiveSourceRevision !=
+              ranges.first.request.effectiveSourceRevision ||
+          r.sourceStart != sourceEnd ||
+          r.wordStart != wordEnd ||
+          r.segmentStart != segmentEnd ||
+          r.sourceEnd < r.sourceStart ||
+          r.wordEnd - r.wordStart != publication.fragment.wordCount ||
+          r.segmentEnd - r.segmentStart !=
+              publication.fragment.speechDocument.segments.length ||
+          !publication.isPreparationReady) {
+        throw const FormatException('Incomplete or unordered export coverage');
+      }
+      final m = maps[index];
+      // These producer-local counters reset for each fragment. Their references
+      // are contained within that fragment, unlike stable segment/cast IDs.
+      for (final annotation in rows(
+        m,
+        'baseSpeechAnnotations',
+        'annotations',
+      )) {
+        annotation['annotationId'] =
+            'range${publication.sequence}:${annotation['annotationId']}';
+      }
+      for (final artifact in rows(
+        m,
+        'basePronunciationArtifacts',
+        'artifacts',
+      )) {
+        artifact['artifactId'] =
+            'range${publication.sequence}:${artifact['artifactId']}';
+        for (final representation
+            in (artifact['representations'] as List)
+                .cast<Map<String, Object?>>()) {
+          representation['representationId'] =
+              'range${publication.sequence}:${representation['representationId']}';
+        }
+      }
+      if (publication.fragment.speechDocument.normalizationVersion !=
+              first.speechDocument.normalizationVersion ||
+          publication.fragment.positionMap.mappingVersion !=
+              first.positionMap.mappingVersion) {
+        throw const FormatException('Incompatible export dependencies');
+      }
+      final blocks = rows(m, 'displayDocument', 'blocks');
+      for (var i = 0; i < blocks.length; i++) {
+        blocks[i]['ordinal'] = blockEnd + i;
+      }
+      blockEnd += blocks.length;
+      final segments = rows(m, 'speechDocument', 'segments');
+      var paragraphs = 0;
+      for (var i = 0; i < segments.length; i++) {
+        final segment = segments[i];
+        segment['ordinal'] = segmentEnd + i;
+        final localParagraph = segment['paragraphIndex'] as int;
+        if (localParagraph + 1 > paragraphs) paragraphs = localParagraph + 1;
+        segment['paragraphIndex'] = paragraphEnd + localParagraph;
+      }
+      paragraphEnd += paragraphs;
+      for (final range in rows(m, 'documentVoiceAttribution', 'ranges')) {
+        range['startWordIndex'] = (range['startWordIndex'] as int) + wordEnd;
+        range['endWordIndex'] = (range['endWordIndex'] as int) + wordEnd;
+      }
+      for (final entry in rows(m, 'characterCastRegistry', 'entries')) {
+        cast[entry['castId'] as String] = entry;
+      }
+      redirects.addAll(
+        (graph(m, 'characterCastRegistry')['castIdRedirects'] as Map)
+            .cast<String, String>(),
+      );
+      sourceEnd = r.sourceEnd;
+      wordEnd = r.wordEnd;
+      segmentEnd = r.segmentEnd;
+    }
+    for (final item in lists.entries) {
+      graph(output, item.key)[item.value] = [
+        for (final m in maps) ...rows(m, item.key, item.value),
+      ];
+    }
+    graph(output, 'displayDocument')['assets'] = {
+      for (final m in maps)
+        ...(graph(m, 'displayDocument')['assets'] as Map<String, Object?>),
+    };
+    final segments = rows(output, 'speechDocument', 'segments');
+    graph(output, 'speechDocument')['totalWordCount'] = wordEnd;
+    graph(output, 'speechDocument')['segmentIndexById'] = {
+      for (var i = 0; i < segments.length; i++) segments[i]['segmentId']!: i,
+    };
+    String canonicalCast(String id) {
+      final seen = <String>{};
+      while (redirects.containsKey(id)) {
+        if (!seen.add(id)) throw const FormatException('Cyclic cast redirect');
+        id = redirects[id]!;
+      }
+      return id;
+    }
+
+    for (final range in rows(output, 'documentVoiceAttribution', 'ranges')) {
+      range['castId'] = canonicalCast(range['castId'] as String);
+    }
+    graph(output, 'characterCastRegistry')['entries'] = [
+      for (final entry in cast.entries)
+        if (canonicalCast(entry.key) == entry.key) entry.value,
+    ];
+    graph(output, 'characterCastRegistry')['castIdRedirects'] = redirects;
+    for (final name in [...lists.keys, 'characterCastRegistry']) {
+      graph(output, name)['documentId'] = documentId;
+    }
+    graph(output, 'normalizedImportResult')['sourceFingerprint'] =
+        'prepared-snapshot:${ranges.first.request.effectiveSourceRevision}';
+    output['speakableText'] = ranges
+        .map((p) => p.fragment.speakableText)
+        .join('\n\n');
+    output['displayHtml'] = ranges
+        .map((p) => p.fragment.displayHtml)
+        .join('\n');
+    output['sourceDescription'] =
+        'Complete prepared document ($sourceEnd source units)';
+    output['attachments'] = [
+      for (final m in maps) ...(m['attachments'] as List),
+    ];
+    // Decode validates graph identity, unique speech IDs and exact word coverage
+    // without invoking an importer, attribution or annotation inference.
+    return decodeReaderDocument(jsonEncode(output));
   }
 
   Map<String, Object?> _toEnvelope(ReaderDocument document) {
@@ -438,5 +629,56 @@ class ReaderDocumentSerializationService {
       CharacterGenderEvidenceSource.pronoun => 'pronoun',
       CharacterGenderEvidenceSource.unknown => 'unknown',
     };
+  }
+}
+
+// Keep closures outside async scopes containing UI cancellation callbacks.
+Future<String> _serializeDocumentOnWorker(
+  ReaderDocument document,
+  Map<String, String> userVoiceAssignments,
+) => Isolate.run(
+  () => const ReaderDocumentSerializationService().serializeToJsonString(
+    document,
+    userVoiceAssignments: userVoiceAssignments,
+  ),
+);
+
+/// Resolve an existing destination parent so directory symlinks cannot alias
+/// original inputs or checkpoint files. Rename replaces a final symlink rather
+/// than following it; the parent is the relevant publication destination.
+Future<void> requirePreservedDocumentExportPath(
+  String outputPath, {
+  String? sourcePath,
+  String? checkpointRoot,
+}) async {
+  Future<String> destination(String path) async {
+    final absolute = p.normalize(p.absolute(path));
+    try {
+      final parent = await Directory(
+        p.dirname(absolute),
+      ).resolveSymbolicLinks();
+      return p.join(parent, p.basename(absolute));
+    } on FileSystemException {
+      return absolute;
+    }
+  }
+
+  final output = await destination(outputPath);
+  if (sourcePath != null) {
+    var source = await destination(sourcePath);
+    try {
+      source = await File(sourcePath).resolveSymbolicLinks();
+    } on FileSystemException {
+      // A source may have been moved since its complete checkpoint was made.
+    }
+    if (output == source || output == await destination(sourcePath)) {
+      throw ArgumentError('Export must preserve the original source');
+    }
+  }
+  if (checkpointRoot != null) {
+    final root = await Directory(checkpointRoot).resolveSymbolicLinks();
+    if (output == root || p.isWithin(root, output)) {
+      throw ArgumentError('Export must preserve checkpoint files');
+    }
   }
 }

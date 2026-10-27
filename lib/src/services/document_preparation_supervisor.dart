@@ -13,6 +13,7 @@ import 'document_import_service.dart';
 import 'prepared_document_snapshot.dart';
 import 'reader_document_serialization_service.dart';
 import 'reader_document_repository.dart';
+import 'file_source_revision.dart';
 
 /// Main-isolate owner of one active operation and one latest pending request.
 /// Native PDF extraction drains in its adapter; only pure Dart work is killed.
@@ -134,8 +135,22 @@ class DocumentPreparationSupervisor {
     _AcquisitionProof? acquisitionProof;
     try {
       var request = job.request;
-      // Cache identity must be supplied by the source owner; a path or prefix
-      // fingerprint alone cannot attest a source revision.
+      final pathRevision =
+          request.sourcePath != null &&
+          isFileSourceRevision(request.sourceRevision);
+      Future<void> validatePath() async {
+        if (pathRevision) {
+          await requireFileSourceRevision(
+            request.sourcePath!,
+            request.sourceRevision!,
+          );
+        }
+      }
+
+      if (pathRevision) await validatePath();
+      if (job.result.isCompleted) return;
+      // Only source-owner revisions admit reuse. A local path generation is
+      // checked before/after acquisition and every bounded replay publication.
       if (repository != null &&
           job.cacheKey != null &&
           request.sourceRevision != null &&
@@ -159,6 +174,7 @@ class DocumentPreparationSupervisor {
               final publication = sequence == 1
                   ? first
                   : await _readCachedRange(cache, sequence, request);
+              await validatePath();
               if (job.result.isCompleted) return;
               timer.cancel();
               await Future.any<void>([
@@ -194,6 +210,7 @@ class DocumentPreparationSupervisor {
         );
       }
       if (job.acquireSource != null) await job.acquireSource!();
+      if (pathRevision) await validatePath();
       if (job.result.isCompleted) return;
       job.onProgress?.call(
         const PreparationProgress(
@@ -367,9 +384,13 @@ class DocumentPreparationSupervisor {
             message.request.revision == request.revision &&
             message.request.kind == request.kind &&
             message.request.watchSession == request.watchSession) {
+          if (message.outcome == DocumentPreparationOutcome.ready) {
+            await validatePath();
+            if (job.result.isCompleted) return;
+          }
           if (message.outcome == DocumentPreparationOutcome.ready &&
               checkpoint != null &&
-              acquisitionProof != null) {
+              (acquisitionProof != null || pathRevision)) {
             await checkpoint.complete(
               receipt: acquisitionProof?.receipt,
               provisionalDocumentId: acquisitionProof?.provisionalDocumentId,
