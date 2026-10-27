@@ -3,8 +3,10 @@ import 'dart:io';
 import 'dart:isolate';
 
 import 'package:crypto/crypto.dart';
+import 'package:path/path.dart' as p;
 
 import '../models/document_preparation.dart';
+import '../models/reader_document.dart';
 import 'reader_document_serialization_service.dart';
 
 /// Single main-isolate admission owner. Each cache key has one active writer;
@@ -125,6 +127,77 @@ class ReaderDocumentCache {
   }
 
   String get sourceRevision => manifest['sourceRevision'] as String;
+
+  bool _assembling = false;
+
+  /// Explicit export owns one sequential range reader. Validation advances with
+  /// reads, never on startup. Cancellation/replacement is checked between reads
+  /// and after the finite worker merge; stale work cannot publish a result.
+  Future<ReaderDocument> readCompleteDocument({
+    required DocumentPreparationRequest request,
+    required String documentId,
+    bool Function()? isCurrent,
+  }) async {
+    if (_assembling) throw StateError('A checkpoint export is already active');
+    if (!isComplete || rangeCount == 0) {
+      throw StateError('A complete checkpoint is required for export');
+    }
+    void checkCurrent() {
+      if (isCurrent != null && !isCurrent()) {
+        throw StateError('Checkpoint export cancelled');
+      }
+    }
+
+    _assembling = true;
+    try {
+      final ranges = <DocumentPreparationPublication>[];
+      for (var i = 1; i <= rangeCount; i++) {
+        checkCurrent();
+        final range = await readRange(i, request: request);
+        checkCurrent();
+        ranges.add(range);
+      }
+      final last = ranges.last.range;
+      if (last.sourceEnd != manifest['sourceEnd'] ||
+          last.wordEnd != manifest['wordEnd'] ||
+          last.segmentEnd != manifest['segmentEnd']) {
+        throw const FormatException('Checkpoint totals do not match ranges');
+      }
+      final document = await _combineRangesOnWorker(ranges, documentId);
+      checkCurrent();
+      return document;
+    } on FormatException {
+      await invalidate();
+      rethrow;
+    } finally {
+      _assembling = false;
+    }
+  }
+
+  Future<File> exportToFile({
+    required DocumentPreparationRequest request,
+    required String documentId,
+    required String outputPath,
+    bool Function()? isCurrent,
+    Map<String, String> userVoiceAssignments = const {},
+  }) async {
+    await requirePreservedDocumentExportPath(
+      outputPath,
+      sourcePath: request.sourcePath,
+      checkpointRoot: p.dirname(path),
+    );
+    final document = await readCompleteDocument(
+      request: request,
+      documentId: documentId,
+      isCurrent: isCurrent,
+    );
+    return const ReaderDocumentSerializationService().writeToFile(
+      document: document,
+      outputPath: outputPath,
+      isCurrent: isCurrent,
+      userVoiceAssignments: userVoiceAssignments,
+    );
+  }
 
   /// Revokes only this immutable generation. A stale reader cannot remove a
   /// newer manifest: each generation has its own persistent invalidation marker.
@@ -407,3 +480,14 @@ Future<void> _atomicWrite(String path, String contents) async {
   await temporary.writeAsString(contents, flush: true);
   await temporary.rename(path);
 }
+
+// Do not capture readCompleteDocument's cancellation closure or repository.
+Future<ReaderDocument> _combineRangesOnWorker(
+  List<DocumentPreparationPublication> ranges,
+  String documentId,
+) => Isolate.run(
+  () => const ReaderDocumentSerializationService().combinePreparedRanges(
+    ranges,
+    documentId: documentId,
+  ),
+);

@@ -181,6 +181,80 @@ void main() {
     });
 
     test(
+      'radoc voice choices restore into fresh preferences and malformed choices mutate nothing',
+      () async {
+        final directory = await Directory.systemTemp.createTemp(
+          'radoc-voice-restore-',
+        );
+        addTearDown(() => directory.delete(recursive: true));
+        final document = DocumentImportService().importPastedText(
+          'John said, "Hello." He smiled.',
+        );
+        const codec = ReaderDocumentSerializationService();
+        final output = await codec.writeToFile(
+          document: document,
+          outputPath: '${directory.path}/book.radoc',
+          userVoiceAssignments: {'cast_narrator': 'am_michael'},
+        );
+        SharedPreferences.setMockInitialValues({});
+        final engine = _FakeTtsEngine(voices: _multiVoiceTestVoices);
+        final controller = ReaderController(ttsEngine: engine);
+        addTearDown(controller.dispose);
+        await controller.initialize();
+        await controller.importFilePaths([output.path]);
+        expect(
+          controller.document.displayDocument.documentId,
+          document.displayDocument.documentId,
+        );
+        expect(
+          controller.castVoiceAssignments!
+              .forCastId('cast_narrator')!
+              .effectiveVoiceId,
+          'am_michael',
+        );
+        final stored = await ReaderPreferencesService().load();
+        expect(
+          stored.storedDocumentCastVoiceAssignments[controller
+              .sessionDocumentId]?['cast_narrator'],
+          'am_michael',
+        );
+        await controller.assignVoiceToCast('cast_narrator', 'af_bella');
+        await controller.importFilePaths([output.path]);
+        expect(
+          controller.castVoiceAssignments!
+              .forCastId('cast_narrator')!
+              .effectiveVoiceId,
+          'af_bella',
+        );
+        final before = await ReaderPreferencesService().load();
+        final malformed =
+            jsonDecode(await output.readAsString()) as Map<String, dynamic>;
+        malformed['userVoiceAssignments'] = {'cast_narrator': 42};
+        final invalid = await File(
+          '${directory.path}/invalid.radoc',
+        ).writeAsString(jsonEncode(malformed));
+        await controller.importFilePaths([invalid.path]);
+        expect(controller.statusMessage, contains('malformed'));
+        expect(
+          controller.document.displayDocument.documentId,
+          document.displayDocument.documentId,
+        );
+        expect(
+          controller.castVoiceAssignments!
+              .forCastId('cast_narrator')!
+              .effectiveVoiceId,
+          'af_bella',
+        );
+        expect(
+          (await ReaderPreferencesService().load())
+              .storedDocumentCastVoiceAssignments,
+          before.storedDocumentCastVoiceAssignments,
+        );
+        await controller.shutdownPreparation();
+      },
+    );
+
+    test(
       'callback byte intake is admitted before acquisition and skips cache identity',
       () async {
         final directory = await Directory.systemTemp.createTemp(
@@ -394,7 +468,7 @@ void main() {
         );
         expect(cache!.isComplete, isTrue);
         expect(cache.rangeCount, greaterThan(3));
-        expect(controller.hasCompleteDocumentSnapshot, isFalse);
+        expect(controller.hasCompleteDocumentSnapshot, isTrue);
         final migrated = await ReaderPreferencesService().load();
         expect(
           migrated
@@ -564,7 +638,7 @@ void main() {
     );
 
     test(
-      'mutable file-backed intake has no cache revision or invented canonical identity',
+      'stable file-backed intake warms without repeated source analysis and stale edits miss',
       () async {
         final directory = await Directory.systemTemp.createTemp(
           'controller-file-cache-',
@@ -585,19 +659,226 @@ void main() {
           '${directory.path}/book.txt',
         ).writeAsString(text);
         await controller.importFilePaths([file.path]);
-        expect(source.requests.single.sourceRevision, isNull);
-        expect(source.cacheKeys.single, isNull);
+        expect(
+          source.requests.single.sourceRevision,
+          startsWith('file-stat-v2:'),
+        );
+        expect(source.cacheKeys.single, source.requests.single.sourceRevision);
         expect(_words(await _consumeRanges(controller, engine)), _words(text));
-        // Sequential acquisition may prove identity at EOF, but no path/stat
-        // cache revision was invented before reading the source.
         expect(
           controller.sessionDocumentId,
           'doc_acquired_${sha256.convert(utf8.encode(text))}',
         );
-        expect(await Directory('${directory.path}/cache').exists(), isFalse);
+        final coldId = controller.sessionDocumentId;
+        await controller.assignVoiceToCast('cast_narrator', 'af_bella');
+        await controller.importFilePaths([file.path]);
+        expect(controller.sessionDocumentId, coldId);
+        expect(_words(await _consumeRanges(controller, engine)), _words(text));
+        expect(source.results.last.workerName, 'prepared-range-cache');
+        expect(
+          source.requests.last.sourceRevision,
+          source.requests.first.sourceRevision,
+        );
+        final changed = text.replaceFirst('Ledger', 'Edited');
+        final priorTime = (await file.stat()).modified;
+        await file.writeAsString(changed);
+        await file.setLastModified(priorTime);
+        await controller.importFilePaths([file.path]);
+        expect(
+          _words(await _consumeRanges(controller, engine)),
+          _words(changed),
+        );
+        expect(source.results.last.workerName, isNot('prepared-range-cache'));
+        expect(
+          source.requests.last.sourceRevision,
+          isNot(source.requests.first.sourceRevision),
+        );
+        expect(await file.readAsString(), changed);
         await controller.shutdownPreparation();
       },
     );
+
+    test(
+      'complete checkpoint exports every ordered range as radoc and audio',
+      () async {
+        final directory = await Directory.systemTemp.createTemp(
+          'controller-range-export-',
+        );
+        addTearDown(() => directory.delete(recursive: true));
+        final repository = ReaderDocumentRepository('${directory.path}/cache');
+        final source = _RecordingPreparationSupervisor(repository);
+        final engine = _ExportTtsEngine();
+        final controller = ReaderController(
+          preparationSupervisor: source,
+          ttsEngine: engine,
+        );
+        addTearDown(controller.dispose);
+        await controller.initialize();
+        final text = _cacheProse();
+        await controller.importPastedText(text);
+        expect(
+          await controller.exportDocumentToPath(
+            '${directory.path}/partial.radoc',
+          ),
+          isNull,
+        );
+        expect(_words(await _consumeRanges(controller, engine)), _words(text));
+        engine.emitStart();
+        expect(controller.hasCompleteDocumentSnapshot, isTrue);
+        final canonical = controller.sessionDocumentId;
+        final output = await controller.exportDocumentToPath(
+          '${directory.path}/book.radoc',
+        );
+        expect(output, isNotNull);
+        final restored = const ReaderDocumentSerializationService()
+            .deserializeFromJsonString(await output!.readAsString());
+        expect(_words(restored.speakableText), _words(text));
+        expect(restored.displayDocument.documentId, canonical);
+        expect(
+          restored.speechDocument.segments.last.normalizedText,
+          contains('marker999'),
+        );
+        final audio = await controller.exportAudioToPath(
+          '${directory.path}/book.wav',
+        );
+        expect(audio, isNotNull, reason: controller.statusMessage);
+        expect(_words(engine.exported!.text), _words(text));
+        expect(
+          engine.exported!.speechDocument!.totalWordCount,
+          _words(text).length,
+        );
+        expect(
+          engine
+              .exported!
+              .planningContext!
+              .realization
+              .speechDocument
+              .segments
+              .last
+              .normalizedText,
+          contains('marker999'),
+        );
+        await controller.assignVoiceToCast('cast_narrator', 'af_bella');
+        expect(await controller.exportDocumentToPath(output.path), isNotNull);
+        await controller.importFilePaths([output.path]);
+        expect(controller.document.displayDocument.documentId, canonical);
+        expect(_words(controller.document.speakableText), _words(text));
+        expect(source.requests, hasLength(1));
+        expect(
+          controller.castVoiceAssignments!
+              .forCastId('cast_narrator')!
+              .effectiveVoiceId,
+          'af_bella',
+        );
+        await controller.shutdownPreparation();
+        SharedPreferences.setMockInitialValues({});
+        final reopenSource = _RecordingPreparationSupervisor(repository);
+        final reopened = ReaderController(
+          preparationSupervisor: reopenSource,
+          ttsEngine: _FakeTtsEngine(voices: _multiVoiceTestVoices),
+        );
+        addTearDown(reopened.dispose);
+        await reopened.initialize();
+        await reopened.importFilePaths([output.path]);
+        expect(reopenSource.requests, isEmpty);
+        expect(_words(reopened.document.speakableText), _words(text));
+        expect(reopened.sessionDocumentId, canonical);
+        expect(
+          reopened.castVoiceAssignments!
+              .forCastId('cast_narrator')!
+              .effectiveVoiceId,
+          'af_bella',
+        );
+        await reopened.shutdownPreparation();
+      },
+    );
+    test(
+      'damaged checkpoint export exposes preparation retry and retains source and choices',
+      () async {
+        final directory = await Directory.systemTemp.createTemp(
+          'controller-export-damaged-',
+        );
+        addTearDown(() => directory.delete(recursive: true));
+        final repository = ReaderDocumentRepository('${directory.path}/cache');
+        final source = _RecordingPreparationSupervisor(repository);
+        final engine = _FakeTtsEngine(voices: _multiVoiceTestVoices);
+        final controller = ReaderController(
+          preparationSupervisor: source,
+          ttsEngine: engine,
+        );
+        addTearDown(controller.dispose);
+        await controller.initialize();
+        final text = _cacheProse();
+        await controller.importPastedText(text);
+        await _consumeRanges(controller, engine);
+        await controller.assignVoiceToCast('cast_narrator', 'af_bella');
+        final cache = (await repository.open(
+          sourceKey: source.cacheKeys.single!,
+          sourceRevision: source.requests.single.sourceRevision!,
+        ))!;
+        await File(
+          '${cache.path}/${cache.rangeCount}.json',
+        ).writeAsString('corrupt');
+        final output = await File(
+          '${directory.path}/book.radoc',
+        ).writeAsString('prior export');
+        expect(await controller.exportDocumentToPath(output.path), isNull);
+        expect(controller.canRetryDocumentPreparation, isTrue);
+        expect(controller.hasCompleteDocumentSnapshot, isFalse);
+        expect(await output.readAsString(), 'prior export');
+        await controller.retryDocumentPreparation();
+        expect(_words(await _consumeRanges(controller, engine)), _words(text));
+        expect(source.results.last.workerName, isNot('prepared-range-cache'));
+        expect(
+          controller.castVoiceAssignments!
+              .forCastId('cast_narrator')!
+              .effectiveVoiceId,
+          'af_bella',
+        );
+        expect(await controller.exportDocumentToPath(output.path), isNotNull);
+        await controller.shutdownPreparation();
+      },
+    );
+
+    test(
+      'replacement cancels checkpoint export before publication and preserves prior output',
+      () async {
+        final directory = await Directory.systemTemp.createTemp(
+          'controller-export-cancel-',
+        );
+        addTearDown(() => directory.delete(recursive: true));
+        final repository = _HeldExportRepository('${directory.path}/cache');
+        final engine = _FakeTtsEngine();
+        final controller = ReaderController(
+          documentRepository: repository,
+          ttsEngine: engine,
+        );
+        addTearDown(controller.dispose);
+        await controller.initialize();
+        await controller.importPastedText(_cacheProse());
+        await _consumeRanges(controller, engine);
+        final output = await File(
+          '${directory.path}/book.radoc',
+        ).writeAsString('prior export');
+        repository.holdNextOpen = true;
+        final exporting = controller.exportDocumentToPath(output.path);
+        await repository.started.future;
+        expect(
+          await controller.exportDocumentToPath(
+            '${directory.path}/overlap.radoc',
+          ),
+          isNull,
+        );
+        await controller.importPastedText('New current document.');
+        repository.release.complete();
+        expect(await exporting, isNull);
+        expect(await output.readAsString(), 'prior export');
+        expect(controller.document.speakableText, 'New current document.');
+        expect(await File('${directory.path}/overlap.radoc').exists(), isFalse);
+        await controller.shutdownPreparation();
+      },
+    );
+
     test(
       'real large-source parser feeds every bounded range once before EOF',
       () async {
@@ -2936,6 +3217,38 @@ const List<VoiceProfile> _multiVoiceTestVoices = <VoiceProfile>[
   ),
 ];
 
+class _ExportTtsEngine extends _FakeTtsEngine implements AudioExportCapable {
+  _ExportTtsEngine() : super(voices: _multiVoiceTestVoices);
+  TtsExportRequest? exported;
+  @override
+  Future<void> speak(TtsSpeakRequest request) async {
+    await super.speak(request);
+    request.onPlaybackReady?.call(
+      TtsPlaybackAcknowledgment(
+        documentId: request.documentId!,
+        assignmentRevision: request.assignmentRevision,
+        generationId: 'source-test',
+        bindingFingerprints: const {},
+      ),
+    );
+  }
+
+  @override
+  Future<TtsExportResult> exportAudio(TtsExportRequest request) async {
+    exported = request;
+    return TtsExportResult(
+      outputPath: request.outputPath,
+      sidecarPath: '${request.outputPath}.json',
+      duration: const Duration(seconds: 1),
+      chunkCount: 1,
+      voiceId: 'af_bella',
+      rate: 1,
+      engineId: 'source-test',
+      engineVersion: '1',
+    );
+  }
+}
+
 class _FakeTtsEngine implements TtsEngine {
   _FakeTtsEngine({
     List<VoiceProfile> voices = const <VoiceProfile>[
@@ -3171,6 +3484,30 @@ class _HeldOpenRepository extends ReaderDocumentRepository {
     String dependencies = ReaderDocumentRepository.dependencyVersion,
   }) async {
     if (!started.isCompleted) {
+      started.complete();
+      await release.future;
+    }
+    return super.open(
+      sourceKey: sourceKey,
+      sourceRevision: sourceRevision,
+      dependencies: dependencies,
+    );
+  }
+}
+
+class _HeldExportRepository extends ReaderDocumentRepository {
+  _HeldExportRepository(super.rootPath);
+  bool holdNextOpen = false;
+  final started = Completer<void>();
+  final release = Completer<void>();
+  @override
+  Future<ReaderDocumentCache?> open({
+    required String sourceKey,
+    required String sourceRevision,
+    String dependencies = ReaderDocumentRepository.dependencyVersion,
+  }) async {
+    if (holdNextOpen) {
+      holdNextOpen = false;
       started.complete();
       await release.future;
     }

@@ -26,9 +26,50 @@ Uri? _uri(dynamic v) => v == null ? null : Uri.parse(v as String);
 
 /// V1 remains readable; unknown future schemas fail closed. Derived artifacts
 /// are decoded as data, never recreated by analysis on the opening isolate.
-ReaderDocument decodeReaderDocument(String source) {
+ReaderDocument decodeReaderDocument(String source) =>
+    decodeReaderDocumentWithPreferences(source).document;
+
+({ReaderDocument document, Map<String, String> userVoiceAssignments})
+decodeReaderDocumentWithPreferences(String source) {
   try {
     final m = _map(jsonDecode(source));
+    final document = _decodeReaderDocument(m);
+    final assignments = m.containsKey('userVoiceAssignments')
+        ? validateReaderDocumentVoiceAssignments(
+            m['userVoiceAssignments'],
+            document,
+          )
+        : const <String, String>{};
+    return (document: document, userVoiceAssignments: assignments);
+  } catch (error) {
+    if (error is FormatException) rethrow;
+    throw FormatException('Invalid radoc snapshot: $error');
+  }
+}
+
+Map<String, String> validateReaderDocumentVoiceAssignments(
+  Object? value,
+  ReaderDocument document,
+) {
+  final validCastIds = {
+    ...document.characterCastRegistry.entries.map((entry) => entry.castId),
+    ...document.characterCastRegistry.castIdRedirects.keys,
+  };
+  if (value is! Map ||
+      value.entries.any(
+        (entry) =>
+            entry.key is! String ||
+            !validCastIds.contains(entry.key) ||
+            entry.value is! String ||
+            (entry.value as String).trim().isEmpty,
+      )) {
+    throw const FormatException('Invalid user voice assignments');
+  }
+  return Map<String, String>.unmodifiable(value.cast<String, String>());
+}
+
+ReaderDocument _decodeReaderDocument(Map<String, dynamic> m) {
+  try {
     if (m['formatId'] != 'read-aloud-document' ||
         !const ['radoc-v1', 'radoc-v2'].contains(m['formatVersion'])) {
       throw const FormatException('Unsupported radoc schema');
