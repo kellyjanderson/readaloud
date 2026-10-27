@@ -7,8 +7,10 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:read_aloud/src/controllers/reader_controller.dart';
 import 'package:read_aloud/src/models/voice_profile.dart';
 import 'package:read_aloud/src/screens/read_aloud_screen.dart';
+import 'package:read_aloud/src/services/reader_preferences_service.dart';
 import 'package:read_aloud/src/services/tts_engine.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:read_aloud/src/widgets/voice_management_dialog.dart';
 
 void main() {
   setUp(() => SharedPreferences.setMockInitialValues({}));
@@ -32,7 +34,6 @@ void main() {
         enablePlatformIntakeChannels: false,
       );
       addTearDown(() async {
-        await controller.shutdownPreparation();
         controller.dispose();
       });
       final source = File(
@@ -64,9 +65,12 @@ void main() {
         (oracle['canonicalCastIds'] as List).cast<String>().toSet(),
       );
       await tester.tap(find.byKey(const Key('character-voices-entry')));
-      await tester.pumpAndSettle();
+      await _pumpUi(tester);
       expect(find.text('Voice Management'), findsOneWidget);
-      final entries = controller.document.characterCastRegistry.entries;
+      final registry = controller.document.characterCastRegistry;
+      final characters = registry.characterEntries.toList()
+        ..sort((a, b) => a.displayLabel.compareTo(b.displayLabel));
+      final entries = [registry.narratorEntry, ...characters];
       for (final entry in entries) {
         final card = find.byKey(
           Key('voice-assignment-card-${entry.displayLabel}'),
@@ -74,7 +78,12 @@ void main() {
         await tester.scrollUntilVisible(
           card,
           180,
-          scrollable: find.byType(Scrollable).first,
+          scrollable: find
+              .descendant(
+                of: find.byType(VoiceManagementDialog),
+                matching: find.byType(Scrollable),
+              )
+              .first,
         );
         final dropdown = find.descendant(
           of: card,
@@ -115,13 +124,13 @@ void main() {
           .effectiveVoiceId;
       final next = current == 'af_bella' ? 'am_michael' : 'af_bella';
       await tester.tap(dropdown);
-      await tester.pumpAndSettle();
+      await _pumpUi(tester);
       await tester.tap(
         find
             .text(next == 'af_bella' ? 'Bella (en-US)' : 'Michael (en-US)')
             .last,
       );
-      await tester.pumpAndSettle();
+      await _pumpUi(tester);
       expect(
         controller.castVoiceAssignments!
             .forCastId(last.castId)!
@@ -129,9 +138,9 @@ void main() {
         next,
       );
       await tester.tap(find.byTooltip('Close voice management'));
-      await tester.pumpAndSettle();
+      await _pumpUi(tester);
       await tester.tap(find.byKey(const Key('character-voices-entry')));
-      await tester.pumpAndSettle();
+      await _pumpUi(tester);
       expect(
         controller.castVoiceAssignments!
             .forCastId(last.castId)!
@@ -141,7 +150,12 @@ void main() {
       await tester.scrollUntilVisible(
         card,
         180,
-        scrollable: find.byType(Scrollable).first,
+        scrollable: find
+            .descendant(
+              of: find.byType(VoiceManagementDialog),
+              matching: find.byType(Scrollable),
+            )
+            .first,
       );
       await tester.ensureVisible(dropdown);
       expect(
@@ -156,21 +170,22 @@ void main() {
         next,
       );
       expect(tester.takeException(), isNull);
-      await tester.pumpWidget(const SizedBox.shrink());
+      await _finish(tester, controller);
     });
   }
 
   testWidgets(
     'normal file intake publishes real ranges before delayed speech startup and pending Play cancels',
     (tester) async {
-      final directory = await Directory.systemTemp.createTemp('reader-ui-');
-      final source = await File('${directory.path}/chapter.txt').writeAsString(
-        List.generate(
-          600,
-          (i) => 'Paragraph $i follows a quiet path through the valley.',
-        ).join('\n\n'),
-      );
-      addTearDown(() => directory.delete(recursive: true));
+      final directory = Directory.systemTemp.createTempSync('reader-ui-');
+      final source = File('${directory.path}/chapter.txt')
+        ..writeAsStringSync(
+          List.generate(
+            600,
+            (i) => 'Paragraph $i follows a quiet path through the valley.',
+          ).join('\n\n'),
+        );
+      addTearDown(() => directory.deleteSync(recursive: true));
       final gate = Completer<void>();
       final engine = _UiEngine(startup: gate.future);
       final controller = ReaderController(
@@ -179,7 +194,6 @@ void main() {
       );
       addTearDown(() async {
         if (!gate.isCompleted) gate.complete();
-        await controller.shutdownPreparation();
         controller.dispose();
       });
       await tester.pumpWidget(
@@ -207,29 +221,29 @@ void main() {
       expect(engine.requests.single.text, contains('Paragraph 0'));
       expect(controller.hasCompleteDocumentSnapshot, isFalse);
       expect(tester.takeException(), isNull);
-      await tester.pumpWidget(const SizedBox.shrink());
+      await _finish(tester, controller);
     },
   );
 
   testWidgets(
     'cancel and retry preserve a published document and restore usable intake',
     (tester) async {
-      final directory = await Directory.systemTemp.createTemp(
+      final directory = Directory.systemTemp.createTempSync(
         'reader-cancel-ui-',
       );
-      final file = await File('${directory.path}/book.txt').writeAsString(
-        List.generate(
-          900,
-          (i) => 'Paragraph $i follows the river through the valley.',
-        ).join('\n\n'),
-      );
-      addTearDown(() => directory.delete(recursive: true));
+      final file = File('${directory.path}/book.txt')
+        ..writeAsStringSync(
+          List.generate(
+            900,
+            (i) => 'Paragraph $i follows the river through the valley.',
+          ).join('\n\n'),
+        );
+      addTearDown(() => directory.deleteSync(recursive: true));
       final controller = ReaderController(
         ttsEngine: _UiEngine(),
         enablePlatformIntakeChannels: false,
       );
       addTearDown(() async {
-        await controller.shutdownPreparation();
         controller.dispose();
       });
       await tester.pumpWidget(
@@ -252,12 +266,14 @@ void main() {
       await tester.tap(find.byKey(const Key('retry-preparation')));
       await _pumpUntil(
         tester,
-        () => controller.preparedRanges.isNotEmpty && controller.isImporting,
+        () =>
+            controller.preparedRanges.isNotEmpty &&
+            controller.isPreparingDocument,
       );
       expect(controller.document.speakableText, contains('Paragraph 0'));
       expect(controller.canRetryDocumentPreparation, isFalse);
       expect(tester.takeException(), isNull);
-      await tester.pumpWidget(const SizedBox.shrink());
+      await _finish(tester, controller);
     },
   );
 
@@ -271,7 +287,6 @@ void main() {
         enablePlatformIntakeChannels: false,
       );
       addTearDown(() async {
-        await controller.shutdownPreparation();
         controller.dispose();
       });
       await tester.pumpWidget(
@@ -295,10 +310,10 @@ void main() {
             !controller.isPreparingDocument,
       );
       await tester.tap(find.byKey(const Key('character-voices-entry')));
-      await tester.pumpAndSettle();
+      await _pumpUi(tester);
       expect(find.text('Voice Management'), findsOneWidget);
       await tester.tap(find.byTooltip('Close voice management'));
-      await tester.pumpAndSettle();
+      await _pumpUi(tester);
       await tester.tap(find.byKey(const Key('retry-startup')));
       await _pumpUntil(
         tester,
@@ -312,16 +327,76 @@ void main() {
         {'John', 'Maria'},
       );
       expect(tester.takeException(), isNull);
-      await tester.pumpWidget(const SizedBox.shrink());
+      await _finish(tester, controller);
     },
   );
+
+  testWidgets('explicit paste wins over delayed startup restore', (
+    tester,
+  ) async {
+    final directory = Directory.systemTemp.createTempSync(
+      'reader-restore-order-',
+    );
+    final previous = File('${directory.path}/previous.txt')
+      ..writeAsStringSync(
+        'The remembered document must not replace a new user request.',
+      );
+    addTearDown(() => directory.deleteSync(recursive: true));
+    SharedPreferences.setMockInitialValues({
+      'reader.lastOpenedDocumentPath': previous.path,
+    });
+    final preferences = _DelayedPreferences();
+    final controller = ReaderController(
+      ttsEngine: _UiEngine(),
+      preferencesService: preferences,
+      enablePlatformIntakeChannels: false,
+    );
+    addTearDown(() async {
+      controller.dispose();
+    });
+    await tester.pumpWidget(
+      MaterialApp(home: ReadAloudScreen(controller: controller)),
+    );
+    await _paste(
+      tester,
+      'This new document was explicitly chosen while preferences were loading.',
+    );
+    preferences.ready.complete();
+    await _pumpUntil(
+      tester,
+      () =>
+          controller.preparedRanges.isNotEmpty &&
+          !controller.isPreparingDocument,
+    );
+    expect(controller.document.speakableText, contains('explicitly chosen'));
+    expect(
+      controller.document.speakableText,
+      isNot(contains('remembered document')),
+    );
+    expect(tester.takeException(), isNull);
+    await _finish(tester, controller);
+  });
+}
+
+Future<void> _finish(WidgetTester tester, ReaderController controller) async {
+  var complete = false;
+  final drained = controller.shutdownPreparation().then((_) => complete = true);
+  await _pumpUntil(tester, () => complete);
+  await drained;
+  await tester.pumpWidget(const SizedBox.shrink());
+  await tester.pump();
+}
+
+Future<void> _pumpUi(WidgetTester tester) async {
+  await tester.pump();
+  await tester.pump(const Duration(milliseconds: 400));
 }
 
 Future<void> _paste(WidgetTester tester, String text) async {
   await tester.tap(find.byKey(const Key('reader-overflow-menu')));
-  await tester.pumpAndSettle();
+  await _pumpUi(tester);
   await tester.tap(find.text('Paste Text'));
-  await tester.pumpAndSettle();
+  await _pumpUi(tester);
   await tester.enterText(find.byType(TextField), text);
   await tester.tap(find.text('Load'));
   await tester.pump(const Duration(milliseconds: 400));
@@ -388,4 +463,13 @@ class _UiEngine implements TtsEngine, VoiceLibraryCapable {
   void dispose() {}
   @override
   dynamic noSuchMethod(Invocation invocation) => null;
+}
+
+class _DelayedPreferences extends ReaderPreferencesService {
+  final ready = Completer<void>();
+  @override
+  Future<ReaderPreferences> load() async {
+    await ready.future;
+    return super.load();
+  }
 }

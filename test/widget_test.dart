@@ -120,7 +120,7 @@ void main() {
   });
 
   testWidgets('renders the reader shell', (WidgetTester tester) async {
-    await tester.pumpWidget(const ReadAloudApp());
+    await tester.pumpWidget(_testApp());
     await tester.pump(const Duration(milliseconds: 300));
 
     expect(find.text('Read Aloud'), findsWidgets);
@@ -165,7 +165,7 @@ void main() {
     await tester.binding.setSurfaceSize(const Size(800, 420));
     addTearDown(() => tester.binding.setSurfaceSize(null));
 
-    await tester.pumpWidget(const ReadAloudApp());
+    await tester.pumpWidget(_testApp());
     await tester.pump(const Duration(milliseconds: 300));
 
     expect(tester.takeException(), isNull);
@@ -205,7 +205,7 @@ void main() {
         () => tester.platformDispatcher.clearPlatformBrightnessTestValue(),
       );
 
-      await tester.pumpWidget(const ReadAloudApp());
+      await tester.pumpWidget(_testApp());
       await tester.pump(const Duration(milliseconds: 300));
 
       expect(
@@ -473,7 +473,7 @@ void main() {
       () => tester.platformDispatcher.clearPlatformBrightnessTestValue(),
     );
 
-    await tester.pumpWidget(const ReadAloudApp());
+    await tester.pumpWidget(_testApp());
     await tester.pump(const Duration(milliseconds: 300));
 
     final shell = tester.widget<DecoratedBox>(
@@ -576,6 +576,16 @@ void main() {
       debugDefaultTargetPlatformOverride = null;
     },
   );
+}
+
+ReadAloudApp _testApp() {
+  final controller = ReaderController(
+    preferencesService: _MemoryReaderPreferencesService(),
+    ttsEngine: _FakeTtsEngine(),
+    enablePlatformIntakeChannels: false,
+  );
+  addTearDown(controller.dispose);
+  return ReadAloudApp(controller: controller);
 }
 
 Iterable<String> _collectMenuLabels(Iterable<PlatformMenuItem> items) sync* {
