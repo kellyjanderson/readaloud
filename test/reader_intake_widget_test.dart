@@ -5,15 +5,162 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:read_aloud/src/controllers/reader_controller.dart';
+import 'package:read_aloud/src/models/document_preparation.dart';
 import 'package:read_aloud/src/models/voice_profile.dart';
 import 'package:read_aloud/src/screens/read_aloud_screen.dart';
 import 'package:read_aloud/src/services/reader_preferences_service.dart';
+import 'package:read_aloud/src/services/document_preparation_supervisor.dart';
+import 'package:read_aloud/src/services/reader_document_repository.dart';
 import 'package:read_aloud/src/services/tts_engine.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:read_aloud/src/widgets/voice_management_dialog.dart';
 
 void main() {
   setUp(() => SharedPreferences.setMockInitialValues({}));
+
+  testWidgets(
+    'normal pasted source reopens its automatic radoc checkpoint and retained cast choices without analysis',
+    (tester) async {
+      await tester.binding.setSurfaceSize(const Size(1000, 1100));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      final directory = Directory.systemTemp.createTempSync(
+        'reader-warm-source-ui-',
+      );
+      addTearDown(() => directory.deleteSync(recursive: true));
+      final repository = ReaderDocumentRepository(directory.path);
+      final text = File(
+        'test/fixtures/rc2_prose/text/orchard.txt',
+      ).readAsStringSync();
+      final cold = ReaderController(
+        documentRepository: repository,
+        ttsEngine: _UiEngine(),
+        enablePlatformIntakeChannels: false,
+      );
+      addTearDown(cold.dispose);
+      await tester.pumpWidget(
+        MaterialApp(home: ReadAloudScreen(controller: cold)),
+      );
+      await _pumpUntil(tester, () => !cold.isInitializing);
+      await _paste(tester, text);
+      await _pumpUntil(
+        tester,
+        () => cold.isPreparationComplete && cold.preparedRanges.isNotEmpty,
+      );
+      final expectedDocumentId = cold.sessionDocumentId;
+      final expectedCastIds = cold.document.characterCastRegistry.entries
+          .map((entry) => entry.castId)
+          .toSet();
+      final expectedText = cold.document.speakableText;
+      await tester.tap(find.byKey(const Key('character-voices-entry')));
+      await _pumpUi(tester);
+      final narrator = find.byKey(const Key('voice-assignment-card-Narrator'));
+      final dropdown = find.descendant(
+        of: narrator,
+        matching: find.byType(DropdownButtonFormField<String>),
+      );
+      await tester.ensureVisible(dropdown);
+      await _pumpUi(tester);
+      final original = cold.castVoiceAssignments!
+          .forCastId('cast_narrator')!
+          .effectiveVoiceId;
+      final chosen = original == 'af_bella' ? 'am_michael' : 'af_bella';
+      await tester.tap(dropdown);
+      await _pumpUi(tester);
+      await tester.tap(
+        find
+            .text(chosen == 'af_bella' ? 'Bella (en-US)' : 'Michael (en-US)')
+            .last,
+      );
+      await _pumpUi(tester);
+      expect(
+        cold.castVoiceAssignments!.forCastId('cast_narrator')!.effectiveVoiceId,
+        chosen,
+      );
+      await _finish(tester, cold);
+
+      final manifest = directory
+          .listSync(recursive: true)
+          .whereType<File>()
+          .singleWhere((file) => file.path.endsWith('/manifest.json'));
+      final before = manifest.readAsStringSync();
+      final payload =
+          jsonDecode((jsonDecode(before) as Map)['payload'] as String) as Map;
+      expect(payload['complete'], isTrue);
+      final rangeFiles = directory
+          .listSync(recursive: true)
+          .whereType<File>()
+          .where((file) => RegExp(r'/[0-9]+\.json$').hasMatch(file.path))
+          .toList();
+      expect(rangeFiles, isNotEmpty);
+      final rangePayload =
+          jsonDecode(
+                (jsonDecode(rangeFiles.first.readAsStringSync())
+                        as Map)['payload']
+                    as String,
+              )
+              as Map;
+      expect(
+        (jsonDecode(rangePayload['document'] as String)
+            as Map)['formatVersion'],
+        'radoc-v2',
+      );
+
+      // This is source replay through the real repository, not .radoc file-picker
+      // intake. Any fallback to source preparation is an explicit test failure.
+      final warmEngine = _UiEngine();
+      final warm = ReaderController(
+        preparationSupervisor: DocumentPreparationSupervisor(
+          repository: repository,
+          workerEntryPoint: _rejectUnexpectedSourcePreparation,
+        ),
+        ttsEngine: warmEngine,
+        enablePlatformIntakeChannels: false,
+      );
+      addTearDown(warm.dispose);
+      await tester.pumpWidget(
+        MaterialApp(home: ReadAloudScreen(controller: warm)),
+      );
+      await _pumpUntil(tester, () => !warm.isInitializing);
+      await _paste(tester, text);
+      await _pumpUntil(
+        tester,
+        () => warm.isPreparationComplete && warm.preparedRanges.isNotEmpty,
+      );
+      expect(warm.document.speakableText, expectedText);
+      expect(warm.sessionDocumentId, expectedDocumentId);
+      expect(
+        warm.document.characterCastRegistry.entries
+            .map((entry) => entry.castId)
+            .toSet(),
+        expectedCastIds,
+      );
+      expect(
+        warm.castVoiceAssignments!.forCastId('cast_narrator')!.effectiveVoiceId,
+        chosen,
+      );
+      expect(
+        manifest.readAsStringSync(),
+        before,
+        reason: 'Warm replay reuses the immutable completed checkpoint',
+      );
+      await tester.tap(find.byKey(const Key('character-voices-entry')));
+      await _pumpUi(tester);
+      final warmDropdown = find.descendant(
+        of: find.byKey(const Key('voice-assignment-card-Narrator')),
+        matching: find.byType(DropdownButton<String>),
+      );
+      await tester.ensureVisible(warmDropdown);
+      await _pumpUi(tester);
+      expect(tester.widget<DropdownButton<String>>(warmDropdown).value, chosen);
+      await tester.tap(find.byTooltip('Close voice management'));
+      await _pumpUi(tester);
+      await tester.tap(find.bySemanticsLabel('Play'));
+      await _pumpUntil(tester, () => warmEngine.requests.isNotEmpty);
+      expect(warmEngine.requests.single.text, expectedText);
+      expect(tester.takeException(), isNull);
+      await _finish(tester, warm);
+    },
+  );
 
   for (final name in [
     'tide',
@@ -472,4 +619,14 @@ class _DelayedPreferences extends ReaderPreferencesService {
     await ready.future;
     return super.load();
   }
+}
+
+void _rejectUnexpectedSourcePreparation(DocumentPreparationWorkerInput input) {
+  input.reply.send(
+    DocumentPreparationResult(
+      request: input.request,
+      outcome: DocumentPreparationOutcome.failed,
+      error: 'Unexpected source analysis during warm replay',
+    ),
+  );
 }
