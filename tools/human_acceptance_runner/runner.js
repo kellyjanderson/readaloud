@@ -13,6 +13,15 @@
   if (!scenarios.some((test) => test.id === state.active)) state.active = defaults.active;
 
   const byId = new Map(scenarios.map((test) => [test.id, test]));
+  const earlierTitles = {
+    'p0-narrator': 'Narration without dialogue',
+    'p1-one-person': 'One person speaks',
+    'p2-two-people': 'Two people talk',
+    'p3-three-people': 'Three people talk',
+    'p4-four-people': 'Four people talk',
+    'choose-voices': 'Choose character voices',
+    'reading-along': 'Read along while listening'
+  };
   const $ = (id) => document.getElementById(id);
   const safeText = (value) => String(value ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
   const resultFor = (id) => state.results[id] || { outcome: '', notes: '', appClosed: false, startedAt: '', closedAt: '' };
@@ -105,11 +114,21 @@
   }
 
   function downloadResults() {
+    const earlierSession = Object.entries(state.results)
+      .filter(([id]) => !byId.has(id))
+      .map(([id, result]) => ({
+        id,
+        title: earlierTitles[id] || id,
+        result: result.outcome && result.appClosed ? result.outcome : 'incomplete',
+        notes: result.notes || '',
+        appClosed: Boolean(result.appClosed)
+      }));
     const report = {
       schema: 2,
       exportedAt: new Date().toISOString(),
       tester: state.tester,
       app: { path: appPath, sourceRevision },
+      earlierSession,
       results: scenarios.map((test) => ({ id: test.id, title: test.title, passage: passages.get(test.passageId).label, result: finished(test) ? resultFor(test.id).outcome : 'incomplete', notes: resultFor(test.id).notes, appClosed: resultFor(test.id).appClosed }))
     };
     const url = URL.createObjectURL(new Blob([JSON.stringify(report, null, 2)], { type: 'application/json' }));
@@ -125,6 +144,8 @@
     try { await navigator.clipboard.writeText(appPath); $('copy-build-path').textContent = 'Copied'; }
     catch { $('build-path').focus(); $('build-path').select(); $('copy-build-path').textContent = 'Path selected'; }
   });
+  const earlierCaseCount = Object.keys(state.results).filter((id) => !byId.has(id)).length;
+  if (earlierCaseCount) $('prior-session-note').hidden = false;
   $('export-session').addEventListener('click', downloadResults);
   $('reset-session').addEventListener('click', () => {
     if (state.runningCaseId) { window.alert('Quit Read Aloud before resetting this test session.'); return; }
