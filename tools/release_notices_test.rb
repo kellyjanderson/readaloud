@@ -46,7 +46,10 @@ class ReleaseNoticesTest < Minitest::Test
     File.write(File.join(@root, 'third_party/licenses/dart/just_audio/LICENSE'), 'truncated grant')
     assert_match(/Notice changed/, assert_raises(RuntimeError) { ReleaseNotices.validate(@root) }.message)
     FileUtils.cp(File.join(ReleaseNotices::ROOT, 'third_party/licenses/dart/just_audio/LICENSE'), File.join(@root, 'third_party/licenses/dart/just_audio/LICENSE'))
-    File.write(File.join(@root, 'assets/lexicon.json'), '{}')
+    asset = File.join(@root, 'assets/lexicon.json')
+    # Source assets may be read-only; this test mutates only its private copy.
+    File.chmod(0o600, asset)
+    File.write(asset, '{}')
     assert_match(/Asset changed/, assert_raises(RuntimeError) { ReleaseNotices.validate(@root) }.message)
   end
 

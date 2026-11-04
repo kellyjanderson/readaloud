@@ -2,8 +2,8 @@
   "schema": 1,
   "scope": "Conservative pubspec.lock superset, source grants and native notices; not release clearance",
   "lockfiles": {
-    "pubspec.lock": "a822fa801e1f78fb31f6c59a76f701d24349ea32c0d560952f9e143aeb3b3b21",
-    "macos/Podfile.lock": "c4c97b9cdfbdf488ab0e163009f2a7840c141d545522f24532662abd025874cf"
+    "pubspec.lock": "487288b1cf69a127913310d6963c58264d9d975c08235b03fe06b0cb60507d09",
+    "macos/Podfile.lock": "68d9ee161c6509ca3c2162fdbde53d02cf2e70f29d9ade7846e270e4d24645fe"
   },
   "packages": [
     {
@@ -1113,6 +1113,16 @@
       "sha256": "1d531df6b9d1142fa3f6abc518cfab21adc6570ae11631c40a7ba366c93d2eaa",
       "source": "Flutter 3.41.5 2c9eb20739dfec95e2c74bd3dfa4601b0a8a36aa / engine 052f31d115eceda8cbff1b3481fcde4330c4ae12 / bin/cache/pkg/sky_engine/LICENSE",
       "qualification": "Collected from coordinator-verified arm64 SDK; engine notices are a conservative superset. Actual candidate-to-SDK identity still requires build provenance."
+    },
+    {
+      "id": "dart:super_sliver_list",
+      "notice": "dart/super_sliver_list/LICENSE",
+      "sha256": "c7ea398d228b0f28d4dc0fb7157ee0e184afafab764294398d398cc8eeb1b5aa",
+      "source": "https://pub.dev/api/archives/super_sliver_list-0.4.1.tar.gz",
+      "version": "0.4.1",
+      "dependency": "direct main",
+      "package_source": "hosted",
+      "archive_sha256": "b1e1e64d08ce40e459b9bb5d9f8e361617c26b8c9f3bb967760b0f436b6e3f56"
     }
   ],
   "assets": [
@@ -1219,6 +1229,11 @@
       "comparison_archive_sha256_verified": true
     },
     {
+      "path": "assets/mlx_tts_worker.py",
+      "size": 14498,
+      "sha256": "f55b2dd5b15ca9c4522e79388aeca88520ba1beacd8bc18d5e192ad498b7c990"
+    },
+    {
       "path": "assets/tokenizer_vocab.json",
       "size": 1381,
       "sha256": "123650fd1232dde6c12311a4708fb4fd4e992bb3b4ffba9f4551348821dc1e2b",
@@ -1244,6 +1259,166 @@
       "comparison_sha256": "f4ed0e7a0ba8cbebe2a5cdc4ef012522a1a3d14dbda6acd1015fe88b4176acb3",
       "matches_comparison": true,
       "comparison_archive_sha256_verified": true
+    },
+    {
+      "path": "assets/voice_library/README.md",
+      "size": 905,
+      "sha256": "4ea411d58092dc77a37e8b4e4692541c3a080b6c08d7733e7bd967ff94deb596"
+    },
+    {
+      "path": "assets/voice_library/audrey.wav",
+      "size": 522284,
+      "sha256": "d4ffe59104bd027141bd73848592bec76225e9e45a4131869498b277e557684b"
+    },
+    {
+      "path": "assets/voice_library/ava.wav",
+      "size": 464684,
+      "sha256": "d4e1e097a0fe6e9d894846f5891cd553bc9f5b092d98f7a81f58116a3363492f"
+    },
+    {
+      "path": "assets/voice_library/ben.wav",
+      "size": 495404,
+      "sha256": "0a88cd844a47d1059dc755dacc7a9cb7fca0ebee4680bfbaf73dd378d1a8a308"
+    },
+    {
+      "path": "assets/voice_library/bruno.wav",
+      "size": 418604,
+      "sha256": "56a7e42f5a0e76e7e36ec56c6c06d04e00b487f6afb13941276832ec409a254d"
+    },
+    {
+      "path": "assets/voice_library/celia.wav",
+      "size": 506924,
+      "sha256": "84a4b2c736325f43062a352ee3c4bd4c533935d98b99c7b489d52a0de405b03e"
+    },
+    {
+      "path": "assets/voice_library/clara.wav",
+      "size": 514604,
+      "sha256": "1e8c55a12c6a99fb5b8e5c359b0c164209d9b8b6b8ad5720639867d536f70217"
+    },
+    {
+      "path": "assets/voice_library/david.wav",
+      "size": 476204,
+      "sha256": "f434aac385f49d81c0a8432fd014df7a248b8740b0d761d240b3ced38c6e3178"
+    },
+    {
+      "path": "assets/voice_library/duncan.wav",
+      "size": 468524,
+      "sha256": "2eeb59dbb9a4222cefabf1e8462dfc8d0880c1131647abb3ce98d0968c0d47b1"
+    },
+    {
+      "path": "assets/voice_library/elin.wav",
+      "size": 460844,
+      "sha256": "2e7b56ed0e36fe23f973a2c2c53b9d1046886cb4fcdabd50083b43ac076c541d"
+    },
+    {
+      "path": "assets/voice_library/finn.wav",
+      "size": 426284,
+      "sha256": "830b3f9df743714fc235d91636d3e352470e9d60f21937b8eb8a5989542dc451"
+    },
+    {
+      "path": "assets/voice_library/grace.wav",
+      "size": 476204,
+      "sha256": "01d74ff6d95c5fbf221dddb3c4197058d4bbb2ec3f5e18ab7cca94dddd4e27ec"
+    },
+    {
+      "path": "assets/voice_library/hugo.wav",
+      "size": 564524,
+      "sha256": "a4063014b4b5389a5c06f5d15e32cb1e7d7439f5a33c9f053358ca3d87e9fa9b"
+    },
+    {
+      "path": "assets/voice_library/iris.wav",
+      "size": 449324,
+      "sha256": "9921c061fd68fce27855daf4672d6d9686eb620fa70283f37b4f2ba9f61f746c"
+    },
+    {
+      "path": "assets/voice_library/jack.wav",
+      "size": 414764,
+      "sha256": "4e926d90eddf9531d5b237512979816e73664456d94daae6250742dcf6b95f8e"
+    },
+    {
+      "path": "assets/voice_library/keira.wav",
+      "size": 503084,
+      "sha256": "4a0896187aed6de821da43e1db87c0a564d32437f9d495f86ffbf84b8f474c99"
+    },
+    {
+      "path": "assets/voice_library/leon.wav",
+      "size": 453164,
+      "sha256": "e19e82fc2b75fff192d976521323ed16ce163397ad5628ef98daf6f5ff1abdde"
+    },
+    {
+      "path": "assets/voice_library/library.json",
+      "size": 18993,
+      "sha256": "81af40e2416e86c7d381682458ebb734aeda26389ff8ac9963d63ddec202a045"
+    },
+    {
+      "path": "assets/voice_library/maya.wav",
+      "size": 522284,
+      "sha256": "4281ec57a59ea4dccb21a5eb70c83776c3c600aea9b03b8fb057201410eeb92c"
+    },
+    {
+      "path": "assets/voice_library/noah.wav",
+      "size": 483884,
+      "sha256": "f47314f5aef6c5d14bda4b7a0c9e34d5900799cb0bfd190dad55ecdc6a8a2e5d"
+    },
+    {
+      "path": "assets/voice_library/olive.wav",
+      "size": 503084,
+      "sha256": "5fa0e95cae13d469b74ded2b3710d065c6fc0619d0d23a7d51cdf12f5d911b38"
+    },
+    {
+      "path": "assets/voice_library/peter.wav",
+      "size": 391724,
+      "sha256": "7403ff1165ffe153c3410dd11d379c72df4e867e1e44c00b6efe9710b298dbc2"
+    },
+    {
+      "path": "assets/voice_library/quinn.wav",
+      "size": 480044,
+      "sha256": "4ed8ca3e62cddb1f6280cd01f193bb22e4edcb8085f6072ec5a5285600b8c7e5"
+    },
+    {
+      "path": "assets/voice_library/rajan.wav",
+      "size": 468524,
+      "sha256": "08361713785b02751d8bc3ab1287f2784ad6e6e44190451eec0f227dbae8029d"
+    },
+    {
+      "path": "assets/voice_library/sarah.wav",
+      "size": 495404,
+      "sha256": "afc141299fcff103652f39e632946277c1a6e24541f9fa6cba908acf8ffdeb8a"
+    },
+    {
+      "path": "assets/voice_library/theo.wav",
+      "size": 491564,
+      "sha256": "5f9141fd963775eb5bc54a831cf2f1ac100a7371379c2a28ece0e48b0e10c4ad"
+    },
+    {
+      "path": "assets/voice_library/una.wav",
+      "size": 441644,
+      "sha256": "b37477d384f74c6f1344a179810412e4edebf12a0248b1144bc358b6e0d3fd86"
+    },
+    {
+      "path": "assets/voice_library/victor.wav",
+      "size": 553004,
+      "sha256": "ed8c7be4f2b25de90742a223b1488655674d5971a6620dfde8a748741def8125"
+    },
+    {
+      "path": "assets/voice_library/willow.wav",
+      "size": 510764,
+      "sha256": "408c24a82039818e086a35f135b40a8791ee8dc2bc2fb9e57182fe865f12c8de"
+    },
+    {
+      "path": "assets/voice_library/xavier.wav",
+      "size": 422444,
+      "sha256": "56fa75a5d317ccf9ee8bb1cbd080f91e647c84a92e58d6c7e2a520b871ba643e"
+    },
+    {
+      "path": "assets/voice_library/yasmin.wav",
+      "size": 487724,
+      "sha256": "cf75ae12bfde197ee733f856cd68b50a570b435693327282ee31a540121980b9"
+    },
+    {
+      "path": "assets/voice_library/zach.wav",
+      "size": 422444,
+      "sha256": "ce21406d2ad3cf463bff6c842f639b5798f9c0663fe3031eabc2d53d01aa740e"
     }
   ],
   "blockers": [
@@ -1270,6 +1445,10 @@
     {
       "id": "distribution-signing",
       "detail": "Distribution identity, Developer ID/notarization authorization and entitlements validation not established. No keychain/signing/config changes authorized; local candidate may be ad hoc and must disclose assessment."
+    },
+    {
+      "id": "mlx-runtime-and-reference-voices",
+      "detail": "Directed MLX baseline adds embedded Python/MLX runtime dependencies and thirty synthetic Qwen VoiceDesign references (provenance in assets/voice_library/library.json). Full bundled runtime license closure and generated reference distribution review remain required before a distributable release. Cleanup tag is a source checkpoint, not clearance."
     }
   ]
 }
