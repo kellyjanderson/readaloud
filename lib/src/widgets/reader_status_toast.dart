@@ -66,6 +66,14 @@ class ReaderToastStyle {
 }
 
 String sanitizeReaderStatusMessage(String message) {
+  if (message.startsWith('Failed to import ') &&
+      message.contains('ENTITLEMENT_')) {
+    return 'The file chooser could not open because this app build is missing its macOS file-access permission. Reinstall a correctly signed build.';
+  }
+  if (message.startsWith('Failed to import ') &&
+      message.contains('PlatformException')) {
+    return 'The file could not be opened. Try choosing it again.';
+  }
   if (message.contains('PlatformException') ||
       message.contains('INFERENCE_ERROR')) {
     return 'Speech generation hit a temporary error. Try playing again.';

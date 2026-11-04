@@ -45,6 +45,29 @@ abstract interface class ResourcePreparationCapable {
   Future<void> shutdownResources();
 }
 
+class TtsResourceProgress {
+  const TtsResourceProgress({
+    required this.stage,
+    required this.message,
+    this.completed,
+    this.total,
+    this.unit = 'bytes',
+  });
+
+  final String stage;
+  final String message;
+  final int? completed;
+  final int? total;
+  final String unit;
+
+  double? get fraction =>
+      total == null || total! <= 0 ? null : (completed ?? 0) / total!;
+}
+
+abstract interface class TtsResourceProgressCapable {
+  set onResourceProgress(void Function(TtsResourceProgress?)? callback);
+}
+
 class TtsProgressUpdate {
   const TtsProgressUpdate({
     required this.startOffset,
@@ -153,6 +176,18 @@ class VoiceLibraryEntry {
   final String? statusMessage;
 }
 
+/// Pull-only continuation of one source session. The consumer owns cancellation;
+/// the producer returns null only at verified EOF. A single consumer calls this
+/// once per sequence, after admitting the previous range's plan.
+class TtsRangeContinuation {
+  const TtsRangeContinuation({required this.next});
+  final Future<TtsSpeakRequest?> Function(
+    int previousSequence,
+    Future<void> cancelled,
+  )
+  next;
+}
+
 class TtsSpeakRequest {
   const TtsSpeakRequest({
     required this.text,
@@ -168,6 +203,10 @@ class TtsSpeakRequest {
     this.assignmentRevision = 0,
     this.isCurrent,
     this.onPlaybackReady,
+    this.rangeSequence = 0,
+    this.sourceWordOffset = 0,
+    this.continuation,
+    this.onRangeActive,
   });
 
   final String text;
@@ -183,6 +222,12 @@ class TtsSpeakRequest {
   final int assignmentRevision;
   final bool Function()? isCurrent;
   final void Function(TtsPlaybackAcknowledgment)? onPlaybackReady;
+  final int rangeSequence;
+  final int sourceWordOffset;
+  final TtsRangeContinuation? continuation;
+
+  /// Invoked on actual player progress, never on lookahead preparation.
+  final void Function()? onRangeActive;
 }
 
 class TtsExportRequest {
@@ -252,6 +297,11 @@ abstract interface class AudioExportCapable {
 /// The resulting effective rate must identify both cache content and inference.
 abstract interface class SpeechRateNormalizationCapable {
   double normalizeSpeechRate(double requested);
+}
+
+abstract interface class TtsEngineIdentityCapable {
+  String get engineId;
+  String get engineVersion;
 }
 
 abstract interface class TtsEngine {

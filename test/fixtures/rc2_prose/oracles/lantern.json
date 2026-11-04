@@ -1,0 +1,36 @@
+{
+  "audit": "https://github.com/kellyjanderson/readaloud/issues/89#issuecomment-6429213427",
+  "sourceSha256": "c19e509bc1f3b3f562583896b99b073275d0a06717b1669191a277926697f8cd",
+  "canonicalCastIds": [
+    "cast_character_mara"
+  ],
+  "namedNonSpeakers": [
+    "Ellis"
+  ],
+  "dialogue": [
+    {
+      "text": "We can mend the frame before evening,",
+      "startUtf16": 340,
+      "endUtf16": 377,
+      "castId": "cast_character_mara"
+    },
+    {
+      "text": "That can wait until the hinge is safe.",
+      "startUtf16": 1124,
+      "endUtf16": 1162,
+      "castId": "cast_character_mara"
+    },
+    {
+      "text": "I will leave a record this time,",
+      "startUtf16": 1817,
+      "endUtf16": 1849,
+      "castId": "cast_character_mara"
+    }
+  ],
+  "voiceHints": {
+    "cast_character_mara": {
+      "gender": "female",
+      "source": "pronoun"
+    }
+  }
+}

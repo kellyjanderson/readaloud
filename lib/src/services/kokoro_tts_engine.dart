@@ -23,6 +23,9 @@ import 'kokoro_assets.dart';
 import 'kokoro_playback_coordination.dart';
 import 'kokoro_pronunciation_translation_service.dart';
 import 'kokoro_speech_worker_processor.dart';
+import 'speech_worker_pipeline.dart';
+import 'mlx_speech_worker_processor.dart';
+import 'mlx_voice_library.dart';
 import 'kokoro_voice_catalog.dart';
 import 'kokoro_voice_manager.dart';
 import 'kokoro_voice_repository.dart';
@@ -38,15 +41,29 @@ class KokoroTtsEngine
         AudioExportCapable,
         ResourcePreparationCapable,
         SpeechRateNormalizationCapable,
-        VoiceAssignmentPlaybackCapable {
+        VoiceAssignmentPlaybackCapable,
+        TtsEngineIdentityCapable,
+        TtsResourceProgressCapable {
   KokoroTtsEngine({
     AudioPlayer? player,
     this.beforeSynthesis,
     AudioArtifactPins? artifactPins,
     ExportedAudioAssembler? exportAssembler,
+    String engineId = 'kokoro',
+    String? mlxModelPath,
+    String? mlxPythonPath,
+    int mlxQuantizationBits = 0,
   }) : _player = player ?? AudioPlayer(useLazyPreparation: false),
        _artifactPins = artifactPins ?? AudioArtifactPins.shared,
-       _exportAssembler = exportAssembler ?? ExportedAudioAssembler();
+       _exportAssembler = exportAssembler ?? ExportedAudioAssembler(),
+       _engineId = engineId,
+       _engineVersion = engineId == 'kokoro'
+           ? '12'
+           : mlxTtsVersionFor(mlxQuantizationBits),
+       _mlxQuantizationBits = mlxQuantizationBits,
+       _mlxModelPath = mlxModelPath ?? '',
+       _mlxPythonPath = mlxPythonPath ?? '',
+       _selectedVoiceId = defaultVoiceIdFor(engineId);
   final Future<void> Function()? beforeSynthesis;
   final AudioArtifactPins _artifactPins;
   late final _playbackPins = KokoroPlaybackArtifactPins(_artifactPins);
@@ -72,8 +89,25 @@ class KokoroTtsEngine
     );
   }
 
-  static const String _engineId = 'kokoro';
-  static const String _engineVersion = '12';
+  final String _engineId;
+  final String _engineVersion;
+  @override
+  String get engineId => _engineId;
+  @override
+  String get engineVersion => _engineVersion;
+  final String _mlxModelPath;
+  final String _mlxPythonPath;
+  final int _mlxQuantizationBits;
+  // MLX voice IDs are not Kokoro language-family codes. Current reading input
+  // is English; preset/reference accent metadata must not change text language.
+  String _languageTagForVoice(String voiceId) =>
+      _usesMlx ? 'en-us' : KokoroVoiceCatalog.languageTagForVoice(voiceId);
+
+  bool get _usesMlx =>
+      _engineId == 'qwen3_tts_base_1_7b' ||
+      _engineId == 'qwen3_tts_1_7b' ||
+      _engineId == 'voxtral_4b' ||
+      _engineId == 'moss_tts_8b';
   static const String _fallbackNormalizationVersion =
       'read-aloud-normalization-v1';
   static const int _targetChunkWordCount = 18;
@@ -87,6 +121,7 @@ class KokoroTtsEngine
 
   void Function()? _onStart;
   void Function(String? message)? _onStatus;
+  void Function(TtsResourceProgress?)? _onResourceProgress;
   void Function(TtsProgressUpdate update)? _onProgress;
   void Function()? _onComplete;
   void Function(String message)? _onError;
@@ -96,17 +131,26 @@ class KokoroTtsEngine
   TtsDebugTraceSession? _debugTraceSession;
 
   Future<void>? _initializationFuture;
+  bool _initializationClosed = false;
+  bool _initializationMayRetry = true;
   KokoroAssetBundle? _assets;
   KokoroVoiceRepository? _voiceRepository;
   KokoroVoiceManager? _voiceManager;
   KokoroTokenizationWorker? _playbackTokenizer;
   KokoroTokenizationWorker? _exportTokenizer;
   SpeechRuntime? _speechRuntime;
-  KokoroSpeechWorkerChunkProcessor? _resourceProcessor;
+  SpeechWorkerResourceOwner? _resourceProcessor;
   SynthesisAdmissionOwner? _admission;
   CancellableSynthesisLease? _playbackLease;
   CancellableSynthesisLease? _exportLease;
-  final _nativePlaybackAdmission = KokoroBufferAdmission();
+  late final _nativePlaybackAdmission = _newPlaybackAdmissionPolicy();
+
+  KokoroBufferAdmission _newPlaybackAdmissionPolicy() => _usesMlx
+      ? KokoroBufferAdmission(
+          high: const Duration(seconds: 20),
+          low: const Duration(seconds: 12),
+        )
+      : KokoroBufferAdmission();
   final Set<Future<void>> _playbackPreparationTasks = {};
   int get pendingPlaybackPreparationTasks => _playbackPreparationTasks.length;
 
@@ -139,6 +183,8 @@ class KokoroTtsEngine
   }
 
   final SpeechPlanningSupervisor _refillPlanner = SpeechPlanningSupervisor();
+  Completer<void> _continuationCancelled = Completer<void>();
+  final Map<int, void Function()> _rangeActivations = {};
   Completer<void> _bufferChanged = Completer<void>();
   int _nextReadyWord = 0;
   _PlaybackChunk? _startupFirstChunk;
@@ -252,6 +298,8 @@ class KokoroTtsEngine
   Future<void> shutdownResources() =>
       _resourceShutdown ??= _shutdownResources();
   Future<void> _shutdownResources() async {
+    _initializationClosed = true;
+    await _initializationFuture?.catchError((Object _) {});
     ++_resourceRequest;
     _resourcesReady = false;
     await Future.wait([_cancelExport(), stop()]);
@@ -274,7 +322,7 @@ class KokoroTtsEngine
   int? _activePlaybackToken;
   double _speechRate = 1.0;
   double _volume = 1.0;
-  String _selectedVoiceId = KokoroVoiceCatalog.defaultVoiceId;
+  String _selectedVoiceId;
   List<_PlaybackChunk> _activeChunks = const <_PlaybackChunk>[];
   final _producedAudioCredit = KokoroProducedAudioCredit();
   int _currentChunkIndex = 0;
@@ -302,6 +350,10 @@ class KokoroTtsEngine
   @override
   set onStatus(void Function(String? message)? callback) =>
       _onStatus = callback;
+
+  @override
+  set onResourceProgress(void Function(TtsResourceProgress?)? callback) =>
+      _onResourceProgress = callback;
 
   @override
   set onProgress(void Function(TtsProgressUpdate update)? callback) =>
@@ -335,16 +387,37 @@ class KokoroTtsEngine
       _onVoiceLibraryChanged = callback;
 
   @override
-  List<VoiceLibraryEntry> get voiceLibrary =>
-      _voiceManager?.voiceLibrary ?? const <VoiceLibraryEntry>[];
+  List<VoiceLibraryEntry> get voiceLibrary => _usesMlx
+      ? mlxVoicesFor(_engineId)
+            .map(
+              (voice) => VoiceLibraryEntry(
+                voice: voice,
+                isBundled: true,
+                isInstalled: true,
+              ),
+            )
+            .toList(growable: false)
+      : _voiceManager?.voiceLibrary ?? const <VoiceLibraryEntry>[];
 
   @override
   Future<void> initialize() {
-    _initializationFuture ??= _initializeInternal();
+    if (_initializationClosed) {
+      return Future.error(StateError('Speech resource owner has shut down.'));
+    }
+    _initializationFuture ??= _initializeInternal().catchError((Object error) {
+      // Failed startup is retryable. Concurrent callers share this attempt;
+      // partial native owners drain before a subsequent attempt is admitted.
+      if (_initializationMayRetry) _initializationFuture = null;
+      throw error;
+    });
     return _initializationFuture!;
   }
 
   Future<void> _initializeInternal() async {
+    await _playerStateSubscription?.cancel();
+    await _positionSubscription?.cancel();
+    await _currentIndexSubscription?.cancel();
+    _requireInitializationOwner();
     _playerStateSubscription = _player.playerStateStream.listen((state) {
       if (_activePlaybackToken == null) {
         return;
@@ -406,20 +479,30 @@ class KokoroTtsEngine
     );
 
     try {
-      _assets = await prepareKokoroAssets(onStatus: _onStatus);
+      if (_usesMlx && usesReferenceVoiceLibrary(_engineId)) {
+        await MlxVoiceLibrary.load();
+        _requireInitializationOwner();
+      }
+      _assets = await prepareKokoroAssets(
+        onStatus: _onStatus,
+        includeModel: !_usesMlx,
+      );
+      _requireInitializationOwner();
       if (!(_assets?.isReady ?? false)) {
-        _onError?.call(_assets?.message ?? 'Kokoro is unavailable.');
-        return;
+        throw StateError(_assets?.message ?? 'Kokoro is unavailable.');
       }
 
-      _voiceRepository = KokoroVoiceRepository(
-        voicesDirectory: _assets!.voicesDirectory!,
-      );
-      _voiceManager = KokoroVoiceManager(
-        voiceRepository: _voiceRepository!,
-        cacheDirectory: _assets!.cacheDirectory!,
-      )..onChanged = () => _onVoiceLibraryChanged?.call();
-      await _voiceManager!.initialize();
+      if (!_usesMlx) {
+        _voiceRepository = KokoroVoiceRepository(
+          voicesDirectory: _assets!.voicesDirectory!,
+        );
+        _voiceManager = KokoroVoiceManager(
+          voiceRepository: _voiceRepository!,
+          cacheDirectory: _assets!.cacheDirectory!,
+        )..onChanged = () => _onVoiceLibraryChanged?.call();
+        await _voiceManager!.initialize();
+        _requireInitializationOwner();
+      }
 
       // The platform bridge obtains asset text only. Lexicon JSON decoding,
       // dictionary growth, CMU conversion and lazy G2P initialization all belong
@@ -431,6 +514,7 @@ class KokoroTtsEngine
         rootBundle.loadString('assets/us_silver.json'),
         rootBundle.loadString('assets/cmudict.dict'),
       ]);
+      _requireInitializationOwner();
       final tokenizerAssets = KokoroTokenizerAssets(
         vocabularyJson: tokenizerSources[0],
         lexiconJson: tokenizerSources[1],
@@ -446,6 +530,7 @@ class KokoroTtsEngine
         _tokenizerContentDigest,
         tokenizerSources,
       );
+      _requireInitializationOwner();
       _exportTokenizer = KokoroTokenizationWorker(
         assets: tokenizerAssets,
         rawDictionary: tokenizerSources[4],
@@ -456,6 +541,7 @@ class KokoroTtsEngine
         throw StateError('Kokoro requires a root isolate token.');
       }
       _resourceProcessor = await _createWorkerProcessor(rootIsolateToken);
+      _requireInitializationOwner();
       _admission = SynthesisAdmissionOwner(
         _resourceProcessor!,
         beforeProcess: beforeSynthesis,
@@ -495,24 +581,47 @@ class KokoroTtsEngine
       await _speechRuntime!.initializeRuntime(
         preferredVoiceId: _selectedVoiceId,
       );
+      _requireInitializationOwner();
       if (!_speechRuntime!.capabilities.isEngineSupported) {
-        _onError?.call(
+        throw StateError(
           'Kokoro is not supported on this Flutter platform path.',
         );
-        return;
       }
 
       _emitActivity(const TtsPlaybackActivity.idle());
       _onStatus?.call(null);
     } catch (error) {
+      _initializationMayRetry = false;
       _emitActivity(const TtsPlaybackActivity.idle());
-      _onError?.call('Kokoro could not be initialized: $error');
+      _onError?.call('$_engineId could not be initialized: $error');
+      await _runtimeEventSubscription?.cancel();
+      _runtimeEventSubscription = null;
+      await _speechRuntime?.shutdownRuntime();
+      _speechRuntime = null;
+      await _playbackTokenizer?.shutdown();
+      await _exportTokenizer?.shutdown();
+      _playbackTokenizer = null;
+      _exportTokenizer = null;
+      await _admission?.shutdown();
+      if (_admission == null) await _resourceProcessor?.dispose();
+      _admission = null;
+      _resourceProcessor = null;
+      _playbackLease = null;
+      _initializationMayRetry = true;
+      rethrow;
+    }
+  }
+
+  void _requireInitializationOwner() {
+    if (_initializationClosed) {
+      throw StateError('Speech startup was cancelled.');
     }
   }
 
   @override
   Future<List<VoiceProfile>> loadVoices() async {
     await initialize();
+    if (_usesMlx) return mlxVoicesFor(_engineId);
     final voiceManager = _voiceManager;
     if (voiceManager == null) {
       return const <VoiceProfile>[];
@@ -559,7 +668,7 @@ class KokoroTtsEngine
   Future<void> speak(TtsSpeakRequest request) async {
     await initialize();
     if (request.isCurrent?.call() == false) return;
-    if (_speechRuntime == null || _voiceManager == null) {
+    if (_speechRuntime == null || (!_usesMlx && _voiceManager == null)) {
       _onError?.call(_assets?.message ?? 'Kokoro is unavailable.');
       return;
     }
@@ -794,7 +903,7 @@ class KokoroTtsEngine
           chunks = await _prepareChunks(
             speakRequest,
             tokenWorker: _exportTokenizer,
-            languageTag: KokoroVoiceCatalog.languageTagForVoice(voiceId),
+            languageTag: _languageTagForVoice(voiceId),
           );
         } else {
           final prepared = await _preparePlannedChunkWindow(
@@ -802,7 +911,7 @@ class KokoroTtsEngine
             tokenWorker: _exportTokenizer,
             specs: plan.chunks,
             initialSearchOffset: searchOffset,
-            languageTag: KokoroVoiceCatalog.languageTagForVoice(voiceId),
+            languageTag: _languageTagForVoice(voiceId),
           );
           chunks = prepared.chunks;
           searchOffset = prepared.nextSearchOffset;
@@ -823,9 +932,7 @@ class KokoroTtsEngine
               .map(
                 (c) => c.toRuntimeChunk(
                   rate: rate,
-                  languageTag: KokoroVoiceCatalog.languageTagForVoice(
-                    c.voiceId,
-                  ),
+                  languageTag: _languageTagForVoice(c.voiceId),
                   isInitialChunk: initial && c.chunkId == chunks.first.chunkId,
                   isResumedChunk: false,
                 ),
@@ -923,9 +1030,7 @@ class KokoroTtsEngine
         );
       }
       if (!current()) return;
-      final languageTag = KokoroVoiceCatalog.languageTagForVoice(
-        _selectedVoiceId,
-      );
+      final languageTag = _languageTagForVoice(_selectedVoiceId);
       final hasPlannedChunks =
           request.chunkPlan != null && request.chunkPlan!.chunks.isNotEmpty;
       final preparedStartupWindow = hasPlannedChunks
@@ -951,8 +1056,22 @@ class KokoroTtsEngine
       }
       final startupWindow = KokoroStartupChunkWindow(preparedChunks);
       final chunks = startupWindow.startup;
+      final spans = KokoroSourceSpanCursor(chunks.first.startWordIndex);
+      if (hasPlannedChunks) {
+        for (final chunk in chunks) {
+          spans.admit(
+            startWord: chunk.startWordIndex,
+            endWord: chunk.endWordIndex,
+          );
+        }
+      }
 
       final generationId = 'generation_$requestToken';
+      _continuationCancelled = Completer<void>();
+      _rangeActivations.clear();
+      if (request.onRangeActive case final activate?) {
+        _rangeActivations[request.sourceWordOffset] = activate;
+      }
       _activeGenerationId = generationId;
       _firstPendingChunkId = chunks.first.chunkId;
       _nextReadyWord = chunks.first.startWordIndex;
@@ -975,7 +1094,10 @@ class KokoroTtsEngine
       _remainingPlannedChunkCount = hasPlannedChunks
           ? request.chunkPlan!.chunks.length -
                 chunks.length +
-                (request.chunkPlan!.nextSegmentId == null ? 0 : 1)
+                (request.chunkPlan!.nextSegmentId == null &&
+                        request.continuation == null
+                    ? 0
+                    : 1)
           : startupWindow.tail.length;
 
       _emitActivity(
@@ -1006,9 +1128,7 @@ class KokoroTtsEngine
         generationId: generationId,
         chunk: chunks.first.toRuntimeChunk(
           rate: _speechRate,
-          languageTag: KokoroVoiceCatalog.languageTagForVoice(
-            chunks.first.voiceId,
-          ),
+          languageTag: _languageTagForVoice(chunks.first.voiceId),
           isInitialChunk: true,
           isResumedChunk: request.isResumedPlayback,
         ),
@@ -1023,9 +1143,7 @@ class KokoroTtsEngine
               .map(
                 (chunk) => chunk.toRuntimeChunk(
                   rate: _speechRate,
-                  languageTag: KokoroVoiceCatalog.languageTagForVoice(
-                    chunk.voiceId,
-                  ),
+                  languageTag: _languageTagForVoice(chunk.voiceId),
                   isInitialChunk: false,
                   isResumedChunk: false,
                 ),
@@ -1036,7 +1154,8 @@ class KokoroTtsEngine
 
       if (hasPlannedChunks &&
           (request.chunkPlan!.chunks.length > 1 ||
-              request.chunkPlan!.nextSegmentId != null)) {
+              request.chunkPlan!.nextSegmentId != null ||
+              request.continuation != null)) {
         final remainingSpecs = request.chunkPlan!.chunks
             .skip(chunks.length)
             .toList(growable: false);
@@ -1048,6 +1167,7 @@ class KokoroTtsEngine
             languageTag: languageTag,
             specs: remainingSpecs,
             initialSearchOffset: preparedStartupWindow!.nextSearchOffset,
+            spans: spans,
           ),
           requestToken,
         );
@@ -1162,7 +1282,7 @@ class KokoroTtsEngine
       if (current()) {
         await _cancelActiveGeneration();
         await _resetPlaybackState();
-        _onError?.call('Kokoro synthesis failed: $error');
+        _onError?.call('$_engineId synthesis failed: $error');
       }
     }
   }
@@ -1174,6 +1294,7 @@ class KokoroTtsEngine
     required String languageTag,
     required List<ChunkSpec> specs,
     required int initialSearchOffset,
+    required KokoroSourceSpanCursor spans,
   }) async {
     final runtime = _speechRuntime;
     final sessionId = _activeSessionId;
@@ -1183,9 +1304,10 @@ class KokoroTtsEngine
         generationId == _activeGenerationId &&
         sessionId == _activeSessionId;
     var remaining = specs;
+    var rangeRequest = request;
     var next = request.chunkPlan?.nextSegmentId;
     var offset = initialSearchOffset;
-    final policy = KokoroBufferAdmission();
+    final policy = _newPlaybackAdmissionPolicy();
     try {
       while (current()) {
         for (final spec in remaining) {
@@ -1194,7 +1316,7 @@ class KokoroTtsEngine
           await _awaitPlaybackCredit(policy, current);
           if (!current()) return;
           final prepared = await _preparePlannedChunk(
-            request: request,
+            request: rangeRequest,
             spec: spec,
             searchOffset: offset,
             languageTag: languageTag,
@@ -1202,6 +1324,10 @@ class KokoroTtsEngine
           if (!current()) return;
           offset = prepared.nextSearchOffset;
           final chunk = prepared.chunk;
+          spans.admit(
+            startWord: chunk.startWordIndex,
+            endWord: chunk.endWordIndex,
+          );
           _pendingChunksById[chunk.chunkId] = chunk;
           _recordPronunciationTrace(chunk);
           await runtime.prepareChunkPlan(
@@ -1210,16 +1336,56 @@ class KokoroTtsEngine
             chunks: [
               chunk.toRuntimeChunk(
                 rate: _speechRate,
-                languageTag: KokoroVoiceCatalog.languageTagForVoice(
-                  chunk.voiceId,
-                ),
+                languageTag: _languageTagForVoice(chunk.voiceId),
                 isInitialChunk: false,
                 isResumedChunk: false,
               ),
             ],
           );
         }
-        if (next == null || request.planningContext == null) break;
+        if (next == null || rangeRequest.planningContext == null) {
+          final continuation = rangeRequest.continuation;
+          if (rangeRequest.speechDocument case final document?) {
+            spans.requireEnd(
+              rangeRequest.sourceWordOffset + document.totalWordCount,
+            );
+          }
+          if (continuation == null) break;
+          await _awaitPlaybackCredit(policy, current);
+          if (!current()) return;
+          final following = await Future.any([
+            continuation.next(
+              rangeRequest.rangeSequence,
+              _continuationCancelled.future,
+            ),
+            _continuationCancelled.future.then<TtsSpeakRequest?>(
+              (_) => throw const PlanningCancelled(),
+            ),
+          ]);
+          if (!current()) return;
+          if (following == null) break;
+          final expectedWord =
+              rangeRequest.sourceWordOffset +
+              rangeRequest.speechDocument!.totalWordCount;
+          if (following.rangeSequence != rangeRequest.rangeSequence + 1 ||
+              following.sourceWordOffset != expectedWord ||
+              following.documentId != request.documentId ||
+              following.assignmentRevision != request.assignmentRevision ||
+              following.planningContext?.realization.rate != _speechRate ||
+              following.chunkPlan == null ||
+              following.chunkPlan!.chunks.isEmpty) {
+            throw StateError('Non-contiguous or stale prepared range.');
+          }
+          rangeRequest = following;
+          if (following.onRangeActive case final activate?) {
+            _rangeActivations[following.sourceWordOffset] = activate;
+          }
+          remaining = following.chunkPlan!.chunks;
+          next = following.chunkPlan!.nextSegmentId;
+          offset = 0;
+          _expectedChunkCount += remaining.length;
+          continue;
+        }
         while (current() &&
             kokoroPlayableLead(_admissionLead(), playerSpeed: _player.speed) >=
                 kokoroTargetBufferedLeadTime) {
@@ -1227,7 +1393,7 @@ class KokoroTtsEngine
         }
         if (!current()) return;
         final window = await _refillPlanner.plan(
-          request.planningContext!,
+          rangeRequest.planningContext!,
           startSegmentId: next,
         );
         if (!current()) return;
@@ -1329,7 +1495,7 @@ class KokoroTtsEngine
         requestToken == _requestToken &&
         generationId == _activeGenerationId &&
         session == _activeSessionId;
-    final policy = KokoroBufferAdmission();
+    final policy = _newPlaybackAdmissionPolicy();
     try {
       for (final chunk in chunks) {
         await _awaitPlaybackCredit(policy, current);
@@ -1341,9 +1507,7 @@ class KokoroTtsEngine
           chunks: [
             chunk.toRuntimeChunk(
               rate: _speechRate,
-              languageTag: KokoroVoiceCatalog.languageTagForVoice(
-                chunk.voiceId,
-              ),
+              languageTag: _languageTagForVoice(chunk.voiceId),
               isInitialChunk: false,
               isResumedChunk: false,
             ),
@@ -1547,6 +1711,16 @@ class KokoroTtsEngine
     _lastProgressKey = progressKey;
     final boundary = chunk.wordBoundaries[wordIndex];
     final absoluteWordIndex = chunk.startWordIndex + wordIndex;
+    final eligible =
+        _rangeActivations.keys
+            .where((start) => start <= absoluteWordIndex)
+            .toList()
+          ..sort();
+    if (eligible.isNotEmpty) {
+      final start = eligible.last;
+      _rangeActivations[start]?.call();
+      _rangeActivations.removeWhere((offset, _) => offset < start);
+    }
     final segmentRange = chunk.segmentRangeForWordIndex(absoluteWordIndex);
     _onProgress?.call(
       TtsProgressUpdate(
@@ -1627,7 +1801,7 @@ class KokoroTtsEngine
       case SpeechRuntimeEventType.runtimeFailed:
         _emitActivity(const TtsPlaybackActivity.idle());
         _onError?.call(
-          'Kokoro runtime failed: ${event.message ?? event.errorCode ?? 'Unknown runtime failure.'}',
+          '$_engineId runtime failed: ${event.message ?? event.errorCode ?? 'Unknown runtime failure.'}',
         );
       case SpeechRuntimeEventType.runtimeShutdown:
         _emitActivity(const TtsPlaybackActivity.idle());
@@ -1826,7 +2000,7 @@ class KokoroTtsEngine
 
     if (_activePlaybackToken == null || _activeChunks.isEmpty) {
       _onError?.call(
-        'Kokoro synthesis failed: ${event.message ?? 'Unknown worker failure.'}',
+        '$_engineId synthesis failed: ${event.message ?? 'Unknown worker failure.'}',
       );
       return;
     }
@@ -1955,9 +2129,7 @@ class KokoroTtsEngine
           .map(
             (chunk) => chunk.toRuntimeChunk(
               rate: _speechRate,
-              languageTag: KokoroVoiceCatalog.languageTagForVoice(
-                chunk.voiceId,
-              ),
+              languageTag: _languageTagForVoice(chunk.voiceId),
               isInitialChunk: false,
               isResumedChunk: false,
             ),
@@ -2026,7 +2198,7 @@ class KokoroTtsEngine
     );
     final tokenization = await _tokenizeSpeakText(
       pieceText,
-      KokoroVoiceCatalog.languageTagForVoice(failedChunk.voiceId),
+      _languageTagForVoice(failedChunk.voiceId),
     );
 
     return _QueuedChunk(
@@ -2040,6 +2212,8 @@ class KokoroTtsEngine
           .toList(growable: false),
       cacheKey: _fallbackCacheKey(
         pieceText,
+        engineId: _engineId,
+        engineVersion: _engineVersion,
         voiceId: failedChunk.voiceId,
         rate: failedChunk.synthesisRate,
         normalizationVersion: failedChunk.normalizationVersion,
@@ -2099,6 +2273,7 @@ class KokoroTtsEngine
   }
 
   Future<void> _cancelActiveGeneration() async {
+    if (!_continuationCancelled.isCompleted) _continuationCancelled.complete();
     final sessionId = _activeSessionId;
     if (sessionId == null) {
       _playbackLease?.cancelPending();
@@ -2205,7 +2380,9 @@ class KokoroTtsEngine
       );
       final translatedChunk = tokenization.translatedChunk!;
       final chunk = _QueuedChunk(
-        chunkId: spec.chunkId,
+        chunkId: request.rangeSequence == 0
+            ? spec.chunkId
+            : 'range_${request.rangeSequence}_${spec.chunkId}',
         expectedBinding: _bindingForVoice(bindings, spec.voiceId),
         synthesisIdentity: synthesisIdentity,
         synthesisRate: synthesisRate,
@@ -2275,11 +2452,13 @@ class KokoroTtsEngine
     final translatedChunk = tokenization.translatedChunk!;
     return _PreparedPlannedChunk(
       chunk: _QueuedChunk(
-        chunkId: spec.chunkId,
+        chunkId: request.rangeSequence == 0
+            ? spec.chunkId
+            : 'range_${request.rangeSequence}_${spec.chunkId}',
         expectedBinding: binding,
         synthesisIdentity: synthesisIdentity,
         synthesisRate: synthesisRate,
-        generationOrder: spec.startSegmentIndex,
+        generationOrder: spec.startSegmentIndex + request.sourceWordOffset,
         segmentIds: spec.segmentIds,
         cacheKey: spec.cacheKey,
         voiceId: spec.voiceId,
@@ -2291,9 +2470,17 @@ class KokoroTtsEngine
         capabilityProfileId: translatedChunk.capabilityProfileId,
         engineSpeakText: translatedChunk.speakText,
         startOffset: startOffset,
-        startWordIndex: spec.startWordIndex,
-        endWordIndex: spec.endWordIndex,
-        segmentRanges: _segmentRangesForChunk(spec, request.speechDocument),
+        startWordIndex: spec.startWordIndex + request.sourceWordOffset,
+        endWordIndex: spec.endWordIndex + request.sourceWordOffset,
+        segmentRanges: _segmentRangesForChunk(spec, request.speechDocument)
+            .map(
+              (range) => _ChunkSegmentRange(
+                segmentId: range.segmentId,
+                startWordIndex: range.startWordIndex + request.sourceWordOffset,
+                endWordIndex: range.endWordIndex + request.sourceWordOffset,
+              ),
+            )
+            .toList(growable: false),
         ttsSegments: spec.ttsSegments,
         translatedPronunciationArtifacts:
             translatedChunk.pronunciationArtifacts,
@@ -2378,6 +2565,8 @@ class KokoroTtsEngine
           segmentIds: <String>['chunk_${chunks.length}'],
           cacheKey: _fallbackCacheKey(
             text,
+            engineId: _engineId,
+            engineVersion: _engineVersion,
             voiceId: binding.voiceId,
             rate: synthesisRate,
             normalizationVersion: normalizationVersion,
@@ -2550,6 +2739,9 @@ class KokoroTtsEngine
             'remainingPlannedChunkCount': _remainingPlannedChunkCount,
           },
         );
+        if (_usesMlx) {
+          return; // Valid audio remains playable if inference is slow.
+        }
         throw TimeoutException('Startup buffer target not reached.');
       }
       await Future<void>.delayed(_startupWarmupPollInterval);
@@ -2557,6 +2749,9 @@ class KokoroTtsEngine
   }
 
   bool _isStartupWarmEnough(_PlaybackChunk firstChunk) {
+    // Voxtral needs an initial speech lead for short title/dialogue chunks.
+    // Slower backends retain first-chunk startup and existing underrun routing.
+    if (_usesMlx && _engineId != 'voxtral_4b') return true;
     final startupBufferedChunks = _startupBufferedChunks(firstChunk);
     return kokoroIsStartupWarmEnough(
       bufferedChunkCount: startupBufferedChunks.length,
@@ -2802,13 +2997,14 @@ class KokoroTtsEngine
 
   @override
   void dispose() {
+    _initializationClosed = true;
+    _onVoiceLibraryChanged = null;
     unawaited(stop());
     unawaited(_playerStateSubscription?.cancel());
     unawaited(_positionSubscription?.cancel());
     unawaited(_currentIndexSubscription?.cancel());
     unawaited(_runtimeEventSubscription?.cancel());
-    unawaited(shutdownResources());
-    _player.dispose();
+    unawaited(shutdownResources().whenComplete(_player.dispose));
   }
 
   void _emitActivity(TtsPlaybackActivity activity) {
@@ -2825,7 +3021,11 @@ class KokoroTtsEngine
         : kokoroPlayableLead(_preparedLead(), playerSpeed: _player.speed);
     final pressure = phase == TtsPlaybackPhase.idle
         ? TtsBufferPressure.none
-        : kokoroBufferPressureForLeadTime(leadTime);
+        : leadTime <= kokoroCriticalBufferedLeadTime
+        ? TtsBufferPressure.critical
+        : leadTime <= _nativePlaybackAdmission.low
+        ? TtsBufferPressure.lowWater
+        : TtsBufferPressure.healthy;
 
     if (phase != TtsPlaybackPhase.idle &&
         pressure != _lastRecordedBufferPressure) {
@@ -2834,8 +3034,8 @@ class KokoroTtsEngine
         value: <String, Object?>{
           'state': pressure.name,
           'leadTimeMs': leadTime.inMilliseconds,
-          'targetLeadTimeMs': kokoroTargetBufferedLeadTime.inMilliseconds,
-          'lowWaterLeadTimeMs': kokoroLowWaterBufferedLeadTime.inMilliseconds,
+          'targetLeadTimeMs': _nativePlaybackAdmission.high.inMilliseconds,
+          'lowWaterLeadTimeMs': _nativePlaybackAdmission.low.inMilliseconds,
           'criticalLeadTimeMs': kokoroCriticalBufferedLeadTime.inMilliseconds,
         },
       );
@@ -2853,9 +3053,19 @@ class KokoroTtsEngine
     );
   }
 
-  Future<KokoroSpeechWorkerChunkProcessor> _createWorkerProcessor(
+  Future<SpeechWorkerResourceOwner> _createWorkerProcessor(
     RootIsolateToken rootIsolateToken,
   ) async {
+    if (_usesMlx) {
+      return MlxSpeechWorkerChunkProcessor(
+        engineId: _engineId,
+        modelPath: _mlxModelPath,
+        pythonPath: _mlxPythonPath,
+        quantizationBits: _mlxQuantizationBits,
+        onStatus: (message) => _onStatus?.call(message),
+        onResourceProgress: (progress) => _onResourceProgress?.call(progress),
+      );
+    }
     final assets = _assets;
     if (assets == null ||
         assets.modelPath == null ||
@@ -3365,14 +3575,16 @@ int _nextChunkSearchOffset({
 
 String _fallbackCacheKey(
   String speakText, {
+  required String engineId,
+  required String engineVersion,
   required String voiceId,
   required double rate,
   required String normalizationVersion,
 }) {
   final speakHash = crypto.sha256.convert(utf8.encode(speakText)).toString();
   return [
-    KokoroTtsEngine._engineId,
-    KokoroTtsEngine._engineVersion,
+    engineId,
+    engineVersion,
     voiceId,
     rate.toString(),
     normalizationVersion,

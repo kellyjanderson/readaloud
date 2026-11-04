@@ -112,6 +112,18 @@ The reading surface should help the user stay visually oriented while listening,
 
 Voice quality is central to the product.
 
+Every engine configuration eligible for Read Aloud must provide at least 30
+usable, distinct voice identities, through native presets or a supported,
+reusable reference/voice-creation mechanism. The English-first release must
+include at least 15 ready-to-use English voices without manually finding or
+placing voice files. Users need enough selection to judge the model and assign
+different character voices. Aliases, random seeds,
+pitch changes and emotional styles do not count as additional identities. Voice
+selection must change synthesis conditioning and be available for preview and
+character assignment. Configurations below this minimum must be identified as
+unsuitable rather than presented as qualified engines. Current implementation
+and acoustic evidence limits are tracked in issue #109.
+
 Users should be able to:
 
 - choose a preferred voice

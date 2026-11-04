@@ -1,6 +1,6 @@
 # Reading and voice choices
 
-The reader separates document preparation, voice-resource preparation and audio buffering. A visible document does not mean speech is ready. Play becomes eligible after document preparation; playback waits for prepared voices and enough finalized audio ahead. Short documents may start when all their remaining audio is ready.
+The reader separates document preparation, voice-resource preparation and audio buffering. A visible document or prepared range does not mean speech is ready. Preparation can publish ranges progressively, while playback still waits for prepared voices and enough finalized audio ahead. Short documents may start when all their remaining audio is ready. Progress and cancellation/retry feedback describe preparation work; they do not promise a particular time to first speech or uninterrupted playback.
 
 ## Current and Pending voices
 
@@ -16,12 +16,22 @@ Voice preview is a separate action and pauses reader playback when needed. Insta
 
 A new **Save Audio** request is refused while voice choices are pending. Apply the choices first, then save. An export already dispatched uses its captured document/voice context; it does not silently incorporate later requested choices. Resource replacement cancels and drains incompatible export work.
 
+A complete multi-range checkpoint can supply whole-document audio export, including ranges already consumed by playback. A partially prepared or corrupt checkpoint cannot be saved as a complete book. Export reconstructs the complete prepared graph before planning audio; it does not rerun source analysis.
+
 Voice Management scrolls its voice list while keeping assignment feedback separate. **Close voice management** returns to the reader. Reader status messages remain underneath modal dialogs; after closing a dialog, **Dismiss status message** removes the retained message. The named actions have bounded native UI evidence; native Escape dismissal is not yet verified.
+
+## Opening and reusing documents
+
+The normal **Open Document** picker accepts `.radoc` v1 and v2 files alongside supported source formats. A valid file opens as a document without running ordinary source-import analysis. A malformed or unsupported `.radoc` is refused with guidance to re-export it using a compatible Read Aloud version; the current document is retained.
+
+Read Aloud automatically saves prepared ranges and can reuse a complete checkpoint for unchanged captured text/bytes or a local macOS file with matching filesystem revision metadata. File checks resolve symlinks and use file identity plus high-resolution modification/change times; they do not hash the whole book before opening it. Changed/unavailable metadata causes a miss or retry. This is local filesystem trust, not a portable cryptographic identity. Callback-provided input without a stable revision still misses conservatively; hashing an already-captured input still reads that input before lookup. Partial checkpoints are not complete books. Corruption invalidates the cached generation, and Retry rebuilds from the preserved original source.
+
+Complete-checkpoint `.radoc` export is available through the controller/repository API; this slice adds no save-document UI. Such files open through the normal picker and retain prepared text, speech direction, attribution evidence and explicit cast voice choices. A fresh preference store restores the saved choices; existing local choices take precedence over an older file. Invalid assignment data is refused before changing the document or preferences. External asset files and native synthesis resources are not embedded or restored merely by exporting the graph.
 
 ## Verification boundary
 
-This guide reflects the prepared-runtime feature branch through PR #80 (`2b7c344`). The exact John/Maria example exposed a comma-terminated dialogue-tag attribution bug; PR #77 fixes that case and its focused import tests pass. The user-reported single-choice voice selector is tracked separately in [future bug #78](https://github.com/kellyjanderson/readaloud/issues/78). Those source changes and automated checks do not establish acoustic acceptance on the current integrated app build.
+RC2 UI and document-intake behavior is integrated through PR #99 on the feature branch; its focused widget coverage includes selection controls and `.radoc` picker success/refusal. The exact John/Maria example exposed a comma-terminated dialogue-tag attribution bug; PR #77 fixes that case and its focused import tests pass. The current status and remaining scope for the [single-choice voice selector report #78](https://github.com/kellyjanderson/readaloud/issues/78) are maintained in its issue block. These source changes and automated checks do not establish acoustic acceptance on the current integrated app build.
 
 The [supplemental native run](https://github.com/kellyjanderson/readaloud/issues/53#issuecomment-6396165816) passed paused pending Play, injected failure/retry, stale startup failure, export cancellation/drain and A/B/A emitted-PCM comparisons, ending with zero native resources and pins. Its controlled assembly wait and frame callbacks do not establish CPU-load responsiveness or input latency. The user listened to an earlier app build and reported John missing from the cast; current integrated-binary A/B/A human listening remains outstanding. Long-run memory stability and permanently hung-native teardown also remain open. [P4](https://github.com/kellyjanderson/readaloud/issues/53) and [FINAL](https://github.com/kellyjanderson/readaloud/issues/54) remain open; no installed-release acceptance is implied.
 
-`.radoc` (`radoc-v1`) inspection exports remain write-only. The separate `.radoc-v2` codec can decode and re-encode an immutable data-only snapshot, but it cannot restore an editable application document or its runtime resources.
+The picker restore path for `.radoc` is separate from the instrumented `radoc-v2` artifact codec: that codec decodes and re-encodes an immutable inspection snapshot, not the picker’s `ReaderDocument` restore operation. Neither restores native engine resources. RC2 implementation and automated evidence are recorded under [design #83](https://github.com/kellyjanderson/readaloud/issues/83), [persistence #90](https://github.com/kellyjanderson/readaloud/issues/90), and [picker intake #101](https://github.com/kellyjanderson/readaloud/issues/101). Native app, launch timing, release and human audio acceptance remain open; see [FINAL #54](https://github.com/kellyjanderson/readaloud/issues/54).

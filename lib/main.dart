@@ -24,10 +24,10 @@ Future<void> main(List<String> args) async {
   }
 
   WidgetsFlutterBinding.ensureInitialized();
-  await pdfrxFlutterInitialize();
-  await EnglishPronunciationDictionaryService.instance.initialize();
 
   if (parseResult.options.headless) {
+    await pdfrxFlutterInitialize();
+    await EnglishPronunciationDictionaryService.instance.initialize();
     final result = await runHeadlessSession(parseResult.options);
     setProcessExitCode(result.exitCode);
     return;

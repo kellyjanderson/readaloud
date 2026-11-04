@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light dark">
+  <title>Read Aloud — Human acceptance runner</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header class="topbar">
+    <div>
+      <p class="eyebrow">READ ALOUD</p>
+      <h1>Try Read Aloud</h1>
+    </div>
+    <div class="session-actions">
+      <button id="export-session" class="button secondary">Export results</button>
+      <button id="reset-session" class="button quiet">Reset session</button>
+    </div>
+  </header>
+
+  <main>
+    <section class="session-card" aria-labelledby="session-heading">
+      <div class="section-heading">
+        <div>
+          <p class="eyebrow">BEFORE YOU BEGIN</p>
+          <h2 id="session-heading">Open the test version</h2>
+        </div>
+        <p class="autosave" role="status" aria-live="polite" id="save-status">Saved on this device</p>
+      </div>
+      <div class="setup-grid">
+        <label>Read Aloud app
+          <span class="path-control"><input id="build-path" autocomplete="off" readonly value="/tmp/readaloud-rc2-final-9ed4532/build/macos/Build/Products/Release/read_aloud.app"><button id="copy-build-path" class="button secondary" type="button">Copy path</button></span>
+        </label>
+        <label>Your name (optional)
+          <input id="tester" autocomplete="name" placeholder="Name">
+        </label>
+        <p class="start-instruction">In Finder, press ⌘⇧G, paste the app path, then open Read Aloud. Each test will give you a passage and tell you what to try. Quit Read Aloud (⌘Q) after each test.</p>
+      </div>
+      <p id="prior-session-note" class="prior-session-note" hidden>Your earlier test notes are kept and will be included when you download the results.</p>
+    </section>
+
+    <div class="workspace">
+      <nav class="test-nav" aria-label="Acceptance tests">
+        <div class="nav-heading"><h2>Test cases</h2><span id="progress-count"></span></div>
+        <ol id="test-list"></ol>
+        <div class="nav-legend"><span class="dot pending"></span>Ready <span class="dot passed"></span>Went well <span class="dot failed"></span>Problem noted</div>
+      </nav>
+
+      <section class="test-panel" aria-labelledby="case-title">
+        <div id="case-content"></div>
+      </section>
+    </div>
+  </main>
+  <script src="passages.js"></script>
+  <script src="scenarios.js"></script>
+  <script src="runner.js"></script>
+</body>
+</html>

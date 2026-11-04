@@ -1,0 +1,37 @@
+{
+  "audit": "https://github.com/kellyjanderson/readaloud/issues/89#issuecomment-6429213427",
+  "sourceSha256": "570390de19916736e3709e413a886fd022a09fdd91f6682daab04568f051be20",
+  "canonicalCastIds": [
+    "cast_character_quinn"
+  ],
+  "namedNonSpeakers": [
+    "Ivo"
+  ],
+  "dialogue": [
+    {
+      "text": "We can mend the frame before evening,",
+      "startUtf16": 341,
+      "endUtf16": 378,
+      "castId": "cast_character_quinn"
+    },
+    {
+      "text": "That can wait until the hinge is safe.",
+      "startUtf16": 1127,
+      "endUtf16": 1165,
+      "castId": "cast_character_quinn"
+    },
+    {
+      "text": "I will leave a record this time,",
+      "startUtf16": 1819,
+      "endUtf16": 1851,
+      "castId": "cast_character_quinn"
+    }
+  ],
+  "variantOf": "lantern",
+  "voiceHints": {
+    "cast_character_quinn": {
+      "gender": "female",
+      "source": "pronoun"
+    }
+  }
+}

@@ -1,8 +1,11 @@
 # Human documentation
 
 - [Reading and voice choices](reading-and-voice-choices.md)
+- [Local MLX engines, models and reference voices](mlx-tts-engines.md)
 - [Development and verification](development.md)
+- [Human acceptance runner](../tools/human_acceptance_runner/README.md) for one-case-at-a-time RC2 sessions and result export.
 - [Maintenance and GitHub workflow](maintenance.md)
+- [macOS candidate notices and packaging](release-compliance.md)
 
 Internal engineering facts live in [architecture](../project/architecture/README.md); proposed work lives in [GitHub design issues](project-management.md).
 

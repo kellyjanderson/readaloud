@@ -1,6 +1,9 @@
 # Read Aloud
 
-A local-first Flutter reader for long-form text-to-speech using Kokoro. Import documents, listen with narrator and character voices, follow the spoken text, and export audio.
+A local-first Flutter reader for long-form text-to-speech using Kokoro by default. Import documents, listen with narrator and character voices, follow the spoken text, and export audio.
+
+For local Apple Silicon evaluation of Qwen3-TTS, Voxtral TTS, or MOSS-TTS,
+see [MLX TTS engine setup](docs/mlx-tts-engines.md).
 
 ## Required reading experience
 
@@ -16,9 +19,9 @@ The [product definition](project/product-definition.md) defines these standing e
 
 ## Project status
 
-macOS is the current functional target. Other Flutter platform folders are retained but are not qualified by the current project review. This repository is pre-release; older release labels and the package version are being reconciled before the next release.
+macOS on Apple Silicon is the current functional target. Other Flutter platform folders are retained but are not qualified. The cleanup baseline consolidates the RC2 reader, local MLX engines, full-document display and the visual acceptance runner. It is a development checkpoint, not a claim that all reading-experience requirements pass.
 
-Speaker attribution is heuristic. Document preparation, worker planning, resident synthesis resources and requested/effective voice choices are described in [current architecture](project/architecture/README.md), with explicit evidence limits. The prepared-runtime feature branch has bounded native assignment/cache evidence and automated A/B/A artifact checks. Human acceptance on the current integrated build, long-run memory and permanently hung-native teardown remain open in [GitHub design and slice issues](docs/project-management.md). A user-reported single-choice character voice selector is tracked for a future release in [issue #78](https://github.com/kellyjanderson/readaloud/issues/78).
+Speaker attribution is heuristic. Current architecture records implementation and evidence limits. Sustained audio continuity, launch timing and human acceptance remain tracked in [RC2 qualification](https://github.com/kellyjanderson/readaloud/issues/91). [Drama 3 integration](https://github.com/kellyjanderson/readaloud/issues/111), live model switching and their concurrency repairs follow this baseline; they are not implemented by the cleanup tag.
 
 ## Features
 
@@ -37,7 +40,7 @@ cd readaloud
 flutter pub get
 ```
 
-Before running, place a compatible model at `assets/kokoro/model/kokoro-v1.0.onnx`. Model weights are not in Git; see [model setup](assets/kokoro/model/README.md). The app uses a [vendored ONNX plugin override](third_party/flutter_onnxruntime/pubspec.yaml).
+For the default Kokoro engine, place a compatible model at `assets/kokoro/model/kokoro-v1.0.onnx`; see [model setup](assets/kokoro/model/README.md). For MLX engines, install the [arm64 runtime](docs/mlx-tts-engines.md) and select the engine in Settings. Model weights download separately and are not in Git. The app uses a [vendored ONNX plugin override](third_party/flutter_onnxruntime/pubspec.yaml).
 
 ```sh
 flutter run -d macos

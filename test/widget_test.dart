@@ -11,6 +11,7 @@ import 'package:read_aloud/src/models/reader_resume_state.dart';
 import 'package:read_aloud/src/models/voice_profile.dart';
 import 'package:read_aloud/src/models/voice_assignment_state.dart';
 import 'package:read_aloud/src/screens/read_aloud_screen.dart';
+import 'package:read_aloud/src/screens/open_source_notices_screen.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:read_aloud/src/app.dart';
@@ -66,11 +67,11 @@ void main() {
     await tester.pump();
     expect(engine.speakCount, 1);
     final buffering = tester
-        .getSemantics(find.bySemanticsLabel('Play'))
+        .getSemantics(find.bySemanticsLabel('Cancel pending Play'))
         .getSemanticsData();
-    expect(buffering.value, 'Buffering');
-    expect(buffering.flagsCollection.isEnabled, Tristate.isFalse);
-    expect(buffering.hasAction(SemanticsAction.tap), isFalse);
+    expect(buffering.value, 'Waiting for speech; activate to cancel');
+    expect(buffering.flagsCollection.isEnabled, Tristate.isTrue);
+    expect(buffering.hasAction(SemanticsAction.tap), isTrue);
 
     engine.start();
     await tester.pump();
@@ -83,6 +84,71 @@ void main() {
     tester.semantics.tap(find.semantics.byLabel('Character Voices'));
     await tester.pump(const Duration(milliseconds: 500));
     expect(find.text('Voice Management'), findsOneWidget);
+  });
+
+  testWidgets(
+    'Voxtral precision choice is saved and clearly requires restart',
+    (tester) async {
+      final preferences = _MemoryReaderPreferencesService();
+      final controller = ReaderController(
+        preferencesService: preferences,
+        ttsEngine: _AccessibleTtsEngine(),
+        enablePlatformIntakeChannels: false,
+      );
+      addTearDown(controller.dispose);
+      await tester.pumpWidget(ReadAloudApp(controller: controller));
+      await tester.pump(const Duration(milliseconds: 300));
+      await tester.tap(find.byKey(const Key('reader-overflow-menu')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Settings').last);
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('tts-engine-settings-dropdown')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Voxtral TTS 4B').last);
+      await tester.pumpAndSettle();
+      await tester.tap(
+        find.byKey(const Key('voxtral-precision-settings-dropdown')),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Fast (4-bit)').last);
+      await tester.pumpAndSettle();
+      expect((await preferences.load()).voxtralQuantizationBits, 4);
+      expect(controller.ttsEngineRestartRequired, isTrue);
+      expect(
+        find.textContaining('Reopen the app to apply changes'),
+        findsOneWidget,
+      );
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets('Qwen Base selection persists and shows its reference library', (
+    tester,
+  ) async {
+    final preferences = _MemoryReaderPreferencesService();
+    final controller = ReaderController(
+      preferencesService: preferences,
+      ttsEngine: _AccessibleTtsEngine(),
+      enablePlatformIntakeChannels: false,
+    );
+    addTearDown(controller.dispose);
+    await tester.pumpWidget(ReadAloudApp(controller: controller));
+    await tester.pump(const Duration(milliseconds: 300));
+    await tester.tap(find.byKey(const Key('reader-overflow-menu')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Settings').last);
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('tts-engine-settings-dropdown')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Qwen3-TTS 1.7B Base (reference voices)').last);
+    await tester.pumpAndSettle();
+    expect((await preferences.load()).ttsEngineId, 'qwen3_tts_base_1_7b');
+    expect(
+      find.textContaining('30 synthetic reference voices'),
+      findsOneWidget,
+    );
+    expect(controller.ttsEngineRestartRequired, isTrue);
+    expect(tester.takeException(), isNull);
   });
 
   testWidgets('transport supports keyboard focus and activation', (
@@ -120,7 +186,7 @@ void main() {
   });
 
   testWidgets('renders the reader shell', (WidgetTester tester) async {
-    await tester.pumpWidget(const ReadAloudApp());
+    await tester.pumpWidget(_testApp());
     await tester.pump(const Duration(milliseconds: 300));
 
     expect(find.text('Read Aloud'), findsWidgets);
@@ -165,7 +231,7 @@ void main() {
     await tester.binding.setSurfaceSize(const Size(800, 420));
     addTearDown(() => tester.binding.setSurfaceSize(null));
 
-    await tester.pumpWidget(const ReadAloudApp());
+    await tester.pumpWidget(_testApp());
     await tester.pump(const Duration(milliseconds: 300));
 
     expect(tester.takeException(), isNull);
@@ -205,7 +271,7 @@ void main() {
         () => tester.platformDispatcher.clearPlatformBrightnessTestValue(),
       );
 
-      await tester.pumpWidget(const ReadAloudApp());
+      await tester.pumpWidget(_testApp());
       await tester.pump(const Duration(milliseconds: 300));
 
       expect(
@@ -269,9 +335,19 @@ void main() {
     expect(find.text('Document'), findsOneWidget);
     expect(find.text('Output'), findsOneWidget);
     expect(find.text('Live Input'), findsOneWidget);
-    expect(find.text('Settings'), findsOneWidget);
+    expect(find.text('Settings'), findsNWidgets(2));
+    expect(find.text('Help'), findsOneWidget);
+    expect(find.text('Open Source Notices'), findsOneWidget);
     expect(find.text('Workspace'), findsNothing);
     expect(find.byType(PopupMenuDivider), findsAtLeastNWidgets(3));
+    final document = controller.document;
+    await tester.tap(find.text('Open Source Notices'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 350));
+    expect(find.byType(OpenSourceNoticesScreen), findsOneWidget);
+    await tester.tap(find.byType(BackButton));
+    await tester.pumpAndSettle();
+    expect(identical(controller.document, document), isTrue);
   });
 
   testWidgets('reader options are grouped into named sections', (
@@ -473,7 +549,7 @@ void main() {
       () => tester.platformDispatcher.clearPlatformBrightnessTestValue(),
     );
 
-    await tester.pumpWidget(const ReadAloudApp());
+    await tester.pumpWidget(_testApp());
     await tester.pump(const Duration(milliseconds: 300));
 
     final shell = tester.widget<DecoratedBox>(
@@ -572,10 +648,35 @@ void main() {
       expect(labels, contains('Load Sample'));
       expect(labels, contains('Save Audio...'));
       expect(labels, contains('Reader Options...'));
+      expect(labels, contains('Help'));
+      expect(labels, contains('Open Source Notices'));
+
+      final help = menuBar.menus.whereType<PlatformMenu>().singleWhere(
+        (menu) => menu.label == 'Help',
+      );
+      help.menus.single.onSelected!();
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 350));
+      expect(find.byType(OpenSourceNoticesScreen), findsOneWidget);
+      final document = controller.document;
+      await tester.tap(find.byType(BackButton));
+      await tester.pumpAndSettle();
+      expect(find.byType(OpenSourceNoticesScreen), findsNothing);
+      expect(identical(controller.document, document), isTrue);
 
       debugDefaultTargetPlatformOverride = null;
     },
   );
+}
+
+ReadAloudApp _testApp() {
+  final controller = ReaderController(
+    preferencesService: _MemoryReaderPreferencesService(),
+    ttsEngine: _FakeTtsEngine(),
+    enablePlatformIntakeChannels: false,
+  );
+  addTearDown(controller.dispose);
+  return ReadAloudApp(controller: controller);
 }
 
 Iterable<String> _collectMenuLabels(Iterable<PlatformMenuItem> items) sync* {
@@ -633,6 +734,8 @@ class _MemoryReaderPreferencesService extends ReaderPreferencesService {
 
   @override
   Future<void> save({
+    String ttsEngineId = ReaderPreferences.defaultTtsEngineId,
+    int voxtralQuantizationBits = 0,
     required String fontFamily,
     required double fontScale,
     required ReaderAppearanceMode appearanceMode,
@@ -648,6 +751,8 @@ class _MemoryReaderPreferencesService extends ReaderPreferencesService {
     String? lastOpenedDirectoryAccessToken,
   }) async {
     _preferences = ReaderPreferences(
+      ttsEngineId: ttsEngineId,
+      voxtralQuantizationBits: voxtralQuantizationBits,
       selectedVoiceId: selectedVoiceId,
       voiceSpeeds: Map<String, double>.from(voiceSpeeds),
       fontFamily: fontFamily,

@@ -1,0 +1,6 @@
+# Preserve imported grants byte for byte, including upstream CRLF/whitespace.
+dart/** -whitespace
+native/** -whitespace
+sdk/** -whitespace
+fonts/** -whitespace
+assets/** -whitespace

@@ -1,0 +1,5 @@
+# Local arm64 Python runtime for the bundled mlx_tts_worker.py Flutter asset.
+mlx==0.32.4
+mlx-audio==0.6.3
+huggingface-hub[hf_xet]==2.4.0
+mistral-common[audio]==1.13.0

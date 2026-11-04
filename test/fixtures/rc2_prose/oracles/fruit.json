@@ -1,0 +1,49 @@
+{
+  "audit": "https://github.com/kellyjanderson/readaloud/issues/89#issuecomment-6429213427",
+  "sourceSha256": "bcdab201aba8d8232b8a8a521a167643e4d01900427320b70860c5ffee15879e",
+  "canonicalCastIds": [
+    "cast_character_quinn",
+    "cast_character_ayo"
+  ],
+  "namedNonSpeakers": [
+    "Ivo",
+    "Eren"
+  ],
+  "dialogue": [
+    {
+      "text": "The lower branches will give us enough,",
+      "startUtf16": 344,
+      "endUtf16": 383,
+      "castId": "cast_character_quinn"
+    },
+    {
+      "text": "We should lift it before we push again,",
+      "startUtf16": 789,
+      "endUtf16": 828,
+      "castId": "cast_character_ayo"
+    },
+    {
+      "text": "Leave the bruised ones in a separate pile.",
+      "startUtf16": 1113,
+      "endUtf16": 1155,
+      "castId": "cast_character_quinn"
+    },
+    {
+      "text": "The smaller jars should go to the far houses,",
+      "startUtf16": 1413,
+      "endUtf16": 1458,
+      "castId": "cast_character_ayo"
+    }
+  ],
+  "variantOf": "orchard",
+  "voiceHints": {
+    "cast_character_quinn": {
+      "gender": "female",
+      "source": "pronoun"
+    },
+    "cast_character_ayo": {
+      "gender": "male",
+      "source": "pronoun"
+    }
+  }
+}

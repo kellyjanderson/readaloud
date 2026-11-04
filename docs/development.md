@@ -1,5 +1,9 @@
 # Development and verification
 
+## Native app test-session cleanup
+
+Agents running UI, native, playback or acceptance checks must quit Read Aloud when each test session ends, including failed or blocked runs. Use the app's normal Quit action, then verify the exact test-build process has exited before finishing the test or development task. Do not leave the app running between cases. Record an inability to close or verify as a blocker. The [human acceptance runner](../tools/human_acceptance_runner/README.md) requires this closure record before an app-used test counts as complete.
+
 The documented baseline is Flutter 3.41.5 / Dart 3.11.3. Use an SDK matching your machine architecture. The ignored `.flutter-sdk` is not a clean-clone prerequisite: inspect `file <sdk>/bin/cache/dart-sdk/bin/dart` and run `<sdk>/bin/flutter --version` before testing. An Intel SDK fails with `bad CPU type in executable` on an arm64 host without Intel execution support. Install the matching arm64 release from the official Flutter archive instead of upgrading project dependencies.
 
 Install Xcode and CocoaPods for macOS development, run `flutter pub get`, and supply the compatible model described in [model setup](../assets/kokoro/model/README.md). Model weights are not committed. Voices and pronunciation resources are bundled; ONNX uses the [vendored override](../third_party/flutter_onnxruntime/pubspec.yaml).

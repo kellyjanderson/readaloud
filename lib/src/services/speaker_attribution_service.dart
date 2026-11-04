@@ -1,13 +1,15 @@
 import '../models/dialogue_attribution.dart';
 import '../models/speech_annotation.dart';
 import '../models/speech_document.dart';
+import '../models/voice_profile.dart';
+import 'character_cast_registry_service.dart';
 
 class SpeakerAttributionService {
   const SpeakerAttributionService();
 
-  static const attributionVersion = 'read-aloud-speaker-attribution-v5';
+  static const attributionVersion = 'read-aloud-speaker-attribution-v6';
   static const providerId = 'heuristic_speaker_attribution';
-  static const providerVersion = 'v5';
+  static const providerVersion = 'v6';
   static const _minimumAttributionConfidence = 0.75;
 
   static const _speechVerbPattern =
@@ -54,7 +56,45 @@ class SpeakerAttributionService {
   DialogueAttributionSet attribute({
     required SpeechDocument speechDocument,
     required BaseSpeechAnnotationSet baseAnnotations,
+    List<SpeechSegment> contextSegments = const [],
+    List<SpeechSegment> followingContextSegments = const [],
   }) {
+    if (contextSegments.length > 12 || followingContextSegments.length > 12) {
+      throw ArgumentError(
+        'Attribution evidence halos must contain at most 12 segments each.',
+      );
+    }
+    final currentIds = speechDocument.segments
+        .map((segment) => segment.segmentId)
+        .toSet();
+    final evidenceOnlyIds = <String>{};
+    final segments = <SpeechSegment>[
+      for (final segment in contextSegments)
+        if (!currentIds.contains(segment.segmentId) &&
+            evidenceOnlyIds.add(segment.segmentId))
+          segment,
+      ...speechDocument.segments,
+      for (final segment in followingContextSegments)
+        if (!currentIds.contains(segment.segmentId) &&
+            evidenceOnlyIds.add(segment.segmentId))
+          segment,
+    ];
+    speechDocument = SpeechDocument(
+      documentId: speechDocument.documentId,
+      sourceType: speechDocument.sourceType,
+      languageTag: speechDocument.languageTag,
+      normalizationVersion: speechDocument.normalizationVersion,
+      segments: segments,
+      segmentIndexById: {
+        for (var index = 0; index < segments.length; index++)
+          segments[index].segmentId: index,
+      },
+      totalWordCount: segments.fold<int>(
+        0,
+        (count, segment) => count + segment.wordCount,
+      ),
+    );
+
     final segmentById = <String, SpeechSegment>{
       for (final segment in speechDocument.segments) segment.segmentId: segment,
     };
@@ -95,6 +135,7 @@ class SpeakerAttributionService {
         allSpans: spans,
         speechDocument: speechDocument,
         priorResolvedSpans: resolvedSpans,
+        evidenceOnlyIds: evidenceOnlyIds,
       );
       outcomes.add(outcome);
       resolvedSpans.add(_ResolvedDialogueSpan(span: span, outcome: outcome));
@@ -114,6 +155,7 @@ class SpeakerAttributionService {
     required List<_DialogueSpanContext> allSpans,
     required SpeechDocument speechDocument,
     required List<_ResolvedDialogueSpan> priorResolvedSpans,
+    required Set<String> evidenceOnlyIds,
   }) {
     final decision =
         _sameSentenceDecision(span) ??
@@ -122,13 +164,17 @@ class SpeakerAttributionService {
           allSpans: allSpans,
           speechDocument: speechDocument,
           direction: _AdjacentDirection.after,
+          evidenceOnlyIds: evidenceOnlyIds,
         ) ??
         _adjacentDecision(
           span: span,
           allSpans: allSpans,
           speechDocument: speechDocument,
           direction: _AdjacentDirection.before,
+          evidenceOnlyIds: evidenceOnlyIds,
         ) ??
+        _narrativePronounDecision(span: span, speechDocument: speechDocument) ??
+        _actionBeatDecision(span: span, speechDocument: speechDocument) ??
         _paragraphOwnershipDecision(
           span: span,
           priorResolvedSpans: priorResolvedSpans,
@@ -191,6 +237,7 @@ class SpeakerAttributionService {
     required List<_DialogueSpanContext> allSpans,
     required SpeechDocument speechDocument,
     required _AdjacentDirection direction,
+    required Set<String> evidenceOnlyIds,
   }) {
     final segmentIndex = switch (direction) {
       _AdjacentDirection.after => span.lastSegmentIndex + 1,
@@ -201,7 +248,8 @@ class SpeakerAttributionService {
     }
 
     final segment = speechDocument.segments[segmentIndex];
-    if (!_isLocalEvidenceSegment(span: span, segment: segment)) {
+    if (!_isLocalEvidenceSegment(span: span, segment: segment) &&
+        !evidenceOnlyIds.contains(segment.segmentId)) {
       return null;
     }
 
@@ -210,11 +258,15 @@ class SpeakerAttributionService {
     // steal attribution from the preceding quote.
     if (direction == _AdjacentDirection.after &&
         segment.normalizedText.trimRight().endsWith(',') &&
-        allSpans.any(
-          (candidate) =>
-              candidate.firstSegmentIndex == segmentIndex + 1 &&
-              candidate.paragraphIndex == span.paragraphIndex,
-        )) {
+        (segmentIndex + 1 < speechDocument.segments.length &&
+                RegExp(r'^\s*[“"]').hasMatch(
+                  speechDocument.segments[segmentIndex + 1].normalizedText,
+                ) ||
+            allSpans.any(
+              (candidate) =>
+                  candidate.firstSegmentIndex == segmentIndex + 1 &&
+                  candidate.paragraphIndex == span.paragraphIndex,
+            ))) {
       return null;
     }
 
@@ -226,6 +278,180 @@ class SpeakerAttributionService {
           : DialogueAttributionRule.adjacentBefore,
       exactConfidence: direction == _AdjacentDirection.after ? 0.90 : 0.88,
       looseConfidence: direction == _AdjacentDirection.after ? 0.84 : 0.82,
+    );
+  }
+
+  static const _contextNonNames = <String>{
+    'The',
+    'A',
+    'An',
+    'He',
+    'She',
+    'They',
+    'His',
+    'Her',
+    'Their',
+    'It',
+    'Its',
+    'Each',
+    'Nobody',
+    'Nothing',
+    'Somebody',
+    'For',
+    'By',
+    'At',
+    'On',
+    'In',
+    'Outside',
+    'Inside',
+    'Beyond',
+    'Below',
+    'Above',
+  };
+
+  _AttributionDecision? _narrativePronounDecision({
+    required _DialogueSpanContext span,
+    required SpeechDocument speechDocument,
+  }) {
+    DialogueEvidenceSpan? signal;
+    for (
+      var index = span.firstSegmentIndex;
+      index <= span.lastSegmentIndex + 1 &&
+          index < speechDocument.segments.length;
+      index++
+    ) {
+      final segment = speechDocument.segments[index];
+      if (segment.paragraphIndex != span.paragraphIndex) break;
+      signal = _pronounEvidenceSpan(
+        text: _withoutQuotedText(segment.normalizedText),
+        sourceSegmentId: segment.segmentId,
+      );
+      if (signal != null) break;
+    }
+    if (signal == null) return null;
+    final start = (span.firstSegmentIndex - 12).clamp(
+      0,
+      speechDocument.segments.length,
+    );
+    final context = speechDocument.segments.sublist(
+      start,
+      span.firstSegmentIndex,
+    );
+    if (context.isEmpty) return null;
+    final names = <String>{};
+    for (final segment in context) {
+      names.addAll(
+        RegExp(r"\b[A-Z][A-Za-z'’-]+\b")
+            .allMatches(_withoutQuotedText(segment.normalizedText))
+            .map((match) => match.group(0)!)
+            .where((name) => !_contextNonNames.contains(name)),
+      );
+    }
+    final bounded = SpeechDocument(
+      documentId: speechDocument.documentId,
+      sourceType: speechDocument.sourceType,
+      languageTag: speechDocument.languageTag,
+      normalizationVersion: speechDocument.normalizationVersion,
+      segments: context,
+      segmentIndexById: {
+        for (var index = 0; index < context.length; index++)
+          context[index].segmentId: index,
+      },
+      totalWordCount: context.fold<int>(
+        0,
+        (count, segment) => count + segment.wordCount,
+      ),
+    );
+    final candidates = <String>[];
+    for (final name in names) {
+      final identity = const CharacterCastRegistryService().inferIdentity(
+        speechDocument: bounded,
+        aliases: [name],
+      );
+      if (identity.conflictFlag) continue;
+      final matches = switch (signal.text.toLowerCase()) {
+        'she' => identity.preferredVoiceGender == VoiceGender.female,
+        'he' => identity.preferredVoiceGender == VoiceGender.male,
+        'they' =>
+          identity.pronounProfile.countFor('they') +
+                      identity.pronounProfile.countFor('theirs') >
+                  0 &&
+              identity.preferredVoiceGender == null,
+        _ => false,
+      };
+      if (matches) candidates.add(name);
+    }
+    if (candidates.length != 1) return null;
+    return _AttributionDecision(
+      label: candidates.single,
+      confidence: 0.80,
+      ruleUsed: DialogueAttributionRule.pronounResolution,
+      evidenceSpan: signal,
+    );
+  }
+
+  _AttributionDecision? _actionBeatDecision({
+    required _DialogueSpanContext span,
+    required SpeechDocument speechDocument,
+  }) {
+    final candidates = <SpeechSegment>[];
+    var contextBlock = span.blockId;
+    var crossedBlock = false;
+    for (
+      var index = span.firstSegmentIndex;
+      index >= 0 && candidates.length < 8;
+      index--
+    ) {
+      final segment = speechDocument.segments[index];
+      if (segment.blockId != contextBlock) {
+        // An isolated quotation may follow a whole narrative paragraph. Cross
+        // only that paragraph, never another dialogue turn or an arbitrary scene.
+        if (candidates.length != 1 ||
+            crossedBlock ||
+            RegExp('[“”"]').hasMatch(segment.normalizedText)) {
+          break;
+        }
+        contextBlock = segment.blockId;
+        crossedBlock = true;
+      }
+      candidates.add(segment);
+    }
+    final names = <String>{};
+    for (final segment in candidates) {
+      names.addAll(
+        RegExp(r"\b[A-Z][A-Za-z'’-]+\b")
+            .allMatches(_withoutQuotedText(segment.normalizedText))
+            .map((entry) => entry.group(0)!)
+            .where((name) => !_contextNonNames.contains(name)),
+      );
+    }
+    if (names.length != 1) return null;
+    for (final segment in candidates) {
+      final text = _withoutQuotedText(segment.normalizedText);
+      final match = RegExp(
+        r"^\s*([A-Z][A-Za-z'’-]+)\s+(?:lifted|set|placed|turned|stepped|nodded|shook|looked|held|opened|closed|leaned|reached|paused|smiled|frowned|pushed|put|took|brought|stood|rested|examined|tested)\b",
+      ).firstMatch(text);
+      if (match == null || !_isLikelySpeakerLabel(match.group(1))) continue;
+      return _AttributionDecision(
+        label: match.group(1)!,
+        confidence: 0.81,
+        ruleUsed: DialogueAttributionRule.actionBinding,
+        evidenceSpan: _evidenceSpanForGroup(
+          match: match,
+          groupIndex: 1,
+          sourceSegmentId: segment.segmentId,
+        ),
+      );
+    }
+    return null;
+  }
+
+  // Preserve UTF-16 coordinates while preventing a name/verb inside speech
+  // from masquerading as its narrator's attribution tag.
+  String _withoutQuotedText(String text) {
+    return text.replaceAllMapped(
+      RegExp(r'"[^"\n]*"|“[^”\n]*”'),
+      (match) => ' ' * match.group(0)!.length,
     );
   }
 
@@ -438,7 +664,7 @@ class SpeakerAttributionService {
     required double looseConfidence,
   }) {
     final candidates = _extractSpeakerCandidates(
-      text,
+      _withoutQuotedText(text),
       sourceSegmentId: sourceSegmentId,
       ruleUsed: ruleUsed,
       exactConfidence: exactConfidence,
@@ -498,7 +724,7 @@ class SpeakerAttributionService {
     required _DialogueSpanContext span,
     required SpeechSegment segment,
   }) {
-    return segment.paragraphIndex == span.paragraphIndex ||
+    return segment.paragraphIndex == span.paragraphIndex &&
         segment.blockId == span.blockId;
   }
 

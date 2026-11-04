@@ -7,6 +7,8 @@ import '../models/reader_resume_state.dart';
 
 class ReaderPreferences {
   const ReaderPreferences({
+    this.ttsEngineId = 'kokoro',
+    this.voxtralQuantizationBits = 0,
     required this.fontFamily,
     required this.fontScale,
     required this.appearanceMode,
@@ -24,7 +26,10 @@ class ReaderPreferences {
   static const String defaultFontFamily = 'serif';
   static const double defaultFontScale = 1.0;
   static const bool defaultMultiVoiceEnabled = true;
+  static const String defaultTtsEngineId = 'kokoro';
 
+  final String ttsEngineId;
+  final int voxtralQuantizationBits;
   final String fontFamily;
   final double fontScale;
   final ReaderAppearanceMode appearanceMode;
@@ -40,7 +45,9 @@ class ReaderPreferences {
 }
 
 class ReaderPreferencesService {
+  static const _voxtralBitsKey = 'reader.voxtralQuantizationBits';
   static const String _selectedVoiceIdKey = 'reader.selectedVoiceId';
+  static const String _ttsEngineIdKey = 'reader.ttsEngineId';
   static const String _voiceSpeedsKey = 'reader.voiceSpeeds';
   static const String _fontFamilyKey = 'reader.fontFamily';
   static const String _fontScaleKey = 'reader.fontScale';
@@ -61,6 +68,10 @@ class ReaderPreferencesService {
   Future<ReaderPreferences> load() async {
     final preferences = await SharedPreferences.getInstance();
     return ReaderPreferences(
+      voxtralQuantizationBits: preferences.getInt(_voxtralBitsKey) == 4 ? 4 : 0,
+      ttsEngineId:
+          preferences.getString(_ttsEngineIdKey) ??
+          ReaderPreferences.defaultTtsEngineId,
       selectedVoiceId: preferences.getString(_selectedVoiceIdKey),
       voiceSpeeds: _decodeVoiceSpeeds(preferences.getString(_voiceSpeedsKey)),
       fontFamily:
@@ -94,12 +105,15 @@ class ReaderPreferencesService {
   }
 
   Future<void> save({
+    int voxtralQuantizationBits = 0,
+    String ttsEngineId = ReaderPreferences.defaultTtsEngineId,
     required String fontFamily,
     required double fontScale,
     required ReaderAppearanceMode appearanceMode,
     required bool multiVoiceEnabled,
     required Map<String, double> voiceSpeeds,
-    required Map<String, Map<String, String>> storedDocumentCastVoiceAssignments,
+    required Map<String, Map<String, String>>
+    storedDocumentCastVoiceAssignments,
     ReaderResumeState? resumeState,
     String? selectedVoiceId,
     String? lastOpenedDocumentPath,
@@ -109,15 +123,22 @@ class ReaderPreferencesService {
   }) async {
     final preferences = await SharedPreferences.getInstance();
 
+    await preferences.setInt(_voxtralBitsKey, voxtralQuantizationBits);
+
     if (selectedVoiceId == null || selectedVoiceId.isEmpty) {
       await preferences.remove(_selectedVoiceIdKey);
     } else {
       await preferences.setString(_selectedVoiceIdKey, selectedVoiceId);
     }
 
+    await preferences.setString(_ttsEngineIdKey, ttsEngineId);
+
     await preferences.setString(_fontFamilyKey, fontFamily);
     await preferences.setDouble(_fontScaleKey, fontScale);
-    await preferences.setString(_appearanceModeKey, appearanceMode.storageValue);
+    await preferences.setString(
+      _appearanceModeKey,
+      appearanceMode.storageValue,
+    );
     await preferences.setBool(_multiVoiceEnabledKey, multiVoiceEnabled);
     await preferences.setString(_voiceSpeedsKey, jsonEncode(voiceSpeeds));
     await preferences.setString(
@@ -127,7 +148,10 @@ class ReaderPreferencesService {
     if (resumeState == null) {
       await preferences.remove(_resumeStateKey);
     } else {
-      await preferences.setString(_resumeStateKey, jsonEncode(resumeState.toJson()));
+      await preferences.setString(
+        _resumeStateKey,
+        jsonEncode(resumeState.toJson()),
+      );
     }
 
     if (lastOpenedDocumentPath == null || lastOpenedDocumentPath.isEmpty) {
