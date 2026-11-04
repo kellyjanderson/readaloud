@@ -7,6 +7,26 @@ import 'package:read_aloud/src/services/kokoro_playback_coordination.dart';
 
 void main() {
   test(
+    'lease cancellation cannot abort another lease with the same generation',
+    () async {
+      final processor = _CancellableProcessor();
+      final owner = SynthesisAdmissionOwner(
+        processor,
+        exportMayRun: () => true,
+      );
+      final playback = owner.lease(export: false);
+      final export = owner.lease(export: true);
+      final active = export.process(_request('p1'), (_) {});
+      (playback as CancellableSpeechWorkerChunkProcessor).cancelGeneration('g');
+      playback.cancelPending();
+      expect(processor.cancelled, isEmpty);
+      (export as CancellableSpeechWorkerChunkProcessor).cancelGeneration('g');
+      expect(processor.cancelled, ['g']);
+      await active;
+      await owner.shutdown();
+    },
+  );
+  test(
     'buffer hysteresis, count cap and actual player speed govern admission',
     () {
       final policy = KokoroBufferAdmission(maxChunks: 6);
@@ -117,5 +137,15 @@ class _Processor implements SpeechWorkerChunkProcessor {
   @override
   Future<void> dispose() async {
     closed = true;
+  }
+}
+
+class _CancellableProcessor extends _Processor
+    implements CancellableSpeechWorkerChunkProcessor {
+  final cancelled = <String>[];
+  @override
+  void cancelGeneration(String generationId) {
+    cancelled.add(generationId);
+    if (!gate.isCompleted) gate.complete();
   }
 }

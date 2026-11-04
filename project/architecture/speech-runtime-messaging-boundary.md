@@ -73,3 +73,49 @@ These legacy contracts describe intended behavior and acceptance; `final` denote
 - [speech runtime lifecycle and ownership](../specifications/speech-runtime-lifecycle-and-ownership.md)
 - [speech worker pipeline](../specifications/speech-worker-pipeline.md)
 - [trim and cap join correction](../specifications/trim-and-cap-join-correction.md)
+
+## MLX model preparation and replacement
+
+The controller prepares a selected MLX model at launch and immediately on a
+Settings selection, independently of document binding preparation. The engine's
+single admission owner serializes model preparation and synthesis. One current
+replacement loop reads the latest desired engine after old resources drain;
+rapid selection changes retire an obsolete preparation before the next model
+starts. UI callbacks carry their owning engine identity and old callbacks cannot
+publish new-session state. Document/cast preferences and reading position remain
+in the controller. Shutdown is shared/idempotent; it retires an active Python
+load/inference before waiting for the admission drain.
+
+A playback/export lease forwards cancellation only for its own active generation.
+It cannot cancel another lease with the same generation string. The Python
+supervisor reserves admission before process start, associates stream/exit
+callbacks with their child, and retires malformed, timed-out or cancelled children.
+A replacement process reloads the recorded model and verifies its identity before
+accepting synthesis. Cache identity includes the loaded model identity, helper
+version, voice/reference identity and text. Custom local model identity includes
+config hash and weight file path/size/mtime; it is not a full weight-byte audit.
+Artifact lookup/publication run on an isolate; temporary WAVs have unique
+request-owned directories. Queue bounds remain eight pending pipeline chunks and
+three pending shared admissions, with one active synthesis.
+
+The native app and Python child each sample their own physical footprint;
+sandbox policy forbids the app from querying the child's libproc counters.
+One child-owned daemon emits memory telemetry every two seconds through the
+locked JSON-lines writer. The supervisor combines it with one in-flight native
+self-query, ignores retired-child messages, and retires the worker at 99 GB or
+after 30 seconds without telemetry. Child exit owns sampler cancellation.
+These are sampled guardrails, not a proved hard real-time 100 GB bound.
+
+The worker consumes all model-generated pieces, validates finite mono output and
+constant rate, and writes a single complete native-rate PCM16 WAV. The artifact
+store, boundary correction and export carry the WAV sample rate instead of
+assuming Kokoro's 24 kHz. Boundary derivative identity was versioned to prevent
+reuse of derivatives computed with the old timing assumption.
+
+Drama has bf16/8-/4-bit pinned repository entries and 43 selectable reference
+voices including 13 cached Fish Official designed references. Native multi-voice
+scene packing/timing is still open; implemented fiction routing is per-character
+chunk synthesis. Source regressions establish ownership, emitted-sample retention
+and format behavior. They do not establish real Drama acoustic quality, sustained
+memory, M3 performance or uninterrupted chapter playback; native evidence is
+recorded in #111.

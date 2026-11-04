@@ -208,7 +208,7 @@ class VoiceManagementDialog extends StatelessWidget {
               ),
               const SizedBox(height: 8),
               Text(
-                '${engineName == null ? '' : '$engineName · '}${availableVoices.where((v) => v.locale.toLowerCase().startsWith('en')).length} English voices ready',
+                '${engineName == null ? '' : '$engineName · '}${availableVoices.where((v) => v.locale.toLowerCase().startsWith('en')).length} English voice choices',
                 key: const Key('english-voice-count'),
               ),
               const SizedBox(height: 8),
@@ -228,7 +228,7 @@ class VoiceManagementDialog extends StatelessWidget {
                     Text(
                       availableVoices.isEmpty
                           ? 'Speech voices are loading. You can inspect the cast now.'
-                          : '${availableVoices.length} installed voice choices per speaker. Download more in Voice Library below.',
+                          : '${availableVoices.length} voice choices per speaker. References download when first selected.',
                     ),
                     const SizedBox(height: 12),
                     _VoiceAssignmentCard(

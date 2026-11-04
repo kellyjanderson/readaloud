@@ -1,3 +1,4 @@
+import '../models/speech_engine_catalog.dart';
 import 'dart:async';
 import 'dart:math' as math;
 
@@ -523,33 +524,24 @@ class _ReadAloudScreenState extends State<ReadAloudScreen> {
                       decoration: const InputDecoration(
                         border: OutlineInputBorder(),
                       ),
-                      items: const [
-                        DropdownMenuItem(
-                          value: 'kokoro',
-                          child: Text('Kokoro (default)'),
-                        ),
-                        DropdownMenuItem(
-                          value: 'qwen3_tts_base_1_7b',
-                          child: Text('Qwen3-TTS 1.7B Base (reference voices)'),
-                        ),
-                        DropdownMenuItem(
-                          value: 'qwen3_tts_1_7b',
-                          child: Text('Qwen3-TTS 1.7B CustomVoice'),
-                        ),
-                        DropdownMenuItem(
-                          value: 'voxtral_4b',
-                          child: Text('Voxtral TTS 4B'),
-                        ),
-                        DropdownMenuItem(
-                          value: 'moss_tts_8b',
-                          child: Text('MOSS-TTS v1.5 8B'),
-                        ),
-                      ],
+                      items: speechEngineLabels.entries
+                          .map(
+                            (entry) => DropdownMenuItem(
+                              value: entry.key,
+                              child: Text(
+                                entry.value,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                          )
+                          .toList(),
                       onChanged: (engineId) async {
                         if (engineId == null) return;
+                        setDialogState(() => selectedEngineId = engineId);
                         await _controller.setTtsEngineId(engineId);
                         if (!dialogContext.mounted) return;
-                        setDialogState(() => selectedEngineId = engineId);
+                        setDialogState(() {});
                       },
                     ),
                     const SizedBox(height: 8),
@@ -557,8 +549,12 @@ class _ReadAloudScreenState extends State<ReadAloudScreen> {
                       height: 64,
                       child: SingleChildScrollView(
                         child: Text(switch (selectedEngineId) {
+                          'fish_drama3' ||
+                          'fish_drama3_8bit' ||
+                          'fish_drama3_4bit' =>
+                            'Fish Official reference voices plus the existing voice bank. bf16 needs a 96 GB or larger Mac; choose 8-bit or 4-bit for smaller Macs. Downloads when selected.',
                           'qwen3_tts_base_1_7b' || 'moss_tts_8b' =>
-                            '30 synthetic reference voices. Choose and preview them in Voice Management; the same library is available for character assignments.',
+                            '43 reference voices, including 13 Fish voices. Choose and preview them in Voice Management; the same library is available for character assignments.',
                           'qwen3_tts_1_7b' =>
                             '9 fixed speakers. Below the required 30 voices; use Qwen Base for the larger reference library.',
                           'voxtral_4b' =>
@@ -598,14 +594,41 @@ class _ReadAloudScreenState extends State<ReadAloudScreen> {
                       ),
                       const SizedBox(height: 8),
                       const Text(
-                        'Fast mode trades some model precision for faster speech generation. Reopen the app to apply changes.',
+                        'Fast mode trades some model precision for faster speech generation. Changes apply in this session.',
                       ),
                     ],
                     const SizedBox(height: 12),
-                    Text(
-                      _controller.ttsEngineRestartRequired
-                          ? 'Quit and reopen Read Aloud to use ${_ttsEngineLabel(selectedEngineId)}. Current session: ${_ttsEngineLabel(_controller.runningTtsEngineId)}.'
-                          : 'Active engine: ${_ttsEngineLabel(_controller.runningTtsEngineId)}.',
+                    SizedBox(
+                      height: 100,
+                      child: ListenableBuilder(
+                        listenable: _controller,
+                        builder: (context, _) {
+                          final progress = _controller.speechResourceProgress;
+                          return SingleChildScrollView(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  _controller.startupError ??
+                                      progress?.message ??
+                                      (_controller.isInitializing
+                                          ? 'Preparing ${_ttsEngineLabel(selectedEngineId)}…'
+                                          : 'Active engine: ${_ttsEngineLabel(_controller.runningTtsEngineId)}.'),
+                                ),
+                                if (progress != null)
+                                  LinearProgressIndicator(
+                                    value: progress.fraction,
+                                  ),
+                                if (_controller.startupError != null)
+                                  TextButton(
+                                    onPressed: _controller.retryInitialization,
+                                    child: const Text('Retry download'),
+                                  ),
+                              ],
+                            ),
+                          );
+                        },
+                      ),
                     ),
                   ],
                 ),
@@ -623,14 +646,8 @@ class _ReadAloudScreenState extends State<ReadAloudScreen> {
     );
   }
 
-  String _ttsEngineLabel(String engineId) => switch (engineId) {
-    'kokoro' => 'Kokoro',
-    'qwen3_tts_1_7b' => 'Qwen3-TTS 1.7B CustomVoice',
-    'qwen3_tts_base_1_7b' => 'Qwen3-TTS 1.7B Base',
-    'voxtral_4b' => 'Voxtral TTS 4B',
-    'moss_tts_8b' => 'MOSS-TTS v1.5 8B',
-    _ => engineId,
-  };
+  String _ttsEngineLabel(String engineId) =>
+      speechEngineLabels[engineId] ?? engineId;
 
   Widget _buildAssignmentStatus(BuildContext context) {
     final state = _controller.voiceAssignmentState;

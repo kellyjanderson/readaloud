@@ -86,6 +86,9 @@ class EngineCapabilityRegistry {
       case 'qwen3_tts_base_1_7b':
       case 'qwen3_tts_1_7b':
       case 'voxtral_4b':
+      case 'fish_drama3':
+      case 'fish_drama3_8bit':
+      case 'fish_drama3_4bit':
       case 'moss_tts_8b':
         return EngineCapabilityProfile(
           capabilityProfileId:

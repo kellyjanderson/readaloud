@@ -28,6 +28,67 @@ import 'package:read_aloud/src/services/tts_engine.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
+  test(
+    'launch prepares selected model and settings can cancel model preparation',
+    () async {
+      SharedPreferences.setMockInitialValues({});
+      final initial = _ModelPreparationEngine();
+      final loading = _ModelPreparationEngine()..hold = true;
+      final finalEngine = _ModelPreparationEngine();
+      final controller = ReaderController(
+        ttsEngine: initial,
+        engineFactory: (id, _) => id == 'fish_drama3' ? loading : finalEngine,
+        enablePlatformIntakeChannels: false,
+      );
+      addTearDown(controller.dispose);
+      await controller.initialize();
+      expect(initial.preparations, 1);
+      final first = controller.setTtsEngineId('fish_drama3');
+      await loading.started.future;
+      final second = controller.setTtsEngineId('fish_drama3_4bit');
+      await Future.wait([first, second]).timeout(const Duration(seconds: 2));
+      expect(loading.closed, true);
+      expect(finalEngine.preparations, 1);
+      expect(controller.runningTtsEngineId, 'fish_drama3_4bit');
+      expect(controller.startupError, isNull);
+    },
+  );
+
+  test(
+    'rapid engine changes drain once, select latest, and reject old callbacks',
+    () async {
+      SharedPreferences.setMockInitialValues({});
+      final old = _BarrierStopTtsEngine();
+      final replacements = <String>[];
+      final controller = ReaderController(
+        ttsEngine: old,
+        engineFactory: (id, bits) {
+          replacements.add(id);
+          return _FakeTtsEngine();
+        },
+        enablePlatformIntakeChannels: false,
+      );
+      addTearDown(controller.dispose);
+      await controller.initialize();
+      await controller.importPastedText('The city kept its secrets.');
+      final document = controller.document;
+      old.holdNext = true;
+      final stale = old._onStatus;
+      final first = controller.setTtsEngineId('fish_drama3');
+      await Future<void>.delayed(Duration.zero);
+      final second = controller.setTtsEngineId('fish_drama3_4bit');
+      await Future<void>.delayed(Duration.zero);
+      old.release.complete();
+      await Future.wait([first, second]);
+      stale?.call('stale failure');
+      expect(controller.statusMessage, isNot('stale failure'));
+      expect(controller.runningTtsEngineId, 'fish_drama3_4bit');
+      expect(controller.ttsEngineRestartRequired, isFalse);
+      expect(controller.document, same(document));
+      expect(replacements, ['fish_drama3_4bit']);
+    },
+  );
+
   TestWidgetsFlutterBinding.ensureInitialized();
 
   setUp(() async {
@@ -4003,5 +4064,37 @@ class _ResourceBarrierEngine extends _FakeTtsEngine
   @override
   Future<void> shutdownResources() async {
     ready = false;
+  }
+}
+
+class _ModelPreparationEngine extends _FakeTtsEngine
+    implements ModelPreparationCapable, ResourcePreparationCapable {
+  bool hold = false, closed = false;
+  int preparations = 0;
+  final started = Completer<void>();
+  final released = Completer<void>();
+  @override
+  Future<void> prepareSelectedModel() async {
+    preparations++;
+    if (!started.isCompleted) started.complete();
+    if (hold) await released.future;
+    if (closed) throw StateError('model preparation cancelled');
+  }
+
+  @override
+  bool get resourcesReady => !closed;
+  @override
+  Future<List<PreparedVoiceBinding>> prepareDocumentResources({
+    required String documentId,
+    required int revision,
+    required Set<String> voiceIds,
+    required String pronunciationProfileId,
+  }) async => [];
+  @override
+  Future<void> releaseDocumentResources() async {}
+  @override
+  Future<void> shutdownResources() async {
+    closed = true;
+    if (!released.isCompleted) released.complete();
   }
 }

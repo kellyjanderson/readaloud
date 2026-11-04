@@ -16,6 +16,9 @@ spec.loader.exec_module(worker)
 
 
 class GeneratorAdapterTest(unittest.TestCase):
+    def test_child_can_measure_its_own_physical_footprint(self):
+        self.assertGreater(worker._physical_footprint(), 0)
+
     def test_precision_change_reloads_instead_of_reusing_wrong_weights(self):
         worker._unload()
         model = SimpleNamespace(parameters=lambda: {})
@@ -59,6 +62,22 @@ class GeneratorAdapterTest(unittest.TestCase):
                     self.assertEqual(worker._model.kwargs['ref_audio'], str(reference))
                     self.assertEqual(worker._model.kwargs['ref_text'], 'Reference voice speech.')
                     self.assertNotIn('voice', worker._model.kwargs)
+
+    def test_all_pieces_keep_native_rate_and_exact_samples(self):
+        import numpy as np
+
+        source = np.sin(np.arange(8820) * .08).astype(np.float32) * .2
+        pieces = (SimpleNamespace(sample_rate=44100, audio=mx.array(a))
+                  for a in (source[:3500], source[3500:]))
+        audio, rate, count = worker._complete_audio(pieces)
+        self.assertEqual((rate, count, audio.size), (44100, 2, 8820))
+        np.testing.assert_array_equal(audio, source)
+
+    def test_malformed_late_piece_never_publishes_partial_success(self):
+        pieces = iter([SimpleNamespace(sample_rate=24000, audio=mx.ones(240)),
+                       SimpleNamespace(sample_rate=44100, audio=mx.ones(240))])
+        with self.assertRaises(ValueError): worker._complete_audio(pieces)
+        with self.assertRaises(ValueError): worker._complete_audio(iter([]))
 
     def test_unknown_presets_and_missing_reference_are_rejected(self):
         for engine in sorted(worker.MODEL_IDS):

@@ -65,6 +65,9 @@ class SpeechRuntimeCapabilities {
       'qwen3_tts_base_1_7b' ||
       'qwen3_tts_1_7b' ||
       'voxtral_4b' ||
+      'fish_drama3' ||
+      'fish_drama3_8bit' ||
+      'fish_drama3_4bit' ||
       'moss_tts_8b' => !kIsWeb && defaultTargetPlatform == TargetPlatform.macOS,
       _ => false,
     };

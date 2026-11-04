@@ -14,6 +14,26 @@ import 'package:read_aloud/src/services/speech_worker_pipeline.dart';
 import 'package:read_aloud/src/services/synthesis_boundary_policy.dart';
 
 void main() {
+  test(
+    'native sample rates survive artifact publication with correct duration',
+    () async {
+      final directory = await Directory.systemTemp.createTemp('native-rate-');
+      addTearDown(() => directory.delete(recursive: true));
+      final store = AudioArtifactStore(directory);
+      for (final rate in [16000, 24000, 44100, 48000, 96000]) {
+        final source = wav(rate: rate);
+        final artifact = store.publish(
+          identity: artifactIdentity(rate),
+          wav: source,
+          metadata: {},
+        );
+        expect(artifact.sampleRate, rate);
+        expect(artifact.duration, const Duration(seconds: 1));
+        expect(File(artifact.audioPath).readAsBytesSync(), source);
+      }
+    },
+  );
+
   late Directory root;
   setUp(() => root = Directory.systemTemp.createTempSync('p4-private-cache-'));
   tearDown(() => root.deleteSync(recursive: true));
@@ -353,8 +373,8 @@ SpeechWorkerChunkRequest request({
   synthesisIdentity: synthesis,
 );
 
-Uint8List wav() {
-  final bytes = Uint8List(44 + 24000 * 2);
+Uint8List wav({int rate = 24000}) {
+  final bytes = Uint8List(44 + rate * 2);
   final b = ByteData.sublistView(bytes);
   void tag(int at, String s) => bytes.setRange(at, at + 4, s.codeUnits);
   tag(0, 'RIFF');
@@ -365,12 +385,12 @@ Uint8List wav() {
   b.setUint32(16, 16, Endian.little);
   b.setUint16(20, 1, Endian.little);
   b.setUint16(22, 1, Endian.little);
-  b.setUint32(24, 24000, Endian.little);
-  b.setUint32(28, 48000, Endian.little);
+  b.setUint32(24, rate, Endian.little);
+  b.setUint32(28, rate * 2, Endian.little);
   b.setUint16(32, 2, Endian.little);
   b.setUint16(34, 16, Endian.little);
   b.setUint32(40, bytes.length - 44, Endian.little);
-  for (var i = 4800; i < 19200; i++) {
+  for (var i = rate ~/ 5; i < rate * 4 ~/ 5; i++) {
     b.setInt16(44 + i * 2, 12000, Endian.little);
   }
   return bytes;
