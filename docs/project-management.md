@@ -4,6 +4,13 @@ Working design and planning live in [GitHub Issues](https://github.com/kellyjand
 
 ## Current entry points
 
+- [Product-first review and integration](https://github.com/kellyjanderson/readaloud/issues/110); [repository cleanup](https://github.com/kellyjanderson/readaloud/issues/115).
+- [Drama 3 fiction reading](https://github.com/kellyjanderson/readaloud/issues/111), [model variants and live switching](https://github.com/kellyjanderson/readaloud/issues/112), and [required concurrency repairs](https://github.com/kellyjanderson/readaloud/issues/113).
+- [Existing MLX/full-document implementation](https://github.com/kellyjanderson/readaloud/issues/109), [RC2 product requirements](https://github.com/kellyjanderson/readaloud/issues/83), and [outstanding integrated acceptance](https://github.com/kellyjanderson/readaloud/issues/91).
+- [Release compliance](https://github.com/kellyjanderson/readaloud/issues/55).
+
+## Earlier implementation evidence
+
 - [Prepared-document runtime design](https://github.com/kellyjanderson/readaloud/issues/48); accepted direction R1 is linked in its decision comment.
 - [P0 baseline](https://github.com/kellyjanderson/readaloud/issues/49), [P1 preparation](https://github.com/kellyjanderson/readaloud/issues/50), [P2 resident resources](https://github.com/kellyjanderson/readaloud/issues/51), [P3 worker planning](https://github.com/kellyjanderson/readaloud/issues/52), [P4 assignment/cache](https://github.com/kellyjanderson/readaloud/issues/53), [FINAL acceptance/reconciliation](https://github.com/kellyjanderson/readaloud/issues/54).
 - [Release compliance](https://github.com/kellyjanderson/readaloud/issues/55).
