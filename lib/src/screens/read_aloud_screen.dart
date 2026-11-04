@@ -608,7 +608,7 @@ class _ReadAloudScreenState extends State<ReadAloudScreen> {
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                Text(
+                                SelectableText(
                                   _controller.startupError ??
                                       progress?.message ??
                                       (_controller.isInitializing
@@ -1224,7 +1224,8 @@ class _ReadAloudScreenState extends State<ReadAloudScreen> {
               isCharacterModeEnabled: _controller.isMultiVoiceEnabled,
               voiceLibrary: _controller.voiceLibrary,
               availableVoices: _controller.voices,
-              characterCastRegistry: _controller.document.characterCastRegistry,
+              characterCastRegistry: _controller.characterCastRegistry,
+              isCastDiscoveryComplete: _controller.isPreparationComplete,
               castVoiceAssignments: _controller.castVoiceAssignments,
               selectedVoiceId: _controller.selectedVoice?.id,
               assignmentState: _controller.voiceAssignmentState,

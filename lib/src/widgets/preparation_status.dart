@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../models/document_preparation.dart';
 import '../services/tts_engine.dart';
@@ -184,73 +185,78 @@ class _PreparationStatusState extends State<PreparationStatus> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Expanded(
-            child: SingleChildScrollView(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  Semantics(
-                    liveRegion: true,
-                    child: Text(
-                      title,
-                      style: Theme.of(context).textTheme.bodyMedium,
+            child: SelectionArea(
+              child: SingleChildScrollView(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Semantics(
+                      liveRegion: true,
+                      child: Text(
+                        title,
+                        style: Theme.of(context).textTheme.bodyMedium,
+                      ),
                     ),
-                  ),
-                  const SizedBox(height: 6),
-                  if (resource != null)
-                    MeasuredProgress(
-                      fraction: resource.fraction,
-                      label: resourceProgressLabel(resource),
-                    )
-                  else if (widget.startupError == null &&
-                      problem == null &&
-                      active != null &&
-                      !paused &&
-                      !_details)
-                    MeasuredProgress(
-                      fraction: active.fraction,
-                      label:
-                          '${_stageName(active.stage)} · ${_counter(active)}',
-                    ),
-                  if (_details) ...[
-                    const Divider(height: 20),
-                    if (stages.isEmpty) const Text('No document activity yet.'),
-                    for (final p in stages.where(
-                      (p) => !_hidden.contains(p.stage),
-                    ))
-                      AnimatedOpacity(
-                        key: ValueKey('activity-${p.stage.name}'),
-                        opacity: _fading.contains(p.stage) ? 0 : 1,
-                        duration: MediaQuery.disableAnimationsOf(context)
-                            ? Duration.zero
-                            : const Duration(milliseconds: 600),
-                        child: Padding(
-                          padding: const EdgeInsets.only(bottom: 10),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.stretch,
-                            children: [
-                              Text(
-                                '${_stageName(p.stage)} · ${p.state.name}',
-                                style: Theme.of(context).textTheme.labelLarge,
-                              ),
-                              if (p.state == PreparationWorkState.working)
-                                MeasuredProgress(
-                                  fraction: p.fraction,
-                                  label: _counter(p),
-                                )
-                              else
+                    const SizedBox(height: 6),
+                    if (resource != null)
+                      MeasuredProgress(
+                        fraction: resource.fraction,
+                        label: resourceProgressLabel(resource),
+                      )
+                    else if (widget.startupError == null &&
+                        problem == null &&
+                        active != null &&
+                        !paused &&
+                        !_details)
+                      MeasuredProgress(
+                        fraction: active.fraction,
+                        label:
+                            '${_stageName(active.stage)} · ${_counter(active)}',
+                      ),
+                    if (_details) ...[
+                      const Divider(height: 20),
+                      if (stages.isEmpty)
+                        const Text('No document activity yet.'),
+                      for (final p in stages.where(
+                        (p) => !_hidden.contains(p.stage),
+                      ))
+                        AnimatedOpacity(
+                          key: ValueKey('activity-${p.stage.name}'),
+                          opacity: _fading.contains(p.stage) ? 0 : 1,
+                          duration: MediaQuery.disableAnimationsOf(context)
+                              ? Duration.zero
+                              : const Duration(milliseconds: 600),
+                          child: Padding(
+                            padding: const EdgeInsets.only(bottom: 10),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.stretch,
+                              children: [
                                 Text(
-                                  _counter(p),
-                                  style: Theme.of(context).textTheme.bodySmall,
+                                  '${_stageName(p.stage)} · ${p.state.name}',
+                                  style: Theme.of(context).textTheme.labelLarge,
                                 ),
-                              if (p.error ?? p.waitingReason
-                                  case final String detail)
-                                Text(detail),
-                            ],
+                                if (p.state == PreparationWorkState.working)
+                                  MeasuredProgress(
+                                    fraction: p.fraction,
+                                    label: _counter(p),
+                                  )
+                                else
+                                  Text(
+                                    _counter(p),
+                                    style: Theme.of(
+                                      context,
+                                    ).textTheme.bodySmall,
+                                  ),
+                                if (p.error ?? p.waitingReason
+                                    case final String detail)
+                                  Text(detail),
+                              ],
+                            ),
                           ),
                         ),
-                      ),
+                    ],
                   ],
-                ],
+                ),
               ),
             ),
           ),
@@ -284,6 +290,24 @@ class _PreparationStatusState extends State<PreparationStatus> {
                     key: const Key('toggle-activity'),
                     onPressed: () => setState(() => _details = !_details),
                     child: Text(_details ? 'Hide activity' : 'Activity'),
+                  ),
+
+                  TextButton.icon(
+                    key: const Key('copy-reader-status'),
+                    onPressed: () => Clipboard.setData(
+                      ClipboardData(
+                        text: [
+                          title,
+                          if (resource != null) resourceProgressLabel(resource),
+                          for (final p in stages)
+                            '${_stageName(p.stage)} · ${p.state.name} · ${_counter(p)}'
+                                '${p.error == null ? '' : '\n${p.error}'}'
+                                '${p.waitingReason == null ? '' : '\n${p.waitingReason}'}',
+                        ].join('\n\n'),
+                      ),
+                    ),
+                    icon: const Icon(Icons.copy, size: 18),
+                    label: const Text('Copy'),
                   ),
                 ],
               ),

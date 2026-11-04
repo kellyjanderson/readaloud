@@ -6,6 +6,59 @@ import 'package:read_aloud/src/services/tts_engine.dart';
 import 'package:read_aloud/src/widgets/preparation_status.dart';
 
 void main() {
+  testWidgets('long errors can be selected and copied without truncation', (
+    tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(420, 600));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    final error = 'Failed to load speech: ${'diagnostic detail ' * 40}END';
+    String? copied;
+    tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+      SystemChannels.platform,
+      (call) async {
+        if (call.method == 'Clipboard.setData') {
+          copied = (call.arguments as Map)['text'] as String;
+        }
+        return null;
+      },
+    );
+    addTearDown(
+      () => tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+        SystemChannels.platform,
+        null,
+      ),
+    );
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: PreparationStatus(
+            progress: const [
+              PreparationProgress(
+                stage: PreparationStage.analysis,
+                state: PreparationWorkState.failed,
+                completed: 3,
+                total: 9,
+                unit: 'ranges',
+                error: 'Analysis failed in a later range',
+              ),
+            ],
+            isImporting: false,
+            isInitializing: false,
+            isComplete: false,
+            startupError: error,
+          ),
+        ),
+      ),
+    );
+    expect(find.byType(SelectionArea), findsOneWidget);
+    expect(find.text(error), findsOneWidget);
+    await tester.tap(find.byKey(const Key('copy-reader-status')));
+    await tester.pump();
+    expect(copied, contains(error));
+    expect(copied, contains('Analysis failed in a later range'));
+    expect(copied, contains('3 of 9 ranges'));
+    expect(tester.takeException(), isNull);
+  });
   Future<void> render(
     WidgetTester tester,
     List<PreparationProgress> stages, {
@@ -59,6 +112,8 @@ void main() {
         .5,
       );
       expect(find.byKey(const ValueKey('activity-parsing')), findsNothing);
+      await tester.sendKeyEvent(LogicalKeyboardKey.tab);
+      // The selectable output is keyboard reachable before the action column.
       await tester.sendKeyEvent(LogicalKeyboardKey.tab);
       await tester.sendKeyEvent(LogicalKeyboardKey.space);
       expect(cancelled, 1);

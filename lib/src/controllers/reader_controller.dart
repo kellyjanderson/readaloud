@@ -374,6 +374,17 @@ class ReaderController extends ChangeNotifier {
           _playbackStartDriver != null);
   List<CastEntry> get discoveredCastEntries =>
       List.unmodifiable(_discoveredCast.values);
+
+  /// Session-wide discoveries for casting UI. Playback keeps its range-local
+  /// document and bindings; opening the dialog must not change audible intent.
+  CharacterCastRegistry get characterCastRegistry => _discoveredCast.isEmpty
+      ? _document.characterCastRegistry
+      : CharacterCastRegistry(
+          documentId: sessionDocumentId,
+          registryVersion: _document.characterCastRegistry.registryVersion,
+          entries: _discoveredCast.values.toList(growable: false),
+          castIdRedirects: _castRedirects,
+        );
   Map<String, String> get castIdRedirects => Map.unmodifiable(_castRedirects);
   String get sessionDocumentId =>
       _sessionDocumentId ?? _document.displayDocument.documentId;
@@ -2457,7 +2468,7 @@ class ReaderController extends ChangeNotifier {
     }
     final automaticAssignments = _castVoiceAssignmentService.resolve(
       CastVoiceAssignmentInput(
-        characterCastRegistry: _document.characterCastRegistry,
+        characterCastRegistry: characterCastRegistry,
         availableVoices: _voices,
         fallbackVoiceId: _selectedVoiceId!,
         preferredNarratorVoiceId: _selectedVoiceId,
@@ -4267,7 +4278,8 @@ class ReaderController extends ChangeNotifier {
 
     return _castVoiceAssignmentService.resolve(
       CastVoiceAssignmentInput(
-        characterCastRegistry: (document ?? _document).characterCastRegistry,
+        characterCastRegistry:
+            document?.characterCastRegistry ?? characterCastRegistry,
         availableVoices: _voices,
         fallbackVoiceId: preferredNarratorVoiceId,
         preferredNarratorVoiceId: preferredNarratorVoiceId,
