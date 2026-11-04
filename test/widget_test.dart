@@ -153,6 +153,7 @@ void main() {
     tester,
   ) async {
     debugDefaultTargetPlatformOverride = TargetPlatform.macOS;
+    addTearDown(() => debugDefaultTargetPlatformOverride = null);
     final engine = _AccessibleTtsEngine();
     final controller = ReaderController(
       preferencesService: _MemoryReaderPreferencesService(),
@@ -163,7 +164,8 @@ void main() {
     await tester.pumpWidget(ReadAloudApp(controller: controller));
     await tester.pump();
     var focused = false;
-    for (var step = 0; step < 10; step += 1) {
+    // The selectable diagnostics and Copy action also participate in traversal.
+    for (var step = 0; step < 20; step += 1) {
       await tester.sendKeyEvent(LogicalKeyboardKey.tab);
       await tester.pump();
       focused =
@@ -773,6 +775,7 @@ class _MemoryReaderPreferencesService extends ReaderPreferencesService {
     required Map<String, double> voiceSpeeds,
     required Map<String, Map<String, String>>
     storedDocumentCastVoiceAssignments,
+    Map<String, String> sourceVoiceDocumentIds = const {},
     ReaderResumeState? resumeState,
     String? selectedVoiceId,
     String? lastOpenedDocumentPath,
@@ -794,6 +797,7 @@ class _MemoryReaderPreferencesService extends ReaderPreferencesService {
           (key, value) => MapEntry(key, Map<String, String>.from(value)),
         ),
       ),
+      sourceVoiceDocumentIds: Map.of(sourceVoiceDocumentIds),
       resumeState: resumeState,
       lastOpenedDocumentPath: lastOpenedDocumentPath,
       lastOpenedDocumentAccessToken: lastOpenedDocumentAccessToken,

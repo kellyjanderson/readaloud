@@ -407,8 +407,19 @@ class ReaderController extends ChangeNotifier {
     }
     final previous = sessionDocumentId;
     final canonical = migration.canonicalDocumentId;
-    final choices = _storedDocumentCastVoiceAssignments[previous];
-    if (choices != null) {
+    final sourcePreferenceOwner =
+        _sourceVoiceDocumentIds[_activeSourceRevision];
+    final preferenceOwner = _voicePreferenceDocumentId;
+    final choices = _storedDocumentCastVoiceAssignments[preferenceOwner];
+    if (sourcePreferenceOwner != null && sourcePreferenceOwner != canonical) {
+      // This source's saved snapshot is authoritative, including absence after
+      // Reset. Older canonical choices must not undo edits made before EOF.
+      if (choices == null || choices.isEmpty) {
+        _storedDocumentCastVoiceAssignments.remove(canonical);
+      } else {
+        _storedDocumentCastVoiceAssignments[canonical] = Map.of(choices);
+      }
+    } else if (choices != null) {
       final canonicalChoices = _storedDocumentCastVoiceAssignments.putIfAbsent(
         canonical,
         () => {},
@@ -426,8 +437,11 @@ class ReaderController extends ChangeNotifier {
     }
     _documentIdentityRedirects[previous] = canonical;
     _sessionDocumentId = canonical;
-    // Retain provisional keys for recovery; canonical preferences take
-    // precedence on replay. Current overrides and active speech remain intact.
+    if (_activeSourceRevision case final source?) {
+      _sourceVoiceDocumentIds[source] = canonical;
+    }
+    // Retain provisional keys for recovery; subsequent replay uses the updated
+    // canonical owner. Current overrides and active speech remain intact.
     await _persistPreferences();
     if (!_disposed) notifyListeners();
     return true;
@@ -780,6 +794,27 @@ class ReaderController extends ChangeNotifier {
           );
     _requireRevision(revision);
     final cachedMigration = cache?.identityMigration(request);
+    // Upgrade pre-alias preferences only from a validated range of this exact
+    // source revision. Never guess a book by title or by matching cast names.
+    if (sourceRevision != null &&
+        !_sourceVoiceDocumentIds.containsKey(sourceRevision) &&
+        _storedDocumentCastVoiceAssignments.isNotEmpty &&
+        cache != null &&
+        cache.rangeCount > 0) {
+      try {
+        final prior = await cache.readRange(1, request: request);
+        _requireRevision(revision);
+        final priorId =
+            cachedMigration?.canonicalDocumentId ??
+            prior.fragment.displayDocument.documentId;
+        if (_storedDocumentCastVoiceAssignments.containsKey(priorId)) {
+          _sourceVoiceDocumentIds[sourceRevision] = priorId;
+        }
+      } on FormatException {
+        // Corrupt cache cannot establish preference ownership; rebuild input.
+      }
+    }
+    _requireRevision(revision);
     final completion = _preparation.prepareRanges(
       request,
       cacheKey: sourceRevision,
@@ -1054,6 +1089,7 @@ class ReaderController extends ChangeNotifier {
   final Map<String, SpokenChunkRecord> _spokenChunkRecords =
       <String, SpokenChunkRecord>{};
   final Map<String, String> _castVoiceOverrides = <String, String>{};
+  final Map<String, String> _sourceVoiceDocumentIds = {};
   String? _activeSpokenChunkId;
   String? _ttsDebugTraceLogPath;
   DateTime? _ttsDebugTraceStartedAt;
@@ -1249,6 +1285,9 @@ class ReaderController extends ChangeNotifier {
     _storedDocumentCastVoiceAssignments
       ..clear()
       ..addAll(preferences.storedDocumentCastVoiceAssignments);
+    _sourceVoiceDocumentIds
+      ..clear()
+      ..addAll(preferences.sourceVoiceDocumentIds);
     _resumeState = preferences.resumeState;
     _lastOpenedDocumentPath = preferences.lastOpenedDocumentPath;
     _lastOpenedDocumentAccessToken = preferences.lastOpenedDocumentAccessToken;
@@ -2471,22 +2510,10 @@ class ReaderController extends ChangeNotifier {
         _voices.every((voice) => voice.id != voiceId)) {
       return;
     }
-    final automaticAssignments = _castVoiceAssignmentService.resolve(
-      CastVoiceAssignmentInput(
-        characterCastRegistry: characterCastRegistry,
-        availableVoices: _voices,
-        fallbackVoiceId: _selectedVoiceId!,
-        preferredNarratorVoiceId: _selectedVoiceId,
-      ),
-    );
-    final automaticAssignment = automaticAssignments.forCastId(castId);
-    if (automaticAssignment?.effectiveVoiceId == voiceId) {
-      _castVoiceOverrides.remove(castId);
-      _clearStoredCastVoiceAssignment(castId);
-    } else {
-      _castVoiceOverrides[castId] = voiceId;
-      _storeCastVoiceAssignment(castId, voiceId);
-    }
+    // Selecting a voice expresses intent even when it matches today's
+    // automatic assignment. Only Reset returns the role to automatic routing.
+    _castVoiceOverrides[castId] = voiceId;
+    _storeCastVoiceAssignment(castId, voiceId);
     await _voiceChoicesEdited();
   }
 
@@ -3453,6 +3480,7 @@ class ReaderController extends ChangeNotifier {
         for (final entry in _storedDocumentCastVoiceAssignments.entries)
           entry.key: Map<String, String>.unmodifiable(entry.value),
       }),
+      sourceVoiceDocumentIds: Map.unmodifiable(_sourceVoiceDocumentIds),
       resumeState: _resumeState,
       lastOpenedDocumentPath: _lastOpenedDocumentPath,
       lastOpenedDocumentAccessToken: _lastOpenedDocumentAccessToken,
@@ -3482,6 +3510,7 @@ class ReaderController extends ChangeNotifier {
           multiVoiceEnabled: value.multiVoiceEnabled,
           storedDocumentCastVoiceAssignments:
               value.storedDocumentCastVoiceAssignments,
+          sourceVoiceDocumentIds: value.sourceVoiceDocumentIds,
           resumeState: value.resumeState,
           lastOpenedDocumentPath: value.lastOpenedDocumentPath,
           lastOpenedDocumentAccessToken: value.lastOpenedDocumentAccessToken,
@@ -4296,13 +4325,19 @@ class ReaderController extends ChangeNotifier {
 
   Map<String, String> _currentStoredCastVoiceAssignments() {
     return Map<String, String>.unmodifiable(
-      _storedDocumentCastVoiceAssignments[sessionDocumentId] ??
+      _storedDocumentCastVoiceAssignments[_voicePreferenceDocumentId] ??
           const <String, String>{},
     );
   }
 
+  String get _voicePreferenceDocumentId =>
+      _sourceVoiceDocumentIds[_activeSourceRevision] ?? sessionDocumentId;
+
   void _storeCastVoiceAssignment(String castId, String voiceId) {
-    final documentId = sessionDocumentId;
+    final documentId = _voicePreferenceDocumentId;
+    if (_activeSourceRevision case final source?) {
+      _sourceVoiceDocumentIds[source] = documentId;
+    }
     final assignments =
         _storedDocumentCastVoiceAssignments[documentId] ?? <String, String>{};
     assignments[castId] = voiceId;
@@ -4310,7 +4345,7 @@ class ReaderController extends ChangeNotifier {
   }
 
   void _clearStoredCastVoiceAssignment(String castId) {
-    final documentId = sessionDocumentId;
+    final documentId = _voicePreferenceDocumentId;
     final assignments = _storedDocumentCastVoiceAssignments[documentId];
     if (assignments == null) {
       return;
