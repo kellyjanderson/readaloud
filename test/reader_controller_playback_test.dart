@@ -97,6 +97,58 @@ void main() {
   });
 
   group('ReaderController playback', () {
+    for (final started in [false, true]) {
+      test(
+        'first Play retries a failed ${started ? 'playing' : 'buffering'} attempt',
+        () async {
+          final engine = _FakeTtsEngine();
+          final controller = ReaderController(ttsEngine: engine);
+          addTearDown(controller.dispose);
+          await controller.initialize();
+          await controller.importPastedText('Alpha beta. Gamma delta.');
+          await controller.startPlayback();
+          final failedRequest = engine.lastSpeakRequest!;
+          if (started) {
+            engine.emitStart();
+            engine.emitProgress(
+              TtsProgressUpdate(
+                startOffset: 6,
+                endOffset: 10,
+                word: 'beta',
+                documentId: controller.document.displayDocument.documentId,
+                chunkId: 'before-failure',
+                segmentId:
+                    controller.document.speechDocument.segments.first.segmentId,
+                wordStartIndex: 1,
+                wordEndIndex: 2,
+                elapsedInChunk: const Duration(seconds: 1),
+                chunkAudioDuration: const Duration(seconds: 2),
+                voiceId: controller.selectedVoice!.id,
+                rate: controller.currentSpeed,
+              ),
+            );
+          }
+          final word = controller.currentWordIndex;
+          engine.emitError('Malformed audio; retry playback.');
+          expect(controller.playbackState, ReaderPlaybackPrimaryState.failed);
+          expect(controller.isPlaying, isFalse);
+          expect(failedRequest.isCurrent!(), isFalse);
+          engine
+              .emitStart(); // Late success from the failed attempt cannot play.
+          expect(controller.isPlaying, isFalse);
+          await controller.togglePlayback();
+          expect(engine.speakCallCount, 2);
+          expect(engine.pauseCallCount, 0);
+          expect(controller.currentWordIndex, word);
+          expect(engine.lastSpeakRequest!.isCurrent!(), isTrue);
+          expect(controller.statusMessage, isNull);
+          engine.emitStart();
+          expect(controller.isPlaying, isTrue);
+          expect(controller.playbackState, ReaderPlaybackPrimaryState.playing);
+        },
+      );
+    }
+
     test('opens .radoc directly without source importer analysis', () async {
       final importer = _ControlledPreparationImporter();
       final controller = ReaderController(importer: importer);

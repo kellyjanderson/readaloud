@@ -2050,7 +2050,9 @@ class KokoroTtsEngine
       _requestToken += 1;
       _refillPlanner.cancel();
       _playbackTokenizer?.cancel();
-      await speechRuntime.cancelGeneration(generationId);
+      // End the session's continuation and admission waits as well as its
+      // synthesis. Otherwise the next speak() can hang draining old work.
+      await _cancelActiveGeneration();
       await _resetPlaybackState();
       _onError?.call(error.message);
       return;

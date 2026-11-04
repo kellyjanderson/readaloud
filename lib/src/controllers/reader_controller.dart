@@ -1365,13 +1365,18 @@ class ReaderController extends ChangeNotifier {
       }
       unawaited(_flushResumePersistence());
       _statusMessage = message;
+      // A terminal error ends this intent, including late preparation/ready
+      // callbacks. Play must create a new attempt, not toggle stale buffering.
+      ++_playbackIntent;
+      _resumeAfterPreparation = false;
+      _pendingPlayUntilReady = false;
+      _playbackStartPending = false;
       _activePlaybackDocumentId = null;
       _isPlaying = false;
       _isFadingOut = false;
       _playbackRequestedAt = null;
-      _playbackState = _playbackActivity.isPlaying
-          ? ReaderPlaybackPrimaryState.playing
-          : ReaderPlaybackPrimaryState.failed;
+      _playbackActivity = const TtsPlaybackActivity.idle();
+      _playbackState = ReaderPlaybackPrimaryState.failed;
       _readingFocusState = _readingFocusState.copyWith(playbackActive: false);
       notifyListeners();
     };

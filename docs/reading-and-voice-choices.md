@@ -10,6 +10,8 @@ Choose **Activity** for stage counts and diagnostic detail. Active work stays ab
 
 Select text in the output area to copy a passage, or choose **Copy** to copy the full current message and stage diagnostics, including details outside the visible scroll area. Speech startup messages in Settings are selectable too.
 
+After a synthesis failure, press **Play** to retry from the retained reading position. Completed cached audio remains reusable; incomplete rendered audio is retained separately and is not treated as a completed passage.
+
 Downloaded models remain in Application Support and are reused by normal development and release builds. A rebuild does not clear them. Interrupted downloads reuse completed files and resume remaining work; loading a saved model into memory is a separate step. Intentionally isolated test apps with a different bundle identifier have separate macOS storage.
 
 ## Current and Pending voices

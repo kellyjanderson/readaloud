@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/gestures.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:read_aloud/src/models/document_preparation.dart';
@@ -6,6 +8,75 @@ import 'package:read_aloud/src/services/tts_engine.dart';
 import 'package:read_aloud/src/widgets/preparation_status.dart';
 
 void main() {
+  testWidgets(
+    'mouse selection and Command-C work before and after resize',
+    (tester) async {
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      String? copied;
+      tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+        SystemChannels.platform,
+        (call) async {
+          if (call.method == 'Clipboard.setData') {
+            copied = (call.arguments as Map)['text'] as String;
+          }
+          return null;
+        },
+      );
+      addTearDown(
+        () => tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+          SystemChannels.platform,
+          null,
+        ),
+      );
+      const error =
+          'Synthesis failed before the remaining passage was prepared.\n'
+          'ValueError: Expected finite, non-empty mono audio';
+      await tester.pumpWidget(
+        const MaterialApp(
+          home: Scaffold(
+            body: PreparationStatus(
+              progress: [],
+              isImporting: false,
+              isInitializing: false,
+              isComplete: false,
+              message: error,
+            ),
+          ),
+        ),
+      );
+      for (final width in [1200.0, 420.0, 900.0]) {
+        await tester.binding.setSurfaceSize(Size(width, 600));
+        await tester.pump();
+        final paragraph = tester.renderObject<RenderParagraph>(
+          find.descendant(
+            of: find.text(error),
+            matching: find.byType(RichText),
+          ),
+        );
+        Offset position(int offset) => paragraph.localToGlobal(
+          paragraph.getOffsetForCaret(TextPosition(offset: offset), Rect.zero) +
+              const Offset(0, 8),
+        );
+        final mouse = await tester.startGesture(
+          position(0),
+          kind: PointerDeviceKind.mouse,
+        );
+        await mouse.moveTo(position(9));
+        await mouse.up();
+        await tester.pump();
+        await tester.sendKeyDownEvent(LogicalKeyboardKey.metaLeft);
+        await tester.sendKeyEvent(LogicalKeyboardKey.keyC);
+        await tester.sendKeyUpEvent(LogicalKeyboardKey.metaLeft);
+        await tester.pump();
+        expect(copied, 'Synthesis', reason: 'selection at width $width');
+        copied = null;
+        await mouse.removePointer();
+        expect(tester.takeException(), isNull);
+      }
+    },
+    variant: TargetPlatformVariant.only(TargetPlatform.macOS),
+  );
+
   testWidgets('long errors can be selected and copied without truncation', (
     tester,
   ) async {
