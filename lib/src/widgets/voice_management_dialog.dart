@@ -8,6 +8,7 @@ import '../models/voice_profile.dart';
 import '../services/tts_engine.dart';
 import '../theme/read_aloud_theme.dart';
 import 'voice_library_row.dart';
+import 'preparation_status.dart';
 
 /// Assignment feedback stays outside the scrolling voice list.
 class VoiceAssignmentFeedback extends StatelessWidget {
@@ -392,9 +393,6 @@ class VoiceManagementDialog extends StatelessWidget {
   ) {
     final isSelected = entry.voice.id == selectedVoiceId;
     final progress = entry.progress;
-    final progressPercent = progress == null
-        ? null
-        : '${(progress * 100).round()}%';
 
     if (entry.isDownloading) {
       return SizedBox(
@@ -402,11 +400,7 @@ class VoiceManagementDialog extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.end,
-          children: [
-            LinearProgressIndicator(value: progress),
-            const SizedBox(height: 6),
-            Text(progressPercent ?? 'Working...'),
-          ],
+          children: [MeasuredProgress(fraction: progress)],
         ),
       );
     }

@@ -144,10 +144,7 @@ void main() {
     await tester.tap(find.text('Qwen3-TTS 1.7B Base').last);
     await tester.pumpAndSettle();
     expect((await preferences.load()).ttsEngineId, 'qwen3_tts_base_1_7b');
-    expect(
-      find.textContaining('43 reference voices'),
-      findsOneWidget,
-    );
+    expect(find.textContaining('43 reference voices'), findsOneWidget);
     expect(controller.ttsEngineRestartRequired, isFalse);
     expect(tester.takeException(), isNull);
   });
@@ -438,6 +435,38 @@ void main() {
       expect(tester.takeException(), isNull);
     },
   );
+
+  testWidgets('model progress is inline without a duplicate toast', (
+    tester,
+  ) async {
+    final engine = _DownloadProgressEngine();
+    final controller = ReaderController(
+      preferencesService: _MemoryReaderPreferencesService(),
+      ttsEngine: engine,
+      enablePlatformIntakeChannels: false,
+    );
+    addTearDown(controller.dispose);
+    await tester.pumpWidget(ReadAloudApp(controller: controller));
+    await tester.pump(const Duration(milliseconds: 300));
+    engine.report(
+      const TtsResourceProgress(
+        stage: 'modelDownload',
+        message: 'Downloading speech model files…',
+        completed: 25,
+        total: 100,
+      ),
+    );
+    controller.showStatusMessage('Downloading speech model files…');
+    await tester.pump();
+    expect(find.byKey(const Key('status-toast')), findsNothing);
+    expect(find.text('Downloading speech model files…'), findsOneWidget);
+    expect(
+      tester
+          .widget<LinearProgressIndicator>(find.byType(LinearProgressIndicator))
+          .value,
+      .25,
+    );
+  });
 
   testWidgets('status toast uses a floating themed feedback surface', (
     WidgetTester tester,
@@ -772,6 +801,15 @@ class _MemoryReaderPreferencesService extends ReaderPreferencesService {
       lastOpenedDirectoryAccessToken: lastOpenedDirectoryAccessToken,
     );
   }
+}
+
+class _DownloadProgressEngine extends _FakeTtsEngine
+    implements TtsResourceProgressCapable {
+  void Function(TtsResourceProgress?)? _report;
+  @override
+  set onResourceProgress(void Function(TtsResourceProgress?)? callback) =>
+      _report = callback;
+  void report(TtsResourceProgress value) => _report?.call(value);
 }
 
 class _FakeTtsEngine implements TtsEngine {

@@ -615,9 +615,11 @@ class _ReadAloudScreenState extends State<ReadAloudScreen> {
                                           ? 'Preparing ${_ttsEngineLabel(selectedEngineId)}…'
                                           : 'Active engine: ${_ttsEngineLabel(_controller.runningTtsEngineId)}.'),
                                 ),
-                                if (progress != null)
-                                  LinearProgressIndicator(
-                                    value: progress.fraction,
+                                if (progress != null &&
+                                    _controller.startupError == null)
+                                  MeasuredProgress(
+                                    fraction: progress.fraction,
+                                    label: resourceProgressLabel(progress),
                                   ),
                                 if (_controller.startupError != null)
                                   TextButton(

@@ -105,42 +105,27 @@ def _progress(message: str, *, stage: str, completed: int | None = None,
            completed=completed, total=total, unit=unit)
 
 
-def _download_progress_class():
+def _download_progress_class(total_bytes: int | None, cached_bytes: int):
     from tqdm import tqdm
 
     class ProgressTqdm(tqdm):
-        _active: dict[int, tuple[int, int | None]] = {}
-        _finished_bytes = 0
-        _finished_total = 0
         _last_report = 0.0
 
         def _emit_progress(self):
-            if not hasattr(self, 'desc') or not hasattr(self, 'n'):
+            # HF owns aggregate reconstruction accounting, including resumed
+            # bytes. Its separate transfer bar starts at zero on every retry
+            # and must not be presented as whole-model completion.
+            if not getattr(self, 'desc', '').startswith('Reconstructing'):
                 return
-            if self.desc and "download" not in self.desc.lower():
-                return
-            key = id(self)
-            self.__class__._active[key] = (
-                int(self.n), int(self.total) if self.total is not None else None
-            )
             now = time.monotonic()
-            if now - self._last_report >= 0.4 or (self.total and self.n >= self.total):
-                self._last_report = now
-                completed = self.__class__._finished_bytes + sum(
-                    item[0] for item in self.__class__._active.values()
-                )
-                known_totals = [item[1] for item in self.__class__._active.values()]
-                total = self.__class__._finished_total + sum(
-                    item for item in known_totals if item is not None
-                )
-                if any(item is None for item in known_totals):
-                    total = None
-                _progress(
-                    "Downloading speech model files…",
-                    stage="modelDownload",
-                    completed=completed,
-                    total=total,
-                )
+            if now - self._last_report < 0.4:
+                return
+            self._last_report = now
+            completed = cached_bytes + int(self.n)
+            _progress('Downloading remaining speech model files…',
+                      stage='modelDownload',
+                      completed=min(total_bytes, completed) if total_bytes is not None else completed,
+                      total=total_bytes)
 
         def update(self, n=1):
             result = super().update(n)
@@ -152,21 +137,28 @@ def _download_progress_class():
             self._emit_progress()
             return result
 
-        def close(self):
-            key = id(self)
-            current = self.__class__._active.pop(key, None)
-            if current is not None:
-                self.__class__._finished_bytes += current[0]
-                if current[1] is not None:
-                    self.__class__._finished_total += current[1]
-            super().close()
-
     return ProgressTqdm
 
 
 def _complete_snapshot(directory: Path, model_id: str) -> bool:
-    required = DRAMA_MODELS.get(model_id, {}).get('requiredFiles', ['config.json'])
-    return all((directory / name).is_file() for name in required)
+    required = DRAMA_MODELS.get(model_id, {}).get('requiredFiles')
+    if required is None:
+        required = ['config.json']
+        # A config alone is a partial download, not an installed model.
+        weights = list(directory.glob('*.safetensors'))
+        if not weights:
+            return False
+        required += [weight.name for weight in weights]
+        for index in directory.glob('*.safetensors.index.json'):
+            try:
+                required += list(set(json.loads(index.read_text())['weight_map'].values()))
+            except (OSError, ValueError, KeyError):
+                return False
+    try:
+        return all((directory / name).is_file() and (directory / name).stat().st_size > 0
+                   for name in required)
+    except OSError:
+        return False
 
 
 def _download_model(model_id: str, private_cache_path: str) -> Path:
@@ -174,62 +166,50 @@ def _download_model(model_id: str, private_cache_path: str) -> Path:
     from huggingface_hub import constants as hf_constants
 
     spec = DRAMA_MODELS.get(model_id)
-    repo_id = spec["repo"] if spec else MODEL_REPOSITORIES[model_id]
-    revision = spec["revision"] if spec else None
-    # Prefer the normal Hugging Face cache. In a sandboxed release this may not
-    # be readable; then keep a reusable copy in this app's support directory.
-    configured_cache = (
-        os.environ.get("HF_HUB_CACHE")
-        or os.environ.get("HUGGINGFACE_HUB_CACHE")
-        or str(hf_constants.HF_HUB_CACHE)
-    )
+    repo_id = spec['repo'] if spec else MODEL_REPOSITORIES[model_id]
+    revision = spec['revision'] if spec else None
     private_cache = Path(private_cache_path).expanduser()
-    candidates = [Path(configured_cache).expanduser()]
-    if private_cache not in candidates:
-        candidates.append(private_cache)
-
-    try:
-        cached = snapshot_download(
-            repo_id=repo_id, revision=revision,
-            cache_dir=str(candidates[0]),
-            local_files_only=True,
-        )
-        if _complete_snapshot(Path(cached), model_id):
-            _configure_hf_cache(candidates[0], hf_constants)
-            return Path(cached)
-    except Exception:
-        pass
-
-    last_error = None
-    for index, cache_dir in enumerate(candidates):
+    configured_cache = Path(os.environ.get('HF_HUB_CACHE') or
+                            os.environ.get('HUGGINGFACE_HUB_CACHE') or
+                            str(hf_constants.HF_HUB_CACHE)).expanduser()
+    candidates = list(dict.fromkeys([private_cache, configured_cache]))
+    # Check every accessible cache before any network request. No build number,
+    # executable path or debug/release mode is part of this persistent identity.
+    for cache_dir in candidates:
         try:
-            cache_dir.mkdir(parents=True, exist_ok=True)
-            _progress(
-                f"Downloading {model_id.replace('_', ' ')} model files…",
-                stage="modelDownload",
-            )
-            snapshot = snapshot_download(
-                repo_id=repo_id, revision=revision,
-                cache_dir=str(cache_dir),
-                tqdm_class=_download_progress_class(),
-            )
-            resolved = Path(snapshot)
-            if not _complete_snapshot(resolved, model_id):
-                raise FileNotFoundError(f"Downloaded model has no config.json: {resolved}")
-            _configure_hf_cache(cache_dir, hf_constants)
-            return resolved
-        except Exception as error:
-            last_error = error
-            # Fall back only if the global cache was rejected (for example by
-            # App Sandbox file access); download/network errors are retried in
-            # the private cache as a straightforward recovery path.
-            if index == 0 and len(candidates) > 1:
-                continue
-            break
-    raise RuntimeError(
-        f"Could not download {repo_id} to the shared Hugging Face cache or "
-        f"the app cache ({private_cache}): {last_error}"
+            cached = Path(snapshot_download(repo_id=repo_id, revision=revision,
+                          cache_dir=str(cache_dir), local_files_only=True))
+            if _complete_snapshot(cached, model_id):
+                _configure_hf_cache(cache_dir, hf_constants)
+                _progress('Using downloaded speech model files', stage='modelCached')
+                return cached
+        except (OSError, ValueError):
+            pass
+
+    # One destination per attempt: retries resume the same blobs. A network
+    # failure must never start a second copy in a different cache.
+    private_cache.mkdir(parents=True, exist_ok=True)
+    _progress('Checking saved files and remaining download size…', stage='modelCache')
+    plan = snapshot_download(repo_id=repo_id, revision=revision,
+                             cache_dir=str(private_cache), dry_run=True,
+                             allow_patterns=spec['requiredFiles'] if spec else None)
+    total = (sum(item.file_size for item in plan)
+             if all(item.file_size is not None for item in plan) else None)
+    cached_bytes = sum(item.file_size or 0 for item in plan if not item.will_download)
+    _progress('Reusing saved files; downloading only missing model data…',
+              stage='modelDownload', completed=cached_bytes, total=total)
+    # Freeze the metadata revision even for models whose catalog uses main.
+    resolved_revision = revision or (plan[0].commit_hash if plan else None)
+    snapshot = snapshot_download(
+        repo_id=repo_id, revision=resolved_revision, cache_dir=str(private_cache),
+        allow_patterns=spec['requiredFiles'] if spec else None,
+        tqdm_class=_download_progress_class(total, cached_bytes),
     )
+    resolved = Path(snapshot)
+    if not _complete_snapshot(resolved, model_id):
+        raise FileNotFoundError(f'Model download is incomplete: {resolved}')
+    _configure_hf_cache(private_cache, hf_constants)
+    return resolved
 
 
 def _configure_hf_cache(cache_dir: Path, hf_constants: Any) -> None:

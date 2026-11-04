@@ -867,6 +867,10 @@ class ReaderController extends ChangeNotifier {
           for (final stage in [
             PreparationStage.acquisition,
             PreparationStage.parsing,
+            PreparationStage.normalization,
+            PreparationStage.mapping,
+            PreparationStage.analysis,
+            PreparationStage.pronunciation,
             PreparationStage.persistence,
           ]) {
             final progress = _preparationProgress[stage];
@@ -1474,6 +1478,7 @@ class ReaderController extends ChangeNotifier {
       _pendingPlayUntilReady = false;
     } finally {
       if (current()) {
+        _speechResourceProgress = null;
         _isInitializing = false;
         notifyListeners();
         _resumePendingPlay();
@@ -4149,7 +4154,28 @@ class ReaderController extends ChangeNotifier {
         ),
       );
     } on PlanningCancelled {
+      publishReadingStage(
+        ticket,
+        const PreparationProgress(
+          stage: PreparationStage.planning,
+          state: PreparationWorkState.cancelled,
+          completed: 0,
+          unit: 'chunks',
+        ),
+      );
       return;
+    } catch (error) {
+      publishReadingStage(
+        ticket,
+        PreparationProgress(
+          stage: PreparationStage.planning,
+          state: PreparationWorkState.failed,
+          completed: 0,
+          unit: 'chunks',
+          error: '$error',
+        ),
+      );
+      rethrow;
     }
   }
 
