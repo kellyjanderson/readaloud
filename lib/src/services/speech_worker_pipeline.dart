@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:collection';
 import 'dart:convert';
 
+import '../models/prepared_voice_binding.dart';
 import '../models/speech_annotation.dart';
 
 enum SpeechWorkerCommandType {
@@ -238,6 +239,22 @@ abstract interface class SpeechWorkerChunkProcessor {
   Future<void> dispose();
 }
 
+abstract interface class SpeechWorkerResourceOwner
+    implements SpeechWorkerChunkProcessor {
+  Future<List<PreparedVoiceBinding>> prepareResources({
+    required String documentId,
+    required int revision,
+    required Iterable<String> voiceIds,
+    String pronunciationProfileId = 'kokoro-default',
+  });
+
+  Future<void> releaseResources();
+}
+
+abstract interface class CancellableSpeechWorkerChunkProcessor {
+  void cancelGeneration(String generationId);
+}
+
 class SpeechWorkerPipeline {
   SpeechWorkerPipeline({
     required SpeechWorkerChunkProcessor processor,
@@ -356,6 +373,12 @@ class SpeechWorkerPipeline {
 
   Future<void> _cancelGeneration(String generationId) async {
     _cancelledGenerationIds.add(generationId);
+    final processor = _processor;
+    if (processor is CancellableSpeechWorkerChunkProcessor) {
+      (processor as CancellableSpeechWorkerChunkProcessor).cancelGeneration(
+        generationId,
+      );
+    }
     final cancelled = <SpeechWorkerChunkRequest>[];
 
     for (final chunk in _pending) {
@@ -394,23 +417,37 @@ class SpeechWorkerPipeline {
         }
 
         Future<void>? completion;
+        var terminalObserved = false;
+        var terminalPublished = false;
         try {
           await _processor.process(chunk, (event) {
-            if (_isShutdown || _isCancelled(event.generationId)) {
+            if (_isShutdown ||
+                _isCancelled(chunk.generationId) ||
+                event.sessionId != chunk.sessionId ||
+                event.generationId != chunk.generationId ||
+                event.chunkId != chunk.chunkId ||
+                terminalObserved) {
               return;
             }
+            if (event.isTerminal) terminalObserved = true;
             if (event.type == SpeechWorkerEventType.completed &&
                 onCompleted != null) {
               completion = Future.sync(() => onCompleted!(event));
             } else {
               _emit(event);
+              if (event.isTerminal) terminalPublished = true;
             }
           });
           await completion;
           if (_isCancelled(chunk.generationId)) {
             _emit(_cancelledEventFor(chunk));
+          } else if (!terminalObserved && !_isShutdown) {
+            throw StateError(
+              'Speech processor returned without a terminal event.',
+            );
           }
         } catch (error) {
+          if (terminalPublished) continue;
           if (_isCancelled(chunk.generationId)) {
             _emit(_cancelledEventFor(chunk));
           } else {

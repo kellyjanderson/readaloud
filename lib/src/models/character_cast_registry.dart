@@ -73,6 +73,9 @@ class CharacterIdentityEvidenceSpan {
     required int startUtf16,
     required int endUtf16,
     required String text,
+    CharacterGenderEvidenceSource source =
+        CharacterGenderEvidenceSource.unknown,
+    CharacterGenderIdentityLabel? genderIdentityLabel,
   }) {
     if (segmentId.trim().isEmpty) {
       throw ArgumentError.value(
@@ -100,6 +103,8 @@ class CharacterIdentityEvidenceSpan {
       startUtf16: startUtf16,
       endUtf16: endUtf16,
       text: text,
+      source: source,
+      genderIdentityLabel: genderIdentityLabel,
     );
   }
 
@@ -108,12 +113,16 @@ class CharacterIdentityEvidenceSpan {
     required this.startUtf16,
     required this.endUtf16,
     required this.text,
+    required this.source,
+    this.genderIdentityLabel,
   });
 
   final String segmentId;
   final int startUtf16;
   final int endUtf16;
   final String text;
+  final CharacterGenderEvidenceSource source;
+  final CharacterGenderIdentityLabel? genderIdentityLabel;
 }
 
 class CharacterIdentityProfile {
@@ -126,6 +135,7 @@ class CharacterIdentityProfile {
     List<CharacterIdentityEvidenceSpan> evidenceSpans =
         const <CharacterIdentityEvidenceSpan>[],
     bool conflictFlag = false,
+    List<String> countedSegmentIds = const [],
   }) {
     if (genderConfidence < 0.0 || genderConfidence > 1.0) {
       throw ArgumentError.value(
@@ -134,15 +144,30 @@ class CharacterIdentityProfile {
         'genderConfidence must be between 0.0 and 1.0.',
       );
     }
+    final uniqueEvidence = <String, CharacterIdentityEvidenceSpan>{};
+    for (final span in evidenceSpans) {
+      uniqueEvidence['${span.segmentId}:${span.startUtf16}:${span.endUtf16}:${span.source}'] =
+          span;
+    }
+    final evidence = uniqueEvidence.values.toList();
+    // Keep both initial and newest proof, rather than allowing old repeated
+    // pronouns to displace all later conflicting/contextual evidence.
+    final retained = evidence.length <= 32
+        ? evidence
+        : <CharacterIdentityEvidenceSpan>[
+            ...evidence.take(16),
+            ...evidence.skip(evidence.length - 16),
+          ];
     return CharacterIdentityProfile._(
       genderIdentityLabel: genderIdentityLabel,
       genderConfidence: genderConfidence,
       genderSource: genderSource,
       pronounProfile: pronounProfile,
-      evidenceSpans: List<CharacterIdentityEvidenceSpan>.unmodifiable(
-        evidenceSpans,
-      ),
+      evidenceSpans: List<CharacterIdentityEvidenceSpan>.unmodifiable(retained),
       conflictFlag: conflictFlag,
+      countedSegmentIds: List<String>.unmodifiable(
+        countedSegmentIds.toSet().toList().reversed.take(24).toList().reversed,
+      ),
     );
   }
 
@@ -153,6 +178,7 @@ class CharacterIdentityProfile {
     required this.pronounProfile,
     required this.evidenceSpans,
     required this.conflictFlag,
+    required this.countedSegmentIds,
   });
 
   const CharacterIdentityProfile.unknown()
@@ -161,6 +187,7 @@ class CharacterIdentityProfile {
       genderSource = CharacterGenderEvidenceSource.unknown,
       pronounProfile = const CharacterPronounProfile.empty(),
       evidenceSpans = const <CharacterIdentityEvidenceSpan>[],
+      countedSegmentIds = const <String>[],
       conflictFlag = false;
 
   final CharacterGenderIdentityLabel genderIdentityLabel;
@@ -169,6 +196,10 @@ class CharacterIdentityProfile {
   final CharacterPronounProfile pronounProfile;
   final List<CharacterIdentityEvidenceSpan> evidenceSpans;
   final bool conflictFlag;
+
+  /// Recent source/session-scoped segments whose pronouns entered the aggregate.
+  /// Separate from the compact evidence projection, for overlapping halos.
+  final List<String> countedSegmentIds;
 
   VoiceGender? get preferredVoiceGender {
     return switch (genderIdentityLabel) {
@@ -188,6 +219,7 @@ class CharacterCastRegistry {
     required String documentId,
     required String registryVersion,
     required List<CastEntry> entries,
+    Map<String, String> castIdRedirects = const <String, String>{},
   }) {
     if (documentId.trim().isEmpty) {
       throw ArgumentError.value(
@@ -230,6 +262,7 @@ class CharacterCastRegistry {
       documentId: documentId,
       registryVersion: registryVersion,
       entries: List<CastEntry>.unmodifiable(entries),
+      castIdRedirects: Map<String, String>.unmodifiable(castIdRedirects),
     );
   }
 
@@ -237,11 +270,15 @@ class CharacterCastRegistry {
     required this.documentId,
     required this.registryVersion,
     required this.entries,
+    required this.castIdRedirects,
   });
 
   final String documentId;
   final String registryVersion;
   final List<CastEntry> entries;
+
+  /// Retired alias IDs point directly at the surviving first-encounter ID.
+  final Map<String, String> castIdRedirects;
 
   CastEntry get narratorEntry => entries.firstWhere(
     (entry) => entry.roleKind == CastEntryRoleKind.narrator,
@@ -252,7 +289,7 @@ class CharacterCastRegistry {
 
   CastEntry? forCastId(String castId) {
     for (final entry in entries) {
-      if (entry.castId == castId) {
+      if (entry.castId == (castIdRedirects[castId] ?? castId)) {
         return entry;
       }
     }

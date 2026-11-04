@@ -1,0 +1,102 @@
+{
+  "audit": "https://github.com/kellyjanderson/readaloud/issues/89#issuecomment-6429213427",
+  "sourceSha256": "e1c0aa68f4475608ebf62881c2115f2e1872bedf4595edffd18d5fc71d8971eb",
+  "canonicalCastIds": [
+    "cast_character_beatrice",
+    "cast_character_leon",
+    "cast_character_priya",
+    "cast_character_tomas"
+  ],
+  "namedNonSpeakers": [
+    "Ada"
+  ],
+  "dialogue": [
+    {
+      "text": "If this gets into the flour, we close tomorrow too,",
+      "startUtf16": 303,
+      "endUtf16": 354,
+      "castId": "cast_character_beatrice"
+    },
+    {
+      "text": "Put the tin here, Bea. Your arms are shaking.",
+      "startUtf16": 510,
+      "endUtf16": 555,
+      "castId": "cast_character_leon"
+    },
+    {
+      "text": "There's a space above that panel,",
+      "startUtf16": 852,
+      "endUtf16": 885,
+      "castId": "cast_character_priya"
+    },
+    {
+      "text": "The water could be coming from the other end of the building.",
+      "startUtf16": 900,
+      "endUtf16": 961,
+      "castId": "cast_character_priya"
+    },
+    {
+      "text": "I checked the window before I came down. The floor was dry.",
+      "startUtf16": 1107,
+      "endUtf16": 1166,
+      "castId": "cast_character_beatrice"
+    },
+    {
+      "text": "Don't put that under the leak,",
+      "startUtf16": 1350,
+      "endUtf16": 1380,
+      "castId": "cast_character_tomas"
+    },
+    {
+      "text": "It's for the window on the stairs. The glass is out.",
+      "startUtf16": 1441,
+      "endUtf16": 1493,
+      "castId": "cast_character_tomas"
+    },
+    {
+      "text": "I thought you meant the one in the storeroom.",
+      "startUtf16": 1568,
+      "endUtf16": 1613,
+      "castId": "cast_character_beatrice"
+    },
+    {
+      "text": "I left a note on your bicycle.",
+      "startUtf16": 1660,
+      "endUtf16": 1690,
+      "castId": "cast_character_tomas"
+    },
+    {
+      "text": "My bicycle is at the repair shop,",
+      "startUtf16": 1694,
+      "endUtf16": 1727,
+      "castId": "cast_character_beatrice"
+    },
+    {
+      "text": "We can argue about bicycles when the water stops. Leon, can you hold the light?",
+      "startUtf16": 1966,
+      "endUtf16": 2045,
+      "castId": "cast_character_priya"
+    }
+  ],
+  "namedAliases": {
+    "Bea": "Beatrice"
+  },
+  "voiceHints": {
+    "cast_character_beatrice": {
+      "gender": "female",
+      "source": "pronoun"
+    },
+    "cast_character_leon": {
+      "gender": "male",
+      "source": "pronoun"
+    },
+    "cast_character_priya": {
+      "gender": null,
+      "source": "unknown"
+    },
+    "cast_character_tomas": {
+      "gender": "male",
+      "source": "pronoun"
+    }
+  }
+}

@@ -1,0 +1,48 @@
+{
+  "audit": "https://github.com/kellyjanderson/readaloud/issues/89#issuecomment-6429213427",
+  "sourceSha256": "08e1b39807f87dae6036e2dae7b4bb6236c992d5a0d71b922207911700de035e",
+  "canonicalCastIds": [
+    "cast_character_mara",
+    "cast_character_jonah"
+  ],
+  "namedNonSpeakers": [
+    "Ellis",
+    "Niko"
+  ],
+  "dialogue": [
+    {
+      "text": "The lower branches will give us enough,",
+      "startUtf16": 345,
+      "endUtf16": 384,
+      "castId": "cast_character_mara"
+    },
+    {
+      "text": "We should lift it before we push again,",
+      "startUtf16": 785,
+      "endUtf16": 824,
+      "castId": "cast_character_jonah"
+    },
+    {
+      "text": "Leave the bruised ones in a separate pile.",
+      "startUtf16": 1110,
+      "endUtf16": 1152,
+      "castId": "cast_character_mara"
+    },
+    {
+      "text": "The smaller jars should go to the far houses,",
+      "startUtf16": 1410,
+      "endUtf16": 1455,
+      "castId": "cast_character_jonah"
+    }
+  ],
+  "voiceHints": {
+    "cast_character_mara": {
+      "gender": "female",
+      "source": "pronoun"
+    },
+    "cast_character_jonah": {
+      "gender": "male",
+      "source": "pronoun"
+    }
+  }
+}

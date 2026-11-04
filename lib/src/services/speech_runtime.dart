@@ -62,6 +62,10 @@ class SpeechRuntimeCapabilities {
             defaultTargetPlatform == TargetPlatform.macOS);
     final isEngineSupported = switch (engineId) {
       'kokoro' => isKokoroSupported,
+      'qwen3_tts_base_1_7b' ||
+      'qwen3_tts_1_7b' ||
+      'voxtral_4b' ||
+      'moss_tts_8b' => !kIsWeb && defaultTargetPlatform == TargetPlatform.macOS,
       _ => false,
     };
 

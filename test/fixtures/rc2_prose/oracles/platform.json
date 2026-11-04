@@ -1,0 +1,52 @@
+{
+  "audit": "https://github.com/kellyjanderson/readaloud/issues/89#issuecomment-6429213427",
+  "sourceSha256": "1c90fd31f9511eb3640fdef9e729927af07f59fc7b61b564120938992ef8594e",
+  "canonicalCastIds": [
+    "cast_character_mara",
+    "cast_character_jonah",
+    "cast_character_niko"
+  ],
+  "namedNonSpeakers": [
+    "Ellis"
+  ],
+  "dialogue": [
+    {
+      "text": "Keep the mint along the edge,",
+      "startUtf16": 366,
+      "endUtf16": 395,
+      "castId": "cast_character_mara"
+    },
+    {
+      "text": "This one needs a wider space,",
+      "startUtf16": 789,
+      "endUtf16": 818,
+      "castId": "cast_character_jonah"
+    },
+    {
+      "text": "I found the missing sign under the counter,",
+      "startUtf16": 1495,
+      "endUtf16": 1538,
+      "castId": "cast_character_niko"
+    },
+    {
+      "text": "We can copy it onto the new board,",
+      "startUtf16": 1735,
+      "endUtf16": 1769,
+      "castId": "cast_character_mara"
+    }
+  ],
+  "voiceHints": {
+    "cast_character_mara": {
+      "gender": "female",
+      "source": "pronoun"
+    },
+    "cast_character_jonah": {
+      "gender": "male",
+      "source": "pronoun"
+    },
+    "cast_character_niko": {
+      "gender": null,
+      "source": "unknown"
+    }
+  }
+}

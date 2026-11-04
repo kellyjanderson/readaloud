@@ -5,7 +5,7 @@ Status: Implemented source with bounded P0–P3 evidence; integrated P4/FINAL ac
 
 ## Implemented structure and limitations
 
-Read Aloud is a local Flutter document reader. The native default engine path uses Kokoro; platform fallbacks exist, but macOS is the project’s functional target. This is not a claim of fresh installed-app verification.
+Read Aloud is a local Flutter document reader. Kokoro remains the default engine. macOS can select Qwen3-TTS 1.7B CustomVoice, Voxtral TTS 4B, or MOSS-TTS v1.5 through the `READALOUD_TTS_ENGINE` launch environment for local evaluation. These engines replace chunk synthesis while retaining Read Aloud's document, voice-assignment, planning, admission, cache, playback and export pipeline. Their model adapters currently consume planned plain text and supported voice presets; engine-specific pronunciation realization and acoustic quality are not qualified. Voxtral TTS is licensed CC BY-NC 4.0 and is restricted to noncommercial use. See [MLX TTS engine setup](../../docs/mlx-tts-engines.md). Platform fallbacks remain available. This source description is not a claim of fresh installed-app verification.
 
 The main entry selects UI or headless execution. `ReaderController` owns UI-facing transport, document intake, voice settings, restore, watched-file reload and follow-along state. `ReaderDocument` aggregates display/speech models, position mappings, annotations, pronunciation, character registry and document voice attribution. Compatibility text/HTML views remain in use.
 

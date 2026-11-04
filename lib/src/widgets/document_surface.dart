@@ -21,6 +21,8 @@ class DocumentSurface extends StatefulWidget {
     this.scrollController,
     this.spokenSelection = const SpokenSelection.none(),
     this.followRequestTick = 0,
+    this.inline = false,
+    this.onInlineFocus,
   });
 
   final ReaderDocument document;
@@ -32,6 +34,8 @@ class DocumentSurface extends StatefulWidget {
   final ScrollController? scrollController;
   final SpokenSelection spokenSelection;
   final int followRequestTick;
+  final bool inline;
+  final ValueChanged<double>? onInlineFocus;
 
   @override
   State<DocumentSurface> createState() => _DocumentSurfaceState();
@@ -118,10 +122,11 @@ class _DocumentSurfaceState extends State<DocumentSurface> {
       },
       child: Scrollbar(
         controller: _scrollController,
-        thumbVisibility: true,
+        thumbVisibility: !widget.inline,
         child: SingleChildScrollView(
           controller: _scrollController,
           primary: false,
+          physics: widget.inline ? const NeverScrollableScrollPhysics() : null,
           padding: const EdgeInsets.only(right: 8),
           child: SelectionArea(
             child: Html(
@@ -234,10 +239,7 @@ class _DocumentSurfaceState extends State<DocumentSurface> {
                   backgroundColor: tokens.spokenBlockBackground,
                   color: bodyTextColor,
                   border: Border(
-                    left: BorderSide(
-                      color: tokens.spokenBlockBorder,
-                      width: 3,
-                    ),
+                    left: BorderSide(color: tokens.spokenBlockBorder, width: 3),
                   ),
                 ),
               },
@@ -260,6 +262,24 @@ class _DocumentSurfaceState extends State<DocumentSurface> {
   }
 
   void _syncReadingFocus({bool force = false}) {
+    if (widget.inline) {
+      if (!mounted ||
+          widget.focusedDisplayBlockId == null ||
+          (!force && !widget.autoFollowActive)) {
+        return;
+      }
+      final blocks = [...widget.document.displayDocument.blocks]
+        ..sort((a, b) => a.ordinal.compareTo(b.ordinal));
+      final index = blocks.indexWhere(
+        (b) => b.blockId == widget.focusedDisplayBlockId,
+      );
+      if (index >= 0) {
+        widget.onInlineFocus?.call(
+          blocks.length <= 1 ? 0 : index / (blocks.length - 1),
+        );
+      }
+      return;
+    }
     if (!mounted ||
         widget.focusedDisplayBlockId == null ||
         !_scrollController.hasClients) {

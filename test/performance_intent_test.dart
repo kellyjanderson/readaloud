@@ -173,11 +173,20 @@ void main() {
         throwsUnsupportedError,
       );
       expect(() => raw.add({}), throwsUnsupportedError);
+      const serialization = ReaderDocumentSerializationService();
+      final restored = serialization.deserializeFromJsonString(
+        serialization.serializeToJsonString(doc),
+      );
+      final restoredIntents = restored.baseSpeechAnnotations.annotations
+          .where((a) => a.isPerformanceIntent)
+          .toList();
+      expect(restoredIntents, hasLength(2));
+      expect(restoredIntents.first.deliveryIntent, DeliveryIntent.whispered);
+      expect(restoredIntents.last.inflectionIntent, InflectionIntent.rising);
+      expect(restoredIntents.first.confidence, .65);
       expect(
-        const ReaderDocumentSerializationService().serializeToJsonString(doc),
-        const ReaderDocumentSerializationService().serializeToJsonString(
-          imported,
-        ),
+        restoredIntents.first.source,
+        SpeechAnnotationSource.explicitSourceMetadata,
       );
       for (final invalid in <Map<String, Object?>>[
         {'source': 'ruleBasedLinguisticInference'},

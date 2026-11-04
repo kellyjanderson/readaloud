@@ -1,6 +1,9 @@
 # Read Aloud
 
-A local-first Flutter reader for long-form text-to-speech using Kokoro. Import documents, listen with narrator and character voices, follow the spoken text, and export audio.
+A local-first Flutter reader for long-form text-to-speech using Kokoro by default. Import documents, listen with narrator and character voices, follow the spoken text, and export audio.
+
+For local Apple Silicon evaluation of Qwen3-TTS, Voxtral TTS, or MOSS-TTS,
+see [MLX TTS engine setup](docs/mlx-tts-engines.md).
 
 ## Required reading experience
 

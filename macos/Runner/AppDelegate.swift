@@ -1,13 +1,20 @@
 import Cocoa
 import FlutterMacOS
+import Darwin
 
 @main
 class AppDelegate: FlutterAppDelegate {
   private let documentAccessChannelName = "read_aloud/document_access"
+  private let mlxLifecycleChannelName = "read_aloud/mlx_tts_lifecycle"
   private var activeSecurityScopedURLs: [String: URL] = [:]
   private var documentAccessChannel: FlutterMethodChannel?
+  private var mlxLifecycleChannel: FlutterMethodChannel?
+  private var terminationCleanupStarted = false
+  private var terminationReplySent = false
 
   override func applicationDidFinishLaunching(_ notification: Notification) {
+    // A failed inference child must surface a pipe error, not kill the GUI.
+    signal(SIGPIPE, SIG_IGN)
     // FlutterAppDelegate implements will-finish-launching, but not this optional
     // NSApplicationDelegate callback. Dispatching it to super raises an exception.
     configureDocumentAccessChannel()
@@ -18,6 +25,27 @@ class AppDelegate: FlutterAppDelegate {
 
   override func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
     return true
+  }
+
+  override func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
+    guard let mlxLifecycleChannel else { return .terminateNow }
+    guard !terminationCleanupStarted else { return .terminateLater }
+    terminationCleanupStarted = true
+
+    let finishTermination = { [weak self] in
+      DispatchQueue.main.async {
+        guard let self, !self.terminationReplySent else { return }
+        self.terminationReplySent = true
+        sender.reply(toApplicationShouldTerminate: true)
+      }
+    }
+    mlxLifecycleChannel.invokeMethod("shutdown", arguments: nil) { _ in
+      finishTermination()
+    }
+    DispatchQueue.main.asyncAfter(deadline: .now() + 12) {
+      finishTermination()
+    }
+    return .terminateLater
   }
 
   override func applicationSupportsSecureRestorableState(_ app: NSApplication) -> Bool {
@@ -43,6 +71,10 @@ class AppDelegate: FlutterAppDelegate {
 
     let channel = FlutterMethodChannel(
       name: documentAccessChannelName,
+      binaryMessenger: resolvedFlutterViewController.engine.binaryMessenger
+    )
+    mlxLifecycleChannel = FlutterMethodChannel(
+      name: mlxLifecycleChannelName,
       binaryMessenger: resolvedFlutterViewController.engine.binaryMessenger
     )
     documentAccessChannel = channel

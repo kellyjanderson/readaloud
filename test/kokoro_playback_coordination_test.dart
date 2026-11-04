@@ -3,21 +3,47 @@ import 'package:read_aloud/src/services/kokoro_playback_coordination.dart';
 import 'package:read_aloud/src/services/tts_engine.dart';
 
 void main() {
-  group('kokoro playback coordination', () {
-    test('enters underrun recovery when future chunks are already buffered', () {
-      final snapshot = KokoroPlaybackQueueSnapshot(
-        activeChunkCount: 3,
-        currentChunkIndex: 0,
-        currentQueueBaseIndex: 0,
-        pendingChunkCount: 0,
-        remainingPlannedChunkCount: 0,
-        playerRelativeIndex: 0,
+  test('source spans accept contiguous ranges without retaining history', () {
+    final spans = KokoroSourceSpanCursor(40);
+    spans.admit(startWord: 40, endWord: 43);
+    spans.admit(startWord: 43, endWord: 48);
+    spans.requireEnd(48);
+    expect(spans.nextWord, 48);
+  });
+  for (final malformed in [(39, 43), (41, 43), (40, 40), (40, 39)]) {
+    test('refuses skipped/repeated/non-advancing source span $malformed', () {
+      final spans = KokoroSourceSpanCursor(40);
+      expect(
+        () => spans.admit(startWord: malformed.$1, endWord: malformed.$2),
+        throwsStateError,
       );
-
-      expect(kokoroHasBufferedFutureChunks(snapshot), isTrue);
-      expect(kokoroShouldEnterUnderrunRecovery(snapshot), isTrue);
-      expect(kokoroNextRecoveryStartIndex(snapshot), 1);
+      expect(spans.nextWord, 40);
     });
+  }
+  test('refuses EOF with a missing planned suffix', () {
+    final spans = KokoroSourceSpanCursor(0);
+    spans.admit(startWord: 0, endWord: 3);
+    expect(() => spans.requireEnd(8), throwsStateError);
+    expect(() => spans.admit(startWord: 0, endWord: 3), throwsStateError);
+  });
+  group('kokoro playback coordination', () {
+    test(
+      'enters underrun recovery when future chunks are already buffered',
+      () {
+        final snapshot = KokoroPlaybackQueueSnapshot(
+          activeChunkCount: 3,
+          currentChunkIndex: 0,
+          currentQueueBaseIndex: 0,
+          pendingChunkCount: 0,
+          remainingPlannedChunkCount: 0,
+          playerRelativeIndex: 0,
+        );
+
+        expect(kokoroHasBufferedFutureChunks(snapshot), isTrue);
+        expect(kokoroShouldEnterUnderrunRecovery(snapshot), isTrue);
+        expect(kokoroNextRecoveryStartIndex(snapshot), 1);
+      },
+    );
 
     test('enters underrun recovery when later chunks are still pending', () {
       final snapshot = KokoroPlaybackQueueSnapshot(
@@ -34,33 +60,39 @@ void main() {
       expect(kokoroNextRecoveryStartIndex(snapshot), isNull);
     });
 
-    test('computes recovery start from absolute queue position after rebasing', () {
-      final snapshot = KokoroPlaybackQueueSnapshot(
-        activeChunkCount: 5,
-        currentChunkIndex: 2,
-        currentQueueBaseIndex: 2,
-        pendingChunkCount: 0,
-        remainingPlannedChunkCount: 0,
-        playerRelativeIndex: 1,
-      );
+    test(
+      'computes recovery start from absolute queue position after rebasing',
+      () {
+        final snapshot = KokoroPlaybackQueueSnapshot(
+          activeChunkCount: 5,
+          currentChunkIndex: 2,
+          currentQueueBaseIndex: 2,
+          pendingChunkCount: 0,
+          remainingPlannedChunkCount: 0,
+          playerRelativeIndex: 1,
+        );
 
-      expect(kokoroNextRecoveryStartIndex(snapshot), 4);
-    });
+        expect(kokoroNextRecoveryStartIndex(snapshot), 4);
+      },
+    );
 
-    test('returns null when playback is already at the final buffered chunk', () {
-      final snapshot = KokoroPlaybackQueueSnapshot(
-        activeChunkCount: 3,
-        currentChunkIndex: 2,
-        currentQueueBaseIndex: 0,
-        pendingChunkCount: 0,
-        remainingPlannedChunkCount: 0,
-        playerRelativeIndex: 2,
-      );
+    test(
+      'returns null when playback is already at the final buffered chunk',
+      () {
+        final snapshot = KokoroPlaybackQueueSnapshot(
+          activeChunkCount: 3,
+          currentChunkIndex: 2,
+          currentQueueBaseIndex: 0,
+          pendingChunkCount: 0,
+          remainingPlannedChunkCount: 0,
+          playerRelativeIndex: 2,
+        );
 
-      expect(kokoroHasBufferedFutureChunks(snapshot), isFalse);
-      expect(kokoroShouldEnterUnderrunRecovery(snapshot), isFalse);
-      expect(kokoroNextRecoveryStartIndex(snapshot), isNull);
-    });
+        expect(kokoroHasBufferedFutureChunks(snapshot), isFalse);
+        expect(kokoroShouldEnterUnderrunRecovery(snapshot), isFalse);
+        expect(kokoroNextRecoveryStartIndex(snapshot), isNull);
+      },
+    );
 
     test('plans append-only resume from the next buffered chunk', () {
       final snapshot = KokoroPlaybackQueueSnapshot(
@@ -81,21 +113,24 @@ void main() {
       expect(plan.nextChunkIndex, 1);
     });
 
-    test('waits for prepared audio when starvation has only pending chunks', () {
-      final snapshot = KokoroPlaybackQueueSnapshot(
-        activeChunkCount: 1,
-        currentChunkIndex: 0,
-        currentQueueBaseIndex: 0,
-        pendingChunkCount: 2,
-        remainingPlannedChunkCount: 1,
-        playerRelativeIndex: 0,
-      );
+    test(
+      'waits for prepared audio when starvation has only pending chunks',
+      () {
+        final snapshot = KokoroPlaybackQueueSnapshot(
+          activeChunkCount: 1,
+          currentChunkIndex: 0,
+          currentQueueBaseIndex: 0,
+          pendingChunkCount: 2,
+          remainingPlannedChunkCount: 1,
+          playerRelativeIndex: 0,
+        );
 
-      final plan = kokoroPlanForwardRecovery(snapshot);
+        final plan = kokoroPlanForwardRecovery(snapshot);
 
-      expect(plan.action, KokoroForwardRecoveryAction.waitForPreparedAudio);
-      expect(plan.nextChunkIndex, isNull);
-    });
+        expect(plan.action, KokoroForwardRecoveryAction.waitForPreparedAudio);
+        expect(plan.nextChunkIndex, isNull);
+      },
+    );
 
     test('plans recoverable chunk slices on punctuation boundaries', () {
       final slices = kokoroPlanRecoverableChunkSlices(
