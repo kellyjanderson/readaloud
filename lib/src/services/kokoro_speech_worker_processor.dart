@@ -15,7 +15,7 @@ import 'speech_worker_pipeline.dart';
 
 /// One resident isolate; one command at a time. A timeout quarantines this
 /// owner until native work drains: it never starts a replacement session.
-class KokoroSpeechWorkerChunkProcessor implements SpeechWorkerChunkProcessor {
+class KokoroSpeechWorkerChunkProcessor implements SpeechWorkerResourceOwner {
   KokoroSpeechWorkerChunkProcessor({
     required RootIsolateToken rootIsolateToken,
     required String modelPath,
@@ -134,6 +134,7 @@ class KokoroSpeechWorkerChunkProcessor implements SpeechWorkerChunkProcessor {
     }
   }
 
+  @override
   Future<List<PreparedVoiceBinding>> prepareResources({
     required String documentId,
     required int revision,
@@ -154,6 +155,7 @@ class KokoroSpeechWorkerChunkProcessor implements SpeechWorkerChunkProcessor {
     );
   }
 
+  @override
   Future<void> releaseResources() async {
     await drain();
     if (_starting != null && !_exited.isCompleted) {

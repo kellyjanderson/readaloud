@@ -23,6 +23,7 @@ class KokoroAssetBundle {
 
 Future<KokoroAssetBundle> prepareKokoroAssets({
   void Function(String? message)? onStatus,
+  bool includeModel = true,
 }) async {
   try {
     final supportDirectory = await getApplicationSupportDirectory();
@@ -49,24 +50,26 @@ Future<KokoroAssetBundle> prepareKokoroAssets({
       _joinPaths(<String>[modelsDirectory.path, 'kokoro-v1.0.onnx']),
     );
 
-    await _seedModelFromLegacyRuntime(modelFile);
-    if (!await modelFile.exists() || await modelFile.length() == 0) {
-      onStatus?.call('Preparing the bundled Kokoro speech model...');
-      await _copyAssetToFile(_bundledModelAssetPath, modelFile);
-    }
+    if (includeModel) {
+      await _seedModelFromLegacyRuntime(modelFile);
+      if (!await modelFile.exists() || await modelFile.length() == 0) {
+        onStatus?.call('Preparing the bundled Kokoro speech model...');
+        await _copyAssetToFile(_bundledModelAssetPath, modelFile);
+      }
 
-    if (!await modelFile.exists() || await modelFile.length() == 0) {
-      return const KokoroAssetBundle(
-        isReady: false,
-        message: 'The bundled Kokoro speech model is missing.',
-      );
+      if (!await modelFile.exists() || await modelFile.length() == 0) {
+        return const KokoroAssetBundle(
+          isReady: false,
+          message: 'The bundled Kokoro speech model is missing.',
+        );
+      }
     }
 
     onStatus?.call(null);
     return KokoroAssetBundle(
       isReady: true,
       message: null,
-      modelPath: modelFile.path,
+      modelPath: includeModel ? modelFile.path : null,
       voicesDirectory: voicesDirectory.path,
       cacheDirectory: cacheDirectory.path,
     );

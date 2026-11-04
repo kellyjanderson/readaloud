@@ -13,6 +13,7 @@ import '../models/reader_document.dart';
 import '../models/voice_assignment_state.dart';
 import '../theme/read_aloud_theme.dart';
 import '../widgets/document_surface.dart';
+import '../widgets/range_document_surface.dart';
 import '../widgets/preparation_status.dart';
 import '../widgets/reading_focus_recenter_button.dart';
 import '../widgets/voice_management_dialog.dart';
@@ -24,6 +25,7 @@ enum _AppMenuAction {
   sample,
   saveAudio,
   readerOptions,
+  settings,
   liveFeed,
   notices,
 }
@@ -128,6 +130,7 @@ class _ReadAloudScreenState extends State<ReadAloudScreen> {
                         isImporting: _controller.isPreparingDocument,
                         isInitializing: _controller.isInitializing,
                         isComplete: _controller.isPreparationComplete,
+                        resourceProgress: _controller.speechResourceProgress,
                         startupError: _controller.startupError,
                         message:
                             _controller.isPreparingDocument || pendingPlayback
@@ -257,6 +260,10 @@ class _ReadAloudScreenState extends State<ReadAloudScreen> {
       const PopupMenuDivider(),
       const _OverflowMenuSectionLabel(label: 'Settings'),
       const PopupMenuItem<_AppMenuAction>(
+        value: _AppMenuAction.settings,
+        child: Text('Settings'),
+      ),
+      const PopupMenuItem<_AppMenuAction>(
         value: _AppMenuAction.readerOptions,
         child: Text('Reader Options'),
       ),
@@ -297,6 +304,12 @@ class _ReadAloudScreenState extends State<ReadAloudScreen> {
         ),
       PlatformMenuItemGroup(
         members: <PlatformMenuItem>[
+          PlatformMenuItem(
+            label: 'Settings...',
+            onSelected: () {
+              unawaited(_handleAppMenuAction(_AppMenuAction.settings));
+            },
+          ),
           PlatformMenuItem(
             label: 'Reader Options...',
             shortcut: SingleActivator(LogicalKeyboardKey.comma, meta: true),
@@ -454,6 +467,8 @@ class _ReadAloudScreenState extends State<ReadAloudScreen> {
         await _saveAudio();
       case _AppMenuAction.readerOptions:
         await _showReaderOptionsSheet();
+      case _AppMenuAction.settings:
+        await _showSettingsDialog();
       case _AppMenuAction.liveFeed:
         if (_controller.isLiveReadEnabled) {
           await _controller.stopLiveRead();
@@ -482,6 +497,140 @@ class _ReadAloudScreenState extends State<ReadAloudScreen> {
       },
     );
   }
+
+  Future<void> _showSettingsDialog() async {
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) {
+        var selectedEngineId = _controller.selectedTtsEngineId;
+        var selectedBits = _controller.voxtralQuantizationBits;
+        return StatefulBuilder(
+          builder: (context, setDialogState) => AlertDialog(
+            title: const Text('Settings'),
+            content: SizedBox(
+              width: 420,
+              child: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text('Text-to-speech engine'),
+                    const SizedBox(height: 8),
+                    DropdownButtonFormField<String>(
+                      key: const Key('tts-engine-settings-dropdown'),
+                      initialValue: selectedEngineId,
+                      isExpanded: true,
+                      decoration: const InputDecoration(
+                        border: OutlineInputBorder(),
+                      ),
+                      items: const [
+                        DropdownMenuItem(
+                          value: 'kokoro',
+                          child: Text('Kokoro (default)'),
+                        ),
+                        DropdownMenuItem(
+                          value: 'qwen3_tts_base_1_7b',
+                          child: Text('Qwen3-TTS 1.7B Base (reference voices)'),
+                        ),
+                        DropdownMenuItem(
+                          value: 'qwen3_tts_1_7b',
+                          child: Text('Qwen3-TTS 1.7B CustomVoice'),
+                        ),
+                        DropdownMenuItem(
+                          value: 'voxtral_4b',
+                          child: Text('Voxtral TTS 4B'),
+                        ),
+                        DropdownMenuItem(
+                          value: 'moss_tts_8b',
+                          child: Text('MOSS-TTS v1.5 8B'),
+                        ),
+                      ],
+                      onChanged: (engineId) async {
+                        if (engineId == null) return;
+                        await _controller.setTtsEngineId(engineId);
+                        if (!dialogContext.mounted) return;
+                        setDialogState(() => selectedEngineId = engineId);
+                      },
+                    ),
+                    const SizedBox(height: 8),
+                    SizedBox(
+                      height: 64,
+                      child: SingleChildScrollView(
+                        child: Text(switch (selectedEngineId) {
+                          'qwen3_tts_base_1_7b' || 'moss_tts_8b' =>
+                            '30 synthetic reference voices. Choose and preview them in Voice Management; the same library is available for character assignments.',
+                          'qwen3_tts_1_7b' =>
+                            '9 fixed speakers. Below the required 30 voices; use Qwen Base for the larger reference library.',
+                          'voxtral_4b' =>
+                            '20 presets. Below the required 30 voices; this local runtime cannot create reference voices.',
+                          _ =>
+                            '54 catalog voices across languages. Manage and preview voices in Voice Management.',
+                        }),
+                      ),
+                    ),
+                    if (selectedEngineId == 'voxtral_4b') ...[
+                      const SizedBox(height: 16),
+                      const Text('Voxtral performance'),
+                      const SizedBox(height: 8),
+                      DropdownButtonFormField<int>(
+                        key: const Key('voxtral-precision-settings-dropdown'),
+                        initialValue: selectedBits,
+                        isExpanded: true,
+                        decoration: const InputDecoration(
+                          border: OutlineInputBorder(),
+                        ),
+                        items: const [
+                          DropdownMenuItem(
+                            value: 4,
+                            child: Text('Fast (4-bit)'),
+                          ),
+                          DropdownMenuItem(
+                            value: 0,
+                            child: Text('Full precision'),
+                          ),
+                        ],
+                        onChanged: (bits) async {
+                          if (bits == null) return;
+                          await _controller.setVoxtralQuantizationBits(bits);
+                          if (!dialogContext.mounted) return;
+                          setDialogState(() => selectedBits = bits);
+                        },
+                      ),
+                      const SizedBox(height: 8),
+                      const Text(
+                        'Fast mode trades some model precision for faster speech generation. Reopen the app to apply changes.',
+                      ),
+                    ],
+                    const SizedBox(height: 12),
+                    Text(
+                      _controller.ttsEngineRestartRequired
+                          ? 'Quit and reopen Read Aloud to use ${_ttsEngineLabel(selectedEngineId)}. Current session: ${_ttsEngineLabel(_controller.runningTtsEngineId)}.'
+                          : 'Active engine: ${_ttsEngineLabel(_controller.runningTtsEngineId)}.',
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(dialogContext).pop(),
+                child: const Text('Done'),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  String _ttsEngineLabel(String engineId) => switch (engineId) {
+    'kokoro' => 'Kokoro',
+    'qwen3_tts_1_7b' => 'Qwen3-TTS 1.7B CustomVoice',
+    'qwen3_tts_base_1_7b' => 'Qwen3-TTS 1.7B Base',
+    'voxtral_4b' => 'Voxtral TTS 4B',
+    'moss_tts_8b' => 'MOSS-TTS v1.5 8B',
+    _ => engineId,
+  };
 
   Widget _buildAssignmentStatus(BuildContext context) {
     final state = _controller.voiceAssignmentState;
@@ -966,19 +1115,27 @@ class _ReadAloudScreenState extends State<ReadAloudScreen> {
         child: Stack(
           children: [
             Positioned.fill(
-              child: DocumentSurface(
-                document: _controller.document,
-                fontFamily: _controller.fontFamily,
-                fontScale: _controller.fontScale,
-                spokenSelection: _controller.spokenSelection,
-                focusedDisplayBlockId:
-                    _controller.readingFocusState.activeDisplayBlockId,
-                autoFollowActive:
-                    _controller.readingFocusState.shouldAutoFollow,
-                followRequestTick:
-                    _controller.readingFocusState.recenterRequestTick,
-                onManualScrollWhileFollowing: _controller.suspendReaderFollow,
-              ),
+              child: _controller.hasRangeDocument
+                  ? RangeDocumentSurface(
+                      key: ValueKey(
+                        'book-${_controller.preparedDocumentRevision}',
+                      ),
+                      controller: _controller,
+                    )
+                  : DocumentSurface(
+                      document: _controller.document,
+                      fontFamily: _controller.fontFamily,
+                      fontScale: _controller.fontScale,
+                      spokenSelection: _controller.spokenSelection,
+                      focusedDisplayBlockId:
+                          _controller.readingFocusState.activeDisplayBlockId,
+                      autoFollowActive:
+                          _controller.readingFocusState.shouldAutoFollow,
+                      followRequestTick:
+                          _controller.readingFocusState.recenterRequestTick,
+                      onManualScrollWhileFollowing:
+                          _controller.suspendReaderFollow,
+                    ),
             ),
             if (_controller.readingFocusState.canRecenter)
               Positioned(
@@ -1044,6 +1201,7 @@ class _ReadAloudScreenState extends State<ReadAloudScreen> {
           animation: _controller,
           builder: (context, _) {
             return VoiceManagementDialog(
+              engineName: _ttsEngineLabel(_controller.runningTtsEngineId),
               isCharacterModeEnabled: _controller.isMultiVoiceEnabled,
               voiceLibrary: _controller.voiceLibrary,
               availableVoices: _controller.voices,

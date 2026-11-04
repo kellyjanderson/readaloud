@@ -116,6 +116,22 @@ class PreparationProgress {
   final String? scope;
   double? get fraction =>
       total == null || total == 0 ? null : completed / total!;
+
+  PreparationProgress withState(
+    PreparationWorkState state, {
+    String? waitingReason,
+  }) => PreparationProgress(
+    stage: stage,
+    state: state,
+    completed: completed,
+    unit: unit,
+    total: total,
+    discovered: discovered,
+    waitingReason: waitingReason,
+    error: error,
+    workRevision: workRevision,
+    scope: scope,
+  );
 }
 
 /// Main-isolate progress capability for a single producer/dependency version.

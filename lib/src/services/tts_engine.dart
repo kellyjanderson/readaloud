@@ -45,6 +45,29 @@ abstract interface class ResourcePreparationCapable {
   Future<void> shutdownResources();
 }
 
+class TtsResourceProgress {
+  const TtsResourceProgress({
+    required this.stage,
+    required this.message,
+    this.completed,
+    this.total,
+    this.unit = 'bytes',
+  });
+
+  final String stage;
+  final String message;
+  final int? completed;
+  final int? total;
+  final String unit;
+
+  double? get fraction =>
+      total == null || total! <= 0 ? null : (completed ?? 0) / total!;
+}
+
+abstract interface class TtsResourceProgressCapable {
+  set onResourceProgress(void Function(TtsResourceProgress?)? callback);
+}
+
 class TtsProgressUpdate {
   const TtsProgressUpdate({
     required this.startOffset,
@@ -274,6 +297,11 @@ abstract interface class AudioExportCapable {
 /// The resulting effective rate must identify both cache content and inference.
 abstract interface class SpeechRateNormalizationCapable {
   double normalizeSpeechRate(double requested);
+}
+
+abstract interface class TtsEngineIdentityCapable {
+  String get engineId;
+  String get engineVersion;
 }
 
 abstract interface class TtsEngine {

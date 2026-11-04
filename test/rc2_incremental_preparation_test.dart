@@ -10,6 +10,7 @@ import 'package:read_aloud/src/models/document_preparation.dart';
 import 'package:read_aloud/src/models/document_import_exception.dart';
 import 'package:read_aloud/src/models/voice_profile.dart';
 import 'package:read_aloud/src/services/document_import_service.dart';
+import 'package:read_aloud/src/services/document_access_service.dart';
 import 'package:read_aloud/src/services/document_preparation_supervisor.dart';
 import 'package:read_aloud/src/services/tts_engine.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -20,6 +21,327 @@ void main() {
     180,
     (i) => 'Paragraph $i follows the road ahead.',
   ).join('\n\n');
+
+  test(
+    'viewport demand before producer credit installation cannot deadlock',
+    () async {
+      SharedPreferences.setMockInitialValues({});
+      final engine = _ExportProbe()..barrier.complete();
+      final controller = ReaderController(
+        ttsEngine: engine,
+        enablePlatformIntakeChannels: false,
+      );
+      addTearDown(() async {
+        await controller.shutdownPreparation();
+        controller.dispose();
+      });
+      await controller.initialize();
+      Future<DocumentPreparationPublication?>? demand;
+      controller.addListener(() {
+        if (controller.preparedRangeCount ==
+                ReaderController.preparedRangeCapacity &&
+            demand == null) {
+          demand = controller.readPreparedRange(9);
+        }
+      });
+      await controller.importPastedText(
+        List.filled(
+          12,
+          '${List.filled(240, 'The quiet river. ').join()}\n\n',
+        ).join(),
+      );
+      await _waitUntil(() => demand != null);
+      final next = await demand!.timeout(const Duration(seconds: 5));
+      expect(next!.sequence, 9);
+      expect(controller.preparedRanges.length, lessThanOrEqualTo(8));
+      expect(engine.spoken, 0);
+    },
+  );
+
+  test(
+    'document processing resumes across full windows without speech',
+    () async {
+      SharedPreferences.setMockInitialValues({});
+      final text = List.filled(
+        20,
+        '${List.filled(240, 'The quiet river. ').join()}\n\n',
+      ).join();
+      final expected = await boundedProseUnits(Stream.value(text)).toList();
+      expect(
+        expected.length,
+        greaterThan(ReaderController.preparedRangeCapacity),
+      );
+      final supervisor = DocumentPreparationSupervisor();
+      final engine = _ExportProbe()..barrier.complete();
+      final controller = ReaderController(
+        preparationSupervisor: supervisor,
+        ttsEngine: engine,
+        enablePlatformIntakeChannels: false,
+      );
+      addTearDown(() async {
+        await controller.shutdownPreparation();
+        controller.dispose();
+      });
+      final seen = <int>{};
+      final terminalFlags = <int, bool>{};
+      var maximumResidentRanges = 0;
+      var fullWindows = 0;
+      controller.addListener(() {
+        final ranges = controller.preparedRanges;
+        seen.addAll(ranges.map((range) => range.sequence));
+        for (final range in ranges) {
+          terminalFlags[range.sequence] = range.isLast;
+        }
+        if (ranges.length > maximumResidentRanges) {
+          maximumResidentRanges = ranges.length;
+        }
+        if (controller.preparationProgress.values.any(
+          (p) =>
+              p.waitingReason ==
+              'Prepared reading window is full; continues as you read',
+        )) {
+          fullWindows++;
+          controller.releasePreparedRange(ranges.last.sequence - 1);
+        }
+      });
+      await controller.initialize();
+      await controller.importPastedText(text);
+      await _waitUntil(() => controller.isPreparationComplete);
+      expect(seen, {for (var i = 1; i <= expected.length; i++) i});
+      expect(maximumResidentRanges, ReaderController.preparedRangeCapacity);
+      expect(terminalFlags.entries.where((e) => e.value).map((e) => e.key), [
+        expected.length,
+      ]);
+      expect(fullWindows, greaterThan(1));
+      expect(controller.preparedRanges.last.isLast, isTrue);
+      expect(engine.spoken, 0);
+      expect(supervisor.pendingCount, 0);
+    },
+  );
+
+  test(
+    'cancel at a full window drains and replacement rejects stale work',
+    () async {
+      SharedPreferences.setMockInitialValues({});
+      final supervisor = DocumentPreparationSupervisor();
+      final engine = _ExportProbe()..barrier.complete();
+      final controller = ReaderController(
+        preparationSupervisor: supervisor,
+        ttsEngine: engine,
+        enablePlatformIntakeChannels: false,
+      );
+      addTearDown(() async {
+        await controller.shutdownPreparation();
+        controller.dispose();
+      });
+      await controller.initialize();
+      for (var run = 0; run < 3; run++) {
+        final cancelled = Completer<void>();
+        var cancelling = false;
+        void cancelAtCapacity() {
+          final atBoundary = run.isEven
+              ? controller.preparedRanges.length ==
+                    ReaderController.preparedRangeCapacity
+              : controller.preparationProgress.values.any(
+                  (p) =>
+                      p.waitingReason ==
+                      'Prepared reading window is full; continues as you read',
+                );
+          if (!cancelling && atBoundary) {
+            cancelling = true;
+            unawaited(
+              controller.cancelDocumentPreparation().then(cancelled.complete),
+            );
+          }
+        }
+
+        controller.addListener(cancelAtCapacity);
+        await controller.importPastedText(
+          List.filled(
+            12,
+            '${List.filled(240, 'A long source waits. ').join()}\n\n',
+          ).join(),
+        );
+        await cancelled.future.timeout(const Duration(seconds: 5));
+        controller.removeListener(cancelAtCapacity);
+        expect(
+          controller.preparationProgress.values.where(
+            (p) => const [
+              PreparationWorkState.working,
+              PreparationWorkState.waiting,
+              PreparationWorkState.stalled,
+            ].contains(p.state),
+          ),
+          isEmpty,
+          reason:
+              'Cancelled work must not leave active progress or install a new wait',
+        );
+        await controller.importPastedText('Replacement $run reaches its end.');
+        await _waitUntil(
+          () => controller.isPreparationComplete && supervisor.activeCount == 0,
+        );
+        expect(controller.document.speakableText, contains('Replacement $run'));
+        expect(controller.preparedRanges.length, 1);
+        expect(supervisor.pendingCount, 0);
+        expect(engine.spoken, 0);
+      }
+    },
+  );
+
+  final fixturePath = Platform.environment['READALOUD_PREPARATION_FIXTURE'];
+  test(
+    'local supplied document completes cold and cached without inference',
+    () async {
+      SharedPreferences.setMockInitialValues({});
+      final directory = await Directory.systemTemp.createTemp(
+        'preparation-fixture-',
+      );
+      final source = await File(
+        fixturePath!,
+      ).copy('${directory.path}/fixture.txt');
+      final engine = _ExportProbe()..barrier.complete();
+      final controller = ReaderController(
+        ttsEngine: engine,
+        documentAccessService: _BookmarkMetadataAccess(),
+        enablePlatformIntakeChannels: false,
+      );
+      addTearDown(() async {
+        await controller.shutdownPreparation();
+        controller.dispose();
+        await directory.delete(recursive: true);
+      });
+      await controller.initialize();
+      for (var run = 0; run < 3; run++) {
+        final watch = Stopwatch()..start();
+        await controller.importFilePaths([source.path]);
+        await _waitUntil(() => controller.isPreparationComplete);
+        expect(controller.preparedRanges.last.isLast, isTrue);
+        expect(
+          controller.preparationProgress.values.where(
+            (p) =>
+                p.state == PreparationWorkState.working ||
+                p.state == PreparationWorkState.stalled,
+          ),
+          isEmpty,
+        );
+        expect(engine.spoken, 0);
+        // Local performance evidence, independent of model loading or inference.
+        // ignore: avoid_print
+        print(
+          'PREPARATION_ONLY run=$run elapsedMs=${watch.elapsedMilliseconds} '
+          'ranges=${controller.preparedRanges.length} '
+          'words=${controller.preparedRanges.last.range.wordEnd}',
+        );
+      }
+    },
+    skip: fixturePath == null || !Platform.isMacOS,
+  );
+
+  test(
+    'bookmark metadata is committed before the source revision is captured',
+    () async {
+      SharedPreferences.setMockInitialValues({});
+      final directory = await Directory.systemTemp.createTemp(
+        'bookmark-order-',
+      );
+      final file = await File(
+        '${directory.path}/book.txt',
+      ).writeAsString('$prose\n\n$prose');
+      final access = _BookmarkMetadataAccess();
+      final engine = _ExportProbe()..barrier.complete();
+      final controller = ReaderController(
+        ttsEngine: engine,
+        documentAccessService: access,
+        enablePlatformIntakeChannels: false,
+      );
+      addTearDown(() async {
+        await controller.shutdownPreparation();
+        controller.dispose();
+        await directory.delete(recursive: true);
+      });
+      await controller.initialize();
+      await controller.importFilePaths([file.path]);
+      final deadline = DateTime.now().add(const Duration(seconds: 5));
+      while (!controller.isPreparationComplete &&
+          DateTime.now().isBefore(deadline)) {
+        await Future<void>.delayed(const Duration(milliseconds: 10));
+      }
+      expect(
+        controller.isPreparationComplete,
+        isTrue,
+        reason: controller.statusMessage,
+      );
+      expect(access.fileBookmarks, 1);
+      expect(await file.readAsString(), '$prose\n\n$prose');
+    },
+    skip: !Platform.isMacOS,
+  );
+
+  test(
+    'EOF at the eighth range does not wait for a ninth consumer credit',
+    () async {
+      SharedPreferences.setMockInitialValues({});
+      final text = List.filled(
+        8,
+        '${List.filled(240, 'The quiet river. ').join()}\n\n',
+      ).join();
+      final units = await boundedProseUnits(Stream.value(text)).toList();
+      expect(units.length, 8);
+      final engine = _ExportProbe()..barrier.complete();
+      final controller = ReaderController(
+        ttsEngine: engine,
+        enablePlatformIntakeChannels: false,
+      );
+      addTearDown(() async {
+        await controller.shutdownPreparation();
+        controller.dispose();
+      });
+      await controller.initialize();
+      await controller.importPastedText(text);
+      final deadline = DateTime.now().add(const Duration(seconds: 5));
+      while (!controller.isPreparationComplete &&
+          DateTime.now().isBefore(deadline)) {
+        await Future<void>.delayed(const Duration(milliseconds: 10));
+      }
+      expect(controller.isPreparationComplete, isTrue);
+      expect(controller.preparedRanges.length, 8);
+      expect(controller.preparedRanges.last.isLast, isTrue);
+    },
+  );
+
+  test(
+    'a short multi-range document reaches EOF without requiring playback',
+    () async {
+      SharedPreferences.setMockInitialValues({});
+      final engine = _ExportProbe()..barrier.complete();
+      final controller = ReaderController(
+        ttsEngine: engine,
+        enablePlatformIntakeChannels: false,
+      );
+      addTearDown(() async {
+        await controller.shutdownPreparation();
+        controller.dispose();
+      });
+      final text = List.generate(
+        150,
+        (i) =>
+            'Paragraph $i follows the quiet river past the old bridge. The morning sun warms the garden while the children wait beside the gate.',
+      ).join('\n\n');
+      expect(text.length, greaterThan(3 * 4096));
+      expect(text.length, lessThan(8 * 4096));
+      await controller.initialize();
+      final watch = Stopwatch()..start();
+      await controller.importPastedText(text);
+      while (!controller.isPreparationComplete &&
+          watch.elapsed < const Duration(seconds: 5)) {
+        await Future<void>.delayed(const Duration(milliseconds: 10));
+      }
+      expect(controller.isPreparationComplete, isTrue);
+      expect(controller.preparedRanges.length, lessThanOrEqualTo(8));
+      expect(controller.preparedRanges.last.isLast, isTrue);
+      expect(engine.spoken, 0);
+    },
+  );
 
   test('RTF supports the documented 256-group nesting boundary', () async {
     const depth = DocumentImportService.maxRtfGroupNesting;
@@ -522,7 +844,7 @@ void main() {
       expect(controller.isPreparationComplete, isFalse);
       expect(controller.document.wordCount, lessThan(180 * 7 * 3));
       await Future<void>.delayed(const Duration(milliseconds: 20));
-      expect(controller.preparedRanges.length, lessThanOrEqualTo(3));
+      expect(controller.preparedRanges.length, lessThanOrEqualTo(8));
       expect(engine.spoken, 1);
       expect(controller.hasCompleteDocumentSnapshot, isFalse);
       expect(await controller.exportAudioToPath('/unused.wav'), isNull);
@@ -530,6 +852,44 @@ void main() {
       expect(controller.statusMessage, contains('complete document snapshot'));
       await controller.pausePlayback();
     },
+  );
+}
+
+class _BookmarkMetadataAccess implements DocumentAccessService {
+  int fileBookmarks = 0;
+  @override
+  Future<String?> createPersistentRestoreToken(String path) async {
+    if (await FileSystemEntity.type(path) == FileSystemEntityType.file) {
+      fileBookmarks++;
+      // Same contents and permissions, changed ctime: like macOS adding macl.
+      final result = await Process.run('/bin/chmod', ['u+rw', path]);
+      if (result.exitCode != 0) throw StateError('${result.stderr}');
+    }
+    return 'bookmark:$path';
+  }
+
+  @override
+  Future<DocumentAccessLease?> openPersistentRestoreToken(String token) async =>
+      null;
+  @override
+  Future<DocumentAccessLease?> requestPersistentRestoreAccess(
+    String path,
+  ) async => null;
+  @override
+  Future<DocumentAccessLease?> requestPersistentDirectoryAccess(
+    String path,
+  ) async => null;
+}
+
+Future<void> _waitUntil(bool Function() ready) async {
+  final deadline = DateTime.now().add(const Duration(seconds: 5));
+  while (!ready() && DateTime.now().isBefore(deadline)) {
+    await Future<void>.delayed(const Duration(milliseconds: 5));
+  }
+  expect(
+    ready(),
+    isTrue,
+    reason: 'Document processing did not drain in five seconds',
   );
 }
 

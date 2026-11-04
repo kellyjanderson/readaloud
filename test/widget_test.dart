@@ -86,6 +86,71 @@ void main() {
     expect(find.text('Voice Management'), findsOneWidget);
   });
 
+  testWidgets(
+    'Voxtral precision choice is saved and clearly requires restart',
+    (tester) async {
+      final preferences = _MemoryReaderPreferencesService();
+      final controller = ReaderController(
+        preferencesService: preferences,
+        ttsEngine: _AccessibleTtsEngine(),
+        enablePlatformIntakeChannels: false,
+      );
+      addTearDown(controller.dispose);
+      await tester.pumpWidget(ReadAloudApp(controller: controller));
+      await tester.pump(const Duration(milliseconds: 300));
+      await tester.tap(find.byKey(const Key('reader-overflow-menu')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Settings').last);
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('tts-engine-settings-dropdown')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Voxtral TTS 4B').last);
+      await tester.pumpAndSettle();
+      await tester.tap(
+        find.byKey(const Key('voxtral-precision-settings-dropdown')),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Fast (4-bit)').last);
+      await tester.pumpAndSettle();
+      expect((await preferences.load()).voxtralQuantizationBits, 4);
+      expect(controller.ttsEngineRestartRequired, isTrue);
+      expect(
+        find.textContaining('Reopen the app to apply changes'),
+        findsOneWidget,
+      );
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets('Qwen Base selection persists and shows its reference library', (
+    tester,
+  ) async {
+    final preferences = _MemoryReaderPreferencesService();
+    final controller = ReaderController(
+      preferencesService: preferences,
+      ttsEngine: _AccessibleTtsEngine(),
+      enablePlatformIntakeChannels: false,
+    );
+    addTearDown(controller.dispose);
+    await tester.pumpWidget(ReadAloudApp(controller: controller));
+    await tester.pump(const Duration(milliseconds: 300));
+    await tester.tap(find.byKey(const Key('reader-overflow-menu')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Settings').last);
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('tts-engine-settings-dropdown')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Qwen3-TTS 1.7B Base (reference voices)').last);
+    await tester.pumpAndSettle();
+    expect((await preferences.load()).ttsEngineId, 'qwen3_tts_base_1_7b');
+    expect(
+      find.textContaining('30 synthetic reference voices'),
+      findsOneWidget,
+    );
+    expect(controller.ttsEngineRestartRequired, isTrue);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('transport supports keyboard focus and activation', (
     tester,
   ) async {
@@ -270,7 +335,7 @@ void main() {
     expect(find.text('Document'), findsOneWidget);
     expect(find.text('Output'), findsOneWidget);
     expect(find.text('Live Input'), findsOneWidget);
-    expect(find.text('Settings'), findsOneWidget);
+    expect(find.text('Settings'), findsNWidgets(2));
     expect(find.text('Help'), findsOneWidget);
     expect(find.text('Open Source Notices'), findsOneWidget);
     expect(find.text('Workspace'), findsNothing);
@@ -669,6 +734,8 @@ class _MemoryReaderPreferencesService extends ReaderPreferencesService {
 
   @override
   Future<void> save({
+    String ttsEngineId = ReaderPreferences.defaultTtsEngineId,
+    int voxtralQuantizationBits = 0,
     required String fontFamily,
     required double fontScale,
     required ReaderAppearanceMode appearanceMode,
@@ -684,6 +751,8 @@ class _MemoryReaderPreferencesService extends ReaderPreferencesService {
     String? lastOpenedDirectoryAccessToken,
   }) async {
     _preferences = ReaderPreferences(
+      ttsEngineId: ttsEngineId,
+      voxtralQuantizationBits: voxtralQuantizationBits,
       selectedVoiceId: selectedVoiceId,
       voiceSpeeds: Map<String, double>.from(voiceSpeeds),
       fontFamily: fontFamily,

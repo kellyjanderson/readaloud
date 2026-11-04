@@ -671,8 +671,9 @@ bool _canStreamText(DocumentPreparationRequest request) =>
         !request.fileName!.toLowerCase().endsWith('.pdf') &&
         _isSupportedRangeFormat(request.fileName));
 
-/// Pure Dart owner: at most 8 Ki UTF-16 source units plus one input IO chunk and
-/// one immutable publication. Waiting for consumer credit also pauses openRead.
+/// Pure Dart owner: one source unit and one bounded successor (each up to 8 Ki
+/// UTF-16), one input IO chunk and one immutable publication. Waiting for
+/// consumer credit also pauses openRead.
 /// Kill on replacement/timeout closes the isolate's file handles; native PDF
 /// cancellation retains the separate supervisor drain rule above.
 Future<void> _publishTextRanges(
@@ -733,6 +734,7 @@ Future<void> _publishTextRanges(
   try {
     await for (final context in _contextUnits(
       _importUnits(effectiveInput, importer, acquisition),
+      eagerLookahead: !input.nativePdf,
     )) {
       final unit = context.unit;
       final text = unit.text;
@@ -759,7 +761,7 @@ Future<void> _publishTextRanges(
         wordStart,
         segmentStart,
         sourceStart + text.length,
-        false,
+        context.isLast,
         sourceLocator: unit.locator,
       );
       input.reply.send(publication);
@@ -935,17 +937,20 @@ Stream<DocumentImportUnit> _importUnits(
 }
 
 class _ContextImportUnit {
-  const _ContextImportUnit(this.unit, this.following);
+  const _ContextImportUnit(this.unit, this.following, {required this.isLast});
   final DocumentImportUnit unit;
   final DocumentImportUnit? following;
+  final bool isLast;
 }
 
-/// Only an attribution-sensitive boundary asks for a following unit. The
-/// additional unit and its 12-segment halo are explicit bounded lookahead;
-/// ordinary PDF pages do not wait on acquisition of their successor.
+/// Text/container intake holds one bounded successor to distinguish EOF from
+/// absence of an attribution halo. Native PDF pages retain demand acquisition:
+/// ordinary pages do not wait on extraction of their successor. Unknown EOF
+/// must never be advertised as the last range.
 Stream<_ContextImportUnit> _contextUnits(
-  Stream<DocumentImportUnit> source,
-) async* {
+  Stream<DocumentImportUnit> source, {
+  required bool eagerLookahead,
+}) async* {
   final iterator = StreamIterator(source);
   DocumentImportUnit? pending;
   try {
@@ -956,10 +961,15 @@ Stream<_ContextImportUnit> _contextUnits(
       final quoteCount = RegExp('["“”]').allMatches(text).length;
       final needsFollowing =
           quoteCount.isOdd || RegExp(r'["”]\s*$').hasMatch(text);
-      if (needsFollowing && await iterator.moveNext()) {
+      final checkedSuccessor = eagerLookahead || needsFollowing;
+      if (checkedSuccessor && await iterator.moveNext()) {
         pending = iterator.current;
       }
-      yield _ContextImportUnit(unit, pending);
+      yield _ContextImportUnit(
+        unit,
+        needsFollowing ? pending : null,
+        isLast: checkedSuccessor && pending == null,
+      );
     }
   } finally {
     await iterator.cancel();

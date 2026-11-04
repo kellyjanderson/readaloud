@@ -68,14 +68,7 @@ void main() {
           waitingReason: 'Awaiting next input range',
         ),
       );
-      expect(
-        tester
-            .widget<LinearProgressIndicator>(
-              find.byType(LinearProgressIndicator),
-            )
-            .value,
-        isNull,
-      );
+      expect(find.byType(LinearProgressIndicator), findsNothing);
       expect(find.textContaining('total may grow'), findsOneWidget);
       expect(find.textContaining('Awaiting next input range'), findsOneWidget);
       await render(

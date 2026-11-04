@@ -83,6 +83,22 @@ class EngineCapabilityRegistry {
           },
           supportsPlainTextFallback: true,
         );
+      case 'qwen3_tts_base_1_7b':
+      case 'qwen3_tts_1_7b':
+      case 'voxtral_4b':
+      case 'moss_tts_8b':
+        return EngineCapabilityProfile(
+          capabilityProfileId:
+              '$engineId:$resolvedPlatformFamily:$capabilityVersion',
+          engineId: engineId,
+          platformFamily: resolvedPlatformFamily,
+          capabilityVersion: capabilityVersion,
+          directRepresentationTypes: const <String>{},
+          approximableRepresentationTypes: const <String>{
+            'normalized_spoken_text',
+          },
+          supportsPlainTextFallback: true,
+        );
     }
 
     throw UnsupportedError(

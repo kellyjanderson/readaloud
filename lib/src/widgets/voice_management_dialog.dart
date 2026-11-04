@@ -130,6 +130,7 @@ class VoiceManagementDialog extends StatelessWidget {
   const VoiceManagementDialog({
     super.key,
     required this.isCharacterModeEnabled,
+    this.engineName,
     required this.voiceLibrary,
     required this.availableVoices,
     required this.characterCastRegistry,
@@ -148,6 +149,7 @@ class VoiceManagementDialog extends StatelessWidget {
   });
 
   final bool isCharacterModeEnabled;
+  final String? engineName;
   final List<VoiceLibraryEntry> voiceLibrary;
   final List<VoiceProfile> availableVoices;
   final CharacterCastRegistry characterCastRegistry;
@@ -203,6 +205,11 @@ class VoiceManagementDialog extends StatelessWidget {
                     ),
                   ),
                 ],
+              ),
+              const SizedBox(height: 8),
+              Text(
+                '${engineName == null ? '' : '$engineName · '}${availableVoices.where((v) => v.locale.toLowerCase().startsWith('en')).length} English voices ready',
+                key: const Key('english-voice-count'),
               ),
               const SizedBox(height: 8),
               Expanded(

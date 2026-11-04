@@ -12,9 +12,26 @@ void main() {
   });
 
   group('ReaderPreferencesService', () {
+    test('persists the selected Voxtral precision', () async {
+      final service = ReaderPreferencesService();
+      for (final bits in [4, 0]) {
+        await service.save(
+          voxtralQuantizationBits: bits,
+          fontFamily: ReaderPreferences.defaultFontFamily,
+          fontScale: 1,
+          appearanceMode: ReaderAppearanceMode.system,
+          multiVoiceEnabled: true,
+          voiceSpeeds: {},
+          storedDocumentCastVoiceAssignments: {},
+        );
+        expect((await service.load()).voxtralQuantizationBits, bits);
+      }
+    });
     test('loads defaults when no preferences are stored', () async {
       final service = ReaderPreferencesService();
       final preferences = await service.load();
+
+      expect(preferences.voxtralQuantizationBits, 0);
 
       expect(preferences.fontFamily, ReaderPreferences.defaultFontFamily);
       expect(preferences.fontScale, ReaderPreferences.defaultFontScale);

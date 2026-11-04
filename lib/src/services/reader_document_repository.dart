@@ -286,7 +286,9 @@ class ReaderDocumentCache {
           progress: [
             PreparationProgress(
               stage: PreparationStage.persistence,
-              state: PreparationWorkState.complete,
+              state: sequence == rangeCount
+                  ? PreparationWorkState.complete
+                  : PreparationWorkState.working,
               completed: sequence,
               total: rangeCount,
               unit: 'ranges',

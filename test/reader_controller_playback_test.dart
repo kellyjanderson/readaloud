@@ -910,7 +910,7 @@ void main() {
         while (true) {
           expect(request.rangeSequence, ++sequences);
           expect(request.sourceWordOffset, nextWord);
-          expect(controller.preparedRanges.length, lessThanOrEqualTo(3));
+          expect(controller.preparedRanges.length, lessThanOrEqualTo(8));
           emittedText.add(request.text);
           nextWord += request.speechDocument!.totalWordCount;
           request.onRangeActive?.call();
@@ -3395,7 +3395,7 @@ Future<String> _consumeRanges(
   while (true) {
     expect(request.rangeSequence, ++sequence);
     expect(request.sourceWordOffset, nextWord);
-    expect(controller.preparedRanges.length, lessThanOrEqualTo(3));
+    expect(controller.preparedRanges.length, lessThanOrEqualTo(8));
     output.add(request.text);
     nextWord += request.speechDocument!.totalWordCount;
     request.onRangeActive?.call();

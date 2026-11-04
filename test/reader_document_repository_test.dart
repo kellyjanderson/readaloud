@@ -125,7 +125,17 @@ void main() {
       expect(cache.rangeCount, greaterThan(1));
       final original = <DocumentPreparationPublication>[];
       for (var i = 1; i <= cache.rangeCount; i++) {
-        original.add(await cache.readRange(i, request: request(2)));
+        final range = await cache.readRange(i, request: request(2));
+        original.add(range);
+        final progress = range.progress.single;
+        expect(progress.completed, i);
+        expect(progress.total, cache.rangeCount);
+        expect(
+          progress.state,
+          i == cache.rangeCount
+              ? PreparationWorkState.complete
+              : PreparationWorkState.working,
+        );
       }
       final output = await cache.exportToFile(
         request: request(2),

@@ -56,6 +56,14 @@ import '../services/spoken_selection_mapper_service.dart';
 import '../services/tts_engine.dart';
 
 class ReaderController extends ChangeNotifier {
+  static const int preparedRangeCapacity = 8;
+  static const Set<String> _knownTtsEngineIds = <String>{
+    'kokoro',
+    'qwen3_tts_1_7b',
+    'qwen3_tts_base_1_7b',
+    'voxtral_4b',
+    'moss_tts_8b',
+  };
   static const Duration _healthyFollowerUpdateInterval = Duration(
     milliseconds: 100,
   );
@@ -91,6 +99,7 @@ class ReaderController extends ChangeNotifier {
        _documentAccessService =
            documentAccessService ?? createDocumentAccessService(),
        _preferencesService = preferencesService ?? ReaderPreferencesService(),
+       _providedTtsEngine = ttsEngine,
        _ttsEngine = ttsEngine ?? createDefaultTtsEngine(),
        _enablePlatformIntakeChannels = enablePlatformIntakeChannels,
        _document = ReaderDocument.sample();
@@ -185,6 +194,8 @@ class ReaderController extends ChangeNotifier {
   bool _preparationComplete = true;
   bool _hasCompleteDocumentSnapshot = true;
   int _publicationSequence = 0;
+  int _preparedWordCount = 0;
+  final Map<int, Future<DocumentPreparationPublication?>> _rangeReads = {};
   String? _sessionDocumentId;
   final Map<String, String> _documentIdentityRedirects = {};
   String? _startupError;
@@ -235,6 +246,16 @@ class ReaderController extends ChangeNotifier {
     _playbackState = ReaderPlaybackPrimaryState.paused;
     _playbackActivity = const TtsPlaybackActivity.idle();
     _statusMessage = 'Document preparation cancelled. Retry to continue.';
+    _preparationProgress.updateAll((_, progress) {
+      return switch (progress.state) {
+        PreparationWorkState.working ||
+        PreparationWorkState.waiting ||
+        PreparationWorkState.stalled => progress.withState(
+          PreparationWorkState.cancelled,
+        ),
+        _ => progress,
+      };
+    });
     final credit = _rangeCredit;
     _rangeCredit = null;
     if (credit != null && !credit.isCompleted) credit.complete();
@@ -254,6 +275,94 @@ class ReaderController extends ChangeNotifier {
   Map<PreparationStage, PreparationProgress> get preparationProgress =>
       Map.unmodifiable(_preparationProgress);
   bool get isPreparationComplete => _preparationComplete;
+  int get preparedRangeCount => _publicationSequence;
+  int get preparedWordCount => _preparedWordCount;
+  int? get activePreparedRangeSequence => _activePreparedRange?.sequence;
+  bool get hasRangeDocument =>
+      _activePreparationRequest != null &&
+      _publicationSequence > 0 &&
+      _preparedDocumentRevision == _documentRevision;
+  int get pendingRangeReadCount => _rangeReads.length;
+
+  /// Viewport and playback share immutable checkpoint data. At most eight
+  /// reads are admitted/coalesced; waiting callers can cancel before admission.
+  Future<DocumentPreparationPublication?> readPreparedRange(
+    int sequence, {
+    Future<void>? cancelled,
+  }) async {
+    final revision = _documentRevision;
+    bool current() => !_disposed && revision == _documentRevision;
+    Future<T> cancellable<T>(Future<T> work) => cancelled == null
+        ? work
+        : Future.any([
+            work,
+            cancelled.then<T>((_) => throw const PlanningCancelled()),
+          ]);
+    if (sequence < 1) throw ArgumentError.value(sequence, 'sequence');
+    while (current()) {
+      final existing = _rangeReads[sequence];
+      if (existing != null) return cancellable(existing);
+      if (_rangeReads.length < preparedRangeCapacity) break;
+      final changed = _rangesChanged.future;
+      await cancellable(
+        Future.any<void>([
+          changed,
+          ..._rangeReads.values.map(
+            (read) => read.then<void>((_) {}, onError: (Object _) {}),
+          ),
+        ]),
+      );
+    }
+    if (!current()) return null;
+    late Future<DocumentPreparationPublication?> work;
+    work = _readPreparedRange(sequence, revision).whenComplete(() {
+      if (identical(_rangeReads[sequence], work)) _rangeReads.remove(sequence);
+    });
+    _rangeReads[sequence] = work;
+    return cancellable(work);
+  }
+
+  Future<DocumentPreparationPublication?> _readPreparedRange(
+    int sequence,
+    int revision,
+  ) async {
+    final request = _activePreparationRequest;
+    if (request == null) return null;
+    bool current() => !_disposed && revision == _documentRevision;
+    while (current()) {
+      // Capture before any await/credit grant, so a publication cannot be lost.
+      final changed = _rangesChanged.future;
+      final resident = _preparedRanges
+          .where((r) => r.sequence == sequence)
+          .firstOrNull;
+      if (resident != null) return resident;
+      if (sequence <= _publicationSequence) {
+        final repository = _preparation.repository;
+        final cache = await repository?.open(
+          sourceKey: request.effectiveSourceRevision,
+          sourceRevision: request.effectiveSourceRevision,
+        );
+        if (!current()) return null;
+        if (cache == null || sequence > cache.rangeCount) {
+          throw StateError(
+            'The requested text range is unavailable. Retry document preparation.',
+          );
+        }
+        final publication = await cache.readRange(sequence, request: request);
+        return current() ? publication : null;
+      }
+      if (_preparationError case final error?) throw error;
+      if (_preparationComplete) return null;
+      if (_rangeCredit != null) {
+        // Demand from the viewport is independent of audio consumption. Earlier
+        // committed ranges stay readable from disk, including for playback.
+        releasePreparedRange(_publicationSequence - 1);
+      }
+      await changed;
+    }
+    return null;
+  }
+
   bool get hasCompleteDocumentSnapshot =>
       _documentPrepared &&
       (_hasCompleteDocumentSnapshot ||
@@ -366,7 +475,7 @@ class ReaderController extends ChangeNotifier {
   }
 
   /// C owns consumption. Releasing a committed range grants one producer credit;
-  /// at most three bounded fragments can be resident ahead of playback.
+  /// at most eight bounded fragments can be resident ahead of playback.
   void releasePreparedRange(int sequence) {
     _preparedRanges.removeWhere((range) => range.sequence <= sequence);
     final credit = _rangeCredit;
@@ -560,6 +669,8 @@ class ReaderController extends ChangeNotifier {
     _activePreparedRange = null;
     _signalRanges();
     _publicationSequence = 0;
+    _preparedWordCount = 0;
+    _rangeReads.clear();
     _preparedRanges.clear();
     _discoveredCast.clear();
     _castRedirects.clear();
@@ -719,6 +830,7 @@ class ReaderController extends ChangeNotifier {
           }
         }
         _publicationSequence = publication.sequence;
+        _preparedWordCount = publication.range.wordEnd;
         _preparedRanges.add(publication);
         _signalRanges();
         final registry = publication.fragment.characterCastRegistry;
@@ -737,6 +849,7 @@ class ReaderController extends ChangeNotifier {
         }
         for (final progress in publication.progress) {
           if (publication.coverage.contains(progress.stage) ||
+              progress.scope == 'cache' ||
               !_preparationProgress.containsKey(progress.stage)) {
             _preparationProgress[progress.stage] = progress;
           }
@@ -746,16 +859,43 @@ class ReaderController extends ChangeNotifier {
         _documentLoadStageProgress = null;
         if (!first.isCompleted) first.complete(publication.fragment);
         notifyListeners();
-        if (_preparedRanges.length >= 3) {
-          _preparationProgress[PreparationStage.parsing] = PreparationProgress(
-            stage: PreparationStage.parsing,
-            state: PreparationWorkState.waiting,
-            completed: publication.range.wordEnd,
-            unit: 'words',
-            waitingReason: 'The bounded reading-ahead window is full',
-          );
+        // A synchronous listener can cancel, replace or dispose this request.
+        // Never install a producer wait after its owner has been invalidated.
+        if (!current()) return;
+        if (_preparedRanges.length >= preparedRangeCapacity &&
+            !publication.isLast) {
+          const reason =
+              'Prepared reading window is full; continues as you read';
+          final paused = <PreparationStage>[];
+          for (final stage in [
+            PreparationStage.acquisition,
+            PreparationStage.parsing,
+            PreparationStage.persistence,
+          ]) {
+            final progress = _preparationProgress[stage];
+            if (progress != null &&
+                progress.state != PreparationWorkState.complete) {
+              paused.add(stage);
+              _preparationProgress[stage] = progress.withState(
+                PreparationWorkState.waiting,
+                waitingReason: reason,
+              );
+            }
+          }
           final credit = _rangeCredit = Completer<void>();
+          _signalRanges(); // Wake demand that arrived before credit existed.
+          notifyListeners();
           await credit.future;
+          if (!current()) return;
+          for (final stage in paused) {
+            final progress = _preparationProgress[stage];
+            if (progress?.waitingReason == reason) {
+              _preparationProgress[stage] = progress!.withState(
+                PreparationWorkState.working,
+              );
+            }
+          }
+          notifyListeners();
         }
       },
     );
@@ -829,7 +969,12 @@ class ReaderController extends ChangeNotifier {
   ReaderPreferences? _pendingPreferences;
   Future<void>? _preferenceSavePump;
   int _preferenceSnapshotRevision = 0;
-  final TtsEngine _ttsEngine;
+  final TtsEngine? _providedTtsEngine;
+  TtsEngine _ttsEngine;
+  String _selectedTtsEngineId = ReaderPreferences.defaultTtsEngineId;
+  int _voxtralQuantizationBits = 0;
+  int _runningVoxtralQuantizationBits = 0;
+  String _runningTtsEngineId = ReaderPreferences.defaultTtsEngineId;
   final bool _enablePlatformIntakeChannels;
   final CastVoiceAssignmentService _castVoiceAssignmentService =
       const CastVoiceAssignmentService();
@@ -883,6 +1028,7 @@ class ReaderController extends ChangeNotifier {
   TtsPlaybackActivity _playbackActivity = const TtsPlaybackActivity.idle();
 
   String? _statusMessage;
+  TtsResourceProgress? _speechResourceProgress;
   NarrationState _narrationState = NarrationState.initial();
   VoiceSessionRealization? _currentRealization;
   ChunkPlan? _currentChunkPlan;
@@ -935,6 +1081,7 @@ class ReaderController extends ChangeNotifier {
   ReaderPlaybackPrimaryState get playbackState => _playbackState;
   TtsPlaybackActivity get playbackActivity => _playbackActivity;
   String? get statusMessage => _statusMessage;
+  TtsResourceProgress? get speechResourceProgress => _speechResourceProgress;
   NarrationState get narrationState => _narrationState;
   VoiceSessionRealization? get currentRealization => _currentRealization;
   ChunkPlan? get currentChunkPlan => _currentChunkPlan;
@@ -980,6 +1127,13 @@ class ReaderController extends ChangeNotifier {
   bool get isLiveReadEnabled => _liveReadFilePath != null;
   String? get liveReadFilePath => _liveReadFilePath;
   bool get canExportAudio => _ttsEngine is AudioExportCapable;
+  String get selectedTtsEngineId => _selectedTtsEngineId;
+  int get voxtralQuantizationBits => _voxtralQuantizationBits;
+  String get runningTtsEngineId => _runningTtsEngineId;
+  bool get ttsEngineRestartRequired =>
+      _selectedTtsEngineId != _runningTtsEngineId ||
+      (_selectedTtsEngineId == 'voxtral_4b' &&
+          _voxtralQuantizationBits != _runningVoxtralQuantizationBits);
   String get suggestedAudioExportFileName =>
       _defaultAudioExportFileName(_document.title, _selectedVoiceId);
   String get currentDocumentWindowLabel {
@@ -1040,6 +1194,21 @@ class ReaderController extends ChangeNotifier {
 
   Future<void> initialize() async {
     _initializationStarted = true;
+    final preferences = await _preferencesService.load();
+    _voxtralQuantizationBits = preferences.voxtralQuantizationBits;
+    _runningVoxtralQuantizationBits = _voxtralQuantizationBits;
+    _selectedTtsEngineId = _knownTtsEngineIds.contains(preferences.ttsEngineId)
+        ? preferences.ttsEngineId
+        : ReaderPreferences.defaultTtsEngineId;
+    if (_providedTtsEngine == null) {
+      _ttsEngine = createDefaultTtsEngine(
+        engineId: _selectedTtsEngineId,
+        voxtralQuantizationBits: _voxtralQuantizationBits,
+      );
+    }
+    _runningTtsEngineId = _ttsEngine is TtsEngineIdentityCapable
+        ? (_ttsEngine as TtsEngineIdentityCapable).engineId
+        : _selectedTtsEngineId;
     _ttsEngine.onStart = () {
       if (_activePreviewVoiceId != null) {
         _isVoicePreviewLoading = false;
@@ -1068,6 +1237,14 @@ class ReaderController extends ChangeNotifier {
       _statusMessage = message;
       notifyListeners();
     };
+    if (_ttsEngine is TtsResourceProgressCapable) {
+      (_ttsEngine as TtsResourceProgressCapable).onResourceProgress =
+          (progress) {
+            if (_disposed) return;
+            _speechResourceProgress = progress;
+            notifyListeners();
+          };
+    }
     _ttsEngine.onComplete = () {
       if (_activePreviewVoiceId != null) {
         _resetPreviewState();
@@ -1181,7 +1358,6 @@ class ReaderController extends ChangeNotifier {
       _voiceLibrary = _voiceLibraryCapable!.voiceLibrary;
     }
 
-    final preferences = await _preferencesService.load();
     _selectedVoiceId = preferences.selectedVoiceId;
     _voiceSpeeds
       ..clear()
@@ -1886,19 +2062,11 @@ class ReaderController extends ChangeNotifier {
         }
         pulling = true;
         try {
-          DocumentPreparationPublication? publication;
-          while (current()) {
-            publication = _preparedRanges
-                .where((range) => range.sequence == sequence + 1)
-                .firstOrNull;
-            if (publication != null) break;
-            if (_preparationError case final error?) throw error;
-            if (_preparationComplete) return null;
-            await Future.any([
-              _rangesChanged.future,
-              cancelled.then<void>((_) => throw const PlanningCancelled()),
-            ]);
-          }
+          final publication = await readPreparedRange(
+            sequence + 1,
+            cancelled: cancelled,
+          );
+          if (current() && publication == null) return null;
           if (!current() || publication == null) {
             throw const PlanningCancelled();
           }
@@ -2268,6 +2436,25 @@ class ReaderController extends ChangeNotifier {
       return;
     }
     _fontFamily = fontFamily;
+    await _persistPreferences();
+    notifyListeners();
+  }
+
+  Future<void> setTtsEngineId(String engineId) async {
+    await _preferencesReady.future;
+    if (!_knownTtsEngineIds.contains(engineId) ||
+        _selectedTtsEngineId == engineId) {
+      return;
+    }
+    _selectedTtsEngineId = engineId;
+    await _persistPreferences();
+    notifyListeners();
+  }
+
+  Future<void> setVoxtralQuantizationBits(int bits) async {
+    await _preferencesReady.future;
+    if (bits != 0 && bits != 4) return;
+    _voxtralQuantizationBits = bits;
     await _persistPreferences();
     notifyListeners();
   }
@@ -2702,6 +2889,24 @@ class ReaderController extends ChangeNotifier {
       await _rememberOpenedDocumentPath(sourcePath, revision: revision);
       return;
     }
+    // Security-scoped bookmark creation can update the source's ctime without
+    // changing its bytes. Finish that metadata write before capturing the
+    // immutable acquisition revision, and never repeat it during acquisition.
+    String? preparedRestoreToken;
+    if (sourcePath != null) {
+      try {
+        preparedRestoreToken =
+            p.normalize(sourcePath) == _lastOpenedDocumentPath &&
+                (_lastOpenedDocumentAccessToken?.isNotEmpty ?? false)
+            ? _lastOpenedDocumentAccessToken
+            : await _documentAccessService.createPersistentRestoreToken(
+                sourcePath,
+              );
+      } catch (_) {
+        // Access recovery and diagnostics remain owned by the import boundary.
+      }
+      _requireRevision(revision);
+    }
     final imported = await _prepare(
       revision,
       DocumentPreparationKind.bytes,
@@ -2716,7 +2921,12 @@ class ReaderController extends ChangeNotifier {
       revision: revision,
     );
     _requireRevision(revision);
-    await _rememberOpenedDocumentPath(sourcePath, revision: revision);
+    await _rememberOpenedDocumentPath(
+      sourcePath,
+      revision: revision,
+      restoreTokenPrepared: true,
+      preparedRestoreToken: preparedRestoreToken,
+    );
   }
 
   Future<void> _prepareResourceBindings(
@@ -3045,6 +3255,9 @@ class ReaderController extends ChangeNotifier {
     _followerProgressDebounce?.cancel();
     _ttsEngine.onStart = null;
     _ttsEngine.onStatus = null;
+    if (_ttsEngine is TtsResourceProgressCapable) {
+      (_ttsEngine as TtsResourceProgressCapable).onResourceProgress = null;
+    }
     _ttsEngine.onProgress = null;
     _ttsEngine.onComplete = null;
     _ttsEngine.onError = null;
@@ -3070,6 +3283,8 @@ class ReaderController extends ChangeNotifier {
 
   Future<void> _persistPreferences() async {
     _pendingPreferences = ReaderPreferences(
+      voxtralQuantizationBits: _voxtralQuantizationBits,
+      ttsEngineId: _selectedTtsEngineId,
       selectedVoiceId: _selectedVoiceId,
       voiceSpeeds: Map.unmodifiable(_voiceSpeeds),
       fontFamily: _fontFamily,
@@ -3099,6 +3314,8 @@ class ReaderController extends ChangeNotifier {
       _pendingPreferences = null;
       try {
         await _preferencesService.save(
+          voxtralQuantizationBits: value.voxtralQuantizationBits,
+          ttsEngineId: value.ttsEngineId,
           selectedVoiceId: value.selectedVoiceId,
           voiceSpeeds: value.voiceSpeeds,
           fontFamily: value.fontFamily,
@@ -3248,6 +3465,8 @@ class ReaderController extends ChangeNotifier {
   Future<void> _rememberOpenedDocumentPath(
     String? sourcePath, {
     required int revision,
+    bool restoreTokenPrepared = false,
+    String? preparedRestoreToken,
   }) async {
     _requireRevision(revision);
     if (sourcePath == null || sourcePath.trim().isEmpty) {
@@ -3263,8 +3482,11 @@ class ReaderController extends ChangeNotifier {
     final previousToken = _lastOpenedDocumentAccessToken;
     _lastOpenedDocumentPath = normalizedPath;
     try {
-      final restoreToken = await _documentAccessService
-          .createPersistentRestoreToken(normalizedPath);
+      final restoreToken = restoreTokenPrepared
+          ? preparedRestoreToken
+          : await _documentAccessService.createPersistentRestoreToken(
+              normalizedPath,
+            );
       _requireRevision(revision);
       if (restoreToken != null && restoreToken.trim().isNotEmpty) {
         _lastOpenedDocumentAccessToken = restoreToken;
@@ -3795,11 +4017,21 @@ class ReaderController extends ChangeNotifier {
   }
 
   String _engineId() {
+    final identity = _ttsEngine;
+    if (identity is TtsEngineIdentityCapable) {
+      return (identity as TtsEngineIdentityCapable).engineId;
+    }
     final runtime = _ttsEngine.runtimeType.toString().toLowerCase();
     return runtime.contains('kokoro') ? 'kokoro' : 'generic';
   }
 
-  String _engineVersion() => _engineId() == 'kokoro' ? '2' : '1';
+  String _engineVersion() {
+    final identity = _ttsEngine;
+    if (identity is TtsEngineIdentityCapable) {
+      return (identity as TtsEngineIdentityCapable).engineVersion;
+    }
+    return _engineId() == 'kokoro' ? '2' : '1';
+  }
 
   EnglishPronunciationProfile _selectedPronunciationProfile({String? voiceId}) {
     final effectiveVoiceId = voiceId ?? _selectedVoiceId;

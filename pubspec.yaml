@@ -52,6 +52,7 @@ dependencies:
   kokoro_tts_flutter: ^0.2.0+1
   malsami: 0.0.3
   flutter_onnxruntime: ^1.6.3
+  super_sliver_list: ^0.4.1
 
 dev_dependencies:
   flutter_test:
@@ -88,6 +89,8 @@ flutter:
     - assets/us_silver.json
     - assets/gb_gold.json
     - assets/gb_silver.json
+    - assets/mlx_tts_worker.py
+    - assets/voice_library/
     - assets/kokoro/model/
     - assets/kokoro/voices/
 

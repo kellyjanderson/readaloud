@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../models/document_preparation.dart';
+import '../services/tts_engine.dart';
 
 /// A stable, scrollable status region. Counters belong to their own stage;
 /// finishing parsing never implies that resources or persistence are ready.
@@ -11,6 +12,7 @@ class PreparationStatus extends StatelessWidget {
     required this.isImporting,
     required this.isInitializing,
     required this.isComplete,
+    this.resourceProgress,
     this.message,
     this.startupError,
     this.onCancel,
@@ -22,6 +24,7 @@ class PreparationStatus extends StatelessWidget {
   final bool isImporting;
   final bool isInitializing;
   final bool isComplete;
+  final TtsResourceProgress? resourceProgress;
   final String? message;
   final String? startupError;
   final VoidCallback? onCancel;
@@ -30,7 +33,12 @@ class PreparationStatus extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final stages = progress.toList();
+    final stages = progress
+        .where(
+          (stage) =>
+              !isComplete || stage.state != PreparationWorkState.complete,
+        )
+        .toList();
     return SizedBox(
       key: const Key('preparation-status'),
       height: 112,
@@ -46,20 +54,37 @@ class PreparationStatus extends StatelessWidget {
                   children: [
                     Text(
                       startupError ??
+                          resourceProgress?.message ??
                           message ??
                           (isInitializing
                               ? 'Preparing speech resources. You can open a document now.'
-                              : isImporting
-                              ? 'Preparing the next reading range…'
+                              : stages.any(
+                                  (stage) =>
+                                      stage.waitingReason?.startsWith(
+                                        'Prepared reading window is full',
+                                      ) ??
+                                      false,
+                                )
+                              ? 'Ready to read — preparation continues as you read.'
                               : isComplete
                               ? 'Ready to read'
+                              : isImporting
+                              ? 'Preparing the next reading range…'
                               : 'Partial document — more ranges are available as you read.'),
                     ),
                     if (startupError != null &&
                         message != null &&
                         message != startupError)
                       Text(message!),
-                    if (isInitializing) ...[
+                    if (resourceProgress != null) ...[
+                      const SizedBox(height: 4),
+                      LinearProgressIndicator(
+                        value: resourceProgress!.fraction?.clamp(0, 1),
+                        semanticsLabel: resourceProgress!.total == null
+                            ? '${resourceProgress!.message}; total unknown'
+                            : '${resourceProgress!.message}; ${resourceProgress!.completed ?? 0} of ${resourceProgress!.total} ${resourceProgress!.unit}',
+                      ),
+                    ] else if (isInitializing) ...[
                       const SizedBox(height: 4),
                       const LinearProgressIndicator(
                         semanticsLabel: 'Speech resources; total work unknown',
@@ -69,7 +94,9 @@ class PreparationStatus extends StatelessWidget {
                       const SizedBox(height: 4),
                       Text(_stageDescription(stage)),
                       if (stage.state != PreparationWorkState.failed &&
-                          stage.state != PreparationWorkState.cancelled)
+                          stage.state != PreparationWorkState.cancelled &&
+                          stage.state != PreparationWorkState.waiting &&
+                          stage.state != PreparationWorkState.stalled)
                         LinearProgressIndicator(
                           // A finished counter does not imply a finished stage.
                           value: stage.state == PreparationWorkState.complete
