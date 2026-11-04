@@ -2,6 +2,7 @@
 
 - [Reading and voice choices](reading-and-voice-choices.md)
 - [Development and verification](development.md)
+- [Human acceptance runner](../tools/human_acceptance_runner/README.md) for one-case-at-a-time RC2 sessions and result export.
 - [Maintenance and GitHub workflow](maintenance.md)
 - [macOS candidate notices and packaging](release-compliance.md)
 
