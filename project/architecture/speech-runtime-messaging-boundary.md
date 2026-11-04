@@ -112,8 +112,35 @@ self-query, ignores retired-child messages, and retires the worker at 99 GB or
 after 30 seconds without telemetry. Child exit owns sampler cancellation.
 These are sampled guardrails, not a proved hard real-time 100 GB bound.
 
-The worker consumes all model-generated pieces, validates finite mono output and
-constant rate, and writes a single complete native-rate PCM16 WAV. The artifact
+The worker consumes all model-generated pieces and validates finite mono output
+and constant rate. An explicitly final, streaming, zero-sample packet is a
+terminal marker; it does not erase preceding audio. Empty unmarked packets,
+non-finite/multichannel output, rate changes, data after the terminal marker and
+generations containing no audio still fail. The iterator is drained/closed so a
+late producer exception is not silently converted into success.
+
+Validated packets are written incrementally to a unique PCM16 WAV with its
+header updated and flushed after each packet. The existing single Python child
+owns the writer; the admitted Dart request owns its unique persistent attempt
+directory under `generated-audio/mlx-raw-v1/incomplete`. Initial request metadata
+records `complete: false` and source/voice/model/session/generation/chunk identity.
+Cancellation and failures retire/join the child before request cleanup. Failed
+or cancelled attempts containing WAV data are retained without automatic
+eviction; failure text identifies the retained prefix where available. These
+files never qualify as complete cache hits or automatically start playback.
+Resume/stitching inside a failed text chunk is not implemented because token to
+audio alignment has not been established. Empty attempts can be removed.
+
+On successful generator completion, the WAV is published with a no-clobber hard
+link; only its duplicate staging link is removed. Dart removes the attempt copy
+only after immutable artifact publication succeeds and a joined worker-isolate
+checksum comparison confirms identical WAV bytes. A competing different render
+or unverifiable published file leaves the attempt intact. Previously published audio
+and failed attempt prefixes survive later failures and retries. The PCM16
+conversion matches the prior MLX Audio writer, so valid existing cache entries
+retain their engine identity and need not be rendered again. See [#120](https://github.com/kellyjanderson/readaloud/issues/120)
+for boundary, malformed-tail, retry and process-termination regression evidence.
+The artifact
 store, boundary correction and export carry the WAV sample rate instead of
 assuming Kokoro's 24 kHz. Boundary derivative identity was versioned to prevent
 reuse of derivatives computed with the old timing assumption.

@@ -145,6 +145,16 @@ mono PCM16 WAV at the model's native sample rate. Drama stays at 44.1 kHz.
 Artifact duration, boundary silence measurements and export derive timing from
 the WAV header. Playback/export introduce no sample-rate conversion.
 
+If synthesis fails after producing valid audio, that audio is retained. The
+error gives the saved incomplete WAV path when available; request provenance is
+stored beside it under `generated-audio/mlx-raw-v1/incomplete` in Application
+Support. Cancellation also retains packets already written. Retry creates a
+separate attempt and does not overwrite the earlier recording. Incomplete
+passages are not automatically played or treated as complete cached speech;
+automatic continuation within a failed chunk is not yet implemented. Completed
+cached audio remains reusable. Drama's empty final stream marker is handled as
+normal completion, preserving all preceding samples at 44.1 kHz.
+
 MOSS-TTS v1.5 may download its separate audio-tokenizer files into the selected
 Hugging Face cache the first time it loads.
 
