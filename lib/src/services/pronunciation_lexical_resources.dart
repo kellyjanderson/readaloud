@@ -69,6 +69,8 @@ globalEnglishPronunciationLexicalResources =
         ),
       ],
       'for': <PronunciationRepresentation>[
+        // Legacy Kokoro workaround. The translation boundary restricts this
+        // stable ID to Kokoro, including artifacts already stored in .radoc.
         PronunciationRepresentation(
           representationId: 'lex_for_spoken',
           representationType: 'normalized_spoken_text',

@@ -136,7 +136,12 @@ unknown presets or missing reference conditioning.
 The selected engine replaces only chunk synthesis. Read Aloud retains its
 existing document preparation, pronunciation/text planning, voice assignment,
 chunk planning, admission, cache, cancellation/staleness checks, playback and
-export pipeline. A supervised child process loads one model and handles one
+export pipeline. The legacy Kokoro respelling of `for` as `four` is restricted
+to Kokoro; MLX engines receive the original `for`, including when reopening
+an existing prepared book. Explicit pronunciation choices still apply. Previously
+rendered audio is preserved; new synthesis uses the corrected text.
+
+A supervised child process loads one model and handles one
 request at a time. Cancellation retires the in-flight process so it cannot
 publish stale output; a later request reloads the same model identity into a fresh worker before synthesis. On app quit the
 native delegate asks Dart to shut the worker down, waits for its response, and

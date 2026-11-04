@@ -247,8 +247,20 @@ _TranslatedSegment _translateSegment(
     }
 
     final selectedRepresentation = artifact.selectedRepresentation;
+    // This app-owned respelling predates MLX support and exists in saved
+    // documents too. It is a Kokoro workaround, not general content intent.
+    // Scope it here so old artifacts are safe without reimporting books or
+    // removing audio. User overrides have their own representation IDs.
+    final skipKokoroRespelling =
+        capabilityProfile.engineId != 'kokoro' &&
+        selectedRepresentation?.representationId == 'lex_for_spoken' &&
+        selectedRepresentation?.representationType ==
+            'normalized_spoken_text' &&
+        selectedRepresentation?.representationValue == 'four';
     KokoroPronunciationTranslationOutcome translationOutcome;
-    if (_isEnglishSClassAllomorphArtifact(artifact) &&
+    if (skipKokoroRespelling) {
+      translationOutcome = KokoroPronunciationTranslationOutcome.deferred;
+    } else if (_isEnglishSClassAllomorphArtifact(artifact) &&
         selectedRepresentation?.representationType != 'phoneme_string' &&
         selectedRepresentation?.representationType !=
             'explicit_suffix_phoneme') {
@@ -368,7 +380,11 @@ _TranslatedSegment _translateSegment(
         translationOutcome: translationOutcome,
         representationType: selectedRepresentation?.representationType,
         representationValue: selectedRepresentation?.representationValue,
-        diagnosticCodes: artifact.diagnosticCodes,
+        diagnosticCodes: <String>[
+          ...artifact.diagnosticCodes,
+          if (skipKokoroRespelling)
+            'pronunciation.translation.kokoro_only_respelling',
+        ],
       ),
     );
   }
