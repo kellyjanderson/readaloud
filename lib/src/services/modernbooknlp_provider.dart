@@ -96,7 +96,7 @@ class ModernBookNlpProvider {
           response['providerId'] != 'modernbooknlp-joint' ||
           response['providerVersion'] != modernBookNlpRevision ||
           response['modelIdentity'] != modernBookNlpModelIdentity ||
-          response['adapterVersion'] != 'readaloud-cpu-1') {
+          response['adapterVersion'] != modernBookNlpAdapterVersion) {
         throw const FormatException('Unrecognized provider version');
       }
       return response;
@@ -215,6 +215,8 @@ class ModernBookNlpProvider {
   }
 }
 
+const modernBookNlpAdapterVersion = 'readaloud-cpu-2';
+
 const modernBookNlpModelIdentity =
     'a32c85b99e6491f559e0c46c6257b18be0a39a06c15c281389ca0934c229cfb2';
 const modernBookNlpRevision = '84f1f34f6f0ec7c6e9c558b4371e61ea2354d95b';
@@ -281,7 +283,28 @@ void validateModernBookNlpResult(Map<String, dynamic> result, String text) {
     }
   }
 
+  final artifacts = result['linguisticArtifacts'];
+  if (artifacts != null) {
+    if (artifacts is! Map ||
+        artifacts['schema'] != 1 ||
+        artifacts['pipeline'] != 'entity,quote,coref' ||
+        artifacts['coordinateSystem'] != 'python-codepoint') {
+      throw const FormatException('Unsupported linguistic evidence');
+    }
+    final files = artifacts['files'];
+    const names = {'tokens', 'entities', 'quotes', 'book'};
+    if (files is! Map ||
+        files.length != names.length ||
+        !names.every((name) => files[name] is String)) {
+      throw const FormatException('Incomplete linguistic evidence');
+    }
+    final book = jsonDecode(files['book'] as String);
+    if (book is! Map || book['characters'] is! List) {
+      throw const FormatException('Invalid character summaries');
+    }
+  }
   final ids = <String>{};
+
   for (final entity in result['entities'] as List) {
     if (entity['entityId'] is! String ||
         !ids.add(entity['entityId'] as String)) {

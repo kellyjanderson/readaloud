@@ -229,3 +229,21 @@ held-out literary quality or audible acceptance claim follows from the protocol
 tests. Actual bundled sandbox/setup/quit evidence is linked separately in #127. The user's later significant
 attribution-regression report supersedes the earlier positive impression; the
 existing rules remain frozen while #127 integration/qualification proceeds.
+
+### Preserved upstream linguistic evidence
+
+The CPU worker's `readaloud-cpu-2` output retains data-only upstream tokens,
+entities (all categories), quotes, and character summary artifacts in addition to
+its validated person/quote projection. Existing model assets and patched upstream
+modules are unchanged; the output adapter identity changes cache compatibility.
+The feature contract is `entity,quote,coref`: token syntax, aliases, pronouns,
+referential-gender distributions and character modifiers/actions already computed
+by that pipeline are retained. Event/supersense stages are not enabled, and debug
+HTML/pickles are not saved. See the [capability assessment](../research/modernbooknlp-capability-reuse.md)
+for exact source support and limitations.
+
+Records are candidate evidence in the logical book, not another mutable Character
+owner. Restoring evidence does not assign a voice, infer explicit/presented gender
+from pronouns, or alter current dialogue turns. Future admission uses the existing
+Character aggregate with cross-window identity and correction precedence, under
+[R22](https://github.com/kellyjanderson/readaloud/issues/110#issuecomment-6671953753).

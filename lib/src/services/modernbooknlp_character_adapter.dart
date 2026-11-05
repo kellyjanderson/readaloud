@@ -36,7 +36,7 @@ CharacterAnalysisDelta modernBookNlpCharacterDelta({
   }
   if (result['providerVersion'] != modernBookNlpRevision ||
       result['modelIdentity'] != modernBookNlpModelIdentity ||
-      result['adapterVersion'] != 'readaloud-cpu-1' ||
+      result['adapterVersion'] != modernBookNlpAdapterVersion ||
       result['schema'] != 1 ||
       result['providerId'] != 'modernbooknlp-joint') {
     throw const FormatException('Missing pinned model provenance');

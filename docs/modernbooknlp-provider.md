@@ -143,3 +143,48 @@ Provider processes are resident, but rolling book-level coreference is not imple
 Native UI/storage/quit evidence is recorded in #127 separately from audible acceptance. Initial playback must continue
 through fast discovery while deeper analysis becomes available. There is no default
 neural routing switch in this slice.
+
+## Saved book analysis
+
+Completed analysis windows now persist in the working book under Application
+Support. Reopening the same source or restarting the app checks this saved work
+before starting the model. Settings reports **Restored saved book analysis** on a
+hit. Model downloads and saved analysis are separate caches; changing the provider,
+model, output adapter or window text prevents incompatible result reuse.
+
+The output adapter is `readaloud-cpu-2`; the installed CPU runtime patch remains
+version 1 and needs no reinstall or model download for this change. Besides the
+person/quotation projection, records retain the upstream token/syntax, complete
+entity, quotation and character-summary data already computed. Event/supersense
+analysis remains disabled. See the [full capability review](../project/research/modernbooknlp-capability-reuse.md).
+
+The existing document-export API includes these records in `.radoc-v4`, together
+with Character choices; v1–v3 imports still work. A portable saved window can be
+restored in a fresh working store without loading a model. All records survive
+re-export; the imported-book diagnostic currently selects the first compatible
+window, not complete playback-indexed coverage. There is no new save UI or rendered
+audio packaging in this slice. Ordinary automatic persistence remains incremental
+in Application Support.
+
+`tools/modernbooknlp_persistence_smoke.dart` is the isolated native probe for real
+inference, A → B → A cache reuse and copied `.radoc` reopen in a fresh book/Character
+store whose provider factory deliberately fails if called. It uses the same
+`residentNlpTest` sandbox as the resident probe and a unique run directory. Build
+with the repository Flutter toolchain/configuration first, then
+`sh tools/build_macos_release.sh tools/modernbooknlp_persistence_smoke.dart`, copy and
+sign with the isolated bundle ID as above, and pass a fresh receipt path. Always
+Quit that exact app and verify its process and recorded children exit. Speech is
+silent in this probe; passing it is not attribution-quality or audible acceptance.
+
+The November 5 persistence probe passed real CPU analysis, A/B/A saved-result
+reuse, explicit narrator choice retention through export/re-import, and a fresh
+working/Character store with zero provider-creation attempts. Normal Quit and the
+app/recorded child exit were verified. This used synthetic prose and silent speech;
+it does not qualify City/Rosalina attribution or audible Fish output. Deterministic
+tests separately cover fresh-owner disk reuse, stale/corrupt dependencies and
+revoked publication. The full implementation evidence is recorded in #127.
+
+To test a real app relaunch, start that same isolated bundle again with a new
+receipt path followed by the exported `.radoc` path as its second argument. This
+mode opens a fresh working store, refuses all provider creation, and checks restored
+evidence and the explicit voice choice. Quit and verify exit again afterward.

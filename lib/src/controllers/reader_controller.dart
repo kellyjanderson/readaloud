@@ -1,3 +1,4 @@
+import '../services/document_analysis_record.dart';
 import '../services/modernbooknlp_analysis.dart';
 import '../services/modernbooknlp_provider.dart';
 import '../services/modernbooknlp_runtime.dart';
@@ -111,23 +112,41 @@ class ReaderController extends ChangeNotifier {
 
   final ModernBookNlpAnalysis characterAnalysis;
   void _offerCharacterAnalysis() {
-    if (_preparedRanges.isEmpty) return;
-    final range = _activePreparedRange ?? _preparedRanges.first;
-    final text = range.fragment.speechDocument.segments
-        .map((s) => s.normalizedText)
-        .join('\n');
-    if (text.isEmpty) return;
-    // Never silently truncate a source window or split a UTF-16 surrogate.
-    // Preparation already produces bounded ranges; oversized ones are not admitted.
-    if (text.length > 16384) return;
+    characterAnalysis.repository ??= _preparation.repository?.analysis;
+    final active = _activePreparedRange;
+    final range = active != null && active.request.revision == _documentRevision
+        ? active
+        : _preparedRanges.firstOrNull;
+    final saved = _document.analysisRecords
+        .where((r) => r.reusable)
+        .firstOrNull;
+    // Do not assemble an unbounded portable book merely to reject its size.
+    if (range == null &&
+        saved == null &&
+        _document.speakableText.length > 16384) {
+      return;
+    }
+    final text = range != null
+        ? range.fragment.speechDocument.segments
+              .map((s) => s.normalizedText)
+              .join('\n')
+        : saved?.text ??
+              _document.speechDocument.segments
+                  .map((s) => s.normalizedText)
+                  .join('\n');
+    if (text.isEmpty || text.length > 16384) return;
     characterAnalysis.offer(
       ModernBookNlpRequest(
-        requestId: '$_preparationOwner-$_documentRevision-${range.sequence}',
+        requestId:
+            '$_preparationOwner-$_documentRevision-${range?.sequence ?? 0}',
         ownerId: _preparationOwner,
-        workId: _sessionDocumentId ?? range.fragment.displayDocument.documentId,
-        sourceRevision: range.request.effectiveSourceRevision,
+        workId: _sessionDocumentId ?? _document.displayDocument.documentId,
+        sourceRevision:
+            range?.request.effectiveSourceRevision ??
+            saved?.sourceRevision ??
+            _document.normalizedImportResult.sourceFingerprint,
         analysisRevision: _documentRevision,
-        sequence: range.sequence,
+        sequence: range?.sequence ?? 0,
         text: text,
       ),
     );
@@ -2865,7 +2884,7 @@ class ReaderController extends ChangeNotifier {
     }
   }
 
-  /// Exports a regular v3 snapshot that the normal Open Document route reads.
+  /// Exports a regular v4 snapshot that the normal Open Document route reads.
   /// Only a complete in-memory graph or complete committed checkpoint qualifies.
   /// Replacement/cancellation suppresses the atomic rename of a staged export.
   Future<File?> exportDocumentToPath(String outputPath) async {
@@ -2900,6 +2919,21 @@ class ReaderController extends ChangeNotifier {
       _requireRevision(revision);
       final request = _activePreparationRequest;
       final repository = _preparation.repository;
+      final recordMap = {
+        for (final record in _document.analysisRecords) record.key: record,
+      };
+      if (repository != null) {
+        for (final record in await repository.analysis.recordsForSource(
+          request?.effectiveSourceRevision ??
+              _document.normalizedImportResult.sourceFingerprint,
+        )) {
+          recordMap[record.key] = record;
+        }
+      }
+      _requireRevision(revision);
+      final analysisRecords = List<DocumentAnalysisRecord>.unmodifiable(
+        recordMap.values,
+      );
       if (!_hasCompleteDocumentSnapshot &&
           request != null &&
           repository != null) {
@@ -2918,6 +2952,7 @@ class ReaderController extends ChangeNotifier {
           isCurrent: current,
           userVoiceAssignments: assignments,
           characters: characters,
+          analysisRecords: analysisRecords,
         );
       }
       final document = await _completeExportDocument(revision);
@@ -2927,6 +2962,7 @@ class ReaderController extends ChangeNotifier {
         isCurrent: current,
         userVoiceAssignments: assignments,
         characters: characters,
+        analysisRecords: analysisRecords,
       );
     } catch (error) {
       if (current()) {
@@ -3299,6 +3335,7 @@ class ReaderController extends ChangeNotifier {
     _requireRevision(revision);
     _finalizeActiveSpokenChunk();
     _document = document;
+    characterAnalysis.restoreRecords(document.analysisRecords);
     _activePreparedRange = _preparedRanges
         .where((range) => identical(range.fragment, document))
         .firstOrNull;
@@ -3359,6 +3396,7 @@ class ReaderController extends ChangeNotifier {
       _statusMessage =
           'Loaded ${document.title}, but no readable text was extracted yet.';
     }
+    _offerCharacterAnalysis();
     notifyListeners();
     _resumePendingPlay();
   }

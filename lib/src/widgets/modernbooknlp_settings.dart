@@ -18,7 +18,7 @@ class ModernBookNlpSettings extends StatelessWidget {
           analysis.error ??
           progress?['message'] as String? ??
           (analysis.result != null
-              ? '${analysis.completedWindows} windows evaluated; ${(analysis.result!['quotes'] as List).length} quotations in the latest window.'
+              ? '${analysis.restoredFromBook ? 'Restored saved book analysis. ' : ''}${analysis.completedWindows} windows evaluated; ${(analysis.result!['quotes'] as List).length} quotations in the latest window.'
               : analysis.ready
               ? 'Ready for a reading window.'
               : 'Not running.');
