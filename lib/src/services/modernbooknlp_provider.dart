@@ -3,9 +3,8 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
 
-/// Experimental offline provider. No app startup, playback or voice mutation.
-/// Uses platform Process ownership, not another scheduling framework. The caller
-/// admits one bounded window; replacing/cancelling it kills and reaps the child.
+/// Single resident child, one admitted exchange, no hidden queue. The supervisor
+/// owns latest-window demand; cancellation invalidates and reaps out of band.
 class ModernBookNlpProvider {
   ModernBookNlpProvider({
     required this.pythonPath,
@@ -17,85 +16,81 @@ class ModernBookNlpProvider {
   final Duration timeout;
   Process? _child;
   bool _busy = false, _closed = false;
-  int _epoch = 0;
+  int _epoch = 0, _sequence = 0;
+  Completer<void>? _done;
+  Completer<Map<String, dynamic>>? _reply;
+  String? _requestId;
+  void Function(Map<String, dynamic>)? _progress;
   Future<void>? _retiring;
-  Completer<void>? _operationDone;
+  StreamSubscription<List<int>>? _out, _err;
+  String _stderr = '';
+  int? get processId => _child?.pid;
 
-  Future<Map<String, dynamic>> analyze(ModernBookNlpRequest request) async {
+  Future<void> prepare({
+    bool offline = false,
+    void Function(Map<String, dynamic>)? onProgress,
+  }) async {
+    await _exchange({
+      'schema': 1,
+      'command': 'prepare',
+      'requestId': 'prepare-${++_sequence}',
+      'offline': offline,
+    }, onProgress);
+  }
+
+  Future<Map<String, dynamic>> analyze(
+    ModernBookNlpRequest request, {
+    void Function(Map<String, dynamic>)? onProgress,
+  }) async {
+    final response = await _exchange({
+      ...request.toJson(),
+      'command': 'analyze',
+    }, onProgress);
+    for (final key in [
+      'requestId',
+      'ownerId',
+      'workId',
+      'sourceRevision',
+      'analysisRevision',
+      'sequence',
+    ]) {
+      if (response[key] != request.toJson()[key]) {
+        await cancel();
+        throw FormatException('Stale provider $key');
+      }
+    }
+    validateModernBookNlpResult(response, request.text);
+    return response;
+  }
+
+  Future<Map<String, dynamic>> _exchange(
+    Map<String, Object> request,
+    void Function(Map<String, dynamic>)? onProgress,
+  ) async {
     if (_closed || _busy) throw StateError('Provider closed or already active');
     _busy = true;
-    final operationDone = _operationDone = Completer<void>();
+    final done = _done = Completer<void>();
     final epoch = _epoch;
-    final output = BytesBuilder(copy: false);
-    var stderr = '';
-    var exceeded = false;
-    StreamSubscription<List<int>>? outSubscription, errSubscription;
-    Process? child;
     try {
       await _retiring;
-      child = await Process.start(
-        pythonPath,
-        ['-u', '-B', helperPath, runtimePath],
-        environment: {
-          'TOKENIZERS_PARALLELISM': 'false',
-          'OMP_NUM_THREADS': '4',
-          'HF_HUB_OFFLINE': '1',
-          'TRANSFORMERS_OFFLINE': '1',
-        },
-      );
-      _child = child;
       if (_closed || epoch != _epoch) throw const ModernBookNlpCancelled();
-      final outDone = Completer<void>(), errDone = Completer<void>();
-      outSubscription = child.stdout.listen(
-        (bytes) {
-          if (output.length + bytes.length > 1024 * 1024) {
-            exceeded = true;
-            child!.kill(ProcessSignal.sigkill);
-          } else {
-            output.add(bytes);
-          }
-        },
-        onDone: outDone.complete,
-        onError: outDone.completeError,
-      );
-      errSubscription = child.stderr.listen(
-        (bytes) {
-          stderr += utf8.decode(bytes, allowMalformed: true);
-          if (stderr.length > 4096) {
-            stderr = stderr.substring(stderr.length - 4096);
-          }
-        },
-        onDone: errDone.complete,
-        onError: errDone.completeError,
-      );
-      child.stdin.writeln(jsonEncode(request.toJson()));
-      await child.stdin.close();
-      final code = await child.exitCode.timeout(timeout);
-      await Future.wait([
-        outDone.future,
-        errDone.future,
-      ]).timeout(const Duration(seconds: 3));
+      if (_child == null) await _start();
       if (_closed || epoch != _epoch) throw const ModernBookNlpCancelled();
-      if (exceeded || code != 0) {
-        throw StateError('Provider failed ($code): $stderr');
-      }
-      final response = Map<String, dynamic>.from(
-        jsonDecode(utf8.decode(output.takeBytes())) as Map,
+      final reply = _reply = Completer<Map<String, dynamic>>();
+      _requestId = request['requestId'] as String;
+      _progress = onProgress;
+      final result = reply.future.timeout(
+        request['command'] == 'prepare' ? const Duration(minutes: 30) : timeout,
       );
+      unawaited(
+        result.then<void>((_) {}, onError: (Object _, StackTrace _) {}),
+      );
+      _child!.stdin.writeln(jsonEncode(request));
+      await _child!.stdin.flush();
+      final response = await result;
+      if (_closed || epoch != _epoch) throw const ModernBookNlpCancelled();
       if (response['ok'] != true) {
-        throw StateError('ModernBookNLP: ${response['error']}');
-      }
-      for (final key in [
-        'requestId',
-        'ownerId',
-        'workId',
-        'sourceRevision',
-        'analysisRevision',
-        'sequence',
-      ]) {
-        if (response[key] != request.toJson()[key]) {
-          throw FormatException('Stale provider $key');
-        }
+        throw StateError('ModernBookNLP: ${response['error']}. $_stderr');
       }
       if (response['schema'] != 1 ||
           response['providerId'] != 'modernbooknlp-joint' ||
@@ -104,37 +99,109 @@ class ModernBookNlpProvider {
           response['adapterVersion'] != 'readaloud-cpu-1') {
         throw const FormatException('Unrecognized provider version');
       }
-      validateModernBookNlpResult(response, request.text);
       return response;
+    } catch (_) {
+      await _retire();
+      rethrow;
     } finally {
-      try {
-        if (child != null) await _reap(child);
-      } finally {
-        if (identical(_child, child)) _child = null;
-        await outSubscription?.cancel();
-        await errSubscription?.cancel();
-        _busy = false;
-        operationDone.complete();
-      }
+      _reply = null;
+      _requestId = null;
+      _progress = null;
+      _busy = false;
+      done.complete();
     }
   }
 
-  Future<void> cancel() async {
-    ++_epoch; // Revoke publication before signalling or awaiting process exit.
-    final child = _child;
-    if (child != null) {
-      await (_retiring ??= _reap(child).whenComplete(() => _retiring = null));
+  Future<void> _start() async {
+    final child = await Process.start(
+      pythonPath,
+      ['-u', '-B', helperPath, runtimePath, '--serve'],
+      environment: {
+        'TOKENIZERS_PARALLELISM': 'false',
+        'OMP_NUM_THREADS': '4',
+        'HF_HUB_DISABLE_XET': '1',
+      },
+    );
+    _child = child;
+    _stderr = '';
+    final line = BytesBuilder(copy: false);
+    void failed(Object error) {
+      if (!identical(_child, child)) return;
+      if (_reply?.isCompleted == false) _reply!.completeError(error);
+      child.kill(ProcessSignal.sigkill);
     }
+
+    _out = child.stdout.listen((chunk) {
+      if (!identical(_child, child)) return;
+      var start = 0;
+      while (start < chunk.length) {
+        final end = chunk.indexOf(10, start);
+        final limit = end < 0 ? chunk.length : end;
+        if (line.length + limit - start > 1024 * 1024) {
+          failed(StateError('Provider output exceeds bound'));
+          return;
+        }
+        line.add(chunk.sublist(start, limit));
+        if (end < 0) break;
+        start = end + 1;
+        try {
+          final message = Map<String, dynamic>.from(
+            jsonDecode(utf8.decode(line.takeBytes())) as Map,
+          );
+          if (message['requestId'] != _requestId) continue;
+          if (message['type'] == 'progress') {
+            _progress?.call(message);
+          } else if (_reply?.isCompleted == false) {
+            _reply!.complete(message);
+          }
+        } catch (error) {
+          failed(error);
+          return;
+        }
+      }
+    }, onError: failed);
+    _err = child.stderr.listen((bytes) {
+      if (!identical(_child, child)) return;
+      _stderr += utf8.decode(bytes, allowMalformed: true);
+      if (_stderr.length > 4096) {
+        _stderr = _stderr.substring(_stderr.length - 4096);
+      }
+    }, onError: failed);
+    unawaited(
+      child.exitCode.then((code) {
+        if (!identical(_child, child)) return;
+        if (_reply?.isCompleted == false) {
+          _reply!.completeError(
+            StateError('Provider exited ($code). $_stderr'),
+          );
+        }
+        // Retain the dead process until subscriptions are retired by next exchange.
+      }),
+    );
+  }
+
+  Future<void> cancel() async {
+    ++_epoch;
+    if (_reply?.isCompleted == false) {
+      _reply!.completeError(const ModernBookNlpCancelled());
+    }
+    await _retire();
   }
 
   Future<void> close() async {
     _closed = true;
-    final done = _operationDone;
+    final done = _done;
     await cancel();
     await done?.future;
+    await _retire(); // Covers cancellation while Process.start was in flight.
   }
 
-  Future<void> _reap(Process child) async {
+  Future<void> _retire() =>
+      _retiring ??= _reap().whenComplete(() => _retiring = null);
+  Future<void> _reap() async {
+    final child = _child;
+    _child = null;
+    if (child == null) return;
     child.kill(ProcessSignal.sigterm);
     try {
       await child.exitCode.timeout(const Duration(seconds: 3));
@@ -142,6 +209,9 @@ class ModernBookNlpProvider {
       child.kill(ProcessSignal.sigkill);
       await child.exitCode.timeout(const Duration(seconds: 3));
     }
+    await _out?.cancel();
+    await _err?.cancel();
+    _out = _err = null;
   }
 }
 

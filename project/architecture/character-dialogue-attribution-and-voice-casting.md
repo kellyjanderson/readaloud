@@ -214,9 +214,18 @@ not construct or await this provider.
 
 The [provider guide](../../docs/modernbooknlp-provider.md) records pinned assets,
 CPU-only patch, actual local inference, unsupported/error cases and promotion limits.
-The current one-shot process is suitable for evaluation, not yet resident incremental
-reading. Full-library coreference is not substituted for bounded startup. No MPS,
-production sandbox, app-download UI, held-out literary quality or audible acceptance
-claim follows from the passing protocol tests. The user's later significant
+The app now retains the provider between bounded windows. `ModernBookNlpAnalysis`
+owns opt-in diagnostic demand (one active plus latest pending), invalidates source
+replacement results and never blocks Play or first-pass preparation. Settings setup
+uses the shared pinned acquisition helper and App Support cache; the build bundles
+a separate standalone interpreter. Native Quit waits for provider shutdown alongside
+MLX. The sandbox probe verified two windows in one process, Stop/restart, unchanged
+attribution and normal Quit with child exit. The pinned OpenMP replacement addresses
+an observed sandbox shared-memory crash without removing sandbox restrictions.
+This probe uses silent speech and scheduled frames, so it does not establish audible
+acceptance or full input responsiveness. Rolling cross-window entity context and
+promotion into audible routing remain open. Full-library coreference is not substituted for bounded startup. No MPS,
+held-out literary quality or audible acceptance claim follows from the protocol
+tests. Actual bundled sandbox/setup/quit evidence is linked separately in #127. The user's later significant
 attribution-regression report supersedes the earlier positive impression; the
 existing rules remain frozen while #127 integration/qualification proceeds.

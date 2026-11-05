@@ -12,7 +12,9 @@ void main() {
     final helper = File('${root.path}/worker.rb');
     await helper.writeAsString(r'''
 require 'json'
-r=JSON.parse(STDIN.readline)
+$stdout.sync=true
+STDIN.each_line do |line|
+r=JSON.parse(line)
 File.write(ARGV[0]+'/pid',Process.pid)
 if r['text']=='block'
   sleep 30
@@ -21,6 +23,7 @@ elsif r['text']=='oversize'
 else
   r['sourceRevision']='obsolete' if r['text']=='stale'
   puts JSON.generate(r.merge('ok'=>true,'providerId'=>'modernbooknlp-joint','providerVersion'=>'84f1f34f6f0ec7c6e9c558b4371e61ea2354d95b','modelIdentity'=>'a32c85b99e6491f559e0c46c6257b18be0a39a06c15c281389ca0934c229cfb2','adapterVersion'=>'readaloud-cpu-1','entities'=>[],'quotes'=>[]))
+end
 end
 ''');
     final executable = File('${root.path}/python');
@@ -64,7 +67,7 @@ end
     'bounded protocol accepts current output and rejects stale identity',
     () async {
       expect((await provider.analyze(request('valid')))['ok'], true);
-      await reaped();
+      expect(provider.processId, isNotNull);
       await expectLater(
         provider.analyze(request('stale')),
         throwsFormatException,

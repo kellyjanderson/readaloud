@@ -33,6 +33,30 @@ void main() {
         hasLength(2),
       );
       expect(result['peakRssBytes'], greaterThan(0));
+      final pid = provider.processId;
+      final second = await provider.analyze(
+        ModernBookNlpRequest(
+          requestId: 'second',
+          ownerId: 'test',
+          workId: 'fixture',
+          sourceRevision: 'v1',
+          analysisRevision: 1,
+          sequence: 2,
+          text: '"I will return," Miriam said.',
+        ),
+      );
+      expect(provider.processId, pid);
+      expect(second['reusedModel'], true);
+      expect(second['loadSeconds'], lessThan(0.05));
+      stdout.writeln(
+        'Resident second load=${second['loadSeconds']} inference=${second['inferenceSeconds']} pid=$pid',
+      );
+      await provider.close();
+      expect(
+        (await Process.run('/bin/kill', ['-0', '$pid'])).exitCode,
+        isNot(0),
+      );
+
       stdout.writeln(
         'ModernBookNLP load=${result['loadSeconds']} inference=${result['inferenceSeconds']} peakRSS=${result['peakRssBytes']}',
       );
