@@ -49,3 +49,9 @@ receipt path to its executable; it refuses existing work storage. It seeds two
 synthetic works, migrates, resets/reopens, removes one work file and verifies the
 other work and global engine are unchanged. After the receipt, use normal Quit and
 verify exit. This proves storage behavior, not attribution or audible Fish switching.
+
+The optional [ModernBookNLP provider guide](../docs/modernbooknlp-provider.md) covers
+`install_modernbooknlp_runtime.sh`, `prepare_modernbooknlp_assets.py`,
+`evaluate_modernbooknlp.py` and `modernbooknlp_worker_test.py`. These use a separate
+Python environment and explicit persistent asset directory; they do not enable
+neural attribution or alter the MLX runtime.

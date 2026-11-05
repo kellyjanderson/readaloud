@@ -1,0 +1,8 @@
+[
+  {"id":"explicit","text":"Ada opened the gate. \"Come inside,\" Ada said. Bruno smiled. \"Thank you,\" Bruno replied.","speakers":["Ada","Bruno"]},
+  {"id":"pronoun","text":"Miriam put down her cup. \"I will return tomorrow,\" she said.","speakers":["Miriam"]},
+  {"id":"unicode","text":"🌙 Élodie watched the sky. \"It is late,\" Élodie said.","speakers":["Élodie"]},
+  {"id":"unknown","text":"The hallway was dark. \"Is anyone there?\" The wind rattled the door.","speakers":[null]},
+  {"id":"mentioned-name","text":"Ada looked at Bruno. \"Clara told me the news,\" Ada said. \"I already know,\" Bruno replied.","speakers":["Ada","Bruno"]},
+  {"id":"long-turn","text":"Eleanor stopped by the window. \"Wait here. I will bring the letter,\" Eleanor said.","speakers":["Eleanor"]}
+]
