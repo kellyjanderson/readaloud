@@ -92,6 +92,8 @@ The November 4 directed slice ran the real macOS app with the local bf16 Drama c
 
 Acceptance remains incomplete: that run took 12.605 seconds from the harness's in-app timer to 515 ms of playback (not an external launch-to-first-audio measurement). Its longest observed player-position stall was 672 ms; an earlier cold run stalled for 7.158 seconds. Existing generated audio assisted the later run, so it does not establish fresh-inference continuity. Numerous untagged City exchanges still fall back to narration or incorrect heuristic ownership; the chapter ending, full attribution quality, native normal-Quit and M3 qualification remain open. Source tests and this bounded run do not close #124/#111/#113.
 
+The November 5 ownership probe ([receipt and limits](https://github.com/kellyjanderson/readaloud/issues/126#issuecomment-6655612725)) verified an explicit Mara/Sophia choice through source reopen, content-addressed native binding and one completed 1.3-second character turn in a 110-word City dialogue excerpt. Output was non-silent 44.1 kHz PCM. Gender evidence in that excerpt remained unknown; the test did not infer identity from the selected voice. **Overall smoke failed** with a 4404 ms observed stall; the in-app first-playback timer was 16.351 seconds. A prior full-source run took 111.325 seconds and did not reach Mara in its three-minute window. These timers include probe setup/reopen and do not replace the required external launch benchmark. All five owned sessions received normal Quit and verified process exit. Native UI interaction, perceptual listening, full chapter and M3 acceptance remain unproved. The 681-test/2-skip source pass and the positive selection subcase do not erase those failures.
+
 ## Expressiveness boundary
 
 
