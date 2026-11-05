@@ -9,6 +9,7 @@ class AppDelegate: FlutterAppDelegate {
   private var activeSecurityScopedURLs: [String: URL] = [:]
   private var documentAccessChannel: FlutterMethodChannel?
   private var mlxLifecycleChannel: FlutterMethodChannel?
+  private var bookNlpLifecycleChannel: FlutterMethodChannel?
   private var terminationCleanupStarted = false
   private var terminationReplySent = false
 
@@ -39,9 +40,12 @@ class AppDelegate: FlutterAppDelegate {
         sender.reply(toApplicationShouldTerminate: true)
       }
     }
-    mlxLifecycleChannel.invokeMethod("shutdown", arguments: nil) { _ in
-      finishTermination()
+    let cleanup = DispatchGroup()
+    for channel in [mlxLifecycleChannel, bookNlpLifecycleChannel].compactMap({ $0 }) {
+      cleanup.enter()
+      channel.invokeMethod("shutdown", arguments: nil) { _ in cleanup.leave() }
     }
+    cleanup.notify(queue: .main) { finishTermination() }
     DispatchQueue.main.asyncAfter(deadline: .now() + 12) {
       finishTermination()
     }
@@ -75,6 +79,10 @@ class AppDelegate: FlutterAppDelegate {
     )
     mlxLifecycleChannel = FlutterMethodChannel(
       name: mlxLifecycleChannelName,
+      binaryMessenger: resolvedFlutterViewController.engine.binaryMessenger
+    )
+    bookNlpLifecycleChannel = FlutterMethodChannel(
+      name: "read_aloud/booknlp_lifecycle",
       binaryMessenger: resolvedFlutterViewController.engine.binaryMessenger
     )
     // Each process samples itself: sandbox policy denies cross-process libproc

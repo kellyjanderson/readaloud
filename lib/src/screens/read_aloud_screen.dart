@@ -1,3 +1,4 @@
+import '../widgets/modernbooknlp_settings.dart';
 import '../models/speech_engine_catalog.dart';
 import 'dart:async';
 import 'dart:math' as math;
@@ -54,6 +55,13 @@ class _ReadAloudScreenState extends State<ReadAloudScreen> {
 
   @override
   void initState() {
+    const MethodChannel('read_aloud/booknlp_lifecycle').setMethodCallHandler((
+      call,
+    ) async {
+      if (call.method == 'shutdown') {
+        await _controller.characterAnalysis.shutdown();
+      }
+    });
     super.initState();
     _controller = widget.controller ?? ReaderController();
     _ttsTraceScrollController = ScrollController();
@@ -62,6 +70,9 @@ class _ReadAloudScreenState extends State<ReadAloudScreen> {
 
   @override
   void dispose() {
+    const MethodChannel(
+      'read_aloud/booknlp_lifecycle',
+    ).setMethodCallHandler(null);
     _ttsTraceScrollController.dispose();
     if (widget.controller == null) {
       _controller.dispose();
@@ -597,6 +608,9 @@ class _ReadAloudScreenState extends State<ReadAloudScreen> {
                         'Fast mode trades some model precision for faster speech generation. Changes apply in this session.',
                       ),
                     ],
+                    ModernBookNlpSettings(
+                      analysis: _controller.characterAnalysis,
+                    ),
                     const SizedBox(height: 12),
                     SizedBox(
                       height: 100,

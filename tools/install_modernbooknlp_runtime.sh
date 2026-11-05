@@ -2,10 +2,16 @@
 # Isolated optional CPU provider runtime; never touches the MLX environment.
 set -eu
 root=${1:?Usage: tools/install_modernbooknlp_runtime.sh RUNTIME_DIRECTORY [python3.11]}
-python=${2:-python3.11}
+python=${2:-}
 project_root=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 mkdir -p "$root"
 root=$(CDPATH= cd -- "$root" && pwd)
+if [ -z "$python" ]; then
+  command -v uv >/dev/null 2>&1 || { echo 'Install uv to provision the standalone analysis runtime.' >&2; exit 1; }
+  mkdir -p "$root/python"
+  UV_PYTHON_INSTALL_DIR="$root/python" uv python install 3.11.15
+  python=$(UV_PYTHON_INSTALL_DIR="$root/python" uv python find --managed-python --no-project --resolve-links 3.11.15)
+fi
 "$python" -m venv "$root/venv"
 "$root/venv/bin/python" -m pip install -r "$project_root/tools/modernbooknlp_requirements.txt"
 archive="$root/upstream.tar.gz"

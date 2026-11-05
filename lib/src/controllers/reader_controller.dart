@@ -1,3 +1,6 @@
+import '../services/modernbooknlp_analysis.dart';
+import '../services/modernbooknlp_provider.dart';
+import '../services/modernbooknlp_runtime.dart';
 import '../services/character_analysis_adapter.dart';
 import '../services/work_character_store.dart';
 import '../models/speech_engine_catalog.dart';
@@ -75,6 +78,7 @@ class ReaderController extends ChangeNotifier {
   static const int _followerHardResyncWordDelta = 10;
 
   ReaderController({
+    ModernBookNlpAnalysis? characterAnalysis,
     DocumentImportService? importer,
     DocumentPreparationSupervisor? preparationSupervisor,
     ReaderDocumentRepository? documentRepository,
@@ -83,7 +87,10 @@ class ReaderController extends ChangeNotifier {
     TtsEngine? ttsEngine,
     TtsEngine Function(String, int)? engineFactory,
     bool enablePlatformIntakeChannels = true,
-  }) : _preparation =
+  }) : characterAnalysis =
+           characterAnalysis ??
+           ModernBookNlpAnalysis(createModernBookNlpProvider),
+       _preparation =
            preparationSupervisor ??
            DocumentPreparationSupervisor(
              testImporter: importer,
@@ -101,6 +108,30 @@ class ReaderController extends ChangeNotifier {
        _ttsEngine = ttsEngine ?? createDefaultTtsEngine(),
        _enablePlatformIntakeChannels = enablePlatformIntakeChannels,
        _document = ReaderDocument.sample();
+
+  final ModernBookNlpAnalysis characterAnalysis;
+  void _offerCharacterAnalysis() {
+    if (_preparedRanges.isEmpty) return;
+    final range = _activePreparedRange ?? _preparedRanges.first;
+    final text = range.fragment.speechDocument.segments
+        .map((s) => s.normalizedText)
+        .join('\n');
+    if (text.isEmpty) return;
+    // Never silently truncate a source window or split a UTF-16 surrogate.
+    // Preparation already produces bounded ranges; oversized ones are not admitted.
+    if (text.length > 16384) return;
+    characterAnalysis.offer(
+      ModernBookNlpRequest(
+        requestId: '$_preparationOwner-$_documentRevision-${range.sequence}',
+        ownerId: _preparationOwner,
+        workId: _sessionDocumentId ?? range.fragment.displayDocument.documentId,
+        sourceRevision: range.request.effectiveSourceRevision,
+        analysisRevision: _documentRevision,
+        sequence: range.sequence,
+        text: text,
+      ),
+    );
+  }
 
   DocumentPreparationSupervisor _preparation;
   final bool _useDefaultRepository;
@@ -665,6 +696,7 @@ class ReaderController extends ChangeNotifier {
   }
 
   int _beginDocumentRequest() {
+    characterAnalysis.invalidateWindow();
     ++_playbackIntent;
     _playbackStartPending = false;
     _invalidateResourceBindings();
@@ -890,6 +922,7 @@ class ReaderController extends ChangeNotifier {
         _publicationSequence = publication.sequence;
         _preparedWordCount = publication.range.wordEnd;
         _preparedRanges.add(publication);
+        _offerCharacterAnalysis();
         _signalRanges();
         for (final progress in publication.progress) {
           if (publication.coverage.contains(progress.stage) ||
@@ -2277,6 +2310,7 @@ class ReaderController extends ChangeNotifier {
               _finalizeActiveSpokenChunk();
               _document = range.fragment;
               _activePreparedRange = range;
+              _offerCharacterAnalysis();
               _currentWordIndex = 0;
               _utteranceStartOffset = 0;
               _currentPlanningContext = context;
@@ -3448,6 +3482,7 @@ class ReaderController extends ChangeNotifier {
 
   @override
   void dispose() {
+    characterAnalysis.dispose();
     unawaited(_planning.shutdown());
     unawaited(_exportPlanner?.shutdown());
     _disposed = true;
@@ -4045,6 +4080,7 @@ class ReaderController extends ChangeNotifier {
     ++_watchSession;
     await _cancelLiveReadWatch();
     await _preparation.shutdown();
+    await characterAnalysis.shutdown();
     await _sourceRevisionWork;
     await _documentExportWork;
   }

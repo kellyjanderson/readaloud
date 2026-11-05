@@ -93,6 +93,9 @@ flutter:
     - assets/fish_drama_models.json
     - assets/fish_voice_library.json
     - assets/mlx_tts_worker.py
+    - assets/modernbooknlp_worker.py
+    - assets/modernbooknlp_assets.py
+    - assets/modernbooknlp_models.json
     - assets/voice_library/
     - assets/kokoro/model/
     - assets/kokoro/voices/

@@ -62,4 +62,4 @@ app.*.map.json
 /android/app/release
 
 # Isolated optional NLP evaluation dependencies
-/.venv/
+/.venv

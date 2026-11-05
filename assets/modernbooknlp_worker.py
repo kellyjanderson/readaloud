@@ -1,6 +1,6 @@
 """Bounded, offline ModernBookNLP evaluation worker; no playback or voice writer.
 
-One JSON request on stdin, one JSON reply, then exit. The Dart owner can terminate
+One bounded request at a time; --serve retains the loaded pipeline between requests. The Dart owner can terminate
 and reap it out of band. Production default promotion remains a separate gate.
 """
 from __future__ import annotations
@@ -80,7 +80,7 @@ def decode_outputs(directory, text):
     return {'entities': list(entities.values()), 'quotes': quotes, 'tokenCount': len(tokens)}
 
 
-def load_pipeline(root):
+def load_pipeline(root, progress=lambda **values: None):
     manifest = json.loads((root / 'runtime.json').read_text())
     catalog = json.loads(Path(__file__).with_name('modernbooknlp_models.json').read_text())
     if (manifest.get('upstream') != UPSTREAM or manifest.get('schema') != 1
@@ -88,13 +88,15 @@ def load_pipeline(root):
         raise ValueError('Unsupported provider runtime')
     # Validate every component before importing constructors which otherwise fetch.
     # The application-owned installer records the hashes from its pinned artifacts.
-    for relative, digest in manifest['sha256'].items():
+    for index, (relative, digest) in enumerate(manifest['sha256'].items()):
         path = (root / relative).resolve()
         if not path.is_relative_to(root.resolve()) or not path.is_file():
             raise ValueError('Missing provider artifact: ' + relative)
         with path.open('rb') as file:
             if hashlib.file_digest(file, 'sha256').hexdigest() != digest:
                 raise ValueError('Provider artifact changed: ' + relative)
+        progress(stage='verify', completed=index + 1, total=len(manifest['sha256']), unit='files', message='Verifying analysis models')
+    progress(stage='load', completed=0, total=None, unit='models', message='Loading analysis model')
     os.environ.update(HF_HUB_OFFLINE='1', TRANSFORMERS_OFFLINE='1',
                       TOKENIZERS_PARALLELISM='false', READALOUD_BOOKNLP_HOME=str(root),
                       READALOUD_MODERNBERT=str(root / manifest['encoder']),
@@ -143,33 +145,63 @@ def analyze(pipeline, request):
 
 def main():
     protocol = sys.stdout
-    request = {}
-    try:
+    pipeline = manifest = None
+    serving = '--serve' in sys.argv
+    while True:
         raw = sys.stdin.buffer.readline(128 * 1024 + 1)
-        if len(raw) > 128 * 1024:
-            raise ValueError('Request too large')
-        request = json.loads(raw)
-        validate_request(request)
-        started = time.monotonic()
-        with contextlib.redirect_stdout(sys.stderr):
-            pipeline, manifest = load_pipeline(Path(sys.argv[1]).resolve())
-            loaded = time.monotonic()
-            result = analyze(pipeline, request)
-        reply = {key: request[key] for key in ('requestId', 'ownerId', 'workId', 'sourceRevision', 'analysisRevision', 'sequence')}
-        reply.update(schema=1, ok=True, providerId='modernbooknlp-joint', providerVersion=UPSTREAM,
-                     modelIdentity=manifest['modelIdentity'], adapterVersion=ADAPTER_VERSION, **result,
-                     loadSeconds=loaded-started, inferenceSeconds=time.monotonic()-loaded,
-                     peakRssBytes=resource.getrusage(resource.RUSAGE_SELF).ru_maxrss * (1 if sys.platform == 'darwin' else 1024))
-    except Exception as error:
-        reply = {'schema': 1, 'requestId': request.get('requestId'), 'ok': False,
-                 'error': f'{type(error).__name__}: {error}'}
-        import traceback
-        traceback.print_exc(file=sys.stderr)
-    encoded = json.dumps(reply)
-    if len(encoded.encode()) > MAX_OUTPUT:
-        encoded = json.dumps({'ok': False, 'requestId': request.get('requestId'), 'error': 'Provider output exceeded bound'})
-    protocol.write(encoded + '\n')
-    protocol.flush()
+        if not raw:
+            break
+        request = {}
+        failed = False
+        try:
+            if len(raw) > 128 * 1024:
+                raise ValueError('Request too large')
+            request = json.loads(raw)
+            if not isinstance(request.get('requestId'), str) or len(request['requestId']) > 512:
+                raise ValueError('Missing bounded request identity')
+            def progress(**values):
+                if serving:
+                    protocol.write(json.dumps({'requestId': request['requestId'], 'type': 'progress', **values}) + '\n')
+                    protocol.flush()
+            started = time.monotonic()
+            reused = pipeline is not None
+            command = request.get('command', 'analyze')
+            with contextlib.redirect_stdout(sys.stderr):
+                if command == 'prepare':
+                    from modernbooknlp_assets import prepare
+                    prepare(Path(sys.argv[1]), offline=request.get('offline', False), progress=progress)
+                elif command == 'analyze':
+                    validate_request(request)
+                else:
+                    raise ValueError('Unknown provider command')
+                if pipeline is None:
+                    pipeline, manifest = load_pipeline(Path(sys.argv[1]).resolve(), progress)
+                loaded = time.monotonic()
+                if command == 'analyze':
+                    progress(stage='analyze', completed=0, total=None, unit='windows', message='Analyzing the current reading window')
+                    result = analyze(pipeline, request)
+                else:
+                    result = {}
+            reply = {key: request[key] for key in ('requestId', 'ownerId', 'workId', 'sourceRevision', 'analysisRevision', 'sequence') if key in request}
+            reply.update(schema=1, ok=True, providerId='modernbooknlp-joint', providerVersion=UPSTREAM,
+                         modelIdentity=manifest['modelIdentity'], adapterVersion=ADAPTER_VERSION, **result,
+                         reusedModel=reused, processId=os.getpid(),
+                         loadSeconds=loaded-started, inferenceSeconds=time.monotonic()-loaded,
+                         peakRssBytes=resource.getrusage(resource.RUSAGE_SELF).ru_maxrss * (1 if sys.platform == 'darwin' else 1024))
+        except Exception as error:
+            failed = True
+            reply = {'schema': 1, 'requestId': request.get('requestId'), 'ok': False,
+                     'error': f'{type(error).__name__}: {error}'}
+            import traceback
+            traceback.print_exc(file=sys.stderr)
+        encoded = json.dumps(reply)
+        if len(encoded.encode()) > MAX_OUTPUT:
+            failed = True
+            encoded = json.dumps({'ok': False, 'requestId': request.get('requestId'), 'error': 'Provider output exceeded bound'})
+        protocol.write(encoded + '\n')
+        protocol.flush()
+        if not serving or failed:
+            break
 
 
 if __name__ == '__main__':
