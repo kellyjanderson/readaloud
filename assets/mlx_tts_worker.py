@@ -350,6 +350,34 @@ def _reference_inputs(request: dict[str, Any]) -> tuple[str, str]:
     return reference, transcript
 
 
+def _drama_reference_inputs(request: dict[str, Any], text: str):
+    """Lower stable app voice IDs to native scene slots; MLX owns conditioning.
+
+    Use the same ordered reference set across turns so its existing content cache
+    can reuse encodings/prefixes. No tensors or history cache cross this boundary.
+    """
+    references = request.get('references')
+    if references is None:
+        reference, transcript = _reference_inputs(request)
+        return text, reference, transcript
+    if not isinstance(references, list) or not 1 <= len(references) <= 16:
+        raise ValueError('Drama requires a bounded reference set of 1 to 16 voices.')
+    audios, transcripts, voices = [], [], []
+    for slot, item in enumerate(references):
+        if not isinstance(item, dict) or item.get('voice') in voices:
+            raise ValueError('Drama reference voices must be unique objects.')
+        audio, transcript = _reference_inputs(item)
+        if '<|speaker:' in transcript:
+            raise ValueError('Reference transcripts must not supply speaker slots.')
+        audios.append(audio)
+        transcripts.append(f'<|speaker:{slot}|> {transcript}')
+        voices.append(item['voice'])
+    if request.get('voice') not in voices:
+        raise ValueError('Selected voice is absent from the Drama reference set.')
+    slot = voices.index(request['voice'])
+    return f'<|speaker:{slot}|> {text}', audios, transcripts
+
+
 def _synthesize(request: dict[str, Any]) -> dict[str, Any]:
     if _model is None or _model_id is None:
         raise RuntimeError("No MLX TTS model is loaded.")
@@ -392,7 +420,7 @@ def _synthesize(request: dict[str, Any]) -> dict[str, Any]:
             _model.generate(text=text, voice=voice, stream=False, verbose=False)
         )
     elif _model_id in DRAMA_MODELS:
-        reference, transcript = _reference_inputs(request)
+        text, reference, transcript = _drama_reference_inputs(request, text)
         results = _model.generate(text=text, ref_audio=reference, ref_text=transcript,
                                   stream=True, first_chunk_frames=4)
     else:

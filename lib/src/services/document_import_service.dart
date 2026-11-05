@@ -20,6 +20,7 @@ import '../models/normalized_import_result.dart';
 import '../models/position_map.dart';
 import '../models/reader_document.dart';
 import '../models/speech_document.dart';
+import '../models/speech_annotation.dart';
 import 'base_speech_annotation_inference_service.dart';
 import 'character_cast_registry_service.dart';
 import 'document_voice_attribution_service.dart';
@@ -203,10 +204,12 @@ class DocumentImportService {
 
   CharacterCastRegistry? _incrementalRegistry;
   List<SpeechSegment> _precedingSegments = const [];
+  List<SpeechAnnotation> _precedingDialogueAnnotations = const [];
   String? _incrementalSession;
   bool _buildingFragment = false;
   List<SpeechSegment> _followingSegments = const [];
   String _fragmentIdentityNamespace = '';
+  void Function(CharacterCastRegistry)? _onCharacterDiscovery;
 
   /// Worker-owned bounded adapter. Range-local IDs never alias earlier ranges.
   /// The publication envelope carries global coordinates without re-importing
@@ -216,6 +219,7 @@ class DocumentImportService {
     required String title,
     required String sessionId,
     required int sourceStart,
+    void Function(CharacterCastRegistry)? onCharacterDiscovery,
     DocumentImportUnit? unit,
     DocumentImportUnit? followingUnit,
     String? completeSourceFingerprint,
@@ -224,6 +228,7 @@ class DocumentImportService {
       _incrementalSession = sessionId;
       _incrementalRegistry = null;
       _precedingSegments = const [];
+      _precedingDialogueAnnotations = const [];
     }
     final recovered = _recoverPlainTextStructure(text);
     _followingSegments = const [];
@@ -244,6 +249,7 @@ class DocumentImportService {
     }
     _fragmentIdentityNamespace = 'r${sourceStart}_';
     _buildingFragment = true;
+    _onCharacterDiscovery = onCharacterDiscovery;
     try {
       return _buildReaderDocument(
         title: title,
@@ -260,6 +266,7 @@ class DocumentImportService {
       );
     } finally {
       _buildingFragment = false;
+      _onCharacterDiscovery = null;
       _followingSegments = const [];
     }
   }
@@ -1032,9 +1039,44 @@ class DocumentImportService {
       speechDocument: normalized.speechDocument,
       displayDocument: normalized.displayDocument,
     );
+    final discovered = _characterCastRegistryService.discover(
+      speechDocument: normalized.speechDocument,
+      speakers: _speakerAttributionService.discoverSpeakers(
+        normalized.speechDocument,
+      ),
+      previousRegistry: _buildingFragment ? _incrementalRegistry : null,
+    );
+    final currentSegmentIds = normalized.speechDocument.segments
+        .map((segment) => segment.segmentId)
+        .toSet();
+    final discoveredHere = discovered.entries
+        .where(
+          (entry) =>
+              entry.roleKind == CastEntryRoleKind.narrator ||
+              entry.identityProfile?.evidenceSpans.any(
+                    (span) => currentSegmentIds.contains(span.segmentId),
+                  ) ==
+                  true ||
+              !(_incrementalRegistry?.entries.any(
+                    (old) => old.castId == entry.castId,
+                  ) ??
+                  false),
+        )
+        .toList();
+    _onCharacterDiscovery?.call(
+      CharacterCastRegistry(
+        documentId: discovered.documentId,
+        registryVersion: discovered.registryVersion,
+        entries: discoveredHere,
+        castIdRedirects: discovered.castIdRedirects,
+      ),
+    );
     final dialogueAttributions = _speakerAttributionService.attribute(
       speechDocument: normalized.speechDocument,
       baseAnnotations: baseSpeechAnnotations,
+      contextAnnotations: _buildingFragment
+          ? _precedingDialogueAnnotations
+          : const [],
       contextSegments: _buildingFragment ? _precedingSegments : const [],
       followingContextSegments: _buildingFragment
           ? _followingSegments
@@ -1043,7 +1085,16 @@ class DocumentImportService {
     var characterCastRegistry = _characterCastRegistryService.build(
       dialogueAttributions: dialogueAttributions,
       speechDocument: normalized.speechDocument,
-      previousRegistry: _buildingFragment ? _incrementalRegistry : null,
+      previousRegistry: discovered,
+      // Halos can add evidence absent from the fast current-range pass.
+      discoveredProfiles:
+          _precedingSegments.isEmpty && _followingSegments.isEmpty
+          ? {
+              for (final entry in discovered.characterEntries)
+                if (entry.identityProfile != null)
+                  entry.castId: entry.identityProfile!,
+            }
+          : const {},
       contextSegments: _buildingFragment ? _precedingSegments : const [],
       followingContextSegments: _buildingFragment
           ? _followingSegments
@@ -1090,6 +1141,15 @@ class DocumentImportService {
       ];
       _precedingSegments = List.unmodifiable(
         context.skip(math.max(0, context.length - 12)),
+      );
+      final retainedIds = _precedingSegments.map((s) => s.segmentId).toSet();
+      _precedingDialogueAnnotations = List.unmodifiable(
+        [
+          ..._precedingDialogueAnnotations,
+          ...baseSpeechAnnotations.annotations.where(
+            (a) => a.kind == SpeechAnnotationKind.dialogueSpan,
+          ),
+        ].where((a) => retainedIds.contains(a.segmentId)),
       );
     }
     final documentVoiceAttribution = _documentVoiceAttributionService.build(

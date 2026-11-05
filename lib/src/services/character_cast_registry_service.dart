@@ -7,7 +7,70 @@ import '../models/speech_document.dart';
 class CharacterCastRegistryService {
   const CharacterCastRegistryService();
 
-  static const registryVersion = 'read-aloud-character-cast-registry-v3';
+  static const registryVersion = 'read-aloud-character-cast-registry-v4';
+
+  /// Fast entities use the same IDs and evidence type as refined attribution.
+  /// This pass cannot make a provisional voice choice into a user assignment.
+  CharacterCastRegistry discover({
+    required SpeechDocument speechDocument,
+    required List<SpeakerReference> speakers,
+    CharacterCastRegistry? previousRegistry,
+  }) {
+    final entries = <String, CastEntry>{
+      'cast_narrator': CastEntry(
+        castId: 'cast_narrator',
+        roleKind: CastEntryRoleKind.narrator,
+        displayLabel: 'Narrator',
+        confidence: 1,
+        provenance: CastEntryProvenance.syntheticNarrator,
+      ),
+      for (final entry in previousRegistry?.characterEntries ?? <CastEntry>[])
+        entry.castId: entry,
+    };
+    for (final speaker in speakers) {
+      final id = _castIdForNormalizedLabel(speaker.normalizedLabel);
+      final prior = entries[id];
+      final aliases = {
+        ...?prior?.observedAliases,
+        speaker.displayLabel,
+      }.toList();
+      entries[id] = CastEntry(
+        castId: id,
+        roleKind: CastEntryRoleKind.character,
+        displayLabel: prior?.displayLabel ?? speaker.displayLabel,
+        confidence: prior?.confidence ?? 0.8,
+        provenance: CastEntryProvenance.attributedDialogueInference,
+        observedAliases: aliases,
+        attributionIds: prior?.attributionIds ?? const [],
+        identityProfile: prior?.identityProfile,
+      );
+    }
+    return CharacterCastRegistry(
+      documentId: speechDocument.documentId,
+      registryVersion: registryVersion,
+      entries: entries.values
+          .map(
+            (entry) => entry.roleKind == CastEntryRoleKind.narrator
+                ? entry
+                : CastEntry(
+                    castId: entry.castId,
+                    roleKind: entry.roleKind,
+                    displayLabel: entry.displayLabel,
+                    confidence: entry.confidence,
+                    provenance: entry.provenance,
+                    observedAliases: entry.observedAliases,
+                    attributionIds: entry.attributionIds,
+                    identityProfile: inferIdentity(
+                      speechDocument: speechDocument,
+                      aliases: entry.observedAliases,
+                      previousProfile: entry.identityProfile,
+                    ),
+                  ),
+          )
+          .toList(),
+      castIdRedirects: previousRegistry?.castIdRedirects ?? const {},
+    );
+  }
 
   CharacterCastRegistry build({
     required DialogueAttributionSet dialogueAttributions,
@@ -15,6 +78,7 @@ class CharacterCastRegistryService {
     CharacterCastRegistry? previousRegistry,
     List<SpeechSegment> contextSegments = const [],
     List<SpeechSegment> followingContextSegments = const [],
+    Map<String, CharacterIdentityProfile> discoveredProfiles = const {},
   }) {
     if (contextSegments.length > 12 || followingContextSegments.length > 12) {
       throw ArgumentError(
@@ -113,18 +177,20 @@ class CharacterCastRegistryService {
       for (final retired in priorMatches.skip(1)) {
         redirects[retired.castId] = prior!.castId;
       }
-      final identityProfile = inferIdentity(
-        speechDocument: priorMatches.isEmpty
-            ? identityDocument
-            : speechDocument,
-        aliases: aliases,
-        previousProfile: _mergeProfiles(
-          priorMatches
-              .map((entry) => entry.identityProfile)
-              .whereType<CharacterIdentityProfile>()
-              .toList(),
-        ),
-      );
+      final identityProfile =
+          (priorMatches.length <= 1
+              ? discoveredProfiles[prior?.castId]
+              : null) ??
+          inferIdentity(
+            speechDocument: identityDocument,
+            aliases: aliases,
+            previousProfile: _mergeProfiles(
+              priorMatches
+                  .map((entry) => entry.identityProfile)
+                  .whereType<CharacterIdentityProfile>()
+                  .toList(),
+            ),
+          );
       entries.add(
         CastEntry(
           castId:
@@ -170,11 +236,13 @@ class CharacterCastRegistryService {
             provenance: entry.provenance,
             observedAliases: entry.observedAliases,
             attributionIds: entry.attributionIds,
-            identityProfile: inferIdentity(
-              speechDocument: speechDocument,
-              aliases: entry.observedAliases,
-              previousProfile: entry.identityProfile,
-            ),
+            identityProfile:
+                discoveredProfiles[entry.castId] ??
+                inferIdentity(
+                  speechDocument: identityDocument,
+                  aliases: entry.observedAliases,
+                  previousProfile: entry.identityProfile,
+                ),
           ),
         );
       }
@@ -373,7 +441,7 @@ class CharacterCastRegistryService {
         continue;
       }
       final match = RegExp(
-        r'^\s*(He|She|They)\b',
+        r'^\s*(He|She|They|His|Her|Their)\b',
       ).firstMatch(segment.normalizedText);
       if (match == null) continue;
       final names = RegExp(r"\b[A-Z][A-Za-z'’-]+\b")
@@ -402,6 +470,20 @@ class CharacterCastRegistryService {
               'for',
               'in',
               'on',
+              'monday',
+              'tuesday',
+              'wednesday',
+              'thursday',
+              'friday',
+              'saturday',
+              'sunday',
+              'mondays',
+              'tuesdays',
+              'wednesdays',
+              'thursdays',
+              'fridays',
+              'saturdays',
+              'sundays',
             }.contains(name),
           )
           .toSet();

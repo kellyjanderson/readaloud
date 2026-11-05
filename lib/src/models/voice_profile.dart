@@ -15,6 +15,7 @@ class VoiceProfile {
     this.traits = const <String>[],
     this.description,
     this.metadataSource = VoiceMetadataSource.platformProvided,
+    this.automaticSelectionPriority = 0,
   });
 
   final String id;
@@ -28,6 +29,24 @@ class VoiceProfile {
   final List<String> traits;
   final String? description;
   final VoiceMetadataSource metadataSource;
+
+  /// Engine-owned preference among compatible voices, never a gender override.
+  final int automaticSelectionPriority;
+
+  VoiceProfile withAutomaticSelectionPriority(int priority) => VoiceProfile(
+    id: id,
+    label: label,
+    locale: locale,
+    rawValue: rawValue,
+    gender: gender,
+    qualityGrade: qualityGrade,
+    targetQuality: targetQuality,
+    trainingDurationLabel: trainingDurationLabel,
+    traits: traits,
+    description: description,
+    metadataSource: metadataSource,
+    automaticSelectionPriority: priority,
+  );
 
   String get displayName => locale.isEmpty ? label : '$label ($locale)';
 

@@ -16,7 +16,8 @@ import 'tts_engine.dart';
 import 'mlx_voice_library.dart';
 
 const String mlxTtsModelVersion = 'mlx-audio-0.6.3-mlx-0.32.4-complete-v3';
-String mlxTtsVersionFor(int bits) => '$mlxTtsModelVersion-q$bits';
+String mlxTtsVersionFor(int bits, {String? engineId}) =>
+    '$mlxTtsModelVersion-q$bits${isDramaEngine(engineId ?? '') ? '-native-cast-v1' : ''}';
 const MethodChannel _mlxLifecycleChannel = MethodChannel(
   'read_aloud/mlx_tts_lifecycle',
 );
@@ -170,10 +171,13 @@ class MlxSpeechWorkerChunkProcessor
         }),
         modelDigest: artifactIdentity(<String, Object?>{
           'engineId': engineId,
-          'engineVersion': mlxTtsVersionFor(quantizationBits),
+          'engineVersion': mlxTtsVersionFor(
+            quantizationBits,
+            engineId: engineId,
+          ),
           'modelIdentity': _modelIdentity,
         }),
-        engineVersion: mlxTtsVersionFor(quantizationBits),
+        engineVersion: mlxTtsVersionFor(quantizationBits, engineId: engineId),
         pronunciationProfileId: pronunciationProfileId,
         bindingRevision: revision,
         documentId: documentId,
@@ -445,14 +449,47 @@ class MlxSpeechWorkerChunkProcessor
         );
         return;
       }
+      final referenceIds = isDramaEngine(engineId)
+          ? (_bindings.values
+                .where(
+                  (b) =>
+                      b.documentId == request.documentId &&
+                      b.bindingRevision == binding.bindingRevision,
+                )
+                .map((b) => b.voiceId)
+                .toList()
+              ..sort())
+          : <String>[];
+      // Fish slots are scene-local. Partition large casts rather than imposing
+      // the backend's 16-slot limit on the work or falling back to another voice.
+      final firstReference = referenceIds.isEmpty
+          ? 0
+          : (referenceIds.indexOf(request.voiceId) ~/ 16) * 16;
+      final references = referenceIds
+          .skip(firstReference)
+          .take(16)
+          .map(
+            (id) => <String, Object?>{
+              'voice': id,
+              'referenceAudioPath': _referencePaths[id],
+              'referenceText': MlxVoiceLibrary.voice(
+                id,
+              ).rawValue['referenceText'],
+            },
+          )
+          .toList();
       final identity = artifactIdentity(<String, Object?>{
         'schema': 'mlx-python-raw-v1',
         'engineId': engineId,
-        'engineVersion': mlxTtsVersionFor(quantizationBits),
+        'engineVersion': mlxTtsVersionFor(quantizationBits, engineId: engineId),
         'modelIdentity': _modelIdentity,
         'cacheKey': request.cacheKey,
         'voiceId': request.voiceId,
         'voiceDigest': binding.voiceDigest,
+        if (references.isNotEmpty)
+          'referenceSet': [
+            for (final ref in references) _bindings[ref['voice']]!.voiceDigest,
+          ],
         'rate': request.rate.toString(),
         'language': request.languageTag,
         'speakText': request.speakText,
@@ -521,6 +558,7 @@ class MlxSpeechWorkerChunkProcessor
           text: request.speakText,
           voice: _nativeVoice(engineId, request.voiceId),
           referenceAudioPath: _referencePaths[request.voiceId],
+          references: references.isEmpty ? null : references,
           referenceText: usesReferenceVoiceLibrary(engineId)
               ? MlxVoiceLibrary.voice(request.voiceId).rawValue['referenceText']
                     as String
@@ -689,6 +727,7 @@ class MlxTtsPythonProcess {
     required String? voice,
     String? referenceAudioPath,
     String? referenceText,
+    List<Map<String, Object?>>? references,
     required String language,
     required String outputPath,
   }) => _request(<String, Object?>{
@@ -704,6 +743,7 @@ class MlxTtsPythonProcess {
     'voice': voice,
     'referenceAudioPath': referenceAudioPath,
     'referenceText': referenceText,
+    'references': ?references,
     'language': language,
     'outputPath': outputPath,
   }, timeout: const Duration(minutes: 5));
@@ -998,12 +1038,16 @@ List<VoiceProfile> mlxVoicesFor(String engineId) {
   if (isDramaEngine(engineId)) {
     final voices = MlxVoiceLibrary.profiles;
     return [
-      ...voices.where((v) => v.id == 'library_fishadrian'),
-      ...voices.where(
-        (v) =>
-            v.rawValue['provider'] == 'Fish Official' &&
-            v.id != 'library_fishadrian',
-      ),
+      ...voices
+          .where((v) => v.id == 'library_fishadrian')
+          .map((v) => v.withAutomaticSelectionPriority(1)),
+      ...voices
+          .where(
+            (v) =>
+                v.rawValue['provider'] == 'Fish Official' &&
+                v.id != 'library_fishadrian',
+          )
+          .map((v) => v.withAutomaticSelectionPriority(1)),
       ...voices.where((v) => v.rawValue['provider'] != 'Fish Official'),
     ];
   }

@@ -62,7 +62,7 @@ class KokoroTtsEngine
        _engineId = engineId,
        _engineVersion = engineId == 'kokoro'
            ? '12'
-           : mlxTtsVersionFor(mlxQuantizationBits),
+           : mlxTtsVersionFor(mlxQuantizationBits, engineId: engineId),
        _mlxQuantizationBits = mlxQuantizationBits,
        _mlxModelPath = mlxModelPath ?? '',
        _mlxPythonPath = mlxPythonPath ?? '',
