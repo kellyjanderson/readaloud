@@ -541,7 +541,8 @@ class _VoiceAssignmentCard extends StatelessWidget {
     final qualityLabel =
         selectedVoice?.qualityGrade ?? selectedVoice?.targetQuality;
     final hasExplicitOverride =
-        assignment?.decisionKind == VoiceAssignmentDecisionKind.userOverride;
+        assignment?.userOverrideVoiceId != null ||
+        assignment?.storedVoiceId != null;
 
     return DecoratedBox(
       key: Key('voice-assignment-card-$label'),

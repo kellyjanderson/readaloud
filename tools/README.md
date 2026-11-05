@@ -39,3 +39,13 @@ test app when finished. A probe result is not general audible-product acceptance
 Ruby `*_test.rb` files exercise their adjacent tool. Run Python tooling using the
 managed environment documented in the MLX guide. Voice-generation and runtime
 installation tools modify assets or environments; they are not cleanup commands.
+
+`character_storage_smoke.dart` exercises the real macOS preferences/path-provider
+plugins and per-work migration without loading speech models. Build it as a target
+with `build_macos_release.sh`, copy the result, give the copy a fresh bundle ID
+containing `characterStorageTest`, and re-sign with `Runner/Release.entitlements`.
+Never run this target with the production identity. Pass one sandbox-writable JSON
+receipt path to its executable; it refuses existing work storage. It seeds two
+synthetic works, migrates, resets/reopens, removes one work file and verifies the
+other work and global engine are unchanged. After the receipt, use normal Quit and
+verify exit. This proves storage behavior, not attribution or audible Fish switching.

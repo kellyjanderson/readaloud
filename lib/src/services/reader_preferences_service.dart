@@ -1,5 +1,7 @@
 import 'dart:convert';
-import 'dart:isolate';
+import 'package:path/path.dart' as p;
+import 'package:path_provider/path_provider.dart';
+import 'work_character_repository.dart';
 
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -54,6 +56,49 @@ class ReaderPreferences {
 }
 
 class ReaderPreferencesService {
+  ReaderPreferencesService({WorkCharacterRepository? workRepository})
+    : _providedRepository = workRepository;
+  final WorkCharacterRepository? _providedRepository;
+  Future<WorkCharacterRepository>? _repositoryFuture;
+  StoredWorkCharacters? _workState;
+  Future<WorkCharacterRepository> _repository() =>
+      _repositoryFuture ??= () async {
+        if (_providedRepository != null) return _providedRepository;
+        final support = await getApplicationSupportDirectory();
+        return WorkCharacterRepository(p.join(support.path, 'works'));
+      }();
+
+  Future<StoredWorkCharacters> _loadWorks(SharedPreferences preferences) async {
+    try {
+      final repository = await _repository();
+      final state = await repository.load(
+        legacyCharacters: preferences.getString(_characterSnapshotKey),
+        legacyChoices: preferences.getString(
+          _storedDocumentCastVoiceAssignmentsKey,
+        ),
+        legacySourceIds: preferences.getString(_sourceVoiceDocumentIdsKey),
+      );
+      // The repository's validated completion marker makes retries authoritative
+      // even if a process exits halfway through retiring these legacy keys.
+      for (final key in [
+        _characterSnapshotKey,
+        _storedDocumentCastVoiceAssignmentsKey,
+        _sourceVoiceDocumentIdsKey,
+      ]) {
+        if (preferences.containsKey(key) && !await preferences.remove(key)) {
+          throw StateError(
+            'Could not retire migrated character preference $key',
+          );
+        }
+      }
+      _characterLoadError = null;
+      return _workState = state;
+    } catch (error) {
+      _characterLoadError = error;
+      rethrow;
+    }
+  }
+
   static const _voxtralBitsKey = 'reader.voxtralQuantizationBits';
   static const String _selectedVoiceIdKey = 'reader.selectedVoiceId';
   static const String _ttsEngineIdKey = 'reader.ttsEngineId';
@@ -80,22 +125,9 @@ class ReaderPreferencesService {
 
   Future<ReaderPreferences> load() async {
     final preferences = await SharedPreferences.getInstance();
-    CharacterStoreSnapshot? snapshot;
-    try {
-      final text = preferences.getString(_characterSnapshotKey);
-      snapshot = text == null
-          ? null
-          : await Isolate.run(
-              () => WorkCharacterStore.fromJson(
-                (jsonDecode(text) as Map).cast<String, dynamic>(),
-              ).snapshot(),
-            );
-      _characterLoadError = null;
-    } catch (error) {
-      _characterLoadError = error;
-      rethrow;
-    }
-    final characters = snapshot?.restore();
+    final workState = await _loadWorks(preferences);
+    final snapshot = workState.snapshot;
+    final characters = snapshot.restore();
     return ReaderPreferences(
       voxtralQuantizationBits: preferences.getInt(_voxtralBitsKey) == 4 ? 4 : 0,
       ttsEngineId:
@@ -115,15 +147,9 @@ class ReaderPreferencesService {
       multiVoiceEnabled:
           preferences.getBool(_multiVoiceEnabledKey) ??
           ReaderPreferences.defaultMultiVoiceEnabled,
-      storedDocumentCastVoiceAssignments:
-          characters?.legacySelections ??
-          _decodeStoredDocumentCastVoiceAssignments(
-            preferences.getString(_storedDocumentCastVoiceAssignmentsKey),
-          ),
+      storedDocumentCastVoiceAssignments: characters.legacySelections,
       characterSnapshot: snapshot,
-      sourceVoiceDocumentIds: _decodeStringMap(
-        preferences.getString(_sourceVoiceDocumentIdsKey),
-      ),
+      sourceVoiceDocumentIds: workState.sourceIds,
       resumeState: _decodeResumeState(preferences.getString(_resumeStateKey)),
       lastOpenedDocumentPath: preferences.getString(_lastOpenedDocumentPathKey),
       lastOpenedDocumentAccessToken: preferences.getString(
@@ -182,24 +208,14 @@ class ReaderPreferencesService {
     );
     await preferences.setBool(_multiVoiceEnabledKey, multiVoiceEnabled);
     await preferences.setString(_voiceSpeedsKey, jsonEncode(voiceSpeeds));
-    if (characterSnapshot != null) {
-      final encoded = await Isolate.run(
-        () => jsonEncode(characterSnapshot.toJson()),
-      );
-      final saved = await preferences.setString(_characterSnapshotKey, encoded);
-      if (!saved) throw StateError('Could not persist character choices');
-      // Legacy preferences are migration input only. Never keep two writers.
-      await preferences.remove(_storedDocumentCastVoiceAssignmentsKey);
-    } else {
-      await preferences.setString(
-        _storedDocumentCastVoiceAssignmentsKey,
-        jsonEncode(storedDocumentCastVoiceAssignments),
-      );
-    }
-    await preferences.setString(
-      _sourceVoiceDocumentIdsKey,
-      jsonEncode(sourceVoiceDocumentIds),
-    );
+    final previous = _workState ?? await _loadWorks(preferences);
+    final snapshot =
+        characterSnapshot ??
+        (previous.snapshot.restore()
+              ..migrateLegacy(storedDocumentCastVoiceAssignments))
+            .snapshot();
+    await (await _repository()).save(snapshot, sourceVoiceDocumentIds);
+    _workState = StoredWorkCharacters(snapshot, sourceVoiceDocumentIds);
     if (resumeState == null) {
       await preferences.remove(_resumeStateKey);
     } else {
@@ -282,64 +298,6 @@ class ReaderPreferencesService {
       return ReaderResumeState.fromJson(jsonDecode(rawValue));
     } catch (_) {
       return null;
-    }
-  }
-
-  Map<String, String> _decodeStringMap(String? raw) {
-    if (raw == null) return {};
-    try {
-      final decoded = jsonDecode(raw);
-      if (decoded is! Map<String, dynamic>) return {};
-      return {
-        for (final entry in decoded.entries)
-          if (entry.key.isNotEmpty &&
-              entry.value is String &&
-              (entry.value as String).isNotEmpty)
-            entry.key: entry.value as String,
-      };
-    } on FormatException {
-      return {};
-    }
-  }
-
-  Map<String, Map<String, String>> _decodeStoredDocumentCastVoiceAssignments(
-    String? rawValue,
-  ) {
-    if (rawValue == null || rawValue.isEmpty) {
-      return <String, Map<String, String>>{};
-    }
-
-    try {
-      final decoded = jsonDecode(rawValue);
-      if (decoded is! Map<String, dynamic>) {
-        return <String, Map<String, String>>{};
-      }
-
-      final result = <String, Map<String, String>>{};
-      for (final entry in decoded.entries) {
-        final documentId = entry.key.trim();
-        final castAssignments = entry.value;
-        if (documentId.isEmpty || castAssignments is! Map<String, dynamic>) {
-          continue;
-        }
-
-        final normalizedAssignments = <String, String>{};
-        for (final castEntry in castAssignments.entries) {
-          final castId = castEntry.key.trim();
-          final voiceId = (castEntry.value as String?)?.trim();
-          if (castId.isEmpty || voiceId == null || voiceId.isEmpty) {
-            continue;
-          }
-          normalizedAssignments[castId] = voiceId;
-        }
-
-        if (normalizedAssignments.isNotEmpty) {
-          result[documentId] = normalizedAssignments;
-        }
-      }
-      return result;
-    } catch (_) {
-      return <String, Map<String, String>>{};
     }
   }
 }
