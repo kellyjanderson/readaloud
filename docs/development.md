@@ -23,7 +23,7 @@ Run focused tests first when changing one subsystem. Native session lifetime, ac
 The expandable voice-selection contract uses stable `VS` case IDs. Run:
 
 ```sh
-tools/flutter test test/character_voice_selection_contract_test.dart test/reader_document_serialization_service_test.dart test/reader_preferences_service_test.dart test/reader_voice_assignment_revision_test.dart
+tools/flutter test test/character_voice_selection_contract_test.dart test/character_analysis_adapter_test.dart test/reader_document_serialization_service_test.dart test/reader_preferences_service_test.dart test/reader_voice_assignment_revision_test.dart
 ```
 
 Keep these cases when replacing attribution providers. Add prose-to-character
@@ -64,3 +64,10 @@ For an isolated export baseline, add `PRODUCT_BUNDLE_IDENTIFIER=com.kellyjanders
 ## Resident resource validation
 
 Build the P2 lifetime probe with `tools/flutter build macos --debug -t tools/p2_native_probe.dart`, then use the command-scoped Xcode workaround above with `PRODUCT_BUNDLE_IDENTIFIER=com.kellyjanderson.readAloud.p2`. Run `ruby tools/run_p2_native_probe.rb <app-executable> <new-container-output-directory>`, choosing a new path inside `~/Library/Containers/com.kellyjanderson.readAloud.p2/Data/tmp/`. It runs 300 uncached A/B/A chunks and six close-cycle chunks, records actual asset/PCM hashes and RSS, requires native session/tensor bounds and normal close, and strictly decodes every WAV with ffmpeg. Model weights remain local prerequisites. This probe establishes resource lifetime and emitted PCM validity; it does not establish audible continuity or provider quality. Restore the ordinary app entry point before subsequent user-interface builds.
+
+For the automatic-selection native case, add `READALOUD_SMOKE_AUTO_VOICE_CHANGE=1`
+to the existing named-character City excerpt probe. It selects another compatible
+Fish voice during active playback, never calls Apply, and requires a current engine
+acknowledgment, new selected binding and a completed selected-character turn.
+This proves the routing path, not perceived age/timbre or smooth switching. Keep
+`READALOUD_SMOKE_NORMAL_QUIT=1` and verify the cleanup receipt.

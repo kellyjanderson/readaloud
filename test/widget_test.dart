@@ -407,34 +407,24 @@ void main() {
       controller.updateAssignment(VoiceAssignmentPhase.pending);
       await tester.pump();
       expect(
-        find.text('Pending voice change — open Character Voices to apply'),
+        find.text('Voice selection saved — ready for Play'),
         findsOneWidget,
       );
       await tester.tap(find.byKey(const Key('character-voices-entry')));
       await tester.pumpAndSettle();
       expect(find.text('Current: Bella (en-US)'), findsOneWidget);
       expect(find.text('Pending: am_michael'), findsOneWidget);
-      await tester.tap(find.text('Apply and replay current chunk'));
-      await tester.pump();
-      expect(controller.applyCalls, 1);
+      expect(find.byKey(const Key('apply-voice-assignments')), findsNothing);
       controller.updateAssignment(
         VoiceAssignmentPhase.preparing,
         initial: true,
       );
       await tester.pump();
-      expect(
-        tester
-            .widget<FilledButton>(
-              find.byKey(const Key('apply-voice-assignments')),
-            )
-            .onPressed,
-        isNull,
-      );
+      expect(find.byKey(const Key('retry-voice-assignments')), findsNothing);
       controller.updateAssignment(VoiceAssignmentPhase.failed);
       await tester.pump();
       await tester.tap(find.text('Retry voice change'));
       expect(controller.retryCalls, 1);
-      expect(controller.applyCalls, 1);
       expect(tester.takeException(), isNull);
     },
   );
@@ -955,7 +945,6 @@ class _AssignmentUiController extends ReaderController {
         enablePlatformIntakeChannels: false,
       );
   VoiceAssignmentState snapshot = VoiceAssignmentState();
-  int applyCalls = 0;
   int retryCalls = 0;
   @override
   VoiceAssignmentState get voiceAssignmentState => snapshot;
@@ -969,11 +958,6 @@ class _AssignmentUiController extends ReaderController {
       isInitialBuffering: initial,
     );
     notifyListeners();
-  }
-
-  @override
-  Future<void> applyPendingVoiceAssignments() async {
-    applyCalls++;
   }
 
   @override

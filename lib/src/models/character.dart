@@ -292,15 +292,37 @@ class CharacterState {
 /// Data-only provider handoff. Analysis never carries an authorized selection
 /// mutation. The consumer checks source/revision and provider sequence first.
 class CharacterAnalysisDelta {
-  const CharacterAnalysisDelta({
+  CharacterAnalysisDelta({
     required this.workId,
     required this.sourceRevision,
     required this.analysisRevision,
     required this.sequence,
     required this.providerId,
     required this.registry,
-  });
+    this.providerVersion = 'unspecified',
+    this.modelId,
+    List<CharacterDialogueReference> dialogues = const [],
+  }) : dialogues = List.unmodifiable(dialogues);
   final String workId, sourceRevision, providerId;
+  final String providerVersion;
+  final String? modelId;
+  final List<CharacterDialogueReference> dialogues;
   final int analysisRevision, sequence;
   final CharacterCastRegistry registry;
+}
+
+/// Coordinates remain in the existing source-scoped segment's word space;
+/// unknown dialogue has no castId, never an invented narrator attribution.
+class CharacterDialogueReference {
+  const CharacterDialogueReference({
+    required this.attributionId,
+    required this.dialogueSpanId,
+    required this.segmentId,
+    required this.startWord,
+    required this.endWord,
+    this.castId,
+  });
+  final String attributionId, dialogueSpanId, segmentId;
+  final int startWord, endWord;
+  final String? castId;
 }

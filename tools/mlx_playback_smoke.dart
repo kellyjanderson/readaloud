@@ -207,6 +207,51 @@ Future<void> main(List<String> args) async {
       0,
       (sum, range) => sum + range.fragment.wordCount,
     );
+    if (Platform.environment['READALOUD_SMOKE_AUTO_VOICE_CHANGE'] == '1') {
+      if (contractCastId == null) {
+        throw StateError('Automatic-change probe requires a character');
+      }
+      final previous = contractVoiceId!;
+      final next = controller.voices
+          .firstWhere(
+            (v) =>
+                v.id != previous &&
+                v.id.startsWith('library_fish') &&
+                v.gender ==
+                    controller.voices
+                        .firstWhere((v) => v.id == previous)
+                        .gender,
+          )
+          .id;
+      final switchStarted = watch.elapsedMilliseconds;
+      await controller.assignVoiceToCast(contractCastId, next);
+      final changeDeadline = DateTime.now().add(const Duration(minutes: 2));
+      while (DateTime.now().isBefore(changeDeadline) &&
+          (controller.voiceAssignmentState.hasPending ||
+              !player.playing ||
+              player.position.inMilliseconds < 500)) {
+        await Future<void>.delayed(const Duration(milliseconds: 50));
+      }
+      if (controller.voiceAssignmentState.hasPending ||
+          !player.playing ||
+          controller.voiceAssignmentState.effectiveCastVoices[contractCastId] !=
+              next) {
+        throw StateError(
+          'Automatic selection did not reach current native acknowledgment',
+        );
+      }
+      receipt['automaticVoiceChange'] = {
+        'from': previous,
+        'to': next,
+        'elapsedMs': watch.elapsedMilliseconds - switchStarted,
+        'acknowledgedRevision':
+            controller.voiceAssignmentState.effectiveRevision,
+        'positionMs': player.position.inMilliseconds,
+      };
+      contractVoiceId = next;
+      // This one explicit user edit is expected; other characters remain stable.
+      initialCast[contractCastId]!['voice'] = next;
+    }
     final soakSeconds =
         int.tryParse(
           Platform.environment['READALOUD_SMOKE_PLAY_SECONDS'] ?? '0',
@@ -301,7 +346,9 @@ Future<void> main(List<String> args) async {
           .where((c) => c.castId == contractCastId)
           .toList();
       receipt['characterSpokenTurns'] = turns.length;
-      if (turns.isEmpty || turns.any((c) => c.voiceId != contractVoiceId)) {
+      if (!turns.any((c) => c.voiceId == contractVoiceId && c.completed) ||
+          (Platform.environment['READALOUD_SMOKE_AUTO_VOICE_CHANGE'] != '1' &&
+              turns.any((c) => c.voiceId != contractVoiceId))) {
         throw StateError(
           'No correctly selected character turn reached playback',
         );

@@ -95,9 +95,8 @@ void main() {
   );
 
   testWidgets(
-    'assignment feedback preserves current and requested choices and keyboard apply',
+    'assignment feedback preserves current and requested choices without Apply and with keyboard Retry',
     (tester) async {
-      var applied = 0;
       var retried = 0;
       Future<void> render(
         VoiceAssignmentPhase phase, {
@@ -126,7 +125,6 @@ void main() {
                       _voice(id: 'am_michael', label: 'Michael'),
                     ],
                     castRegistry: _narratorOnlyRegistry(),
-                    onApply: () => applied++,
                     onRetry: () => retried++,
                   ),
                 ),
@@ -143,23 +141,13 @@ void main() {
       final before = tester.getTopLeft(
         find.byKey(const Key('voice-assignment-feedback')),
       );
-      await tester.sendKeyEvent(LogicalKeyboardKey.tab);
-      await tester.sendKeyEvent(LogicalKeyboardKey.space);
-      await tester.pump();
-      expect(applied, 1);
+      expect(find.byKey(const Key('apply-voice-assignments')), findsNothing);
       await render(VoiceAssignmentPhase.preparing, initial: true);
       expect(
         find.text('Preparing latest choices before playback.'),
         findsOneWidget,
       );
-      expect(
-        tester
-            .widget<FilledButton>(
-              find.byKey(const Key('apply-voice-assignments')),
-            )
-            .onPressed,
-        isNull,
-      );
+      expect(find.byKey(const Key('retry-voice-assignments')), findsNothing);
       expect(
         tester.getTopLeft(find.byKey(const Key('voice-assignment-feedback'))),
         before,
@@ -168,9 +156,10 @@ void main() {
       expect(find.text('Applying choices and rebuffering.'), findsOneWidget);
       await render(VoiceAssignmentPhase.failed);
       expect(find.textContaining('Voice unavailable.'), findsOneWidget);
-      await tester.tap(find.text('Retry voice change'));
+      await tester.sendKeyEvent(LogicalKeyboardKey.tab);
+      await tester.sendKeyEvent(LogicalKeyboardKey.space);
+      await tester.pump();
       expect(retried, 1);
-      expect(applied, 1);
       expect(tester.takeException(), isNull);
     },
   );

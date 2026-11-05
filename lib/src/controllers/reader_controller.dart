@@ -1,4 +1,4 @@
-import '../models/character.dart';
+import '../services/character_analysis_adapter.dart';
 import '../services/work_character_store.dart';
 import '../models/speech_engine_catalog.dart';
 import '../services/speech_planning_supervisor.dart';
@@ -564,6 +564,12 @@ class ReaderController extends ChangeNotifier {
       _invalidateResourceBindings();
       await startPlayback();
     } catch (error) {
+      if (_disposed ||
+          documentRevision != _documentRevision ||
+          applyIntent != _playbackIntent ||
+          !_resumeAfterPreparation) {
+        return;
+      }
       _voiceAssignments.fail(revision, error);
       notifyListeners();
     } finally {
@@ -602,6 +608,9 @@ class ReaderController extends ChangeNotifier {
 
   Future<void> _voiceChoicesEdited() async {
     final initial = _isInitialVoiceBuffering;
+    final retrying =
+        _resumeAfterPreparation &&
+        voiceAssignmentState.phase == VoiceAssignmentPhase.failed;
     _captureRequestedVoiceChoices(initialBuffering: initial);
     notifyListeners();
     if (initial) {
@@ -617,6 +626,12 @@ class ReaderController extends ChangeNotifier {
       _playbackStartPending = true;
       unawaited(_stopSupersededStartup());
       unawaited(_drivePlaybackStarts());
+    } else if (retrying ||
+        _isPlaying ||
+        (_resumeAfterPreparation && _playbackActivity.isBuffering)) {
+      // Reuse the single playback driver: selection is intent, while the
+      // current request acknowledgment remains the authority for audible voice.
+      unawaited(applyPendingVoiceAssignments());
     }
     await _persistPreferences();
   }
@@ -867,12 +882,15 @@ class ReaderController extends ChangeNotifier {
             if (!current()) return;
           }
         }
+        // Validate the provider boundary before admitting the prepared range.
+        _mergeDiscoveredCast(
+          publication.fragment.characterCastRegistry,
+          document: publication.fragment,
+        );
         _publicationSequence = publication.sequence;
         _preparedWordCount = publication.range.wordEnd;
         _preparedRanges.add(publication);
         _signalRanges();
-        final registry = publication.fragment.characterCastRegistry;
-        _mergeDiscoveredCast(registry);
         for (final progress in publication.progress) {
           if (publication.coverage.contains(progress.stage) ||
               progress.scope == 'cache' ||
@@ -2727,11 +2745,6 @@ class ReaderController extends ChangeNotifier {
       notifyListeners();
       return null;
     }
-    if (voiceAssignmentState.hasPending) {
-      _statusMessage = 'Apply pending voice choices before saving audio.';
-      notifyListeners();
-      return null;
-    }
     final exporter = _ttsEngine is AudioExportCapable
         ? _ttsEngine as AudioExportCapable
         : null;
@@ -2781,7 +2794,9 @@ class ReaderController extends ChangeNotifier {
       if (exportAssignmentRevision != voiceAssignmentState.requestedRevision) {
         throw const PlanningCancelled();
       }
-      if (!isResourcesReady || !_hasCompleteDocumentSnapshot) {
+      if (!isResourcesReady ||
+          _preparedAssignmentRevision != exportAssignmentRevision ||
+          !_hasCompleteDocumentSnapshot) {
         await _prepareResourceBindings(exportRevision, document: document);
       }
 
@@ -3267,7 +3282,7 @@ class ReaderController extends ChangeNotifier {
     _characters.migrateLegacy({
       _voicePreferenceDocumentId: restoredVoiceAssignments,
     });
-    _mergeDiscoveredCast(document.characterCastRegistry);
+    _mergeDiscoveredCast(document.characterCastRegistry, document: document);
     _voiceAssignments.resetDocument();
     _pausedVoiceReplayAnchor = null;
     _assignmentReplayWord = null;
@@ -4341,7 +4356,10 @@ class ReaderController extends ChangeNotifier {
     );
   }
 
-  void _mergeDiscoveredCast(CharacterCastRegistry registry) {
+  void _mergeDiscoveredCast(
+    CharacterCastRegistry registry, {
+    ReaderDocument? document,
+  }) {
     final key = _voicePreferenceDocumentId;
     if (_activeSourceRevision case final source?) {
       _sourceVoiceDocumentIds.putIfAbsent(source, () => key);
@@ -4355,16 +4373,23 @@ class ReaderController extends ChangeNotifier {
         analysisRevision: _documentRevision,
       );
     }
-    _characters.apply(
-      CharacterAnalysisDelta(
-        workId: key,
-        sourceRevision: _activeSourceRevision ?? key,
-        analysisRevision: _documentRevision,
-        sequence: ++_characterDeltaSequence,
-        providerId: 'preparation',
-        registry: registry,
-      ),
-    );
+    const adapter = CharacterAnalysisAdapter();
+    final delta = document == null
+        ? adapter.discovery(
+            workId: key,
+            sourceRevision: _activeSourceRevision ?? key,
+            analysisRevision: _documentRevision,
+            sequence: ++_characterDeltaSequence,
+            registry: registry,
+          )
+        : adapter.refined(
+            workId: key,
+            sourceRevision: _activeSourceRevision ?? key,
+            analysisRevision: _documentRevision,
+            sequence: ++_characterDeltaSequence,
+            document: document,
+          );
+    _characters.apply(delta);
     _refreshCharacterProjection();
     _castRedirects
       ..clear()

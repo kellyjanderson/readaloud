@@ -49,6 +49,16 @@ class WorkCharacterStore {
         delta.sequence <= (_sequences[delta.providerId] ?? -1)) {
       return false;
     }
+    // Validate the complete handoff before mutating records or consuming its
+    // sequence. Turn evidence stays in the prepared document, not this store.
+    for (final turn in delta.dialogues) {
+      if (turn.startWord < 0 ||
+          turn.endWord <= turn.startWord ||
+          (turn.castId != null &&
+              delta.registry.forCastId(turn.castId!) == null)) {
+        throw const FormatException('Invalid character dialogue reference');
+      }
+    }
     _sequences[delta.providerId] = delta.sequence;
     mergeEvidence(delta.workId, delta.registry);
     return true;

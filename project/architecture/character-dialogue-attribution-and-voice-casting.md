@@ -19,7 +19,7 @@ Assignments remain a separate `CastVoiceAssignmentSet`. Resolution prioritizes u
 
 Every explicit voice selection is saved, including a selection equal to the current automatic result. Reset writes a versioned automatic-mode tombstone; an absent choice and a Reset are distinct. The source preference owner is stable across unfinished-book reopenings independently of temporary graph IDs. When the source obtains its canonical document identity, its saved preference snapshot takes precedence over older canonical choices, including absent roles after Reset. This transition changes future preference resolution, not already captured playback intent. See [reader session state](reader-interface-and-session-state.md) for persistence ownership and restart evidence limits.
 
-`ResolvedPreparedVoiceReference` joins cast identity and assignment decision provenance to immutable `PreparedVoiceBinding` records. The resident worker validates model/voice content digests and request-bound fingerprints/revisions; native handles remain worker-owned. `VoiceAssignmentCoordinator` separately retains requested and effective default/cast snapshots. Edits during active playback change requested intent without changing the current chunk. Initial buffering coalesces to the newest request; effective state updates only on the current engine acknowledgment. Explicit Apply replays from the current audible source chunk start, and paused pending edits use the retained chunk-start anchor on next Play; repetition is disclosed instead of promising seamless tail replacement. Failures retain pending intent for retry. Ordinary attribution/routing never becomes a user edit. Whole-document processing does not eliminate wrong attribution; a neural provider still requires evaluation.
+`ResolvedPreparedVoiceReference` joins cast identity and assignment decision provenance to immutable `PreparedVoiceBinding` records. The resident worker validates model/voice content digests and request-bound fingerprints/revisions; native handles remain worker-owned. `VoiceAssignmentCoordinator` separately retains requested and effective default/cast snapshots. Edits during active playback immediately schedule the latest requested intent through the existing playback-start driver. Initial buffering coalesces to the newest request; effective state updates only on the current engine acknowledgment. Automatic replacement replays from the current audible source chunk start, and paused pending edits use the retained chunk-start anchor on next Play; repetition is disclosed instead of promising seamless tail replacement. Failures retain pending intent for retry. Ordinary attribution/routing never becomes a user edit. Whole-document processing does not eliminate wrong attribution; a neural provider still requires evaluation.
 
 ## Character owner and persistence
 
@@ -67,8 +67,10 @@ full attribute history and richer exact-model binding specs remain with
 [#126](https://github.com/kellyjanderson/readaloud/issues/126),
 [#125](https://github.com/kellyjanderson/readaloud/issues/125) and
 [#127](https://github.com/kellyjanderson/readaloud/issues/127).
-The user's Rosalina report (inflated cast, unstable voices and poor attribution)
-remains a failed product observation; fixed-ID selection tests do not override it.
+The user's earlier Rosalina report (inflated cast, unstable voices and poor
+attribution) remains recorded. The user subsequently reported much improved
+attribution with the second slice; this is useful product feedback, not a labeled
+corpus score or completion of the remaining attribution acceptance.
 
 ## Expandable voice-selection contract
 
@@ -150,3 +152,35 @@ These legacy contracts describe intended behavior and acceptance; `final` denote
 - [us english starter voice set and auto cast preference](../specifications/us-english-starter-voice-set-and-auto-cast-preference.md)
 - [voice metadata model and source normalization](../specifications/voice-metadata-model-and-source-normalization.md)
 - [voice routed progress and diagnostics](../specifications/voice-routed-progress-and-diagnostics.md)
+
+### Shared analysis admission
+
+`CharacterAnalysisAdapter` adapts fast discovery and refined prepared fragments
+into `CharacterAnalysisDelta`. Refinement retains provider/version/model identity
+and maps each source-scoped dialogue segment/word span to its canonical cast ID,
+including multi-segment dialogue and explicitly unknown speakers. It rejects
+missing, ambiguous or cross-document mappings before range admission. The owner
+validates references before consuming the provider sequence or mutating characters.
+Existing supervisor ownership and source/revision gates still reject obsolete
+publications; no new queue or provider lifecycle is introduced.
+
+Per-turn attribution evidence remains owned and serialized by the prepared
+document. The delta carries bounded validation references, not a second dialogue
+database. Current canonical identities/redirects still come from the existing
+registry service: arbitrary neural entity reconciliation and candidate rejection
+remain #125/#127 follow-up work. This adapter does not introduce ModernBookNLP or
+claim improved inference accuracy. VS20–23 add independently labeled prose,
+whole/split continuity, selection survival and atomic malformed-input rejection to
+the existing VS01–19 baseline.
+
+The November 5 automatic-change native probe opened the 110-word City excerpt,
+retained Mara/Sophia on reopen and reached 523 ms of playback at an in-app elapsed
+26.650 seconds. Selecting Sarah without Apply produced a replacement plan routed
+to Sarah, but did not reach current native acknowledgment within two minutes.
+The probe FAILED; it does not establish audible replacement or smooth switching.
+A process sample found MLX evaluation waiting; this is not a proven root cause.
+The test app received normal Quit, exited successfully, and its Python child was
+absent afterward. The existing user-owned debug app was left running. Private
+receipts are in the QA container's `Data/auto-voice-adapter-20261105/`; the JSON
+links the source trace and audio paths. The failed run is retained for runtime
+follow-up, not superseded by controller tests.
