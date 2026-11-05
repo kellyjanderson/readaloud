@@ -51,9 +51,9 @@ For development, `READALOUD_TTS_ENGINE` can still override the saved preference
 for the process that launches the macOS app:
 
 ```sh
-READALOUD_TTS_ENGINE=qwen3_tts_1_7b flutter run -d macos
-READALOUD_TTS_ENGINE=voxtral_4b flutter run -d macos
-READALOUD_TTS_ENGINE=moss_tts_8b flutter run -d macos
+READALOUD_TTS_ENGINE=qwen3_tts_1_7b tools/flutter run -d macos
+READALOUD_TTS_ENGINE=voxtral_4b tools/flutter run -d macos
+READALOUD_TTS_ENGINE=moss_tts_8b tools/flutter run -d macos
 ```
 
 The default interpreter is installed at
