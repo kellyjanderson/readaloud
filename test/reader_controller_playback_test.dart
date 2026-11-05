@@ -3736,6 +3736,7 @@ class _ObservedRepositoryPreparationSupervisor
     required Future<void> Function(DocumentPreparationPublication)
     onPublication,
     void Function(PreparationProgress)? onProgress,
+    void Function(CharacterDiscoveryPublication)? onCharacterDiscovery,
     Future<void> Function()? acquireSource,
     Future<void> Function()? onDrained,
   }) {
@@ -3747,6 +3748,7 @@ class _ObservedRepositoryPreparationSupervisor
       onIdentityMigration: onIdentityMigration,
       onPublication: onPublication,
       onProgress: onProgress,
+      onCharacterDiscovery: onCharacterDiscovery,
       acquireSource: acquireSource,
       onDrained: onDrained,
     );
@@ -3836,6 +3838,7 @@ class _RecordingPreparationSupervisor extends DocumentPreparationSupervisor {
     required Future<void> Function(DocumentPreparationPublication)
     onPublication,
     void Function(PreparationProgress)? onProgress,
+    void Function(CharacterDiscoveryPublication)? onCharacterDiscovery,
     Future<void> Function()? acquireSource,
     Future<void> Function()? onDrained,
   }) async {
@@ -3849,6 +3852,7 @@ class _RecordingPreparationSupervisor extends DocumentPreparationSupervisor {
       onIdentityMigration: onIdentityMigration,
       onPublication: onPublication,
       onProgress: onProgress,
+      onCharacterDiscovery: onCharacterDiscovery,
       acquireSource: acquireSource,
       onDrained: onDrained,
     );
@@ -3886,6 +3890,7 @@ class _RangePreparationSupervisor extends DocumentPreparationSupervisor {
     required Future<void> Function(DocumentPreparationPublication)
     onPublication,
     void Function(PreparationProgress)? onProgress,
+    void Function(CharacterDiscoveryPublication)? onCharacterDiscovery,
     Future<void> Function()? acquireSource,
     Future<void> Function()? onDrained,
   }) {

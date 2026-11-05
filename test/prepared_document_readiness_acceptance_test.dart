@@ -185,6 +185,7 @@ class _ObservedPreparationSupervisor extends DocumentPreparationSupervisor {
     required Future<void> Function(DocumentPreparationPublication)
     onPublication,
     void Function(PreparationProgress)? onProgress,
+    void Function(CharacterDiscoveryPublication)? onCharacterDiscovery,
     Future<void> Function()? acquireSource,
     Future<void> Function()? onDrained,
   }) async {
@@ -195,6 +196,7 @@ class _ObservedPreparationSupervisor extends DocumentPreparationSupervisor {
       onIdentityMigration: onIdentityMigration,
       onPublication: onPublication,
       onProgress: onProgress,
+      onCharacterDiscovery: onCharacterDiscovery,
       acquireSource: acquireSource,
       onDrained: onDrained,
     );
