@@ -1,4 +1,5 @@
 import 'package:flutter/foundation.dart';
+import 'speech_adjustment_context.dart';
 
 class EngineCapabilityProfile {
   const EngineCapabilityProfile({
@@ -9,6 +10,8 @@ class EngineCapabilityProfile {
     required this.directRepresentationTypes,
     required this.approximableRepresentationTypes,
     required this.supportsPlainTextFallback,
+    this.modelId = '',
+    this.modelRevision = '',
   });
 
   final String capabilityProfileId;
@@ -18,6 +21,14 @@ class EngineCapabilityProfile {
   final Set<String> directRepresentationTypes;
   final Set<String> approximableRepresentationTypes;
   final bool supportsPlainTextFallback;
+  final String modelId;
+  final String modelRevision;
+  SpeechModelContext get modelContext => SpeechModelContext(
+    engineId: engineId,
+    modelId: modelId,
+    modelRevision: modelRevision,
+    capabilityVersion: capabilityVersion,
+  );
 
   bool supportsDirectRepresentation(String representationType) {
     return directRepresentationTypes.contains(representationType);
@@ -31,6 +42,8 @@ class EngineCapabilityProfile {
     return <String, Object?>{
       'capabilityProfileId': capabilityProfileId,
       'engineId': engineId,
+      'modelId': modelId,
+      'modelRevision': modelRevision,
       'platformFamily': platformFamily,
       'capabilityVersion': capabilityVersion,
       'directRepresentationTypes': directRepresentationTypes.toList()..sort(),
@@ -44,6 +57,8 @@ class EngineCapabilityProfile {
     return EngineCapabilityProfile(
       capabilityProfileId: map['capabilityProfileId']! as String,
       engineId: map['engineId']! as String,
+      modelId: map['modelId'] as String? ?? '',
+      modelRevision: map['modelRevision'] as String? ?? '',
       platformFamily: map['platformFamily']! as String,
       capabilityVersion: map['capabilityVersion']! as String,
       directRepresentationTypes: Set<String>.from(
@@ -64,6 +79,8 @@ class EngineCapabilityRegistry {
     required String engineId,
     String? platformFamily,
     String capabilityVersion = 'v1',
+    String? modelId,
+    String? modelRevision,
   }) {
     final resolvedPlatformFamily = platformFamily ?? currentPlatformFamily();
     switch (engineId) {
@@ -72,6 +89,8 @@ class EngineCapabilityRegistry {
           capabilityProfileId:
               'kokoro:$resolvedPlatformFamily:$capabilityVersion',
           engineId: engineId,
+          modelId: modelId ?? 'kokoro-v1.0.onnx',
+          modelRevision: modelRevision ?? '1.0',
           platformFamily: resolvedPlatformFamily,
           capabilityVersion: capabilityVersion,
           directRepresentationTypes: const <String>{
@@ -94,6 +113,8 @@ class EngineCapabilityRegistry {
           capabilityProfileId:
               '$engineId:$resolvedPlatformFamily:$capabilityVersion',
           engineId: engineId,
+          modelId: modelId ?? '',
+          modelRevision: modelRevision ?? '',
           platformFamily: resolvedPlatformFamily,
           capabilityVersion: capabilityVersion,
           directRepresentationTypes: const <String>{},

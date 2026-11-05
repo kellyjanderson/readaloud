@@ -8,9 +8,17 @@ Current preparation appears above the document, without a download popup. A perc
 
 Choose **Activity** for stage counts and diagnostic detail. Active work stays above completed items, which fade away after a few seconds. Failures remain visible with retry controls. **Cancel document** cancels document preparation; model selection/download is controlled separately in Settings.
 
+Select text in the output area to copy a passage, or choose **Copy** to copy the full current message and stage diagnostics, including details outside the visible scroll area. Speech startup messages in Settings are selectable too.
+
+After a synthesis failure, press **Play** to retry from the retained reading position. Completed cached audio remains reusable; incomplete rendered audio is retained separately and is not treated as a completed passage.
+
 Downloaded models remain in Application Support and are reused by normal development and release builds. A rebuild does not clear them. Interrupted downloads reuse completed files and resume remaining work; loading a saved model into memory is a separate step. Intentionally isolated test apps with a different bundle identifier have separate macOS storage.
 
 ## Current and Pending voices
+
+The character list includes speakers discovered across all prepared sections, even when the reader is still showing an earlier section. It updates as preparation advances and retains explicit assignments. The discovery summary distinguishes partial preparation from completed analysis. More characters can appear as you listen or scroll; heuristic detection can still miss or misidentify speakers, so completed analysis is not a guarantee of a complete cast.
+
+Narrator and character choices are remembered when you reopen the same unchanged document, including a book whose preparation has not finished. Choosing a voice explicitly keeps that choice even if it matches the current automatic assignment. Use **Reset** to return that role to automatic selection.
 
 Open **Character Voices** to manage narrator/cast assignments, or **Voice options** in single-voice mode. Assignment fields show requested choices. The footer keeps **Current** playback choices separate from **Pending** intent and reports preparing, applying or failure. Automatic speaker routing follows the prepared cast; it is separate from editing a voice assignment. Attribution remains heuristic, and selecting a voice does not correct a mistaken speaker attribution. The current selector may expose only one available choice for a character; the user-reported limitation is tracked for a future release in [issue #78](https://github.com/kellyjanderson/readaloud/issues/78).
 

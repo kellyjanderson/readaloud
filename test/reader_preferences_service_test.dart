@@ -43,6 +43,7 @@ void main() {
       expect(preferences.selectedVoiceId, isNull);
       expect(preferences.voiceSpeeds, isEmpty);
       expect(preferences.storedDocumentCastVoiceAssignments, isEmpty);
+      expect(preferences.sourceVoiceDocumentIds, isEmpty);
       expect(preferences.resumeState, isNull);
       expect(preferences.lastOpenedDocumentPath, isNull);
       expect(preferences.lastOpenedDocumentAccessToken, isNull);
@@ -55,6 +56,7 @@ void main() {
 
       await service.save(
         selectedVoiceId: 'af_bella',
+        sourceVoiceDocumentIds: const {'source-revision': 'doc_love'},
         voiceSpeeds: const <String, double>{'af_bella': 1.15},
         fontFamily: 'sans-serif',
         fontScale: 1.2,
@@ -81,6 +83,9 @@ void main() {
 
       final preferences = await service.load();
       expect(preferences.selectedVoiceId, 'af_bella');
+      expect(preferences.sourceVoiceDocumentIds, {
+        'source-revision': 'doc_love',
+      });
       expect(preferences.voiceSpeeds['af_bella'], 1.15);
       expect(preferences.fontFamily, 'sans-serif');
       expect(preferences.fontScale, 1.2);

@@ -4,6 +4,7 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:isolate';
 
+import 'package:crypto/crypto.dart';
 import 'package:flutter/services.dart';
 import 'package:path_provider/path_provider.dart';
 
@@ -35,6 +36,54 @@ Future<AudioArtifact> _publishArtifact(
     Directory(root),
   ).publish(identity: identity, wav: wav, metadata: metadata),
 );
+
+Future<bool> _sameRenderedAudio(String attempt, String published) =>
+    Isolate.run(() {
+      try {
+        return sha256.convert(File(attempt).readAsBytesSync()) ==
+            sha256.convert(File(published).readAsBytesSync());
+      } on FileSystemException {
+        return false; // Unverifiable publication never authorizes removal.
+      }
+    });
+
+/// Durable, incomplete request output, separate from complete cache entries.
+/// Failed/cancelled attempts keep rendered WAVs; only empty attempts or copies
+/// already published to the immutable artifact store are removed.
+class MlxSynthesisAttempt {
+  MlxSynthesisAttempt._(this.directory);
+  final Directory directory;
+  File get audio => File('${directory.path}/speech.wav');
+
+  static Future<MlxSynthesisAttempt> create(
+    Directory store,
+    Map<String, Object?> metadata,
+  ) async {
+    final retained = Directory('${store.path}/incomplete');
+    await retained.create(recursive: true);
+    final directory = await retained.createTemp('attempt-');
+    await File(
+      '${directory.path}/request.json',
+    ).writeAsString(jsonEncode({...metadata, 'complete': false}), flush: true);
+    return MlxSynthesisAttempt._(directory);
+  }
+
+  Future<void> finish({String? publishedAudioPath}) async {
+    if (!await directory.exists()) return;
+    final exactCopyPublished =
+        publishedAudioPath != null &&
+        await audio.exists() &&
+        await _sameRenderedAudio(audio.path, publishedAudioPath);
+    await for (final entry in directory.list(followLinks: false)) {
+      if (entry is File &&
+          entry.path.endsWith('.wav') &&
+          (!exactCopyPublished || entry.path != audio.path)) {
+        return;
+      }
+    }
+    await directory.delete(recursive: true);
+  }
+}
 
 /// Owns one persistent Python process. Inference runs outside the Flutter
 /// isolate; the existing Dart pipeline retains cache, admission and playback.
@@ -438,9 +487,19 @@ class MlxSpeechWorkerChunkProcessor
         return;
       }
 
-      final temporaryDirectory = await getTemporaryDirectory();
-      final requestDirectory = await temporaryDirectory.createTemp('mlx-');
-      final temporaryAudio = File('${requestDirectory.path}/speech.wav');
+      final attempt = await MlxSynthesisAttempt.create(Directory(storePath), {
+        'artifactIdentity': identity,
+        'engineId': engineId,
+        'modelIdentity': _modelIdentity,
+        'voiceId': request.voiceId,
+        'sessionId': request.sessionId,
+        'generationId': request.generationId,
+        'chunkId': request.chunkId,
+        'synthesisIdentity': request.synthesisIdentity,
+        'speakText': request.speakText,
+      });
+      final temporaryAudio = attempt.audio;
+      String? publishedAudioPath;
       final worker = _process ??= MlxTtsPythonProcess(
         pythonPath: _resolvedPythonPath ?? pythonPath,
         helperPath: _helperPath ?? '',
@@ -505,6 +564,7 @@ class MlxSpeechWorkerChunkProcessor
           wav,
           metadata,
         );
+        publishedAudioPath = artifact.audioPath;
         if (isCancelled()) return;
         stopwatch.stop();
         event(
@@ -528,9 +588,7 @@ class MlxSpeechWorkerChunkProcessor
           );
         }
       } finally {
-        if (await requestDirectory.exists()) {
-          await requestDirectory.delete(recursive: true);
-        }
+        await attempt.finish(publishedAudioPath: publishedAudioPath);
       }
     } finally {
       if (_activeGeneration == request.generationId) _activeGeneration = null;

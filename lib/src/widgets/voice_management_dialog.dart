@@ -135,6 +135,7 @@ class VoiceManagementDialog extends StatelessWidget {
     required this.voiceLibrary,
     required this.availableVoices,
     required this.characterCastRegistry,
+    this.isCastDiscoveryComplete = true,
     required this.castVoiceAssignments,
     required this.selectedVoiceId,
     required this.previewStateForVoice,
@@ -154,6 +155,7 @@ class VoiceManagementDialog extends StatelessWidget {
   final List<VoiceLibraryEntry> voiceLibrary;
   final List<VoiceProfile> availableVoices;
   final CharacterCastRegistry characterCastRegistry;
+  final bool isCastDiscoveryComplete;
   final CastVoiceAssignmentSet? castVoiceAssignments;
   final String? selectedVoiceId;
   final VoicePreviewState Function(String voiceId) previewStateForVoice;
@@ -257,6 +259,12 @@ class VoiceManagementDialog extends StatelessWidget {
                       style: Theme.of(context).textTheme.titleSmall,
                     ),
                     const SizedBox(height: 8),
+                    Text(
+                      '${characterEntries.isEmpty ? 'No dialogue speakers discovered yet.' : '${characterEntries.length} characters discovered so far.'} '
+                      '${isCastDiscoveryComplete ? 'Prepared text analysis is complete; speaker detection can still miss or misidentify characters.' : 'More characters appear as you read or scroll into new sections.'}',
+                      key: const Key('cast-discovery-status'),
+                    ),
+                    const SizedBox(height: 8),
                     if (characterEntries.isNotEmpty) ...[
                       for (final entry in characterEntries) ...[
                         _VoiceAssignmentCard(
@@ -275,13 +283,6 @@ class VoiceManagementDialog extends StatelessWidget {
                         const SizedBox(height: 12),
                       ],
                     ],
-                    if (characterEntries.isEmpty)
-                      const Padding(
-                        padding: EdgeInsets.symmetric(vertical: 12),
-                        child: Text(
-                          'No dialogue speakers discovered yet. Characters appear here as reading ranges are prepared.',
-                        ),
-                      ),
                     const Divider(height: 32),
                     Text(
                       'Voice Library',

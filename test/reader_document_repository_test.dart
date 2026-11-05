@@ -148,6 +148,28 @@ void main() {
         await output.readAsString(),
       );
       expect(restored.displayDocument.documentId, 'complete-book');
+      final expectedContexts = original
+          .expand(
+            (publication) => publication
+                .fragment
+                .basePronunciationArtifacts
+                .artifacts
+                .expand(
+                  (artifact) => artifact.representations.map(
+                    (representation) => representation.context.toMap(),
+                  ),
+                ),
+          )
+          .toList();
+      expect(expectedContexts, isNotEmpty);
+      expect(
+        restored.basePronunciationArtifacts.artifacts.expand(
+          (artifact) => artifact.representations.map(
+            (representation) => representation.context.toMap(),
+          ),
+        ),
+        expectedContexts,
+      );
       expect(
         (jsonDecode(await output.readAsString())
             as Map)['userVoiceAssignments'],

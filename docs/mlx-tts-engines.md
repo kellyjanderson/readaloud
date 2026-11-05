@@ -136,7 +136,21 @@ unknown presets or missing reference conditioning.
 The selected engine replaces only chunk synthesis. Read Aloud retains its
 existing document preparation, pronunciation/text planning, voice assignment,
 chunk planning, admission, cache, cancellation/staleness checks, playback and
-export pipeline. A supervised child process loads one model and handles one
+export pipeline. The legacy Kokoro respelling of `for` as `four` is restricted
+to Kokoro; MLX engines receive the original `for`, including when reopening
+an existing prepared book. Explicit pronunciation choices still apply. Previously
+rendered audio is preserved; new synthesis uses the corrected text.
+
+Engine-specific pronunciation and expressive adjustments require a versioned
+record for the exact engine/model context. A different model, revision or precision
+does not inherit another model's exceptions. Saved books retain adjustment
+references separately from their text. Recognized legacy records migrate when
+opened; an unknown or mismatched adjustment is retained but not applied.
+Document intent such as a pronunciation request or “whispered” direction remains
+separate. Expressive directions are currently preserved without model-specific
+emotion controls; no supported delivery mapping is claimed.
+
+A supervised child process loads one model and handles one
 request at a time. Cancellation retires the in-flight process so it cannot
 publish stale output; a later request reloads the same model identity into a fresh worker before synthesis. On app quit the
 native delegate asks Dart to shut the worker down, waits for its response, and
@@ -144,6 +158,16 @@ has a bounded 12-second termination fallback. Generated PCM is written as
 mono PCM16 WAV at the model's native sample rate. Drama stays at 44.1 kHz.
 Artifact duration, boundary silence measurements and export derive timing from
 the WAV header. Playback/export introduce no sample-rate conversion.
+
+If synthesis fails after producing valid audio, that audio is retained. The
+error gives the saved incomplete WAV path when available; request provenance is
+stored beside it under `generated-audio/mlx-raw-v1/incomplete` in Application
+Support. Cancellation also retains packets already written. Retry creates a
+separate attempt and does not overwrite the earlier recording. Incomplete
+passages are not automatically played or treated as complete cached speech;
+automatic continuation within a failed chunk is not yet implemented. Completed
+cached audio remains reusable. Drama's empty final stream marker is handled as
+normal completion, preserving all preceding samples at 44.1 kHz.
 
 MOSS-TTS v1.5 may download its separate audio-tokenizer files into the selected
 Hugging Face cache the first time it loads.

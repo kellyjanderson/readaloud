@@ -13,9 +13,11 @@ import hashlib
 import json
 import os
 import sys
+import tempfile
 import threading
 import time
 import traceback
+import wave
 from pathlib import Path
 from typing import Any
 
@@ -287,25 +289,46 @@ def _model_identity(directory: Path, model_id: str, bits: int) -> str:
     return hashlib.sha256(json.dumps(value, sort_keys=True).encode()).hexdigest()
 
 
-def _complete_audio(results: Any):
+def _complete_audio(results: Any, *, on_piece=None):
     import numpy as np
     pieces = []
     sample_rate = None
     frames = 0
+    ended = False
     try:
         for result in results:
+            if ended:
+                raise ValueError("Audio packet received after the final stream marker")
             rate = int(result.sample_rate)
-            audio = np.asarray(result.audio, dtype=np.float32).squeeze()
-            if audio.ndim != 1 or not audio.size or not np.isfinite(audio).all():
-                raise ValueError("Expected finite, non-empty mono audio")
+            audio = np.asarray(result.audio, dtype=np.float32)
+            if audio.ndim > 1:
+                audio = audio.squeeze()
+                if audio.ndim == 0:
+                    audio = audio.reshape(1)
+            if audio.ndim != 1:
+                raise ValueError(f"Expected mono audio; received shape {audio.shape}")
             if sample_rate is not None and rate != sample_rate:
                 raise ValueError("Sample rate changed within one generation")
             if rate <= 0:
                 raise ValueError("Invalid model sample rate")
+            if not audio.size:
+                # MLX Audio Drama 3 emits an empty final streaming packet when
+                # the last codec frame landed exactly on a streaming boundary.
+                # It is an end marker, not missing speech. Keep consuming the
+                # iterator so late producer failures cannot become success.
+                if (getattr(result, 'is_streaming_chunk', False) is True and
+                        getattr(result, 'is_final_chunk', False) is True):
+                    ended = True
+                    continue
+                raise ValueError("Empty audio without a final streaming marker")
+            if not np.isfinite(audio).all():
+                raise ValueError("Model audio contains non-finite samples")
             sample_rate = rate
             frames += audio.size
             if frames > rate * 600:
                 raise ValueError("Generated chunk exceeded ten minute bound")
+            if on_piece is not None:
+                on_piece(audio, rate)
             pieces.append(audio)
     finally:
         close = getattr(results, 'close', None)
@@ -379,14 +402,52 @@ def _synthesize(request: dict[str, Any]) -> dict[str, Any]:
                             language=language, max_tokens=512, stream=False)
         )
 
-    audio, sample_rate, piece_count = _complete_audio(results)
-    from mlx_audio.audio_io import write as write_audio
-
     destination = Path(output_path).expanduser().resolve()
     destination.parent.mkdir(parents=True, exist_ok=True)
-    write_audio(str(destination), audio, sample_rate)
-    if not destination.is_file() or destination.stat().st_size <= 44:
-        raise RuntimeError("MLX Audio did not write a complete WAV file.")
+    partial = None
+    raw = None
+    wav = None
+
+    def preserve_piece(audio, rate):
+        nonlocal partial, raw, wav
+        import numpy as np
+        if wav is None:
+            raw = tempfile.NamedTemporaryFile(
+                mode='xb', prefix='rendered-', suffix='.partial.wav',
+                dir=destination.parent, delete=False,
+            )
+            partial = Path(raw.name)
+            wav = wave.open(raw, 'wb')
+            wav.setnchannels(1)
+            wav.setsampwidth(2)
+            wav.setframerate(rate)
+        # Match mlx_audio.audio_io.write's PCM16 encoding. Each write updates
+        # the WAV header; flush it so child failure/cancellation retains a
+        # readable prefix, without claiming the passage is complete.
+        pcm = (np.clip(audio, -1.0, 1.0) * 32767).astype('<i2')
+        wav.writeframes(pcm.tobytes())
+        raw.flush()
+
+    try:
+        try:
+            _, sample_rate, piece_count = _complete_audio(
+                results, on_piece=preserve_piece)
+        finally:
+            if wav is not None:
+                wav.close()
+            if raw is not None:
+                raw.close()
+        # Atomic, no-clobber publication: an existing render is never replaced.
+        os.link(partial, destination)
+    except Exception as error:
+        if partial is not None and partial.is_file():
+            raise RuntimeError(
+                f'{error}. Rendered audio retained at {partial} '
+                '(incomplete passage; not used as a completed cache entry).'
+            ) from error
+        raise
+    # This removes only a duplicate link after the same bytes were published.
+    partial.unlink()
     return {
         "audioPath": str(destination),
         "nativeSampleRate": sample_rate,

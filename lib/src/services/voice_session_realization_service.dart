@@ -347,6 +347,9 @@ RealizedPronunciationArtifact _realizeArtifact({
       endWord: artifact.endWord,
       resolutionClass: 'context_resolved',
       selectedRepresentation: PronunciationRepresentation(
+        context: SpeechAdjustmentContext.content(
+          'narration-state:explicit-pronunciation-intent:v1',
+        ),
         representationId: '${artifact.artifactId}_user_override',
         representationType: 'normalized_spoken_text',
         representationValue: userOverride,
