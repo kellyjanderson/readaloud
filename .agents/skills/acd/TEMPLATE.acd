@@ -1,6 +1,6 @@
-# GitHub design issue body template
+# Architectural change document template
 
-Use in GitHub; do not instantiate this file in the repository.
+Draft in project/interim/<revision>/ as Markdown, then publish the reviewed revision to its GitHub design issue. Follow project/interim/README.md for provenance, fixed snapshots, reconciliation and cleanup.
 
 ## Problem and outcome
 ## Architectural delta and affected architecture

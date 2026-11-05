@@ -16,6 +16,7 @@ for active GitHub work. This map explains file ownership; it is not another plan
 | [tools](../tools/README.md) | Launch, packaging, asset maintenance and bounded qualification tools |
 | `docs/` | Human setup, usage and maintenance guidance |
 | `project/architecture/` | Implemented structure, invariants and evidence limits |
+| [project/interim](../project/interim/README.md) | Versioned design drafts/published revisions awaiting explicit architecture reconciliation and retirement |
 | `project/product-definition.md`, `project/ui/` | Product expectations and retained interface guidance |
 | `project/specifications/`, `project/test-specifications/` | Detailed legacy contracts and acceptance scenarios; retain until their semantics are explicitly reconciled |
 | `project/research/` | Source-backed research, read by topic; dates matter |
@@ -50,7 +51,8 @@ support/container storage; repository cleanup must not clear them. See the
 
 ## Keep the structure clean
 
-- Put new active design, planning and evidence receipts in GitHub. Add historical
+- Keep execution/status and published decision/evidence receipts in GitHub; draft
+  and preserve fixed design revisions under `project/interim/`. Add historical
   repository material to `project/archive/` only when preserving existing history;
   do not recreate local planning or release-status directories.
 - Put reusable developer commands in `tools/` and list their purpose in its index.

@@ -58,6 +58,7 @@ tools/flutter run -d macos
 | [docs](docs/README.md) | Human setup and maintenance guidance |
 | [architecture](project/architecture/README.md) | Current implementation and evidence locations |
 | [GitHub planning](docs/project-management.md) | Working design, execution slices and orchestrator handoffs |
+| [interim designs](project/interim/README.md) | Versioned design drafts and published revisions awaiting reconciliation |
 | [legacy contracts](project/specifications/README.md) | Retained detailed behavior references |
 | [archive](project/archive/README.md) | Superseded specifications and historical snapshots |
 
