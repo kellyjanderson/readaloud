@@ -63,9 +63,12 @@ void main() {
     final laterId = dialog.characterCastRegistry.characterEntries
         .firstWhere((e) => e.displayLabel == 'Carlos')
         .castId;
-    await tester.runAsync(
-      () => controller.assignVoiceToCast(laterId, 'af_bella'),
-    );
+    var savedChoice = false;
+    final savingChoice = controller
+        .assignVoiceToCast(laterId, 'af_bella')
+        .then((_) => savedChoice = true);
+    await _pumpUntil(tester, () => savedChoice);
+    await savingChoice;
     await _pumpUi(tester);
     expect(
       controller.castVoiceAssignments!.forCastId(laterId)!.effectiveVoiceId,
@@ -686,6 +689,7 @@ void main() {
         MaterialApp(home: ReadAloudScreen(controller: controller)),
       );
       await tester.pump();
+      await _pumpUntil(tester, () => engine.attempts == 1);
       gate.completeError(StateError('Missing required speech asset'));
       await _pumpUntil(tester, () => controller.startupError != null);
       expect(

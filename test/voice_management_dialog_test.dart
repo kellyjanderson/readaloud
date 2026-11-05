@@ -198,141 +198,147 @@ void main() {
     },
   );
 
-  testWidgets('groups narrator and character assignments with override state', (
-    WidgetTester tester,
-  ) async {
-    await tester.binding.setSurfaceSize(const Size(900, 900));
-    addTearDown(() => tester.binding.setSurfaceSize(null));
+  for (final stored in [false, true]) {
+    testWidgets(
+      'groups narrator and character assignments with saved choice (stored=$stored)',
+      (WidgetTester tester) async {
+        await tester.binding.setSurfaceSize(const Size(900, 900));
+        addTearDown(() => tester.binding.setSurfaceSize(null));
 
-    String? changedCastId;
-    String? changedVoiceId;
-    String? clearedCastId;
-    String? previewVoiceId;
+        String? changedCastId;
+        String? changedVoiceId;
+        String? clearedCastId;
+        String? previewVoiceId;
 
-    await tester.pumpWidget(
-      MaterialApp(
-        home: Scaffold(
-          body: VoiceManagementDialog(
-            isCharacterModeEnabled: true,
-            voiceLibrary: <VoiceLibraryEntry>[
-              VoiceLibraryEntry(
-                voice: _voice(
-                  id: 'af_bella',
-                  label: 'Bella',
-                  gender: VoiceGender.female,
-                  qualityGrade: 'A-',
-                  traits: const <String>['warm'],
-                  description: 'Balanced and clear.',
+        await tester.pumpWidget(
+          MaterialApp(
+            home: Scaffold(
+              body: VoiceManagementDialog(
+                isCharacterModeEnabled: true,
+                voiceLibrary: <VoiceLibraryEntry>[
+                  VoiceLibraryEntry(
+                    voice: _voice(
+                      id: 'af_bella',
+                      label: 'Bella',
+                      gender: VoiceGender.female,
+                      qualityGrade: 'A-',
+                      traits: const <String>['warm'],
+                      description: 'Balanced and clear.',
+                    ),
+                    isBundled: true,
+                    isInstalled: true,
+                  ),
+                  VoiceLibraryEntry(
+                    voice: _voice(id: 'am_michael', label: 'Michael'),
+                    isBundled: false,
+                    isInstalled: true,
+                  ),
+                ],
+                availableVoices: <VoiceProfile>[
+                  _voice(
+                    id: 'af_bella',
+                    label: 'Bella',
+                    gender: VoiceGender.female,
+                    qualityGrade: 'A-',
+                    traits: const <String>['warm'],
+                    description: 'Balanced and clear.',
+                  ),
+                  _voice(id: 'am_michael', label: 'Michael'),
+                ],
+                characterCastRegistry: _richRegistry(),
+                castVoiceAssignments: CastVoiceAssignmentSet(
+                  documentId: 'doc_1',
+                  assignmentVersion: 'v1',
+                  assignments: <CastVoiceAssignment>[
+                    CastVoiceAssignment(
+                      castId: 'cast_narrator',
+                      effectiveVoiceId: 'af_bella',
+                      decisionKind: VoiceAssignmentDecisionKind.automatic,
+                      automaticVoiceId: 'af_bella',
+                    ),
+                    CastVoiceAssignment(
+                      castId: 'cast_character_jennifer',
+                      effectiveVoiceId: 'am_michael',
+                      decisionKind: stored
+                          ? VoiceAssignmentDecisionKind.storedDocumentChoice
+                          : VoiceAssignmentDecisionKind.userOverride,
+                      automaticVoiceId: 'af_bella',
+                      userOverrideVoiceId: stored ? null : 'am_michael',
+                      storedVoiceId: stored ? 'am_michael' : null,
+                    ),
+                  ],
                 ),
-                isBundled: true,
-                isInstalled: true,
+                selectedVoiceId: 'af_bella',
+                previewStateForVoice: (_) => VoicePreviewState.idle,
+                onClose: () {},
+                onSelectLibraryVoice: (_) {},
+                onInstallVoice: (_) {},
+                onToggleVoicePreview: (voiceId) {
+                  previewVoiceId = voiceId;
+                },
+                onAssignCastVoice: (castId, voiceId) {
+                  changedCastId = castId;
+                  changedVoiceId = voiceId;
+                },
+                onClearCastVoiceOverride: (castId) {
+                  clearedCastId = castId;
+                },
               ),
-              VoiceLibraryEntry(
-                voice: _voice(id: 'am_michael', label: 'Michael'),
-                isBundled: false,
-                isInstalled: true,
-              ),
-            ],
-            availableVoices: <VoiceProfile>[
-              _voice(
-                id: 'af_bella',
-                label: 'Bella',
-                gender: VoiceGender.female,
-                qualityGrade: 'A-',
-                traits: const <String>['warm'],
-                description: 'Balanced and clear.',
-              ),
-              _voice(id: 'am_michael', label: 'Michael'),
-            ],
-            characterCastRegistry: _richRegistry(),
-            castVoiceAssignments: CastVoiceAssignmentSet(
-              documentId: 'doc_1',
-              assignmentVersion: 'v1',
-              assignments: <CastVoiceAssignment>[
-                CastVoiceAssignment(
-                  castId: 'cast_narrator',
-                  effectiveVoiceId: 'af_bella',
-                  decisionKind: VoiceAssignmentDecisionKind.automatic,
-                  automaticVoiceId: 'af_bella',
-                ),
-                CastVoiceAssignment(
-                  castId: 'cast_character_jennifer',
-                  effectiveVoiceId: 'am_michael',
-                  decisionKind: VoiceAssignmentDecisionKind.userOverride,
-                  automaticVoiceId: 'af_bella',
-                  userOverrideVoiceId: 'am_michael',
-                ),
-              ],
             ),
-            selectedVoiceId: 'af_bella',
-            previewStateForVoice: (_) => VoicePreviewState.idle,
-            onClose: () {},
-            onSelectLibraryVoice: (_) {},
-            onInstallVoice: (_) {},
-            onToggleVoicePreview: (voiceId) {
-              previewVoiceId = voiceId;
-            },
-            onAssignCastVoice: (castId, voiceId) {
-              changedCastId = castId;
-              changedVoiceId = voiceId;
-            },
-            onClearCastVoiceOverride: (castId) {
-              clearedCastId = castId;
-            },
           ),
-        ),
-      ),
+        );
+
+        expect(find.text('Cast Assignments'), findsOneWidget);
+        expect(find.text('Narrator'), findsOneWidget);
+        expect(find.text('Automatic'), findsOneWidget);
+        expect(find.text('Female'), findsOneWidget);
+        expect(find.text('Balanced and clear.'), findsWidgets);
+
+        await tester.tap(find.byTooltip('Preview voice').first);
+        await tester.pump();
+
+        expect(previewVoiceId, 'af_bella');
+
+        await tester.scrollUntilVisible(
+          find.text('Jennifer'),
+          160,
+          scrollable: find.byType(Scrollable).first,
+        );
+        expect(find.text('Jennifer'), findsOneWidget);
+        expect(find.text(stored ? 'Stored' : 'Overridden'), findsOneWidget);
+        expect(find.text('Automatic voice: Bella (en-US)'), findsOneWidget);
+
+        await tester.ensureVisible(
+          find.descendant(
+            of: find.byKey(const Key('voice-assignment-card-Jennifer')),
+            matching: find.byType(DropdownButtonFormField<String>),
+          ),
+        );
+        await tester.pumpAndSettle();
+        await tester.tap(
+          find.descendant(
+            of: find.byKey(const Key('voice-assignment-card-Jennifer')),
+            matching: find.byType(DropdownButtonFormField<String>),
+          ),
+        );
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('Bella (en-US)').last);
+        await tester.pumpAndSettle();
+
+        expect(changedCastId, 'cast_character_jennifer');
+        expect(changedVoiceId, 'af_bella');
+
+        await tester.ensureVisible(find.text('Use Automatic Assignment'));
+
+        await tester.tap(
+          find.widgetWithText(TextButton, 'Use Automatic Assignment'),
+        );
+        await tester.pumpAndSettle();
+
+        expect(clearedCastId, 'cast_character_jennifer');
+      },
     );
-
-    expect(find.text('Cast Assignments'), findsOneWidget);
-    expect(find.text('Narrator'), findsOneWidget);
-    expect(find.text('Automatic'), findsOneWidget);
-    expect(find.text('Female'), findsOneWidget);
-    expect(find.text('Balanced and clear.'), findsWidgets);
-
-    await tester.tap(find.byTooltip('Preview voice').first);
-    await tester.pump();
-
-    expect(previewVoiceId, 'af_bella');
-
-    await tester.scrollUntilVisible(
-      find.text('Jennifer'),
-      160,
-      scrollable: find.byType(Scrollable).first,
-    );
-    expect(find.text('Jennifer'), findsOneWidget);
-    expect(find.text('Overridden'), findsOneWidget);
-    expect(find.text('Automatic voice: Bella (en-US)'), findsOneWidget);
-
-    await tester.ensureVisible(
-      find.descendant(
-        of: find.byKey(const Key('voice-assignment-card-Jennifer')),
-        matching: find.byType(DropdownButtonFormField<String>),
-      ),
-    );
-    await tester.pumpAndSettle();
-    await tester.tap(
-      find.descendant(
-        of: find.byKey(const Key('voice-assignment-card-Jennifer')),
-        matching: find.byType(DropdownButtonFormField<String>),
-      ),
-    );
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('Bella (en-US)').last);
-    await tester.pumpAndSettle();
-
-    expect(changedCastId, 'cast_character_jennifer');
-    expect(changedVoiceId, 'af_bella');
-
-    await tester.ensureVisible(find.text('Use Automatic Assignment'));
-
-    await tester.tap(
-      find.widgetWithText(TextButton, 'Use Automatic Assignment'),
-    );
-    await tester.pumpAndSettle();
-
-    expect(clearedCastId, 'cast_character_jennifer');
-  });
+  }
 
   testWidgets('reduces to narrator management when no characters exist', (
     WidgetTester tester,

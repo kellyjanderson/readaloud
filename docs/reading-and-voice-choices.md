@@ -18,7 +18,7 @@ Downloaded models remain in Application Support and are reused by normal develop
 
 The character list includes speakers discovered across all prepared sections, even when the reader is still showing an earlier section. It updates as preparation advances and retains explicit assignments. The discovery summary distinguishes partial preparation from completed analysis. More characters can appear as you listen or scroll; heuristic detection can still miss or misidentify speakers, so completed analysis is not a guarantee of a complete cast.
 
-Narrator and character choices are remembered when you reopen the same unchanged document, including a book whose preparation has not finished. Choosing a voice explicitly keeps that choice even if it matches the current automatic assignment. Use **Reset** to return that role to automatic selection. Reset is remembered across reopening and is not undone by an older imported choice. If another engine cannot use a selected voice, a compatible fallback is used while the original choice is retained for returning to its engine.
+Narrator and character choices are remembered when you reopen the same unchanged document, including a book whose preparation has not finished. Choosing a voice explicitly keeps that choice even if it matches the current automatic assignment. Use **Use Automatic Assignment** to return that role to automatic selection. Reset is remembered across reopening and is not undone by an older imported choice. If another engine cannot use a selected voice, a compatible fallback is used while the original choice is retained for returning to its engine.
 
 Open **Character Voices** to manage narrator/cast assignments, or **Voice options** in single-voice mode. Assignment fields show requested choices. The footer keeps **Current** playback choices separate from **Pending** intent and reports preparing, applying or failure. Automatic speaker routing follows the prepared cast; it is separate from editing a voice assignment. Attribution remains heuristic, and selecting a voice does not correct a mistaken speaker attribution. The current selector may expose only one available choice for a character; the user-reported limitation is tracked for a future release in [issue #78](https://github.com/kellyjanderson/readaloud/issues/78).
 
@@ -51,3 +51,20 @@ RC2 UI and document-intake behavior is integrated through PR #99 on the feature 
 The [supplemental native run](https://github.com/kellyjanderson/readaloud/issues/53#issuecomment-6396165816) passed paused pending Play, injected failure/retry, stale startup failure, export cancellation/drain and A/B/A emitted-PCM comparisons, ending with zero native resources and pins. Its controlled assembly wait and frame callbacks do not establish CPU-load responsiveness or input latency. The user listened to an earlier app build and reported John missing from the cast; current integrated-binary A/B/A human listening remains outstanding. Long-run memory stability and permanently hung-native teardown also remain open. [P4](https://github.com/kellyjanderson/readaloud/issues/53) and [FINAL](https://github.com/kellyjanderson/readaloud/issues/54) remain open; no installed-release acceptance is implied.
 
 The picker restore path for `.radoc` is separate from the instrumented `radoc-v2` artifact codec: that codec decodes and re-encodes an immutable inspection snapshot, not the picker’s `ReaderDocument` restore operation. Neither restores native engine resources. RC2 implementation and automated evidence are recorded under [design #83](https://github.com/kellyjanderson/readaloud/issues/83), [persistence #90](https://github.com/kellyjanderson/readaloud/issues/90), and [picker intake #101](https://github.com/kellyjanderson/readaloud/issues/101). Native app, launch timing, release and human audio acceptance remain open; see [FINAL #54](https://github.com/kellyjanderson/readaloud/issues/54).
+
+## Where character choices are stored
+
+Character definitions and selected voices are stored per work in Application Support:
+`works/<SHA-256 of the stable work ID>/characters.json`. The file includes its readable
+`workId`, character labels and choices. On sandboxed macOS this is under
+`~/Library/Containers/com.kellyjanderson.readAloud/Data/Library/Application Support/com.kellyjanderson.readAloud/`.
+Existing preference data migrates automatically on first launch of this version.
+Global appearance, engine/default voice, bookmarks and last reading position remain
+app preferences; models and downloaded voices are separate.
+
+For a fresh character/voice test, quit the app, back up and remove only that work's
+`characters.json`, leave `works/migration.json` intact, and reopen the original source.
+Other works are unaffected. Opening an exported `.radoc` can restore its embedded
+choices. This reset does not delete the prepared-document cache or last reading
+position, so it is distinct from a full preparation test. The older build predating
+this migration still stores work records in its preference collection.

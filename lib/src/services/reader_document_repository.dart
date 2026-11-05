@@ -1,3 +1,4 @@
+import 'atomic_text_file.dart';
 import 'dart:convert';
 import 'dart:io';
 import 'dart:isolate';
@@ -387,7 +388,7 @@ class ReaderDocumentCheckpoint {
         if (utf8.encode(content).length > maxChunkBytes) {
           throw const FormatException('Checkpoint range exceeds bounded size');
         }
-        await _atomicWrite(target, content);
+        await atomicWriteText(target, content);
       });
       if (!isCurrent) throw StateError('Checkpoint was replaced');
       _count++;
@@ -478,12 +479,6 @@ class ReaderDocumentCheckpoint {
       }
     }
   }
-}
-
-Future<void> _atomicWrite(String path, String contents) async {
-  final temporary = File('$path.tmp');
-  await temporary.writeAsString(contents, flush: true);
-  await temporary.rename(path);
 }
 
 // Do not capture readCompleteDocument's cancellation closure or repository.

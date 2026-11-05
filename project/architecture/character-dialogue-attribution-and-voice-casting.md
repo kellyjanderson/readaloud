@@ -49,18 +49,34 @@ audible revisions; automatic analysis does not become a manual edit. A voice
 unavailable in another engine falls back for realization while retaining its
 original selection. Returning to the compatible engine restores that intent.
 
-The existing one-active/one-pending preference pump saves a versioned immutable
-character snapshot, `reader.workCharacters.v1`. Snapshot capture copies record
-references; recursive JSON conversion/validation runs in `Isolate.run`. A successful
-new write retires the legacy voice-map key. Future/corrupt schemas fail visibly and
-block default overwrites. `.radoc` v3 uses the same character codec and the existing
-atomic export writer; v1/v2 remain readable. Explicit export overlays the owner's
-captured registry, including Reset, on the prepared graph. Existing local intent
-wins over stale imported intent. Native assets remain external.
+The existing one-active/one-pending preference pump captures immutable character
+snapshots. `WorkCharacterRepository` stores each work in Application Support at
+`works/<sha256(stableWorkId)>/characters.json`, with its character records, selection
+revisions (including Reset), identity aliases, redirects and exact source associations.
+Unchanged files are not rewritten. Global appearance, engine/default voice, access
+bookmarks and the last reading position remain in preferences.
 
-**Limits:** this is the first ownership migration, not the entire R2 contract.
-Preferences currently load/save the retained work collection as one snapshot;
-there is no paged evidence repository or crash-durable character journal. Existing
+The repository admits one operation with no additional queue. Its short-lived
+`Isolate.run` worker owns JSON validation, hashing and file I/O; the controller's
+existing pump owns revision coalescing, stale failure handling and shutdown drain.
+A published work file is the commit unit, using the shared flushed temporary-file /
+same-directory rename helper. Canonical work association retires the superseded file
+only after the canonical record is readable. This is not a multi-work transaction.
+
+First load migrates the old character, cast-choice and source-map preference keys,
+validates all records, then writes `works/migration.json` before retiring those keys.
+Already published work files win on interrupted migration. Corrupt/future records or
+migration markers block writes rather than overwriting them. After migration, deleting
+one work's file while the app is closed resets that work without legacy resurrection.
+`.radoc` v3 reuses the same character codec; v1/v2 remain readable. Explicit import can
+restore saved choices; existing local intent wins over stale imported intent. Native
+assets remain external.
+
+**Limits:** this is a storage boundary within R2, not the entire contract. Startup
+still loads the retained work collection, and saves compare a complete snapshot;
+there is no paged evidence repository or crash-durable character journal. A first
+migration has no fractional UI progress and is not yet qualified for a huge library.
+Existing
 compact provider profiles do not recover evidence discarded before this slice.
 Provider-native entity reconciliation, split corrections, calibrated confidence,
 full attribute history and richer exact-model binding specs remain with

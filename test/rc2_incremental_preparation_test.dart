@@ -561,7 +561,7 @@ void main() {
             ownerId: controller.preparationOwnerId,
             documentRevision: controller.preparedDocumentRevision,
             sourceRevision:
-                '${controller.preparationOwnerId}:${controller.preparedDocumentRevision}',
+                controller.preparedRanges.first.request.effectiveSourceRevision,
             watchSession: current.watchSession,
             provisionalDocumentId: previous,
             canonicalDocumentId: 'verified-manifest-document',
