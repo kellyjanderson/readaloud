@@ -6,6 +6,7 @@ import 'package:crypto/crypto.dart';
 import 'package:path/path.dart' as p;
 
 import '../models/document_preparation.dart';
+import '../models/character_cast_registry.dart';
 import '../models/reader_document.dart';
 import 'reader_document_serialization_service.dart';
 
@@ -180,6 +181,7 @@ class ReaderDocumentCache {
     required String outputPath,
     bool Function()? isCurrent,
     Map<String, String> userVoiceAssignments = const {},
+    CharacterCastRegistry? characters,
   }) async {
     await requirePreservedDocumentExportPath(
       outputPath,
@@ -196,6 +198,7 @@ class ReaderDocumentCache {
       outputPath: outputPath,
       isCurrent: isCurrent,
       userVoiceAssignments: userVoiceAssignments,
+      characters: characters,
     );
   }
 

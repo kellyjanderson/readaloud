@@ -658,8 +658,7 @@ class _ReadAloudScreenState extends State<ReadAloudScreen> {
         : 'Voice options';
     final label = switch (state.phase) {
       VoiceAssignmentPhase.current => 'Current voice choices',
-      VoiceAssignmentPhase.pending =>
-        'Pending voice change — open $managerLabel to apply',
+      VoiceAssignmentPhase.pending => 'Voice selection saved — ready for Play',
       VoiceAssignmentPhase.preparing =>
         state.isInitialBuffering
             ? 'Preparing latest voice choices before playback'
@@ -1229,9 +1228,6 @@ class _ReadAloudScreenState extends State<ReadAloudScreen> {
               castVoiceAssignments: _controller.castVoiceAssignments,
               selectedVoiceId: _controller.selectedVoice?.id,
               assignmentState: _controller.voiceAssignmentState,
-              onApplyAssignments: () {
-                unawaited(_controller.applyPendingVoiceAssignments());
-              },
               onRetryAssignments: () {
                 unawaited(_controller.retryVoiceAssignments());
               },

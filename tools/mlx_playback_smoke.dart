@@ -12,6 +12,7 @@ import 'package:read_aloud/src/app.dart';
 import 'package:read_aloud/src/controllers/reader_controller.dart';
 import 'package:read_aloud/src/services/kokoro_tts_engine.dart';
 import 'package:read_aloud/src/models/spoken_chunk_record.dart';
+import 'package:read_aloud/src/models/voice_profile.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 class SmokeController extends ReaderController {
@@ -112,6 +113,57 @@ Future<void> main(List<String> args) async {
     receipt['characters'] = controller.document.characterCastRegistry.entries
         .map((entry) => entry.castId)
         .toList();
+    final characterName = Platform.environment['READALOUD_SMOKE_CHARACTER'];
+    String? contractCastId, contractVoiceId;
+    if (characterName != null) {
+      if (documentPath == null) {
+        throw StateError('Character reopen probe requires a document path');
+      }
+      final character = controller.characterCastRegistry.characterEntries
+          .singleWhere((entry) => entry.displayLabel == characterName);
+      contractCastId = character.castId;
+      final previous = controller.castVoiceAssignments!
+          .forCastId(contractCastId)!
+          .effectiveVoiceId;
+      final choices = controller.voices
+          .where(
+            (voice) =>
+                (character.inferredGender == null ||
+                    character.inferredGender == VoiceGender.neutral ||
+                    voice.gender == character.inferredGender) &&
+                voice.id != previous &&
+                (!args[0].startsWith('fish_drama3') ||
+                    voice.id.startsWith('library_fish')),
+          )
+          .toList();
+      if (choices.isEmpty) {
+        throw StateError('No alternative compatible voice for $characterName');
+      }
+      contractVoiceId = choices.last.id;
+      await controller.assignVoiceToCast(contractCastId, contractVoiceId);
+      await controller.importFilePaths([documentPath]);
+      final reopened = controller.characterCastRegistry.forCastId(
+        contractCastId,
+      )!;
+      if (reopened.selectedVoice.voiceId != contractVoiceId ||
+          controller.castVoiceAssignments!
+                  .forCastId(contractCastId)!
+                  .effectiveVoiceId !=
+              contractVoiceId) {
+        throw StateError(
+          'Explicit character voice did not survive source reopen',
+        );
+      }
+      receipt['voiceContract'] = {
+        'case': 'VS16-native',
+        'character': characterName,
+        'genderEvidence': character.inferredGender?.name,
+        'castId': contractCastId,
+        'original': previous,
+        'selected': contractVoiceId,
+        'reopenedSelectionRevision': reopened.selectedVoice.revision,
+      };
+    }
     final initialCast = {
       for (final entry in controller.characterCastRegistry.characterEntries)
         entry.castId: {
@@ -155,6 +207,51 @@ Future<void> main(List<String> args) async {
       0,
       (sum, range) => sum + range.fragment.wordCount,
     );
+    if (Platform.environment['READALOUD_SMOKE_AUTO_VOICE_CHANGE'] == '1') {
+      if (contractCastId == null) {
+        throw StateError('Automatic-change probe requires a character');
+      }
+      final previous = contractVoiceId!;
+      final next = controller.voices
+          .firstWhere(
+            (v) =>
+                v.id != previous &&
+                v.id.startsWith('library_fish') &&
+                v.gender ==
+                    controller.voices
+                        .firstWhere((v) => v.id == previous)
+                        .gender,
+          )
+          .id;
+      final switchStarted = watch.elapsedMilliseconds;
+      await controller.assignVoiceToCast(contractCastId, next);
+      final changeDeadline = DateTime.now().add(const Duration(minutes: 2));
+      while (DateTime.now().isBefore(changeDeadline) &&
+          (controller.voiceAssignmentState.hasPending ||
+              !player.playing ||
+              player.position.inMilliseconds < 500)) {
+        await Future<void>.delayed(const Duration(milliseconds: 50));
+      }
+      if (controller.voiceAssignmentState.hasPending ||
+          !player.playing ||
+          controller.voiceAssignmentState.effectiveCastVoices[contractCastId] !=
+              next) {
+        throw StateError(
+          'Automatic selection did not reach current native acknowledgment',
+        );
+      }
+      receipt['automaticVoiceChange'] = {
+        'from': previous,
+        'to': next,
+        'elapsedMs': watch.elapsedMilliseconds - switchStarted,
+        'acknowledgedRevision':
+            controller.voiceAssignmentState.effectiveRevision,
+        'positionMs': player.position.inMilliseconds,
+      };
+      contractVoiceId = next;
+      // This one explicit user edit is expected; other characters remain stable.
+      initialCast[contractCastId]!['voice'] = next;
+    }
     final soakSeconds =
         int.tryParse(
           Platform.environment['READALOUD_SMOKE_PLAY_SECONDS'] ?? '0',
@@ -232,6 +329,29 @@ Future<void> main(List<String> args) async {
             'Unchanged character evidence reassigned its voice: ${entry['castId']}',
           );
         }
+      }
+    }
+    if (contractCastId != null) {
+      final bindings = controller.resolvedResourceBindings
+          .where((b) => b.assignment.castId == contractCastId)
+          .toList();
+      receipt['characterBindings'] = bindings.map((b) => b.toMap()).toList();
+      if (bindings.isEmpty ||
+          bindings.any((b) => b.resource.voiceId != contractVoiceId)) {
+        throw StateError(
+          'Selected character did not bind to the selected native reference',
+        );
+      }
+      final turns = controller.spokenChunkRecords
+          .where((c) => c.castId == contractCastId)
+          .toList();
+      receipt['characterSpokenTurns'] = turns.length;
+      if (!turns.any((c) => c.voiceId == contractVoiceId && c.completed) ||
+          (Platform.environment['READALOUD_SMOKE_AUTO_VOICE_CHANGE'] != '1' &&
+              turns.any((c) => c.voiceId != contractVoiceId))) {
+        throw StateError(
+          'No correctly selected character turn reached playback',
+        );
       }
     }
     receipt['preparationCompleteMs'] = preparationCompleteMs;
@@ -316,6 +436,9 @@ Future<void> main(List<String> args) async {
     await file.writeAsString(
       const JsonEncoder.withIndent('  ').convert(receipt),
     );
-    exit(passed ? 0 : 1);
+    if (Platform.environment['READALOUD_SMOKE_NORMAL_QUIT'] != '1') {
+      exit(passed ? 0 : 1);
+    }
+    // The test driver now invokes the application normal Quit action.
   }
 }

@@ -1,9 +1,11 @@
 import 'dart:convert';
+import 'dart:isolate';
 
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../models/reader_appearance_mode.dart';
 import '../models/reader_resume_state.dart';
+import 'work_character_store.dart';
 
 class ReaderPreferences {
   const ReaderPreferences({
@@ -16,6 +18,7 @@ class ReaderPreferences {
     required this.voiceSpeeds,
     required this.storedDocumentCastVoiceAssignments,
     this.sourceVoiceDocumentIds = const {},
+    this.characterSnapshot,
     this.resumeState,
     this.selectedVoiceId,
     this.lastOpenedDocumentPath,
@@ -42,6 +45,7 @@ class ReaderPreferences {
   /// Exact source revisions map to the preference owner, independently of the
   /// temporary document IDs used while an unfinished book is being prepared.
   final Map<String, String> sourceVoiceDocumentIds;
+  final CharacterStoreSnapshot? characterSnapshot;
   final ReaderResumeState? resumeState;
   final String? lastOpenedDocumentPath;
   final String? lastOpenedDocumentAccessToken;
@@ -62,6 +66,7 @@ class ReaderPreferencesService {
   static const String _storedDocumentCastVoiceAssignmentsKey =
       'reader.storedDocumentCastVoiceAssignments';
   static const _sourceVoiceDocumentIdsKey = 'reader.sourceVoiceDocumentIds';
+  static const _characterSnapshotKey = 'reader.workCharacters.v1';
   static const String _lastOpenedDocumentPathKey =
       'reader.lastOpenedDocumentPath';
   static const String _lastOpenedDocumentAccessTokenKey =
@@ -71,8 +76,26 @@ class ReaderPreferencesService {
   static const String _lastOpenedDirectoryAccessTokenKey =
       'reader.lastOpenedDirectoryAccessToken';
 
+  Object? _characterLoadError;
+
   Future<ReaderPreferences> load() async {
     final preferences = await SharedPreferences.getInstance();
+    CharacterStoreSnapshot? snapshot;
+    try {
+      final text = preferences.getString(_characterSnapshotKey);
+      snapshot = text == null
+          ? null
+          : await Isolate.run(
+              () => WorkCharacterStore.fromJson(
+                (jsonDecode(text) as Map).cast<String, dynamic>(),
+              ).snapshot(),
+            );
+      _characterLoadError = null;
+    } catch (error) {
+      _characterLoadError = error;
+      rethrow;
+    }
+    final characters = snapshot?.restore();
     return ReaderPreferences(
       voxtralQuantizationBits: preferences.getInt(_voxtralBitsKey) == 4 ? 4 : 0,
       ttsEngineId:
@@ -93,9 +116,11 @@ class ReaderPreferencesService {
           preferences.getBool(_multiVoiceEnabledKey) ??
           ReaderPreferences.defaultMultiVoiceEnabled,
       storedDocumentCastVoiceAssignments:
+          characters?.legacySelections ??
           _decodeStoredDocumentCastVoiceAssignments(
             preferences.getString(_storedDocumentCastVoiceAssignmentsKey),
           ),
+      characterSnapshot: snapshot,
       sourceVoiceDocumentIds: _decodeStringMap(
         preferences.getString(_sourceVoiceDocumentIdsKey),
       ),
@@ -124,6 +149,7 @@ class ReaderPreferencesService {
     required Map<String, Map<String, String>>
     storedDocumentCastVoiceAssignments,
     Map<String, String> sourceVoiceDocumentIds = const {},
+    CharacterStoreSnapshot? characterSnapshot,
     ReaderResumeState? resumeState,
     String? selectedVoiceId,
     String? lastOpenedDocumentPath,
@@ -131,6 +157,11 @@ class ReaderPreferencesService {
     String? lastOpenedDirectoryPath,
     String? lastOpenedDirectoryAccessToken,
   }) async {
+    if (_characterLoadError != null) {
+      throw StateError(
+        'Character storage could not be read; preserving it: $_characterLoadError',
+      );
+    }
     final preferences = await SharedPreferences.getInstance();
 
     await preferences.setInt(_voxtralBitsKey, voxtralQuantizationBits);
@@ -151,10 +182,20 @@ class ReaderPreferencesService {
     );
     await preferences.setBool(_multiVoiceEnabledKey, multiVoiceEnabled);
     await preferences.setString(_voiceSpeedsKey, jsonEncode(voiceSpeeds));
-    await preferences.setString(
-      _storedDocumentCastVoiceAssignmentsKey,
-      jsonEncode(storedDocumentCastVoiceAssignments),
-    );
+    if (characterSnapshot != null) {
+      final encoded = await Isolate.run(
+        () => jsonEncode(characterSnapshot.toJson()),
+      );
+      final saved = await preferences.setString(_characterSnapshotKey, encoded);
+      if (!saved) throw StateError('Could not persist character choices');
+      // Legacy preferences are migration input only. Never keep two writers.
+      await preferences.remove(_storedDocumentCastVoiceAssignmentsKey);
+    } else {
+      await preferences.setString(
+        _storedDocumentCastVoiceAssignmentsKey,
+        jsonEncode(storedDocumentCastVoiceAssignments),
+      );
+    }
     await preferences.setString(
       _sourceVoiceDocumentIdsKey,
       jsonEncode(sourceVoiceDocumentIds),

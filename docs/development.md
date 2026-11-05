@@ -20,6 +20,22 @@ ruby tools/check_docs.rb
 
 Run focused tests first when changing one subsystem. Native session lifetime, actual audio output and visible UI responsiveness require running-app/native checks. Pure Dart or widget tests do not establish these. Generated outputs remain ignored under `project/test-artifacts/` and `tmp/`.
 
+The expandable voice-selection contract uses stable `VS` case IDs. Run:
+
+```sh
+tools/flutter test test/character_voice_selection_contract_test.dart test/character_analysis_adapter_test.dart test/reader_document_serialization_service_test.dart test/reader_preferences_service_test.dart test/reader_voice_assignment_revision_test.dart
+```
+
+Keep these cases when replacing attribution providers. Add prose-to-character
+oracles separately so wrong attribution cannot pass merely because a wrong
+character consistently uses one voice. The native smoke accepts
+`READALOUD_SMOKE_CHARACTER=Mara` with a City fixture path: it selects an alternate
+compatible voice, reopens the source, and requires the chosen voice in prepared
+references and played character turns. `READALOUD_SMOKE_NORMAL_QUIT=1` leaves the
+finished test app alive after writing its receipt so the driver can issue normal
+Quit and verify exit. This flag requires a supervising driver; it is not for an
+unattended launch without cleanup. Existing smoke defaults remain self-cleaning.
+
 For native accessibility checks, launch the exact isolated app bundle in the foreground before acquiring its AX tree. Background acquisition can time out or return stale observations; foreground launch is a diagnostic prerequisite, not proof that the app fixes that behavior. Verify named transport buttons and their state changes through actual actions. Keep native action evidence separate from widget semantics and keyboard tests.
 
 See [architecture](../project/architecture/README.md) for source/test locations and [contributing](../CONTRIBUTING.md) for the GitHub planning workflow. No current fresh test-pass or release qualification is implied by this setup guide.
@@ -48,3 +64,10 @@ For an isolated export baseline, add `PRODUCT_BUNDLE_IDENTIFIER=com.kellyjanders
 ## Resident resource validation
 
 Build the P2 lifetime probe with `tools/flutter build macos --debug -t tools/p2_native_probe.dart`, then use the command-scoped Xcode workaround above with `PRODUCT_BUNDLE_IDENTIFIER=com.kellyjanderson.readAloud.p2`. Run `ruby tools/run_p2_native_probe.rb <app-executable> <new-container-output-directory>`, choosing a new path inside `~/Library/Containers/com.kellyjanderson.readAloud.p2/Data/tmp/`. It runs 300 uncached A/B/A chunks and six close-cycle chunks, records actual asset/PCM hashes and RSS, requires native session/tensor bounds and normal close, and strictly decodes every WAV with ffmpeg. Model weights remain local prerequisites. This probe establishes resource lifetime and emitted PCM validity; it does not establish audible continuity or provider quality. Restore the ordinary app entry point before subsequent user-interface builds.
+
+For the automatic-selection native case, add `READALOUD_SMOKE_AUTO_VOICE_CHANGE=1`
+to the existing named-character City excerpt probe. It selects another compatible
+Fish voice during active playback, never calls Apply, and requires a current engine
+acknowledgment, new selected binding and a completed selected-character turn.
+This proves the routing path, not perceived age/timbre or smooth switching. Keep
+`READALOUD_SMOKE_NORMAL_QUIT=1` and verify the cleanup receipt.

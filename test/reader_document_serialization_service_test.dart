@@ -1,4 +1,6 @@
 import 'dart:convert';
+import 'package:read_aloud/src/models/character.dart';
+import 'package:read_aloud/src/services/work_character_store.dart';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
@@ -10,6 +12,71 @@ void main() {
   group('ReaderDocumentSerializationService', () {
     const serializationService = ReaderDocumentSerializationService();
 
+    test(
+      'VS15 radoc v3 retains authoritative choice and Reset independently of legacy overrides',
+      () {
+        final document = DocumentImportService().importPastedText(
+          '"Wait," Lena said.',
+        );
+        final owner = WorkCharacterStore();
+        const work = 'work-persistent';
+        owner.mergeEvidence(work, document.characterCastRegistry);
+        owner.select(work, 'cast_narrator', 'voice-b');
+        final selected = serializationService.serializeToJsonString(
+          document,
+          characters: owner.registry(
+            work,
+            documentId: document.characterCastRegistry.documentId,
+          ),
+        );
+        owner.select(work, 'cast_narrator', null);
+        final reset = serializationService.serializeToJsonString(
+          document,
+          characters: owner.registry(
+            work,
+            documentId: document.characterCastRegistry.documentId,
+          ),
+          userVoiceAssignments: {'cast_narrator': 'obsolete'},
+        );
+        final reopened = WorkCharacterStore();
+        final decodedReset = decodeReaderDocumentWithPreferences(reset);
+        reopened.restoreDocument(
+          'new-file-id',
+          decodedReset.document.characterCastRegistry,
+        );
+        reopened.migrateLegacy({
+          'new-file-id': decodedReset.userVoiceAssignments,
+        });
+        reopened.restoreDocument(
+          'new-file-id',
+          decodeReaderDocument(selected).characterCastRegistry,
+        );
+        expect(
+          reopened
+              .character('new-file-id', 'cast_narrator')!
+              .selectedVoice
+              .mode,
+          VoiceSelectionMode.automatic,
+        );
+        expect(
+          reopened
+              .character('new-file-id', 'cast_narrator')!
+              .selectedVoice
+              .revision,
+          2,
+        );
+        final fresh = WorkCharacterStore()
+          ..restoreDocument(
+            'copy',
+            decodeReaderDocument(selected).characterCastRegistry,
+          );
+        expect(
+          fresh.character('copy', 'cast_narrator')!.selectedVoice.voiceId,
+          'voice-b',
+        );
+        expect(fresh.character('copy', 'cast_narrator')!.workId, work);
+      },
+    );
     test(
       'optional voice overrides round trip and malformed data fails closed',
       () {

@@ -1,3 +1,5 @@
+import '../services/character_analysis_adapter.dart';
+import '../services/work_character_store.dart';
 import '../models/speech_engine_catalog.dart';
 import '../services/speech_planning_supervisor.dart';
 import '../services/voice_assignment_coordinator.dart';
@@ -39,7 +41,6 @@ import '../models/voice_session_realization.dart';
 import '../models/voice_preview_state.dart';
 import '../models/voice_profile.dart';
 import '../services/cast_aware_speech_route_service.dart';
-import '../services/cast_voice_assignment_service.dart';
 import '../services/default_tts_engine.dart';
 import '../services/document_access_service.dart';
 import '../services/document_import_service.dart';
@@ -407,34 +408,8 @@ class ReaderController extends ChangeNotifier {
     }
     final previous = sessionDocumentId;
     final canonical = migration.canonicalDocumentId;
-    final sourcePreferenceOwner =
-        _sourceVoiceDocumentIds[_activeSourceRevision];
     final preferenceOwner = _voicePreferenceDocumentId;
-    final choices = _storedDocumentCastVoiceAssignments[preferenceOwner];
-    if (sourcePreferenceOwner != null && sourcePreferenceOwner != canonical) {
-      // This source's saved snapshot is authoritative, including absence after
-      // Reset. Older canonical choices must not undo edits made before EOF.
-      if (choices == null || choices.isEmpty) {
-        _storedDocumentCastVoiceAssignments.remove(canonical);
-      } else {
-        _storedDocumentCastVoiceAssignments[canonical] = Map.of(choices);
-      }
-    } else if (choices != null) {
-      final canonicalChoices = _storedDocumentCastVoiceAssignments.putIfAbsent(
-        canonical,
-        () => {},
-      );
-      for (final choice in choices.entries) {
-        final currentEdit = _preparedDocumentRevision == _documentRevision
-            ? _castVoiceOverrides[choice.key]
-            : null;
-        if (currentEdit != null) {
-          canonicalChoices[choice.key] = currentEdit;
-        } else {
-          canonicalChoices.putIfAbsent(choice.key, () => choice.value);
-        }
-      }
-    }
+    _characters.associate(preferenceOwner, canonical);
     _documentIdentityRedirects[previous] = canonical;
     _sessionDocumentId = canonical;
     if (_activeSourceRevision case final source?) {
@@ -589,6 +564,12 @@ class ReaderController extends ChangeNotifier {
       _invalidateResourceBindings();
       await startPlayback();
     } catch (error) {
+      if (_disposed ||
+          documentRevision != _documentRevision ||
+          applyIntent != _playbackIntent ||
+          !_resumeAfterPreparation) {
+        return;
+      }
       _voiceAssignments.fail(revision, error);
       notifyListeners();
     } finally {
@@ -627,6 +608,9 @@ class ReaderController extends ChangeNotifier {
 
   Future<void> _voiceChoicesEdited() async {
     final initial = _isInitialVoiceBuffering;
+    final retrying =
+        _resumeAfterPreparation &&
+        voiceAssignmentState.phase == VoiceAssignmentPhase.failed;
     _captureRequestedVoiceChoices(initialBuffering: initial);
     notifyListeners();
     if (initial) {
@@ -642,6 +626,12 @@ class ReaderController extends ChangeNotifier {
       _playbackStartPending = true;
       unawaited(_stopSupersededStartup());
       unawaited(_drivePlaybackStarts());
+    } else if (retrying ||
+        _isPlaying ||
+        (_resumeAfterPreparation && _playbackActivity.isBuffering)) {
+      // Reuse the single playback driver: selection is intent, while the
+      // current request acknowledgment remains the authority for audible voice.
+      unawaited(applyPendingVoiceAssignments());
     }
     await _persistPreferences();
   }
@@ -694,6 +684,8 @@ class ReaderController extends ChangeNotifier {
     _preparedWordCount = 0;
     _rangeReads.clear();
     _preparedRanges.clear();
+    _characters.cancelAnalysis();
+    _characterAnalysisKey = null;
     _discoveredCast.clear();
     _castRedirects.clear();
     _documentIdentityRedirects.clear();
@@ -890,12 +882,15 @@ class ReaderController extends ChangeNotifier {
             if (!current()) return;
           }
         }
+        // Validate the provider boundary before admitting the prepared range.
+        _mergeDiscoveredCast(
+          publication.fragment.characterCastRegistry,
+          document: publication.fragment,
+        );
         _publicationSequence = publication.sequence;
         _preparedWordCount = publication.range.wordEnd;
         _preparedRanges.add(publication);
         _signalRanges();
-        final registry = publication.fragment.characterCastRegistry;
-        _mergeDiscoveredCast(registry);
         for (final progress in publication.progress) {
           if (publication.coverage.contains(progress.stage) ||
               progress.scope == 'cache' ||
@@ -1036,8 +1031,6 @@ class ReaderController extends ChangeNotifier {
   int _runningVoxtralQuantizationBits = 0;
   String _runningTtsEngineId = ReaderPreferences.defaultTtsEngineId;
   final bool _enablePlatformIntakeChannels;
-  final CastVoiceAssignmentService _castVoiceAssignmentService =
-      const CastVoiceAssignmentService();
   final EnglishPronunciationProfileSelector _pronunciationProfileSelector =
       const EnglishPronunciationProfileSelector();
   final PronunciationResourceLayeringService
@@ -1063,8 +1056,11 @@ class ReaderController extends ChangeNotifier {
   String? _lastOpenedDocumentAccessToken;
   String? _lastOpenedDirectoryPath;
   String? _lastOpenedDirectoryAccessToken;
-  final Map<String, Map<String, String>> _storedDocumentCastVoiceAssignments =
-      <String, Map<String, String>>{};
+  WorkCharacterStore _characters = WorkCharacterStore();
+  Map<String, Map<String, String>> get _storedDocumentCastVoiceAssignments =>
+      _characters.legacySelections;
+  String? _characterAnalysisKey;
+  int _characterDeltaSequence = 0;
   ReaderResumeState? _resumeState;
   String? _currentDocumentPath;
   String? _liveReadFilePath;
@@ -1094,7 +1090,11 @@ class ReaderController extends ChangeNotifier {
   ChunkPlan? _currentChunkPlan;
   final Map<String, SpokenChunkRecord> _spokenChunkRecords =
       <String, SpokenChunkRecord>{};
-  final Map<String, String> _castVoiceOverrides = <String, String>{};
+  final Set<String> _editedCastIds = {};
+  Map<String, String> get _castVoiceOverrides => Map.unmodifiable({
+    for (final e in _characters.selections(_voicePreferenceDocumentId).entries)
+      if (_editedCastIds.contains(e.key)) e.key: e.value,
+  });
   final Map<String, String> _sourceVoiceDocumentIds = {};
   String? _activeSpokenChunkId;
   String? _ttsDebugTraceLogPath;
@@ -1255,7 +1255,18 @@ class ReaderController extends ChangeNotifier {
 
   Future<void> initialize() async {
     _initializationStarted = true;
-    final preferences = await _preferencesService.load();
+    late final ReaderPreferences preferences;
+    try {
+      preferences = await _preferencesService.load();
+    } catch (error) {
+      _startupError =
+          'Could not read saved character choices. Stored data has been preserved. $error';
+      _statusMessage = _startupError;
+      _isInitializing = false;
+      if (!_preferencesReady.isCompleted) _preferencesReady.complete();
+      notifyListeners();
+      return;
+    }
     _voxtralQuantizationBits = preferences.voxtralQuantizationBits;
     _runningVoxtralQuantizationBits = _voxtralQuantizationBits;
     _selectedTtsEngineId = _knownTtsEngineIds.contains(preferences.ttsEngineId)
@@ -1288,9 +1299,12 @@ class ReaderController extends ChangeNotifier {
     _fontScale = preferences.fontScale;
     _appearanceMode = preferences.appearanceMode;
     _isMultiVoiceEnabled = preferences.multiVoiceEnabled;
-    _storedDocumentCastVoiceAssignments
-      ..clear()
-      ..addAll(preferences.storedDocumentCastVoiceAssignments);
+    _characters = preferences.characterSnapshot == null
+        ? WorkCharacterStore()
+        : preferences.characterSnapshot!.restore();
+    if (preferences.characterSnapshot == null) {
+      _characters.migrateLegacy(preferences.storedDocumentCastVoiceAssignments);
+    }
     _sourceVoiceDocumentIds
       ..clear()
       ..addAll(preferences.sourceVoiceDocumentIds);
@@ -2518,7 +2532,7 @@ class ReaderController extends ChangeNotifier {
     }
     // Selecting a voice expresses intent even when it matches today's
     // automatic assignment. Only Reset returns the role to automatic routing.
-    _castVoiceOverrides[castId] = voiceId;
+    _editedCastIds.add(castId);
     _storeCastVoiceAssignment(castId, voiceId);
     await _voiceChoicesEdited();
   }
@@ -2529,7 +2543,7 @@ class ReaderController extends ChangeNotifier {
         !storedAssignments.containsKey(castId)) {
       return;
     }
-    _castVoiceOverrides.remove(castId);
+    _editedCastIds.remove(castId);
     _clearStoredCastVoiceAssignment(castId);
     await _voiceChoicesEdited();
   }
@@ -2731,11 +2745,6 @@ class ReaderController extends ChangeNotifier {
       notifyListeners();
       return null;
     }
-    if (voiceAssignmentState.hasPending) {
-      _statusMessage = 'Apply pending voice choices before saving audio.';
-      notifyListeners();
-      return null;
-    }
     final exporter = _ttsEngine is AudioExportCapable
         ? _ttsEngine as AudioExportCapable
         : null;
@@ -2785,7 +2794,9 @@ class ReaderController extends ChangeNotifier {
       if (exportAssignmentRevision != voiceAssignmentState.requestedRevision) {
         throw const PlanningCancelled();
       }
-      if (!isResourcesReady || !_hasCompleteDocumentSnapshot) {
+      if (!isResourcesReady ||
+          _preparedAssignmentRevision != exportAssignmentRevision ||
+          !_hasCompleteDocumentSnapshot) {
         await _prepareResourceBindings(exportRevision, document: document);
       }
 
@@ -2820,7 +2831,7 @@ class ReaderController extends ChangeNotifier {
     }
   }
 
-  /// Exports a regular v2 snapshot that the normal Open Document route reads.
+  /// Exports a regular v3 snapshot that the normal Open Document route reads.
   /// Only a complete in-memory graph or complete committed checkpoint qualifies.
   /// Replacement/cancellation suppresses the atomic rename of a staged export.
   Future<File?> exportDocumentToPath(String outputPath) async {
@@ -2837,10 +2848,13 @@ class ReaderController extends ChangeNotifier {
   Future<File?> _exportDocumentToPath(String outputPath) async {
     if (!hasCompleteDocumentSnapshot || _isExporting) return null;
     final revision = _documentRevision;
-    final assignments = Map<String, String>.unmodifiable({
-      ..._currentStoredCastVoiceAssignments(),
-      ..._castVoiceOverrides,
-    });
+    final assignments = Map<String, String>.unmodifiable(
+      _characters.selections(_voicePreferenceDocumentId),
+    );
+    final characters = _characters.registry(
+      _voicePreferenceDocumentId,
+      documentId: sessionDocumentId,
+    );
     _isExporting = true;
     bool current() => !_disposed && revision == _documentRevision;
     notifyListeners();
@@ -2869,6 +2883,7 @@ class ReaderController extends ChangeNotifier {
           outputPath: outputPath,
           isCurrent: current,
           userVoiceAssignments: assignments,
+          characters: characters,
         );
       }
       final document = await _completeExportDocument(revision);
@@ -2877,6 +2892,7 @@ class ReaderController extends ChangeNotifier {
         outputPath: outputPath,
         isCurrent: current,
         userVoiceAssignments: assignments,
+        characters: characters,
       );
     } catch (error) {
       if (current()) {
@@ -3073,9 +3089,10 @@ class ReaderController extends ChangeNotifier {
         sourcePath: sourcePath,
         revision: revision,
         restoredVoiceAssignments: restored.userVoiceAssignments,
+        restoreCharacters: true,
       );
       _requireRevision(revision);
-      if (restored.userVoiceAssignments.isNotEmpty) await _persistPreferences();
+      await _persistPreferences();
       _requireRevision(revision);
       await _rememberOpenedDocumentPath(sourcePath, revision: revision);
       return;
@@ -3240,6 +3257,7 @@ class ReaderController extends ChangeNotifier {
     String? statusMessage,
     String? sourcePath,
     Map<String, String> restoredVoiceAssignments = const {},
+    bool restoreCharacters = false,
   }) async {
     _requireRevision(revision);
     _activePlaybackDocumentId = null;
@@ -3255,16 +3273,16 @@ class ReaderController extends ChangeNotifier {
         _preparationComplete && _publicationSequence <= 1;
     final initialId = document.displayDocument.documentId;
     _sessionDocumentId = _documentIdentityRedirects[initialId] ?? initialId;
-    if (restoredVoiceAssignments.isNotEmpty) {
-      final choices = _storedDocumentCastVoiceAssignments.putIfAbsent(
-        sessionDocumentId,
-        () => {},
+    if (restoreCharacters) {
+      _characters.restoreDocument(
+        _voicePreferenceDocumentId,
+        document.characterCastRegistry,
       );
-      for (final choice in restoredVoiceAssignments.entries) {
-        // Existing local edits take precedence over an exported snapshot.
-        choices.putIfAbsent(choice.key, () => choice.value);
-      }
     }
+    _characters.migrateLegacy({
+      _voicePreferenceDocumentId: restoredVoiceAssignments,
+    });
+    _mergeDiscoveredCast(document.characterCastRegistry, document: document);
     _voiceAssignments.resetDocument();
     _pausedVoiceReplayAnchor = null;
     _assignmentReplayWord = null;
@@ -3286,7 +3304,7 @@ class ReaderController extends ChangeNotifier {
     _activeSpokenChunkId = null;
     _resetFollowerProgressSynchronization();
     _spokenSelection = const SpokenSelection.none();
-    _castVoiceOverrides.clear();
+    _editedCastIds.clear();
     _readingFocusState = const ReadingFocusState();
     _utteranceStartOffset = 0;
     _utteranceStartWordIndex = 0;
@@ -3487,6 +3505,7 @@ class ReaderController extends ChangeNotifier {
           entry.key: Map<String, String>.unmodifiable(entry.value),
       }),
       sourceVoiceDocumentIds: Map.unmodifiable(_sourceVoiceDocumentIds),
+      characterSnapshot: _characters.snapshot(),
       resumeState: _resumeState,
       lastOpenedDocumentPath: _lastOpenedDocumentPath,
       lastOpenedDocumentAccessToken: _lastOpenedDocumentAccessToken,
@@ -3517,6 +3536,7 @@ class ReaderController extends ChangeNotifier {
           storedDocumentCastVoiceAssignments:
               value.storedDocumentCastVoiceAssignments,
           sourceVoiceDocumentIds: value.sourceVoiceDocumentIds,
+          characterSnapshot: value.characterSnapshot,
           resumeState: value.resumeState,
           lastOpenedDocumentPath: value.lastOpenedDocumentPath,
           lastOpenedDocumentAccessToken: value.lastOpenedDocumentAccessToken,
@@ -4124,15 +4144,16 @@ class ReaderController extends ChangeNotifier {
     final profile = _selectedPronunciationProfile(voiceId: voiceId);
     final assignments =
         (multiVoice ?? _isMultiVoiceEnabled) && _voices.isNotEmpty
-        ? _castVoiceAssignmentService.resolve(
-            CastVoiceAssignmentInput(
-              characterCastRegistry: _castingRegistryFor(document),
-              availableVoices: _voices,
-              fallbackVoiceId: voiceId,
-              preferredNarratorVoiceId: voiceId,
-              storedAssignments: stored ?? _currentStoredCastVoiceAssignments(),
-              userOverrides: overrides ?? _castVoiceOverrides,
-            ),
+        ? _characters.resolve(
+            workId: _voicePreferenceDocumentId,
+            engineId: _runningTtsEngineId,
+            voices: _voices,
+            narratorVoiceId: voiceId,
+            evidence: _castingRegistryFor(document),
+            editedCastIds: overrides?.keys.toSet() ?? _editedCastIds,
+            capturedChoices: overrides == null && stored == null
+                ? null
+                : {...?stored, ...?overrides},
           )
         : null;
     return SpeechPlanningContext(
@@ -4316,17 +4337,15 @@ class ReaderController extends ChangeNotifier {
       return null;
     }
 
-    return _castVoiceAssignmentService.resolve(
-      CastVoiceAssignmentInput(
-        characterCastRegistry: document == null
-            ? characterCastRegistry
-            : _castingRegistryFor(document),
-        availableVoices: _voices,
-        fallbackVoiceId: preferredNarratorVoiceId,
-        preferredNarratorVoiceId: preferredNarratorVoiceId,
-        storedAssignments: _currentStoredCastVoiceAssignments(),
-        userOverrides: _castVoiceOverrides,
-      ),
+    return _characters.resolve(
+      workId: _voicePreferenceDocumentId,
+      engineId: _runningTtsEngineId,
+      voices: _voices,
+      narratorVoiceId: preferredNarratorVoiceId,
+      editedCastIds: _editedCastIds,
+      evidence: document == null
+          ? characterCastRegistry
+          : _castingRegistryFor(document),
     );
   }
 
@@ -4337,18 +4356,44 @@ class ReaderController extends ChangeNotifier {
     );
   }
 
-  void _mergeDiscoveredCast(CharacterCastRegistry registry) {
-    for (final entry in registry.entries) {
-      _discoveredCast[entry.castId] = entry;
+  void _mergeDiscoveredCast(
+    CharacterCastRegistry registry, {
+    ReaderDocument? document,
+  }) {
+    final key = _voicePreferenceDocumentId;
+    if (_activeSourceRevision case final source?) {
+      _sourceVoiceDocumentIds.putIfAbsent(source, () => key);
     }
-    for (final redirect in registry.castIdRedirects.entries) {
-      _castRedirects[redirect.key] = redirect.value;
-      _discoveredCast.remove(redirect.key);
-      final choice = _castVoiceOverrides[redirect.key];
-      if (choice != null) {
-        _castVoiceOverrides.putIfAbsent(redirect.value, () => choice);
-      }
+    final analysisKey = '$_documentRevision:${_characters.workId(key)}';
+    if (_characterAnalysisKey != analysisKey) {
+      _characterAnalysisKey = analysisKey;
+      _characters.begin(
+        workId: key,
+        sourceRevision: _activeSourceRevision ?? key,
+        analysisRevision: _documentRevision,
+      );
     }
+    const adapter = CharacterAnalysisAdapter();
+    final delta = document == null
+        ? adapter.discovery(
+            workId: key,
+            sourceRevision: _activeSourceRevision ?? key,
+            analysisRevision: _documentRevision,
+            sequence: ++_characterDeltaSequence,
+            registry: registry,
+          )
+        : adapter.refined(
+            workId: key,
+            sourceRevision: _activeSourceRevision ?? key,
+            analysisRevision: _documentRevision,
+            sequence: ++_characterDeltaSequence,
+            document: document,
+          );
+    _characters.apply(delta);
+    _refreshCharacterProjection();
+    _castRedirects
+      ..clear()
+      ..addAll(_characters.redirects(key));
   }
 
   CharacterCastRegistry _castingRegistryFor(ReaderDocument document) {
@@ -4375,26 +4420,27 @@ class ReaderController extends ChangeNotifier {
       _sourceVoiceDocumentIds[_activeSourceRevision] ?? sessionDocumentId;
 
   void _storeCastVoiceAssignment(String castId, String voiceId) {
-    final documentId = _voicePreferenceDocumentId;
+    final key = _voicePreferenceDocumentId;
     if (_activeSourceRevision case final source?) {
-      _sourceVoiceDocumentIds[source] = documentId;
+      _sourceVoiceDocumentIds[source] = key;
     }
-    final assignments =
-        _storedDocumentCastVoiceAssignments[documentId] ?? <String, String>{};
-    assignments[castId] = voiceId;
-    _storedDocumentCastVoiceAssignments[documentId] = assignments;
+    _characters.select(key, castId, voiceId);
+    _refreshCharacterProjection();
   }
 
   void _clearStoredCastVoiceAssignment(String castId) {
-    final documentId = _voicePreferenceDocumentId;
-    final assignments = _storedDocumentCastVoiceAssignments[documentId];
-    if (assignments == null) {
-      return;
-    }
-    assignments.remove(castId);
-    if (assignments.isEmpty) {
-      _storedDocumentCastVoiceAssignments.remove(documentId);
-    }
+    _characters.select(_voicePreferenceDocumentId, castId, null);
+    _refreshCharacterProjection();
+  }
+
+  void _refreshCharacterProjection() {
+    _discoveredCast
+      ..clear()
+      ..addEntries(
+        _characters
+            .entries(_voicePreferenceDocumentId)
+            .map((e) => MapEntry(e.castId, e)),
+      );
   }
 
   void _recordFirstAudioLatency() {

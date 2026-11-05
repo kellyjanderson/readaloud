@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:read_aloud/src/services/work_character_store.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:read_aloud/src/controllers/reader_controller.dart';
@@ -33,8 +34,15 @@ void main() {
     return controller;
   }
 
+  Future<void> until(bool Function() done) async {
+    for (var i = 0; i < 500 && !done(); i++) {
+      await Future<void>.delayed(const Duration(milliseconds: 1));
+    }
+    expect(done(), isTrue, reason: 'bounded asynchronous completion');
+  }
+
   test(
-    'active edits preserve effective audio; explicit apply replays source anchor and requires current ack',
+    'active B/C edits automatically coalesce at source anchor and require current ack',
     () async {
       final engine = _AssignmentEngine();
       final controller = await reader(engine);
@@ -43,15 +51,17 @@ void main() {
       engine.acknowledge(original);
       expect(controller.isPlaying, isTrue);
       final stops = engine.stops;
-      final selects = engine.selected.length;
-      final prepares = engine.preparations.length;
+      engine.anchor = TtsPlaybackResumeAnchor(
+        documentId: original.documentId!,
+        chunkId: 'audible-source',
+        startWordIndex: 4,
+      );
+      final barrier = _Barrier();
+      engine.nextStop = barrier;
       await controller.selectVoiceById('af_heart');
+      await barrier.started.future;
       await controller.assignVoiceToCast('cast_narrator', 'am_fenrir');
-      expect(engine.stops, stops);
-      expect(engine.selected.length, selects);
-      expect(engine.preparations.length, prepares);
       expect(engine.requests, hasLength(1));
-      expect(controller.isPlaying, isTrue);
       expect(
         controller.voiceAssignmentState.effectiveDefaultVoiceId,
         'af_bella',
@@ -60,19 +70,10 @@ void main() {
         controller.voiceAssignmentState.requestedDefaultVoiceId,
         'af_heart',
       );
-      expect(
-        controller.voiceAssignmentState.phase,
-        VoiceAssignmentPhase.pending,
-      );
-      expect(await controller.exportAudioToPath('/tmp/pending.wav'), isNull);
-      expect(engine.exports, isEmpty);
-      engine.anchor = TtsPlaybackResumeAnchor(
-        documentId: original.documentId!,
-        chunkId: 'audible-source',
-        startWordIndex: 4,
-      );
-      await controller.applyPendingVoiceAssignments();
+      barrier.release.complete();
+      await until(() => engine.requests.length == 2);
       expect(engine.stops, greaterThan(stops));
+      expect(engine.requests.last.chunkPlan!.chunks.first.voiceId, 'am_fenrir');
       final replacement = engine.requests.last;
       expect(replacement.chunkPlan!.chunks.first.startWordIndex, 4);
       expect(
@@ -133,7 +134,7 @@ void main() {
   }
 
   test(
-    'an already captured effective export finishes while new pending export is refused',
+    'an already captured export keeps its voices while selection automatically changes playback',
     () async {
       final engine = _AssignmentEngine();
       final controller = await reader(engine);
@@ -162,19 +163,18 @@ void main() {
     },
   );
 
-  test('pause during explicit apply stop cannot revive playback', () async {
+  test('pause during automatic change cannot revive playback', () async {
     final engine = _AssignmentEngine();
     final controller = await reader(engine);
     await controller.startPlayback();
     engine.acknowledge(engine.requests.single);
-    await controller.selectVoiceById('af_heart');
     final barrier = _Barrier();
     engine.nextStop = barrier;
-    final applying = controller.applyPendingVoiceAssignments();
+    await controller.selectVoiceById('af_heart');
     await barrier.started.future;
     await controller.pausePlayback();
     barrier.release.complete();
-    await applying;
+    await Future<void>.delayed(const Duration(milliseconds: 20));
     expect(engine.requests, hasLength(1));
     expect(controller.isPlaying, isFalse);
     expect(controller.voiceAssignmentState.hasPending, isTrue);
@@ -219,21 +219,26 @@ void main() {
     },
   );
 
-  test('an acknowledged underrun keeps assignment edits deferred', () async {
-    final engine = _AssignmentEngine();
-    final controller = await reader(engine);
-    await controller.startPlayback();
-    engine.acknowledge(engine.requests.last);
-    engine.activity?.call(
-      const TtsPlaybackActivity(phase: TtsPlaybackPhase.buffering),
-    );
-    final stops = engine.stops;
-    await controller.selectVoiceById('af_heart');
-    expect(engine.stops, stops);
-    expect(engine.requests, hasLength(1));
-    expect(controller.voiceAssignmentState.isInitialBuffering, isFalse);
-    expect(controller.voiceAssignmentState.phase, VoiceAssignmentPhase.pending);
-  });
+  test(
+    'an acknowledged underrun automatically applies the latest selection',
+    () async {
+      final engine = _AssignmentEngine();
+      final controller = await reader(engine);
+      await controller.startPlayback();
+      engine.acknowledge(engine.requests.last);
+      engine.activity?.call(
+        const TtsPlaybackActivity(phase: TtsPlaybackPhase.buffering),
+      );
+      final stops = engine.stops;
+      await controller.selectVoiceById('af_heart');
+      await until(() => engine.requests.length == 2);
+      expect(engine.stops, greaterThan(stops));
+      expect(
+        engine.requests.last.planningContext!.realization.voiceId,
+        'af_heart',
+      );
+    },
+  );
 
   for (final paused in [false, true]) {
     test(
@@ -261,8 +266,15 @@ void main() {
         );
         if (paused) {
           await controller.pausePlayback();
+        } else {
+          engine.anchor = TtsPlaybackResumeAnchor(
+            documentId: engine.requests.last.documentId!,
+            chunkId: 'current-source',
+            startWordIndex: 8,
+          );
         }
         await controller.selectVoiceById('af_heart');
+        if (!paused) await until(() => engine.requests.length == 3);
         await controller.jumpBySeconds(1);
         if (paused) {
           await controller.startPlayback();
@@ -285,7 +297,7 @@ void main() {
         startWordIndex: 4,
       );
       await controller.selectVoiceById('af_heart');
-      await controller.applyPendingVoiceAssignments();
+      await until(() => engine.requests.length == 2);
       final failed = engine.requests.last;
       engine.activity?.call(const TtsPlaybackActivity.idle());
       engine.error?.call('current B preparation failed');
@@ -310,6 +322,66 @@ void main() {
         'af_heart',
       );
       expect(controller.voiceAssignmentState.hasPending, isFalse);
+    },
+  );
+
+  for (final paused in [false, true]) {
+    test(
+      'idle/paused selection does not autoplay and export uses it (paused=$paused)',
+      () async {
+        final engine = _AssignmentEngine();
+        final controller = await reader(engine);
+        if (paused) {
+          await controller.startPlayback();
+          engine.acknowledge(engine.requests.single);
+          await controller.pausePlayback();
+        }
+        final count = engine.requests.length;
+        await controller.selectVoiceById('af_heart');
+        await Future<void>.delayed(const Duration(milliseconds: 20));
+        expect(engine.requests.length, count);
+        expect(controller.isPlaying, isFalse);
+        expect(
+          await controller.exportAudioToPath('/tmp/selected.wav'),
+          isNotNull,
+        );
+        expect(
+          engine.exports.single.planningContext!.realization.voiceId,
+          'af_heart',
+        );
+        expect(engine.requests.length, count);
+      },
+    );
+  }
+
+  test(
+    'active Reset automatically applies and replacement cancels an in-flight change',
+    () async {
+      final engine = _AssignmentEngine();
+      final controller = await reader(engine);
+      await controller.assignVoiceToCast('cast_narrator', 'am_fenrir');
+      await controller.startPlayback();
+      engine.acknowledge(engine.requests.single);
+      await controller.clearCastVoiceOverride('cast_narrator');
+      await until(() => engine.requests.length == 2);
+      engine.acknowledge(engine.requests.last);
+      expect(
+        controller.voiceAssignmentState.effectiveCastVoices['cast_narrator'],
+        'af_bella',
+      );
+      final barrier = _Barrier();
+      engine.nextStop = barrier;
+      await controller.selectVoiceById('af_heart');
+      await barrier.started.future;
+      final replacing = controller.loadDocument(
+        DocumentImportService().importPastedText('A different work.'),
+      );
+      barrier.release.complete();
+      await replacing;
+      await Future<void>.delayed(const Duration(milliseconds: 20));
+      expect(engine.requests, hasLength(2));
+      expect(controller.isPlaying, isFalse);
+      expect(controller.document.speakableText, contains('different work'));
     },
   );
 
@@ -355,6 +427,7 @@ class _SnapshotPreferences extends ReaderPreferencesService {
     required Map<String, Map<String, String>>
     storedDocumentCastVoiceAssignments,
     Map<String, String> sourceVoiceDocumentIds = const {},
+    CharacterStoreSnapshot? characterSnapshot,
     ReaderResumeState? resumeState,
     String? selectedVoiceId,
     String? lastOpenedDocumentPath,
@@ -373,6 +446,7 @@ class _SnapshotPreferences extends ReaderPreferencesService {
         voiceSpeeds: voiceSpeeds,
         storedDocumentCastVoiceAssignments: storedDocumentCastVoiceAssignments,
         sourceVoiceDocumentIds: sourceVoiceDocumentIds,
+        characterSnapshot: characterSnapshot,
         selectedVoiceId: selectedVoiceId,
       ),
     );

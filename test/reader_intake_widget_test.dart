@@ -63,7 +63,9 @@ void main() {
     final laterId = dialog.characterCastRegistry.characterEntries
         .firstWhere((e) => e.displayLabel == 'Carlos')
         .castId;
-    await controller.assignVoiceToCast(laterId, 'af_bella');
+    await tester.runAsync(
+      () => controller.assignVoiceToCast(laterId, 'af_bella'),
+    );
     await _pumpUi(tester);
     expect(
       controller.castVoiceAssignments!.forCastId(laterId)!.effectiveVoiceId,
@@ -194,7 +196,10 @@ void main() {
         ),
       ]);
       await _openDocument(tester);
-      await _pumpUntil(tester, () => warm.isPreparationComplete);
+      await _pumpUntil(
+        tester,
+        () => warm.isPreparationComplete && !warm.isPreparingDocument,
+      );
       expect(warm.document.speakableText, expectedText);
       expect(
         warm.document.characterCastRegistry.entries
@@ -343,7 +348,7 @@ void main() {
       expect(
         (jsonDecode(rangePayload['document'] as String)
             as Map)['formatVersion'],
-        'radoc-v2',
+        ReaderDocumentSerializationService.formatVersion,
       );
 
       // This is source replay through the real repository, not .radoc file-picker

@@ -13,12 +13,13 @@ import '../models/pronunciation_artifact.dart';
 import '../models/reader_document.dart';
 import '../models/speech_document.dart';
 import 'reader_document_codec.dart';
+import 'character_codec.dart';
 
 class ReaderDocumentSerializationService {
   const ReaderDocumentSerializationService();
 
   static const formatId = 'read-aloud-document';
-  static const formatVersion = 'radoc-v2';
+  static const formatVersion = 'radoc-v3';
 
   ReaderDocument deserializeFromJsonString(String source) =>
       decodeReaderDocument(source);
@@ -27,9 +28,15 @@ class ReaderDocumentSerializationService {
   String serializeToJsonString(
     ReaderDocument document, {
     Map<String, String> userVoiceAssignments = const {},
+    CharacterCastRegistry? characters,
   }) {
     const encoder = JsonEncoder.withIndent('  ');
     final envelope = _toEnvelope(document);
+    if (characters != null) {
+      envelope['characterCastRegistry'] = _characterCastRegistryToMap(
+        characters,
+      );
+    }
     if (userVoiceAssignments.isNotEmpty) {
       envelope['userVoiceAssignments'] = validateReaderDocumentVoiceAssignments(
         userVoiceAssignments,
@@ -44,6 +51,7 @@ class ReaderDocumentSerializationService {
     required String outputPath,
     bool Function()? isCurrent,
     Map<String, String> userVoiceAssignments = const {},
+    CharacterCastRegistry? characters,
     String? sourcePath,
   }) async {
     await requirePreservedDocumentExportPath(
@@ -59,6 +67,7 @@ class ReaderDocumentSerializationService {
       final serialized = await _serializeDocumentOnWorker(
         document,
         Map.unmodifiable(userVoiceAssignments),
+        characters,
       );
       if (isCurrent != null && !isCurrent()) {
         throw StateError('Document export cancelled');
@@ -486,63 +495,12 @@ class ReaderDocumentSerializationService {
 
   Map<String, Object?> _characterCastRegistryToMap(
     CharacterCastRegistry registry,
-  ) {
-    return <String, Object?>{
-      'documentId': registry.documentId,
-      'registryVersion': registry.registryVersion,
-      'castIdRedirects': registry.castIdRedirects,
-      'entries': registry.entries
-          .map(
-            (entry) => <String, Object?>{
-              'castId': entry.castId,
-              'roleKind': entry.roleKind.name,
-              'displayLabel': entry.displayLabel,
-              'confidence': entry.confidence,
-              'provenance': entry.provenance.name,
-              'observedAliases': entry.observedAliases,
-              'attributionIds': entry.attributionIds,
-              'identityProfile': entry.identityProfile == null
-                  ? null
-                  : <String, Object?>{
-                      'genderIdentityLabel': _identityLabelName(
-                        entry.identityProfile!.genderIdentityLabel,
-                      ),
-                      'genderConfidence':
-                          entry.identityProfile!.genderConfidence,
-                      'genderSource': _identitySourceName(
-                        entry.identityProfile!.genderSource,
-                      ),
-                      'pronounProfile': <String, Object?>{
-                        'counts': entry.identityProfile!.pronounProfile.counts,
-                      },
-                      'evidenceSpans': entry.identityProfile!.evidenceSpans
-                          .map(
-                            (span) => <String, Object?>{
-                              'segmentId': span.segmentId,
-                              'startUtf16': span.startUtf16,
-                              'endUtf16': span.endUtf16,
-                              'text': span.text,
-                              'source': _identitySourceName(span.source),
-                              'genderIdentityLabel':
-                                  span.genderIdentityLabel == null
-                                  ? null
-                                  : _identityLabelName(
-                                      span.genderIdentityLabel!,
-                                    ),
-                            },
-                          )
-                          .toList(growable: false),
-                      'conflictFlag': entry.identityProfile!.conflictFlag,
-                      'countedSegmentIds':
-                          entry.identityProfile!.countedSegmentIds,
-                    },
-              'inferredGender': entry.inferredGender?.name,
-              'inferredGenderConfidence': entry.inferredGenderConfidence,
-            },
-          )
-          .toList(growable: false),
-    };
-  }
+  ) => {
+    'documentId': registry.documentId,
+    'registryVersion': registry.registryVersion,
+    'castIdRedirects': registry.castIdRedirects,
+    'entries': registry.entries.map(encodeCharacter).toList(),
+  };
 
   Map<String, Object?> _documentVoiceAttributionToMap(
     DocumentVoiceAttributionSet attribution,
@@ -606,41 +564,18 @@ class ReaderDocumentSerializationService {
           .toList(growable: false),
     };
   }
-
-  String _identityLabelName(CharacterGenderIdentityLabel label) {
-    return switch (label) {
-      CharacterGenderIdentityLabel.male => 'male',
-      CharacterGenderIdentityLabel.female => 'female',
-      CharacterGenderIdentityLabel.cisMale => 'cis_male',
-      CharacterGenderIdentityLabel.cisFemale => 'cis_female',
-      CharacterGenderIdentityLabel.transgender => 'transgender',
-      CharacterGenderIdentityLabel.transMale => 'trans_male',
-      CharacterGenderIdentityLabel.transFemale => 'trans_female',
-      CharacterGenderIdentityLabel.nonbinary => 'nonbinary',
-      CharacterGenderIdentityLabel.genderqueer => 'genderqueer',
-      CharacterGenderIdentityLabel.unknown => 'unknown',
-    };
-  }
-
-  String _identitySourceName(CharacterGenderEvidenceSource source) {
-    return switch (source) {
-      CharacterGenderEvidenceSource.explicitIdentity => 'explicit_identity',
-      CharacterGenderEvidenceSource.explicitApposition => 'explicit_apposition',
-      CharacterGenderEvidenceSource.descriptor => 'descriptor',
-      CharacterGenderEvidenceSource.pronoun => 'pronoun',
-      CharacterGenderEvidenceSource.unknown => 'unknown',
-    };
-  }
 }
 
 // Keep closures outside async scopes containing UI cancellation callbacks.
 Future<String> _serializeDocumentOnWorker(
   ReaderDocument document,
   Map<String, String> userVoiceAssignments,
+  CharacterCastRegistry? characters,
 ) => Isolate.run(
   () => const ReaderDocumentSerializationService().serializeToJsonString(
     document,
     userVoiceAssignments: userVoiceAssignments,
+    characters: characters,
   ),
 );
 

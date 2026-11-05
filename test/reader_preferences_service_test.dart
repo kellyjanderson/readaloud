@@ -1,3 +1,5 @@
+import 'package:read_aloud/src/models/character.dart';
+import 'package:read_aloud/src/services/work_character_store.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:read_aloud/src/models/reader_appearance_mode.dart';
 import 'package:read_aloud/src/models/reader_resume_state.dart';
@@ -12,6 +14,78 @@ void main() {
   });
 
   group('ReaderPreferencesService', () {
+    test(
+      'VS17 migration writes one owner; Reset and aliases survive a preference reload',
+      () async {
+        SharedPreferences.setMockInitialValues({
+          'reader.storedDocumentCastVoiceAssignments':
+              '{"old-work":{"cast_narrator":"voice-a"}}',
+        });
+        final service = ReaderPreferencesService();
+        final initial = await service.load();
+        final owner = WorkCharacterStore()
+          ..migrateLegacy(initial.storedDocumentCastVoiceAssignments);
+        owner.select('old-work', 'cast_narrator', null);
+        owner.associate('old-work', 'canonical');
+        await service.save(
+          fontFamily: 'serif',
+          fontScale: 1,
+          appearanceMode: ReaderAppearanceMode.system,
+          multiVoiceEnabled: true,
+          voiceSpeeds: {},
+          storedDocumentCastVoiceAssignments: {},
+          characterSnapshot: owner.snapshot(),
+        );
+        final prefs = await SharedPreferences.getInstance();
+        expect(
+          prefs.containsKey('reader.storedDocumentCastVoiceAssignments'),
+          isFalse,
+        );
+        final restored = (await service.load()).characterSnapshot!.restore();
+        restored.migrateLegacy(initial.storedDocumentCastVoiceAssignments);
+        expect(
+          restored.character('canonical', 'cast_narrator')!.selectedVoice.mode,
+          VoiceSelectionMode.automatic,
+        );
+        expect(
+          restored
+              .character('canonical', 'cast_narrator')!
+              .selectedVoice
+              .revision,
+          2,
+        );
+      },
+    );
+
+    test(
+      'VS18 unreadable future character storage is preserved and cannot be overwritten by defaults',
+      () async {
+        const text = '{"schema":999,"valuable":"future data"}';
+        SharedPreferences.setMockInitialValues({
+          'reader.workCharacters.v1': text,
+        });
+        final service = ReaderPreferencesService();
+        await expectLater(service.load(), throwsFormatException);
+        await expectLater(
+          service.save(
+            fontFamily: 'serif',
+            fontScale: 1,
+            appearanceMode: ReaderAppearanceMode.system,
+            multiVoiceEnabled: true,
+            voiceSpeeds: {},
+            storedDocumentCastVoiceAssignments: {},
+            characterSnapshot: WorkCharacterStore().snapshot(),
+          ),
+          throwsStateError,
+        );
+        expect(
+          (await SharedPreferences.getInstance()).getString(
+            'reader.workCharacters.v1',
+          ),
+          text,
+        );
+      },
+    );
     test('persists the selected Voxtral precision', () async {
       final service = ReaderPreferencesService();
       for (final bits in [4, 0]) {

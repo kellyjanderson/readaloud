@@ -17,14 +17,12 @@ class VoiceAssignmentFeedback extends StatelessWidget {
     required this.state,
     required this.voices,
     required this.castRegistry,
-    this.onApply,
     this.onRetry,
   });
 
   final VoiceAssignmentState state;
   final List<VoiceProfile> voices;
   final CharacterCastRegistry castRegistry;
-  final VoidCallback? onApply;
   final VoidCallback? onRetry;
 
   String _summary(String? defaultId, Map<String, String> castVoices) {
@@ -53,16 +51,12 @@ class VoiceAssignmentFeedback extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final failed = state.phase == VoiceAssignmentPhase.failed;
-    final busy =
-        state.phase == VoiceAssignmentPhase.preparing ||
-        state.phase == VoiceAssignmentPhase.applying;
-    final canApply = state.hasPending && !state.isInitialBuffering && !busy;
     final status = switch (state.phase) {
       VoiceAssignmentPhase.current => 'No pending voice changes.',
       VoiceAssignmentPhase.pending =>
         state.isInitialBuffering
             ? 'Preparing latest choices before playback.'
-            : 'Pending choices apply on next Play. Current audio continues.',
+            : 'Your selection is saved. Play uses the new voice.',
       VoiceAssignmentPhase.preparing =>
         state.isInitialBuffering
             ? 'Preparing latest choices before playback.'
@@ -105,19 +99,20 @@ class VoiceAssignmentFeedback extends StatelessWidget {
             Semantics(liveRegion: true, child: Text(status)),
             const SizedBox(height: 6),
             const Text(
-              'Applying replays the current chunk and may repeat words. Apply pending choices before saving audio.',
+              'Voice changes apply automatically. During playback, some words may repeat while the new voice starts.',
             ),
             const SizedBox(height: 8),
-            Align(
-              alignment: Alignment.centerRight,
-              child: FilledButton(
-                key: const Key('apply-voice-assignments'),
-                onPressed: failed ? onRetry : (canApply ? onApply : null),
-                child: Text(
-                  failed
-                      ? 'Retry voice change'
-                      : 'Apply and replay current chunk',
-                ),
+            SizedBox(
+              height: 48,
+              child: Align(
+                alignment: Alignment.centerRight,
+                child: failed
+                    ? FilledButton(
+                        key: const Key('retry-voice-assignments'),
+                        onPressed: onRetry,
+                        child: const Text('Retry voice change'),
+                      )
+                    : null,
               ),
             ),
           ],
@@ -140,7 +135,6 @@ class VoiceManagementDialog extends StatelessWidget {
     required this.selectedVoiceId,
     required this.previewStateForVoice,
     this.assignmentState,
-    this.onApplyAssignments,
     this.onRetryAssignments,
     required this.onClose,
     required this.onSelectLibraryVoice,
@@ -160,7 +154,6 @@ class VoiceManagementDialog extends StatelessWidget {
   final String? selectedVoiceId;
   final VoicePreviewState Function(String voiceId) previewStateForVoice;
   final VoiceAssignmentState? assignmentState;
-  final VoidCallback? onApplyAssignments;
   final VoidCallback? onRetryAssignments;
   final VoidCallback onClose;
   final ValueChanged<String> onSelectLibraryVoice;
@@ -319,7 +312,6 @@ class VoiceManagementDialog extends StatelessWidget {
                     ),
                 voices: availableVoices,
                 castRegistry: characterCastRegistry,
-                onApply: onApplyAssignments,
                 onRetry: onRetryAssignments,
               ),
             ],
