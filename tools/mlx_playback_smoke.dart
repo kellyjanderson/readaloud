@@ -12,6 +12,7 @@ import 'package:read_aloud/src/app.dart';
 import 'package:read_aloud/src/controllers/reader_controller.dart';
 import 'package:read_aloud/src/services/kokoro_tts_engine.dart';
 import 'package:read_aloud/src/models/spoken_chunk_record.dart';
+import 'package:read_aloud/src/models/voice_profile.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 class SmokeController extends ReaderController {
@@ -127,7 +128,9 @@ Future<void> main(List<String> args) async {
       final choices = controller.voices
           .where(
             (voice) =>
-                voice.gender == character.inferredGender &&
+                (character.inferredGender == null ||
+                    character.inferredGender == VoiceGender.neutral ||
+                    voice.gender == character.inferredGender) &&
                 voice.id != previous &&
                 (!args[0].startsWith('fish_drama3') ||
                     voice.id.startsWith('library_fish')),
@@ -154,6 +157,7 @@ Future<void> main(List<String> args) async {
       receipt['voiceContract'] = {
         'case': 'VS16-native',
         'character': characterName,
+        'genderEvidence': character.inferredGender?.name,
         'castId': contractCastId,
         'original': previous,
         'selected': contractVoiceId,
