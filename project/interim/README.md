@@ -5,7 +5,8 @@ revisions until implementation is reconciled. `tmp/` is volatile transport space
 not a place to keep design documents. The user's November 4, 2026 direction adds
 this lifecycle to the earlier GitHub-only drafting process.
 
-Current package: [R10 architectural changes and plan](r10/README.md).
+Current package: [R11 review coverage and implementation plan](r11/README.md).
+Its predecessor [R10 architectural changes](r10/README.md) retains the ten fixed ACD designs.
 
 ## Authority and revision lifecycle
 
