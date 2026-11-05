@@ -5,7 +5,8 @@ revisions until implementation is reconciled. `tmp/` is volatile transport space
 not a place to keep design documents. The user's November 4, 2026 direction adds
 this lifecycle to the earlier GitHub-only drafting process.
 
-Current package: [R12 character contract and consolidated delivery](r12/README.md).
+Current amendment: [R13 progressive analysis and automatic casting](r13/README.md),
+applied to [R12 character contract and consolidated delivery](r12/README.md).
 [R11](r11/README.md) retains the review coverage and acceptance supplement;
 [R10](r10/README.md) retains the ten original ACD designs. R12 explicitly identifies
 the character ownership and sequencing decisions it supersedes.
