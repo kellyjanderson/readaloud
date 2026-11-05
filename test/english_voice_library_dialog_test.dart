@@ -7,7 +7,7 @@ import 'package:read_aloud/src/services/tts_engine.dart';
 import 'package:read_aloud/src/widgets/voice_management_dialog.dart';
 
 void main() {
-  testWidgets('English library dialog exposes all 30 selectable references', (
+  testWidgets('English library dialog exposes all 43 selectable references', (
     tester,
   ) async {
     await MlxVoiceLibrary.load();
@@ -44,12 +44,12 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
-    expect(find.text('Qwen Base · 30 English voices ready'), findsOneWidget);
+    expect(find.text('Qwen Base · 43 English voice choices'), findsOneWidget);
     final dropdown = tester.widget<DropdownButton<String>>(
       find.byType(DropdownButton<String>).first,
     );
-    expect(dropdown.items!.length, 30);
-    expect(dropdown.items!.map((item) => item.value).toSet().length, 30);
+    expect(dropdown.items!.length, 43);
+    expect(dropdown.items!.map((item) => item.value).toSet().length, 43);
     expect(tester.takeException(), isNull);
   });
 }

@@ -1,5 +1,5 @@
 #!/usr/bin/env ruby
-# Separate p2 build: flutter build macos --debug -t tools/p2_native_failure_probe.dart
+# Separate p2 build: tools/flutter build macos --debug -t tools/p2_native_failure_probe.dart
 require 'json'
 require 'digest'
 require 'fileutils'

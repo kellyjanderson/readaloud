@@ -138,7 +138,7 @@ The system must not choose between:
 - starting quickly
 - sounding coherent
 
-The architecture prioritizes a contiguous startup buffer, then refills to a bounded high watermark before the playhead catches generation. See [Document Preparation and Execution Contexts](../../../acd/prepared-document-runtime.acd) for readiness, short-document behavior and backpressure. First-chunk priority is a scheduling policy, not permission to bypass the startup lead gate.
+The architecture prioritizes a contiguous startup buffer, then refills to a bounded high watermark before the playhead catches generation. See [Document Preparation and Execution Contexts](https://github.com/kellyjanderson/readaloud/issues/48) for readiness, short-document behavior and backpressure. First-chunk priority is a scheduling policy, not permission to bypass the startup lead gate.
 
 It also relies on earlier document-time enrichment so that the live play path can focus on only the active voice/session realization and chunk generation.
 

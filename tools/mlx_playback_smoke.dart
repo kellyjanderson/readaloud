@@ -83,7 +83,15 @@ Future<void> main(List<String> args) async {
     }
     receipt['selectedVoice'] = controller.selectedVoice?.id;
     receipt['voiceCount'] = controller.voices.length;
+    receipt['voiceIds'] = controller.voices.map((v) => v.id).toList();
+    if (args[0].startsWith('fish_drama3') && controller.voices.length < 5) {
+      throw StateError('Fewer than five selectable voices per character.');
+    }
     final documentPath = Platform.environment['READALOUD_SMOKE_DOCUMENT_PATH'];
+    final requireCompleteDocument =
+        Platform.environment['READALOUD_SMOKE_REQUIRE_COMPLETE_DOCUMENT'] ==
+        '1';
+    receipt['requireCompleteDocument'] = requireCompleteDocument;
     if (documentPath != null) {
       await controller.importFilePaths([documentPath]);
     } else {
@@ -94,6 +102,10 @@ Future<void> main(List<String> args) async {
                 '"I will," Ben replied. The sun shone on the water.',
       );
     }
+    receipt['documentWords'] = controller.document.wordCount;
+    receipt['characters'] = controller.document.characterCastRegistry.entries
+        .map((entry) => entry.castId)
+        .toList();
     unawaited(controller.startPlayback());
     final deadline = DateTime.now().add(const Duration(minutes: 5));
     var advanced = false;
@@ -163,12 +175,15 @@ Future<void> main(List<String> args) async {
         'error': value.error,
       }),
     );
-    if (documentPath != null && !controller.isPreparationComplete) {
+    receipt['documentPreparationComplete'] = controller.isPreparationComplete;
+    // Long documents intentionally stop at the bounded prepared-range window.
+    // Full-document timing is a separate, explicitly requested probe contract.
+    if (requireCompleteDocument && preparationCompleteMs == null) {
       throw StateError(
         'Preparation did not finish: ${controller.statusMessage}',
       );
     }
-    if (documentPath != null &&
+    if (requireCompleteDocument &&
         (preparationCompleteMs == null || preparationCompleteMs! > 5000)) {
       throw StateError(
         'Small document preparation exceeded five seconds: $preparationCompleteMs ms',
@@ -181,10 +196,12 @@ Future<void> main(List<String> args) async {
     if (paths.isEmpty) throw StateError('No native audio source');
     // just_audio consumes the canonical PCM16 WAV emitted by the pipeline.
     var peak = 0;
+    final sampleRates = <int>{};
     for (final path in paths) {
       if (!await File(path).exists()) continue;
       final bytes = await File(path).readAsBytes();
       final data = ByteData.sublistView(bytes);
+      sampleRates.add(data.getUint32(24, Endian.little));
       var offset = 12;
       while (offset + 8 <= bytes.length) {
         final size = data.getUint32(offset + 4, Endian.little);
@@ -209,10 +226,14 @@ Future<void> main(List<String> args) async {
       'passed': true,
       'peakPcm16': peak,
       'audioPaths': paths.toList(),
+      'sampleRates': sampleRates.toList(),
     });
+    if (args[0].startsWith('fish_drama3') && !sampleRates.contains(44100)) {
+      throw StateError('Drama did not reach playback at native 44.1 kHz.');
+    }
     passed = true;
   } catch (error, stack) {
-    receipt.addAll({'error': '$error', 'stack': '$stack'});
+    receipt.addAll({'passed': false, 'error': '$error', 'stack': '$stack'});
   } finally {
     await controller.pausePlayback();
     await engine.shutdownResources();

@@ -15,6 +15,7 @@ class ReaderPreferences {
     required this.multiVoiceEnabled,
     required this.voiceSpeeds,
     required this.storedDocumentCastVoiceAssignments,
+    this.sourceVoiceDocumentIds = const {},
     this.resumeState,
     this.selectedVoiceId,
     this.lastOpenedDocumentPath,
@@ -37,6 +38,10 @@ class ReaderPreferences {
   final String? selectedVoiceId;
   final Map<String, double> voiceSpeeds;
   final Map<String, Map<String, String>> storedDocumentCastVoiceAssignments;
+
+  /// Exact source revisions map to the preference owner, independently of the
+  /// temporary document IDs used while an unfinished book is being prepared.
+  final Map<String, String> sourceVoiceDocumentIds;
   final ReaderResumeState? resumeState;
   final String? lastOpenedDocumentPath;
   final String? lastOpenedDocumentAccessToken;
@@ -56,6 +61,7 @@ class ReaderPreferencesService {
   static const String _resumeStateKey = 'reader.resumeState';
   static const String _storedDocumentCastVoiceAssignmentsKey =
       'reader.storedDocumentCastVoiceAssignments';
+  static const _sourceVoiceDocumentIdsKey = 'reader.sourceVoiceDocumentIds';
   static const String _lastOpenedDocumentPathKey =
       'reader.lastOpenedDocumentPath';
   static const String _lastOpenedDocumentAccessTokenKey =
@@ -90,6 +96,9 @@ class ReaderPreferencesService {
           _decodeStoredDocumentCastVoiceAssignments(
             preferences.getString(_storedDocumentCastVoiceAssignmentsKey),
           ),
+      sourceVoiceDocumentIds: _decodeStringMap(
+        preferences.getString(_sourceVoiceDocumentIdsKey),
+      ),
       resumeState: _decodeResumeState(preferences.getString(_resumeStateKey)),
       lastOpenedDocumentPath: preferences.getString(_lastOpenedDocumentPathKey),
       lastOpenedDocumentAccessToken: preferences.getString(
@@ -114,6 +123,7 @@ class ReaderPreferencesService {
     required Map<String, double> voiceSpeeds,
     required Map<String, Map<String, String>>
     storedDocumentCastVoiceAssignments,
+    Map<String, String> sourceVoiceDocumentIds = const {},
     ReaderResumeState? resumeState,
     String? selectedVoiceId,
     String? lastOpenedDocumentPath,
@@ -144,6 +154,10 @@ class ReaderPreferencesService {
     await preferences.setString(
       _storedDocumentCastVoiceAssignmentsKey,
       jsonEncode(storedDocumentCastVoiceAssignments),
+    );
+    await preferences.setString(
+      _sourceVoiceDocumentIdsKey,
+      jsonEncode(sourceVoiceDocumentIds),
     );
     if (resumeState == null) {
       await preferences.remove(_resumeStateKey);
@@ -227,6 +241,23 @@ class ReaderPreferencesService {
       return ReaderResumeState.fromJson(jsonDecode(rawValue));
     } catch (_) {
       return null;
+    }
+  }
+
+  Map<String, String> _decodeStringMap(String? raw) {
+    if (raw == null) return {};
+    try {
+      final decoded = jsonDecode(raw);
+      if (decoded is! Map<String, dynamic>) return {};
+      return {
+        for (final entry in decoded.entries)
+          if (entry.key.isNotEmpty &&
+              entry.value is String &&
+              (entry.value as String).isNotEmpty)
+            entry.key: entry.value as String,
+      };
+    } on FormatException {
+      return {};
     }
   }
 

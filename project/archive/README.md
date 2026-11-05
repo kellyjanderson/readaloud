@@ -1,6 +1,6 @@
 # Documentation archive
 
-Historical context only. Current facts live in [architecture](../architecture/README.md); proposed changes live in [ACDs](../acd/README.md). Nothing here is an active work order or proof of implementation.
+Historical context only. Current facts live in [architecture](../architecture/README.md); proposed changes live in [ACDs](../../docs/project-management.md). Nothing here is an active work order or proof of implementation.
 
 ## Architecture snapshots
 
@@ -143,8 +143,15 @@ The following 19 documents explicitly delegated their behavior to children, decl
 
 ## Old planning
 
-- [Specification completion checklist](../planning/archive/progression.md)
-- [Imported-document rework plan](../planning/archive/imported-document-rework-plan.md)
-- [Earlier runtime alignment note](../planning/archive/document-preparation-runtime-alignment.md)
+- [Specification completion checklist](planning/progression.md)
+- [Imported-document rework plan](planning/imported-document-rework-plan.md)
+- [Earlier runtime alignment note](planning/document-preparation-runtime-alignment.md)
 
-The [active plan](../planning/prepared-document-runtime.plan) supersedes these as an execution entry point. Thirteen less-refined ancestors remain listed in the [legacy index](../specifications/README.md) rather than being archived without a semantic decision.
+These plans are historical, including their completion and architecture claims.
+Use the [GitHub entry points](../../docs/project-management.md) for current work.
+Thirteen less-refined ancestors remain listed in the [legacy index](../specifications/README.md) rather than being archived without a semantic decision.
+
+## Release and process history
+
+- [0.3.0 release intent](releases/0.3.0.md): earlier scope, not proof of publication.
+- [October 24 process reconciliation](journal/2026-10-24-process-and-repository-reconciliation.md): historical decisions and corrections, superseded where current AGENTS.md and GitHub workflow differ.

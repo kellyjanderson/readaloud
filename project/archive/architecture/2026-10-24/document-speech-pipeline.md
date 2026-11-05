@@ -54,7 +54,7 @@ All imported formats must pass through a normalization step that preserves:
 
 Flattening imported content directly into one raw speech string is not an acceptable long-term pipeline.
 
-The document may become viewable after normalization. Speech playback eligibility waits for whole-document semantic preparation and startup audio lead. Whole-document waveform generation is not required. See [Document Preparation and Execution Contexts](../../../acd/prepared-document-runtime.acd) for readiness gates and execution owners.
+The document may become viewable after normalization. Speech playback eligibility waits for whole-document semantic preparation and startup audio lead. Whole-document waveform generation is not required. See [Document Preparation and Execution Contexts](https://github.com/kellyjanderson/readaloud/issues/48) for readiness gates and execution owners.
 
 ### 1a. The normalization path must stay lightweight and explainable
 
@@ -121,7 +121,7 @@ Sentence boundaries are the default unit. Clause fallback exists only when engin
 
 ### 5. Preparation and generation cross formal worker boundaries
 
-Parsing, normalization, whole-document analysis, character construction and pronunciation planning belong in the preparation worker. Realization and chunk planning belong in the speech worker. The UI controller accepts prepared revisions and sends commands; it does not perform these passes synchronously. Execution ownership follows [Document Preparation and Execution Contexts](../../../acd/prepared-document-runtime.acd).
+Parsing, normalization, whole-document analysis, character construction and pronunciation planning belong in the preparation worker. Realization and chunk planning belong in the speech worker. The UI controller accepts prepared revisions and sends commands; it does not perform these passes synchronously. Execution ownership follows [Document Preparation and Execution Contexts](https://github.com/kellyjanderson/readaloud/issues/48).
 
 The main isolate is not the home for repeated speech-generation internals such as:
 

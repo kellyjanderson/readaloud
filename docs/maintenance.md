@@ -8,8 +8,8 @@ GitHub Actions must remain disabled. The former automatic documentation workflow
 
 ```sh
 ruby tools/check_docs.rb
-flutter analyze
-flutter test
+tools/flutter analyze
+tools/flutter test
 ```
 
 Choose relevant tests for a small change. A cleanup integration also runs the full source suite. Audio changes require emitted-audio and running-app checks; neither a passing suite nor a cleanup tag establishes acoustic quality, uninterrupted long-form playback or human acceptance. The [MLX guide](mlx-tts-engines.md) describes native probes and their limits.

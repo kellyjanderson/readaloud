@@ -26,7 +26,7 @@ This is not a global event bus for the entire app.
 
 ## Execution Context Contract
 
-[Document Preparation and Execution Contexts](../../../acd/prepared-document-runtime.acd) defines mandatory lanes for document preparation, voice residency, realization, synthesis, storage, export and UI followers. Every producer must name its context, owner, bounded queue, stale-result checks, cancellation/timeout, shutdown and integrated validation. The UI controller must not perform synchronous realization or planning. Native plugin work requires its own background queue policy.
+[Document Preparation and Execution Contexts](https://github.com/kellyjanderson/readaloud/issues/48) defines mandatory lanes for document preparation, voice residency, realization, synthesis, storage, export and UI followers. Every producer must name its context, owner, bounded queue, stale-result checks, cancellation/timeout, shutdown and integrated validation. The UI controller must not perform synchronous realization or planning. Native plugin work requires its own background queue policy.
 
 ## Components
 

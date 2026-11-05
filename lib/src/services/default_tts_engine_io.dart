@@ -1,3 +1,4 @@
+import '../models/speech_engine_catalog.dart';
 import 'dart:io';
 
 import 'package:flutter/foundation.dart';
@@ -14,13 +15,12 @@ TtsEngine createPlatformTtsEngine({
       ? Platform.environment['READALOUD_TTS_ENGINE']
       : null;
   final mlxEngineId =
-      environmentEngineId == null || environmentEngineId.trim().isEmpty
+      engineId != null ||
+          environmentEngineId == null ||
+          environmentEngineId.trim().isEmpty
       ? engineId
       : environmentEngineId;
-  if (mlxEngineId == 'qwen3_tts_base_1_7b' ||
-      mlxEngineId == 'qwen3_tts_1_7b' ||
-      mlxEngineId == 'voxtral_4b' ||
-      mlxEngineId == 'moss_tts_8b') {
+  if (isMlxEngine(mlxEngineId)) {
     return KokoroTtsEngine(
       engineId: mlxEngineId!,
       mlxQuantizationBits: mlxEngineId == 'voxtral_4b'

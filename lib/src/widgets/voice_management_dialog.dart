@@ -8,6 +8,7 @@ import '../models/voice_profile.dart';
 import '../services/tts_engine.dart';
 import '../theme/read_aloud_theme.dart';
 import 'voice_library_row.dart';
+import 'preparation_status.dart';
 
 /// Assignment feedback stays outside the scrolling voice list.
 class VoiceAssignmentFeedback extends StatelessWidget {
@@ -134,6 +135,7 @@ class VoiceManagementDialog extends StatelessWidget {
     required this.voiceLibrary,
     required this.availableVoices,
     required this.characterCastRegistry,
+    this.isCastDiscoveryComplete = true,
     required this.castVoiceAssignments,
     required this.selectedVoiceId,
     required this.previewStateForVoice,
@@ -153,6 +155,7 @@ class VoiceManagementDialog extends StatelessWidget {
   final List<VoiceLibraryEntry> voiceLibrary;
   final List<VoiceProfile> availableVoices;
   final CharacterCastRegistry characterCastRegistry;
+  final bool isCastDiscoveryComplete;
   final CastVoiceAssignmentSet? castVoiceAssignments;
   final String? selectedVoiceId;
   final VoicePreviewState Function(String voiceId) previewStateForVoice;
@@ -208,7 +211,7 @@ class VoiceManagementDialog extends StatelessWidget {
               ),
               const SizedBox(height: 8),
               Text(
-                '${engineName == null ? '' : '$engineName · '}${availableVoices.where((v) => v.locale.toLowerCase().startsWith('en')).length} English voices ready',
+                '${engineName == null ? '' : '$engineName · '}${availableVoices.where((v) => v.locale.toLowerCase().startsWith('en')).length} English voice choices',
                 key: const Key('english-voice-count'),
               ),
               const SizedBox(height: 8),
@@ -228,7 +231,7 @@ class VoiceManagementDialog extends StatelessWidget {
                     Text(
                       availableVoices.isEmpty
                           ? 'Speech voices are loading. You can inspect the cast now.'
-                          : '${availableVoices.length} installed voice choices per speaker. Download more in Voice Library below.',
+                          : '${availableVoices.length} voice choices per speaker. References download when first selected.',
                     ),
                     const SizedBox(height: 12),
                     _VoiceAssignmentCard(
@@ -256,6 +259,12 @@ class VoiceManagementDialog extends StatelessWidget {
                       style: Theme.of(context).textTheme.titleSmall,
                     ),
                     const SizedBox(height: 8),
+                    Text(
+                      '${characterEntries.isEmpty ? 'No dialogue speakers discovered yet.' : '${characterEntries.length} characters discovered so far.'} '
+                      '${isCastDiscoveryComplete ? 'Prepared text analysis is complete; speaker detection can still miss or misidentify characters.' : 'More characters appear as you read or scroll into new sections.'}',
+                      key: const Key('cast-discovery-status'),
+                    ),
+                    const SizedBox(height: 8),
                     if (characterEntries.isNotEmpty) ...[
                       for (final entry in characterEntries) ...[
                         _VoiceAssignmentCard(
@@ -274,13 +283,6 @@ class VoiceManagementDialog extends StatelessWidget {
                         const SizedBox(height: 12),
                       ],
                     ],
-                    if (characterEntries.isEmpty)
-                      const Padding(
-                        padding: EdgeInsets.symmetric(vertical: 12),
-                        child: Text(
-                          'No dialogue speakers discovered yet. Characters appear here as reading ranges are prepared.',
-                        ),
-                      ),
                     const Divider(height: 32),
                     Text(
                       'Voice Library',
@@ -392,9 +394,6 @@ class VoiceManagementDialog extends StatelessWidget {
   ) {
     final isSelected = entry.voice.id == selectedVoiceId;
     final progress = entry.progress;
-    final progressPercent = progress == null
-        ? null
-        : '${(progress * 100).round()}%';
 
     if (entry.isDownloading) {
       return SizedBox(
@@ -402,11 +401,7 @@ class VoiceManagementDialog extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.end,
-          children: [
-            LinearProgressIndicator(value: progress),
-            const SizedBox(height: 6),
-            Text(progressPercent ?? 'Working...'),
-          ],
+          children: [MeasuredProgress(fraction: progress)],
         ),
       );
     }

@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:read_aloud/src/models/engine_capability.dart';
 import 'dart:isolate';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter/services.dart';
@@ -10,6 +11,7 @@ import 'package:read_aloud/src/models/tts_artifact.dart';
 import 'package:read_aloud/src/services/english_speech_preprocessor.dart';
 import 'package:read_aloud/src/services/kokoro_ipa_adapter.dart';
 import 'package:read_aloud/src/services/kokoro_tokenization_worker.dart';
+import 'package:read_aloud/src/services/speech_adjustment_registry.dart';
 
 void fakeWorker(KokoroTokenizationWorkerInput input) async {
   final commands = ReceivePort();
@@ -67,7 +69,12 @@ void main() {
     '[John](/dʒɑn/) and (Mary): don\'t rush.',
   ]) {
     test('cold worker-first fallback preserves pinned output: $text', () async {
-      final worker = KokoroTokenizationWorker(assets: assets);
+      final worker = KokoroTokenizationWorker(
+        capabilityProfile: const EngineCapabilityRegistry().lookup(
+          engineId: 'kokoro',
+        ),
+        assets: assets,
+      );
       addTearDown(worker.shutdown);
       // This must be the first phonemization on this fresh tokenizer. Computing
       // a caller expectation first masked lazy rootBundle access in the old test.
@@ -87,6 +94,9 @@ void main() {
     'raw CMU dictionary is parsed by worker and preserves translated said',
     () async {
       final worker = KokoroTokenizationWorker(
+        capabilityProfile: const EngineCapabilityRegistry().lookup(
+          engineId: 'kokoro',
+        ),
         assets: assets,
         rawDictionary: ';;; fixture\nSAID S EH1 D\nSAID(2) S EH0 D\n',
       );
@@ -103,6 +113,9 @@ void main() {
 
   test('startup and request failures preserve remote worker stack', () async {
     final invalid = KokoroTokenizationWorker(
+      capabilityProfile: const EngineCapabilityRegistry().lookup(
+        engineId: 'kokoro',
+      ),
       assets: KokoroTokenizerAssets(
         vocabularyJson: 'malformed json',
         lexiconJson: assets.lexiconJson,
@@ -119,7 +132,12 @@ void main() {
     } finally {
       await invalid.shutdown();
     }
-    final worker = KokoroTokenizationWorker(assets: assets);
+    final worker = KokoroTokenizationWorker(
+      capabilityProfile: const EngineCapabilityRegistry().lookup(
+        engineId: 'kokoro',
+      ),
+      assets: assets,
+    );
     addTearDown(worker.shutdown);
     try {
       await worker.tokenizeText('', 'en-us');
@@ -138,6 +156,9 @@ void main() {
     'optional malformed custom lexicon keeps warmed fallback behavior',
     () async {
       final worker = KokoroTokenizationWorker(
+        capabilityProfile: const EngineCapabilityRegistry().lookup(
+          engineId: 'kokoro',
+        ),
         assets: KokoroTokenizerAssets(
           vocabularyJson: assets.vocabularyJson,
           lexiconJson: 'invalid custom lexicon',
@@ -169,7 +190,12 @@ void main() {
   test(
     'direct vocabulary token limit and unknown-character filtering are unchanged',
     () async {
-      final worker = KokoroTokenizationWorker(assets: assets);
+      final worker = KokoroTokenizationWorker(
+        capabilityProfile: const EngineCapabilityRegistry().lookup(
+          engineId: 'kokoro',
+        ),
+        assets: assets,
+      );
       addTearDown(worker.shutdown);
       await expectLater(
         worker.tokenizeText('wuglike ' * 100, 'en-us'),
@@ -183,11 +209,58 @@ void main() {
     },
   );
 
+  for (final engine in [
+    'kokoro',
+    'fish_drama3',
+    'fish_drama3_8bit',
+    'fish_drama3_4bit',
+  ]) {
+    test(
+      '$engine worker preserves selected capability and adjustment decision',
+      () async {
+        final worker = KokoroTokenizationWorker(
+          assets: assets,
+          capabilityProfile: const EngineCapabilityRegistry().lookup(
+            engineId: engine,
+          ),
+        );
+        addTearDown(worker.shutdown);
+        final result = await worker.prepare(
+          _spec(
+            text: 'for them',
+            representation: 'normalized_spoken_text',
+            value: 'four',
+            context: kokoroForAdjustmentContext,
+          ),
+          'en-us',
+        );
+        final translated = result.translatedChunk!;
+        expect(translated.capabilityProfileId, startsWith('$engine:'));
+        expect(
+          translated.speakText,
+          engine == 'kokoro' ? 'four them' : 'for them',
+        );
+        final decision =
+            translated.pronunciationArtifacts.first.adjustmentDecision!;
+        expect(decision['allowed'], engine == 'kokoro');
+        expect((decision['target'] as Map)['engineId'], engine);
+        expect(decision['sourceReference'], contains('/issues/120'));
+        expect(
+          () => (decision['target'] as Map)['engineId'] = 'other',
+          throwsUnsupportedError,
+        );
+      },
+    );
+  }
+
   for (final explicitSuffix in [false, true]) {
     test(
       'preserves ${explicitSuffix ? 'explicit suffix' : 's-class allomorph'} phoneme and token sequence',
       () async {
         final worker = KokoroTokenizationWorker(
+          capabilityProfile: const EngineCapabilityRegistry().lookup(
+            engineId: 'kokoro',
+          ),
           assets: assets,
           dictionaryEntries: const {},
         );
@@ -226,6 +299,9 @@ void main() {
     'shutdown settles active and pending owners and rejects new requests',
     () async {
       final worker = KokoroTokenizationWorker(
+        capabilityProfile: const EngineCapabilityRegistry().lookup(
+          engineId: 'kokoro',
+        ),
         assets: assets,
         dictionaryEntries: const {},
         workerEntryPoint: fakeWorker,
@@ -259,6 +335,9 @@ void main() {
     'real initialized tokenizer snapshot runs off caller isolate with exact plain tokens',
     () async {
       final worker = KokoroTokenizationWorker(
+        capabilityProfile: const EngineCapabilityRegistry().lookup(
+          engineId: 'kokoro',
+        ),
         assets: assets,
         dictionaryEntries: const {},
       );
@@ -293,6 +372,9 @@ void main() {
     'dictionary snapshot preserves explicit-word indexing and trace without duplicated said',
     () async {
       final worker = KokoroTokenizationWorker(
+        capabilityProfile: const EngineCapabilityRegistry().lookup(
+          engineId: 'kokoro',
+        ),
         assets: assets,
         dictionaryEntries: const {'said': 'sˈɛd'},
       );
@@ -330,6 +412,9 @@ void main() {
     'one active and only latest pending settle coalesced request explicitly',
     () async {
       final worker = KokoroTokenizationWorker(
+        capabilityProfile: const EngineCapabilityRegistry().lookup(
+          engineId: 'kokoro',
+        ),
         assets: assets,
         dictionaryEntries: const {},
         workerEntryPoint: fakeWorker,
@@ -354,6 +439,9 @@ void main() {
     'cancel kills pure active owner, suppresses late result, and permits fresh work',
     () async {
       final worker = KokoroTokenizationWorker(
+        capabilityProfile: const EngineCapabilityRegistry().lookup(
+          engineId: 'kokoro',
+        ),
         assets: assets,
         dictionaryEntries: const {},
         workerEntryPoint: fakeWorker,
@@ -382,6 +470,9 @@ void main() {
     'mismatched terminal identity fails only its owner and allows recovery',
     () async {
       final worker = KokoroTokenizationWorker(
+        capabilityProfile: const EngineCapabilityRegistry().lookup(
+          engineId: 'kokoro',
+        ),
         assets: assets,
         dictionaryEntries: const {},
         workerEntryPoint: fakeWorker,
@@ -404,6 +495,9 @@ void main() {
 
   test('timeout drains worker exit before replacement and shutdown', () async {
     final worker = KokoroTokenizationWorker(
+      capabilityProfile: const EngineCapabilityRegistry().lookup(
+        engineId: 'kokoro',
+      ),
       assets: assets,
       dictionaryEntries: const {},
       workerEntryPoint: fakeWorker,
@@ -425,6 +519,9 @@ void main() {
     'worker crash and empty token failure settle without blocking shutdown',
     () async {
       final broken = KokoroTokenizationWorker(
+        capabilityProfile: const EngineCapabilityRegistry().lookup(
+          engineId: 'kokoro',
+        ),
         assets: assets,
         dictionaryEntries: const {},
         workerEntryPoint: crashWorker,
@@ -435,6 +532,9 @@ void main() {
       );
       await broken.shutdown();
       final worker = KokoroTokenizationWorker(
+        capabilityProfile: const EngineCapabilityRegistry().lookup(
+          engineId: 'kokoro',
+        ),
         assets: assets,
         dictionaryEntries: const {},
       );
@@ -450,6 +550,9 @@ ChunkSpec _spec({
   String representation = 'phoneme_string',
   String value = 'dʒˈɑn',
   List<String> diagnostics = const [],
+  SpeechAdjustmentContext context = const SpeechAdjustmentContext.content(
+    'test:explicit-content-intent',
+  ),
 }) => ChunkSpec(
   chunkId: 'c',
   segmentIds: ['s'],
@@ -476,6 +579,7 @@ ChunkSpec _spec({
           translationIntent: representation,
           diagnosticCodes: diagnostics,
           selectedRepresentation: PronunciationRepresentation(
+            context: context,
             representationId: 'john-ipa',
             representationType: representation,
             representationValue: value,

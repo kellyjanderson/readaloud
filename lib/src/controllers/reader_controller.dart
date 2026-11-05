@@ -1,3 +1,4 @@
+import '../models/speech_engine_catalog.dart';
 import '../services/speech_planning_supervisor.dart';
 import '../services/voice_assignment_coordinator.dart';
 import '../models/voice_assignment_state.dart';
@@ -57,13 +58,7 @@ import '../services/tts_engine.dart';
 
 class ReaderController extends ChangeNotifier {
   static const int preparedRangeCapacity = 8;
-  static const Set<String> _knownTtsEngineIds = <String>{
-    'kokoro',
-    'qwen3_tts_1_7b',
-    'qwen3_tts_base_1_7b',
-    'voxtral_4b',
-    'moss_tts_8b',
-  };
+  static final Set<String> _knownTtsEngineIds = speechEngineLabels.keys.toSet();
   static const Duration _healthyFollowerUpdateInterval = Duration(
     milliseconds: 100,
   );
@@ -85,6 +80,7 @@ class ReaderController extends ChangeNotifier {
     DocumentAccessService? documentAccessService,
     ReaderPreferencesService? preferencesService,
     TtsEngine? ttsEngine,
+    TtsEngine Function(String, int)? engineFactory,
     bool enablePlatformIntakeChannels = true,
   }) : _preparation =
            preparationSupervisor ??
@@ -99,6 +95,7 @@ class ReaderController extends ChangeNotifier {
        _documentAccessService =
            documentAccessService ?? createDocumentAccessService(),
        _preferencesService = preferencesService ?? ReaderPreferencesService(),
+       _engineFactory = engineFactory,
        _providedTtsEngine = ttsEngine,
        _ttsEngine = ttsEngine ?? createDefaultTtsEngine(),
        _enablePlatformIntakeChannels = enablePlatformIntakeChannels,
@@ -377,6 +374,17 @@ class ReaderController extends ChangeNotifier {
           _playbackStartDriver != null);
   List<CastEntry> get discoveredCastEntries =>
       List.unmodifiable(_discoveredCast.values);
+
+  /// Session-wide discoveries for casting UI. Playback keeps its range-local
+  /// document and bindings; opening the dialog must not change audible intent.
+  CharacterCastRegistry get characterCastRegistry => _discoveredCast.isEmpty
+      ? _document.characterCastRegistry
+      : CharacterCastRegistry(
+          documentId: sessionDocumentId,
+          registryVersion: _document.characterCastRegistry.registryVersion,
+          entries: _discoveredCast.values.toList(growable: false),
+          castIdRedirects: _castRedirects,
+        );
   Map<String, String> get castIdRedirects => Map.unmodifiable(_castRedirects);
   String get sessionDocumentId =>
       _sessionDocumentId ?? _document.displayDocument.documentId;
@@ -399,8 +407,19 @@ class ReaderController extends ChangeNotifier {
     }
     final previous = sessionDocumentId;
     final canonical = migration.canonicalDocumentId;
-    final choices = _storedDocumentCastVoiceAssignments[previous];
-    if (choices != null) {
+    final sourcePreferenceOwner =
+        _sourceVoiceDocumentIds[_activeSourceRevision];
+    final preferenceOwner = _voicePreferenceDocumentId;
+    final choices = _storedDocumentCastVoiceAssignments[preferenceOwner];
+    if (sourcePreferenceOwner != null && sourcePreferenceOwner != canonical) {
+      // This source's saved snapshot is authoritative, including absence after
+      // Reset. Older canonical choices must not undo edits made before EOF.
+      if (choices == null || choices.isEmpty) {
+        _storedDocumentCastVoiceAssignments.remove(canonical);
+      } else {
+        _storedDocumentCastVoiceAssignments[canonical] = Map.of(choices);
+      }
+    } else if (choices != null) {
       final canonicalChoices = _storedDocumentCastVoiceAssignments.putIfAbsent(
         canonical,
         () => {},
@@ -418,8 +437,11 @@ class ReaderController extends ChangeNotifier {
     }
     _documentIdentityRedirects[previous] = canonical;
     _sessionDocumentId = canonical;
-    // Retain provisional keys for recovery; canonical preferences take
-    // precedence on replay. Current overrides and active speech remain intact.
+    if (_activeSourceRevision case final source?) {
+      _sourceVoiceDocumentIds[source] = canonical;
+    }
+    // Retain provisional keys for recovery; subsequent replay uses the updated
+    // canonical owner. Current overrides and active speech remain intact.
     await _persistPreferences();
     if (!_disposed) notifyListeners();
     return true;
@@ -772,6 +794,27 @@ class ReaderController extends ChangeNotifier {
           );
     _requireRevision(revision);
     final cachedMigration = cache?.identityMigration(request);
+    // Upgrade pre-alias preferences only from a validated range of this exact
+    // source revision. Never guess a book by title or by matching cast names.
+    if (sourceRevision != null &&
+        !_sourceVoiceDocumentIds.containsKey(sourceRevision) &&
+        _storedDocumentCastVoiceAssignments.isNotEmpty &&
+        cache != null &&
+        cache.rangeCount > 0) {
+      try {
+        final prior = await cache.readRange(1, request: request);
+        _requireRevision(revision);
+        final priorId =
+            cachedMigration?.canonicalDocumentId ??
+            prior.fragment.displayDocument.documentId;
+        if (_storedDocumentCastVoiceAssignments.containsKey(priorId)) {
+          _sourceVoiceDocumentIds[sourceRevision] = priorId;
+        }
+      } on FormatException {
+        // Corrupt cache cannot establish preference ownership; rebuild input.
+      }
+    }
+    _requireRevision(revision);
     final completion = _preparation.prepareRanges(
       request,
       cacheKey: sourceRevision,
@@ -870,6 +913,10 @@ class ReaderController extends ChangeNotifier {
           for (final stage in [
             PreparationStage.acquisition,
             PreparationStage.parsing,
+            PreparationStage.normalization,
+            PreparationStage.mapping,
+            PreparationStage.analysis,
+            PreparationStage.pronunciation,
             PreparationStage.persistence,
           ]) {
             final progress = _preparationProgress[stage];
@@ -970,6 +1017,13 @@ class ReaderController extends ChangeNotifier {
   Future<void>? _preferenceSavePump;
   int _preferenceSnapshotRevision = 0;
   final TtsEngine? _providedTtsEngine;
+  final TtsEngine Function(String, int)? _engineFactory;
+  Future<void>? _engineSwitch;
+  bool _runningEngineRetired = false;
+  bool get isSwitchingEngine => _engineSwitch != null;
+  TtsEngine _createEngine(String id, int bits) =>
+      _engineFactory?.call(id, bits) ??
+      createDefaultTtsEngine(engineId: id, voxtralQuantizationBits: bits);
   TtsEngine _ttsEngine;
   String _selectedTtsEngineId = ReaderPreferences.defaultTtsEngineId;
   int _voxtralQuantizationBits = 0;
@@ -1035,6 +1089,7 @@ class ReaderController extends ChangeNotifier {
   final Map<String, SpokenChunkRecord> _spokenChunkRecords =
       <String, SpokenChunkRecord>{};
   final Map<String, String> _castVoiceOverrides = <String, String>{};
+  final Map<String, String> _sourceVoiceDocumentIds = {};
   String? _activeSpokenChunkId;
   String? _ttsDebugTraceLogPath;
   DateTime? _ttsDebugTraceStartedAt;
@@ -1200,16 +1255,59 @@ class ReaderController extends ChangeNotifier {
     _selectedTtsEngineId = _knownTtsEngineIds.contains(preferences.ttsEngineId)
         ? preferences.ttsEngineId
         : ReaderPreferences.defaultTtsEngineId;
+    final launchEngine = Platform.isMacOS
+        ? Platform.environment['READALOUD_TTS_ENGINE']?.trim()
+        : null;
+    if (_providedTtsEngine == null &&
+        _knownTtsEngineIds.contains(launchEngine)) {
+      _selectedTtsEngineId = launchEngine!;
+    }
     if (_providedTtsEngine == null) {
-      _ttsEngine = createDefaultTtsEngine(
-        engineId: _selectedTtsEngineId,
-        voxtralQuantizationBits: _voxtralQuantizationBits,
+      _ttsEngine.dispose();
+      _ttsEngine = _createEngine(
+        _selectedTtsEngineId,
+        _voxtralQuantizationBits,
       );
     }
     _runningTtsEngineId = _ttsEngine is TtsEngineIdentityCapable
         ? (_ttsEngine as TtsEngineIdentityCapable).engineId
         : _selectedTtsEngineId;
+    _bindEngineCallbacks();
+
+    _selectedVoiceId = preferences.selectedVoiceId;
+    _voiceSpeeds
+      ..clear()
+      ..addAll(preferences.voiceSpeeds);
+    _fontFamily = preferences.fontFamily;
+    _fontScale = preferences.fontScale;
+    _appearanceMode = preferences.appearanceMode;
+    _isMultiVoiceEnabled = preferences.multiVoiceEnabled;
+    _storedDocumentCastVoiceAssignments
+      ..clear()
+      ..addAll(preferences.storedDocumentCastVoiceAssignments);
+    _sourceVoiceDocumentIds
+      ..clear()
+      ..addAll(preferences.sourceVoiceDocumentIds);
+    _resumeState = preferences.resumeState;
+    _lastOpenedDocumentPath = preferences.lastOpenedDocumentPath;
+    _lastOpenedDocumentAccessToken = preferences.lastOpenedDocumentAccessToken;
+    _lastOpenedDirectoryPath = preferences.lastOpenedDirectoryPath;
+    _lastOpenedDirectoryAccessToken =
+        preferences.lastOpenedDirectoryAccessToken;
+    if (!_preferencesReady.isCompleted) _preferencesReady.complete();
+
+    final startup = retryInitialization();
+    if (_enablePlatformIntakeChannels) {
+      await _initializeIntakeChannels();
+    }
+    if (!_intakeReady.isCompleted) _intakeReady.complete();
+    await startup;
+  }
+
+  void _bindEngineCallbacks() {
+    final engine = _ttsEngine;
     _ttsEngine.onStart = () {
+      if (_disposed || !identical(_ttsEngine, engine)) return;
       if (_activePreviewVoiceId != null) {
         _isVoicePreviewLoading = false;
         _isVoicePreviewPlaying = true;
@@ -1231,6 +1329,7 @@ class ReaderController extends ChangeNotifier {
       notifyListeners();
     };
     _ttsEngine.onStatus = (message) {
+      if (_disposed || !identical(_ttsEngine, engine)) return;
       if (_activePreviewVoiceId != null) {
         return;
       }
@@ -1240,12 +1339,14 @@ class ReaderController extends ChangeNotifier {
     if (_ttsEngine is TtsResourceProgressCapable) {
       (_ttsEngine as TtsResourceProgressCapable).onResourceProgress =
           (progress) {
+            if (_disposed || !identical(_ttsEngine, engine)) return;
             if (_disposed) return;
             _speechResourceProgress = progress;
             notifyListeners();
           };
     }
     _ttsEngine.onComplete = () {
+      if (_disposed || !identical(_ttsEngine, engine)) return;
       if (_activePreviewVoiceId != null) {
         _resetPreviewState();
         unawaited(_restoreSelectedVoiceEngineState());
@@ -1278,6 +1379,7 @@ class ReaderController extends ChangeNotifier {
       notifyListeners();
     };
     _ttsEngine.onError = (message) {
+      if (_disposed || !identical(_ttsEngine, engine)) return;
       if (_activePreviewVoiceId != null) {
         _resetPreviewState();
         unawaited(_restoreSelectedVoiceEngineState());
@@ -1302,18 +1404,28 @@ class ReaderController extends ChangeNotifier {
       }
       unawaited(_flushResumePersistence());
       _statusMessage = message;
+      // A terminal error ends this intent, including late preparation/ready
+      // callbacks. Play must create a new attempt, not toggle stale buffering.
+      ++_playbackIntent;
+      _resumeAfterPreparation = false;
+      _pendingPlayUntilReady = false;
+      _playbackStartPending = false;
       _activePlaybackDocumentId = null;
       _isPlaying = false;
       _isFadingOut = false;
       _playbackRequestedAt = null;
-      _playbackState = _playbackActivity.isPlaying
-          ? ReaderPlaybackPrimaryState.playing
-          : ReaderPlaybackPrimaryState.failed;
+      _playbackActivity = const TtsPlaybackActivity.idle();
+      _playbackState = ReaderPlaybackPrimaryState.failed;
       _readingFocusState = _readingFocusState.copyWith(playbackActive: false);
       notifyListeners();
     };
-    _ttsEngine.onProgress = _handleProgress;
+    _ttsEngine.onProgress = (progress) {
+      if (!_disposed && identical(_ttsEngine, engine)) {
+        _handleProgress(progress);
+      }
+    };
     _ttsEngine.onActivity = (activity) {
+      if (_disposed || !identical(_ttsEngine, engine)) return;
       if (_activePreviewVoiceId != null) {
         switch (activity.phase) {
           case TtsPlaybackPhase.buffering:
@@ -1345,6 +1457,7 @@ class ReaderController extends ChangeNotifier {
       notifyListeners();
     };
     _ttsEngine.onDebugTrace = (trace) {
+      if (_disposed || !identical(_ttsEngine, engine)) return;
       _ttsDebugTraceLogPath = trace.logPath;
       _ttsDebugTraceStartedAt = trace.startedAt;
       _ttsDebugTraceVoiceId = trace.voiceId;
@@ -1357,32 +1470,23 @@ class ReaderController extends ChangeNotifier {
         ..onVoiceLibraryChanged = _handleVoiceLibraryChanged;
       _voiceLibrary = _voiceLibraryCapable!.voiceLibrary;
     }
+  }
 
-    _selectedVoiceId = preferences.selectedVoiceId;
-    _voiceSpeeds
-      ..clear()
-      ..addAll(preferences.voiceSpeeds);
-    _fontFamily = preferences.fontFamily;
-    _fontScale = preferences.fontScale;
-    _appearanceMode = preferences.appearanceMode;
-    _isMultiVoiceEnabled = preferences.multiVoiceEnabled;
-    _storedDocumentCastVoiceAssignments
-      ..clear()
-      ..addAll(preferences.storedDocumentCastVoiceAssignments);
-    _resumeState = preferences.resumeState;
-    _lastOpenedDocumentPath = preferences.lastOpenedDocumentPath;
-    _lastOpenedDocumentAccessToken = preferences.lastOpenedDocumentAccessToken;
-    _lastOpenedDirectoryPath = preferences.lastOpenedDirectoryPath;
-    _lastOpenedDirectoryAccessToken =
-        preferences.lastOpenedDirectoryAccessToken;
-    if (!_preferencesReady.isCompleted) _preferencesReady.complete();
-
-    final startup = retryInitialization();
-    if (_enablePlatformIntakeChannels) {
-      await _initializeIntakeChannels();
+  void _detachEngineCallbacks(TtsEngine engine) {
+    engine.onStart = null;
+    engine.onStatus = null;
+    engine.onComplete = null;
+    engine.onError = null;
+    engine.onProgress = null;
+    engine.onActivity = null;
+    engine.onDebugTrace = null;
+    if (engine is TtsResourceProgressCapable) {
+      (engine as TtsResourceProgressCapable).onResourceProgress = null;
     }
-    if (!_intakeReady.isCompleted) _intakeReady.complete();
-    await startup;
+    if (engine is VoiceLibraryCapable) {
+      (engine as VoiceLibraryCapable).onVoiceLibraryChanged = null;
+    }
+    _voiceLibraryCapable = null;
   }
 
   /// One startup attempt owns all callbacks and publication. Failed attempts
@@ -1413,6 +1517,10 @@ class ReaderController extends ChangeNotifier {
       if (!current()) return;
       await _ttsEngine.setSpeechRate(currentSpeed);
       if (!current()) return;
+      if (_ttsEngine is ModelPreparationCapable) {
+        await (_ttsEngine as ModelPreparationCapable).prepareSelectedModel();
+      }
+      if (!current()) return;
       _startupError = null;
       _statusMessage = null;
       unawaited(_persistPreferences());
@@ -1425,6 +1533,7 @@ class ReaderController extends ChangeNotifier {
       _pendingPlayUntilReady = false;
     } finally {
       if (current()) {
+        _speechResourceProgress = null;
         _isInitializing = false;
         notifyListeners();
         _resumePendingPlay();
@@ -2401,22 +2510,10 @@ class ReaderController extends ChangeNotifier {
         _voices.every((voice) => voice.id != voiceId)) {
       return;
     }
-    final automaticAssignments = _castVoiceAssignmentService.resolve(
-      CastVoiceAssignmentInput(
-        characterCastRegistry: _document.characterCastRegistry,
-        availableVoices: _voices,
-        fallbackVoiceId: _selectedVoiceId!,
-        preferredNarratorVoiceId: _selectedVoiceId,
-      ),
-    );
-    final automaticAssignment = automaticAssignments.forCastId(castId);
-    if (automaticAssignment?.effectiveVoiceId == voiceId) {
-      _castVoiceOverrides.remove(castId);
-      _clearStoredCastVoiceAssignment(castId);
-    } else {
-      _castVoiceOverrides[castId] = voiceId;
-      _storeCastVoiceAssignment(castId, voiceId);
-    }
+    // Selecting a voice expresses intent even when it matches today's
+    // automatic assignment. Only Reset returns the role to automatic routing.
+    _castVoiceOverrides[castId] = voiceId;
+    _storeCastVoiceAssignment(castId, voiceId);
     await _voiceChoicesEdited();
   }
 
@@ -2447,7 +2544,9 @@ class ReaderController extends ChangeNotifier {
       return;
     }
     _selectedTtsEngineId = engineId;
+    _interruptObsoleteModelPreparation();
     await _persistPreferences();
+    await _switchEngine();
     notifyListeners();
   }
 
@@ -2455,8 +2554,94 @@ class ReaderController extends ChangeNotifier {
     await _preferencesReady.future;
     if (bits != 0 && bits != 4) return;
     _voxtralQuantizationBits = bits;
+    _interruptObsoleteModelPreparation();
     await _persistPreferences();
+    await _switchEngine();
     notifyListeners();
+  }
+
+  void _interruptObsoleteModelPreparation() {
+    if (_engineSwitch == null || _ttsEngine is! ResourcePreparationCapable) {
+      return;
+    }
+    ++_startupRevision;
+    _runningEngineRetired = true;
+    final retiringEngine = _ttsEngine;
+    // Shutdown is idempotent and is joined by the single replacement loop.
+    unawaited(
+      (retiringEngine as ResourcePreparationCapable)
+          .shutdownResources()
+          .catchError((Object error) {
+            if (!_disposed && identical(_ttsEngine, retiringEngine)) {
+              _statusMessage = '$error';
+            }
+          }),
+    );
+  }
+
+  Future<void> _switchEngine() {
+    // A supplied test engine without a replacement factory retains its owner.
+    if (_providedTtsEngine != null && _engineFactory == null) {
+      return Future.value();
+    }
+    return _engineSwitch ??= _replaceEngine().whenComplete(() {
+      _engineSwitch = null;
+      if (!_disposed) notifyListeners();
+    });
+  }
+
+  Future<void> _replaceEngine() async {
+    ++_startupRevision;
+    ++_playbackIntent;
+    _pendingPlayUntilReady = false;
+    _planning.cancel();
+    _isInitializing = true;
+    _invalidateResourceBindings();
+    _currentRealization = null;
+    _statusMessage = 'Switching speech engine…';
+    notifyListeners();
+    try {
+      while (!_disposed &&
+          (ttsEngineRestartRequired || _runningEngineRetired)) {
+        final old = _ttsEngine;
+        _detachEngineCallbacks(old);
+        if (old is ResourcePreparationCapable) {
+          await (old as ResourcePreparationCapable).shutdownResources();
+        } else {
+          await old.stop();
+        }
+        old.dispose();
+        await _engineStartup;
+        if (_disposed) return;
+        _resetPreviewState();
+        _isPlaying = false;
+        _activePlaybackDocumentId = null;
+        _playbackActivity = const TtsPlaybackActivity.idle();
+        _playbackState = ReaderPlaybackPrimaryState.paused;
+        _speechResourceProgress = null;
+        _readingFocusState = _readingFocusState.copyWith(playbackActive: false);
+        // Read desired state after old resources have drained: rapid selections
+        // collapse into a single latest target, never parallel resident models.
+        final id = _selectedTtsEngineId;
+        final bits = _voxtralQuantizationBits;
+        _ttsEngine = _createEngine(id, bits);
+        _runningEngineRetired = false;
+        _runningTtsEngineId = id;
+        _runningVoxtralQuantizationBits = bits;
+        _voices = const [];
+        _voiceLibrary = const [];
+        _bindEngineCallbacks();
+        await retryInitialization();
+      }
+    } catch (error) {
+      _startupError = 'Speech engine switch failed: $error';
+      _statusMessage = _startupError;
+    } finally {
+      if (!_disposed) {
+        _isInitializing = false;
+        notifyListeners();
+      }
+    }
   }
 
   Future<void> setFontScale(double fontScale) async {
@@ -3295,6 +3480,7 @@ class ReaderController extends ChangeNotifier {
         for (final entry in _storedDocumentCastVoiceAssignments.entries)
           entry.key: Map<String, String>.unmodifiable(entry.value),
       }),
+      sourceVoiceDocumentIds: Map.unmodifiable(_sourceVoiceDocumentIds),
       resumeState: _resumeState,
       lastOpenedDocumentPath: _lastOpenedDocumentPath,
       lastOpenedDocumentAccessToken: _lastOpenedDocumentAccessToken,
@@ -3324,6 +3510,7 @@ class ReaderController extends ChangeNotifier {
           multiVoiceEnabled: value.multiVoiceEnabled,
           storedDocumentCastVoiceAssignments:
               value.storedDocumentCastVoiceAssignments,
+          sourceVoiceDocumentIds: value.sourceVoiceDocumentIds,
           resumeState: value.resumeState,
           lastOpenedDocumentPath: value.lastOpenedDocumentPath,
           lastOpenedDocumentAccessToken: value.lastOpenedDocumentAccessToken,
@@ -4012,7 +4199,28 @@ class ReaderController extends ChangeNotifier {
         ),
       );
     } on PlanningCancelled {
+      publishReadingStage(
+        ticket,
+        const PreparationProgress(
+          stage: PreparationStage.planning,
+          state: PreparationWorkState.cancelled,
+          completed: 0,
+          unit: 'chunks',
+        ),
+      );
       return;
+    } catch (error) {
+      publishReadingStage(
+        ticket,
+        PreparationProgress(
+          stage: PreparationStage.planning,
+          state: PreparationWorkState.failed,
+          completed: 0,
+          unit: 'chunks',
+          error: '$error',
+        ),
+      );
+      rethrow;
     }
   }
 
@@ -4104,7 +4312,8 @@ class ReaderController extends ChangeNotifier {
 
     return _castVoiceAssignmentService.resolve(
       CastVoiceAssignmentInput(
-        characterCastRegistry: (document ?? _document).characterCastRegistry,
+        characterCastRegistry:
+            document?.characterCastRegistry ?? characterCastRegistry,
         availableVoices: _voices,
         fallbackVoiceId: preferredNarratorVoiceId,
         preferredNarratorVoiceId: preferredNarratorVoiceId,
@@ -4116,13 +4325,19 @@ class ReaderController extends ChangeNotifier {
 
   Map<String, String> _currentStoredCastVoiceAssignments() {
     return Map<String, String>.unmodifiable(
-      _storedDocumentCastVoiceAssignments[sessionDocumentId] ??
+      _storedDocumentCastVoiceAssignments[_voicePreferenceDocumentId] ??
           const <String, String>{},
     );
   }
 
+  String get _voicePreferenceDocumentId =>
+      _sourceVoiceDocumentIds[_activeSourceRevision] ?? sessionDocumentId;
+
   void _storeCastVoiceAssignment(String castId, String voiceId) {
-    final documentId = sessionDocumentId;
+    final documentId = _voicePreferenceDocumentId;
+    if (_activeSourceRevision case final source?) {
+      _sourceVoiceDocumentIds[source] = documentId;
+    }
     final assignments =
         _storedDocumentCastVoiceAssignments[documentId] ?? <String, String>{};
     assignments[castId] = voiceId;
@@ -4130,7 +4345,7 @@ class ReaderController extends ChangeNotifier {
   }
 
   void _clearStoredCastVoiceAssignment(String castId) {
-    final documentId = sessionDocumentId;
+    final documentId = _voicePreferenceDocumentId;
     final assignments = _storedDocumentCastVoiceAssignments[documentId];
     if (assignments == null) {
       return;

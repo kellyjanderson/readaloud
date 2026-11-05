@@ -11,33 +11,38 @@ void main() {
       final merged = service.merge(
         PronunciationResourceLayeringInput(
           profile: EnglishPronunciationProfileRegistry.enUsCore,
-          sourceMetadataResources: const <String, List<PronunciationRepresentation>>{
-            'elliot': <PronunciationRepresentation>[
-              PronunciationRepresentation(
-                representationId: 'src_elliot',
-                representationType: 'normalized_spoken_text',
-                representationValue: 'EL-ee-ut',
-                priority: 300,
-              ),
-            ],
-          },
-          userOverrideResources: const <String, List<PronunciationRepresentation>>{
-            'elliot': <PronunciationRepresentation>[
-              PronunciationRepresentation(
-                representationId: 'user_elliot',
-                representationType: 'normalized_spoken_text',
-                representationValue: 'EL-ee-oht',
-                priority: 900,
-              ),
-            ],
-          },
+          sourceMetadataResources:
+              const <String, List<PronunciationRepresentation>>{
+                'elliot': <PronunciationRepresentation>[
+                  PronunciationRepresentation(
+                    context: SpeechAdjustmentContext.content(
+                      'test:explicit-content-intent',
+                    ),
+                    representationId: 'src_elliot',
+                    representationType: 'normalized_spoken_text',
+                    representationValue: 'EL-ee-ut',
+                    priority: 300,
+                  ),
+                ],
+              },
+          userOverrideResources:
+              const <String, List<PronunciationRepresentation>>{
+                'elliot': <PronunciationRepresentation>[
+                  PronunciationRepresentation(
+                    context: SpeechAdjustmentContext.content(
+                      'test:explicit-content-intent',
+                    ),
+                    representationId: 'user_elliot',
+                    representationType: 'normalized_spoken_text',
+                    representationValue: 'EL-ee-oht',
+                    priority: 900,
+                  ),
+                ],
+              },
         ),
       );
 
-      expect(
-        merged['elliot']?.single.representationValue,
-        'EL-ee-oht',
-      );
+      expect(merged['elliot']?.single.representationValue, 'EL-ee-oht');
       expect(merged.winningLayerIdFor('elliot'), 'user-override');
       expect(
         merged.winningLayerKindFor('elliot'),

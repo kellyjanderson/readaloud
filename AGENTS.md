@@ -1,6 +1,6 @@
 # Read Aloud repository workflow
 
-This is the authoritative process. Current architecture stays in Git; active design, planning, assignments and evidence records live in GitHub. Local skills are procedures, not competing authorities.
+This is the authoritative process. Current architecture and versioned interim design documents stay in Git; published design decisions, active execution, assignments and evidence records live in GitHub. Local skills are procedures, not competing authorities.
 
 ## Non-negotiable product expectations
 
@@ -23,11 +23,12 @@ Read README.md, project/README.md and docs/project-management.md. Start issue re
 
 - `project/architecture/`: implemented structure, intent, invariants, durable rationale and honest evidence limits. Update with implementation; never promote a proposal to current fact.
 - GitHub design issue: working ACD, scope, alternatives, decisions, acceptance and architecture targets.
+- `project/interim/`: Git-tracked design drafts and immutable published revision snapshots, with source issue/revision, lifecycle and reconciliation links. Follow its README; never rely on volatile `tmp/` for design documents. GitHub current blocks and Project Status still own execution; do not mirror live issue bodies or progress here.
 - Native sub-issues/dependencies: implementation slices and readiness. Small fixes may use a single issue.
 - GitHub Project: authoritative status and priority. Marked issue-body blocks: current coordination/work orders and exact evidence pointers. Issue comments: durable decision, handoff and evidence receipts; historical claims do not supersede a reconciled current block without new evidence.
 - GitHub milestone: release scope, tentative version, intended outcomes and exclusions. One release issue owns release-wide readiness and publication; link feature evidence instead of copying plans.
-- `docs/`: durable setup, usage and process guidance. `project/ui/`, legacy specifications/test specifications and research are retained references; new working drafts belong in issues.
-- `project/archive/` and historical journals: preserved history, not active instructions. Do not create local ACDs, plans, progress journals, task checklists or mirrored issue bodies. Ignored `tmp/` may hold disposable tool payloads, never the sole authority.
+- `docs/`: durable setup, usage and process guidance. `project/ui/`, legacy specifications/test specifications and research are retained references; new substantial design drafts use `project/interim/` and publish to their owning issues.
+- `project/archive/` and historical journals: preserved history, not active instructions. Design drafts and fixed plan snapshots belong only in `project/interim/`; do not create local progress journals, task checklists, release-status ledgers or mirrored issue bodies. Ignored `tmp/` may hold disposable transport payloads, never design-document storage. After implementation, reconcile accepted design into current architecture and record evidence in GitHub before retiring interim files through a reviewed Git change; history preserves the revision.
 
 ## Orchestrator and workers
 
