@@ -775,14 +775,14 @@ void main() {
               .storedDocumentCastVoiceAssignments[canonical]?['cast_narrator'],
           'af_bella',
         );
-        // Deliberately retain the old provisional assignment while editing the
-        // canonical one. Reopen must not let the old key overwrite this choice.
+        // Provisional and canonical IDs now project one owner. Neither may
+        // retain an independently writable stale choice after editing.
         await controller.assignVoiceToCast('cast_narrator', 'am_michael');
         final stored = await ReaderPreferencesService().load();
         expect(
           stored
               .storedDocumentCastVoiceAssignments[provisional]?['cast_narrator'],
-          'af_bella',
+          'am_michael',
         );
         expect(
           stored

@@ -10,6 +10,7 @@ class CastVoiceAssignmentInput {
     this.preferredNarratorVoiceId,
     this.storedAssignments = const <String, String>{},
     this.userOverrides = const <String, String>{},
+    this.automaticAssignments = const <String, String>{},
   });
 
   final CharacterCastRegistry characterCastRegistry;
@@ -18,6 +19,7 @@ class CastVoiceAssignmentInput {
   final String? preferredNarratorVoiceId;
   final Map<String, String> storedAssignments;
   final Map<String, String> userOverrides;
+  final Map<String, String> automaticAssignments;
 }
 
 class CastVoiceAssignmentService {
@@ -45,19 +47,26 @@ class CastVoiceAssignmentService {
 
     // The registry preserves first encounter across incremental publications.
     // Alphabetical insertion would reassign every later character's voice.
-    final sortedCharacters =
-        input.characterCastRegistry.characterEntries.toList(growable: false);
-    final usedCharacterVoiceIds = <String>{};
+    final sortedCharacters = input.characterCastRegistry.characterEntries
+        .toList(growable: false);
+    final usedCharacterVoiceIds = <String>{
+      ...input.automaticAssignments.values,
+    };
 
     for (var index = 0; index < sortedCharacters.length; index += 1) {
       final character = sortedCharacters[index];
-      final automaticVoiceId = _chooseAutomaticCharacterVoiceId(
-        voices: sortedVoices,
-        character: character,
-        narratorVoiceId: narratorAutomaticVoiceId,
-        usedCharacterVoiceIds: usedCharacterVoiceIds,
-        fallbackPool: characterVoicePool,
-      );
+      final automaticVoiceId =
+          _validVoiceId(
+            input.automaticAssignments[character.castId],
+            availableVoiceIds,
+          ) ??
+          _chooseAutomaticCharacterVoiceId(
+            voices: sortedVoices,
+            character: character,
+            narratorVoiceId: narratorAutomaticVoiceId,
+            usedCharacterVoiceIds: usedCharacterVoiceIds,
+            fallbackPool: characterVoicePool,
+          );
       automaticAssignments[character.castId] = automaticVoiceId;
       if (automaticVoiceId != null &&
           automaticVoiceId != narratorAutomaticVoiceId) {

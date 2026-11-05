@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:read_aloud/src/services/work_character_store.dart';
 import 'dart:ui' show SemanticsAction, Tristate;
 
 import 'package:flutter/foundation.dart';
@@ -776,6 +777,7 @@ class _MemoryReaderPreferencesService extends ReaderPreferencesService {
     required Map<String, Map<String, String>>
     storedDocumentCastVoiceAssignments,
     Map<String, String> sourceVoiceDocumentIds = const {},
+    CharacterStoreSnapshot? characterSnapshot,
     ReaderResumeState? resumeState,
     String? selectedVoiceId,
     String? lastOpenedDocumentPath,

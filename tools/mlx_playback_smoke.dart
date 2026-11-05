@@ -112,6 +112,54 @@ Future<void> main(List<String> args) async {
     receipt['characters'] = controller.document.characterCastRegistry.entries
         .map((entry) => entry.castId)
         .toList();
+    final characterName = Platform.environment['READALOUD_SMOKE_CHARACTER'];
+    String? contractCastId, contractVoiceId;
+    if (characterName != null) {
+      if (documentPath == null) {
+        throw StateError('Character reopen probe requires a document path');
+      }
+      final character = controller.characterCastRegistry.characterEntries
+          .singleWhere((entry) => entry.displayLabel == characterName);
+      contractCastId = character.castId;
+      final previous = controller.castVoiceAssignments!
+          .forCastId(contractCastId)!
+          .effectiveVoiceId;
+      final choices = controller.voices
+          .where(
+            (voice) =>
+                voice.gender == character.inferredGender &&
+                voice.id != previous &&
+                (!args[0].startsWith('fish_drama3') ||
+                    voice.id.startsWith('library_fish')),
+          )
+          .toList();
+      if (choices.isEmpty) {
+        throw StateError('No alternative compatible voice for $characterName');
+      }
+      contractVoiceId = choices.last.id;
+      await controller.assignVoiceToCast(contractCastId, contractVoiceId);
+      await controller.importFilePaths([documentPath]);
+      final reopened = controller.characterCastRegistry.forCastId(
+        contractCastId,
+      )!;
+      if (reopened.selectedVoice.voiceId != contractVoiceId ||
+          controller.castVoiceAssignments!
+                  .forCastId(contractCastId)!
+                  .effectiveVoiceId !=
+              contractVoiceId) {
+        throw StateError(
+          'Explicit character voice did not survive source reopen',
+        );
+      }
+      receipt['voiceContract'] = {
+        'case': 'VS16-native',
+        'character': characterName,
+        'castId': contractCastId,
+        'original': previous,
+        'selected': contractVoiceId,
+        'reopenedSelectionRevision': reopened.selectedVoice.revision,
+      };
+    }
     final initialCast = {
       for (final entry in controller.characterCastRegistry.characterEntries)
         entry.castId: {
@@ -234,6 +282,27 @@ Future<void> main(List<String> args) async {
         }
       }
     }
+    if (contractCastId != null) {
+      final bindings = controller.resolvedResourceBindings
+          .where((b) => b.assignment.castId == contractCastId)
+          .toList();
+      receipt['characterBindings'] = bindings.map((b) => b.toMap()).toList();
+      if (bindings.isEmpty ||
+          bindings.any((b) => b.resource.voiceId != contractVoiceId)) {
+        throw StateError(
+          'Selected character did not bind to the selected native reference',
+        );
+      }
+      final turns = controller.spokenChunkRecords
+          .where((c) => c.castId == contractCastId)
+          .toList();
+      receipt['characterSpokenTurns'] = turns.length;
+      if (turns.isEmpty || turns.any((c) => c.voiceId != contractVoiceId)) {
+        throw StateError(
+          'No correctly selected character turn reached playback',
+        );
+      }
+    }
     receipt['preparationCompleteMs'] = preparationCompleteMs;
     receipt['preparationStages'] = controller.preparationProgress.map(
       (stage, value) => MapEntry(stage.name, {
@@ -316,6 +385,9 @@ Future<void> main(List<String> args) async {
     await file.writeAsString(
       const JsonEncoder.withIndent('  ').convert(receipt),
     );
-    exit(passed ? 0 : 1);
+    if (Platform.environment['READALOUD_SMOKE_NORMAL_QUIT'] != '1') {
+      exit(passed ? 0 : 1);
+    }
+    // The test driver now invokes the application normal Quit action.
   }
 }

@@ -13,8 +13,8 @@ import '../models/pronunciation_artifact.dart';
 import '../models/reader_document.dart';
 import '../models/speech_annotation.dart';
 import '../models/speech_document.dart';
-import '../models/voice_profile.dart';
 import 'prepared_document_snapshot.dart';
+import 'character_codec.dart';
 
 Map<String, dynamic> _map(dynamic v) => (v as Map).cast<String, dynamic>();
 List<Map<String, dynamic>> _rows(dynamic v) => (v as List).map(_map).toList();
@@ -72,7 +72,11 @@ Map<String, String> validateReaderDocumentVoiceAssignments(
 ReaderDocument _decodeReaderDocument(Map<String, dynamic> m) {
   try {
     if (m['formatId'] != 'read-aloud-document' ||
-        !const ['radoc-v1', 'radoc-v2'].contains(m['formatVersion'])) {
+        !const [
+          'radoc-v1',
+          'radoc-v2',
+          'radoc-v3',
+        ].contains(m['formatVersion'])) {
       throw const FormatException('Unsupported radoc schema');
     }
     final n = _map(m['normalizedImportResult']);
@@ -82,6 +86,15 @@ ReaderDocument _decodeReaderDocument(Map<String, dynamic> m) {
     final a = _map(m['baseSpeechAnnotations']);
     final t = _map(m['dialogueAttributions']);
     final c = _map(m['characterCastRegistry']);
+    final characterEntries = _rows(c['entries']).map(decodeCharacter).toList();
+    if (characterEntries
+            .map((e) => e.workId)
+            .where((id) => id.isNotEmpty)
+            .toSet()
+            .length >
+        1) {
+      throw const FormatException('Mixed character work identities');
+    }
     final v = _map(m['documentVoiceAttribution']);
     final r = _map(m['basePronunciationArtifacts']);
     final documentId = n['documentId'] as String;
@@ -320,27 +333,7 @@ ReaderDocument _decodeReaderDocument(Map<String, dynamic> m) {
         documentId: documentId,
         registryVersion: c['registryVersion'],
         castIdRedirects: _strings(c['castIdRedirects'] ?? <String, String>{}),
-        entries: _rows(c['entries'])
-            .map(
-              (x) => CastEntry(
-                castId: x['castId'],
-                roleKind: _enum(CastEntryRoleKind.values, x['roleKind']),
-                displayLabel: x['displayLabel'],
-                confidence: _number(x['confidence']),
-                provenance: _enum(CastEntryProvenance.values, x['provenance']),
-                observedAliases: _list(x['observedAliases']),
-                attributionIds: _list(x['attributionIds']),
-                identityProfile: x['identityProfile'] == null
-                    ? null
-                    : _profile(_map(x['identityProfile'])),
-                inferredGender: x['inferredGender'] == null
-                    ? null
-                    : _enum(VoiceGender.values, x['inferredGender']),
-                inferredGenderConfidence:
-                    (x['inferredGenderConfidence'] as num?)?.toDouble(),
-              ),
-            )
-            .toList(),
+        entries: characterEntries,
       ),
       documentVoiceAttribution: DocumentVoiceAttributionSet(
         documentId: documentId,
@@ -436,38 +429,6 @@ ReaderDocument _decodeReaderDocument(Map<String, dynamic> m) {
   }
 }
 
-CharacterGenderIdentityLabel _label(dynamic v) =>
-    _enum(CharacterGenderIdentityLabel.values, _camel(v as String));
-CharacterGenderEvidenceSource _source(dynamic v) =>
-    _enum(CharacterGenderEvidenceSource.values, _camel(v as String));
-String _camel(String s) =>
-    s.replaceAllMapped(RegExp(r'_([a-z])'), (m) => m[1]!.toUpperCase());
-CharacterIdentityProfile _profile(Map<String, dynamic> x) =>
-    CharacterIdentityProfile(
-      genderIdentityLabel: _label(x['genderIdentityLabel']),
-      genderConfidence: _number(x['genderConfidence']),
-      genderSource: _source(x['genderSource']),
-      pronounProfile: CharacterPronounProfile(
-        counts: (_map(x['pronounProfile'])['counts'] as Map)
-            .cast<String, int>(),
-      ),
-      conflictFlag: x['conflictFlag'],
-      countedSegmentIds: _list(x['countedSegmentIds'] ?? []),
-      evidenceSpans: _rows(x['evidenceSpans'])
-          .map(
-            (e) => CharacterIdentityEvidenceSpan(
-              segmentId: e['segmentId'],
-              startUtf16: e['startUtf16'],
-              endUtf16: e['endUtf16'],
-              text: e['text'],
-              source: _source(e['source'] ?? 'unknown'),
-              genderIdentityLabel: e['genderIdentityLabel'] == null
-                  ? null
-                  : _label(e['genderIdentityLabel']),
-            ),
-          )
-          .toList(),
-    );
 SpeechAnnotation _annotation(Map<String, dynamic> x) {
   final p = x['pronunciationCandidate'] == null
       ? null

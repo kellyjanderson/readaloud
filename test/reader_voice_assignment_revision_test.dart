@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:read_aloud/src/services/work_character_store.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:read_aloud/src/controllers/reader_controller.dart';
@@ -355,6 +356,7 @@ class _SnapshotPreferences extends ReaderPreferencesService {
     required Map<String, Map<String, String>>
     storedDocumentCastVoiceAssignments,
     Map<String, String> sourceVoiceDocumentIds = const {},
+    CharacterStoreSnapshot? characterSnapshot,
     ReaderResumeState? resumeState,
     String? selectedVoiceId,
     String? lastOpenedDocumentPath,
@@ -373,6 +375,7 @@ class _SnapshotPreferences extends ReaderPreferencesService {
         voiceSpeeds: voiceSpeeds,
         storedDocumentCastVoiceAssignments: storedDocumentCastVoiceAssignments,
         sourceVoiceDocumentIds: sourceVoiceDocumentIds,
+        characterSnapshot: characterSnapshot,
         selectedVoiceId: selectedVoiceId,
       ),
     );

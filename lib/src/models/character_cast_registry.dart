@@ -1,5 +1,6 @@
 import 'dialogue_attribution.dart';
 import 'voice_profile.dart';
+import 'character.dart';
 
 enum CastEntryRoleKind { narrator, character }
 
@@ -297,7 +298,7 @@ class CharacterCastRegistry {
   }
 }
 
-class CastEntry {
+class CastEntry implements Character {
   factory CastEntry({
     required String castId,
     required CastEntryRoleKind roleKind,
@@ -309,6 +310,7 @@ class CastEntry {
     CharacterIdentityProfile? identityProfile,
     VoiceGender? inferredGender,
     double? inferredGenderConfidence,
+    CharacterState? characterState,
   }) {
     if (castId.trim().isEmpty) {
       throw ArgumentError.value(castId, 'castId', 'castId must not be empty.');
@@ -362,6 +364,8 @@ class CastEntry {
       observedAliases: List.unmodifiable(normalizedAliases),
       attributionIds: List.unmodifiable(normalizedAttributionIds),
       identityProfile: resolvedIdentityProfile,
+      characterState:
+          characterState ?? CharacterState.fromProfile(resolvedIdentityProfile),
     );
   }
 
@@ -374,6 +378,7 @@ class CastEntry {
     required this.observedAliases,
     required this.attributionIds,
     required this.identityProfile,
+    required this.characterState,
   });
 
   final String castId;
@@ -384,6 +389,42 @@ class CastEntry {
   final List<String> observedAliases;
   final List<String> attributionIds;
   final CharacterIdentityProfile? identityProfile;
+  final CharacterState characterState;
+  @override
+  String get workId => characterState.workId;
+  @override
+  String get id => castId;
+  @override
+  int get revision => characterState.revision;
+  @override
+  String get displayName => displayLabel;
+  @override
+  List<String> get aliases => observedAliases;
+  @override
+  GenderEvidence get explicitGender => characterState.explicitGender;
+  @override
+  GenderEvidence get implicitGender => characterState.implicitGender;
+  @override
+  List<ScopedGenderEvidence> get presentedGender =>
+      characterState.presentedGender;
+  @override
+  CharacterIdentityProfile? get attributes => identityProfile;
+  @override
+  VoiceSelection get selectedVoice => characterState.selectedVoice;
+  @override
+  CharacterSpeechProfile get speechProfile => characterState.speechProfile;
+
+  CastEntry withCharacterState(CharacterState state) => CastEntry(
+    castId: castId,
+    roleKind: roleKind,
+    displayLabel: displayLabel,
+    confidence: confidence,
+    provenance: provenance,
+    observedAliases: observedAliases,
+    attributionIds: attributionIds,
+    identityProfile: identityProfile,
+    characterState: state,
+  );
 
   VoiceGender? get inferredGender => identityProfile?.preferredVoiceGender;
 
