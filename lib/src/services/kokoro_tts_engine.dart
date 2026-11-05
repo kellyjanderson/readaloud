@@ -1,4 +1,5 @@
 import '../models/speech_engine_catalog.dart';
+import '../models/engine_capability.dart';
 import 'kokoro_tokenization_worker.dart';
 import 'speech_planning_supervisor.dart';
 import 'synthesis_admission_owner.dart';
@@ -535,6 +536,9 @@ class KokoroTtsEngine
         silverJson: tokenizerSources[3],
       );
       _playbackTokenizer = KokoroTokenizationWorker(
+        capabilityProfile: const EngineCapabilityRegistry().lookup(
+          engineId: _engineId,
+        ),
         assets: tokenizerAssets,
         rawDictionary: tokenizerSources[4],
         ownerId: 'playback-tokenizer',
@@ -545,6 +549,9 @@ class KokoroTtsEngine
       );
       _requireInitializationOwner();
       _exportTokenizer = KokoroTokenizationWorker(
+        capabilityProfile: const EngineCapabilityRegistry().lookup(
+          engineId: _engineId,
+        ),
         assets: tokenizerAssets,
         rawDictionary: tokenizerSources[4],
         ownerId: 'export-tokenizer',

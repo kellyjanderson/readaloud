@@ -127,6 +127,12 @@ class RealizedPerformanceIntent {
   const RealizedPerformanceIntent({required this.annotation});
 
   final SpeechAnnotation annotation;
+
+  /// This is document intent; applying a model-specific control still requires
+  /// a separately registered adjustment and an exact target-context match.
+  SpeechAdjustmentContext get context => SpeechAdjustmentContext.content(
+    'annotation:${annotation.source.name}:${annotation.annotationId}',
+  );
   String get engineTreatment => 'unsupported';
   String get fallback => 'engine_default';
   List<String> get diagnosticCodes => List.unmodifiable([

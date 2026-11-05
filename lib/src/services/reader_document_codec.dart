@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'legacy_pronunciation_context.dart';
 import 'dart:typed_data';
 
 import '../models/character_cast_registry.dart';
@@ -389,6 +390,11 @@ ReaderDocument _decodeReaderDocument(Map<String, dynamic> m) {
                         representationValue: q['representationValue'],
                         accentFamily: q['accentFamily'],
                         priority: q['priority'],
+                        context: q.containsKey('context')
+                            ? SpeechAdjustmentContext.fromMap(
+                                Map<String, Object?>.from(q['context'] as Map),
+                              )
+                            : legacyPronunciationContext(q, x['source']),
                       ),
                     )
                     .toList(),

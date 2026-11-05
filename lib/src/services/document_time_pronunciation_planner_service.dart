@@ -46,7 +46,9 @@ class DocumentTimePronunciationPlannerService {
     for (final segment in input.speechDocument.segments) {
       for (final wordSpan in segment.wordSpans) {
         final surfaceText = wordSpan.text;
-        final explicitOverride = parseExplicitPhonemeSuffixOverride(surfaceText);
+        final explicitOverride = parseExplicitPhonemeSuffixOverride(
+          surfaceText,
+        );
         final normalizedSurfaceText =
             explicitOverride?.normalizedBaseSurfaceText ??
             _normalizedToken(surfaceText);
@@ -74,6 +76,9 @@ class DocumentTimePronunciationPlannerService {
               confidence: 1.0,
               representations: <PronunciationRepresentation>[
                 PronunciationRepresentation(
+                  context: SpeechAdjustmentContext.content(
+                    'document-pronunciation-intent:v1',
+                  ),
                   representationId:
                       'explicit_suffix_${segment.segmentId}_${wordSpan.wordIndexWithinSegment}',
                   representationType: 'explicit_suffix_phoneme',
@@ -261,11 +266,14 @@ _InferredPronunciationResolution? _inferResolvedPronunciation({
     return contextualResolution;
   }
 
-  final spokenNumber = _spokenNumberForToken(normalizedSurfaceText);
+  final spokenNumber = spokenNumberForToken(normalizedSurfaceText);
   if (spokenNumber != null) {
     return _InferredPronunciationResolution(
       representations: <PronunciationRepresentation>[
         PronunciationRepresentation(
+          context: SpeechAdjustmentContext.content(
+            'document-pronunciation-intent:v1',
+          ),
           representationId: 'rule_number_$normalizedSurfaceText',
           representationType: 'normalized_spoken_text',
           representationValue: spokenNumber,
@@ -292,7 +300,10 @@ _InferredPronunciationResolution? _inferContextualResolvedPronunciation({
     return null;
   }
 
-  final nextToken = _normalizedSegmentToken(segment, wordIndexWithinSegment + 1);
+  final nextToken = _normalizedSegmentToken(
+    segment,
+    wordIndexWithinSegment + 1,
+  );
   final nextNextToken = _normalizedSegmentToken(
     segment,
     wordIndexWithinSegment + 2,
@@ -308,6 +319,9 @@ _InferredPronunciationResolution? _inferContextualResolvedPronunciation({
   return _InferredPronunciationResolution(
     representations: <PronunciationRepresentation>[
       PronunciationRepresentation(
+        context: SpeechAdjustmentContext.content(
+          'document-pronunciation-intent:v1',
+        ),
         representationId: 'rule_bow_weapon_phoneme',
         representationType: 'phoneme_string',
         representationValue: 'bˈoʊ',
@@ -384,7 +398,9 @@ String? _normalizedSegmentToken(SpeechSegment segment, int wordIndex) {
 
 bool _isArrowToken(String? token) => token == 'arrow' || token == 'arrows';
 
-String? _spokenNumberForToken(String normalizedSurfaceText) {
+/// Canonical cardinal-number expansion, also used to recognize legacy records
+/// without trusting an arbitrary saved respelling based on its ID alone.
+String? spokenNumberForToken(String normalizedSurfaceText) {
   if (!RegExp(r'^\d{1,3}(,\d{3})*$|^\d+$').hasMatch(normalizedSurfaceText)) {
     return null;
   }

@@ -141,6 +141,15 @@ to Kokoro; MLX engines receive the original `for`, including when reopening
 an existing prepared book. Explicit pronunciation choices still apply. Previously
 rendered audio is preserved; new synthesis uses the corrected text.
 
+Engine-specific pronunciation and expressive adjustments require a versioned
+record for the exact engine/model context. A different model, revision or precision
+does not inherit another model's exceptions. Saved books retain adjustment
+references separately from their text. Recognized legacy records migrate when
+opened; an unknown or mismatched adjustment is retained but not applied.
+Document intent such as a pronunciation request or “whispered” direction remains
+separate. Expressive directions are currently preserved without model-specific
+emotion controls; no supported delivery mapping is claimed.
+
 A supervised child process loads one model and handles one
 request at a time. Cancellation retires the in-flight process so it cannot
 publish stale output; a later request reloads the same model identity into a fresh worker before synthesis. On app quit the

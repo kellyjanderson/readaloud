@@ -1,4 +1,5 @@
 import '../models/pronunciation_artifact.dart';
+import 'speech_adjustment_registry.dart';
 
 // App-owned pronunciation resources should prefer standard IPA.
 // Engine-specific adaptation belongs at the TTS boundary.
@@ -7,6 +8,9 @@ globalEnglishPronunciationLexicalResources =
     <String, List<PronunciationRepresentation>>{
       'api': <PronunciationRepresentation>[
         PronunciationRepresentation(
+          context: SpeechAdjustmentContext.content(
+            'app-lexicon:canonical-english:v1',
+          ),
           representationId: 'lex_api_phoneme',
           representationType: 'phoneme_string',
           representationValue: 'eɪpiːˈaɪ',
@@ -16,6 +20,9 @@ globalEnglishPronunciationLexicalResources =
       ],
       'dart': <PronunciationRepresentation>[
         PronunciationRepresentation(
+          context: SpeechAdjustmentContext.content(
+            'app-lexicon:canonical-english:v1',
+          ),
           representationId: 'lex_dart_phoneme',
           representationType: 'phoneme_string',
           representationValue: 'dˈɑɹt',
@@ -25,6 +32,9 @@ globalEnglishPronunciationLexicalResources =
       ],
       'elliot': <PronunciationRepresentation>[
         PronunciationRepresentation(
+          context: SpeechAdjustmentContext.content(
+            'app-lexicon:canonical-english:v1',
+          ),
           representationId: 'lex_elliot_phoneme',
           representationType: 'phoneme_string',
           representationValue: 'ˈɛliət',
@@ -34,6 +44,9 @@ globalEnglishPronunciationLexicalResources =
       ],
       'electrocyte': <PronunciationRepresentation>[
         PronunciationRepresentation(
+          context: SpeechAdjustmentContext.content(
+            'app-lexicon:canonical-english:v1',
+          ),
           representationId: 'lex_electrocyte_phoneme',
           representationType: 'phoneme_string',
           representationValue: 'ɪlˈɛktɹəsaɪt',
@@ -43,6 +56,9 @@ globalEnglishPronunciationLexicalResources =
       ],
       'electrocytes': <PronunciationRepresentation>[
         PronunciationRepresentation(
+          context: SpeechAdjustmentContext.content(
+            'app-lexicon:canonical-english:v1',
+          ),
           representationId: 'lex_electrocytes_phoneme',
           representationType: 'phoneme_string',
           representationValue: 'ɪlˈɛktɹəsaɪts',
@@ -52,6 +68,9 @@ globalEnglishPronunciationLexicalResources =
       ],
       'epub': <PronunciationRepresentation>[
         PronunciationRepresentation(
+          context: SpeechAdjustmentContext.content(
+            'app-lexicon:canonical-english:v1',
+          ),
           representationId: 'lex_epub_spoken',
           representationType: 'normalized_spoken_text',
           representationValue: 'E pub',
@@ -61,6 +80,9 @@ globalEnglishPronunciationLexicalResources =
       ],
       'exclaimed': <PronunciationRepresentation>[
         PronunciationRepresentation(
+          context: SpeechAdjustmentContext.content(
+            'app-lexicon:canonical-english:v1',
+          ),
           representationId: 'lex_exclaimed_phoneme',
           representationType: 'phoneme_string',
           representationValue: 'ɪksklˈeɪmd',
@@ -69,9 +91,10 @@ globalEnglishPronunciationLexicalResources =
         ),
       ],
       'for': <PronunciationRepresentation>[
-        // Legacy Kokoro workaround. The translation boundary restricts this
-        // stable ID to Kokoro, including artifacts already stored in .radoc.
+        // Model-specific recipe; its versioned context survives range-local
+        // representation ID changes and is resolved at translation time.
         PronunciationRepresentation(
+          context: kokoroForAdjustmentContext,
           representationId: 'lex_for_spoken',
           representationType: 'normalized_spoken_text',
           representationValue: 'four',
@@ -81,6 +104,9 @@ globalEnglishPronunciationLexicalResources =
       ],
       'flutter': <PronunciationRepresentation>[
         PronunciationRepresentation(
+          context: SpeechAdjustmentContext.content(
+            'app-lexicon:canonical-english:v1',
+          ),
           representationId: 'lex_flutter_phoneme',
           representationType: 'phoneme_string',
           representationValue: 'flˈʌtɚ',
@@ -90,6 +116,9 @@ globalEnglishPronunciationLexicalResources =
       ],
       'html': <PronunciationRepresentation>[
         PronunciationRepresentation(
+          context: SpeechAdjustmentContext.content(
+            'app-lexicon:canonical-english:v1',
+          ),
           representationId: 'lex_html_spoken',
           representationType: 'normalized_spoken_text',
           representationValue: 'H T M L',
@@ -99,6 +128,9 @@ globalEnglishPronunciationLexicalResources =
       ],
       'json': <PronunciationRepresentation>[
         PronunciationRepresentation(
+          context: SpeechAdjustmentContext.content(
+            'app-lexicon:canonical-english:v1',
+          ),
           representationId: 'lex_json_phoneme',
           representationType: 'phoneme_string',
           representationValue: 'dʒeɪsˈɑn',
@@ -108,6 +140,9 @@ globalEnglishPronunciationLexicalResources =
       ],
       'john': <PronunciationRepresentation>[
         PronunciationRepresentation(
+          context: SpeechAdjustmentContext.content(
+            'app-lexicon:canonical-english:v1',
+          ),
           representationId: 'lex_john_phoneme',
           representationType: 'phoneme_string',
           representationValue: 'dʒˈɑn',
@@ -117,6 +152,9 @@ globalEnglishPronunciationLexicalResources =
       ],
       'kokoro': <PronunciationRepresentation>[
         PronunciationRepresentation(
+          context: SpeechAdjustmentContext.content(
+            'app-lexicon:canonical-english:v1',
+          ),
           representationId: 'lex_kokoro_phoneme',
           representationType: 'phoneme_string',
           representationValue: 'koʊ koʊ ɹoʊ',
@@ -126,6 +164,9 @@ globalEnglishPronunciationLexicalResources =
       ],
       'pdf': <PronunciationRepresentation>[
         PronunciationRepresentation(
+          context: SpeechAdjustmentContext.content(
+            'app-lexicon:canonical-english:v1',
+          ),
           representationId: 'lex_pdf_spoken',
           representationType: 'normalized_spoken_text',
           representationValue: 'P D F',
@@ -140,6 +181,9 @@ enUsCorePronunciationLexicalResources =
     <String, List<PronunciationRepresentation>>{
       'retorted': <PronunciationRepresentation>[
         PronunciationRepresentation(
+          context: SpeechAdjustmentContext.content(
+            'app-lexicon:canonical-english:v1',
+          ),
           representationId: 'lex_retorted_phoneme',
           representationType: 'phoneme_string',
           representationValue: 'ɹɪtˈɔɹtɪd',
@@ -149,6 +193,9 @@ enUsCorePronunciationLexicalResources =
       ],
       'stomped': <PronunciationRepresentation>[
         PronunciationRepresentation(
+          context: SpeechAdjustmentContext.content(
+            'app-lexicon:canonical-english:v1',
+          ),
           representationId: 'lex_stomped_phoneme',
           representationType: 'phoneme_string',
           representationValue: 'stˈɑmpt',
@@ -177,8 +224,7 @@ defaultPronunciationResourceLayers =
       'en-us-core': enUsCorePronunciationLexicalResources,
       'en-gb-core': enGbCorePronunciationLexicalResources,
       'en-au-core': enAuCorePronunciationLexicalResources,
-      'en-us-german-accented':
-          enUsGermanAccentedPronunciationLexicalResources,
+      'en-us-german-accented': enUsGermanAccentedPronunciationLexicalResources,
     };
 
 const Map<String, List<PronunciationRepresentation>>

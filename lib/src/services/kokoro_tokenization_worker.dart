@@ -49,16 +49,14 @@ class KokoroTokenizationWorker {
     required KokoroTokenizerAssets assets,
     Map<String, String> dictionaryEntries = const {},
     String? rawDictionary,
-    EngineCapabilityProfile? capabilityProfile,
+    required EngineCapabilityProfile capabilityProfile,
     this.ownerId = 'kokoro-tokenization',
     this.timeout = const Duration(seconds: 30),
     this.workerEntryPoint = kokoroTokenizationWorkerEntry,
   }) : _assets = assets,
        _rawDictionary = rawDictionary,
        _dictionary = Map.unmodifiable(dictionaryEntries),
-       _capabilityProfile =
-           capabilityProfile ??
-           const EngineCapabilityRegistry().lookup(engineId: 'kokoro') {
+       _capabilityProfile = capabilityProfile {
     if (rawDictionary != null && dictionaryEntries.isNotEmpty) {
       throw ArgumentError('Provide raw dictionary text or entries, not both.');
     }
@@ -385,9 +383,24 @@ KokoroTranslatedChunk _freezeTranslated(KokoroTranslatedChunk chunk) =>
             translationOutcome: artifact.translationOutcome,
             representationType: artifact.representationType,
             representationValue: artifact.representationValue,
+            adjustmentDecision: artifact.adjustmentDecision == null
+                ? null
+                : _freezeAdjustmentDecision(artifact.adjustmentDecision!),
             diagnosticCodes: List.unmodifiable(artifact.diagnosticCodes),
           ),
       ]),
+    );
+
+Map<String, Object?> _freezeAdjustmentDecision(Map<String, Object?> value) =>
+    Map.unmodifiable(
+      value.map(
+        (key, item) => MapEntry(
+          key,
+          item is Map
+              ? _freezeAdjustmentDecision(Map<String, Object?>.from(item))
+              : item,
+        ),
+      ),
     );
 
 List<TtsArtifactSegment> _freezeSegments(List<TtsArtifactSegment> segments) =>
