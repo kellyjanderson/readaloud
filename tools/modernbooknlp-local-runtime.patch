@@ -1,0 +1,25 @@
+--- a/booknlp/english/modern_qa.py
++++ b/booknlp/english/modern_qa.py
+@@ -264 +264 @@
+-    'model_id': 'answerdotai/ModernBERT-large',
++    'model_id': __import__('os').environ.get('READALOUD_MODERNBERT', 'answerdotai/ModernBERT-large'),
+@@ -273 +273 @@
+-home = str(Path.home())
++home = os.environ.get("READALOUD_BOOKNLP_HOME", str(Path.home()))
+@@ -319 +319 @@
+-        self.aligner = WordAligner('answerdotai/ModernBERT-large')
++        self.aligner = WordAligner(MODEL_CONFIG['model_id'])
+@@ -392 +392 @@
+-                with torch.autocast(device_type='cuda', dtype=DTYPE):
++                with torch.autocast(device_type=device_type, dtype=DTYPE, enabled=(device_type == 'cuda')):
+@@ -441 +441 @@
+-        size = max_quote_idx +1 #n_quotes if n_quotes is not None else max_quote_idx + 1
++        size = len(quotes)  # Preserve unknown trailing quotations in the output contract.
+--- a/booknlp/english/tagger.py
++++ b/booknlp/english/tagger.py
+@@ -57,0 +58 @@
++		modelName = __import__('os').environ.get('READALOUD_ENTITY_ENCODER', modelName)
+--- a/booknlp/english/bert_coref_quote_pronouns.py
++++ b/booknlp/english/bert_coref_quote_pronouns.py
+@@ -55,0 +56 @@
++		modelName = __import__('os').environ.get('READALOUD_COREF_ENCODER', modelName)

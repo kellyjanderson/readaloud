@@ -1,0 +1,66 @@
+{
+  "schema": 1,
+  "upstream": "84f1f34f6f0ec7c6e9c558b4371e61ea2354d95b",
+  "sourceArchiveSha256": "9dbd060df5448bf5e802975e2b117acbb99dd4fc5b8192e4cbd92b78f2b47db6",
+  "repositories": [
+    {
+      "role": "qa",
+      "repo": "gasmichel/ModernBookNLP",
+      "revision": "d04801da0336dbec4e38126bc225f54563b1eb95",
+      "files": {
+        "ModernBERT_T2000.safetensors": "a32c85b99e6491f559e0c46c6257b18be0a39a06c15c281389ca0934c229cfb2"
+      }
+    },
+    {
+      "role": "encoder",
+      "repo": "answerdotai/ModernBERT-large",
+      "revision": "45bb4654a4d5aaff24dd11d4781fa46d39bf8c13",
+      "files": {
+        "model.safetensors": "44510fec5d3a81a1877f225637b869495f18e55f6f23a09abb9be0acc030295f",
+        "tokenizer_config.json": "3cd2017ff46d0a527e5d39cae39272eccfa1f19bb9f89b05d166aab2e38354e2",
+        "special_tokens_map.json": "ea97ecdbcc73713039d8d64dbb05e3689495c96657fbd9a18f5bed381be81049",
+        "config.json": "55dca68059e98f0debf8eb63ab355c451c65b1f5d90fdca4754113fdaadd2cca",
+        "tokenizer.json": "9fd55248d51d33976b324fc11592e28071da7d41e0e9401dfb7082e30574b7b1"
+      }
+    },
+    {
+      "role": "entityEncoder",
+      "repo": "google/bert_uncased_L-6_H-768_A-12",
+      "revision": "c132ecc85d3d73b460b741cc50aa9ed18446c335",
+      "files": {
+        "config.json": "701910395dc211b902e685089657ccb437ad4f8a7a6b3cae708f7030fc12ba73",
+        "vocab.txt": "07eced375cec144d27c900241f3e339478dec958f92fddbc551f295c992038a3",
+        "pytorch_model.bin": "58058a678878a286bab61eb65b4df352a7a542358143f3518bb82d84e495d2d3"
+      }
+    },
+    {
+      "role": "corefEncoder",
+      "repo": "google/bert_uncased_L-12_H-768_A-12",
+      "revision": "cc478efa3482fefe275eb2733363db9713d499ef",
+      "files": {
+        "config.json": "887ee20f3594eacdd08318d1c096014389dca4672e3041892916abd17a80c90c",
+        "vocab.txt": "07eced375cec144d27c900241f3e339478dec958f92fddbc551f295c992038a3",
+        "pytorch_model.bin": "874977abfe5eb5c3c1ce5156314da7ee75b00661556b94fc7167201860dd489a"
+      }
+    }
+  ],
+  "booknlp": [
+    {
+      "filename": "entities_google_bert_uncased_L-6_H-768_A-12-v1.0.model",
+      "url": "https://people.ischool.berkeley.edu/~dbamman/booknlp_models/entities_google_bert_uncased_L-6_H-768_A-12-v1.0.model",
+      "sha256": "c67654ac10b3b49371544ccaf8ed76d224f0d274d23f7f7ea09e74f173ddbe06"
+    },
+    {
+      "filename": "coref_google_bert_uncased_L-12_H-768_A-12-v1.0.model",
+      "url": "https://people.ischool.berkeley.edu/~dbamman/booknlp_models/coref_google_bert_uncased_L-12_H-768_A-12-v1.0.model",
+      "sha256": "9b301a05eff4573d34ad2672f310110b716801759470044b07d1979a0dbb50d8"
+    }
+  ],
+  "runtimePatchSha256": "5ab784776fc05f5cb021f7832c7c9381d8abb84c614b8fd9d46c3ed9f2cfab0c",
+  "runtimeAdapterVersion": "readaloud-cpu-1",
+  "patchedModules": {
+    "english/modern_qa.py": "911e29962fc22572fd5e570e8b2d23482758d5492b11264879f6471bd283e905",
+    "english/tagger.py": "75a179b89f14f4ef7213be9f889f3fbe7089472e3b9d5eac83e1ca5a15e4c36a",
+    "english/bert_coref_quote_pronouns.py": "fcee7f0d62e24c47bcebf2f76df2567303247d7c19a5b164d881be2d541b83b1"
+  }
+}

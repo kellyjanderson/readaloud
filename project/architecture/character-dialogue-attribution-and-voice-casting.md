@@ -200,3 +200,23 @@ absent afterward. The existing user-owned debug app was left running. Private
 receipts are in the QA container's `Data/auto-voice-adapter-20261105/`; the JSON
 links the source trace and audio paths. The failed run is retained for runtime
 follow-up, not superseded by controller tests.
+
+## Experimental local neural provider
+
+`ModernBookNlpProvider` is a non-default CPU evaluation boundary for upstream
+ModernBookNLP joint scoring. It runs outside the MLX environment, admits one bounded
+window, validates echoed owner/work/source/revision identity, bounds output and
+terminates/reaps on cancellation or deadline. `modernBookNlpCharacterDelta` maps
+only unambiguous named aliases and exact supplied dialogue coordinates into the
+existing Character contract. It does not edit heuristic attribution, turn boundaries,
+canonical voice intent or the active prepared scene. Normal app initialization does
+not construct or await this provider.
+
+The [provider guide](../../docs/modernbooknlp-provider.md) records pinned assets,
+CPU-only patch, actual local inference, unsupported/error cases and promotion limits.
+The current one-shot process is suitable for evaluation, not yet resident incremental
+reading. Full-library coreference is not substituted for bounded startup. No MPS,
+production sandbox, app-download UI, held-out literary quality or audible acceptance
+claim follows from the passing protocol tests. The user's later significant
+attribution-regression report supersedes the earlier positive impression; the
+existing rules remain frozen while #127 integration/qualification proceeds.
