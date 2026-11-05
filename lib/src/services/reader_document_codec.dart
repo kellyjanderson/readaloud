@@ -1,3 +1,4 @@
+import 'document_analysis_record.dart';
 import 'dart:convert';
 import 'legacy_pronunciation_context.dart';
 import 'dart:typed_data';
@@ -76,6 +77,7 @@ ReaderDocument _decodeReaderDocument(Map<String, dynamic> m) {
           'radoc-v1',
           'radoc-v2',
           'radoc-v3',
+          'radoc-v4',
         ].contains(m['formatVersion'])) {
       throw const FormatException('Unsupported radoc schema');
     }
@@ -241,7 +243,24 @@ ReaderDocument _decodeReaderDocument(Map<String, dynamic> m) {
         );
       }).toList(),
     );
+    final records = (m['analysisRecords'] as List? ?? const [])
+        .map(
+          (row) => DocumentAnalysisRecord.fromJson(
+            Map<String, dynamic>.from(row as Map),
+          ),
+        )
+        .toList();
+    final bookText = speech.segments.map((s) => s.normalizedText).join('\n');
+    final seenRecords = <String>{};
+    for (final record in records) {
+      if (!bookText.contains(record.text) || !seenRecords.add(record.key)) {
+        throw const FormatException(
+          'Analysis window is not part of this book or is duplicated',
+        );
+      }
+    }
     final result = ReaderDocument.restored(
+      analysisRecords: records,
       title: m['title'],
       type: _enum(ReaderDocumentType.values, m['documentType']),
       displayHtml: m['displayHtml'],

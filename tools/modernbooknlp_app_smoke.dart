@@ -7,6 +7,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:read_aloud/src/controllers/reader_controller.dart';
 import 'package:read_aloud/src/screens/read_aloud_screen.dart';
 import 'package:read_aloud/src/services/tts_engine.dart';
+import 'package:read_aloud/src/services/reader_document_repository.dart';
 import 'package:read_aloud/src/models/voice_profile.dart';
 
 Future<void> main(List<String> args) async {
@@ -18,6 +19,9 @@ Future<void> main(List<String> args) async {
     );
   }
   final controller = ReaderController(
+    documentRepository: ReaderDocumentRepository(
+      '${support.path}/resident-probe-${DateTime.now().microsecondsSinceEpoch}',
+    ),
     ttsEngine: _SilentEngine(),
     enablePlatformIntakeChannels: false,
   );
@@ -82,6 +86,9 @@ Future<void> main(List<String> args) async {
       throw StateError('Model was not retained across reading windows');
     }
     await controller.characterAnalysis.stop();
+    // A completed window now restores without restarting the model. Demand a
+    // genuinely new window to exercise child recreation after Stop.
+    await controller.importPastedText('"The path is clear," Juniper said.');
     controller.characterAnalysis.enable();
     await waitFor(
       () =>

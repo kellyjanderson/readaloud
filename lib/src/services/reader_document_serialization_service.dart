@@ -1,3 +1,4 @@
+import 'document_analysis_record.dart';
 import 'dart:convert';
 import 'dart:io';
 import 'dart:isolate';
@@ -19,7 +20,7 @@ class ReaderDocumentSerializationService {
   const ReaderDocumentSerializationService();
 
   static const formatId = 'read-aloud-document';
-  static const formatVersion = 'radoc-v3';
+  static const formatVersion = 'radoc-v4';
 
   ReaderDocument deserializeFromJsonString(String source) =>
       decodeReaderDocument(source);
@@ -29,9 +30,15 @@ class ReaderDocumentSerializationService {
     ReaderDocument document, {
     Map<String, String> userVoiceAssignments = const {},
     CharacterCastRegistry? characters,
+    List<DocumentAnalysisRecord>? analysisRecords,
   }) {
     const encoder = JsonEncoder.withIndent('  ');
     final envelope = _toEnvelope(document);
+    if (analysisRecords != null) {
+      envelope['analysisRecords'] = analysisRecords
+          .map((r) => r.toJson())
+          .toList();
+    }
     if (characters != null) {
       envelope['characterCastRegistry'] = _characterCastRegistryToMap(
         characters,
@@ -52,6 +59,7 @@ class ReaderDocumentSerializationService {
     bool Function()? isCurrent,
     Map<String, String> userVoiceAssignments = const {},
     CharacterCastRegistry? characters,
+    List<DocumentAnalysisRecord>? analysisRecords,
     String? sourcePath,
   }) async {
     await requirePreservedDocumentExportPath(
@@ -68,6 +76,7 @@ class ReaderDocumentSerializationService {
         document,
         Map.unmodifiable(userVoiceAssignments),
         characters,
+        analysisRecords,
       );
       if (isCurrent != null && !isCurrent()) {
         throw StateError('Document export cancelled');
@@ -251,6 +260,9 @@ class ReaderDocumentSerializationService {
     return <String, Object?>{
       'formatId': formatId,
       'formatVersion': formatVersion,
+      'analysisRecords': document.analysisRecords
+          .map((r) => r.toJson())
+          .toList(),
       'title': document.title,
       'documentType': document.type.name,
       'presentation': document.presentation.name,
@@ -571,11 +583,13 @@ Future<String> _serializeDocumentOnWorker(
   ReaderDocument document,
   Map<String, String> userVoiceAssignments,
   CharacterCastRegistry? characters,
+  List<DocumentAnalysisRecord>? analysisRecords,
 ) => Isolate.run(
   () => const ReaderDocumentSerializationService().serializeToJsonString(
     document,
     userVoiceAssignments: userVoiceAssignments,
     characters: characters,
+    analysisRecords: analysisRecords,
   ),
 );
 

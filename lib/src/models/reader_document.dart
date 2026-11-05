@@ -1,3 +1,4 @@
+import '../services/document_analysis_record.dart';
 import 'dart:convert';
 import 'dart:math' as math;
 import 'dart:typed_data';
@@ -48,6 +49,7 @@ class WordSpan {
 }
 
 class ReaderDocument {
+  final List<DocumentAnalysisRecord> analysisRecords;
   ReaderDocument._({
     required this.title,
     required this.type,
@@ -63,6 +65,7 @@ class ReaderDocument {
     this.pdfData,
     this.sourceDescription,
     this.attachments = const <ReaderAttachment>[],
+    this.analysisRecords = const [],
   }) : assert(
          presentation != ReaderDocumentPresentation.pdf || pdfData != null,
          'PDF presentation requires pdfData.',
@@ -85,6 +88,7 @@ class ReaderDocument {
     Uint8List? pdfData,
     String? sourceDescription,
     List<ReaderAttachment> attachments = const [],
+    List<DocumentAnalysisRecord> analysisRecords = const [],
   }) => ReaderDocument._(
     title: title,
     type: type,
@@ -100,6 +104,7 @@ class ReaderDocument {
     pdfData: pdfData,
     sourceDescription: sourceDescription,
     attachments: List.unmodifiable(attachments),
+    analysisRecords: List.unmodifiable(analysisRecords),
   );
 
   /// Completed worker handoff: all expensive derived fields are retained.
@@ -119,6 +124,7 @@ class ReaderDocument {
        presentation = source.presentation,
        sourceDescription = source.sourceDescription,
        attachments = List.unmodifiable(source.attachments),
+       analysisRecords = source.analysisRecords,
        wordSpans = List.unmodifiable(source.wordSpans);
 
   factory ReaderDocument.fromNormalized({

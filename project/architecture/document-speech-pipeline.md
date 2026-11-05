@@ -17,7 +17,7 @@ Automatic `ReaderDocumentRepository` checkpoints are separate from user-exported
 
 For local macOS regular files, the source owner records canonical symlink target plus device/inode/inode generation, size, nanosecond mtime/ctime and mode. Dart's millisecond `FileStat` cannot distinguish every ordinary rewrite; a fixed-size `/usr/bin/stat` probe supplies the higher-resolution receipt without reading book bytes. Controller identity probes share one serialized lane with captured-input hashing; the supervisor's one active operation owns subsequent validation. A probe has a one-second deadline and kills/drains its subprocess on timeout. Missing or unsupported metadata misses conservatively. File restore bookmarks are prepared before capturing this revision, because bookmark creation can change ctime without changing content. This preserves strict source-change detection during acquisition. The supervisor revalidates before acquisition, every cached range publication and successful EOF; a changed source fails with retry guidance and cannot complete a checkpoint. This is trusted local filesystem generation evidence, not cryptographic source identity or proof against a filesystem/provider that lies about change metadata. Symlink retargeting changes the revision. Random-access ZIP/PDF adapters can complete a checkpoint using stable path-generation evidence without claiming full raw-byte hash coverage. Only an actual acquired-byte receipt authorizes content-identity migration.
 
-Missing/incompatible manifests miss safely. Corrupt ranges invalidate only their immutable generation; retry rebuilds from the untouched source rather than resuming a prefix. Partial checkpoints are not complete/exportable books. Explicit repository/controller export reads every committed range in order, checks contiguous source/word/segment coverage and manifest totals, then merges derived graphs on a pure worker. Segment/cast IDs and annotation/evidence content are retained; producer-local annotation/pronunciation counter IDs are qualified by range, and global ordinals/voice word offsets are adjusted. This produces an ordinary v3 `.radoc` or complete audio-planning graph without rerunning analysis. Export metadata memory grows with the complete graph; it is not on the opening/replay path. One controller export is admitted at a time. Replacement cancels publication between reads and after finite worker work; staged files are renamed only while current, temporary files are removed on failure/cancel, and shutdown awaits document-export drain. The controller exposes the document-export API but adds no save-document UI in this slice. External assets/native resources are not made portable by graph export. Normal-app restore, timing and emitted-audio qualification remain with #83/#90.
+Missing/incompatible manifests miss safely. Corrupt ranges invalidate only their immutable generation; retry rebuilds from the untouched source rather than resuming a prefix. Partial checkpoints are not complete/exportable books. Explicit repository/controller export reads every committed range in order, checks contiguous source/word/segment coverage and manifest totals, then merges derived graphs on a pure worker. Segment/cast IDs and annotation/evidence content are retained; producer-local annotation/pronunciation counter IDs are qualified by range, and global ordinals/voice word offsets are adjusted. This produces an ordinary v4 `.radoc` or complete audio-planning graph without rerunning analysis. Export metadata memory grows with the complete graph; it is not on the opening/replay path. One controller export is admitted at a time. Replacement cancels publication between reads and after finite worker work; staged files are renamed only while current, temporary files are removed on failure/cancel, and shutdown awaits document-export drain. The controller exposes the document-export API but adds no save-document UI in this slice. External assets/native resources are not made portable by graph export. Normal-app restore, timing and emitted-audio qualification remain with #83/#90.
 
 Preparation exposes controller APIs for cancellation and retry (`cancelDocumentPreparation`, `retryDocumentPreparation`), stage progress, and bounded range consumption. Cancellation suppresses stale publication and releases a paused consumer credit; retries start a new operation revision. The normal picker path also refuses malformed `.radoc` input while preserving the active document. These APIs and tests establish software behavior only; they do not establish native app acceptance, release readiness or audible output quality.
 
@@ -138,3 +138,41 @@ These legacy contracts describe intended behavior and acceptance; `final` denote
 - [tts runtime chunk request derivation](../specifications/tts-runtime-chunk-request-derivation.md)
 - [voice session pronunciation realization](../specifications/voice-session-pronunciation-realization.md)
 - [voice session realization envelope](../specifications/voice-session-realization-envelope.md)
+
+## Durable linguistic evidence
+
+`ReaderDocumentRepository.analysis` owns the incremental book's immutable analysis
+records in Application Support, under `prepared-documents/analysis`. Record keys
+include source revision, exact bounded normalized text, upstream/model/adapter
+identity and window policy; per-session request IDs are rebound on restore and
+are never persisted as reusable identity. Each record has a checksum and bounded
+schema validation. `ModernBookNlpAnalysis` checks embedded/imported records and then
+the working store before creating or loading a provider. A corrupt record is a miss
+and is replaced only after a new valid result succeeds; file-system failures remain
+actionable. Older dependency records remain exportable evidence but are not reused.
+
+The supervisor owns one current exchange and latest pending demand, including
+persistence, so there is no additional writer queue. Encoding, checksums, validation,
+file I/O and restored-result decoding run in isolates. The UI owner admits an atomic
+rename only while the source/session is current and checks again before publishing
+completion. A replacement during the admitted rename can leave an immutable record
+for the old book, never publish its result into the new book. Stop/shutdown drain the
+finite save operation; they do not kill a filesystem worker mid-write. A failed or
+cancelled stage is removed. Multi-process writers to the same book are not qualified.
+
+`.radoc-v4` serializes the same evidence alongside Character selections and prepared
+input; v1–v3 readers remain supported. Explicit export collects committed records for
+the current source and merges embedded records, and rejects duplicate or nonmatching
+window text on import. A copied artifact can restore a saved window without model
+assets or a provider runtime. This is candidate evidence persistence, not neural
+speaker-route promotion or portable rendered audio. Whole portable decoding/export
+still materializes the book graph on a worker; it is not a paged container. An imported
+book currently offers its first compatible saved window for diagnostic restoration;
+all records survive re-export, but playback-indexed neural coverage is future work.
+
+The book owns semantic content anchors independently of a voice rendition. Shared
+continuous-period integration, explicit temporal referents, rendition alignment and
+portable media/audio manifests remain proposed in [R19](https://github.com/kellyjanderson/readaloud/issues/110#issuecomment-6670899379)
+and [R20](https://github.com/kellyjanderson/readaloud/issues/110#issuecomment-6671095679).
+The separate C++17/C ABI interval stub has Python/Dart bindings; Read Aloud does not
+yet link it. NLP offsets must never be treated as emitted-audio timestamps.

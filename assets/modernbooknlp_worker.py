@@ -16,7 +16,7 @@ import tempfile
 import time
 
 UPSTREAM = '84f1f34f6f0ec7c6e9c558b4371e61ea2354d95b'
-ADAPTER_VERSION = 'readaloud-cpu-1'
+ADAPTER_VERSION = 'readaloud-cpu-2'
 MAX_UTF16 = 16384
 MAX_TOKENS = 4096
 MAX_OUTPUT = 1024 * 1024
@@ -77,7 +77,17 @@ def decode_outputs(directory, text):
         entity_id = row['char_id'] if row['char_id'] in entities else None
         quotes.append({**span(row['quote_start'], row['quote_end']),
                        'entityId': entity_id, 'confidence': None})
-    return {'entities': list(entities.values()), 'quotes': quotes, 'tokenCount': len(tokens)}
+    # Preserve the work already performed by upstream, including non-person
+    # entities and character syntax/gender summaries. Data only: never HTML or
+    # Python pickles. Future typed projections consume these without inference.
+    artifacts = {name: (directory / ('window.' + name)).read_text(encoding='utf-8')
+                 for name in ('tokens', 'entities', 'quotes', 'book')}
+    book = json.loads(artifacts['book'])
+    if not isinstance(book, dict) or not isinstance(book.get('characters'), list):
+        raise ValueError('Invalid provider character summaries')
+    return {'entities': list(entities.values()), 'quotes': quotes, 'tokenCount': len(tokens),
+            'linguisticArtifacts': {'schema': 1, 'pipeline': 'entity,quote,coref',
+                                   'coordinateSystem': 'python-codepoint', 'files': artifacts}}
 
 
 def load_pipeline(root, progress=lambda **values: None):

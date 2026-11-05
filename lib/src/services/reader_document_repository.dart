@@ -1,4 +1,6 @@
 import 'atomic_text_file.dart';
+import 'document_analysis_repository.dart';
+import 'document_analysis_record.dart';
 import 'dart:convert';
 import 'dart:io';
 import 'dart:isolate';
@@ -19,6 +21,7 @@ import 'reader_document_serialization_service.dart';
 class ReaderDocumentRepository {
   ReaderDocumentRepository(this.rootPath);
   final String rootPath;
+  late final analysis = DocumentAnalysisRepository('$rootPath/analysis');
   static const schemaVersion = 1;
   static const dependencyVersion = 'rc2-prepared-ranges-character-discovery-v3';
   final Map<String, Object> _writers = {};
@@ -183,6 +186,7 @@ class ReaderDocumentCache {
     bool Function()? isCurrent,
     Map<String, String> userVoiceAssignments = const {},
     CharacterCastRegistry? characters,
+    List<DocumentAnalysisRecord>? analysisRecords,
   }) async {
     await requirePreservedDocumentExportPath(
       outputPath,
@@ -200,6 +204,7 @@ class ReaderDocumentCache {
       isCurrent: isCurrent,
       userVoiceAssignments: userVoiceAssignments,
       characters: characters,
+      analysisRecords: analysisRecords,
     );
   }
 

@@ -58,3 +58,8 @@ packages that code; `modernbooknlp_app_smoke.dart` checks the opt-in background 
 in an isolated `residentNlpTest` sandbox with silent speech. It must be followed by
 normal Quit and app/child exit verification. Diagnostic analysis does not change
 voices or dialogue, and none of these tools modifies the MLX runtime.
+
+`modernbooknlp_persistence_smoke.dart` checks native analysis persistence, A/B/A
+reuse and portable `.radoc` reopen without a model in a fresh working store. It
+uses silent speech; follow the isolated bundle and normal-Quit instructions in the
+[provider guide](../docs/modernbooknlp-provider.md#saved-book-analysis).

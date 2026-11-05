@@ -27,7 +27,7 @@ void main() {
       final result = <String, dynamic>{
         ...request.toJson(),
         'ok': true,
-        'adapterVersion': 'readaloud-cpu-1',
+        'adapterVersion': 'readaloud-cpu-2',
         'providerId': 'modernbooknlp-joint',
         'providerVersion': modernBookNlpRevision,
         'modelIdentity': modernBookNlpModelIdentity,

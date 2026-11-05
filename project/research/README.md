@@ -4,6 +4,8 @@ Research documents capture accumulated project knowledge and evidence.
 
 ## Current Documents
 
+- [ModernBookNLP capability and reuse assessment](modernbooknlp-capability-reuse.md) — pinned pipeline outputs, current omissions, Character evidence and expressiveness boundaries.
+
 - [Dialogue Attribution, Character Casting, and Voice Library Metadata — 2026-04-03](architecture-questions/dialogue-attribution-character-casting-and-voice-library-metadata-2026-04-03.md)
 - [Document-Time vs Voice-Time Speech Processing — 2026-03-30](architecture-questions/document-time-vs-voice-time-speech-processing-2026-03-30.md)
 - [Flutter Concurrency, Message Boundaries, and Runtime Decoupling — 2026-03-30](architecture-questions/flutter-concurrency-message-boundaries-and-runtime-decoupling-2026-03-30.md)

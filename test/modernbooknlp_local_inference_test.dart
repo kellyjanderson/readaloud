@@ -29,6 +29,14 @@ void main() {
       );
       expect(result['quotes'], hasLength(2));
       expect(
+        result['linguisticArtifacts']['files'].keys,
+        unorderedEquals(['tokens', 'entities', 'quotes', 'book']),
+      );
+      expect(
+        result['linguisticArtifacts']['files']['book'],
+        contains('characters'),
+      );
+      expect(
         (result['quotes'] as List).map((q) => q['entityId']).toSet(),
         hasLength(2),
       );
