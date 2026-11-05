@@ -6,7 +6,7 @@ Architecture documents define the structural truth of `Read Aloud`.
 
 ## Current Documents
 
-- [Document Preparation and Execution Contexts](../../../acd/prepared-document-runtime.acd)
+- [Document Preparation and Execution Contexts](https://github.com/kellyjanderson/readaloud/issues/48)
   Defines whole-document readiness, character voice residency, audio lead, execution lanes and revision ownership.
 - [System Overview](../../../architecture/system-overview.md)
   Defines the major system layers, subsystem boundaries, and responsibility split.

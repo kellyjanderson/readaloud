@@ -33,7 +33,7 @@ That means the imported document should carry first-class attribution structures
 
 Before playback, whole-document analysis produces stable character constructs and an instrumented document containing speaker tags, delivery/inflection intent and pronunciation artifacts. Each character owns or references a typed voice binding: automatic choice, override, effective voice, asset/model fingerprints and binding revision. Identity evidence and assignment provenance remain separate fields within this aggregate. Text-supported presented-gender information, pronouns and uncertainty remain explicit; unsupported identity is not invented.
 
-The runtime validates and loads the required voice resources before playback, retaining them across ordinary character changes until document completion or replacement. Shared native model sessions belong to the runtime, not serialized character records. Normal speaker changes select this resident context while rendering ahead of the playhead; they never restart playback. [Document Preparation and Execution Contexts](../../../acd/prepared-document-runtime.acd) defines the ownership and cache contract.
+The runtime validates and loads the required voice resources before playback, retaining them across ordinary character changes until document completion or replacement. Shared native model sessions belong to the runtime, not serialized character records. Normal speaker changes select this resident context while rendering ahead of the playhead; they never restart playback. [Document Preparation and Execution Contexts](https://github.com/kellyjanderson/readaloud/issues/48) defines the ownership and cache contract.
 
 ## Components
 

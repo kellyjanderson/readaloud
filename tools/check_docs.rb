@@ -6,8 +6,8 @@ require 'uri'
 ROOT = File.expand_path('..', __dir__)
 Dir.chdir(ROOT)
 errors = []
-historical = ->(p) { p.start_with?('project/archive/', 'project/planning/archive/', 'project/acd/archive/') }
-files = (Dir['*.md'] + Dir['docs/**/*.md'] + Dir['project/**/*.{md,acd,plan}'] + Dir['.agents/**/*.{md,acd,plan}']).select { |p| File.file?(p) }
+historical = ->(p) { p.start_with?('project/archive/') && p != 'project/archive/README.md' }
+files = (Dir['*.md'] + Dir['docs/**/*.md'] + Dir['tools/**/*.md'] + Dir['project/**/*.{md,acd,plan}'] + Dir['.agents/**/*.{md,acd,plan}']).select { |p| File.file?(p) }
 links_for = lambda do |path|
   # Code fences may contain example links/templates rather than real references.
   text = File.read(path).gsub(/^```.*?^```[^\n]*$/m, '').gsub(/`[^`]*`/, '')
@@ -18,13 +18,13 @@ links_for = lambda do |path|
   end.compact
 end
 
-files.reject { |p| historical.call(p) || p.include?('/archive/') || p.include?('/disabled/') }.each do |path|
+files.reject { |p| historical.call(p) || p.include?('/disabled/') }.each do |path|
   links_for.call(path).each do |target|
     errors << "#{path}: missing local target #{target}" unless File.exist?(target)
   end
 end
 
-# These locations are retired for active planning. History and navigation remain.
+# These locations are retired; preserved history belongs under project/archive/.
 Dir['project/{acd,planning}/**/*'].select { |p| File.file?(p) }.each do |p|
   next if p.include?('/archive/') || p.end_with?('/README.md')
   errors << "#{p}: working documents belong in GitHub, not the repository"

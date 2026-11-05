@@ -54,11 +54,15 @@ tools/flutter run -d macos
 | --- | --- |
 | `lib/`, `test/` | Application source and tests |
 | `assets/`, `third_party/` | Bundled resources and vendored dependencies |
+| [tools](tools/README.md) | Launcher, packaging and qualification commands |
 | [docs](docs/README.md) | Human setup and maintenance guidance |
 | [architecture](project/architecture/README.md) | Current implementation and evidence locations |
 | [GitHub planning](docs/project-management.md) | Working design, execution slices and orchestrator handoffs |
 | [legacy contracts](project/specifications/README.md) | Retained detailed behavior references |
 | [archive](project/archive/README.md) | Superseded specifications and historical snapshots |
+
+See [repository layout and local files](docs/repository-layout.md) for the purpose
+of platform folders, legacy contracts and ignored SDK/build/model directories.
 
 ## Contributing and support
 

@@ -97,4 +97,4 @@ The October 24 source review found that existing documents already prescribe a l
 
 Acceptance requires integrated tests for full-document readiness, no inference during playback routing, resident voice reuse, A/B/A character boundaries without transport restart, contiguous buffer thresholds and short documents, assignment edits with a full buffer and during startup, stale import success/failure, UI input during long preparation/export, worker failure/timeout, and bounded native resources over long sessions. Audio continuity and responsiveness require running-app evidence in addition to unit tests.
 
-See [implementation alignment plan](../../../planning/archive/document-preparation-runtime-alignment.md) for the code locations and verification work.
+See [implementation alignment plan](../../planning/document-preparation-runtime-alignment.md) for the code locations and verification work.
