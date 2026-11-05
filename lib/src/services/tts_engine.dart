@@ -45,6 +45,11 @@ abstract interface class ResourcePreparationCapable {
   Future<void> shutdownResources();
 }
 
+/// Download/load the selected model independently of document resource bindings.
+abstract interface class ModelPreparationCapable {
+  Future<void> prepareSelectedModel();
+}
+
 class TtsResourceProgress {
   const TtsResourceProgress({
     required this.stage,

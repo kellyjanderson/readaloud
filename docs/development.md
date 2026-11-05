@@ -4,15 +4,17 @@
 
 Agents running UI, native, playback or acceptance checks must quit Read Aloud when each test session ends, including failed or blocked runs. Use the app's normal Quit action, then verify the exact test-build process has exited before finishing the test or development task. Do not leave the app running between cases. Record an inability to close or verify as a blocker. The [human acceptance runner](../tools/human_acceptance_runner/README.md) requires this closure record before an app-used test counts as complete.
 
-The documented baseline is Flutter 3.41.5 / Dart 3.11.3. Use an SDK matching your machine architecture. The ignored `.flutter-sdk` is not a clean-clone prerequisite: inspect `file <sdk>/bin/cache/dart-sdk/bin/dart` and run `<sdk>/bin/flutter --version` before testing. An Intel SDK fails with `bad CPU type in executable` on an arm64 host without Intel execution support. Install the matching arm64 release from the official Flutter archive instead of upgrading project dependencies.
+The `tools/flutter` launcher bootstraps Flutter 3.41.5 / Dart 3.11.3 from the [official Flutter SDK archive](https://docs.flutter.dev/install/archive). It pins the archive hash and framework revision, selects the native Mac architecture (including Apple Silicon from a Rosetta terminal), and uses `.readaloud-tools/flutter-3.41.5-<architecture>` with a separate project-local `pub-cache`. Existing `.flutter-sdk/` and global caches are not prerequisites and are left untouched. `tools/flutter --version` verifies the resulting toolchain. With no arguments, or with `-d macos`, the launcher runs the app.
 
-Install Xcode and CocoaPods for macOS development, run `flutter pub get`, and supply the compatible model described in [model setup](../assets/kokoro/model/README.md). Model weights are not committed. Voices and pronunciation resources are bundled; ONNX uses the [vendored override](../third_party/flutter_onnxruntime/pubspec.yaml).
+Installation happens in a unique staging directory; a failed download or checksum never publishes a partial SDK. An incompatible installed tree is preserved beside its replacement. Read-only permissions are repaired only within the managed tool directory. An OS file lock serializes installation/repair; shared leases allow concurrent healthy invocations and prevent replacing an SDK while Flutter is running. The lease is released on process exit, including crashes. The first SDK download needs network access; subsequent launches reuse the verified installation. Package resolution remains Flutter's responsibility and uses the writable project-local cache.
+
+Install Xcode and CocoaPods for macOS development, run `tools/flutter pub get`, and supply the compatible model described in [model setup](../assets/kokoro/model/README.md). Model weights are not committed. Voices and pronunciation resources are bundled; ONNX uses the [vendored override](../third_party/flutter_onnxruntime/pubspec.yaml).
 
 ```sh
-flutter analyze
-flutter test
-flutter run -d macos
-flutter build macos
+tools/flutter analyze
+tools/flutter test
+tools/flutter run -d macos
+tools/flutter build macos
 ruby tools/check_docs.rb
 ```
 
@@ -24,7 +26,7 @@ See [architecture](../project/architecture/README.md) for source/test locations 
 
 ## Native baseline diagnostics
 
-If old generated files are read-only, preserve them outside their generated locations and rerun `flutter pub get`. Check the exact failing path; do not recursively change permissions on the repository or user data. Keep dependency lockfiles unchanged unless a dependency change is intended.
+If old generated files are read-only, preserve them outside their generated locations and rerun `tools/flutter pub get`. Check the exact failing path; do not recursively change permissions on the repository or user data. Keep dependency lockfiles unchanged unless a dependency change is intended.
 
 Xcode 27 rejects some dependencies' older macOS deployment targets. For a local baseline on a supported host, after dependency resolution, a command-scoped override can build without changing the project's supported-platform declaration:
 
@@ -45,4 +47,4 @@ For an isolated export baseline, add `PRODUCT_BUNDLE_IDENTIFIER=com.kellyjanders
 
 ## Resident resource validation
 
-Build the P2 lifetime probe with `flutter build macos --debug -t tools/p2_native_probe.dart`, then use the command-scoped Xcode workaround above with `PRODUCT_BUNDLE_IDENTIFIER=com.kellyjanderson.readAloud.p2`. Run `ruby tools/run_p2_native_probe.rb <app-executable> <new-container-output-directory>`, choosing a new path inside `~/Library/Containers/com.kellyjanderson.readAloud.p2/Data/tmp/`. It runs 300 uncached A/B/A chunks and six close-cycle chunks, records actual asset/PCM hashes and RSS, requires native session/tensor bounds and normal close, and strictly decodes every WAV with ffmpeg. Model weights remain local prerequisites. This probe establishes resource lifetime and emitted PCM validity; it does not establish audible continuity or provider quality. Restore the ordinary app entry point before subsequent user-interface builds.
+Build the P2 lifetime probe with `tools/flutter build macos --debug -t tools/p2_native_probe.dart`, then use the command-scoped Xcode workaround above with `PRODUCT_BUNDLE_IDENTIFIER=com.kellyjanderson.readAloud.p2`. Run `ruby tools/run_p2_native_probe.rb <app-executable> <new-container-output-directory>`, choosing a new path inside `~/Library/Containers/com.kellyjanderson.readAloud.p2/Data/tmp/`. It runs 300 uncached A/B/A chunks and six close-cycle chunks, records actual asset/PCM hashes and RSS, requires native session/tensor bounds and normal close, and strictly decodes every WAV with ffmpeg. Model weights remain local prerequisites. This probe establishes resource lifetime and emitted PCM validity; it does not establish audible continuity or provider quality. Restore the ordinary app entry point before subsequent user-interface builds.

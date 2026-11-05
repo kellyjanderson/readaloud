@@ -2,7 +2,7 @@
 
 A local-first Flutter reader for long-form text-to-speech using Kokoro by default. Import documents, listen with narrator and character voices, follow the spoken text, and export audio.
 
-For local Apple Silicon evaluation of Qwen3-TTS, Voxtral TTS, or MOSS-TTS,
+For local Apple Silicon evaluation of Fish Audio Drama 3, Qwen3-TTS, Voxtral TTS, or MOSS-TTS,
 see [MLX TTS engine setup](docs/mlx-tts-engines.md).
 
 ## Required reading experience
@@ -21,7 +21,7 @@ The [product definition](project/product-definition.md) defines these standing e
 
 macOS on Apple Silicon is the current functional target. Other Flutter platform folders are retained but are not qualified. The cleanup baseline consolidates the RC2 reader, local MLX engines, full-document display and the visual acceptance runner. It is a development checkpoint, not a claim that all reading-experience requirements pass.
 
-Speaker attribution is heuristic. Current architecture records implementation and evidence limits. Sustained audio continuity, launch timing and human acceptance remain tracked in [RC2 qualification](https://github.com/kellyjanderson/readaloud/issues/91). [Drama 3 integration](https://github.com/kellyjanderson/readaloud/issues/111), live model switching and their concurrency repairs follow this baseline; they are not implemented by the cleanup tag.
+Speaker attribution is heuristic. Current architecture records implementation and evidence limits. Sustained audio continuity, launch timing and human acceptance remain tracked in [RC2 qualification](https://github.com/kellyjanderson/readaloud/issues/91). [Drama 3 integration](https://github.com/kellyjanderson/readaloud/issues/111) adds application-owned model downloads, native-rate audio, 43 reference voice choices and live engine replacement after the cleanup tag. Real Drama audio qualification remains pending the model download; the cleanup tag contains the preserved earlier baseline.
 
 ## Features
 
@@ -32,21 +32,21 @@ Speaker attribution is heuristic. Current architecture records implementation an
 
 ## Development quick start
 
-The documented baseline is Flutter **3.41.5** and Dart **3.11.3**. Install a matching native SDK, Xcode and CocoaPods for macOS.
+The launcher bootstraps Flutter **3.41.5** and Dart **3.11.3** for your Mac automatically. It downloads the official SDK, verifies its pinned SHA-256 and architecture, and keeps the SDK and package cache writable under ignored `.readaloud-tools/`. No preinstalled Flutter, `.flutter-sdk/`, global package cache or generated build cache is required. Install Xcode and CocoaPods for the native macOS toolchain; the first run needs network access.
 
 ```sh
 git clone https://github.com/kellyjanderson/readaloud.git
 cd readaloud
-flutter pub get
+tools/flutter pub get
 ```
 
 For the default Kokoro engine, place a compatible model at `assets/kokoro/model/kokoro-v1.0.onnx`; see [model setup](assets/kokoro/model/README.md). For MLX engines, install the [arm64 runtime](docs/mlx-tts-engines.md) and select the engine in Settings. Model weights download separately and are not in Git. The app uses a [vendored ONNX plugin override](third_party/flutter_onnxruntime/pubspec.yaml).
 
 ```sh
-flutter run -d macos
+tools/flutter run -d macos
 ```
 
-See [reading and voice choices](docs/reading-and-voice-choices.md) for Current/Pending behavior and [development and verification](docs/development.md) for checks and build instructions. The ignored local SDK/build caches are not clean-clone prerequisites.
+`tools/flutter` without arguments launches the macOS app; `tools/flutter -d macos` also accepts the launch shorthand. See [reading and voice choices](docs/reading-and-voice-choices.md) and [development and verification](docs/development.md).
 
 ## Repository guide
 

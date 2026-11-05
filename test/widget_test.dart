@@ -86,49 +86,14 @@ void main() {
     expect(find.text('Voice Management'), findsOneWidget);
   });
 
-  testWidgets(
-    'Voxtral precision choice is saved and clearly requires restart',
-    (tester) async {
-      final preferences = _MemoryReaderPreferencesService();
-      final controller = ReaderController(
-        preferencesService: preferences,
-        ttsEngine: _AccessibleTtsEngine(),
-        enablePlatformIntakeChannels: false,
-      );
-      addTearDown(controller.dispose);
-      await tester.pumpWidget(ReadAloudApp(controller: controller));
-      await tester.pump(const Duration(milliseconds: 300));
-      await tester.tap(find.byKey(const Key('reader-overflow-menu')));
-      await tester.pumpAndSettle();
-      await tester.tap(find.text('Settings').last);
-      await tester.pumpAndSettle();
-      await tester.tap(find.byKey(const Key('tts-engine-settings-dropdown')));
-      await tester.pumpAndSettle();
-      await tester.tap(find.text('Voxtral TTS 4B').last);
-      await tester.pumpAndSettle();
-      await tester.tap(
-        find.byKey(const Key('voxtral-precision-settings-dropdown')),
-      );
-      await tester.pumpAndSettle();
-      await tester.tap(find.text('Fast (4-bit)').last);
-      await tester.pumpAndSettle();
-      expect((await preferences.load()).voxtralQuantizationBits, 4);
-      expect(controller.ttsEngineRestartRequired, isTrue);
-      expect(
-        find.textContaining('Reopen the app to apply changes'),
-        findsOneWidget,
-      );
-      expect(tester.takeException(), isNull);
-    },
-  );
-
-  testWidgets('Qwen Base selection persists and shows its reference library', (
+  testWidgets('Voxtral precision choice is saved and applies without restart', (
     tester,
   ) async {
     final preferences = _MemoryReaderPreferencesService();
     final controller = ReaderController(
       preferencesService: preferences,
       ttsEngine: _AccessibleTtsEngine(),
+      engineFactory: (_, _) => _AccessibleTtsEngine(),
       enablePlatformIntakeChannels: false,
     );
     addTearDown(controller.dispose);
@@ -140,14 +105,47 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const Key('tts-engine-settings-dropdown')));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Qwen3-TTS 1.7B Base (reference voices)').last);
+    await tester.tap(find.text('Voxtral TTS 4B').last);
     await tester.pumpAndSettle();
-    expect((await preferences.load()).ttsEngineId, 'qwen3_tts_base_1_7b');
+    await tester.tap(
+      find.byKey(const Key('voxtral-precision-settings-dropdown')),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Fast (4-bit)').last);
+    await tester.pumpAndSettle();
+    expect((await preferences.load()).voxtralQuantizationBits, 4);
+    expect(controller.ttsEngineRestartRequired, isFalse);
     expect(
-      find.textContaining('30 synthetic reference voices'),
+      find.textContaining('Changes apply in this session'),
       findsOneWidget,
     );
-    expect(controller.ttsEngineRestartRequired, isTrue);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('Qwen Base selection persists and shows its reference library', (
+    tester,
+  ) async {
+    final preferences = _MemoryReaderPreferencesService();
+    final controller = ReaderController(
+      preferencesService: preferences,
+      ttsEngine: _AccessibleTtsEngine(),
+      engineFactory: (_, _) => _AccessibleTtsEngine(),
+      enablePlatformIntakeChannels: false,
+    );
+    addTearDown(controller.dispose);
+    await tester.pumpWidget(ReadAloudApp(controller: controller));
+    await tester.pump(const Duration(milliseconds: 300));
+    await tester.tap(find.byKey(const Key('reader-overflow-menu')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Settings').last);
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('tts-engine-settings-dropdown')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Qwen3-TTS 1.7B Base').last);
+    await tester.pumpAndSettle();
+    expect((await preferences.load()).ttsEngineId, 'qwen3_tts_base_1_7b');
+    expect(find.textContaining('43 reference voices'), findsOneWidget);
+    expect(controller.ttsEngineRestartRequired, isFalse);
     expect(tester.takeException(), isNull);
   });
 
@@ -437,6 +435,38 @@ void main() {
       expect(tester.takeException(), isNull);
     },
   );
+
+  testWidgets('model progress is inline without a duplicate toast', (
+    tester,
+  ) async {
+    final engine = _DownloadProgressEngine();
+    final controller = ReaderController(
+      preferencesService: _MemoryReaderPreferencesService(),
+      ttsEngine: engine,
+      enablePlatformIntakeChannels: false,
+    );
+    addTearDown(controller.dispose);
+    await tester.pumpWidget(ReadAloudApp(controller: controller));
+    await tester.pump(const Duration(milliseconds: 300));
+    engine.report(
+      const TtsResourceProgress(
+        stage: 'modelDownload',
+        message: 'Downloading speech model files…',
+        completed: 25,
+        total: 100,
+      ),
+    );
+    controller.showStatusMessage('Downloading speech model files…');
+    await tester.pump();
+    expect(find.byKey(const Key('status-toast')), findsNothing);
+    expect(find.text('Downloading speech model files…'), findsOneWidget);
+    expect(
+      tester
+          .widget<LinearProgressIndicator>(find.byType(LinearProgressIndicator))
+          .value,
+      .25,
+    );
+  });
 
   testWidgets('status toast uses a floating themed feedback surface', (
     WidgetTester tester,
@@ -771,6 +801,15 @@ class _MemoryReaderPreferencesService extends ReaderPreferencesService {
       lastOpenedDirectoryAccessToken: lastOpenedDirectoryAccessToken,
     );
   }
+}
+
+class _DownloadProgressEngine extends _FakeTtsEngine
+    implements TtsResourceProgressCapable {
+  void Function(TtsResourceProgress?)? _report;
+  @override
+  set onResourceProgress(void Function(TtsResourceProgress?)? callback) =>
+      _report = callback;
+  void report(TtsResourceProgress value) => _report?.call(value);
 }
 
 class _FakeTtsEngine implements TtsEngine {

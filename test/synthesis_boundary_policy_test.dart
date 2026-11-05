@@ -8,6 +8,39 @@ import 'package:read_aloud/src/models/speech_annotation.dart';
 import 'package:read_aloud/src/services/synthesis_boundary_policy.dart';
 
 void main() {
+  for (final rate in [44100, 48000, 96000]) {
+    test(
+      'boundary trimming uses native $rate Hz timing and preserves retained PCM',
+      () async {
+        final root = await Directory.systemTemp.createTemp('native-boundary-');
+        addTearDown(() => root.delete(recursive: true));
+        final file = File('${root.path}/speech.wav');
+        final original = _buildWav(
+          rate: rate,
+          leadingSilenceMs: 240,
+          speechMs: 300,
+          trailingSilenceMs: 40,
+        );
+        await file.writeAsBytes(original);
+        final result = await const SynthesisBoundaryPolicy().correctWavFile(
+          chunkId: 'c',
+          wavFilePath: file.path,
+          boundaryClass: BreakClass.none,
+          isInitialChunk: true,
+          isResumedChunk: false,
+        );
+        final audio = await File(result.audioPath!).readAsBytes();
+        expect(ByteData.sublistView(audio).getUint32(24, Endian.little), rate);
+        expect(result.leadingSilenceBefore, const Duration(milliseconds: 240));
+        expect(result.leadingSilenceAfter, const Duration(milliseconds: 120));
+        expect(result.duration, const Duration(milliseconds: 460));
+        expect(
+          audio.sublist(44),
+          original.sublist(44 + (rate * .12).round() * 2),
+        );
+      },
+    );
+  }
   group('SynthesisBoundaryPolicy', () {
     for (final leadingMs in [80, 240]) {
       test(
@@ -200,13 +233,14 @@ void main() {
 }
 
 Uint8List _buildWav({
+  int rate = sampleRate,
   required int leadingSilenceMs,
   required int speechMs,
   required int trailingSilenceMs,
 }) {
-  final leadingSamples = _msToSamples(leadingSilenceMs);
-  final speechSamples = _msToSamples(speechMs);
-  final trailingSamples = _msToSamples(trailingSilenceMs);
+  final leadingSamples = _msToSamples(leadingSilenceMs, rate);
+  final speechSamples = _msToSamples(speechMs, rate);
+  final trailingSamples = _msToSamples(trailingSilenceMs, rate);
   final pcm = Int16List(leadingSamples + speechSamples + trailingSamples);
 
   for (
@@ -242,8 +276,8 @@ Uint8List _buildWav({
   writeInt(16, 4);
   writeInt(1, 2);
   writeInt(1, 2);
-  writeInt(sampleRate, 4);
-  writeInt(sampleRate * Int16List.bytesPerElement, 4);
+  writeInt(rate, 4);
+  writeInt(rate * Int16List.bytesPerElement, 4);
   writeInt(Int16List.bytesPerElement, 2);
   writeInt(16, 2);
   writeString('data');
@@ -252,6 +286,6 @@ Uint8List _buildWav({
   return bytes.takeBytes();
 }
 
-int _msToSamples(int milliseconds) {
-  return (milliseconds / 1000 * sampleRate).round();
+int _msToSamples(int milliseconds, [int rate = sampleRate]) {
+  return (milliseconds / 1000 * rate).round();
 }

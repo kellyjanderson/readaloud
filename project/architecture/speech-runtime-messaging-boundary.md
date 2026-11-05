@@ -37,6 +37,12 @@ The October 24 P2 native run at source commit `3d0366b` passed 333 strict WAV de
 
 A current integrated-lineage run used production source `1767ed6` and the corrected probe harness delta later committed as `b329c2c`; the run manifest retains checkout HEAD `1767ed6` and the executable hash. The isolated arm64 P2 bundle completed 306 uncached inferences over three resource contexts. Three sessions opened/closed, 1,224 tensors were released, peak counts were one session/four tensors, final counts were zero/zero, and all 306 WAVs passed strict format/hash/duration validation. Repeated same-voice PCM was bit-identical for this fixed utterance. One-second RSS sampling peaked at 1,235.4 MiB across the whole run; during the first context's post-warm 300-chunk interval it ranged 915.2–1,147.7 MiB, falling from 1,144.8 MiB to 929.2 MiB. Runtime model/voice hashes matched the bundle. This supports bounded resource use for this fixture, not a universal memory threshold or long-duration live-playback stability. The [current P2 evidence](https://github.com/kellyjanderson/readaloud/issues/53#issuecomment-6407243488) preserves provenance and artifacts. Two earlier harness attempts failed before the full run because the probe omitted required binding metadata and then reused cached content; both cleaned up to zero handles. The request factory now supplies binding fingerprint/revision and unique synthesis identity, with focused test coverage.
 
+## Persistent model download identity
+
+MLX model files live under Application Support, separate from the app bundle, checkout and build outputs. Normal debug/release builds use the same bundle identity and therefore the same cache. Deliberately isolated probe bundle identities remain separate macOS sandboxes. The Python loader checks every configured candidate with `local_files_only` before requesting network metadata; a complete pinned Drama snapshot is checked against its required-file catalog and reused offline. Cache hits explicitly report Using downloaded speech model files. Generic snapshots require weights as well as config and validate declared weight-index shards.
+
+If files are missing, the loader uses Hugging Face's dry-run metadata to establish the total and identify cached files, pins that metadata revision for the transfer, and downloads into one persistent app cache. Errors propagate for retry in that same destination; a network error never starts a second copy in another cache. The maintained Hub downloader owns blob locks, reuse and resumption. Its aggregate reconstruction counter includes resumed work; the UI adds already cached bytes and uses the full manifest total, rather than treating fresh network transfer as whole-model progress. Unknown sizes remain unknown. See the [Hub download API](https://huggingface.co/docs/huggingface_hub/guides/download) and [issue #119](https://github.com/kellyjanderson/readaloud/issues/119). Reuse does not imply that an interrupted snapshot is complete, nor that loading weights into memory is a new download.
+
 ## Source and tests
 
 - [speech_runtime.dart](../../lib/src/services/speech_runtime.dart)
@@ -73,3 +79,49 @@ These legacy contracts describe intended behavior and acceptance; `final` denote
 - [speech runtime lifecycle and ownership](../specifications/speech-runtime-lifecycle-and-ownership.md)
 - [speech worker pipeline](../specifications/speech-worker-pipeline.md)
 - [trim and cap join correction](../specifications/trim-and-cap-join-correction.md)
+
+## MLX model preparation and replacement
+
+The controller prepares a selected MLX model at launch and immediately on a
+Settings selection, independently of document binding preparation. The engine's
+single admission owner serializes model preparation and synthesis. One current
+replacement loop reads the latest desired engine after old resources drain;
+rapid selection changes retire an obsolete preparation before the next model
+starts. UI callbacks carry their owning engine identity and old callbacks cannot
+publish new-session state. Document/cast preferences and reading position remain
+in the controller. Shutdown is shared/idempotent; it retires an active Python
+load/inference before waiting for the admission drain.
+
+A playback/export lease forwards cancellation only for its own active generation.
+It cannot cancel another lease with the same generation string. The Python
+supervisor reserves admission before process start, associates stream/exit
+callbacks with their child, and retires malformed, timed-out or cancelled children.
+A replacement process reloads the recorded model and verifies its identity before
+accepting synthesis. Cache identity includes the loaded model identity, helper
+version, voice/reference identity and text. Custom local model identity includes
+config hash and weight file path/size/mtime; it is not a full weight-byte audit.
+Artifact lookup/publication run on an isolate; temporary WAVs have unique
+request-owned directories. Queue bounds remain eight pending pipeline chunks and
+three pending shared admissions, with one active synthesis.
+
+The native app and Python child each sample their own physical footprint;
+sandbox policy forbids the app from querying the child's libproc counters.
+One child-owned daemon emits memory telemetry every two seconds through the
+locked JSON-lines writer. The supervisor combines it with one in-flight native
+self-query, ignores retired-child messages, and retires the worker at 99 GB or
+after 30 seconds without telemetry. Child exit owns sampler cancellation.
+These are sampled guardrails, not a proved hard real-time 100 GB bound.
+
+The worker consumes all model-generated pieces, validates finite mono output and
+constant rate, and writes a single complete native-rate PCM16 WAV. The artifact
+store, boundary correction and export carry the WAV sample rate instead of
+assuming Kokoro's 24 kHz. Boundary derivative identity was versioned to prevent
+reuse of derivatives computed with the old timing assumption.
+
+Drama has bf16/8-/4-bit pinned repository entries and 43 selectable reference
+voices including 13 cached Fish Official designed references. Native multi-voice
+scene packing/timing is still open; implemented fiction routing is per-character
+chunk synthesis. Source regressions establish ownership, emitted-sample retention
+and format behavior. They do not establish real Drama acoustic quality, sustained
+memory, M3 performance or uninterrupted chapter playback; native evidence is
+recorded in #111.

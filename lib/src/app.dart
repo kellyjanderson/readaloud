@@ -320,7 +320,14 @@ class _ReadAloudAppState extends State<ReadAloudApp> {
       animation: _controller,
       builder: (context, _) {
         final status = _controller.statusMessage;
-        final toastMessage = status == null
+        // Preparation already has an inline owner. A duplicate toast covers
+        // its measured progress and can outlive the operation it describes.
+        final inlineStatus =
+            _controller.isInitializing ||
+            _controller.speechResourceProgress != null ||
+            _controller.isPreparingDocument ||
+            status == _controller.startupError;
+        final toastMessage = status == null || inlineStatus
             ? null
             : sanitizeReaderStatusMessage(status);
         return MaterialApp(

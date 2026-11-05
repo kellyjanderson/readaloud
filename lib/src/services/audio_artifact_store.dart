@@ -158,7 +158,8 @@ class AudioArtifactStore {
     }
   }
 
-  /// Only our canonical mono PCM16 WAV format is accepted as reusable audio.
+  /// Canonical mono PCM16 WAV at its native sample rate. Rate is carried into
+  /// artifact duration, boundary processing, playback and export.
   static WavFormat validateWav(Uint8List bytes) {
     if (bytes.length <= 44 || (bytes.length - 44).isOdd) {
       throw const FormatException('Incomplete PCM WAV.');
@@ -174,7 +175,7 @@ class AudioArtifactStore {
         b.getUint32(16, Endian.little) != 16 ||
         b.getUint16(20, Endian.little) != 1 ||
         b.getUint16(22, Endian.little) != 1 ||
-        rate != 24000 ||
+        rate == 0 ||
         b.getUint32(28, Endian.little) != rate * 2 ||
         b.getUint16(32, Endian.little) != 2 ||
         b.getUint16(34, Endian.little) != 16 ||
