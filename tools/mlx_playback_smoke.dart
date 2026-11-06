@@ -314,6 +314,20 @@ Future<void> main(List<String> args) async {
       // This one explicit user edit is expected; other characters remain stable.
       initialCast[contractCastId]!['voice'] = next;
     }
+    if (contractCastId != null) {
+      // Native end-of-document releases resources. Capture and validate the
+      // current binding at acknowledgment, while it actually owns playback.
+      final bindings = controller.resolvedResourceBindings
+          .where((b) => b.assignment.castId == contractCastId)
+          .toList();
+      receipt['characterBindings'] = bindings.map((b) => b.toMap()).toList();
+      if (bindings.isEmpty ||
+          bindings.any((b) => b.resource.voiceId != contractVoiceId)) {
+        throw StateError(
+          'Selected character did not bind at native acknowledgment',
+        );
+      }
+    }
     final soakSeconds =
         int.tryParse(
           Platform.environment['READALOUD_SMOKE_PLAY_SECONDS'] ?? '0',
@@ -346,6 +360,7 @@ Future<void> main(List<String> args) async {
       }
     }
     receipt['soakSeconds'] = soakSeconds;
+    receipt['maxNativeStallMs'] = maxStallMs;
     receipt['reachedDocumentEnd'] = reachedEnd;
     receipt['playbackState'] = controller.playbackState.name;
     receipt['cast'] = controller.characterCastRegistry.characterEntries.map((
@@ -432,16 +447,6 @@ Future<void> main(List<String> args) async {
       }
     }
     if (contractCastId != null) {
-      final bindings = controller.resolvedResourceBindings
-          .where((b) => b.assignment.castId == contractCastId)
-          .toList();
-      receipt['characterBindings'] = bindings.map((b) => b.toMap()).toList();
-      if (bindings.isEmpty ||
-          bindings.any((b) => b.resource.voiceId != contractVoiceId)) {
-        throw StateError(
-          'Selected character did not bind to the selected native reference',
-        );
-      }
       final turns = controller.spokenChunkRecords
           .where((c) => c.castId == contractCastId)
           .toList();
