@@ -179,7 +179,10 @@ separate. The pinned Drama bf16 adapter lowers one unambiguous, explicit,
 whole-segment whisper direction to the native `[whispers]` cue and isolates its
 scope from subsequent ordinary text. Partial/conflicting directions, other
 delivery types and untested variants remain preserved with unsupported fallback.
-Audible quality remains a listening gate. Unchanged raw speech is reused across
+The November 5 S3 listening check found expressive delivery but failed perceived
+Character continuity: Mara sounded like a different person between her whispered
+and ordinary turns. Matching selected reference IDs does not satisfy this gate.
+Audible quality remains unqualified. Unchanged raw speech is reused across
 seek/replay; join corrections have their own cache identity.
 
 A supervised child process loads one model and handles one

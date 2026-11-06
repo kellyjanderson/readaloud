@@ -29,6 +29,10 @@ The adapter uses the installed MLX Audio 0.6.3 Drama interface, which documents
 inline delivery cues. Unit/worker and running-app checks establish cue routing,
 source coverage and selected-reference continuity. They do not establish audible
 whisper quality, perceived identity or broad expressive-reading acceptance.
+The November 5 S3 human listening check found expressive delivery but rejected
+Mara's perceived identity continuity between whispered and ordinary turns. The
+selected reference remained Sophia in both turns; correct routing did not make
+the resulting voice recognizable as one person. This acceptance gate has failed.
 `test/fish_delivery_test.dart` covers isolated scope, worker transport, stale
 model/revision rejection and partial/conflicting fallback. The native smoke
 fixture `test/fixtures/s3_dialogue.txt` supplies narrator/A/B/A turns and an ending.
