@@ -84,13 +84,35 @@ Future<void> main(List<String> args) async {
       await controller.importFilePaths([args[1]]);
       controller.characterAnalysis.enable();
       await analysisDone(1);
+      final characters = controller.characterCastRegistry;
+      final restoredAda = characters.characterEntries
+          .where((e) => e.displayLabel == 'Ada')
+          .firstOrNull;
+      receipt.addAll({
+        'restoredFromBook': controller.characterAnalysis.restoredFromBook,
+        'freshProviderAttempts': restartAttempts,
+        'narratorVoice': characters
+            .forCastId('cast_narrator')
+            ?.selectedVoice
+            .voiceId,
+        'documentSnapshotNarratorVoice': controller
+            .document
+            .characterCastRegistry
+            .forCastId('cast_narrator')
+            ?.selectedVoice
+            .voiceId,
+        'adaVoice': restoredAda?.selectedVoice.voiceId,
+        'adaEvidence': restoredAda?.characterState.linguisticEvidence.length,
+        'documentId': controller.document.displayDocument.documentId,
+        'status': controller.statusMessage,
+      });
       if (!controller.characterAnalysis.restoredFromBook ||
           restartAttempts != 0 ||
-          controller.document.characterCastRegistry
-                  .forCastId('cast_narrator')
-                  ?.selectedVoice
-                  .voiceId !=
-              'test') {
+          characters.forCastId('cast_narrator')?.selectedVoice.voiceId !=
+              'test' ||
+          restoredAda?.selectedVoice.voiceId != 'test' ||
+          restoredAda!.characterState.linguisticEvidence.isEmpty ||
+          restoredAda.inferredGender != VoiceGender.female) {
         throw StateError(
           'Relaunch did not restore evidence and selected voice',
         );
