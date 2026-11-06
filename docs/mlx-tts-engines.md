@@ -217,8 +217,12 @@ supported model layers in memory with mlx-audio's model-specific predicate. The
 original cached checkpoint is retained, and precision is part of the speech-cache
 identity. Qwen and MOSS keep their original precision.
 
-MLX playback uses a bounded 20-second high / 12-second low playable-audio lead
-and the existing 64-chunk cap. Voxtral warms the startup buffer before playback;
+Fish playback uses a bounded 30-second high / 20-second low playable-audio lead;
+other MLX adapters use 20-second high / 12-second low lead. The existing 64-chunk
+cap applies to both. The Fish threshold covers the observed 16.5-second complete-WAV
+generation in the long native probe; it is not a hardware-independent guarantee.
+Voxtral and Fish warm the startup buffer before playback. Fish's single-chunk
+shortcut requires twenty playable seconds, or a ready following chunk;
 Qwen and MOSS start with their first validated chunk. At the five-second MLX
 warmup deadline, already validated audio can start rather than failing solely
 because the target lead was not reached. Cancellation and stale-result checks

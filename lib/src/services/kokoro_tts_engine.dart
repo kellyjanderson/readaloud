@@ -150,8 +150,11 @@ class KokoroTtsEngine
 
   KokoroBufferAdmission _newPlaybackAdmissionPolicy() => _usesMlx
       ? KokoroBufferAdmission(
-          high: const Duration(seconds: 20),
-          low: const Duration(seconds: 12),
+          // Fish's complete-WAV inference reached 16.5 seconds in the native
+          // long-reading probe. Resuming at 12 seconds deliberately starved
+          // playback despite faster-than-realtime synthesis overall.
+          high: Duration(seconds: isDramaEngine(_engineId) ? 30 : 20),
+          low: Duration(seconds: isDramaEngine(_engineId) ? 20 : 12),
         )
       : KokoroBufferAdmission();
   final Set<Future<void>> _playbackPreparationTasks = {};
@@ -2798,6 +2801,9 @@ class KokoroTtsEngine
       pendingChunkCount: _pendingChunksById.length,
       remainingPlannedChunkCount: _remainingPlannedChunkCount,
       playerSpeed: _player.speed,
+      singleChunkLeadTarget: isDramaEngine(_engineId)
+          ? _nativePlaybackAdmission.low
+          : kokoroTargetBufferedLeadTime,
     );
   }
 
