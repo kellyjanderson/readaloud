@@ -188,8 +188,10 @@ and ordinary turns. Matching selected reference IDs does not satisfy this gate.
 A subsequent direct-native scene sample passed the user's same-person listening
 check and a revised whisper/shout sample passed the requested contrast check.
 Scene synthesis is now integrated into playback and export. The integrated
-app capture is submitted for human listening; broad identity acceptance remains
-open. Unchanged raw speech is reused across
+app capture passed the user's listening check for the whispered warning,
+shouted reply and recognizable returning voice. This fixture does not establish
+identity across scene boundaries or all character references; broader acceptance
+remains open in [S3 evidence](https://github.com/kellyjanderson/readaloud/issues/111#issuecomment-6680557601). Unchanged raw speech is reused across
 seek/replay; join corrections have their own cache identity.
 
 A supervised child process loads one model and handles one
@@ -340,8 +342,14 @@ Pinned bf16 story reading now sends bounded ordered turns to Drama's native
 multi-speaker API in one generation call per scene. Each turn retains its selected
 reference, source span, binding revision and explicit directions. The library owns
 within-scene context; no additional model-history cache is maintained by the app.
-Other precisions keep separate-turn synthesis. Word highlighting remains an
-estimate over scene duration. Perceptual continuity across scene boundaries,
+Other precisions keep separate-turn synthesis. The app verifies bf16 model files
+against the pinned revision before enabling native scenes and delivery controls,
+including when a local model folder is supplied. First verification shows real
+byte progress; unchanged file state reuses its local verification receipt. An
+unverified checkpoint keeps plain delivery and separate turns while preserving
+saved directions. This verification adds first-run preparation time; the standing
+two-second opening-to-speech requirement remains unmet.
+Word highlighting remains an estimate over scene duration. Perceptual continuity across scene boundaries,
 speech-rate handling and broader #111 acceptance remain open.
 
 Sources: [Drama bf16 model card](https://huggingface.co/mlx-community/fish-audio-drama-3-bf16),
