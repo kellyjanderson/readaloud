@@ -236,6 +236,10 @@ with up to 4,096 preceding UTF-16 units and 12,288 target units. The upstream
 4,096-token limit still applies. `paragraph-context-v2` cache identity prevents
 S1's different paragraph layout from being mistaken for compatible analysis.
 Valid legacy records remain portable candidate evidence.
+The immutable annotation and attribution sets build segment/span indexes during
+their existing validation. Window binding queries only target segment/span keys;
+VS40 rejects access to whole-book collections during selection. An oversized
+quotation spanning more segments than the window retains its fallback route.
 
 Only source-matched complete quotation bindings enter a bounded future-route
 projection (128 dialogue spans). Unmatched boundaries preserve fallback routes;

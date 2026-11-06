@@ -12,9 +12,44 @@ import 'package:read_aloud/src/services/modernbooknlp_window.dart';
 import 'package:read_aloud/src/services/modernbooknlp_character_adapter.dart';
 import 'package:read_aloud/src/services/reader_document_serialization_service.dart';
 import 'package:read_aloud/src/services/tts_engine.dart';
+import 'package:read_aloud/src/models/reader_document.dart';
+import 'package:read_aloud/src/models/speech_annotation.dart';
+import 'package:read_aloud/src/models/dialogue_attribution.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
+  test(
+    'VS40 window binding never enumerates whole-book annotation or outcome collections',
+    () {
+      final source = DocumentImportService().importPastedText(
+        '${List.filled(500, 'The afternoon remained quiet.').join('\n\n')}\n\n'
+        '${File('test/fixtures/rc2_prose/text/rain.txt').readAsStringSync()}',
+      );
+      final annotations = _IndexedAnnotationsOnly(source.baseSpeechAnnotations);
+      final outcomes = _IndexedOutcomesOnly(source.dialogueAttributions);
+      final guarded = ReaderDocument.restored(
+        title: source.title,
+        type: source.type,
+        displayHtml: source.displayHtml,
+        speakableText: source.speakableText,
+        normalizedImportResult: source.normalizedImportResult,
+        baseSpeechAnnotations: annotations,
+        dialogueAttributions: outcomes,
+        characterCastRegistry: source.characterCastRegistry,
+        documentVoiceAttribution: source.documentVoiceAttribution,
+        basePronunciationArtifacts: source.basePronunciationArtifacts,
+        presentation: source.presentation,
+      );
+      final window = ModernBookNlpWindow.at(
+        guarded,
+        wordIndex: guarded.wordCount - 1,
+      )!;
+      expect(window.turns, isNotEmpty);
+      expect(annotations.segmentReads, lessThanOrEqualTo(8));
+      expect(outcomes.spanReads, lessThanOrEqualTo(8));
+      expect(window.text.length, lessThanOrEqualTo(16384));
+    },
+  );
   test(
     'VS38 oversized segments keep contiguous Unicode source and refuse partial turns',
     () {
@@ -213,6 +248,39 @@ void main() {
       expect(starts, 0);
     },
   );
+}
+
+class _IndexedAnnotationsOnly implements BaseSpeechAnnotationSet {
+  _IndexedAnnotationsOnly(this.source);
+  final BaseSpeechAnnotationSet source;
+  int segmentReads = 0;
+  @override
+  Iterable<SpeechAnnotation> forSegment(String id) {
+    segmentReads++;
+    return source.forSegment(id);
+  }
+
+  @override
+  Iterable<SpeechAnnotation> forDialogueSpan(String id) =>
+      source.forDialogueSpan(id);
+  @override
+  dynamic noSuchMethod(Invocation invocation) =>
+      throw StateError('Whole-book annotation access');
+}
+
+class _IndexedOutcomesOnly implements DialogueAttributionSet {
+  _IndexedOutcomesOnly(this.source);
+  final DialogueAttributionSet source;
+  int spanReads = 0;
+  @override
+  DialogueAttributionOutcome? forDialogueSpan(String id) {
+    spanReads++;
+    return source.forDialogueSpan(id);
+  }
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) =>
+      throw StateError('Whole-book outcome access');
 }
 
 class _Engine implements TtsEngine {

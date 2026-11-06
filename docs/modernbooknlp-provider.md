@@ -102,6 +102,9 @@ most 4,096 preceding units, 32 context segments, and the provider's 4,096-token
 admission limit. Short documents keep one bounded window; long documents use
 positional segment groups, with safe slices for oversized segments. A jump demands
 the new position directly. No neural completion gates first speech.
+Annotation and attribution indexes are built during existing immutable snapshot
+construction. Window binding queries target segments and their spans instead of
+rescanning every dialogue and annotation in a complete book.
 
 The new `paragraph-context-v2` policy distinguishes these requests from S1's
 speech-segment newline layout. Existing v1 candidates survive export/import, but

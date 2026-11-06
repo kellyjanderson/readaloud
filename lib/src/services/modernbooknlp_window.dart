@@ -144,15 +144,32 @@ class ModernBookNlpWindow {
     if (buffer.isEmpty || buffer.length > 16384) return null;
     final bySegment = {for (final s in slices) s.segment.segmentId: s};
     final bindings = <ModernBookNlpTurnBinding>[];
-    for (final outcome in document.dialogueAttributions.outcomes) {
-      final annotations = document.baseSpeechAnnotations.annotations
-          .where(
-            (a) =>
-                a.kind == SpeechAnnotationKind.dialogueSpan &&
-                a.dialogueSpanId == outcome.dialogueSpanId,
-          )
+    // The immutable annotation/attribution sets build indexes during their
+    // existing construction/validation, off-isolate on import and restoration.
+    // Visit only spans touching this bounded target, never every book dialogue.
+    final spans = <String>{
+      for (final id in targetIds)
+        for (final a in document.baseSpeechAnnotations.forSegment(id))
+          if (a.kind == SpeechAnnotationKind.dialogueSpan &&
+              a.dialogueSpanId != null)
+            a.dialogueSpanId!,
+    };
+    final protected = <String>{};
+    for (final span in spans) {
+      final outcome = document.dialogueAttributions.forDialogueSpan(span);
+      if (outcome == null) continue;
+      if (outcome.provenance ==
+          DialogueAttributionProvenance.explicitSourceMetadata) {
+        protected.add(span);
+      }
+      final annotations = document.baseSpeechAnnotations
+          .forDialogueSpan(span)
+          .where((a) => a.kind == SpeechAnnotationKind.dialogueSpan)
+          // A span extending beyond the window stays on its fallback route.
+          .take(slices.length + 1)
           .toList();
       if (annotations.isEmpty ||
+          annotations.length > slices.length ||
           !annotations.any((a) => targetIds.contains(a.segmentId)) ||
           annotations.any((a) => !bySegment.containsKey(a.segmentId))) {
         continue;
@@ -205,15 +222,7 @@ class ModernBookNlpWindow {
       List.unmodifiable(slices),
       Set.unmodifiable(targetIds),
       List.unmodifiable(bindings),
-      Set.unmodifiable(
-        document.dialogueAttributions.outcomes
-            .where(
-              (o) =>
-                  o.provenance ==
-                  DialogueAttributionProvenance.explicitSourceMetadata,
-            )
-            .map((o) => o.dialogueSpanId),
-      ),
+      Set.unmodifiable(protected),
     );
   }
 }

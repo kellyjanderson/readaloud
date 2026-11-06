@@ -57,7 +57,7 @@ class DialogueAttributionSet {
     }
 
     final seenIds = <String>{};
-    final seenSpanIds = <String>{};
+    final bySpan = <String, DialogueAttributionOutcome>{};
     for (final outcome in outcomes) {
       if (!seenIds.add(outcome.attributionId)) {
         throw ArgumentError.value(
@@ -66,13 +66,14 @@ class DialogueAttributionSet {
           'attributionId values must be unique within one DialogueAttributionSet.',
         );
       }
-      if (!seenSpanIds.add(outcome.dialogueSpanId)) {
+      if (bySpan.containsKey(outcome.dialogueSpanId)) {
         throw ArgumentError.value(
           outcomes,
           'outcomes',
           'dialogueSpanId values must be unique within one DialogueAttributionSet.',
         );
       }
+      bySpan[outcome.dialogueSpanId] = outcome;
     }
 
     return DialogueAttributionSet._(
@@ -81,6 +82,7 @@ class DialogueAttributionSet {
       providerId: providerId,
       providerVersion: providerVersion,
       outcomes: List<DialogueAttributionOutcome>.unmodifiable(outcomes),
+      bySpan: Map.unmodifiable(bySpan),
     );
   }
 
@@ -90,22 +92,18 @@ class DialogueAttributionSet {
     required this.providerId,
     required this.providerVersion,
     required this.outcomes,
-  });
+    required Map<String, DialogueAttributionOutcome> bySpan,
+  }) : _bySpan = bySpan;
 
   final String documentId;
   final String attributionVersion;
   final String providerId;
   final String providerVersion;
   final List<DialogueAttributionOutcome> outcomes;
+  final Map<String, DialogueAttributionOutcome> _bySpan;
 
-  DialogueAttributionOutcome? forDialogueSpan(String dialogueSpanId) {
-    for (final outcome in outcomes) {
-      if (outcome.dialogueSpanId == dialogueSpanId) {
-        return outcome;
-      }
-    }
-    return null;
-  }
+  DialogueAttributionOutcome? forDialogueSpan(String dialogueSpanId) =>
+      _bySpan[dialogueSpanId];
 }
 
 class DialogueAttributionOutcome {
