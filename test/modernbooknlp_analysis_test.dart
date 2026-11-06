@@ -85,7 +85,7 @@ void main() {
       await Future<void>.delayed(Duration.zero);
       expect(provider.started.length, 2);
       expect(provider.preparations, 1);
-      expect(owner.completedWindows, 2);
+      expect(owner.completedWindows, 1); // Superseded demand cannot publish.
     },
   );
   test(

@@ -28,7 +28,7 @@ class ModernBookNlpSettings extends StatelessWidget {
           const Divider(),
           const Text('ModernBookNLP evaluation'),
           const Text(
-            'Experimental second-pass analysis. Results are diagnostic and do not yet change character voices or dialogue.',
+            'Experimental character refinement for future reading. Your selected voices and current speech are preserved.',
           ),
           const SizedBox(height: 8),
           SizedBox(

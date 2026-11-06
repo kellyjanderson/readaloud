@@ -2,8 +2,10 @@
 
 The experimental provider runs the pinned upstream ModernBookNLP joint pipeline
 locally on CPU. Settings → **ModernBookNLP evaluation → Prepare and evaluate**
-opts into background diagnostic analysis. It does not change existing attribution
-rules, dialogue boundaries or voice selections; automatic promotion remains gated. The current work and
+opts into background character refinement. Completed, source-matched quotations
+can refine newly built future reading routes. Existing heuristic rules and turn
+boundaries stay intact, explicit voice choices win, and already captured speech
+keeps its original routing. The current work and
 promotion decision belong to [#127](https://github.com/kellyjanderson/readaloud/issues/127),
 under the [Character contract](https://github.com/kellyjanderson/readaloud/issues/124).
 The user reported a significant attribution regression in the preceding slice;
@@ -85,12 +87,40 @@ publication before TERM/KILL and exit verification. Close waits for startup/infe
 cleanup. The caller must validate its current work revision before applying a result;
 the provider independently checks the echoed request identity and pinned model.
 
-The Character adapter only admits exact, unambiguous named aliases already present
-in the canonical registry. It preserves supplied dialogue bindings and marks unmatched
-boundaries unknown; it does not invent a new character, confidence score or turn.
-`WorkCharacterStore` retains selection ownership and revision admission. Arbitrary
-entity reconciliation, rolling context and correction precedence require the next
-integration stage before production promotion.
+The Character adapter consumes the preserved typed entity/alias/coreference,
+pronoun, syntax and quotation outputs. Proper and nominal people, including
+singletons missing from `.book`, enter the existing Character owner. Non-person
+clusters and pronoun-only unresolved clusters do not become invented people.
+Exact overlap anchors and unambiguous aliases reconcile window-local IDs;
+collisions abstain. Linked pronouns provide an implied voice hint. Upstream
+referential estimates (including name priors) remain evidence, not explicit or
+presented gender. Explicit selections, Reset and user corrections are preserved.
+
+The controller builds paragraph-preserving windows at the listening position,
+including imported `.radoc` books. Bounds are 12,288 target UTF-16 units plus at
+most 4,096 preceding units, 32 context segments, and the provider's 4,096-token
+admission limit. Short documents keep one bounded window; long documents use
+positional segment groups, with safe slices for oversized segments. A jump demands
+the new position directly. No neural completion gates first speech.
+
+The new `paragraph-context-v2` policy distinguishes these requests from S1's
+speech-segment newline layout. Existing v1 candidates survive export/import, but
+changed layout or text requires fresh inference; exact v2 windows reuse saved
+results before provider creation. Single newlines cannot substitute for upstream
+paragraph boundaries: the qualification caught actual City/Rosalina errors when
+paragraphs were collapsed. Multi-token mention projection now takes exact text
+from verified token coordinates, preserving punctuation and source whitespace.
+
+Raw evidence parsing and Character projection run on an isolate within the
+existing supervisor's bounded lifetime. The main-isolate store rejects obsolete
+source/analysis/correction revisions and preserves later selections/Reset. Each
+Character retains complete record/entity references and at most eight recent
+summaries, with up to 64 observations each; full upstream evidence stays in book
+records. New planning contexts can consume up to 128 recently refined dialogue
+spans. Unmatched source boundaries retain fallback routes; matched unknowns stay
+unknown. Source-authored attribution metadata is protected. Captured active
+requests are never restarted or rewritten: refinement becomes effective at the
+next ordinary planning boundary, range, jump or subsequent Play.
 
 Run the fixed **synthetic smoke cases**, not a held-out literary benchmark:
 
@@ -138,11 +168,11 @@ memory, a held-out quality score, or smooth Fish playback.
 Remaining promotion gates: independent literary and private City labels, fair
 fallback comparison, explicit correction precedence, bounded rolling entities/context,
 shared memory admission, startup/audio and M3 measurements. Background windows currently
-produce diagnostics only; they do not yet replace future prepared speaker routes.
+were diagnostic-only evidence for S1. S2's source-matched future-route integration
+is described above; these early smoke results do not qualify literary accuracy.
 Provider processes are resident, but rolling book-level coreference is not implemented.
 Native UI/storage/quit evidence is recorded in #127 separately from audible acceptance. Initial playback must continue
-through fast discovery while deeper analysis becomes available. There is no default
-neural routing switch in this slice.
+through fast discovery while deeper analysis becomes available. Neural refinement remains opt-in in Settings.
 
 ## Saved book analysis
 
@@ -161,8 +191,8 @@ analysis remains disabled. See the [full capability review](../project/research/
 The existing document-export API includes these records in `.radoc-v4`, together
 with Character choices; v1–v3 imports still work. A portable saved window can be
 restored in a fresh working store without loading a model. All records survive
-re-export; the imported-book diagnostic currently selects the first compatible
-window, not complete playback-indexed coverage. There is no new save UI or rendered
+re-export; S2 selects the bounded window at the current playback position,
+including forward/backward jumps in an imported book. There is no new save UI or rendered
 audio packaging in this slice. Ordinary automatic persistence remains incremental
 in Application Support.
 
@@ -188,3 +218,26 @@ To test a real app relaunch, start that same isolated bundle again with a new
 receipt path followed by the exported `.radoc` path as its second argument. This
 mode opens a fresh working store, refuses all provider creation, and checks restored
 evidence and the explicit voice choice. Quit and verify exit again afterward.
+
+## S2 qualification and limits
+
+The frozen comparison contains 43 quotations in the existing independently audited
+public prose corpus and 20 in private City/Rosalina excerpts. Private labels were
+read from the source and frozen before predictions by the implementation writer;
+they have not had a second independent annotator. The paragraph-preserving app
+path matched 63/63, versus baseline 50/63 (City 4/13 → 13/13; Rosalina 3/7 → 7/7).
+An additional overlapping-window pass matched all 11 audited rain-corpus turns
+and preserved an explicit voice across changing local cluster IDs. These small
+fixtures do not establish whole-novel accuracy. Full private sources and model
+receipts are not published in Git.
+
+Run `test/modernbooknlp_literary_qualification_test.dart` with
+`READALOUD_LITERARY_LABELS`, `READALOUD_LITERARY_RECEIPT`, and the existing runtime
+environment to reproduce the private comparison. `tools/qualify_modernbooknlp.py`
+measures the separate raw-text provider boundary. Committed public rain/orchard
+records exercise the adapter without a model. The isolated native persistence
+probe additionally checks a discovered singleton, female pronoun evidence, and
+an explicit Character voice through portable reopen. These are silent integration
+checks, not proof of emitted Fish voice identity, continuous audio, two-second
+startup, M3 memory acceptance or the S3 switch/stall repair. Exact execution
+receipts and remaining gates belong to [#127](https://github.com/kellyjanderson/readaloud/issues/127).

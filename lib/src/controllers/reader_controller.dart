@@ -1,3 +1,7 @@
+import '../models/character.dart';
+import '../services/modernbooknlp_character_adapter.dart';
+import '../services/modernbooknlp_window.dart';
+import '../services/character_route_refinement.dart';
 import '../services/document_analysis_record.dart';
 import '../services/modernbooknlp_analysis.dart';
 import '../services/modernbooknlp_provider.dart';
@@ -108,48 +112,116 @@ class ReaderController extends ChangeNotifier {
        _providedTtsEngine = ttsEngine,
        _ttsEngine = ttsEngine ?? createDefaultTtsEngine(),
        _enablePlatformIntakeChannels = enablePlatformIntakeChannels,
-       _document = ReaderDocument.sample();
+       _document = ReaderDocument.sample() {
+    this.characterAnalysis.onResult = _acceptCharacterAnalysis;
+  }
 
   final ModernBookNlpAnalysis characterAnalysis;
+  ModernBookNlpWindow? _offeredAnalysisWindow;
+  ModernBookNlpRequest? _offeredAnalysisRequest;
+  String? _analysisContentSource;
+  int? _analysisRangeSequence;
+  List<SpeechSegment> _analysisTail = const [], _analysisLeading = const [];
+  final Map<String, List<CharacterDialogueReference>> _futureCharacterRoutes =
+      {};
+  String get _characterSourceRevision =>
+      _analysisContentSource ??
+      _activeSourceRevision ??
+      _voicePreferenceDocumentId;
+
   void _offerCharacterAnalysis() {
     characterAnalysis.repository ??= _preparation.repository?.analysis;
     final active = _activePreparedRange;
     final range = active != null && active.request.revision == _documentRevision
         ? active
         : _preparedRanges.firstOrNull;
-    final saved = _document.analysisRecords
-        .where((r) => r.reusable)
-        .firstOrNull;
-    // Do not assemble an unbounded portable book merely to reject its size.
-    if (range == null &&
-        saved == null &&
-        _document.speakableText.length > 16384) {
+    final document = range?.fragment ?? _document;
+    final position = range == null || identical(range, active)
+        ? _currentWordIndex
+        : 0;
+    if (_offeredAnalysisRequest?.analysisRevision == _documentRevision &&
+        _analysisRangeSequence == range?.sequence &&
+        _offeredAnalysisWindow?.coversPosition(document, position) == true) {
       return;
     }
-    final text = range != null
-        ? range.fragment.speechDocument.segments
-              .map((s) => s.normalizedText)
-              .join('\n')
-        : saved?.text ??
-              _document.speechDocument.segments
-                  .map((s) => s.normalizedText)
-                  .join('\n');
-    if (text.isEmpty || text.length > 16384) return;
-    characterAnalysis.offer(
-      ModernBookNlpRequest(
-        requestId:
-            '$_preparationOwner-$_documentRevision-${range?.sequence ?? 0}',
-        ownerId: _preparationOwner,
-        workId: _sessionDocumentId ?? _document.displayDocument.documentId,
-        sourceRevision:
-            range?.request.effectiveSourceRevision ??
-            saved?.sourceRevision ??
-            _document.normalizedImportResult.sourceFingerprint,
-        analysisRevision: _documentRevision,
-        sequence: range?.sequence ?? 0,
-        text: text,
-      ),
+    if (_analysisRangeSequence != range?.sequence) {
+      _analysisLeading =
+          range != null && range.sequence == (_analysisRangeSequence ?? -2) + 1
+          ? _analysisTail
+          : const [];
+      _analysisRangeSequence = range?.sequence;
+      var units = 0;
+      final tail = <SpeechSegment>[];
+      for (final s in document.speechDocument.segments.reversed.take(32)) {
+        if (units + s.normalizedText.length + 1 > 4096) break;
+        tail.insert(0, s);
+        units += s.normalizedText.length + 1;
+      }
+      _analysisTail = List.unmodifiable(tail);
+    }
+    final window = ModernBookNlpWindow.at(
+      document,
+      wordIndex: position,
+      previous: _analysisLeading,
     );
+    if (window == null) return;
+    final sequence = ++_characterDeltaSequence;
+    final request = ModernBookNlpRequest(
+      requestId: '$_preparationOwner-$_documentRevision-$sequence',
+      ownerId: _preparationOwner,
+      workId: _voicePreferenceDocumentId,
+      sourceRevision: _characterSourceRevision,
+      analysisRevision: _documentRevision,
+      sequence: sequence,
+      text: window.text,
+      windowPolicy: 'paragraph-context-v2',
+    );
+    _offeredAnalysisWindow = window;
+    _offeredAnalysisRequest = request;
+    characterAnalysis.offer(request);
+  }
+
+  Future<void> _acceptCharacterAnalysis(
+    ModernBookNlpRequest request,
+    Map<String, dynamic> result,
+    bool Function() current,
+  ) async {
+    bool owned() =>
+        current() &&
+        !_disposed &&
+        request.analysisRevision == _documentRevision &&
+        request.requestId == _offeredAnalysisRequest?.requestId;
+    if (!owned()) return;
+    final window = _offeredAnalysisWindow!;
+    final registry = _characters.registry(
+      _voicePreferenceDocumentId,
+      documentId: _document.displayDocument.documentId,
+    );
+    // Parsing raw TSV/JSON, hashing and reconciliation stay off the UI isolate.
+    // This awaited consumer shares the supervisor's one-active/latest-pending
+    // lifetime. User selections/corrections are re-read by the store at apply.
+    final delta = await projectModernBookNlpCharacters(
+      request,
+      result,
+      registry,
+      window,
+    );
+    if (!owned() || !_characters.apply(delta)) return;
+    _refreshCharacterProjection();
+    for (final ref in delta.dialogues) {
+      _futureCharacterRoutes.remove(ref.dialogueSpanId);
+    }
+    for (final ref in delta.dialogues) {
+      if (window.protectedSpanIds.contains(ref.dialogueSpanId)) continue;
+      (_futureCharacterRoutes[ref.dialogueSpanId] ??= []).add(ref);
+    }
+    while (_futureCharacterRoutes.length > 128) {
+      _futureCharacterRoutes.remove(_futureCharacterRoutes.keys.first);
+    }
+    // Do not restart, revoice or replace a captured active planning context.
+    // The next ordinary planning request resolves newly admitted future routes.
+    unawaited(_persistPreferences());
+    notifyListeners();
   }
 
   DocumentPreparationSupervisor _preparation;
@@ -716,6 +788,12 @@ class ReaderController extends ChangeNotifier {
 
   int _beginDocumentRequest() {
     characterAnalysis.invalidateWindow();
+    _offeredAnalysisWindow = null;
+    _offeredAnalysisRequest = null;
+    _analysisContentSource = null;
+    _analysisRangeSequence = null;
+    _analysisTail = _analysisLeading = const [];
+    _futureCharacterRoutes.clear();
     ++_playbackIntent;
     _playbackStartPending = false;
     _invalidateResourceBindings();
@@ -2329,8 +2407,8 @@ class ReaderController extends ChangeNotifier {
               _finalizeActiveSpokenChunk();
               _document = range.fragment;
               _activePreparedRange = range;
-              _offerCharacterAnalysis();
               _currentWordIndex = 0;
+              _offerCharacterAnalysis();
               _utteranceStartOffset = 0;
               _currentPlanningContext = context;
               _currentChunkPlan = window.plan;
@@ -2390,6 +2468,8 @@ class ReaderController extends ChangeNotifier {
     );
     final snappedTarget = _snapWordIndexToSegmentStart(targetWord.toInt());
     _currentWordIndex = snappedTarget;
+    _offeredAnalysisWindow = null;
+    _offerCharacterAnalysis();
     _playbackEndedAtDocumentEnd = false;
     _activeSpokenChunkId = null;
     _resetFollowerProgressSynchronization();
@@ -3336,6 +3416,17 @@ class ReaderController extends ChangeNotifier {
     _finalizeActiveSpokenChunk();
     _document = document;
     characterAnalysis.restoreRecords(document.analysisRecords);
+    _analysisContentSource = restoreCharacters
+        ? document.analysisRecords
+              .where((r) => r.reusable)
+              .firstOrNull
+              ?.sourceRevision
+        : null;
+    if (restoreCharacters ||
+        _offeredAnalysisRequest?.sourceRevision != _characterSourceRevision) {
+      _offeredAnalysisWindow = null;
+      _offeredAnalysisRequest = null;
+    }
     _activePreparedRange = _preparedRanges
         .where((range) => identical(range.fragment, document))
         .firstOrNull;
@@ -3514,6 +3605,7 @@ class ReaderController extends ChangeNotifier {
       currentSectionMode: _sectionModeForCurrentPosition(),
       discourseMode: _discourseModeForCurrentPosition(),
     );
+    _offerCharacterAnalysis();
     _scheduleResumePersistence();
     _queueFollowerProgressUpdate(update);
   }
@@ -4247,7 +4339,10 @@ class ReaderController extends ChangeNotifier {
       routes: assignments == null
           ? null
           : CastAwareSpeechRouteInput(
-              documentVoiceAttribution: document.documentVoiceAttribution,
+              documentVoiceAttribution: refineCharacterRoutes(
+                document.documentVoiceAttribution,
+                _futureCharacterRoutes.values.expand((refs) => refs),
+              ),
               castVoiceAssignments: assignments,
             ),
     );
@@ -4438,12 +4533,13 @@ class ReaderController extends ChangeNotifier {
     if (_activeSourceRevision case final source?) {
       _sourceVoiceDocumentIds.putIfAbsent(source, () => key);
     }
-    final analysisKey = '$_documentRevision:${_characters.workId(key)}';
+    final analysisKey =
+        '$_documentRevision:${_characters.workId(key)}:$_characterSourceRevision';
     if (_characterAnalysisKey != analysisKey) {
       _characterAnalysisKey = analysisKey;
       _characters.begin(
         workId: key,
-        sourceRevision: _activeSourceRevision ?? key,
+        sourceRevision: _characterSourceRevision,
         analysisRevision: _documentRevision,
       );
     }
@@ -4451,14 +4547,14 @@ class ReaderController extends ChangeNotifier {
     final delta = document == null
         ? adapter.discovery(
             workId: key,
-            sourceRevision: _activeSourceRevision ?? key,
+            sourceRevision: _characterSourceRevision,
             analysisRevision: _documentRevision,
             sequence: ++_characterDeltaSequence,
             registry: registry,
           )
         : adapter.refined(
             workId: key,
-            sourceRevision: _activeSourceRevision ?? key,
+            sourceRevision: _characterSourceRevision,
             analysisRevision: _documentRevision,
             sequence: ++_characterDeltaSequence,
             document: document,

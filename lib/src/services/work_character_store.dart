@@ -1,4 +1,5 @@
 import '../models/character.dart';
+import '../models/character_linguistic_evidence.dart';
 import '../models/character_cast_registry.dart';
 import '../models/cast_voice_assignment.dart';
 import '../models/voice_profile.dart';
@@ -51,6 +52,18 @@ class WorkCharacterStore {
     }
     // Validate the complete handoff before mutating records or consuming its
     // sequence. Turn evidence stays in the prepared document, not this store.
+    if (delta.providerId == 'modernbooknlp-joint' &&
+        delta.registry.entries.any(
+          (e) =>
+              (character(
+                    delta.workId,
+                    e.castId,
+                  )?.characterState.correctionRevision ??
+                  0) !=
+              e.characterState.correctionRevision,
+        )) {
+      return false;
+    }
     for (final turn in delta.dialogues) {
       if (turn.startWord < 0 ||
           turn.endWord <= turn.startWord ||
@@ -152,7 +165,14 @@ class WorkCharacterStore {
                   ? -1
                   : 0,
           };
-    final profile = rank(incoming.identityProfile) >= rank(old?.identityProfile)
+    final incomingNeural =
+        incoming.provenance == CastEntryProvenance.providerOutput &&
+        incoming.characterState.linguisticEvidence.isNotEmpty;
+    final priorNeural = prior.linguisticEvidence.isNotEmpty;
+    final profile =
+        (incomingNeural && rank(old?.identityProfile) < 3) ||
+            ((!priorNeural || rank(incoming.identityProfile) >= 3) &&
+                rank(incoming.identityProfile) >= rank(old?.identityProfile))
         ? incoming.identityProfile
         : old?.identityProfile;
     final presented = <String, ScopedGenderEvidence>{
@@ -170,7 +190,7 @@ class WorkCharacterStore {
       observedAliases: {
         ...?old?.observedAliases,
         ...incoming.observedAliases,
-      }.toList(),
+      }.where((a) => prior.aliasCorrections[a.toLowerCase()] != false).toList(),
       attributionIds: {
         ...?old?.attributionIds,
         ...incoming.attributionIds,
@@ -180,8 +200,72 @@ class WorkCharacterStore {
         workId: work,
         revision: prior.revision + 1,
         explicitGender: prior.explicitGender.merge(incoming.explicitGender),
-        implicitGender: prior.implicitGender.merge(incoming.implicitGender),
+        implicitGender: incomingNeural
+            ? GenderEvidence(
+                value: incoming.implicitGender.value,
+                conflict: incoming.implicitGender.conflict,
+                observations: prior.implicitGender
+                    .merge(incoming.implicitGender)
+                    .observations,
+              )
+            : priorNeural
+            ? prior.implicitGender
+            : prior.implicitGender.merge(incoming.implicitGender),
         presentedGender: presented.values.toList(),
+        linguisticEvidence: <String, CharacterLinguisticEvidence>{
+          for (final e in [
+            ...prior.linguisticEvidence,
+            ...incoming.characterState.linguisticEvidence,
+          ])
+            e.key: e,
+        }.values.toList(),
+        linguisticRecordRefs: {
+          ...prior.linguisticRecordRefs,
+          ...incoming.characterState.linguisticRecordRefs,
+        }.toList(),
+      ),
+    );
+  }
+
+  /// Explicit correction ownership. Provider merges retain these fields even
+  /// when their captured registry predates the correction or its Reset.
+  void correctGender(
+    String work,
+    String castId,
+    CharacterGenderIdentityLabel? value,
+  ) {
+    final old = character(work, castId);
+    if (old == null) throw ArgumentError('Unknown character');
+    _works[workId(work)]![old.castId] = old.withCharacterState(
+      old.characterState.copyWith(
+        revision: old.revision + 1,
+        correctionRevision: old.characterState.correctionRevision + 1,
+        correctedGender: value,
+        resetGenderCorrection: value == null,
+        automaticVoices: {},
+      ),
+    );
+  }
+
+  void correctAlias(
+    String work,
+    String castId,
+    String alias, {
+    required bool belongs,
+  }) {
+    final old = character(work, castId);
+    final key = alias.trim().toLowerCase();
+    if (old == null || key.isEmpty) {
+      throw ArgumentError('Invalid alias correction');
+    }
+    _works[workId(work)]![old.castId] = old.withCharacterState(
+      old.characterState.copyWith(
+        revision: old.revision + 1,
+        correctionRevision: old.characterState.correctionRevision + 1,
+        aliasCorrections: {
+          ...old.characterState.aliasCorrections,
+          key: belongs,
+        },
       ),
     );
   }

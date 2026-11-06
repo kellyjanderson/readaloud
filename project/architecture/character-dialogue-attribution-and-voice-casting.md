@@ -203,32 +203,57 @@ follow-up, not superseded by controller tests.
 
 ## Experimental local neural provider
 
-`ModernBookNlpProvider` is a non-default CPU evaluation boundary for upstream
-ModernBookNLP joint scoring. It runs outside the MLX environment, admits one bounded
-window, validates echoed owner/work/source/revision identity, bounds output and
-terminates/reaps on cancellation or deadline. `modernBookNlpCharacterDelta` maps
-only unambiguous named aliases and exact supplied dialogue coordinates into the
-existing Character contract. It does not edit heuristic attribution, turn boundaries,
-canonical voice intent or the active prepared scene. Normal app initialization does
-not construct or await this provider.
+`ModernBookNlpProvider` is an opt-in CPU boundary for pinned ModernBookNLP joint
+scoring. It runs outside MLX, validates owner/work/source/revision and model
+identity, limits input/output, and terminates/reaps on cancellation or deadline.
+Normal initialization neither constructs nor awaits it. `ModernBookNlpAnalysis`
+retains one active plus one latest pending demand. Obsolete success/failure cannot
+publish over the successor; projection is awaited within that same lifetime.
+Native Quit drains both NLP and MLX. The [provider guide](../../docs/modernbooknlp-provider.md)
+records exact runtime and evidence limits.
 
-The [provider guide](../../docs/modernbooknlp-provider.md) records pinned assets,
-CPU-only patch, actual local inference, unsupported/error cases and promotion limits.
-The app now retains the provider between bounded windows. `ModernBookNlpAnalysis`
-owns opt-in diagnostic demand (one active plus latest pending), invalidates source
-replacement results and never blocks Play or first-pass preparation. Settings setup
-uses the shared pinned acquisition helper and App Support cache; the build bundles
-a separate standalone interpreter. Native Quit waits for provider shutdown alongside
-MLX. The sandbox probe verified two windows in one process, Stop/restart, unchanged
-attribution and normal Quit with child exit. The pinned OpenMP replacement addresses
-an observed sandbox shared-memory crash without removing sandbox restrictions.
-This probe uses silent speech and scheduled frames, so it does not establish audible
-acceptance or full input responsiveness. Rolling cross-window entity context and
-promotion into audible routing remain open. Full-library coreference is not substituted for bounded startup. No MPS,
-held-out literary quality or audible acceptance claim follows from the protocol
-tests. Actual bundled sandbox/setup/quit evidence is linked separately in #127. The user's later significant
-attribution-regression report supersedes the earlier positive impression; the
-existing rules remain frozen while #127 integration/qualification proceeds.
+S2 connects upstream typed people, aliases/coreference, linked pronouns, syntax
+and quotations to the existing `WorkCharacterStore`. Model-local IDs remain local
+to an immutable record. Stable segment/UTF-16 anchors and unambiguous named aliases
+join windows; collisions abstain. `.entities` admits singleton people omitted from
+`.book`; non-person and unresolved pronominal-only clusters are not new Characters.
+No second deep name, gender, descriptor or speaker extractor is introduced.
+
+`CharacterState` retains complete record/entity references, eight recent bounded
+linguistic summaries, and separate user correction revision/alias/gender fields.
+Each summary holds at most 64 observations; the book keeps full raw history.
+Selections and Reset remain exclusively store-owned. Corrections invalidate stale
+projection; subsequent heuristic deltas cannot replace a refined implicit profile.
+Pronoun observations and upstream referential distributions are implied evidence,
+not explicit or presented gender. The distributions retain their model provenance
+but historic name priors do not drive voice hints. Ordinary casting uses the same
+aggregate and preserves compatible automatic voices and all explicit choices.
+
+`ModernBookNlpWindow` preserves paragraph boundaries while binding immutable
+speech segments, without changing their dialogue boundaries. It selects bounded
+positional windows in both incremental fragments and complete portable books,
+with up to 4,096 preceding UTF-16 units and 12,288 target units. The upstream
+4,096-token limit still applies. `paragraph-context-v2` cache identity prevents
+S1's different paragraph layout from being mistaken for compatible analysis.
+Valid legacy records remain portable candidate evidence.
+
+Only source-matched complete quotation bindings enter a bounded future-route
+projection (128 dialogue spans). Unmatched boundaries preserve fallback routes;
+matched unresolved speakers stay unknown. Source metadata is protected. Existing
+heuristic rules and prepared turn objects remain unchanged. Captured active
+planning contexts and speech are immutable; the next ordinary planning boundary,
+range, jump or Play can use refinement. This does not hot-swap already captured
+single-book planning contexts or solve the retained Fish switching stall.
+
+Local tests include typed singleton/place distinctions, alias ambiguity, changed
+cluster IDs, correction/Reset versus stale results, Fish catalog choice stability,
+and positional portable A/B/A hits with provider creation blocked. Frozen prose
+comparison improved 50/63 baseline turns to 63/63, plus 11/11 overlapping-window
+turns. Private City/Rosalina labels were source-read before predictions by the
+implementation writer, not independently second-annotated. These are bounded
+source results; full-book literary quality, human listening, Fish continuity,
+opening-to-audio timing and M3 acceptance remain open in #124/#127 and the release.
+No MPS, audio-quality or complete product-conformance claim follows.
 
 ### Preserved upstream linguistic evidence
 
@@ -244,6 +269,6 @@ for exact source support and limitations.
 
 Records are candidate evidence in the logical book, not another mutable Character
 owner. Restoring evidence does not assign a voice, infer explicit/presented gender
-from pronouns, or alter current dialogue turns. Future admission uses the existing
+from pronouns, or alter current dialogue turns. S2 admission uses the existing
 Character aggregate with cross-window identity and correction precedence, under
 [R22](https://github.com/kellyjanderson/readaloud/issues/110#issuecomment-6671953753).

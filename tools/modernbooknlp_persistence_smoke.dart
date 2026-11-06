@@ -76,7 +76,7 @@ Future<void> main(List<String> args) async {
   }
 
   const story =
-      'Ada opened the gate. "Come inside," Ada said. Bruno smiled. "Thank you," Bruno replied.';
+      'Ada opened the gate. She smiled. "Come inside," Ada said. Bruno smiled. "Thank you," Bruno replied. Matilde waved.';
   try {
     await WidgetsBinding.instance.endOfFrame;
     await waitFor(() => !controller.isInitializing);
@@ -117,6 +117,20 @@ Future<void> main(List<String> args) async {
     if (!identical(before, controller.document.dialogueAttributions)) {
       throw StateError('Diagnostic result altered attribution');
     }
+    final ada = controller.characterCastRegistry.characterEntries.singleWhere(
+      (e) => e.displayLabel == 'Ada',
+    );
+    if (ada.characterState.linguisticEvidence.isEmpty ||
+        ada.inferredGender != VoiceGender.female ||
+        !controller.characterCastRegistry.characterEntries.any(
+          (e) => e.displayLabel == 'Matilde',
+        )) {
+      throw StateError(
+        'Typed evidence, singleton or pronoun integration failed',
+      );
+    }
+    await controller.assignVoiceToCast(ada.castId, 'test');
+    receipt['adaId'] = ada.castId;
     await controller.assignVoiceToCast('cast_narrator', 'test');
     await controller.importPastedText('"I will return tomorrow," Miriam said.');
     await analysisDone(2);
@@ -171,6 +185,12 @@ Future<void> main(List<String> args) async {
     if (narrator.selectedVoice.voiceId != 'test') {
       throw StateError('Portable explicit voice lost');
     }
+    final restoredAda = roundtrip.characterCastRegistry.forCastId(ada.castId);
+    if (restoredAda?.selectedVoice.voiceId != 'test' ||
+        restoredAda!.characterState.linguisticEvidence.isEmpty ||
+        restoredAda.inferredGender != VoiceGender.female) {
+      throw StateError('Portable Character evidence/selection lost');
+    }
     receipt.addAll({
       'passed': true,
       'portableRecords': roundtrip.analysisRecords.length,
@@ -178,6 +198,8 @@ Future<void> main(List<String> args) async {
       'portableReuse': cached.result,
       'voicePreserved': true,
       'attributionUnchanged': true,
+      'characterEvidencePreserved': true,
+      'singletonPreserved': true,
     });
   } catch (error, stack) {
     receipt.addAll({'error': '$error', 'stack': '$stack'});

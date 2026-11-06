@@ -1,0 +1,456 @@
+{
+  "schema": 1,
+  "sourceRevision": "e1c0aa68f4475608ebf62881c2115f2e1872bedf4595edffd18d5fc71d8971eb",
+  "text": "The bakery had closed early, but the smell of orange peel still hung above the cooling racks. Beatrice stood beneath the stained ceiling with a roasting tin pressed against her chest. Each drop struck the metal loudly enough to make her blink. The ladder Ada had promised to return was still missing.\n\n\"If this gets into the flour, we close tomorrow too,\" she said.\n\nLeon pushed an empty rack beneath the stain. He had already taken off his good coat; it lay carefully folded on the clean end of the counter. \"Put the tin here, Bea. Your arms are shaking.\" He held the rack steady while Beatrice lowered her burden onto its top shelf.\n\nAt the back door, Priya shook rain from their sleeves. They set a canvas tool bag beside the oven and listened until another drop landed. The sound came a little later than the movement of the dark patch overhead.\n\n\"There's a space above that panel,\" Priya said. \"The water could be coming from the other end of the building.\"\n\nBeatrice looked toward the stairs. The upstairs tenant had complained about a loose window, but the room directly above them held only boxes. \"I checked the window before I came down. The floor was dry.\"\n\nA key scraped in the front lock. Tomas entered sideways with a sheet of plywood, catching his heel on the mat. Leon reached for the nearer edge before it struck the display case.\n\n\"Don't put that under the leak,\" Tomas said. He tilted the board toward the empty doorway. \"It's for the window on the stairs. The glass is out.\"\n\nBeatrice put a hand on the counter. She had checked the wrong window.\n\n\"I thought you meant the one in the storeroom.\"\n\nTomas rested the plywood against the wall. \"I left a note on your bicycle.\"\n\n\"My bicycle is at the repair shop,\" she said. Her voice had gone quiet enough that Leon stopped brushing rain from the board.\n\nPriya took a torch from the bag and aimed it at the ceiling, keeping the beam away from everyone's eyes. They waited for the others to look up.\n\n\"We can argue about bicycles when the water stops. Leon, can you hold the light?\"\n\nHe took the torch, and Priya climbed onto the bottom step of the kitchen stool. Beatrice moved the flour sacks toward the oven. When the first sack proved too heavy, Tomas caught the other end without waiting to be asked. Above them, the patch spread past the edge of the panel.",
+  "textSha256": "9c735cdf2ed375504ee8a08e74007c9eede2e43824afe2e0c6d90becd7ab19c7",
+  "windowPolicy": "paragraph-context-v2",
+  "providerId": "modernbooknlp-joint",
+  "providerVersion": "84f1f34f6f0ec7c6e9c558b4371e61ea2354d95b",
+  "modelIdentity": "a32c85b99e6491f559e0c46c6257b18be0a39a06c15c281389ca0934c229cfb2",
+  "adapterVersion": "readaloud-cpu-2",
+  "output": {
+    "entities": [
+      {
+        "entityId": "0",
+        "mentions": [
+          {
+            "startUtf16": 94,
+            "endUtf16": 102,
+            "text": "Beatrice",
+            "proper": true
+          },
+          {
+            "startUtf16": 173,
+            "endUtf16": 176,
+            "text": "her",
+            "proper": false
+          },
+          {
+            "startUtf16": 233,
+            "endUtf16": 236,
+            "text": "her",
+            "proper": false
+          },
+          {
+            "startUtf16": 356,
+            "endUtf16": 359,
+            "text": "she",
+            "proper": false
+          },
+          {
+            "startUtf16": 528,
+            "endUtf16": 531,
+            "text": "Bea",
+            "proper": true
+          },
+          {
+            "startUtf16": 533,
+            "endUtf16": 537,
+            "text": "Your",
+            "proper": false
+          },
+          {
+            "startUtf16": 587,
+            "endUtf16": 595,
+            "text": "Beatrice",
+            "proper": true
+          },
+          {
+            "startUtf16": 604,
+            "endUtf16": 607,
+            "text": "her",
+            "proper": false
+          },
+          {
+            "startUtf16": 964,
+            "endUtf16": 972,
+            "text": "Beatrice",
+            "proper": true
+          },
+          {
+            "startUtf16": 1107,
+            "endUtf16": 1108,
+            "text": "I",
+            "proper": false
+          },
+          {
+            "startUtf16": 1135,
+            "endUtf16": 1136,
+            "text": "I",
+            "proper": false
+          },
+          {
+            "startUtf16": 1496,
+            "endUtf16": 1504,
+            "text": "Beatrice",
+            "proper": true
+          },
+          {
+            "startUtf16": 1532,
+            "endUtf16": 1535,
+            "text": "She",
+            "proper": false
+          },
+          {
+            "startUtf16": 1568,
+            "endUtf16": 1569,
+            "text": "I",
+            "proper": false
+          },
+          {
+            "startUtf16": 1677,
+            "endUtf16": 1681,
+            "text": "your",
+            "proper": false
+          },
+          {
+            "startUtf16": 1694,
+            "endUtf16": 1696,
+            "text": "My",
+            "proper": false
+          },
+          {
+            "startUtf16": 1729,
+            "endUtf16": 1732,
+            "text": "she",
+            "proper": false
+          },
+          {
+            "startUtf16": 1739,
+            "endUtf16": 1742,
+            "text": "Her",
+            "proper": false
+          },
+          {
+            "startUtf16": 2128,
+            "endUtf16": 2136,
+            "text": "Beatrice",
+            "proper": true
+          }
+        ]
+      },
+      {
+        "entityId": "1",
+        "mentions": [
+          {
+            "startUtf16": 255,
+            "endUtf16": 258,
+            "text": "Ada",
+            "proper": true
+          }
+        ]
+      },
+      {
+        "entityId": "14",
+        "mentions": [
+          {
+            "startUtf16": 332,
+            "endUtf16": 334,
+            "text": "we",
+            "proper": false
+          }
+        ]
+      },
+      {
+        "entityId": "2",
+        "mentions": [
+          {
+            "startUtf16": 367,
+            "endUtf16": 371,
+            "text": "Leon",
+            "proper": true
+          },
+          {
+            "startUtf16": 412,
+            "endUtf16": 414,
+            "text": "He",
+            "proper": false
+          },
+          {
+            "startUtf16": 437,
+            "endUtf16": 440,
+            "text": "his",
+            "proper": false
+          },
+          {
+            "startUtf16": 557,
+            "endUtf16": 559,
+            "text": "He",
+            "proper": false
+          },
+          {
+            "startUtf16": 1280,
+            "endUtf16": 1284,
+            "text": "Leon",
+            "proper": true
+          },
+          {
+            "startUtf16": 1578,
+            "endUtf16": 1581,
+            "text": "you",
+            "proper": false
+          },
+          {
+            "startUtf16": 1776,
+            "endUtf16": 1780,
+            "text": "Leon",
+            "proper": true
+          },
+          {
+            "startUtf16": 2016,
+            "endUtf16": 2020,
+            "text": "Leon",
+            "proper": true
+          },
+          {
+            "startUtf16": 2026,
+            "endUtf16": 2029,
+            "text": "you",
+            "proper": false
+          },
+          {
+            "startUtf16": 2048,
+            "endUtf16": 2050,
+            "text": "He",
+            "proper": false
+          }
+        ]
+      },
+      {
+        "entityId": "3",
+        "mentions": [
+          {
+            "startUtf16": 654,
+            "endUtf16": 659,
+            "text": "Priya",
+            "proper": true
+          },
+          {
+            "startUtf16": 887,
+            "endUtf16": 892,
+            "text": "Priya",
+            "proper": true
+          },
+          {
+            "startUtf16": 1820,
+            "endUtf16": 1825,
+            "text": "Priya",
+            "proper": true
+          },
+          {
+            "startUtf16": 2071,
+            "endUtf16": 2076,
+            "text": "Priya",
+            "proper": true
+          }
+        ]
+      },
+      {
+        "entityId": "6",
+        "mentions": [
+          {
+            "startUtf16": 676,
+            "endUtf16": 681,
+            "text": "their",
+            "proper": false
+          },
+          {
+            "startUtf16": 691,
+            "endUtf16": 695,
+            "text": "They",
+            "proper": false
+          },
+          {
+            "startUtf16": 1084,
+            "endUtf16": 1088,
+            "text": "them",
+            "proper": false
+          }
+        ]
+      },
+      {
+        "entityId": "8",
+        "mentions": [
+          {
+            "startUtf16": 999,
+            "endUtf16": 1018,
+            "text": "The upstairs tenant",
+            "proper": false
+          }
+        ]
+      },
+      {
+        "entityId": "4",
+        "mentions": [
+          {
+            "startUtf16": 1202,
+            "endUtf16": 1207,
+            "text": "Tomas",
+            "proper": true
+          },
+          {
+            "startUtf16": 1259,
+            "endUtf16": 1262,
+            "text": "his",
+            "proper": false
+          },
+          {
+            "startUtf16": 1382,
+            "endUtf16": 1387,
+            "text": "Tomas",
+            "proper": true
+          },
+          {
+            "startUtf16": 1394,
+            "endUtf16": 1396,
+            "text": "He",
+            "proper": false
+          },
+          {
+            "startUtf16": 1616,
+            "endUtf16": 1621,
+            "text": "Tomas",
+            "proper": true
+          },
+          {
+            "startUtf16": 1660,
+            "endUtf16": 1661,
+            "text": "I",
+            "proper": false
+          },
+          {
+            "startUtf16": 2214,
+            "endUtf16": 2219,
+            "text": "Tomas",
+            "proper": true
+          }
+        ]
+      },
+      {
+        "entityId": "10",
+        "mentions": [
+          {
+            "startUtf16": 1908,
+            "endUtf16": 1916,
+            "text": "everyone",
+            "proper": false
+          }
+        ]
+      },
+      {
+        "entityId": "11",
+        "mentions": [
+          {
+            "startUtf16": 1925,
+            "endUtf16": 1929,
+            "text": "They",
+            "proper": false
+          },
+          {
+            "startUtf16": 1966,
+            "endUtf16": 1968,
+            "text": "We",
+            "proper": false
+          },
+          {
+            "startUtf16": 2276,
+            "endUtf16": 2280,
+            "text": "them",
+            "proper": false
+          }
+        ]
+      },
+      {
+        "entityId": "12",
+        "mentions": [
+          {
+            "startUtf16": 1941,
+            "endUtf16": 1951,
+            "text": "the others",
+            "proper": false
+          }
+        ]
+      }
+    ],
+    "quotes": [
+      {
+        "startUtf16": 302,
+        "endUtf16": 355,
+        "entityId": "0",
+        "confidence": null
+      },
+      {
+        "startUtf16": 509,
+        "endUtf16": 556,
+        "entityId": "2",
+        "confidence": null
+      },
+      {
+        "startUtf16": 851,
+        "endUtf16": 886,
+        "entityId": "3",
+        "confidence": null
+      },
+      {
+        "startUtf16": 899,
+        "endUtf16": 962,
+        "entityId": "3",
+        "confidence": null
+      },
+      {
+        "startUtf16": 1106,
+        "endUtf16": 1167,
+        "entityId": "0",
+        "confidence": null
+      },
+      {
+        "startUtf16": 1349,
+        "endUtf16": 1381,
+        "entityId": "4",
+        "confidence": null
+      },
+      {
+        "startUtf16": 1440,
+        "endUtf16": 1494,
+        "entityId": "4",
+        "confidence": null
+      },
+      {
+        "startUtf16": 1567,
+        "endUtf16": 1614,
+        "entityId": "0",
+        "confidence": null
+      },
+      {
+        "startUtf16": 1659,
+        "endUtf16": 1691,
+        "entityId": "4",
+        "confidence": null
+      },
+      {
+        "startUtf16": 1693,
+        "endUtf16": 1728,
+        "entityId": "0",
+        "confidence": null
+      },
+      {
+        "startUtf16": 1965,
+        "endUtf16": 2046,
+        "entityId": "3",
+        "confidence": null
+      }
+    ],
+    "tokenCount": 504,
+    "linguisticArtifacts": {
+      "schema": 1,
+      "pipeline": "entity,quote,coref",
+      "coordinateSystem": "python-codepoint",
+      "files": {
+        "tokens": "paragraph_ID\tsentence_ID\ttoken_ID_within_sentence\ttoken_ID_within_document\tword\tlemma\tbyte_onset\tbyte_offset\tPOS_tag\tfine_POS_tag\tdependency_relation\tsyntactic_head_ID\tevent\n0\t0\t0\t0\tThe\tthe\t0\t3\tDET\tDT\tdet\t1\tO\n0\t0\t1\t1\tbakery\tbakery\t4\t10\tNOUN\tNN\tnsubj\t3\tO\n0\t0\t2\t2\thad\thave\t11\t14\tAUX\tVBD\taux\t3\tO\n0\t0\t3\t3\tclosed\tclose\t15\t21\tVERB\tVBN\tROOT\t3\tO\n0\t0\t4\t4\tearly\tearly\t22\t27\tADV\tRB\tadvmod\t3\tO\n0\t0\t5\t5\t,\t,\t27\t28\tPUNCT\t,\tpunct\t3\tO\n0\t0\t6\t6\tbut\tbut\t29\t32\tCCONJ\tCC\tcc\t3\tO\n0\t0\t7\t7\tthe\tthe\t33\t36\tDET\tDT\tdet\t8\tO\n0\t0\t8\t8\tsmell\tsmell\t37\t42\tNOUN\tNN\tnsubj\t13\tO\n0\t0\t9\t9\tof\tof\t43\t45\tADP\tIN\tprep\t8\tO\n0\t0\t10\t10\torange\torange\t46\t52\tPROPN\tNNP\tcompound\t11\tO\n0\t0\t11\t11\tpeel\tpeel\t53\t57\tPROPN\tNNP\tpobj\t9\tO\n0\t0\t12\t12\tstill\tstill\t58\t63\tADV\tRB\tadvmod\t13\tO\n0\t0\t13\t13\thung\thang\t64\t68\tVERB\tVBD\tconj\t3\tO\n0\t0\t14\t14\tabove\tabove\t69\t74\tADP\tIN\tprep\t13\tO\n0\t0\t15\t15\tthe\tthe\t75\t78\tDET\tDT\tdet\t17\tO\n0\t0\t16\t16\tcooling\tcool\t79\t86\tVERB\tVBG\tamod\t17\tO\n0\t0\t17\t17\tracks\track\t87\t92\tNOUN\tNNS\tpobj\t14\tO\n0\t0\t18\t18\t.\t.\t92\t93\tPUNCT\t.\tpunct\t13\tO\n0\t1\t0\t19\tBeatrice\tBeatrice\t94\t102\tPROPN\tNNP\tnsubj\t20\tO\n0\t1\t1\t20\tstood\tstand\t103\t108\tVERB\tVBD\tROOT\t20\tO\n0\t1\t2\t21\tbeneath\tbeneath\t109\t116\tADP\tIN\tprep\t20\tO\n0\t1\t3\t22\tthe\tthe\t117\t120\tDET\tDT\tdet\t24\tO\n0\t1\t4\t23\tstained\tstain\t121\t128\tVERB\tVBN\tamod\t24\tO\n0\t1\t5\t24\tceiling\tceiling\t129\t136\tNOUN\tNN\tpobj\t21\tO\n0\t1\t6\t25\twith\twith\t137\t141\tADP\tIN\tprep\t24\tO\n0\t1\t7\t26\ta\ta\t142\t143\tDET\tDT\tdet\t28\tO\n0\t1\t8\t27\troasting\troast\t144\t152\tVERB\tVBG\tcompound\t28\tO\n0\t1\t9\t28\ttin\ttin\t153\t156\tNOUN\tNN\tpobj\t25\tO\n0\t1\t10\t29\tpressed\tpress\t157\t164\tVERB\tVBN\tacl\t28\tO\n0\t1\t11\t30\tagainst\tagainst\t165\t172\tADP\tIN\tprep\t29\tO\n0\t1\t12\t31\ther\ther\t173\t176\tPRON\tPRP$\tposs\t32\tO\n0\t1\t13\t32\tchest\tchest\t177\t182\tNOUN\tNN\tpobj\t30\tO\n0\t1\t14\t33\t.\t.\t182\t183\tPUNCT\t.\tpunct\t20\tO\n0\t2\t0\t34\tEach\teach\t184\t188\tDET\tDT\tdet\t35\tO\n0\t2\t1\t35\tdrop\tdrop\t189\t193\tNOUN\tNN\tnsubj\t36\tO\n0\t2\t2\t36\tstruck\tstrike\t194\t200\tVERB\tVBD\tROOT\t36\tO\n0\t2\t3\t37\tthe\tthe\t201\t204\tDET\tDT\tdet\t38\tO\n0\t2\t4\t38\tmetal\tmetal\t205\t210\tNOUN\tNN\tdobj\t36\tO\n0\t2\t5\t39\tloudly\tloudly\t211\t217\tADV\tRB\tadvmod\t40\tO\n0\t2\t6\t40\tenough\tenough\t218\t224\tADV\tRB\tadvmod\t36\tO\n0\t2\t7\t41\tto\tto\t225\t227\tPART\tTO\taux\t42\tO\n0\t2\t8\t42\tmake\tmake\t228\t232\tVERB\tVB\txcomp\t40\tO\n0\t2\t9\t43\ther\ther\t233\t236\tPRON\tPRP$\tposs\t44\tO\n0\t2\t10\t44\tblink\tblink\t237\t242\tNOUN\tNN\tccomp\t42\tO\n0\t2\t11\t45\t.\t.\t242\t243\tPUNCT\t.\tpunct\t36\tO\n0\t3\t0\t46\tThe\tthe\t244\t247\tDET\tDT\tdet\t48\tO\n0\t3\t1\t47\tladder\tladder\t248\t254\tNOUN\tNN\tcompound\t48\tO\n0\t3\t2\t48\tAda\tAda\t255\t258\tPROPN\tNNP\tnsubj\t50\tO\n0\t3\t3\t49\thad\thave\t259\t262\tAUX\tVBD\taux\t50\tO\n0\t3\t4\t50\tpromised\tpromise\t263\t271\tVERB\tVBN\tccomp\t55\tO\n0\t3\t5\t51\tto\tto\t272\t274\tPART\tTO\taux\t52\tO\n0\t3\t6\t52\treturn\treturn\t275\t281\tVERB\tVB\txcomp\t50\tO\n0\t3\t7\t53\twas\tbe\t282\t285\tAUX\tVBD\taux\t55\tO\n0\t3\t8\t54\tstill\tstill\t286\t291\tADV\tRB\tadvmod\t55\tO\n0\t3\t9\t55\tmissing\tmiss\t292\t299\tVERB\tVBG\tROOT\t55\tO\n0\t3\t10\t56\t.\t.\t299\t300\tPUNCT\t.\tpunct\t55\tO\n1\t4\t0\t57\t\"\t\"\t302\t303\tPUNCT\t``\tpunct\t72\tO\n1\t4\t1\t58\tIf\tif\t303\t305\tSCONJ\tIN\tmark\t60\tO\n1\t4\t2\t59\tthis\tthis\t306\t310\tPRON\tDT\tnsubj\t60\tO\n1\t4\t3\t60\tgets\tget\t311\t315\tVERB\tVBZ\tadvcl\t66\tO\n1\t4\t4\t61\tinto\tinto\t316\t320\tADP\tIN\tprep\t60\tO\n1\t4\t5\t62\tthe\tthe\t321\t324\tDET\tDT\tdet\t63\tO\n1\t4\t6\t63\tflour\tflour\t325\t330\tNOUN\tNN\tpobj\t61\tO\n1\t4\t7\t64\t,\t,\t330\t331\tPUNCT\t,\tpunct\t66\tO\n1\t4\t8\t65\twe\twe\t332\t334\tPRON\tPRP\tnsubj\t66\tO\n1\t4\t9\t66\tclose\tclose\t335\t340\tVERB\tVBP\tccomp\t72\tO\n1\t4\t10\t67\ttomorrow\ttomorrow\t341\t349\tNOUN\tNN\tnpadvmod\t66\tO\n1\t4\t11\t68\ttoo\ttoo\t350\t353\tADV\tRB\tadvmod\t66\tO\n1\t4\t12\t69\t,\t,\t353\t354\tPUNCT\t,\tpunct\t72\tO\n1\t4\t13\t70\t\"\t\"\t354\t355\tPUNCT\t''\tpunct\t72\tO\n1\t4\t14\t71\tshe\tshe\t356\t359\tPRON\tPRP\tnsubj\t72\tO\n1\t4\t15\t72\tsaid\tsay\t360\t364\tVERB\tVBD\tROOT\t72\tO\n1\t4\t16\t73\t.\t.\t364\t365\tPUNCT\t.\tpunct\t72\tO\n2\t5\t0\t74\tLeon\tLeon\t367\t371\tPROPN\tNNP\tnsubj\t75\tO\n2\t5\t1\t75\tpushed\tpush\t372\t378\tVERB\tVBD\tROOT\t75\tO\n2\t5\t2\t76\tan\tan\t379\t381\tDET\tDT\tdet\t78\tO\n2\t5\t3\t77\tempty\tempty\t382\t387\tADJ\tJJ\tamod\t78\tO\n2\t5\t4\t78\track\track\t388\t392\tNOUN\tNN\tdobj\t75\tO\n2\t5\t5\t79\tbeneath\tbeneath\t393\t400\tADP\tIN\tprep\t75\tO\n2\t5\t6\t80\tthe\tthe\t401\t404\tDET\tDT\tdet\t81\tO\n2\t5\t7\t81\tstain\tstain\t405\t410\tNOUN\tNN\tpobj\t79\tO\n2\t5\t8\t82\t.\t.\t410\t411\tPUNCT\t.\tpunct\t75\tO\n2\t6\t0\t83\tHe\the\t412\t414\tPRON\tPRP\tnsubj\t86\tO\n2\t6\t1\t84\thad\thave\t415\t418\tAUX\tVBD\taux\t86\tO\n2\t6\t2\t85\talready\talready\t419\t426\tADV\tRB\tadvmod\t86\tO\n2\t6\t3\t86\ttaken\ttake\t427\t432\tVERB\tVBN\tccomp\t93\tO\n2\t6\t4\t87\toff\toff\t433\t436\tADP\tRP\tprt\t86\tO\n2\t6\t5\t88\this\this\t437\t440\tPRON\tPRP$\tposs\t90\tO\n2\t6\t6\t89\tgood\tgood\t441\t445\tADJ\tJJ\tamod\t90\tO\n2\t6\t7\t90\tcoat\tcoat\t446\t450\tNOUN\tNN\tdobj\t86\tO\n2\t6\t8\t91\t;\t;\t450\t451\tPUNCT\t:\tpunct\t93\tO\n2\t6\t9\t92\tit\tit\t452\t454\tPRON\tPRP\tnsubj\t93\tO\n2\t6\t10\t93\tlay\tlay\t455\t458\tAUX\tVBD\tauxpass\t95\tO\n2\t6\t11\t94\tcarefully\tcarefully\t459\t468\tADV\tRB\tadvmod\t95\tO\n2\t6\t12\t95\tfolded\tfold\t469\t475\tVERB\tVBN\tROOT\t95\tO\n2\t6\t13\t96\ton\ton\t476\t478\tADP\tIN\tprep\t95\tO\n2\t6\t14\t97\tthe\tthe\t479\t482\tDET\tDT\tdet\t99\tO\n2\t6\t15\t98\tclean\tclean\t483\t488\tADJ\tJJ\tamod\t99\tO\n2\t6\t16\t99\tend\tend\t489\t492\tNOUN\tNN\tpobj\t96\tO\n2\t6\t17\t100\tof\tof\t493\t495\tADP\tIN\tprep\t99\tO\n2\t6\t18\t101\tthe\tthe\t496\t499\tDET\tDT\tdet\t102\tO\n2\t6\t19\t102\tcounter\tcounter\t500\t507\tNOUN\tNN\tpobj\t100\tO\n2\t6\t20\t103\t.\t.\t507\t508\tPUNCT\t.\tpunct\t95\tO\n2\t7\t0\t104\t\"\t\"\t509\t510\tPUNCT\t``\tpunct\t105\tO\n2\t7\t1\t105\tPut\tput\t510\t513\tVERB\tVB\tROOT\t105\tO\n2\t7\t2\t106\tthe\tthe\t514\t517\tDET\tDT\tdet\t107\tO\n2\t7\t3\t107\ttin\ttin\t518\t521\tNOUN\tNN\tdobj\t105\tO\n2\t7\t4\t108\there\there\t522\t526\tADV\tRB\tadvmod\t105\tO\n2\t7\t5\t109\t,\t,\t526\t527\tPUNCT\t,\tpunct\t105\tO\n2\t7\t6\t110\tBea\tBea\t528\t531\tPROPN\tNNP\tnpadvmod\t105\tO\n2\t7\t7\t111\t.\t.\t531\t532\tPUNCT\t.\tpunct\t105\tO\n2\t8\t0\t112\tYour\tyour\t533\t537\tPRON\tPRP$\tposs\t113\tO\n2\t8\t1\t113\tarms\tarm\t538\t542\tNOUN\tNNS\tnsubj\t115\tO\n2\t8\t2\t114\tare\tbe\t543\t546\tAUX\tVBP\taux\t115\tO\n2\t8\t3\t115\tshaking\tshake\t547\t554\tVERB\tVBG\tROOT\t115\tO\n2\t8\t4\t116\t.\t.\t554\t555\tPUNCT\t.\tpunct\t115\tO\n2\t8\t5\t117\t\"\t\"\t555\t556\tPUNCT\t''\tpunct\t115\tO\n2\t9\t0\t118\tHe\the\t557\t559\tPRON\tPRP\tnsubj\t119\tO\n2\t9\t1\t119\theld\thold\t560\t564\tVERB\tVBD\tROOT\t119\tO\n2\t9\t2\t120\tthe\tthe\t565\t568\tDET\tDT\tdet\t121\tO\n2\t9\t3\t121\track\track\t569\t573\tNOUN\tNN\tdobj\t119\tO\n2\t9\t4\t122\tsteady\tsteady\t574\t580\tADJ\tJJ\tamod\t121\tO\n2\t9\t5\t123\twhile\twhile\t581\t586\tSCONJ\tIN\tmark\t125\tO\n2\t9\t6\t124\tBeatrice\tBeatrice\t587\t595\tPROPN\tNNP\tnsubj\t125\tO\n2\t9\t7\t125\tlowered\tlower\t596\t603\tVERB\tVBD\tadvcl\t119\tO\n2\t9\t8\t126\ther\ther\t604\t607\tPRON\tPRP$\tposs\t127\tO\n2\t9\t9\t127\tburden\tburden\t608\t614\tNOUN\tNN\tdobj\t125\tO\n2\t9\t10\t128\tonto\tonto\t615\t619\tADP\tIN\tprep\t125\tO\n2\t9\t11\t129\tits\tits\t620\t623\tPRON\tPRP$\tposs\t131\tO\n2\t9\t12\t130\ttop\ttop\t624\t627\tADJ\tJJ\tamod\t131\tO\n2\t9\t13\t131\tshelf\tshelf\t628\t633\tNOUN\tNN\tpobj\t128\tO\n2\t9\t14\t132\t.\t.\t633\t634\tPUNCT\t.\tpunct\t119\tO\n3\t10\t0\t133\tAt\tat\t636\t638\tADP\tIN\tprep\t139\tO\n3\t10\t1\t134\tthe\tthe\t639\t642\tDET\tDT\tdet\t136\tO\n3\t10\t2\t135\tback\tback\t643\t647\tADJ\tJJ\tamod\t136\tO\n3\t10\t3\t136\tdoor\tdoor\t648\t652\tNOUN\tNN\tpobj\t133\tO\n3\t10\t4\t137\t,\t,\t652\t653\tPUNCT\t,\tpunct\t139\tO\n3\t10\t5\t138\tPriya\tPriya\t654\t659\tPROPN\tNNP\tnsubj\t139\tO\n3\t10\t6\t139\tshook\tshake\t660\t665\tVERB\tVBD\tROOT\t139\tO\n3\t10\t7\t140\train\train\t666\t670\tNOUN\tNN\tdobj\t139\tO\n3\t10\t8\t141\tfrom\tfrom\t671\t675\tADP\tIN\tprep\t139\tO\n3\t10\t9\t142\ttheir\ttheir\t676\t681\tPRON\tPRP$\tposs\t143\tO\n3\t10\t10\t143\tsleeves\tsleeve\t682\t689\tNOUN\tNNS\tpobj\t141\tO\n3\t10\t11\t144\t.\t.\t689\t690\tPUNCT\t.\tpunct\t139\tO\n3\t11\t0\t145\tThey\tthey\t691\t695\tPRON\tPRP\tnsubj\t146\tO\n3\t11\t1\t146\tset\tset\t696\t699\tVERB\tVBD\tROOT\t146\tO\n3\t11\t2\t147\ta\ta\t700\t701\tDET\tDT\tdet\t150\tO\n3\t11\t3\t148\tcanvas\tcanvas\t702\t708\tNOUN\tNN\tcompound\t149\tO\n3\t11\t4\t149\ttool\ttool\t709\t713\tNOUN\tNN\tcompound\t150\tO\n3\t11\t5\t150\tbag\tbag\t714\t717\tNOUN\tNN\tdobj\t146\tO\n3\t11\t6\t151\tbeside\tbeside\t718\t724\tADP\tIN\tprep\t146\tO\n3\t11\t7\t152\tthe\tthe\t725\t728\tDET\tDT\tdet\t153\tO\n3\t11\t8\t153\toven\toven\t729\t733\tNOUN\tNN\tpobj\t151\tO\n3\t11\t9\t154\tand\tand\t734\t737\tCCONJ\tCC\tcc\t146\tO\n3\t11\t10\t155\tlistened\tlisten\t738\t746\tVERB\tVBD\tconj\t146\tO\n3\t11\t11\t156\tuntil\tuntil\t747\t752\tSCONJ\tIN\tmark\t159\tO\n3\t11\t12\t157\tanother\tanother\t753\t760\tDET\tDT\tdet\t158\tO\n3\t11\t13\t158\tdrop\tdrop\t761\t765\tNOUN\tNN\tnsubj\t159\tO\n3\t11\t14\t159\tlanded\tland\t766\t772\tVERB\tVBD\tadvcl\t155\tO\n3\t11\t15\t160\t.\t.\t772\t773\tPUNCT\t.\tpunct\t146\tO\n3\t12\t0\t161\tThe\tthe\t774\t777\tDET\tDT\tdet\t162\tO\n3\t12\t1\t162\tsound\tsound\t778\t783\tNOUN\tNN\tnsubj\t163\tO\n3\t12\t2\t163\tcame\tcome\t784\t788\tVERB\tVBD\tROOT\t163\tO\n3\t12\t3\t164\ta\ta\t789\t790\tDET\tDT\tdet\t165\tO\n3\t12\t4\t165\tlittle\tlittle\t791\t797\tADJ\tJJ\tnpadvmod\t166\tO\n3\t12\t5\t166\tlater\tlater\t798\t803\tADV\tRB\tadvmod\t163\tO\n3\t12\t6\t167\tthan\tthan\t804\t808\tADP\tIN\tprep\t166\tO\n3\t12\t7\t168\tthe\tthe\t809\t812\tDET\tDT\tdet\t169\tO\n3\t12\t8\t169\tmovement\tmovement\t813\t821\tNOUN\tNN\tpobj\t167\tO\n3\t12\t9\t170\tof\tof\t822\t824\tADP\tIN\tprep\t169\tO\n3\t12\t10\t171\tthe\tthe\t825\t828\tDET\tDT\tdet\t173\tO\n3\t12\t11\t172\tdark\tdark\t829\t833\tADJ\tJJ\tamod\t173\tO\n3\t12\t12\t173\tpatch\tpatch\t834\t839\tNOUN\tNN\tpobj\t170\tO\n3\t12\t13\t174\toverhead\toverhead\t840\t848\tADV\tRB\tadvmod\t173\tO\n3\t12\t14\t175\t.\t.\t848\t849\tPUNCT\t.\tpunct\t163\tO\n4\t13\t0\t176\t\"\t\"\t851\t852\tPUNCT\t``\tpunct\t187\tO\n4\t13\t1\t177\tThere\tthere\t852\t857\tPRON\tEX\texpl\t178\tO\n4\t13\t2\t178\t's\tbe\t857\t859\tVERB\tVBZ\tccomp\t187\tO\n4\t13\t3\t179\ta\ta\t860\t861\tDET\tDT\tdet\t180\tO\n4\t13\t4\t180\tspace\tspace\t862\t867\tNOUN\tNN\tattr\t178\tO\n4\t13\t5\t181\tabove\tabove\t868\t873\tADP\tIN\tprep\t180\tO\n4\t13\t6\t182\tthat\tthat\t874\t878\tDET\tDT\tdet\t183\tO\n4\t13\t7\t183\tpanel\tpanel\t879\t884\tNOUN\tNN\tpobj\t181\tO\n4\t13\t8\t184\t,\t,\t884\t885\tPUNCT\t,\tpunct\t187\tO\n4\t13\t9\t185\t\"\t\"\t885\t886\tPUNCT\t''\tpunct\t187\tO\n4\t13\t10\t186\tPriya\tPriya\t887\t892\tPROPN\tNNP\tnsubj\t187\tO\n4\t13\t11\t187\tsaid\tsay\t893\t897\tVERB\tVBD\tROOT\t187\tO\n4\t13\t12\t188\t.\t.\t897\t898\tPUNCT\t.\tpunct\t187\tO\n4\t14\t0\t189\t\"\t\"\t899\t900\tPUNCT\t``\tpunct\t194\tO\n4\t14\t1\t190\tThe\tthe\t900\t903\tDET\tDT\tdet\t191\tO\n4\t14\t2\t191\twater\twater\t904\t909\tNOUN\tNN\tnsubj\t194\tO\n4\t14\t3\t192\tcould\tcould\t910\t915\tAUX\tMD\taux\t194\tO\n4\t14\t4\t193\tbe\tbe\t916\t918\tAUX\tVB\taux\t194\tO\n4\t14\t5\t194\tcoming\tcome\t919\t925\tVERB\tVBG\tROOT\t194\tO\n4\t14\t6\t195\tfrom\tfrom\t926\t930\tADP\tIN\tprep\t194\tO\n4\t14\t7\t196\tthe\tthe\t931\t934\tDET\tDT\tdet\t198\tO\n4\t14\t8\t197\tother\tother\t935\t940\tADJ\tJJ\tamod\t198\tO\n4\t14\t9\t198\tend\tend\t941\t944\tNOUN\tNN\tpobj\t195\tO\n4\t14\t10\t199\tof\tof\t945\t947\tADP\tIN\tprep\t198\tO\n4\t14\t11\t200\tthe\tthe\t948\t951\tDET\tDT\tdet\t201\tO\n4\t14\t12\t201\tbuilding\tbuilding\t952\t960\tNOUN\tNN\tpobj\t199\tO\n4\t14\t13\t202\t.\t.\t960\t961\tPUNCT\t.\tpunct\t194\tO\n4\t15\t0\t203\t\"\t\"\t961\t962\tPUNCT\t''\tpunct\t205\tO\n5\t15\t1\t204\tBeatrice\tBeatrice\t964\t972\tPROPN\tNNP\tnsubj\t205\tO\n5\t15\t2\t205\tlooked\tlook\t973\t979\tVERB\tVBD\tROOT\t205\tO\n5\t15\t3\t206\ttoward\ttoward\t980\t986\tADP\tIN\tprep\t205\tO\n5\t15\t4\t207\tthe\tthe\t987\t990\tDET\tDT\tdet\t208\tO\n5\t15\t5\t208\tstairs\tstair\t991\t997\tNOUN\tNNS\tpobj\t206\tO\n5\t15\t6\t209\t.\t.\t997\t998\tPUNCT\t.\tpunct\t205\tO\n5\t16\t0\t210\tThe\tthe\t999\t1002\tDET\tDT\tdet\t212\tO\n5\t16\t1\t211\tupstairs\tupstairs\t1003\t1011\tADJ\tJJ\tamod\t212\tO\n5\t16\t2\t212\ttenant\ttenant\t1012\t1018\tNOUN\tNN\tnsubj\t214\tO\n5\t16\t3\t213\thad\thave\t1019\t1022\tAUX\tVBD\taux\t214\tO\n5\t16\t4\t214\tcomplained\tcomplain\t1023\t1033\tVERB\tVBN\tROOT\t214\tO\n5\t16\t5\t215\tabout\tabout\t1034\t1039\tADP\tIN\tprep\t214\tO\n5\t16\t6\t216\ta\ta\t1040\t1041\tDET\tDT\tdet\t218\tO\n5\t16\t7\t217\tloose\tloose\t1042\t1047\tADJ\tJJ\tamod\t218\tO\n5\t16\t8\t218\twindow\twindow\t1048\t1054\tNOUN\tNN\tpobj\t215\tO\n5\t16\t9\t219\t,\t,\t1054\t1055\tPUNCT\t,\tpunct\t214\tO\n5\t16\t10\t220\tbut\tbut\t1056\t1059\tCCONJ\tCC\tcc\t214\tO\n5\t16\t11\t221\tthe\tthe\t1060\t1063\tDET\tDT\tdet\t222\tO\n5\t16\t12\t222\troom\troom\t1064\t1068\tNOUN\tNN\tnsubj\t226\tO\n5\t16\t13\t223\tdirectly\tdirectly\t1069\t1077\tADV\tRB\tadvmod\t224\tO\n5\t16\t14\t224\tabove\tabove\t1078\t1083\tADP\tIN\tprep\t222\tO\n5\t16\t15\t225\tthem\tthey\t1084\t1088\tPRON\tPRP\tpobj\t224\tO\n5\t16\t16\t226\theld\thold\t1089\t1093\tVERB\tVBD\tconj\t214\tO\n5\t16\t17\t227\tonly\tonly\t1094\t1098\tADJ\tJJ\tamod\t228\tO\n5\t16\t18\t228\tboxes\tbox\t1099\t1104\tNOUN\tNNS\tdobj\t226\tO\n5\t16\t19\t229\t.\t.\t1104\t1105\tPUNCT\t.\tpunct\t226\tO\n5\t17\t0\t230\t\"\t\"\t1106\t1107\tPUNCT\t``\tpunct\t232\tO\n5\t17\t1\t231\tI\tI\t1107\t1108\tPRON\tPRP\tnsubj\t232\tO\n5\t17\t2\t232\tchecked\tcheck\t1109\t1116\tVERB\tVBD\tROOT\t232\tO\n5\t17\t3\t233\tthe\tthe\t1117\t1120\tDET\tDT\tdet\t234\tO\n5\t17\t4\t234\twindow\twindow\t1121\t1127\tNOUN\tNN\tdobj\t232\tO\n5\t17\t5\t235\tbefore\tbefore\t1128\t1134\tSCONJ\tIN\tmark\t237\tO\n5\t17\t6\t236\tI\tI\t1135\t1136\tPRON\tPRP\tnsubj\t237\tO\n5\t17\t7\t237\tcame\tcome\t1137\t1141\tVERB\tVBD\tadvcl\t232\tO\n5\t17\t8\t238\tdown\tdown\t1142\t1146\tADP\tRP\tprt\t237\tO\n5\t17\t9\t239\t.\t.\t1146\t1147\tPUNCT\t.\tpunct\t232\tO\n5\t18\t0\t240\tThe\tthe\t1148\t1151\tDET\tDT\tdet\t241\tO\n5\t18\t1\t241\tfloor\tfloor\t1152\t1157\tNOUN\tNN\tnsubj\t242\tO\n5\t18\t2\t242\twas\tbe\t1158\t1161\tAUX\tVBD\tROOT\t242\tO\n5\t18\t3\t243\tdry\tdry\t1162\t1165\tADJ\tJJ\tacomp\t242\tO\n5\t18\t4\t244\t.\t.\t1165\t1166\tPUNCT\t.\tpunct\t242\tO\n5\t19\t0\t245\t\"\t\"\t1166\t1167\tPUNCT\t``\tpunct\t247\tO\n6\t19\t1\t246\tA\ta\t1169\t1170\tDET\tDT\tdet\t247\tO\n6\t19\t2\t247\tkey\tkey\t1171\t1174\tNOUN\tNN\tROOT\t247\tO\n6\t19\t3\t248\tscraped\tscrap\t1175\t1182\tVERB\tVBN\tacl\t247\tO\n6\t19\t4\t249\tin\tin\t1183\t1185\tADP\tIN\tprep\t248\tO\n6\t19\t5\t250\tthe\tthe\t1186\t1189\tDET\tDT\tdet\t252\tO\n6\t19\t6\t251\tfront\tfront\t1190\t1195\tADJ\tJJ\tamod\t252\tO\n6\t19\t7\t252\tlock\tlock\t1196\t1200\tNOUN\tNN\tpobj\t249\tO\n6\t19\t8\t253\t.\t.\t1200\t1201\tPUNCT\t.\tpunct\t247\tO\n6\t20\t0\t254\tTomas\tTomas\t1202\t1207\tPROPN\tNNP\tnsubj\t255\tO\n6\t20\t1\t255\tentered\tenter\t1208\t1215\tVERB\tVBD\tROOT\t255\tO\n6\t20\t2\t256\tsideways\tsideways\t1216\t1224\tADV\tRB\tadvmod\t255\tO\n6\t20\t3\t257\twith\twith\t1225\t1229\tADP\tIN\tprep\t255\tO\n6\t20\t4\t258\ta\ta\t1230\t1231\tDET\tDT\tdet\t259\tO\n6\t20\t5\t259\tsheet\tsheet\t1232\t1237\tNOUN\tNN\tpobj\t257\tO\n6\t20\t6\t260\tof\tof\t1238\t1240\tADP\tIN\tprep\t259\tO\n6\t20\t7\t261\tplywood\tplywood\t1241\t1248\tNOUN\tNN\tpobj\t260\tO\n6\t20\t8\t262\t,\t,\t1248\t1249\tPUNCT\t,\tpunct\t255\tO\n6\t20\t9\t263\tcatching\tcatch\t1250\t1258\tVERB\tVBG\tadvcl\t255\tO\n6\t20\t10\t264\this\this\t1259\t1262\tPRON\tPRP$\tposs\t265\tO\n6\t20\t11\t265\theel\theel\t1263\t1267\tNOUN\tNN\tdobj\t263\tO\n6\t20\t12\t266\ton\ton\t1268\t1270\tADP\tIN\tprep\t263\tO\n6\t20\t13\t267\tthe\tthe\t1271\t1274\tDET\tDT\tdet\t268\tO\n6\t20\t14\t268\tmat\tmat\t1275\t1278\tNOUN\tNN\tpobj\t266\tO\n6\t20\t15\t269\t.\t.\t1278\t1279\tPUNCT\t.\tpunct\t255\tO\n6\t21\t0\t270\tLeon\tLeon\t1280\t1284\tPROPN\tNNP\tnsubj\t271\tO\n6\t21\t1\t271\treached\treach\t1285\t1292\tVERB\tVBD\tROOT\t271\tO\n6\t21\t2\t272\tfor\tfor\t1293\t1296\tADP\tIN\tprep\t271\tO\n6\t21\t3\t273\tthe\tthe\t1297\t1300\tDET\tDT\tdet\t275\tO\n6\t21\t4\t274\tnearer\tnearer\t1301\t1307\tNOUN\tNN\tcompound\t275\tO\n6\t21\t5\t275\tedge\tedge\t1308\t1312\tNOUN\tNN\tpobj\t272\tO\n6\t21\t6\t276\tbefore\tbefore\t1313\t1319\tSCONJ\tIN\tmark\t278\tO\n6\t21\t7\t277\tit\tit\t1320\t1322\tPRON\tPRP\tnsubj\t278\tO\n6\t21\t8\t278\tstruck\tstrike\t1323\t1329\tVERB\tVBD\tadvcl\t271\tO\n6\t21\t9\t279\tthe\tthe\t1330\t1333\tDET\tDT\tdet\t281\tO\n6\t21\t10\t280\tdisplay\tdisplay\t1334\t1341\tNOUN\tNN\tcompound\t281\tO\n6\t21\t11\t281\tcase\tcase\t1342\t1346\tNOUN\tNN\tdobj\t278\tO\n6\t21\t12\t282\t.\t.\t1346\t1347\tPUNCT\t.\tpunct\t271\tO\n7\t22\t0\t283\t\"\t\"\t1349\t1350\tPUNCT\t``\tpunct\t286\tO\n7\t22\t1\t284\tDo\tdo\t1350\t1352\tAUX\tVBP\taux\t286\tO\n7\t22\t2\t285\tn't\tnot\t1352\t1355\tPART\tRB\tneg\t286\tO\n7\t22\t3\t286\tput\tput\t1356\t1359\tVERB\tVB\tccomp\t294\tO\n7\t22\t4\t287\tthat\tthat\t1360\t1364\tPRON\tDT\tdobj\t286\tO\n7\t22\t5\t288\tunder\tunder\t1365\t1370\tADP\tIN\tprep\t286\tO\n7\t22\t6\t289\tthe\tthe\t1371\t1374\tDET\tDT\tdet\t290\tO\n7\t22\t7\t290\tleak\tleak\t1375\t1379\tNOUN\tNN\tpobj\t288\tO\n7\t22\t8\t291\t,\t,\t1379\t1380\tPUNCT\t,\tpunct\t294\tO\n7\t22\t9\t292\t\"\t\"\t1380\t1381\tPUNCT\t''\tpunct\t294\tO\n7\t22\t10\t293\tTomas\tTomas\t1382\t1387\tPROPN\tNNP\tnsubj\t294\tO\n7\t22\t11\t294\tsaid\tsay\t1388\t1392\tVERB\tVBD\tROOT\t294\tO\n7\t22\t12\t295\t.\t.\t1392\t1393\tPUNCT\t.\tpunct\t294\tO\n7\t23\t0\t296\tHe\the\t1394\t1396\tPRON\tPRP\tnsubj\t297\tO\n7\t23\t1\t297\ttilted\ttilt\t1397\t1403\tVERB\tVBD\tROOT\t297\tO\n7\t23\t2\t298\tthe\tthe\t1404\t1407\tDET\tDT\tdet\t299\tO\n7\t23\t3\t299\tboard\tboard\t1408\t1413\tNOUN\tNN\tdobj\t297\tO\n7\t23\t4\t300\ttoward\ttoward\t1414\t1420\tADP\tIN\tprep\t297\tO\n7\t23\t5\t301\tthe\tthe\t1421\t1424\tDET\tDT\tdet\t303\tO\n7\t23\t6\t302\tempty\tempty\t1425\t1430\tADJ\tJJ\tamod\t303\tO\n7\t23\t7\t303\tdoorway\tdoorway\t1431\t1438\tNOUN\tNN\tpobj\t300\tO\n7\t23\t8\t304\t.\t.\t1438\t1439\tPUNCT\t.\tpunct\t297\tO\n7\t24\t0\t305\t\"\t\"\t1440\t1441\tPUNCT\t``\tpunct\t307\tO\n7\t24\t1\t306\tIt\tit\t1441\t1443\tPRON\tPRP\tnsubj\t307\tO\n7\t24\t2\t307\t's\tbe\t1443\t1445\tAUX\tVBZ\tROOT\t307\tO\n7\t24\t3\t308\tfor\tfor\t1446\t1449\tADP\tIN\tprep\t307\tO\n7\t24\t4\t309\tthe\tthe\t1450\t1453\tDET\tDT\tdet\t310\tO\n7\t24\t5\t310\twindow\twindow\t1454\t1460\tNOUN\tNN\tpobj\t308\tO\n7\t24\t6\t311\ton\ton\t1461\t1463\tADP\tIN\tprep\t310\tO\n7\t24\t7\t312\tthe\tthe\t1464\t1467\tDET\tDT\tdet\t313\tO\n7\t24\t8\t313\tstairs\tstair\t1468\t1474\tNOUN\tNNS\tpobj\t311\tO\n7\t24\t9\t314\t.\t.\t1474\t1475\tPUNCT\t.\tpunct\t307\tO\n7\t25\t0\t315\tThe\tthe\t1476\t1479\tDET\tDT\tdet\t316\tO\n7\t25\t1\t316\tglass\tglass\t1480\t1485\tNOUN\tNN\tnsubj\t317\tO\n7\t25\t2\t317\tis\tbe\t1486\t1488\tAUX\tVBZ\tROOT\t317\tO\n7\t25\t3\t318\tout\tout\t1489\t1492\tADV\tRB\tadvmod\t317\tO\n7\t25\t4\t319\t.\t.\t1492\t1493\tPUNCT\t.\tpunct\t317\tO\n7\t26\t0\t320\t\"\t\"\t1493\t1494\tPUNCT\t''\tpunct\t322\tO\n8\t26\t1\t321\tBeatrice\tBeatrice\t1496\t1504\tPROPN\tNNP\tnsubj\t322\tO\n8\t26\t2\t322\tput\tput\t1505\t1508\tVERB\tVBD\tROOT\t322\tO\n8\t26\t3\t323\ta\ta\t1509\t1510\tDET\tDT\tdet\t324\tO\n8\t26\t4\t324\thand\thand\t1511\t1515\tNOUN\tNN\tdobj\t322\tO\n8\t26\t5\t325\ton\ton\t1516\t1518\tADP\tIN\tprep\t322\tO\n8\t26\t6\t326\tthe\tthe\t1519\t1522\tDET\tDT\tdet\t327\tO\n8\t26\t7\t327\tcounter\tcounter\t1523\t1530\tNOUN\tNN\tpobj\t325\tO\n8\t26\t8\t328\t.\t.\t1530\t1531\tPUNCT\t.\tpunct\t322\tO\n8\t27\t0\t329\tShe\tshe\t1532\t1535\tPRON\tPRP\tnsubj\t331\tO\n8\t27\t1\t330\thad\thave\t1536\t1539\tAUX\tVBD\taux\t331\tO\n8\t27\t2\t331\tchecked\tcheck\t1540\t1547\tVERB\tVBN\tROOT\t331\tO\n8\t27\t3\t332\tthe\tthe\t1548\t1551\tDET\tDT\tdet\t334\tO\n8\t27\t4\t333\twrong\twrong\t1552\t1557\tADJ\tJJ\tamod\t334\tO\n8\t27\t5\t334\twindow\twindow\t1558\t1564\tNOUN\tNN\tdobj\t331\tO\n8\t27\t6\t335\t.\t.\t1564\t1565\tPUNCT\t.\tpunct\t331\tO\n9\t28\t0\t336\t\"\t\"\t1567\t1568\tPUNCT\t``\tpunct\t338\tO\n9\t28\t1\t337\tI\tI\t1568\t1569\tPRON\tPRP\tnsubj\t338\tO\n9\t28\t2\t338\tthought\tthink\t1570\t1577\tVERB\tVBD\tROOT\t338\tO\n9\t28\t3\t339\tyou\tyou\t1578\t1581\tPRON\tPRP\tnsubj\t340\tO\n9\t28\t4\t340\tmeant\tmean\t1582\t1587\tVERB\tVBD\tccomp\t338\tO\n9\t28\t5\t341\tthe\tthe\t1588\t1591\tDET\tDT\tdet\t342\tO\n9\t28\t6\t342\tone\tone\t1592\t1595\tNOUN\tNN\tdobj\t340\tO\n9\t28\t7\t343\tin\tin\t1596\t1598\tADP\tIN\tprep\t342\tO\n9\t28\t8\t344\tthe\tthe\t1599\t1602\tDET\tDT\tdet\t345\tO\n9\t28\t9\t345\tstoreroom\tstoreroom\t1603\t1612\tNOUN\tNN\tpobj\t343\tO\n9\t28\t10\t346\t.\t.\t1612\t1613\tPUNCT\t.\tpunct\t338\tO\n9\t29\t0\t347\t\"\t\"\t1613\t1614\tPUNCT\t``\tpunct\t349\tO\n10\t29\t1\t348\tTomas\tTomas\t1616\t1621\tPROPN\tNNP\tnsubj\t349\tO\n10\t29\t2\t349\trested\trest\t1622\t1628\tVERB\tVBD\tROOT\t349\tO\n10\t29\t3\t350\tthe\tthe\t1629\t1632\tDET\tDT\tdet\t351\tO\n10\t29\t4\t351\tplywood\tplywood\t1633\t1640\tNOUN\tNN\tdobj\t349\tO\n10\t29\t5\t352\tagainst\tagainst\t1641\t1648\tADP\tIN\tprep\t351\tO\n10\t29\t6\t353\tthe\tthe\t1649\t1652\tDET\tDT\tdet\t354\tO\n10\t29\t7\t354\twall\twall\t1653\t1657\tNOUN\tNN\tpobj\t352\tO\n10\t29\t8\t355\t.\t.\t1657\t1658\tPUNCT\t.\tpunct\t349\tO\n10\t30\t0\t356\t\"\t\"\t1659\t1660\tPUNCT\t``\tpunct\t358\tO\n10\t30\t1\t357\tI\tI\t1660\t1661\tPRON\tPRP\tnsubj\t358\tO\n10\t30\t2\t358\tleft\tleave\t1662\t1666\tVERB\tVBD\tROOT\t358\tO\n10\t30\t3\t359\ta\ta\t1667\t1668\tDET\tDT\tdet\t360\tO\n10\t30\t4\t360\tnote\tnote\t1669\t1673\tNOUN\tNN\tdobj\t358\tO\n10\t30\t5\t361\ton\ton\t1674\t1676\tADP\tIN\tprep\t358\tO\n10\t30\t6\t362\tyour\tyour\t1677\t1681\tPRON\tPRP$\tposs\t363\tO\n10\t30\t7\t363\tbicycle\tbicycle\t1682\t1689\tNOUN\tNN\tpobj\t361\tO\n10\t30\t8\t364\t.\t.\t1689\t1690\tPUNCT\t.\tpunct\t358\tO\n10\t31\t0\t365\t\"\t\"\t1690\t1691\tPUNCT\t``\tpunct\t369\tO\n11\t31\t1\t366\t\"\t\"\t1693\t1694\tPUNCT\t``\tpunct\t369\tO\n11\t31\t2\t367\tMy\tmy\t1694\t1696\tPRON\tPRP$\tposs\t368\tO\n11\t31\t3\t368\tbicycle\tbicycle\t1697\t1704\tNOUN\tNN\tnsubj\t369\tO\n11\t31\t4\t369\tis\tbe\t1705\t1707\tAUX\tVBZ\tccomp\t377\tO\n11\t31\t5\t370\tat\tat\t1708\t1710\tADP\tIN\tprep\t369\tO\n11\t31\t6\t371\tthe\tthe\t1711\t1714\tDET\tDT\tdet\t373\tO\n11\t31\t7\t372\trepair\trepair\t1715\t1721\tNOUN\tNN\tcompound\t373\tO\n11\t31\t8\t373\tshop\tshop\t1722\t1726\tNOUN\tNN\tpobj\t370\tO\n11\t31\t9\t374\t,\t,\t1726\t1727\tPUNCT\t,\tpunct\t377\tO\n11\t31\t10\t375\t\"\t\"\t1727\t1728\tPUNCT\t''\tpunct\t377\tO\n11\t31\t11\t376\tshe\tshe\t1729\t1732\tPRON\tPRP\tnsubj\t377\tO\n11\t31\t12\t377\tsaid\tsay\t1733\t1737\tVERB\tVBD\tROOT\t377\tO\n11\t31\t13\t378\t.\t.\t1737\t1738\tPUNCT\t.\tpunct\t377\tO\n11\t32\t0\t379\tHer\ther\t1739\t1742\tPRON\tPRP$\tposs\t380\tO\n11\t32\t1\t380\tvoice\tvoice\t1743\t1748\tNOUN\tNN\tnsubj\t382\tO\n11\t32\t2\t381\thad\thave\t1749\t1752\tAUX\tVBD\taux\t382\tO\n11\t32\t3\t382\tgone\tgo\t1753\t1757\tVERB\tVBN\tROOT\t382\tO\n11\t32\t4\t383\tquiet\tquiet\t1758\t1763\tADJ\tJJ\tacomp\t382\tO\n11\t32\t5\t384\tenough\tenough\t1764\t1770\tADV\tRB\tadvmod\t383\tO\n11\t32\t6\t385\tthat\tthat\t1771\t1775\tSCONJ\tIN\tmark\t387\tO\n11\t32\t7\t386\tLeon\tLeon\t1776\t1780\tPROPN\tNNP\tnsubj\t387\tO\n11\t32\t8\t387\tstopped\tstop\t1781\t1788\tVERB\tVBD\tadvcl\t382\tO\n11\t32\t9\t388\tbrushing\tbrush\t1789\t1797\tVERB\tVBG\txcomp\t387\tO\n11\t32\t10\t389\train\train\t1798\t1802\tNOUN\tNN\tdobj\t388\tO\n11\t32\t11\t390\tfrom\tfrom\t1803\t1807\tADP\tIN\tprep\t388\tO\n11\t32\t12\t391\tthe\tthe\t1808\t1811\tDET\tDT\tdet\t392\tO\n11\t32\t13\t392\tboard\tboard\t1812\t1817\tNOUN\tNN\tpobj\t390\tO\n11\t32\t14\t393\t.\t.\t1817\t1818\tPUNCT\t.\tpunct\t382\tO\n12\t33\t0\t394\tPriya\tPriya\t1820\t1825\tPROPN\tNNP\tnsubj\t395\tO\n12\t33\t1\t395\ttook\ttake\t1826\t1830\tVERB\tVBD\tROOT\t395\tO\n12\t33\t2\t396\ta\ta\t1831\t1832\tDET\tDT\tdet\t397\tO\n12\t33\t3\t397\ttorch\ttorch\t1833\t1838\tNOUN\tNN\tdobj\t395\tO\n12\t33\t4\t398\tfrom\tfrom\t1839\t1843\tADP\tIN\tprep\t395\tO\n12\t33\t5\t399\tthe\tthe\t1844\t1847\tDET\tDT\tdet\t400\tO\n12\t33\t6\t400\tbag\tbag\t1848\t1851\tNOUN\tNN\tpobj\t398\tO\n12\t33\t7\t401\tand\tand\t1852\t1855\tCCONJ\tCC\tcc\t395\tO\n12\t33\t8\t402\taimed\taim\t1856\t1861\tVERB\tVBD\tconj\t395\tO\n12\t33\t9\t403\tit\tit\t1862\t1864\tPRON\tPRP\tdobj\t402\tO\n12\t33\t10\t404\tat\tat\t1865\t1867\tADP\tIN\tprep\t402\tO\n12\t33\t11\t405\tthe\tthe\t1868\t1871\tDET\tDT\tdet\t406\tO\n12\t33\t12\t406\tceiling\tceiling\t1872\t1879\tNOUN\tNN\tpobj\t404\tO\n12\t33\t13\t407\t,\t,\t1879\t1880\tPUNCT\t,\tpunct\t402\tO\n12\t33\t14\t408\tkeeping\tkeep\t1881\t1888\tVERB\tVBG\tadvcl\t402\tO\n12\t33\t15\t409\tthe\tthe\t1889\t1892\tDET\tDT\tdet\t410\tO\n12\t33\t16\t410\tbeam\tbeam\t1893\t1897\tNOUN\tNN\tdobj\t408\tO\n12\t33\t17\t411\taway\taway\t1898\t1902\tADV\tRB\tadvmod\t408\tO\n12\t33\t18\t412\tfrom\tfrom\t1903\t1907\tADP\tIN\tprep\t411\tO\n12\t33\t19\t413\teveryone\teveryone\t1908\t1916\tPRON\tNN\tposs\t415\tO\n12\t33\t20\t414\t's\t's\t1916\t1918\tPART\tPOS\tcase\t413\tO\n12\t33\t21\t415\teyes\teye\t1919\t1923\tNOUN\tNNS\tpobj\t412\tO\n12\t33\t22\t416\t.\t.\t1923\t1924\tPUNCT\t.\tpunct\t395\tO\n12\t34\t0\t417\tThey\tthey\t1925\t1929\tPRON\tPRP\tnsubj\t418\tO\n12\t34\t1\t418\twaited\twait\t1930\t1936\tVERB\tVBD\tROOT\t418\tO\n12\t34\t2\t419\tfor\tfor\t1937\t1940\tSCONJ\tIN\tmark\t423\tO\n12\t34\t3\t420\tthe\tthe\t1941\t1944\tDET\tDT\tdet\t421\tO\n12\t34\t4\t421\tothers\tother\t1945\t1951\tNOUN\tNNS\tnsubj\t423\tO\n12\t34\t5\t422\tto\tto\t1952\t1954\tPART\tTO\taux\t423\tO\n12\t34\t6\t423\tlook\tlook\t1955\t1959\tVERB\tVB\tadvcl\t418\tO\n12\t34\t7\t424\tup\tup\t1960\t1962\tADP\tRP\tprt\t423\tO\n12\t34\t8\t425\t.\t.\t1962\t1963\tPUNCT\t.\tpunct\t418\tO\n13\t35\t0\t426\t\"\t\"\t1965\t1966\tPUNCT\t``\tpunct\t429\tO\n13\t35\t1\t427\tWe\twe\t1966\t1968\tPRON\tPRP\tnsubj\t429\tO\n13\t35\t2\t428\tcan\tcan\t1969\t1972\tAUX\tMD\taux\t429\tO\n13\t35\t3\t429\targue\targue\t1973\t1978\tVERB\tVB\tROOT\t429\tO\n13\t35\t4\t430\tabout\tabout\t1979\t1984\tADP\tIN\tprep\t429\tO\n13\t35\t5\t431\tbicycles\tbicycle\t1985\t1993\tNOUN\tNNS\tpobj\t430\tO\n13\t35\t6\t432\twhen\twhen\t1994\t1998\tSCONJ\tWRB\tadvmod\t435\tO\n13\t35\t7\t433\tthe\tthe\t1999\t2002\tDET\tDT\tdet\t434\tO\n13\t35\t8\t434\twater\twater\t2003\t2008\tNOUN\tNN\tnsubj\t435\tO\n13\t35\t9\t435\tstops\tstop\t2009\t2014\tVERB\tVBZ\tadvcl\t429\tO\n13\t35\t10\t436\t.\t.\t2014\t2015\tPUNCT\t.\tpunct\t429\tO\n13\t36\t0\t437\tLeon\tLeon\t2016\t2020\tPROPN\tNNP\tnpadvmod\t441\tO\n13\t36\t1\t438\t,\t,\t2020\t2021\tPUNCT\t,\tpunct\t441\tO\n13\t36\t2\t439\tcan\tcan\t2022\t2025\tAUX\tMD\taux\t441\tO\n13\t36\t3\t440\tyou\tyou\t2026\t2029\tPRON\tPRP\tnsubj\t441\tO\n13\t36\t4\t441\thold\thold\t2030\t2034\tVERB\tVB\tROOT\t441\tO\n13\t36\t5\t442\tthe\tthe\t2035\t2038\tDET\tDT\tdet\t443\tO\n13\t36\t6\t443\tlight\tlight\t2039\t2044\tNOUN\tNN\tdobj\t441\tO\n13\t36\t7\t444\t?\t?\t2044\t2045\tPUNCT\t.\tpunct\t441\tO\n13\t36\t8\t445\t\"\t\"\t2045\t2046\tPUNCT\t''\tpunct\t447\tO\n14\t36\t9\t446\tHe\the\t2048\t2050\tPRON\tPRP\tnsubj\t447\tO\n14\t36\t10\t447\ttook\ttake\t2051\t2055\tVERB\tVBD\tccomp\t441\tO\n14\t36\t11\t448\tthe\tthe\t2056\t2059\tDET\tDT\tdet\t449\tO\n14\t36\t12\t449\ttorch\ttorch\t2060\t2065\tNOUN\tNN\tdobj\t447\tO\n14\t36\t13\t450\t,\t,\t2065\t2066\tPUNCT\t,\tpunct\t447\tO\n14\t36\t14\t451\tand\tand\t2067\t2070\tCCONJ\tCC\tcc\t447\tO\n14\t36\t15\t452\tPriya\tPriya\t2071\t2076\tPROPN\tNNP\tnsubj\t453\tO\n14\t36\t16\t453\tclimbed\tclimb\t2077\t2084\tVERB\tVBD\tconj\t447\tO\n14\t36\t17\t454\tonto\tonto\t2085\t2089\tADP\tIN\tprep\t453\tO\n14\t36\t18\t455\tthe\tthe\t2090\t2093\tDET\tDT\tdet\t457\tO\n14\t36\t19\t456\tbottom\tbottom\t2094\t2100\tADJ\tJJ\tamod\t457\tO\n14\t36\t20\t457\tstep\tstep\t2101\t2105\tNOUN\tNN\tpobj\t454\tO\n14\t36\t21\t458\tof\tof\t2106\t2108\tADP\tIN\tprep\t457\tO\n14\t36\t22\t459\tthe\tthe\t2109\t2112\tDET\tDT\tdet\t461\tO\n14\t36\t23\t460\tkitchen\tkitchen\t2113\t2120\tNOUN\tNN\tcompound\t461\tO\n14\t36\t24\t461\tstool\tstool\t2121\t2126\tNOUN\tNN\tpobj\t458\tO\n14\t36\t25\t462\t.\t.\t2126\t2127\tPUNCT\t.\tpunct\t441\tO\n14\t37\t0\t463\tBeatrice\tBeatrice\t2128\t2136\tPROPN\tNNP\tnsubj\t464\tO\n14\t37\t1\t464\tmoved\tmove\t2137\t2142\tVERB\tVBD\tROOT\t464\tO\n14\t37\t2\t465\tthe\tthe\t2143\t2146\tDET\tDT\tdet\t466\tO\n14\t37\t3\t466\tflour\tflour\t2147\t2152\tNOUN\tNN\tdobj\t464\tO\n14\t37\t4\t467\tsacks\tsack\t2153\t2158\tNOUN\tNNS\tdobj\t464\tO\n14\t37\t5\t468\ttoward\ttoward\t2159\t2165\tADP\tIN\tprep\t467\tO\n14\t37\t6\t469\tthe\tthe\t2166\t2169\tDET\tDT\tdet\t470\tO\n14\t37\t7\t470\toven\toven\t2170\t2174\tNOUN\tNN\tpobj\t468\tO\n14\t37\t8\t471\t.\t.\t2174\t2175\tPUNCT\t.\tpunct\t464\tO\n14\t38\t0\t472\tWhen\twhen\t2176\t2180\tSCONJ\tWRB\tadvmod\t476\tO\n14\t38\t1\t473\tthe\tthe\t2181\t2184\tDET\tDT\tdet\t475\tO\n14\t38\t2\t474\tfirst\tfirst\t2185\t2190\tADJ\tJJ\tamod\t475\tO\n14\t38\t3\t475\tsack\tsack\t2191\t2195\tNOUN\tNN\tnsubj\t476\tO\n14\t38\t4\t476\tproved\tprove\t2196\t2202\tVERB\tVBD\tadvcl\t481\tO\n14\t38\t5\t477\ttoo\ttoo\t2203\t2206\tADV\tRB\tadvmod\t478\tO\n14\t38\t6\t478\theavy\theavy\t2207\t2212\tADJ\tJJ\toprd\t476\tO\n14\t38\t7\t479\t,\t,\t2212\t2213\tPUNCT\t,\tpunct\t481\tO\n14\t38\t8\t480\tTomas\tTomas\t2214\t2219\tPROPN\tNNP\tnsubj\t481\tO\n14\t38\t9\t481\tcaught\tcatch\t2220\t2226\tVERB\tVBD\tROOT\t481\tO\n14\t38\t10\t482\tthe\tthe\t2227\t2230\tDET\tDT\tdet\t484\tO\n14\t38\t11\t483\tother\tother\t2231\t2236\tADJ\tJJ\tamod\t484\tO\n14\t38\t12\t484\tend\tend\t2237\t2240\tNOUN\tNN\tdobj\t481\tO\n14\t38\t13\t485\twithout\twithout\t2241\t2248\tADP\tIN\tprep\t481\tO\n14\t38\t14\t486\twaiting\twait\t2249\t2256\tVERB\tVBG\tpcomp\t485\tO\n14\t38\t15\t487\tto\tto\t2257\t2259\tPART\tTO\taux\t489\tO\n14\t38\t16\t488\tbe\tbe\t2260\t2262\tAUX\tVB\tauxpass\t489\tO\n14\t38\t17\t489\tasked\task\t2263\t2268\tVERB\tVBN\txcomp\t486\tO\n14\t38\t18\t490\t.\t.\t2268\t2269\tPUNCT\t.\tpunct\t481\tO\n14\t39\t0\t491\tAbove\tabove\t2270\t2275\tADP\tIN\tprep\t496\tO\n14\t39\t1\t492\tthem\tthey\t2276\t2280\tPRON\tPRP\tpobj\t491\tO\n14\t39\t2\t493\t,\t,\t2280\t2281\tPUNCT\t,\tpunct\t496\tO\n14\t39\t3\t494\tthe\tthe\t2282\t2285\tDET\tDT\tdet\t495\tO\n14\t39\t4\t495\tpatch\tpatch\t2286\t2291\tNOUN\tNN\tnsubj\t496\tO\n14\t39\t5\t496\tspread\tspread\t2292\t2298\tVERB\tVBD\tROOT\t496\tO\n14\t39\t6\t497\tpast\tpast\t2299\t2303\tADP\tIN\tprep\t496\tO\n14\t39\t7\t498\tthe\tthe\t2304\t2307\tDET\tDT\tdet\t499\tO\n14\t39\t8\t499\tedge\tedge\t2308\t2312\tNOUN\tNN\tpobj\t497\tO\n14\t39\t9\t500\tof\tof\t2313\t2315\tADP\tIN\tprep\t499\tO\n14\t39\t10\t501\tthe\tthe\t2316\t2319\tDET\tDT\tdet\t502\tO\n14\t39\t11\t502\tpanel\tpanel\t2320\t2325\tNOUN\tNN\tpobj\t500\tO\n14\t39\t12\t503\t.\t.\t2325\t2326\tPUNCT\t.\tpunct\t496\tO\n",
+        "entities": "COREF\tstart_token\tend_token\tprop\tcat\ttext\n5\t0\t1\tNOM\tFAC\tThe bakery\n0\t19\t19\tPROP\tPER\tBeatrice\n0\t31\t31\tPRON\tPER\ther\n0\t43\t43\tPRON\tPER\ther\n1\t48\t48\tPROP\tPER\tAda\n14\t65\t65\tPRON\tPER\twe\n0\t71\t71\tPRON\tPER\tshe\n2\t74\t74\tPROP\tPER\tLeon\n2\t83\t83\tPRON\tPER\tHe\n2\t88\t88\tPRON\tPER\this\n0\t110\t110\tPROP\tPER\tBea\n0\t112\t112\tPRON\tPER\tYour\n2\t118\t118\tPRON\tPER\tHe\n0\t124\t124\tPROP\tPER\tBeatrice\n0\t126\t126\tPRON\tPER\ther\n3\t138\t138\tPROP\tPER\tPriya\n6\t142\t142\tPRON\tPER\ttheir\n6\t145\t145\tPRON\tPER\tThey\n3\t186\t186\tPROP\tPER\tPriya\n15\t200\t201\tNOM\tFAC\tthe building\n0\t204\t204\tPROP\tPER\tBeatrice\n7\t207\t208\tNOM\tFAC\tthe stairs\n8\t210\t212\tNOM\tPER\tThe upstairs tenant\n9\t221\t225\tNOM\tFAC\tthe room directly above them\n6\t225\t225\tPRON\tPER\tthem\n0\t231\t231\tPRON\tPER\tI\n0\t236\t236\tPRON\tPER\tI\n4\t254\t254\tPROP\tPER\tTomas\n4\t264\t264\tPRON\tPER\this\n2\t270\t270\tPROP\tPER\tLeon\n4\t293\t293\tPROP\tPER\tTomas\n4\t296\t296\tPRON\tPER\tHe\n7\t312\t313\tNOM\tFAC\tthe stairs\n0\t321\t321\tPROP\tPER\tBeatrice\n0\t329\t329\tPRON\tPER\tShe\n0\t337\t337\tPRON\tPER\tI\n2\t339\t339\tPRON\tPER\tyou\n17\t344\t345\tNOM\tFAC\tthe storeroom\n4\t348\t348\tPROP\tPER\tTomas\n4\t357\t357\tPRON\tPER\tI\n0\t362\t362\tPRON\tPER\tyour\n0\t367\t367\tPRON\tPER\tMy\n18\t371\t373\tNOM\tFAC\tthe repair shop\n0\t376\t376\tPRON\tPER\tshe\n0\t379\t379\tPRON\tPER\tHer\n2\t386\t386\tPROP\tPER\tLeon\n3\t394\t394\tPROP\tPER\tPriya\n10\t413\t413\tNOM\tPER\teveryone\n11\t417\t417\tPRON\tPER\tThey\n12\t420\t421\tNOM\tPER\tthe others\n11\t427\t427\tPRON\tPER\tWe\n2\t437\t437\tPROP\tPER\tLeon\n2\t440\t440\tPRON\tPER\tyou\n2\t446\t446\tPRON\tPER\tHe\n3\t452\t452\tPROP\tPER\tPriya\n13\t460\t461\tNOM\tFAC\tkitchen stool\n0\t463\t463\tPROP\tPER\tBeatrice\n4\t480\t480\tPROP\tPER\tTomas\n11\t492\t492\tPRON\tPER\tthem\n",
+        "quotes": "quote_start\tquote_end\tmention_start\tmention_end\tmention_phrase\tchar_id\tquote\n57\t70\t19\t19\tBeatrice\t0\t\" If this gets into the flour , we close tomorrow too , \"\n104\t117\t74\t74\tLeon\t2\t\" Put the tin here , Bea . Your arms are shaking . \"\n176\t185\t186\t186\tPriya\t3\t\" There 's a space above that panel , \"\n189\t203\t186\t186\tPriya\t3\t\" The water could be coming from the other end of the building . \"\n230\t245\t19\t19\tBeatrice\t0\t\" I checked the window before I came down . The floor was dry . \"\n283\t292\t293\t293\tTomas\t4\t\" Do n't put that under the leak , \"\n305\t320\t293\t293\tTomas\t4\t\" It 's for the window on the stairs . The glass is out . \"\n336\t347\t19\t19\tBeatrice\t0\t\" I thought you meant the one in the storeroom . \"\n356\t365\t293\t293\tTomas\t4\t\" I left a note on your bicycle . \"\n366\t375\t19\t19\tBeatrice\t0\t\" My bicycle is at the repair shop , \"\n426\t445\t186\t186\tPriya\t3\t\" We can argue about bicycles when the water stops . Leon , can you hold the light ? \"\n",
+        "book": "{\"characters\": [{\"agent\": [{\"w\": \"stood\", \"i\": 20}, {\"w\": \"said\", \"i\": 72}, {\"w\": \"lowered\", \"i\": 125}, {\"w\": \"looked\", \"i\": 205}, {\"w\": \"checked\", \"i\": 232}, {\"w\": \"came\", \"i\": 237}, {\"w\": \"put\", \"i\": 322}, {\"w\": \"checked\", \"i\": 331}, {\"w\": \"thought\", \"i\": 338}, {\"w\": \"said\", \"i\": 377}, {\"w\": \"moved\", \"i\": 464}], \"patient\": [], \"mod\": [], \"poss\": [{\"w\": \"chest\", \"i\": 32}, {\"w\": \"blink\", \"i\": 44}, {\"w\": \"arms\", \"i\": 113}, {\"w\": \"burden\", \"i\": 127}, {\"w\": \"bicycle\", \"i\": 363}, {\"w\": \"bicycle\", \"i\": 368}, {\"w\": \"voice\", \"i\": 380}], \"id\": 0, \"g\": {\"inference\": {\"he/him/his\": 0.069, \"she/her\": 0.677, \"they/them/their\": 0.227, \"xe/xem/xyr/xir\": 0.013, \"ze/zem/zir/hir\": 0.013}, \"argmax\": \"she/her\", \"max\": 0.677, \"total\": 15.072}, \"count\": 19, \"mentions\": {\"proper\": [{\"c\": 5, \"n\": \"Beatrice\"}, {\"c\": 1, \"n\": \"Bea\"}], \"common\": [], \"pronoun\": [{\"c\": 3, \"n\": \"her\"}, {\"c\": 3, \"n\": \"I\"}, {\"c\": 2, \"n\": \"she\"}, {\"c\": 1, \"n\": \"Your\"}, {\"c\": 1, \"n\": \"She\"}, {\"c\": 1, \"n\": \"your\"}, {\"c\": 1, \"n\": \"My\"}, {\"c\": 1, \"n\": \"Her\"}]}}, {\"agent\": [{\"w\": \"pushed\", \"i\": 75}, {\"w\": \"taken\", \"i\": 86}, {\"w\": \"held\", \"i\": 119}, {\"w\": \"reached\", \"i\": 271}, {\"w\": \"meant\", \"i\": 340}, {\"w\": \"stopped\", \"i\": 387}, {\"w\": \"hold\", \"i\": 441}, {\"w\": \"took\", \"i\": 447}, {\"w\": \"climbed\", \"i\": 453}], \"patient\": [], \"mod\": [], \"poss\": [{\"w\": \"coat\", \"i\": 90}], \"id\": 2, \"g\": {\"inference\": {\"he/him/his\": 0.708, \"she/her\": 0.102, \"they/them/their\": 0.134, \"xe/xem/xyr/xir\": 0.028, \"ze/zem/zir/hir\": 0.028}, \"argmax\": \"he/him/his\", \"max\": 0.708, \"total\": 14.815}, \"count\": 10, \"mentions\": {\"proper\": [{\"c\": 4, \"n\": \"Leon\"}], \"common\": [], \"pronoun\": [{\"c\": 3, \"n\": \"He\"}, {\"c\": 2, \"n\": \"you\"}, {\"c\": 1, \"n\": \"his\"}]}}, {\"agent\": [{\"w\": \"entered\", \"i\": 255}, {\"w\": \"said\", \"i\": 294}, {\"w\": \"tilted\", \"i\": 297}, {\"w\": \"rested\", \"i\": 349}, {\"w\": \"left\", \"i\": 358}, {\"w\": \"caught\", \"i\": 481}], \"patient\": [], \"mod\": [], \"poss\": [{\"w\": \"heel\", \"i\": 265}], \"id\": 4, \"g\": {\"inference\": {\"he/him/his\": 0.497, \"she/her\": 0.229, \"they/them/their\": 0.231, \"xe/xem/xyr/xir\": 0.021, \"ze/zem/zir/hir\": 0.021}, \"argmax\": \"he/him/his\", \"max\": 0.497, \"total\": 17.715}, \"count\": 7, \"mentions\": {\"proper\": [{\"c\": 4, \"n\": \"Tomas\"}], \"common\": [], \"pronoun\": [{\"c\": 1, \"n\": \"his\"}, {\"c\": 1, \"n\": \"He\"}, {\"c\": 1, \"n\": \"I\"}]}}, {\"agent\": [{\"w\": \"shook\", \"i\": 139}, {\"w\": \"said\", \"i\": 187}, {\"w\": \"took\", \"i\": 395}, {\"w\": \"aimed\", \"i\": 402}, {\"w\": \"climbed\", \"i\": 453}], \"patient\": [], \"mod\": [], \"poss\": [], \"id\": 3, \"g\": {\"inference\": {\"he/him/his\": 0.042, \"she/her\": 0.042, \"they/them/their\": 0.832, \"xe/xem/xyr/xir\": 0.042, \"ze/zem/zir/hir\": 0.042}, \"argmax\": \"they/them/their\", \"max\": 0.832, \"total\": 2.388}, \"count\": 4, \"mentions\": {\"proper\": [{\"c\": 4, \"n\": \"Priya\"}], \"common\": [], \"pronoun\": []}}, {\"agent\": [{\"w\": \"set\", \"i\": 146}, {\"w\": \"listened\", \"i\": 155}], \"patient\": [], \"mod\": [], \"poss\": [{\"w\": \"sleeves\", \"i\": 143}], \"id\": 6, \"g\": {\"inference\": {\"he/him/his\": 0, \"she/her\": 0, \"they/them/their\": 1.0, \"xe/xem/xyr/xir\": 0, \"ze/zem/zir/hir\": 0}, \"argmax\": \"they/them/their\", \"max\": 1.0, \"total\": 3}, \"count\": 3, \"mentions\": {\"proper\": [], \"common\": [], \"pronoun\": [{\"c\": 1, \"n\": \"their\"}, {\"c\": 1, \"n\": \"They\"}, {\"c\": 1, \"n\": \"them\"}]}}, {\"agent\": [{\"w\": \"waited\", \"i\": 418}, {\"w\": \"argue\", \"i\": 429}], \"patient\": [], \"mod\": [], \"poss\": [], \"id\": 11, \"g\": {\"inference\": {\"he/him/his\": 0, \"she/her\": 0, \"they/them/their\": 1.0, \"xe/xem/xyr/xir\": 0, \"ze/zem/zir/hir\": 0}, \"argmax\": \"they/them/their\", \"max\": 1.0, \"total\": 2}, \"count\": 3, \"mentions\": {\"proper\": [], \"common\": [], \"pronoun\": [{\"c\": 1, \"n\": \"They\"}, {\"c\": 1, \"n\": \"We\"}, {\"c\": 1, \"n\": \"them\"}]}}]}"
+      }
+    }
+  }
+}

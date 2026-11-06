@@ -164,11 +164,16 @@ cancelled stage is removed. Multi-process writers to the same book are not quali
 input; v1–v3 readers remain supported. Explicit export collects committed records for
 the current source and merges embedded records, and rejects duplicate or nonmatching
 window text on import. A copied artifact can restore a saved window without model
-assets or a provider runtime. This is candidate evidence persistence, not neural
-speaker-route promotion or portable rendered audio. Whole portable decoding/export
-still materializes the book graph on a worker; it is not a paged container. An imported
-book currently offers its first compatible saved window for diagnostic restoration;
-all records survive re-export, but playback-indexed neural coverage is future work.
+assets or a provider runtime. Whole portable decoding/export still materializes the
+book graph on a worker; it is not a paged container or portable rendered audio.
+S2 selects analysis windows at the playback position in imported books, including
+forward/backward jumps. Both legacy newline and paragraph-context-v2 records are
+validated against their corresponding source layout and retained on re-export;
+different policy/text does not reuse an incompatible result. The same supervisor
+awaits isolate-owned Character projection after persistence, then current-owner
+admission can refine future routes through the existing Character aggregate.
+See [character integration](character-dialogue-attribution-and-voice-casting.md#experimental-local-neural-provider)
+for scope, precedence and evidence limits.
 
 The book owns semantic content anchors independently of a voice rendition. Shared
 continuous-period integration, explicit temporal referents, rendition alignment and
