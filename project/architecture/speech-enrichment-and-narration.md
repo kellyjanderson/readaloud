@@ -40,8 +40,10 @@ turns, preserving the library's within-call context. It is not yet integrated
 into app playback and does not establish general identity continuity. The
 canonical fixture `test/fixtures/s3_whisper_shout_scene.json` separately tests
 Mira's whispered warning followed by Mara's shouted reply; its explicit delivery
-intent is separate from content text. Its direct-native recording awaits human
-delivery acceptance. Exact recordings/settings and retained failures are linked
+intent is separate from content text. The user also accepted that direct-native
+recording's whisper/shout contrast and recognizable voices. Both positive
+judgments apply to these diagnostic samples; running-app integration and
+acceptance remain open. Exact recordings/settings and retained failures are linked
 from [S3](https://github.com/kellyjanderson/readaloud/issues/111).
 `test/fish_delivery_test.dart` covers isolated scope, worker transport, stale
 model/revision rejection and partial/conflicting fallback. The native smoke
