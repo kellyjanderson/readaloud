@@ -1,0 +1,13 @@
+{
+  "schema": 1,
+  "title": "Sisters: whispered warning and shouted reply",
+  "turns": [
+    {"speaker": "Narrator", "voice": "library_fishadrian", "delivery": "neutral", "text": "The hallway was dark and quiet. Mira said,"},
+    {"speaker": "Mira", "voice": "library_fishsarah", "delivery": "whispered", "text": "\"Stay close and keep your voice down.\""},
+    {"speaker": "Narrator", "voice": "library_fishadrian", "delivery": "neutral", "text": "Mara said,"},
+    {"speaker": "Mara", "voice": "library_fishsophia", "delivery": "shouted", "text": "\"I can hear footsteps behind that door!\""},
+    {"speaker": "Narrator", "voice": "library_fishadrian", "delivery": "neutral", "text": "Mira said,"},
+    {"speaker": "Mira", "voice": "library_fishsarah", "delivery": "neutral", "text": "\"Wait until they pass.\""},
+    {"speaker": "Narrator", "voice": "library_fishadrian", "delivery": "neutral", "text": "The door closed softly. They waited together until the final bell rang."}
+  ]
+}

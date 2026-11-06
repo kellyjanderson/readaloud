@@ -182,7 +182,9 @@ delivery types and untested variants remain preserved with unsupported fallback.
 The November 5 S3 listening check found expressive delivery but failed perceived
 Character continuity: Mara sounded like a different person between her whispered
 and ordinary turns. Matching selected reference IDs does not satisfy this gate.
-Audible quality remains unqualified. Unchanged raw speech is reused across
+A subsequent direct-native scene sample passed the user's same-person listening
+check. Scene synthesis is not yet integrated into app playback, so the app's
+identity gate remains open. Unchanged raw speech is reused across
 seek/replay; join corrections have their own cache identity.
 
 A supervised child process loads one model and handles one

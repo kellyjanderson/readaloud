@@ -32,7 +32,17 @@ whisper quality, perceived identity or broad expressive-reading acceptance.
 The November 5 S3 human listening check found expressive delivery but rejected
 Mara's perceived identity continuity between whispered and ordinary turns. The
 selected reference remained Sophia in both turns; correct routing did not make
-the resulting voice recognizable as one person. This acceptance gate has failed.
+the resulting voice recognizable as one person. This running-app acceptance gate
+remains failed. A subsequent direct-native tagged-scene diagnostic received a
+positive human judgment: Mara's whispered and ordinary turns sounded like the
+same person. That diagnostic uses one native generation call with the ordered
+turns, preserving the library's within-call context. It is not yet integrated
+into app playback and does not establish general identity continuity. The
+canonical fixture `test/fixtures/s3_whisper_shout_scene.json` separately tests
+Mira's whispered warning followed by Mara's shouted reply; its explicit delivery
+intent is separate from content text. Its direct-native recording awaits human
+delivery acceptance. Exact recordings/settings and retained failures are linked
+from [S3](https://github.com/kellyjanderson/readaloud/issues/111).
 `test/fish_delivery_test.dart` covers isolated scope, worker transport, stale
 model/revision rejection and partial/conflicting fallback. The native smoke
 fixture `test/fixtures/s3_dialogue.txt` supplies narrator/A/B/A turns and an ending.
