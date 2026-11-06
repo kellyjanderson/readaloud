@@ -3,12 +3,14 @@ import 'dart:convert';
 import 'package:crypto/crypto.dart' as crypto;
 
 import '../models/narration_state.dart';
+import '../models/engine_capability.dart';
 import '../models/pronunciation_artifact.dart';
 import '../models/speech_annotation.dart';
 import '../models/speech_document.dart';
 import '../models/tts_artifact.dart';
 import '../models/voice_session_realization.dart';
 import 'pronunciation_rule_module.dart';
+import 'speech_adjustment_registry.dart';
 
 class VoiceSessionRealizationService {
   const VoiceSessionRealizationService();
@@ -89,7 +91,12 @@ class VoiceSessionRealizationService {
       final segmentPerformanceIntents = segmentAnnotations
           .where((annotation) => annotation.isPerformanceIntent)
           .map(
-            (annotation) => RealizedPerformanceIntent(annotation: annotation),
+            (annotation) => _realizePerformanceIntent(
+              annotation,
+              segment,
+              segmentAnnotations,
+              input.engineId,
+            ),
           )
           .toList(growable: false);
       performanceIntents.addAll(segmentPerformanceIntents);
@@ -162,6 +169,44 @@ class VoiceSessionRealizationService {
       ttsArtifactSet: ttsArtifactSet,
     );
   }
+}
+
+RealizedPerformanceIntent _realizePerformanceIntent(
+  SpeechAnnotation annotation,
+  SpeechSegment segment,
+  List<SpeechAnnotation> annotations,
+  String engineId,
+) {
+  // Scoped natural-language controls have no verified reset token. Only lower
+  // one unambiguous whole-segment whisper, and keep it in its own model call.
+  // Partial/conflicting intent and other deliveries remain canonical metadata.
+  if (engineId != 'fish_drama3' ||
+      annotation.deliveryIntent != DeliveryIntent.whispered ||
+      annotation.startWord != 0 ||
+      annotation.endWord != segment.wordCount ||
+      annotations
+              .where((a) => a.kind == SpeechAnnotationKind.deliveryIntent)
+              .length !=
+          1) {
+    return RealizedPerformanceIntent(annotation: annotation);
+  }
+  final decision = const SpeechAdjustmentRegistry().resolve(
+    context: const SpeechAdjustmentContext.engineModel(
+      'fish-drama3.whispered',
+      '1',
+    ),
+    target: const EngineCapabilityRegistry()
+        .lookup(engineId: engineId)
+        .modelContext,
+    domain: SpeechAdjustmentDomain.delivery,
+    payloadType: 'inline_delivery_cue',
+    payloadValue: '[whispers]',
+  );
+  return RealizedPerformanceIntent(
+    annotation: annotation,
+    engineControl: decision.allowed ? '[whispers]' : null,
+    adjustmentDecision: Map.unmodifiable(decision.toMap()),
+  );
 }
 
 List<RealizedBoundaryIntent> _realizeBoundaryIntents({

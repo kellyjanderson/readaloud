@@ -105,7 +105,6 @@ class EngineCapabilityRegistry {
       case 'qwen3_tts_base_1_7b':
       case 'qwen3_tts_1_7b':
       case 'voxtral_4b':
-      case 'fish_drama3':
       case 'fish_drama3_8bit':
       case 'fish_drama3_4bit':
       case 'moss_tts_8b':
@@ -118,6 +117,22 @@ class EngineCapabilityRegistry {
           platformFamily: resolvedPlatformFamily,
           capabilityVersion: capabilityVersion,
           directRepresentationTypes: const <String>{},
+          approximableRepresentationTypes: const <String>{
+            'normalized_spoken_text',
+          },
+          supportsPlainTextFallback: true,
+        );
+      case 'fish_drama3':
+        return EngineCapabilityProfile(
+          capabilityProfileId:
+              '$engineId:$resolvedPlatformFamily:$capabilityVersion',
+          engineId: engineId,
+          modelId: modelId ?? 'mlx-community/fish-audio-drama-3-bf16',
+          modelRevision:
+              modelRevision ?? '8c5496f9af370bb9342ab98130b27b5389d1b1cb',
+          platformFamily: resolvedPlatformFamily,
+          capabilityVersion: capabilityVersion,
+          directRepresentationTypes: const <String>{'inline_delivery_cue'},
           approximableRepresentationTypes: const <String>{
             'normalized_spoken_text',
           },

@@ -11,8 +11,12 @@ import 'package:just_audio/just_audio.dart';
 import 'package:read_aloud/src/app.dart';
 import 'package:read_aloud/src/controllers/reader_controller.dart';
 import 'package:read_aloud/src/services/kokoro_tts_engine.dart';
+import 'package:read_aloud/src/services/playback_instrumentation_service.dart';
 import 'package:read_aloud/src/models/spoken_chunk_record.dart';
 import 'package:read_aloud/src/models/voice_profile.dart';
+import 'package:read_aloud/src/models/reader_document.dart';
+import 'package:read_aloud/src/models/speech_annotation.dart';
+import 'package:read_aloud/src/services/base_speech_annotation_inference_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 class SmokeController extends ReaderController {
@@ -31,6 +35,10 @@ Future<void> main(List<String> args) async {
   // ignore: invalid_use_of_visible_for_testing_member
   SharedPreferences.setMockInitialValues({});
   if (args.length != 2) exit(2);
+  final metrics = File('${args[1]}.metrics.jsonl').openWrite();
+  PlaybackInstrumentationService.instance.observer = (record) {
+    metrics.writeln(jsonEncode(record.toMap()));
+  };
   final player = AudioPlayer(useLazyPreparation: false);
   final bits =
       int.tryParse(
@@ -54,6 +62,13 @@ Future<void> main(List<String> args) async {
     }
   });
   final watch = Stopwatch()..start();
+  var lastUiTick = watch.elapsedMilliseconds;
+  var maxUiDelayMs = 0;
+  final uiHeartbeat = Timer.periodic(const Duration(milliseconds: 50), (_) {
+    final now = watch.elapsedMilliseconds;
+    maxUiDelayMs = math.max(maxUiDelayMs, now - lastUiTick - 50);
+    lastUiTick = now;
+  });
   final receipt = <String, Object?>{
     'engine': args[0],
     'bits': bits,
@@ -108,6 +123,53 @@ Future<void> main(List<String> args) async {
                 'Anna waved from the shore. "Come back soon," she called. '
                 '"I will," Ben replied. The sun shone on the water.',
       );
+    }
+    final whisperText = Platform.environment['READALOUD_SMOKE_WHISPER_TEXT'];
+    if (whisperText != null) {
+      final source = controller.document;
+      final segment = source.speechDocument.segments.singleWhere(
+        (s) => s.normalizedText.contains(whisperText),
+      );
+      final annotations = const BaseSpeechAnnotationInferenceService().infer(
+        speechDocument: source.speechDocument,
+        displayDocument: source.displayDocument,
+        explicitIntents: [
+          SpeechAnnotation(
+            annotationId: 's3_explicit_whisper',
+            segmentId: segment.segmentId,
+            kind: SpeechAnnotationKind.deliveryIntent,
+            startWord: 0,
+            endWord: segment.wordCount,
+            confidence: 1,
+            source: SpeechAnnotationSource.userOverride,
+            deliveryIntent: DeliveryIntent.whispered,
+          ),
+        ],
+      );
+      await controller.loadDocument(
+        ReaderDocument.fromNormalized(
+          title: source.title,
+          type: source.type,
+          normalizedImportResult: source.normalizedImportResult,
+          baseSpeechAnnotations: annotations,
+          dialogueAttributions: source.dialogueAttributions,
+          characterCastRegistry: source.characterCastRegistry,
+          documentVoiceAttribution: source.documentVoiceAttribution,
+          basePronunciationArtifacts: source.basePronunciationArtifacts,
+        ),
+      );
+      receipt['explicitWhisperSegment'] = segment.segmentId;
+    }
+    final castVoices = Platform.environment['READALOUD_SMOKE_CAST_VOICES'];
+    if (castVoices != null) {
+      for (final entry in (jsonDecode(castVoices) as Map).entries) {
+        final character = controller.characterCastRegistry.characterEntries
+            .singleWhere((c) => c.displayLabel == entry.key);
+        await controller.assignVoiceToCast(
+          character.castId,
+          entry.value as String,
+        );
+      }
     }
     receipt['documentWords'] = controller.document.wordCount;
     receipt['characters'] = controller.document.characterCastRegistry.entries
@@ -262,8 +324,13 @@ Future<void> main(List<String> args) async {
     var lastIndex = player.currentIndex;
     var lastAdvance = watch.elapsedMilliseconds;
     var maxStallMs = 0;
+    var reachedEnd = false;
     while (watch.elapsedMilliseconds < soakEnd) {
       await Future<void>.delayed(const Duration(milliseconds: 50));
+      if (controller.playbackState.name == 'completed') {
+        reachedEnd = true;
+        break;
+      }
       if (player.position != lastPosition || player.currentIndex != lastIndex) {
         lastPosition = player.position;
         lastIndex = player.currentIndex;
@@ -279,6 +346,7 @@ Future<void> main(List<String> args) async {
       }
     }
     receipt['soakSeconds'] = soakSeconds;
+    receipt['reachedDocumentEnd'] = reachedEnd;
     receipt['playbackState'] = controller.playbackState.name;
     receipt['cast'] = controller.characterCastRegistry.characterEntries.map((
       entry,
@@ -309,6 +377,38 @@ Future<void> main(List<String> args) async {
           },
         )
         .toList();
+    if (Platform.environment['READALOUD_SMOKE_REQUIRE_END'] == '1') {
+      final chunks = controller.spokenChunkRecords;
+      if (!reachedEnd ||
+          chunks.isEmpty ||
+          !chunks.last.completed ||
+          chunks.last.endWordIndex != controller.document.wordCount) {
+        throw StateError('Playback did not reach the final source word.');
+      }
+      var nextWord = 0;
+      for (final chunk in chunks) {
+        if (!chunk.completed || chunk.startWordIndex != nextWord) {
+          throw StateError('Missing, repeated or incomplete source span.');
+        }
+        nextWord = chunk.endWordIndex;
+      }
+    }
+    final expectedCast =
+        Platform.environment['READALOUD_SMOKE_EXPECT_CAST_SEQUENCE'];
+    if (expectedCast != null) {
+      final actual = controller.spokenChunkRecords
+          .where((c) => c.castId != null && c.castId != 'cast_narrator')
+          .map(
+            (c) => controller.characterCastRegistry
+                .forCastId(c.castId!)!
+                .displayLabel,
+          )
+          .toList();
+      if (jsonEncode(actual) != jsonEncode(expectedCast.split(','))) {
+        throw StateError('Dialogue cast order differs: $actual');
+      }
+      receipt['dialogueCastOrder'] = actual;
+    }
     if (multiVoice) {
       final mismatches = (receipt['cast']! as List).where(
         (entry) =>
@@ -419,10 +519,56 @@ Future<void> main(List<String> args) async {
     if (soakSeconds > 0 && maxStallMs > 1000) {
       throw StateError('Native playback stalled for $maxStallMs ms');
     }
+    if (Platform.environment['READALOUD_SMOKE_TRANSPORT'] == '1') {
+      final transport = <String, Object?>{};
+      receipt['transport'] = transport;
+      Future<int> waitForNativeAudio() async {
+        final began = watch.elapsedMilliseconds;
+        while (!player.playing || player.position.inMilliseconds < 500) {
+          if (watch.elapsedMilliseconds - began > 120000 ||
+              controller.playbackState == ReaderPlaybackPrimaryState.failed) {
+            throw StateError(
+              'Transport did not reach native audio: ${controller.statusMessage}',
+            );
+          }
+          await Future<void>.delayed(const Duration(milliseconds: 25));
+        }
+        return watch.elapsedMilliseconds - began;
+      }
+
+      await controller.jumpBySeconds(-10000);
+      await controller.startPlayback().timeout(const Duration(minutes: 2));
+      transport['restartToNativeMs'] = await waitForNativeAudio();
+      final pauseStarted = watch.elapsedMilliseconds;
+      await controller.pausePlayback();
+      transport['pauseMs'] = watch.elapsedMilliseconds - pauseStarted;
+      final pausedPosition = player.position;
+      await Future<void>.delayed(const Duration(milliseconds: 500));
+      if (player.playing || player.position != pausedPosition) {
+        throw StateError('Native playback advanced after Pause completed');
+      }
+      await controller.jumpBySeconds(5);
+      transport['seekWord'] = controller.currentWordIndex;
+      await controller.startPlayback().timeout(const Duration(minutes: 2));
+      transport['seekToNativeMs'] = await waitForNativeAudio();
+      await controller.pausePlayback();
+      // A pending Play immediately superseded by Pause must not start later.
+      final pending = controller.startPlayback();
+      await controller.pausePlayback();
+      await pending.timeout(const Duration(seconds: 20));
+      await Future<void>.delayed(const Duration(seconds: 1));
+      if (player.playing || controller.isPlaying) {
+        throw StateError('Cancelled pending Play triggered stale speech');
+      }
+      transport['cancelledPlayStayedSilent'] = true;
+    }
     passed = true;
   } catch (error, stack) {
     receipt.addAll({'passed': false, 'error': '$error', 'stack': '$stack'});
   } finally {
+    receipt['peakAppAndWorkerFootprintBytes'] = engine.debugPeakMlxRuntimeBytes;
+    receipt['maxUiEventLoopDelayMs'] = maxUiDelayMs;
+    receipt['totalProbeMs'] = watch.elapsedMilliseconds;
     receipt['audioPaths'] = paths.toList();
     receipt['tracePath'] = controller.ttsDebugTraceLogPath;
     await controller.pausePlayback();
@@ -431,6 +577,9 @@ Future<void> main(List<String> args) async {
     await subscription.cancel();
     controller.removeListener(observePreparation);
     controller.dispose();
+    uiHeartbeat.cancel();
+    PlaybackInstrumentationService.instance.observer = null;
+    await metrics.close();
     final file = File(args[1]);
     await file.parent.create(recursive: true);
     await file.writeAsString(

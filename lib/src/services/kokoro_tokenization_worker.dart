@@ -409,6 +409,7 @@ List<TtsArtifactSegment> _freezeSegments(List<TtsArtifactSegment> segments) =>
         TtsArtifactSegment(
           segmentId: segment.segmentId,
           speakText: segment.speakText,
+          performanceIntents: List.unmodifiable(segment.performanceIntents),
           pronunciationArtifacts: List.unmodifiable([
             for (final artifact in segment.pronunciationArtifacts)
               RealizedPronunciationArtifact(

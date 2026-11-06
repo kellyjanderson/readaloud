@@ -13,6 +13,26 @@ Speaker attribution and character casting are implemented upstream during import
 
 ## Source and tests
 
+Fish Drama 3 bf16 has a narrowly registered delivery adapter for an explicit,
+unambiguous whole-segment `whispered` intent. The pinned model context lowers it
+to `[whispers]`; the planning worker isolates that segment in its own synthesis
+request so the cue cannot spill into a following ordinary segment. Tokenization
+retains canonical content tokens and source ranges, while its captured model
+context revalidates the cue before producing native speak text. That text enters
+the existing audio cache identity. The model's own reference conditioning remains
+responsible for acoustic voice identity; no duplicate tensor/history cache was
+introduced. Partial/conflicting directions, other delivery/inflection types and
+untested model variants retain canonical metadata with explicit unsupported
+fallback. Parser punctuation and speech tags still do not invent intent.
+
+The adapter uses the installed MLX Audio 0.6.3 Drama interface, which documents
+inline delivery cues. Unit/worker and running-app checks establish cue routing,
+source coverage and selected-reference continuity. They do not establish audible
+whisper quality, perceived identity or broad expressive-reading acceptance.
+`test/fish_delivery_test.dart` covers isolated scope, worker transport, stale
+model/revision rejection and partial/conflicting fallback. The native smoke
+fixture `test/fixtures/s3_dialogue.txt` supplies narrator/A/B/A turns and an ending.
+
 - [base_speech_annotation_inference_service.dart](../../lib/src/services/base_speech_annotation_inference_service.dart)
 - [speech_annotation.dart](../../lib/src/models/speech_annotation.dart)
 - [narration_state.dart](../../lib/src/models/narration_state.dart)

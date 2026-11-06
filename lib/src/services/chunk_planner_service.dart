@@ -126,6 +126,12 @@ _BuiltChunk _buildChunk({
       speechSegment: segment,
       ttsArtifactSet: ttsArtifactSet,
     );
+    if (collectedSegments.isNotEmpty &&
+        ttsSegment.performanceIntents.any(
+          (intent) => intent.engineControl != null,
+        )) {
+      break;
+    }
     final candidateWordCount = wordCount + segment.wordCount;
     final wouldExceedHardCap =
         collectedSegments.isNotEmpty &&
@@ -139,6 +145,11 @@ _BuiltChunk _buildChunk({
     wordCount = candidateWordCount;
     routingContext ??= segmentRoutingContext;
     cursor += 1;
+    if (ttsSegment.performanceIntents.any(
+      (intent) => intent.engineControl != null,
+    )) {
+      break;
+    }
 
     final nextSegment = cursor < speechDocument.segments.length
         ? speechDocument.segments[cursor]

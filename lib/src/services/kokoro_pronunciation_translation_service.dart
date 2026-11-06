@@ -163,7 +163,37 @@ class KokoroPronunciationTranslationService {
           ),
         );
       }
-      translatedSegments.add(translation.speakText);
+      final controls = segment.performanceIntents
+          .where((intent) {
+            // Revalidate at the captured target: reusing a realization for a
+            // different model/revision must never leak an inline direction.
+            return intent.engineControl == '[whispers]' &&
+                const SpeechAdjustmentRegistry()
+                    .resolve(
+                      context: const SpeechAdjustmentContext.engineModel(
+                        'fish-drama3.whispered',
+                        '1',
+                      ),
+                      target: activeCapability.modelContext,
+                      domain: SpeechAdjustmentDomain.delivery,
+                      payloadType: 'inline_delivery_cue',
+                      payloadValue: intent.engineControl!,
+                    )
+                    .allowed;
+          })
+          .map((intent) => intent.engineControl)
+          .whereType<String>();
+      // Payload tokens and source spans remain ordinary content. The native
+      // Fish adapter alone consumes these declared model-specific controls.
+      translatedSegments.add(
+        [
+          if (activeCapability.supportsDirectRepresentation(
+            'inline_delivery_cue',
+          ))
+            ...controls,
+          translation.speakText,
+        ].join(' '),
+      );
       payloadUnits.addAll(translation.payloadUnits);
       translatedArtifacts.addAll(translation.pronunciationArtifacts);
       missingFallbackWordCount += translation.missingFallbackWordCount;

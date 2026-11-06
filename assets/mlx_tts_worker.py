@@ -455,6 +455,9 @@ def _synthesize(request: dict[str, Any]) -> dict[str, Any]:
         pcm = (np.clip(audio, -1.0, 1.0) * 32767).astype('<i2')
         wav.writeframes(pcm.tobytes())
         raw.flush()
+        if wav.getnframes() == len(pcm):
+            _progress('First native audio packet rendered', stage='firstAudioPacket',
+                      completed=len(pcm), unit='frames')
 
     try:
         try:

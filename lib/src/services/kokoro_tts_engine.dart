@@ -72,6 +72,10 @@ class KokoroTtsEngine
   late final _playbackPins = KokoroPlaybackArtifactPins(_artifactPins);
   String _synthesisIdentity = 'uninitialized';
   int get debugPlaybackPinCount => _playbackPins.length;
+  int? get debugPeakMlxRuntimeBytes =>
+      (_resourceProcessor is MlxSpeechWorkerChunkProcessor)
+      ? (_resourceProcessor! as MlxSpeechWorkerChunkProcessor).peakRuntimeBytes
+      : null;
   Duration get debugPlayableBufferedLead => _playableBufferedLeadTime();
   Duration? get debugCurrentChunkDuration =>
       _activeChunks.isEmpty || _currentChunkIndex >= _activeChunks.length
@@ -1811,6 +1815,15 @@ class KokoroTtsEngine
         }
         _emitBufferingActivity();
       case SpeechRuntimeEventType.chunkStageChanged:
+        _recordMetric(
+          'chunkStageChanged',
+          chunkId: event.chunkId,
+          voiceId: event.voiceId,
+          value: <String, Object?>{
+            'stage': event.stage,
+            'elapsedMillis': event.elapsedMillis,
+          },
+        );
         _emitBufferingActivity();
       case SpeechRuntimeEventType.chunkReady:
         unawaited(_handleRuntimeChunkReady(event));
@@ -2772,9 +2785,12 @@ class KokoroTtsEngine
   }
 
   bool _isStartupWarmEnough(_PlaybackChunk firstChunk) {
-    // Voxtral needs an initial speech lead for short title/dialogue chunks.
-    // Slower backends retain first-chunk startup and existing underrun routing.
-    if (_usesMlx && _engineId != 'voxtral_4b') return true;
+    // A tiny opening turn can finish before the next complete WAV is ready.
+    // Fish needs the same bounded startup lead as Voxtral. This wait is part
+    // of measured launch-to-audio time, never a reset of the startup clock.
+    if (_usesMlx && _engineId != 'voxtral_4b' && !isDramaEngine(_engineId)) {
+      return true;
+    }
     final startupBufferedChunks = _startupBufferedChunks(firstChunk);
     return kokoroIsStartupWarmEnough(
       bufferedChunkCount: startupBufferedChunks.length,
