@@ -1,4 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:read_aloud/src/services/audio_artifact_store.dart';
 import 'package:read_aloud/src/models/native_speech_turn.dart';
 import 'package:read_aloud/src/models/prepared_voice_binding.dart';
 import 'package:read_aloud/src/models/speech_annotation.dart';
@@ -50,6 +51,39 @@ void main() {
     modelIdentity: model,
     referenceDigests: references,
   );
+  test('ordinary requests retain the previous raw-v2 identity', () {
+    expect(
+      identity(request()),
+      artifactIdentity(<String, Object?>{
+        'schema': 'mlx-python-raw-v2',
+        'engineId': 'fish_drama3',
+        'engineVersion': 'runtime',
+        'modelIdentity': 'model',
+        'voiceId': 'voice-a',
+        'voiceDigest': 'reference-a',
+        'referenceSet': ['reference-a', 'reference-b'],
+        'rate': '1.0',
+        'language': 'en-us',
+        'normalizationVersion': 'normalization',
+        'capabilityProfileId': null,
+        'speakText': 'Stay close.',
+        'pronunciationArtifacts': <Map<String, Object?>>[],
+        'synthesisIdentity': 'tokenizer',
+      }),
+    );
+    expect(
+      mlxTtsVersionFor(0, engineId: 'fish_drama3_4bit'),
+      endsWith('-native-cast-v1'),
+    );
+    expect(
+      mlxTtsVersionFor(0, engineId: 'fish_drama3_8bit'),
+      endsWith('-native-cast-v1'),
+    );
+    expect(
+      mlxTtsVersionFor(0, engineId: 'fish_drama3', nativeScenes: false),
+      endsWith('-native-cast-v1'),
+    );
+  });
   test(
     'changing a non-leading scene voice or delivery changes raw identity',
     () {

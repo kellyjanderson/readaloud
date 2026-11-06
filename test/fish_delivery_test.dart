@@ -134,6 +134,21 @@ void main() {
         'Are you there?',
       );
       expect(result.finalPhonemeString, isNot(contains('whisper')));
+      final unqualified = await worker.prepare(
+        plan.chunks.first,
+        'en-us',
+        capabilityOverride: const EngineCapabilityRegistry().lookup(
+          engineId: 'fish_drama3',
+          modelId: 'unverified-local-model',
+          modelRevision: 'local-content',
+        ),
+      );
+      expect(unqualified.translatedChunk!.speakText, 'Are you there?');
+      final qualifiedAgain = await worker.prepare(plan.chunks.first, 'en-us');
+      expect(
+        qualifiedAgain.translatedChunk!.speakText,
+        '[whispers] Are you there?',
+      );
     },
   );
 

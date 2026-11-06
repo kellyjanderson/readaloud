@@ -3563,9 +3563,11 @@ class ReaderController extends ChangeNotifier {
         updateDocumentId != activePlaybackDocumentId) {
       return;
     }
+    _recordProgress(update);
     final wordOffset = _activePreparedRange?.range.wordStart ?? 0;
     if (wordOffset != 0 && update.wordStartIndex != null) {
       update = TtsProgressUpdate(
+        sceneTurns: update.sceneTurns,
         startOffset: update.startOffset,
         endOffset: update.endOffset,
         word: update.word,
@@ -3585,7 +3587,6 @@ class ReaderController extends ChangeNotifier {
         dialogueSpanId: update.dialogueSpanId,
       );
     }
-    _recordProgress(update);
     final globalOffset = _utteranceStartOffset + update.endOffset;
     final nextWordIndex =
         update.wordEndIndex ?? _document.wordIndexForOffset(globalOffset);
@@ -4948,6 +4949,7 @@ class ReaderController extends ChangeNotifier {
         .where(
           (record) =>
               record.completed &&
+              record.sceneTurns.map((t) => t.voiceId).toSet().length <= 1 &&
               record.voiceId == voiceId &&
               (record.rate - rate).abs() < 0.001 &&
               record.audioDuration.inMilliseconds > 0 &&

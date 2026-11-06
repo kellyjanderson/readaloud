@@ -411,10 +411,16 @@ Future<void> main(List<String> args) async {
         .toList();
     if (Platform.environment['READALOUD_SMOKE_REQUIRE_END'] == '1') {
       final chunks = controller.spokenChunkRecords;
+      final finalSourceWord = controller.preparedRanges.isEmpty
+          ? controller.document.wordCount
+          : controller.preparedRanges
+                .map((r) => r.range.wordEnd)
+                .reduce(math.max);
+      receipt['finalSourceWord'] = finalSourceWord;
       if (!reachedEnd ||
           chunks.isEmpty ||
           !chunks.last.completed ||
-          chunks.last.endWordIndex != controller.document.wordCount) {
+          chunks.last.endWordIndex != finalSourceWord) {
         throw StateError('Playback did not reach the final source word.');
       }
       var nextWord = 0;
@@ -482,7 +488,10 @@ Future<void> main(List<String> args) async {
                     (t) => {
                       'castId': t.castId,
                       'voiceId': t.voiceId,
-                      'completed': c.completed,
+                      'completed':
+                          c.completed &&
+                          t.startWord >= c.startWordIndex &&
+                          t.endWord <= c.endWordIndex,
                     },
                   ),
           )
@@ -607,7 +616,6 @@ Future<void> main(List<String> args) async {
       }
       transport['cancelledPlayStayedSilent'] = true;
     }
-    passed = true;
     final exportPath = Platform.environment['READALOUD_SMOKE_EXPORT_PATH'];
     if (exportPath != null) {
       final result = await controller.exportAudioToPath(exportPath);
@@ -618,6 +626,7 @@ Future<void> main(List<String> args) async {
       }
       receipt['sceneExportPath'] = exportPath;
     }
+    passed = true;
   } catch (error, stack) {
     receipt.addAll({'passed': false, 'error': '$error', 'stack': '$stack'});
   } finally {

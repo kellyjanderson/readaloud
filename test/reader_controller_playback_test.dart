@@ -5,6 +5,7 @@ import 'package:cross_file/cross_file.dart';
 import 'package:crypto/crypto.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:read_aloud/src/models/native_speech_turn.dart';
 import 'package:read_aloud/src/services/speech_planning_supervisor.dart';
 import 'package:read_aloud/src/models/speech_annotation.dart';
 import 'package:read_aloud/src/services/base_speech_annotation_inference_service.dart';
@@ -1368,12 +1369,34 @@ void main() {
             startOffset: 0,
             endOffset: 6,
             word: 'Second',
+            chunkId: 'second-scene',
+            voiceId: 'voice-a',
+            rate: 1,
+            elapsedInChunk: const Duration(milliseconds: 500),
+            chunkAudioDuration: const Duration(seconds: 2),
+            sceneTurns: const [
+              NativeSpeechTurn(
+                voiceId: 'voice-a',
+                text: 'Second distinct words.',
+                segmentIds: ['second'],
+                startWord: 3,
+                endWord: 6,
+                bindingFingerprint: 'binding',
+                bindingRevision: 1,
+              ),
+            ],
             documentId: first.documentId,
             wordStartIndex: 3,
             wordEndIndex: 4,
           ),
         );
         expect(controller.currentWordIndex, 1);
+        expect(controller.spokenChunkRecords.single.startWordIndex, 3);
+        expect(controller.spokenChunkRecords.single.endWordIndex, 4);
+        expect(
+          controller.spokenChunkRecords.single.sceneTurns.single.startWord,
+          3,
+        );
         final third = (await second.continuation!.next(
           2,
           cancellation.future,

@@ -30,7 +30,7 @@ class ChunkPlannerGraph {
   final List<int> _offsets;
   final Map<String, _ChunkRoutingContext> _routes;
 
-  ChunkPlan plan(ChunkPlannerInput input) {
+  ChunkPlan plan(ChunkPlannerInput input, {int? endSegmentIndex}) {
     if (!identical(input.speechDocument, document)) {
       throw ArgumentError("Planning input does not belong to retained graph.");
     }
@@ -44,8 +44,14 @@ class ChunkPlannerGraph {
     final globalWordOffsets = _offsets;
     final routingContextBySegmentId = _routes;
 
+    final horizon = endSegmentIndex == null
+        ? speechDocument.segments.length
+        : (endSegmentIndex + 1).clamp(
+            startSegmentIndex,
+            speechDocument.segments.length,
+          );
     var cursor = startSegmentIndex;
-    while (cursor < speechDocument.segments.length &&
+    while (cursor < horizon &&
         (input.maxChunks == null ||
             chunks.length < input.maxChunks! * (scenes ? 16 : 1))) {
       final isFirstChunk = chunks.isEmpty;
@@ -59,6 +65,7 @@ class ChunkPlannerGraph {
         startSegmentIndex: cursor,
         globalWordOffsets: globalWordOffsets,
         softTarget: softTarget,
+        endSegmentExclusive: horizon,
         fallbackVoiceId: input.voiceId,
         routingContextBySegmentId: routingContextBySegmentId,
       );
@@ -109,6 +116,7 @@ _BuiltChunk _buildChunk({
   required int startSegmentIndex,
   required List<int> globalWordOffsets,
   required int softTarget,
+  required int endSegmentExclusive,
   required String fallbackVoiceId,
   required Map<String, _ChunkRoutingContext> routingContextBySegmentId,
 }) {
@@ -118,7 +126,7 @@ _BuiltChunk _buildChunk({
   var cursor = startSegmentIndex;
   _ChunkRoutingContext? routingContext;
 
-  while (cursor < speechDocument.segments.length) {
+  while (cursor < endSegmentExclusive) {
     final segment = speechDocument.segments[cursor];
     final segmentRoutingContext =
         routingContextBySegmentId[segment.segmentId] ??

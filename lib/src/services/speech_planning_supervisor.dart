@@ -341,6 +341,9 @@ SpeechPlanningWindow _planWindow(
         engineVersion: context.engineVersion,
         maxChunks: maximum,
       ),
+      endSegmentIndex: input
+          .speechDocument
+          .segmentIndexById[realization.ttsArtifactSet.endSegmentId],
     );
   }
   return SpeechPlanningWindow(realization, plan);

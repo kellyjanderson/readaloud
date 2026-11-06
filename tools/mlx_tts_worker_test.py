@@ -1,5 +1,6 @@
 """Run with the installed MLX runtime Python. No model weights are needed."""
 import importlib.util
+import hashlib
 from pathlib import Path
 import tempfile
 import io
@@ -21,13 +22,37 @@ spec.loader.exec_module(worker)
 
 
 class GeneratorAdapterTest(unittest.TestCase):
+    def test_model_qualification_is_content_based_and_cached_by_exact_file_state(self):
+        with tempfile.TemporaryDirectory() as root:
+            directory=Path(root)/'model'; directory.mkdir()
+            receipt=Path(root)/'receipts'
+            path=directory/'model.safetensors'; path.write_bytes(b'known pinned bytes')
+            manifest=dict(revision='pinned',files={'model.safetensors':dict(size=path.stat().st_size,
+                algorithm='sha256',digest=hashlib.sha256(path.read_bytes()).hexdigest())})
+            with patch.object(worker, '_progress'):
+                self.assertTrue(worker._verify_scene_model(directory,manifest,receipt))
+                with patch('huggingface_hub.utils._verification.compute_file_hash',side_effect=AssertionError('must reuse exact verification')):
+                    self.assertTrue(worker._verify_scene_model(directory,manifest,receipt))
+                path.write_bytes(b'wrong pinned bytes')
+                self.assertFalse(worker._verify_scene_model(directory,manifest,receipt))
+                path.unlink()
+                self.assertFalse(worker._verify_scene_model(directory,manifest,receipt))
+
+    def test_unqualified_model_cannot_accept_scene_turns(self):
+        with tempfile.TemporaryDirectory() as root, patch.object(worker,'_model_native_scenes',False):
+            path=Path(root)/'voice.wav'; path.write_bytes(b'reference')
+            req=dict(voice='library_a',references=[dict(voice='library_a',referenceAudioPath=str(path),referenceText='Reference.')],
+                     sceneTurns=[dict(voice='library_a',text='Hello.',startWord=0,endWord=1)])
+            with self.assertRaisesRegex(ValueError,'verified pinned'):
+                worker._drama_reference_inputs(req,'Hello.')
+
     def test_native_scene_is_one_ordered_call_with_delivery_and_source_validation(self):
         calls = []
         class Model:
             def generate(self, **kwargs):
                 calls.append(kwargs)
                 yield SimpleNamespace(sample_rate=44100, audio=mx.array([.2, -.2]))
-        with tempfile.TemporaryDirectory() as root, patch.object(worker, '_model', Model()), patch.object(worker, '_model_id', 'fish_drama3'):
+        with tempfile.TemporaryDirectory() as root, patch.object(worker, '_model', Model()), patch.object(worker, '_model_id', 'fish_drama3'), patch.object(worker, '_model_native_scenes', True):
             ref = Path(root) / 'ref.wav'
             ref.write_bytes(b'input routing only')
             refs = [dict(voice=v, referenceAudioPath=str(ref), referenceText='Reference.') for v in ['library_mira', 'library_mara']]

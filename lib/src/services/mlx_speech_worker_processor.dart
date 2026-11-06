@@ -16,8 +16,12 @@ import 'tts_engine.dart';
 import 'mlx_voice_library.dart';
 
 const String mlxTtsModelVersion = 'mlx-audio-0.6.3-mlx-0.32.4-complete-v3';
-String mlxTtsVersionFor(int bits, {String? engineId}) =>
-    '$mlxTtsModelVersion-q$bits${isDramaEngine(engineId ?? '') ? (bits == 0 ? '-native-scene-v2' : '-native-cast-v1') : ''}';
+String mlxTtsVersionFor(
+  int bits, {
+  String? engineId,
+  bool nativeScenes = true,
+}) =>
+    '$mlxTtsModelVersion-q$bits${isDramaEngine(engineId ?? '') ? (engineId == 'fish_drama3' && bits == 0 && nativeScenes ? '-native-scene-v2' : '-native-cast-v1') : ''}';
 const MethodChannel _mlxLifecycleChannel = MethodChannel(
   'read_aloud/mlx_tts_lifecycle',
 );
@@ -45,11 +49,16 @@ String mlxRawAudioIdentity({
   'normalizationVersion': request.normalizationVersion,
   'capabilityProfileId': request.capabilityProfileId,
   'speakText': request.speakText,
-  'sceneTurns': request.sceneTurns
-      .map(
-        (t) => {'voice': t.voiceId, 'text': t.text, 'directions': t.directions},
-      )
-      .toList(),
+  if (request.sceneTurns.isNotEmpty)
+    'sceneTurns': request.sceneTurns
+        .map(
+          (t) => {
+            'voice': t.voiceId,
+            'text': t.text,
+            'directions': t.directions,
+          },
+        )
+        .toList(),
   'pronunciationArtifacts': request.pronunciationArtifacts,
   'synthesisIdentity': request.synthesisIdentity,
 });
@@ -160,6 +169,13 @@ class MlxSpeechWorkerChunkProcessor
   String? _helperPath;
   String? _resolvedPythonPath;
   String? _modelIdentity;
+  bool supportsNativeScenes = false;
+  String get runtimeVersion => mlxTtsVersionFor(
+    quantizationBits,
+    engineId: engineId,
+    nativeScenes: supportsNativeScenes,
+  );
+  String? get modelContentIdentity => _modelIdentity;
   String? _activeGeneration;
   Future<void>? _closing;
   final _closedSignal = Completer<void>();
@@ -204,13 +220,10 @@ class MlxSpeechWorkerChunkProcessor
         }),
         modelDigest: artifactIdentity(<String, Object?>{
           'engineId': engineId,
-          'engineVersion': mlxTtsVersionFor(
-            quantizationBits,
-            engineId: engineId,
-          ),
+          'engineVersion': runtimeVersion,
           'modelIdentity': _modelIdentity,
         }),
-        engineVersion: mlxTtsVersionFor(quantizationBits, engineId: engineId),
+        engineVersion: runtimeVersion,
         pronunciationProfileId: pronunciationProfileId,
         bindingRevision: revision,
         documentId: documentId,
@@ -274,6 +287,10 @@ class MlxSpeechWorkerChunkProcessor
     await File(
       '${mlxRoot.path}/fish_drama_models.json',
     ).writeAsString(modelCatalog, flush: true);
+    await File('${mlxRoot.path}/fish_drama_model_checksums.json').writeAsString(
+      await rootBundle.loadString('assets/fish_drama_model_checksums.json'),
+      flush: true,
+    );
     _helperPath = installedHelper.path;
     _modelRoot = mlxRoot.path;
     _resolvedPythonPath = await _findPythonRuntime(mlxRoot);
@@ -311,6 +328,7 @@ class MlxSpeechWorkerChunkProcessor
         onProgress: _handleModelLoadProgress,
       );
       _modelIdentity = loaded['modelIdentity'] as String;
+      supportsNativeScenes = loaded['nativeScenesQualified'] == true;
       if (_closed) throw StateError('MLX inference owner is closed.');
     } finally {
       onResourceProgress?.call(null);
@@ -483,7 +501,8 @@ class MlxSpeechWorkerChunkProcessor
         return;
       }
       if (request.sceneTurns.isNotEmpty) {
-        if (engineId != 'fish_drama3' ||
+        if (!supportsNativeScenes ||
+            engineId != 'fish_drama3' ||
             quantizationBits != 0 ||
             request.sceneTurns.length > 16) {
           throw StateError('Native scenes are unsupported for this target.');
@@ -543,7 +562,7 @@ class MlxSpeechWorkerChunkProcessor
         request: request,
         binding: binding,
         engineId: engineId,
-        engineVersion: mlxTtsVersionFor(quantizationBits, engineId: engineId),
+        engineVersion: runtimeVersion,
         modelIdentity: _modelIdentity,
         referenceDigests: [
           for (final ref in references) _bindings[ref['voice']]!.voiceDigest,

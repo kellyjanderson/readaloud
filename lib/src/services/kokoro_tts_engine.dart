@@ -102,7 +102,24 @@ class KokoroTtsEngine
   @override
   String get engineId => _engineId;
   @override
-  String get engineVersion => _engineVersion;
+  String get engineVersion =>
+      _resourceProcessor is MlxSpeechWorkerChunkProcessor
+      ? (_resourceProcessor! as MlxSpeechWorkerChunkProcessor).runtimeVersion
+      : _engineVersion;
+  EngineCapabilityProfile get _qualifiedCapability {
+    final processor = _resourceProcessor;
+    if (_engineId == 'fish_drama3' &&
+        processor is MlxSpeechWorkerChunkProcessor &&
+        !processor.supportsNativeScenes) {
+      return const EngineCapabilityRegistry().lookup(
+        engineId: _engineId,
+        modelId: 'unverified-local-model',
+        modelRevision: processor.modelContentIdentity ?? 'unknown',
+      );
+    }
+    return const EngineCapabilityRegistry().lookup(engineId: _engineId);
+  }
+
   final String _mlxModelPath;
   final String _mlxPythonPath;
   final int _mlxQuantizationBits;
@@ -978,7 +995,7 @@ class KokoroTtsEngine
         ExportedAudioAssemblyRequest(
           outputPath: request.outputPath,
           engineId: _engineId,
-          engineVersion: _engineVersion,
+          engineVersion: engineVersion,
           documentId: request.documentId ?? 'export-document',
           documentTitle: request.documentTitle ?? 'Read Aloud Export',
           sourceDescription: request.sourceDescription ?? 'Audio export',
@@ -2266,7 +2283,7 @@ class KokoroTtsEngine
       cacheKey: _fallbackCacheKey(
         pieceText,
         engineId: _engineId,
-        engineVersion: _engineVersion,
+        engineVersion: engineVersion,
         voiceId: failedChunk.voiceId,
         rate: failedChunk.synthesisRate,
         normalizationVersion: failedChunk.normalizationVersion,
@@ -2589,6 +2606,7 @@ class KokoroTtsEngine
     final tokenization = await (tokenWorker ?? _playbackTokenizer!).prepare(
       spec,
       languageTag,
+      capabilityOverride: _qualifiedCapability,
     );
     final translatedChunk = tokenization.translatedChunk!;
     return _PreparedPlannedChunk(
@@ -2707,7 +2725,7 @@ class KokoroTtsEngine
           cacheKey: _fallbackCacheKey(
             text,
             engineId: _engineId,
-            engineVersion: _engineVersion,
+            engineVersion: engineVersion,
             voiceId: binding.voiceId,
             rate: synthesisRate,
             normalizationVersion: normalizationVersion,
@@ -3228,7 +3246,7 @@ class KokoroTtsEngine
       generatedAudioDirectory:
           '${supportDirectory.path}${Platform.pathSeparator}generated-audio',
       engineId: _engineId,
-      engineVersion: _engineVersion,
+      engineVersion: engineVersion,
     );
   }
 

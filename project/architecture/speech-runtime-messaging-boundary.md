@@ -175,8 +175,28 @@ identity. MLX Audio owns encoding and prefill reuse through its existing
 content-keyed voice cache; Read Aloud adds no tensor/history cache. Ordered
 reference digests participate in raw artifact identity, and only Drama's engine
 version changes for this binding protocol. Non-Drama adapters retain their prior
-identity and behavior. Native multi-turn scene packing/timing remains open;
-implemented fiction routing still synthesizes bounded per-character chunks. Source regressions establish ownership, emitted-sample retention
+identity and behavior. Qualified bf16 Drama packs ordered, contiguous source turns
+into one native scene call, targeting 75 words and at most sixteen turns. The
+second planning pass cannot extend past the realized annotation horizon. Other
+model contexts retain per-character chunks. Native per-turn timestamps remain
+unavailable; word highlighting uses the existing approximate duration mapping.
+Source regressions establish ownership, emitted-sample retention
 and format behavior. They do not establish real Drama acoustic quality, sustained
 memory, M3 performance or uninterrupted chapter playback; native evidence is
 recorded in #111.
+
+
+Scene and delivery qualification uses the bundled immutable bf16 repository file
+manifest, not the selected engine name or a local folder's name. The native
+Python owner verifies file contents with Hugging Face Hub's hashing utility.
+Its app-owned verification receipt is reusable only while the directory, pinned
+manifest and every file's device/inode/size/mtime/ctime remain identical. A
+changed file is rechecked; a mismatch disables native scenes and model-specific
+whisper/shout lowering while retaining canonical content intent. The first
+verification reports completed bytes and may add preparation latency. It runs
+in the existing single native model-load owner, with selection cancellation and
+shutdown retiring that process; it adds no queue or UI-thread hashing. This is
+capability qualification, not portable publishing metadata or a security claim
+against hostile file replacement. Source checks cover altered/missing files,
+receipt reuse and per-request tokenization capability isolation. Runtime and
+startup acceptance remain separate gates in #111.

@@ -87,6 +87,7 @@ class KokoroTokenizationWorker {
   Future<KokoroTokenizationResult> prepare(
     ChunkSpec spec,
     String languageTag, {
+    EngineCapabilityProfile? capabilityOverride,
     String? requestId,
     int documentRevision = 0,
     int bindingRevision = 0,
@@ -94,6 +95,8 @@ class KokoroTokenizationWorker {
     {
       'chunkId': spec.chunkId,
       'segments': _freezeSegments(spec.ttsSegments),
+      if (capabilityOverride != null)
+        'capabilityOverride': capabilityOverride.toMap(),
       'languageTag': languageTag,
     },
     requestId,
@@ -323,7 +326,13 @@ void kokoroTokenizationWorkerEntry(KokoroTokenizationWorkerInput input) async {
           ? null
           : const KokoroPronunciationTranslationService().translate(
               chunkId: request['chunkId']! as String,
-              capabilityProfile: input.capabilityProfile,
+              capabilityProfile: request['capabilityOverride'] == null
+                  ? input.capabilityProfile
+                  : EngineCapabilityProfile.fromMap(
+                      Map<String, Object?>.from(
+                        request['capabilityOverride'] as Map,
+                      ),
+                    ),
               segments: (request['segments']! as List)
                   .cast<TtsArtifactSegment>(),
             );
