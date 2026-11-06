@@ -62,6 +62,8 @@ class BaseSpeechAnnotationSet {
     }
 
     final seenIds = <String>{};
+    final bySegment = <String, List<SpeechAnnotation>>{};
+    final byDialogueSpan = <String, List<SpeechAnnotation>>{};
     for (final annotation in annotations) {
       if (!seenIds.add(annotation.annotationId)) {
         throw ArgumentError.value(
@@ -70,12 +72,28 @@ class BaseSpeechAnnotationSet {
           'annotationId values must be unique within one BaseSpeechAnnotationSet.',
         );
       }
+      (bySegment[annotation.segmentId] ??= []).add(annotation);
+      if (annotation.dialogueSpanId case final String span) {
+        (byDialogueSpan[span] ??= []).add(annotation);
+      }
     }
 
     return BaseSpeechAnnotationSet._(
       documentId: documentId,
       annotationVersion: annotationVersion,
       annotations: List<SpeechAnnotation>.unmodifiable(annotations),
+      bySegment: Map.unmodifiable(
+        bySegment.map(
+          (key, value) =>
+              MapEntry(key, List<SpeechAnnotation>.unmodifiable(value)),
+        ),
+      ),
+      byDialogueSpan: Map.unmodifiable(
+        byDialogueSpan.map(
+          (key, value) =>
+              MapEntry(key, List<SpeechAnnotation>.unmodifiable(value)),
+        ),
+      ),
     );
   }
 
@@ -83,19 +101,21 @@ class BaseSpeechAnnotationSet {
     required this.documentId,
     required this.annotationVersion,
     required this.annotations,
-  });
+    required Map<String, List<SpeechAnnotation>> bySegment,
+    required Map<String, List<SpeechAnnotation>> byDialogueSpan,
+  }) : _bySegment = bySegment,
+       _byDialogueSpan = byDialogueSpan;
 
   final String documentId;
   final String annotationVersion;
   final List<SpeechAnnotation> annotations;
+  final Map<String, List<SpeechAnnotation>> _bySegment, _byDialogueSpan;
 
   Iterable<SpeechAnnotation> forSegment(String segmentId) =>
-      annotations.where((annotation) => annotation.segmentId == segmentId);
+      _bySegment[segmentId] ?? const [];
 
   Iterable<SpeechAnnotation> forDialogueSpan(String dialogueSpanId) =>
-      annotations.where(
-        (annotation) => annotation.dialogueSpanId == dialogueSpanId,
-      );
+      _byDialogueSpan[dialogueSpanId] ?? const [];
 
   /// Defaults to the legacy V1 vocabulary. V2 explicitly opts into canonical
   /// performance intent; this does not change the in-memory annotation set.

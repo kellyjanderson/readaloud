@@ -234,6 +234,7 @@ class ModernBookNlpRequest {
     required this.analysisRevision,
     required this.sequence,
     required this.text,
+    this.windowPolicy = 'normalized-segments-newline-v1',
   }) {
     if ([
           requestId,
@@ -251,6 +252,7 @@ class ModernBookNlpRequest {
     }
   }
   final String requestId, ownerId, workId, sourceRevision, text;
+  final String windowPolicy;
   final int analysisRevision, sequence;
   Map<String, Object> toJson() => {
     'schema': 1,

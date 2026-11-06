@@ -13,6 +13,7 @@ class DocumentAnalysisRecord {
     this.modelIdentity,
     this.adapterVersion,
     this.outputJson,
+    this.windowPolicy,
   ) : key = digest(
         jsonEncode([
           sourceRevision,
@@ -31,7 +32,11 @@ class DocumentAnalysisRecord {
       adapterVersion,
       outputJson;
   static const adapter = modernBookNlpAdapterVersion;
-  static const windowPolicy = 'normalized-segments-newline-v1';
+  final String windowPolicy;
+  static const supportedPolicies = {
+    'normalized-segments-newline-v1',
+    'paragraph-context-v2',
+  };
   static String digest(String value) =>
       sha256.convert(utf8.encode(value)).toString();
   static String requestKey(ModernBookNlpRequest request) => digest(
@@ -41,7 +46,7 @@ class DocumentAnalysisRecord {
       modernBookNlpRevision,
       modernBookNlpModelIdentity,
       adapter,
-      windowPolicy,
+      request.windowPolicy,
     ]),
   );
   bool get reusable =>
@@ -76,7 +81,7 @@ class DocumentAnalysisRecord {
       'sourceRevision': request.sourceRevision,
       'text': request.text,
       'textSha256': digest(request.text),
-      'windowPolicy': windowPolicy,
+      'windowPolicy': request.windowPolicy,
       'providerId': 'modernbooknlp-joint',
       'providerVersion': output['providerVersion'],
       'modelIdentity': output['modelIdentity'],
@@ -103,7 +108,7 @@ class DocumentAnalysisRecord {
 
   factory DocumentAnalysisRecord._decode(Map<String, dynamic> value) {
     if (value['schema'] != 1 ||
-        value['windowPolicy'] != windowPolicy ||
+        !supportedPolicies.contains(value['windowPolicy']) ||
         value['providerId'] != 'modernbooknlp-joint') {
       throw const FormatException('Unsupported saved analysis schema');
     }
@@ -148,6 +153,7 @@ class DocumentAnalysisRecord {
       value['modelIdentity'],
       value['adapterVersion'],
       encoded,
+      value['windowPolicy'],
     );
   }
 

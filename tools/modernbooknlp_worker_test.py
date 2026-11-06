@@ -32,5 +32,15 @@ class ProtocolTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temporary:
             with self.assertRaises(FileNotFoundError):provider.load_pipeline(Path(temporary))
         self.assertNotIn('torch',sys.modules)
+    def test_entity_projection_preserves_source_whitespace_and_punctuation(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            (root/'window.tokens').write_text("token_ID_within_document\tword\tbyte_onset\tbyte_offset\n0\tAda\t0\t3\n1\tLovelace\t4\t12\n2\t's\t12\t14\n")
+            (root/'window.entities').write_text("COREF\tstart_token\tend_token\tprop\tcat\ttext\n8\t0\t2\tPROP\tPER\tAda Lovelace 's\n")
+            (root/'window.quotes').write_text('quote_start\tquote_end\tchar_id\n')
+            (root/'window.book').write_text('{"characters": []}')
+            source = "Ada\nLovelace's"
+            output = provider.decode_outputs(root, source)
+            self.assertEqual(output['entities'][0]['mentions'][0]['text'], source)
 
 if __name__=='__main__':unittest.main()

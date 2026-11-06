@@ -20,7 +20,16 @@ The character list includes speakers discovered across all prepared sections, ev
 
 Narrator and character choices are remembered when you reopen the same unchanged document, including a book whose preparation has not finished. Choosing a voice explicitly keeps that choice even if it matches the current automatic assignment. Use **Use Automatic Assignment** to return that role to automatic selection. Reset is remembered across reopening and is not undone by an older imported choice. If another engine cannot use a selected voice, a compatible fallback is used while the original choice is retained for returning to its engine.
 
-Open **Character Voices** to manage narrator/cast assignments, or **Voice options** in single-voice mode. Assignment fields show requested choices. The footer keeps **Current** playback choices separate from **Pending** intent and reports preparing, applying or failure. Automatic speaker routing follows the prepared cast; it is separate from editing a voice assignment. Attribution remains heuristic, and selecting a voice does not correct a mistaken speaker attribution. The current selector may expose only one available choice for a character; the user-reported limitation is tracked for a future release in [issue #78](https://github.com/kellyjanderson/readaloud/issues/78).
+Open **Character Voices** to manage narrator/cast assignments, or **Voice options** in single-voice mode. Assignment fields show requested choices. The footer keeps **Current** playback choices separate from **Pending** intent and reports preparing, applying or failure. Automatic speaker routing follows the prepared cast; it is separate from editing a voice assignment. Fast attribution is heuristic, and selecting a voice does not correct a mistaken speaker attribution. The current selector may expose only one available choice for a character; the user-reported limitation is tracked for a future release in [issue #78](https://github.com/kellyjanderson/readaloud/issues/78).
+
+Settings → **ModernBookNLP evaluation → Prepare and evaluate** enables experimental
+local character refinement. It can discover additional people, retain aliases and
+pronoun evidence, and improve future speaker routes. Explicit voice choices remain
+yours; already captured speech does not change. New evidence takes effect at the
+next ordinary planning boundary, range, jump or Play. Completed windows are saved
+with the book and reused when compatible. **Stop** stops further analysis without
+erasing saved evidence. This remains opt-in; it does not resolve the known native
+Fish switching stall or guarantee literary accuracy. See the [provider guide](modernbooknlp-provider.md).
 
 Choosing a narrator or character voice applies it automatically. During playback, the app stops, prepares and buffers the latest choice, then replays from the current audible chunk’s start. Some words may repeat. There is no Apply button; replacement still takes time and is not guaranteed to be seamless.
 

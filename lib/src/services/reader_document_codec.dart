@@ -252,8 +252,21 @@ ReaderDocument _decodeReaderDocument(Map<String, dynamic> m) {
         .toList();
     final bookText = speech.segments.map((s) => s.normalizedText).join('\n');
     final seenRecords = <String>{};
+    final paragraphText = StringBuffer();
+    String? priorBlock;
+    for (final segment in speech.segments) {
+      if (paragraphText.isNotEmpty) {
+        paragraphText.write(priorBlock == segment.blockId ? ' ' : '\n\n');
+      }
+      paragraphText.write(segment.normalizedText);
+      priorBlock = segment.blockId;
+    }
+    final paragraphSource = paragraphText.toString();
     for (final record in records) {
-      if (!bookText.contains(record.text) || !seenRecords.add(record.key)) {
+      final sourceText = record.windowPolicy == 'paragraph-context-v2'
+          ? paragraphSource
+          : bookText;
+      if (!sourceText.contains(record.text) || !seenRecords.add(record.key)) {
         throw const FormatException(
           'Analysis window is not part of this book or is duplicated',
         );

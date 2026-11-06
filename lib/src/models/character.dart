@@ -1,4 +1,5 @@
 import 'character_cast_registry.dart';
+import 'character_linguistic_evidence.dart';
 
 enum VoiceSelectionMode { automatic, explicit }
 
@@ -166,7 +167,22 @@ class CharacterState {
     this.speechProfile = const CharacterSpeechProfile.empty(),
     Map<String, String> automaticVoices = const {},
     List<VoiceSelection> selectionConflicts = const [],
+    List<CharacterLinguisticEvidence> linguisticEvidence = const [],
+    List<String> linguisticRecordRefs = const [],
+    this.correctedGender,
+    this.correctionRevision = 0,
+    Map<String, bool> aliasCorrections = const {},
   }) : presentedGender = List.unmodifiable(presentedGender),
+       linguisticEvidence = List.unmodifiable(
+         linguisticEvidence.length <= 8
+             ? linguisticEvidence
+             : linguisticEvidence.skip(linguisticEvidence.length - 8),
+       ),
+       linguisticRecordRefs = List.unmodifiable({
+         ...linguisticRecordRefs,
+         ...linguisticEvidence.map((e) => e.key),
+       }),
+       aliasCorrections = Map.unmodifiable(aliasCorrections),
        automaticVoices = Map.unmodifiable(automaticVoices),
        selectionConflicts = List.unmodifiable(selectionConflicts);
   final String workId;
@@ -181,6 +197,15 @@ class CharacterState {
   /// updates these; they never masquerade as an explicit voice selection.
   final Map<String, String> automaticVoices;
   final List<VoiceSelection> selectionConflicts;
+  final List<CharacterLinguisticEvidence> linguisticEvidence;
+
+  /// Complete references on disk; UI consumers use the bounded recent summaries.
+  final List<String> linguisticRecordRefs;
+
+  /// User corrections are distinct from source observations and provider data.
+  final CharacterGenderIdentityLabel? correctedGender;
+  final int correctionRevision;
+  final Map<String, bool> aliasCorrections;
 
   factory CharacterState.fromProfile(CharacterIdentityProfile? profile) {
     if (profile == null) return CharacterState();
@@ -223,6 +248,12 @@ class CharacterState {
     List<VoiceSelection>? selectionConflicts,
     List<ScopedGenderEvidence>? presentedGender,
     CharacterSpeechProfile? speechProfile,
+    List<CharacterLinguisticEvidence>? linguisticEvidence,
+    List<String>? linguisticRecordRefs,
+    CharacterGenderIdentityLabel? correctedGender,
+    bool resetGenderCorrection = false,
+    int? correctionRevision,
+    Map<String, bool>? aliasCorrections,
   }) => CharacterState(
     workId: workId ?? this.workId,
     revision: revision ?? this.revision,
@@ -231,6 +262,13 @@ class CharacterState {
     implicitGender: implicitGender ?? this.implicitGender,
     presentedGender: presentedGender ?? this.presentedGender,
     speechProfile: speechProfile ?? this.speechProfile,
+    linguisticEvidence: linguisticEvidence ?? this.linguisticEvidence,
+    linguisticRecordRefs: linguisticRecordRefs ?? this.linguisticRecordRefs,
+    correctedGender: resetGenderCorrection
+        ? null
+        : correctedGender ?? this.correctedGender,
+    correctionRevision: correctionRevision ?? this.correctionRevision,
+    aliasCorrections: aliasCorrections ?? this.aliasCorrections,
     automaticVoices: Map.unmodifiable(automaticVoices ?? this.automaticVoices),
     selectionConflicts: List.unmodifiable(
       selectionConflicts ?? this.selectionConflicts,
@@ -247,6 +285,11 @@ class CharacterState {
     'directions': speechProfile.directionReferences,
     'automaticVoices': automaticVoices,
     'selectionConflicts': selectionConflicts.map((s) => s.toJson()).toList(),
+    'linguisticEvidence': linguisticEvidence.map((s) => s.toJson()).toList(),
+    'linguisticRecordRefs': linguisticRecordRefs,
+    'correctedGender': correctedGender?.name,
+    'correctionRevision': correctionRevision,
+    'aliasCorrections': aliasCorrections,
   };
   factory CharacterState.fromJson(Map<String, dynamic> json) {
     if (json['schema'] != 1) {
@@ -254,12 +297,27 @@ class CharacterState {
     }
     if (json['workId'] is! String ||
         json['revision'] is! int ||
-        (json['revision'] as int) < 0) {
+        (json['revision'] as int) < 0 ||
+        (json['correctionRevision'] != null &&
+            (json['correctionRevision'] is! int ||
+                json['correctionRevision'] < 0))) {
       throw const FormatException('Invalid character identity/revision');
     }
     return CharacterState(
       workId: json['workId'],
       revision: json['revision'],
+      linguisticEvidence: [
+        for (final e in json['linguisticEvidence'] ?? const [])
+          CharacterLinguisticEvidence.fromJson(Map<String, dynamic>.from(e)),
+      ],
+      linguisticRecordRefs: List<String>.from(
+        json['linguisticRecordRefs'] ?? [],
+      ),
+      correctedGender: json['correctedGender'] == null
+          ? null
+          : CharacterGenderIdentityLabel.values.byName(json['correctedGender']),
+      correctionRevision: json['correctionRevision'] ?? 0,
+      aliasCorrections: Map<String, bool>.from(json['aliasCorrections'] ?? {}),
       selectedVoice: VoiceSelection.fromJson(
         Map<String, dynamic>.from(json['selectedVoice']),
       ),
@@ -321,8 +379,10 @@ class CharacterDialogueReference {
     required this.startWord,
     required this.endWord,
     this.castId,
+    this.sourceMatched = true,
   });
   final String attributionId, dialogueSpanId, segmentId;
   final int startWord, endWord;
   final String? castId;
+  final bool sourceMatched;
 }

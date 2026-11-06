@@ -9,6 +9,15 @@ import 'document_analysis_repository.dart';
 class ModernBookNlpAnalysis extends ChangeNotifier {
   ModernBookNlpAnalysis(this.createProvider);
   final Future<ModernBookNlpProvider> Function() createProvider;
+
+  /// Runs inside this same bounded work lifetime, after durable publication.
+  /// The consumer must recheck current() after its off-isolate projection.
+  Future<void> Function(
+    ModernBookNlpRequest,
+    Map<String, dynamic>,
+    bool Function(),
+  )?
+  onResult;
   ModernBookNlpProvider? _provider;
   DocumentAnalysisRepository? repository;
   final Map<String, DocumentAnalysisRecord> _embedded = {};
@@ -98,7 +107,11 @@ class ModernBookNlpAnalysis extends ChangeNotifier {
         _pending = null;
         _active = request;
         final epoch = _windowEpoch;
-        bool windowCurrent() => current() && epoch == _windowEpoch;
+        bool windowCurrent() =>
+            current() &&
+            epoch == _windowEpoch &&
+            _desired != null &&
+            _key(_desired!) == _key(request);
         try {
           DocumentAnalysisRecord? saved =
               _embedded[DocumentAnalysisRecord.requestKey(request)];
@@ -142,6 +155,9 @@ class ModernBookNlpAnalysis extends ChangeNotifier {
               notifyListeners();
               await repository!.save(request, next, isCurrent: windowCurrent);
             }
+          }
+          if (windowCurrent()) {
+            await onResult?.call(request, next, windowCurrent);
           }
           if (windowCurrent()) {
             result = next;

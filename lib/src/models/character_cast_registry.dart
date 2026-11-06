@@ -426,7 +426,29 @@ class CastEntry implements Character {
     characterState: state,
   );
 
-  VoiceGender? get inferredGender => identityProfile?.preferredVoiceGender;
+  VoiceGender? get inferredGender {
+    final corrected = characterState.correctedGender;
+    final label =
+        corrected ??
+        (characterState.linguisticEvidence.isEmpty
+            ? null
+            : explicitGender.value != CharacterGenderIdentityLabel.unknown &&
+                  !explicitGender.conflict
+            ? explicitGender.value
+            : !implicitGender.conflict
+            ? implicitGender.value
+            : CharacterGenderIdentityLabel.unknown);
+    if (label == null) return identityProfile?.preferredVoiceGender;
+    return switch (label) {
+      CharacterGenderIdentityLabel.male ||
+      CharacterGenderIdentityLabel.cisMale ||
+      CharacterGenderIdentityLabel.transMale => VoiceGender.male,
+      CharacterGenderIdentityLabel.female ||
+      CharacterGenderIdentityLabel.cisFemale ||
+      CharacterGenderIdentityLabel.transFemale => VoiceGender.female,
+      _ => null,
+    };
+  }
 
   double? get inferredGenderConfidence =>
       inferredGender == null ? null : identityProfile?.genderConfidence;

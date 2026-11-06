@@ -49,6 +49,7 @@ def read_rows(path):
 
 
 def decode_outputs(directory, text):
+    encoded_text = text.encode('utf-16-le')
     tokens = read_rows(directory / 'window.tokens')
     if len(tokens) > MAX_TOKENS:
         raise ValueError('Provider exceeded admitted token bound')
@@ -70,8 +71,14 @@ def decode_outputs(directory, text):
         if row['cat'] != 'PER':
             continue
         entity = entities.setdefault(row['COREF'], {'entityId': row['COREF'], 'mentions': []})
-        entity['mentions'].append({**span(row['start_token'], row['end_token']),
-                                   'text': row['text'], 'proper': row['prop'] == 'PROP'})
+        location = span(row['start_token'], row['end_token'])
+        # Upstream joins multi-token mentions with spaces, even when the source
+        # contains a paragraph/segment break. Coordinates remain authoritative.
+        mention_text = encoded_text[location['startUtf16'] * 2:location['endUtf16'] * 2].decode('utf-16-le')
+        if ''.join(mention_text.split()) != ''.join(row['text'].split()):
+            raise ValueError('Provider entity does not match original source')
+        entity['mentions'].append({**location, 'text': mention_text,
+                                   'proper': row['prop'] == 'PROP'})
     quotes = []
     for row in read_rows(directory / 'window.quotes'):
         entity_id = row['char_id'] if row['char_id'] in entities else None
