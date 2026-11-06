@@ -1,3 +1,4 @@
+import '../models/native_speech_turn.dart';
 import 'dart:async';
 import 'dart:isolate';
 import 'dart:convert';
@@ -60,6 +61,7 @@ class ExportedBoundaryMetadata {
 
 class ExportedAudioChunk {
   const ExportedAudioChunk({
+    this.sceneTurns = const <NativeSpeechTurn>[],
     required this.chunkId,
     required this.cacheKey,
     required this.audioPath,
@@ -77,6 +79,7 @@ class ExportedAudioChunk {
     this.dialogueSpanId,
   });
 
+  final List<NativeSpeechTurn> sceneTurns;
   final String chunkId;
   final String cacheKey;
   final String audioPath;
@@ -625,6 +628,7 @@ Map<String, Object?> _chunkMetadata(ExportedAudioChunk chunk, _WavInfo info) =>
       'endWordIndex': chunk.endWordIndex,
       'voiceId': chunk.voiceId,
       'routeId': chunk.routeId,
+      'sceneTurns': chunk.sceneTurns.map((t) => t.toMap()).toList(),
       'castId': chunk.castId,
       'dialogueSpanId': chunk.dialogueSpanId,
       'capabilityProfileId': chunk.capabilityProfileId,

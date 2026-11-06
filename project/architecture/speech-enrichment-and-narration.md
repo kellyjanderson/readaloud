@@ -13,10 +13,9 @@ Speaker attribution and character casting are implemented upstream during import
 
 ## Source and tests
 
-Fish Drama 3 bf16 has a narrowly registered delivery adapter for an explicit,
-unambiguous whole-segment `whispered` intent. The pinned model context lowers it
-to `[whispers]`; the planning worker isolates that segment in its own synthesis
-request so the cue cannot spill into a following ordinary segment. Tokenization
+Fish Drama 3 bf16 has registered adapters for explicit, unambiguous whole-segment
+`whispered` and `shouted` intent, lowered to `[whispers]` and `[shouting]`.
+The planning worker preserves each directed turn's boundary. Tokenization
 retains canonical content tokens and source ranges, while its captured model
 context revalidates the cue before producing native speak text. That text enters
 the existing audio cache identity. The model's own reference conditioning remains
@@ -25,26 +24,32 @@ introduced. Partial/conflicting directions, other delivery/inflection types and
 untested model variants retain canonical metadata with explicit unsupported
 fallback. Parser punctuation and speech tags still do not invent intent.
 
-The adapter uses the installed MLX Audio 0.6.3 Drama interface, which documents
-inline delivery cues. Unit/worker and running-app checks establish cue routing,
-source coverage and selected-reference continuity. They do not establish audible
-whisper quality, perceived identity or broad expressive-reading acceptance.
-The November 5 S3 human listening check found expressive delivery but rejected
-Mara's perceived identity continuity between whispered and ordinary turns. The
-selected reference remained Sophia in both turns; correct routing did not make
-the resulting voice recognizable as one person. This running-app acceptance gate
-remains failed. A subsequent direct-native tagged-scene diagnostic received a
-positive human judgment: Mara's whispered and ordinary turns sounded like the
-same person. That diagnostic uses one native generation call with the ordered
-turns, preserving the library's within-call context. It is not yet integrated
-into app playback and does not establish general identity continuity. The
-canonical fixture `test/fixtures/s3_whisper_shout_scene.json` separately tests
-Mira's whispered warning followed by Mara's shouted reply; its explicit delivery
-intent is separate from content text. The user also accepted that direct-native
-recording's whisper/shout contrast and recognizable voices. Both positive
-judgments apply to these diagnostic samples; running-app integration and
-acceptance remain open. Exact recordings/settings and retained failures are linked
-from [S3](https://github.com/kellyjanderson/readaloud/issues/111).
+The pinned bf16 adapter now groups ordered source turns into native scenes in
+both playback and export. Each scene targets at most 75 words and has at most
+16 turns/references; an indivisible source turn may exceed the word target.
+Planning returns at most three scenes per window. The maintained MLX Audio 0.6.3
+library owns its byte splitting, conditioning and within-call history. These
+application bounds limit work ahead, without a second native splitter or history
+cache. Other model precisions retain separate-turn synthesis.
+
+`NativeSpeechTurn` carries source spans, cast/route identity, explicit directions
+and each voice's binding fingerprint/revision through runtime snapshots. The
+processor validates every turn before cache lookup or inference, then the Python
+adapter maps the ordered voices to scene-local speaker slots in one `generate`
+call. Missing references, source gaps and stale bindings fail instead of changing
+speakers. Playback history and export metadata retain the turns. Highlighting
+still estimates position from the scene's duration and words; the turn spans are
+source metadata, not measured acoustic timestamps. Cross-scene acoustic identity
+and precise alignment are not implied.
+
+The first separate-turn app listening check failed Mara's perceived identity.
+Subsequent direct-native samples passed human same-person and whisper/shout
+contrast checks. The integrated app then completed the 42-word directed fixture,
+including all seven turns and its ending; its emitted scene waveform matched the
+queued audio at 0.9999 correlation. File import, pause, seek and superseded Play
+also completed. Human listening of that app capture and long-run continuity are
+tracked separately in [S3](https://github.com/kellyjanderson/readaloud/issues/111).
+No general expressive-reading or release acceptance follows from one scene.
 `test/fish_delivery_test.dart` covers isolated scope, worker transport, stale
 model/revision rejection and partial/conflicting fallback. The native smoke
 fixture `test/fixtures/s3_dialogue.txt` supplies narrator/A/B/A turns and an ending.

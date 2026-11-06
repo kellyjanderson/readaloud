@@ -6,12 +6,13 @@ Raw identity canonically hashes model/voice content binding, engine version, exa
 
 The MLX adapter uses its own `mlx-python-raw-v2` identity in the existing artifact
 store. It includes native model/reference identities, ordered scene references,
+each ordered turn's voice/text/directions,
 exact rate, language, normalization/capability context, realized speak text
 (including supported delivery controls), pronunciation artifacts and synthesis
 identity. It excludes the caller's planner key because that key also carries
 initial/resumed/continued boundary policy. The old inclusion caused a seek to
 regenerate unchanged stochastic speech. Native binding validation still precedes
-lookup; boundary derivatives still include their separate join/predecessor
+lookup for every scene turn; boundary derivatives still include their separate join/predecessor
 context. Previously rendered v1 artifacts remain on disk; no migration deletes
 or relabels them. Cache reuse proves the same rendered voice survives a replay,
 not that independently generated turns have perceptually identical voices.

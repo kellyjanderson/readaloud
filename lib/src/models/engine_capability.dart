@@ -10,10 +10,12 @@ class EngineCapabilityProfile {
     required this.directRepresentationTypes,
     required this.approximableRepresentationTypes,
     required this.supportsPlainTextFallback,
+    this.supportsNativeScenes = false,
     this.modelId = '',
     this.modelRevision = '',
   });
 
+  final bool supportsNativeScenes;
   final String capabilityProfileId;
   final String engineId;
   final String platformFamily;
@@ -41,6 +43,7 @@ class EngineCapabilityProfile {
   Map<String, Object?> toMap() {
     return <String, Object?>{
       'capabilityProfileId': capabilityProfileId,
+      'supportsNativeScenes': supportsNativeScenes,
       'engineId': engineId,
       'modelId': modelId,
       'modelRevision': modelRevision,
@@ -56,6 +59,7 @@ class EngineCapabilityProfile {
   factory EngineCapabilityProfile.fromMap(Map<String, Object?> map) {
     return EngineCapabilityProfile(
       capabilityProfileId: map['capabilityProfileId']! as String,
+      supportsNativeScenes: map['supportsNativeScenes'] as bool? ?? false,
       engineId: map['engineId']! as String,
       modelId: map['modelId'] as String? ?? '',
       modelRevision: map['modelRevision'] as String? ?? '',
@@ -124,6 +128,12 @@ class EngineCapabilityRegistry {
         );
       case 'fish_drama3':
         return EngineCapabilityProfile(
+          supportsNativeScenes:
+              capabilityVersion == 'v1' &&
+              (modelId == null ||
+                  modelId == 'mlx-community/fish-audio-drama-3-bf16') &&
+              (modelRevision == null ||
+                  modelRevision == '8c5496f9af370bb9342ab98130b27b5389d1b1cb'),
           capabilityProfileId:
               '$engineId:$resolvedPlatformFamily:$capabilityVersion',
           engineId: engineId,

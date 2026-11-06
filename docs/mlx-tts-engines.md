@@ -136,8 +136,9 @@ For S3 dialogue checks, `READALOUD_SMOKE_REQUIRE_END=1` requires contiguous
 completed source spans through the final word. `READALOUD_SMOKE_CAST_VOICES`
 accepts a JSON map of Character labels to explicit voice IDs, and
 `READALOUD_SMOKE_EXPECT_CAST_SEQUENCE=Mara,Mira,Mara` checks dialogue order.
-`READALOUD_SMOKE_WHISPER_TEXT` identifies one synthetic-fixture segment to receive
-an explicit canonical whisper annotation; it does not infer directions from
+`READALOUD_SMOKE_WHISPER_TEXT` and `READALOUD_SMOKE_SHOUT_TEXT` identify
+synthetic-fixture segments to receive explicit canonical delivery annotations;
+they do not infer directions from
 prose. `READALOUD_SMOKE_TRANSPORT=1` checks pause, seek acknowledgment and a
 superseded pending Play. The receipt separates transport latency, startup,
 playhead stalls, app/worker peak footprint and UI event-loop delay. The latter
@@ -149,6 +150,8 @@ For actual app-output evidence, compile `tools/capture_macos_app_audio.swift`
 with `swiftc -parse-as-library` and run the resulting executable with the owned
 test PID, a new WAV path and a duration of at most 300 seconds. ScreenCaptureKit
 filters to that process; it does not change output routing or record a microphone.
+It rejects capture packet timestamp discontinuities of 100 ms or more so a
+missing capture interval cannot silently shorten the evidence recording.
 The tool requires existing screen/audio-capture authorization and does not
 request new permissions. Start it before first speech. Run
 `tools/compare_captured_dialogue.py RECEIPT CAPTURE.wav NEW_RESULT.json` with the
@@ -176,15 +179,17 @@ references separately from their text. Recognized legacy records migrate when
 opened; an unknown or mismatched adjustment is retained but not applied.
 Document intent such as a pronunciation request or “whispered” direction remains
 separate. The pinned Drama bf16 adapter lowers one unambiguous, explicit,
-whole-segment whisper direction to the native `[whispers]` cue and isolates its
-scope from subsequent ordinary text. Partial/conflicting directions, other
+whole-segment whisper or shout direction to native `[whispers]` or `[shouting]`
+cues, preserving directed turn boundaries within a scene. Partial/conflicting directions, other
 delivery types and untested variants remain preserved with unsupported fallback.
 The November 5 S3 listening check found expressive delivery but failed perceived
 Character continuity: Mara sounded like a different person between her whispered
 and ordinary turns. Matching selected reference IDs does not satisfy this gate.
 A subsequent direct-native scene sample passed the user's same-person listening
-check. Scene synthesis is not yet integrated into app playback, so the app's
-identity gate remains open. Unchanged raw speech is reused across
+check and a revised whisper/shout sample passed the requested contrast check.
+Scene synthesis is now integrated into playback and export. The integrated
+app capture is submitted for human listening; broad identity acceptance remains
+open. Unchanged raw speech is reused across
 seek/replay; join corrections have their own cache identity.
 
 A supervised child process loads one model and handles one
@@ -331,11 +336,13 @@ this repository. The descriptions are catalog claims, not verified acoustic
 quality. Each selected reference is passed to the model; missing references
 fail visibly rather than selecting a different voice.
 
-Current story reading retains one selected voice per planned chunk. Drama's
-native multi-speaker scene API is not yet connected to the document/timing DTOs;
-source-offset-aware scene synthesis remains open in #111. Do not describe
-per-character chunk routing as native scene generation. Speech-rate handling
-for MLX and perceptual voice continuity also remain acceptance gaps.
+Pinned bf16 story reading now sends bounded ordered turns to Drama's native
+multi-speaker API in one generation call per scene. Each turn retains its selected
+reference, source span, binding revision and explicit directions. The library owns
+within-scene context; no additional model-history cache is maintained by the app.
+Other precisions keep separate-turn synthesis. Word highlighting remains an
+estimate over scene duration. Perceptual continuity across scene boundaries,
+speech-rate handling and broader #111 acceptance remain open.
 
 Sources: [Drama bf16 model card](https://huggingface.co/mlx-community/fish-audio-drama-3-bf16),
 [MLX Audio Drama implementation](https://github.com/Blaizzy/mlx-audio/tree/main/mlx_audio/tts/models/fish_drama3),

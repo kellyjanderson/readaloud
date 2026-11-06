@@ -1,4 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:read_aloud/src/models/native_speech_turn.dart';
 import 'package:read_aloud/src/models/prepared_voice_binding.dart';
 import 'package:read_aloud/src/models/speech_annotation.dart';
 import 'package:read_aloud/src/services/mlx_speech_worker_processor.dart';
@@ -15,11 +16,13 @@ void main() {
     documentId: 'document',
   );
   SpeechWorkerChunkRequest request({
+    List<NativeSpeechTurn> turns = const [],
     String key = 'continued',
     String text = 'Stay close.',
     String generation = 'first',
     double rate = 1,
   }) => SpeechWorkerChunkRequest(
+    sceneTurns: turns,
     sessionId: 'session',
     generationId: generation,
     chunkId: 'chunk',
@@ -46,6 +49,42 @@ void main() {
     engineVersion: 'runtime',
     modelIdentity: model,
     referenceDigests: references,
+  );
+  test(
+    'changing a non-leading scene voice or delivery changes raw identity',
+    () {
+      NativeSpeechTurn turn(String voice, String text) => NativeSpeechTurn(
+        voiceId: voice,
+        text: text,
+        segmentIds: ['s'],
+        startWord: 0,
+        endWord: 2,
+        bindingFingerprint: voice,
+        bindingRevision: 1,
+      );
+      final original = identity(
+        request(turns: [turn('a', 'Hello.'), turn('b', 'Reply.')]),
+      );
+      expect(
+        identity(request(turns: [turn('a', 'Hello.'), turn('c', 'Reply.')])),
+        isNot(original),
+      );
+      expect(
+        identity(
+          request(turns: [turn('a', 'Hello.'), turn('b', '[shouting] Reply.')]),
+        ),
+        isNot(original),
+      );
+      expect(
+        identity(
+          request(
+            key: 'resumed',
+            turns: [turn('a', 'Hello.'), turn('b', 'Reply.')],
+          ),
+        ),
+        original,
+      );
+    },
   );
   test(
     'seek and retry reuse identical native speech, independent of join policy',

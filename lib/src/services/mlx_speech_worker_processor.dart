@@ -17,7 +17,7 @@ import 'mlx_voice_library.dart';
 
 const String mlxTtsModelVersion = 'mlx-audio-0.6.3-mlx-0.32.4-complete-v3';
 String mlxTtsVersionFor(int bits, {String? engineId}) =>
-    '$mlxTtsModelVersion-q$bits${isDramaEngine(engineId ?? '') ? '-native-cast-v1' : ''}';
+    '$mlxTtsModelVersion-q$bits${isDramaEngine(engineId ?? '') ? (bits == 0 ? '-native-scene-v2' : '-native-cast-v1') : ''}';
 const MethodChannel _mlxLifecycleChannel = MethodChannel(
   'read_aloud/mlx_tts_lifecycle',
 );
@@ -45,6 +45,11 @@ String mlxRawAudioIdentity({
   'normalizationVersion': request.normalizationVersion,
   'capabilityProfileId': request.capabilityProfileId,
   'speakText': request.speakText,
+  'sceneTurns': request.sceneTurns
+      .map(
+        (t) => {'voice': t.voiceId, 'text': t.text, 'directions': t.directions},
+      )
+      .toList(),
   'pronunciationArtifacts': request.pronunciationArtifacts,
   'synthesisIdentity': request.synthesisIdentity,
 });
@@ -477,7 +482,32 @@ class MlxSpeechWorkerChunkProcessor
         );
         return;
       }
-      final referenceIds = isDramaEngine(engineId)
+      if (request.sceneTurns.isNotEmpty) {
+        if (engineId != 'fish_drama3' ||
+            quantizationBits != 0 ||
+            request.sceneTurns.length > 16) {
+          throw StateError('Native scenes are unsupported for this target.');
+        }
+        int? nextWord;
+        for (final turn in request.sceneTurns) {
+          final bound = _bindings[turn.voiceId];
+          if (bound == null ||
+              bound.fingerprint != turn.bindingFingerprint ||
+              bound.bindingRevision != turn.bindingRevision ||
+              bound.bindingRevision != binding.bindingRevision ||
+              bound.documentId != request.documentId ||
+              turn.endWord <= turn.startWord ||
+              (nextWord != null && nextWord != turn.startWord)) {
+            throw StateError(
+              'Native scene has stale bindings or non-contiguous source turns.',
+            );
+          }
+          nextWord = turn.endWord;
+        }
+      }
+      final referenceIds = request.sceneTurns.isNotEmpty
+          ? (request.sceneTurns.map((t) => t.voiceId).toSet().toList()..sort())
+          : isDramaEngine(engineId)
           ? (_bindings.values
                 .where(
                   (b) =>
@@ -493,6 +523,9 @@ class MlxSpeechWorkerChunkProcessor
       final firstReference = referenceIds.isEmpty
           ? 0
           : (referenceIds.indexOf(request.voiceId) ~/ 16) * 16;
+      if (request.sceneTurns.isNotEmpty && referenceIds.length > 16) {
+        throw StateError('Native scene exceeds reference capacity.');
+      }
       final references = referenceIds
           .skip(firstReference)
           .take(16)
@@ -579,6 +612,9 @@ class MlxSpeechWorkerChunkProcessor
           voice: _nativeVoice(engineId, request.voiceId),
           referenceAudioPath: _referencePaths[request.voiceId],
           references: references.isEmpty ? null : references,
+          sceneTurns: request.sceneTurns.isEmpty
+              ? null
+              : request.sceneTurns.map((t) => t.toMap()).toList(),
           referenceText: usesReferenceVoiceLibrary(engineId)
               ? MlxVoiceLibrary.voice(request.voiceId).rawValue['referenceText']
                     as String
@@ -756,6 +792,7 @@ class MlxTtsPythonProcess {
     String? referenceAudioPath,
     String? referenceText,
     List<Map<String, Object?>>? references,
+    List<Map<String, Object?>>? sceneTurns,
     required String language,
     required String outputPath,
     void Function(Map<String, Object?>)? onProgress,
@@ -774,6 +811,7 @@ class MlxTtsPythonProcess {
       'referenceAudioPath': referenceAudioPath,
       'referenceText': referenceText,
       'references': ?references,
+      'sceneTurns': ?sceneTurns,
       'language': language,
       'outputPath': outputPath,
     },

@@ -37,13 +37,17 @@ class ChunkPlannerGraph {
     final speechDocument = input.speechDocument;
     final startSegmentIndex =
         speechDocument.segmentIndexById[input.startSegmentId] ?? 0;
-    final chunks = <ChunkSpec>[];
+    var chunks = <ChunkSpec>[];
+    final scenes =
+        input.engineId == 'fish_drama3' &&
+        input.engineVersion.endsWith('-q0-native-scene-v2');
     final globalWordOffsets = _offsets;
     final routingContextBySegmentId = _routes;
 
     var cursor = startSegmentIndex;
     while (cursor < speechDocument.segments.length &&
-        (input.maxChunks == null || chunks.length < input.maxChunks!)) {
+        (input.maxChunks == null ||
+            chunks.length < input.maxChunks! * (scenes ? 16 : 1))) {
       final isFirstChunk = chunks.isEmpty;
       final softTarget = isFirstChunk
           ? ChunkPlannerService._firstChunkSoftTargetWords
@@ -69,6 +73,13 @@ class ChunkPlannerGraph {
       cursor = built.nextSegmentIndex;
     }
 
+    if (scenes) {
+      chunks = packNativeSceneChunks(chunks);
+      if (input.maxChunks != null) {
+        chunks = chunks.take(input.maxChunks!).toList();
+      }
+      if (chunks.isNotEmpty) cursor = chunks.last.endSegmentIndex + 1;
+    }
     final planDigest = crypto.sha256.convert(
       utf8.encode(
         [
@@ -501,4 +512,53 @@ class _ChunkRoutingContext {
   final String? routeId;
   final String? castId;
   final String? dialogueSpanId;
+}
+
+/// Application work-ahead bound, distinct from the library's native splitter.
+List<ChunkSpec> packNativeSceneChunks(List<ChunkSpec> turns) {
+  final result = <ChunkSpec>[];
+  var group = <ChunkSpec>[];
+  var words = 0;
+  final voices = <String>{};
+  void flush() {
+    if (group.isEmpty) return;
+    final first = group.first, last = group.last;
+    result.add(
+      ChunkSpec(
+        chunkId: 'scene_${first.chunkId}',
+        segmentIds: List.unmodifiable(group.expand((c) => c.segmentIds)),
+        speakText: group.map((c) => c.speakText).join(' '),
+        voiceId: first.voiceId,
+        boundaryClass: first.boundaryClass,
+        startSegmentIndex: first.startSegmentIndex,
+        endSegmentIndex: last.endSegmentIndex,
+        estimatedWordCount: words,
+        cacheKey: crypto.sha256
+            .convert(utf8.encode(group.map((c) => c.cacheKey).join('|')))
+            .toString(),
+        startWordIndex: first.startWordIndex,
+        endWordIndex: last.endWordIndex,
+        ttsSegments: List.unmodifiable(group.expand((c) => c.ttsSegments)),
+        sceneTurns: List.unmodifiable(group),
+      ),
+    );
+    group = [];
+    words = 0;
+    voices.clear();
+  }
+
+  for (final turn in turns) {
+    if (group.isNotEmpty &&
+        (group.length >= 16 ||
+            words + turn.estimatedWordCount > 75 ||
+            (!voices.contains(turn.voiceId) && voices.length == 16) ||
+            group.last.endWordIndex != turn.startWordIndex)) {
+      flush();
+    }
+    group.add(turn);
+    words += turn.estimatedWordCount;
+    voices.add(turn.voiceId);
+  }
+  flush();
+  return result;
 }

@@ -25,6 +25,25 @@ MLX uses the same admission policy implementation and existing 64-chunk cap. Fis
 Model installation, launch selection and Voxtral's noncommercial license are documented in
 [MLX TTS engine setup](../../docs/mlx-tts-engines.md).
 
+Fish's next planning window now uses that same twenty-second low watermark.
+The previous independent eight-second planning gate survived the first refill
+repair: a retained long run exhausted its native playlist for 2.367 seconds while
+two subsequent WAVs took 13.428 seconds to arrive. Chunk admission still owns
+the duration/count bounds; the planner admits only one bounded window at a time.
+Initial MLX planning is also bounded to three chunks/scenes instead of requesting
+the complete prepared range. Later windows retain the existing revision and
+cancellation owner.
+
+ReaderController resource preparation makes one attempt per captured playback
+or export intent. The playback pump alone schedules a newer intent. The old
+inner retry loop kept revalidating Fish references after document replacement in
+the retained release hang; its AOT frame checked pre-await revision values.
+Current-intent guards run before native admission and after success/failure;
+binding state is committed before publishing stage completion. Pending resource
+work responds to the same Pause action shown by the reading surface. Unit
+stale-success/error tests and the running file-import/annotation fixture cover
+the repaired path; the original hang evidence remains retained in #111/#113.
+
 The [accepted resource run 2](https://github.com/kellyjanderson/readaloud/issues/53#issuecomment-6395918850) at harness source `25f1dfe` recorded four inferences, two balanced session opens/closes, sixteen tensor releases and final zero sessions/tensors with no native errors. It shares unchanged production behavior with `295677e`; it is not a playback, RSS-isolation or listening result. Assignment295 subsequently failed its listening timeout and then cleaned up to zero sessions/tensors/sources/pins/tasks. The [e18c81d supplemental run](https://github.com/kellyjanderson/readaloud/issues/53#issuecomment-6396165816) exited zero with 133 inferences, three balanced session opens/closes and 532 tensor releases, peak one session/four tensors and final zero native resources, sources, pins and preparation tasks. This bounded cleanup evidence does not establish listening or input during active export.
 
 The macOS plugin serializes ONNX calls on `ortQueue`. The model runner disposes every allocated input and output tensor on success and failure before closing the session, including on macOS. Partially registered native outputs roll back if metadata extraction fails. The former per-chunk macOS close workaround is replaced by resident ownership and explicit drain/close. Native resource counts and close-cycle evidence belong in [P2](https://github.com/kellyjanderson/readaloud/issues/51), distinct from acoustic quality or UI proof.

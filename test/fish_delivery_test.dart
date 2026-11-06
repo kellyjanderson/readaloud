@@ -19,6 +19,7 @@ void main() {
   );
   final first = document.speechDocument.segments.first;
   BaseSpeechAnnotationSet annotations({
+    DeliveryIntent delivery = DeliveryIntent.whispered,
     bool partial = false,
     bool conflict = false,
   }) => const BaseSpeechAnnotationInferenceService().infer(
@@ -33,7 +34,7 @@ void main() {
         endWord: partial ? 1 : first.wordCount,
         confidence: 1,
         source: SpeechAnnotationSource.userOverride,
-        deliveryIntent: DeliveryIntent.whispered,
+        deliveryIntent: delivery,
       ),
       if (conflict)
         SpeechAnnotation(
@@ -65,6 +66,21 @@ void main() {
     ),
   );
 
+  test('explicit shouting preserves intent and lowers only its target cue', () {
+    final result = realize(annotations(delivery: DeliveryIntent.shouted));
+    expect(result.performanceIntents.single.engineControl, '[shouting]');
+    expect(
+      result.performanceIntents.single.annotation.deliveryIntent,
+      DeliveryIntent.shouted,
+    );
+    expect(
+      realize(
+        annotations(delivery: DeliveryIntent.shouted),
+        engine: 'kokoro',
+      ).performanceIntents.single.engineControl,
+      isNull,
+    );
+  });
   test(
     'one explicit whole-turn whisper is isolated and survives the worker',
     () async {

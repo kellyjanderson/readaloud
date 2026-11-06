@@ -167,11 +167,14 @@ class KokoroPronunciationTranslationService {
           .where((intent) {
             // Revalidate at the captured target: reusing a realization for a
             // different model/revision must never leak an inline direction.
-            return intent.engineControl == '[whispers]' &&
+            return const {
+                  '[whispers]',
+                  '[shouting]',
+                }.contains(intent.engineControl) &&
                 const SpeechAdjustmentRegistry()
                     .resolve(
-                      context: const SpeechAdjustmentContext.engineModel(
-                        'fish-drama3.whispered',
+                      context: SpeechAdjustmentContext.engineModel(
+                        'fish-drama3.${intent.annotation.deliveryIntent?.name}',
                         '1',
                       ),
                       target: activeCapability.modelContext,

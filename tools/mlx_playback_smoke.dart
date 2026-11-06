@@ -125,26 +125,35 @@ Future<void> main(List<String> args) async {
       );
     }
     final whisperText = Platform.environment['READALOUD_SMOKE_WHISPER_TEXT'];
-    if (whisperText != null) {
+    final shoutText = Platform.environment['READALOUD_SMOKE_SHOUT_TEXT'];
+    if (whisperText != null || shoutText != null) {
       final source = controller.document;
-      final segment = source.speechDocument.segments.singleWhere(
-        (s) => s.normalizedText.contains(whisperText),
-      );
-      final annotations = const BaseSpeechAnnotationInferenceService().infer(
-        speechDocument: source.speechDocument,
-        displayDocument: source.displayDocument,
-        explicitIntents: [
+      final directions = <SpeechAnnotation>[];
+      for (final entry in {
+        whisperText: DeliveryIntent.whispered,
+        shoutText: DeliveryIntent.shouted,
+      }.entries) {
+        if (entry.key == null) continue;
+        final segment = source.speechDocument.segments.singleWhere(
+          (s) => s.normalizedText.contains(entry.key!),
+        );
+        directions.add(
           SpeechAnnotation(
-            annotationId: 's3_explicit_whisper',
+            annotationId: 's3_explicit_${entry.value.name}',
             segmentId: segment.segmentId,
             kind: SpeechAnnotationKind.deliveryIntent,
             startWord: 0,
             endWord: segment.wordCount,
             confidence: 1,
             source: SpeechAnnotationSource.userOverride,
-            deliveryIntent: DeliveryIntent.whispered,
+            deliveryIntent: entry.value,
           ),
-        ],
+        );
+      }
+      final annotations = const BaseSpeechAnnotationInferenceService().infer(
+        speechDocument: source.speechDocument,
+        displayDocument: source.displayDocument,
+        explicitIntents: directions,
       );
       await controller.loadDocument(
         ReaderDocument.fromNormalized(
@@ -158,7 +167,14 @@ Future<void> main(List<String> args) async {
           basePronunciationArtifacts: source.basePronunciationArtifacts,
         ),
       );
-      receipt['explicitWhisperSegment'] = segment.segmentId;
+      receipt['explicitDirections'] = directions
+          .map(
+            (d) => {
+              'segmentId': d.segmentId,
+              'delivery': d.deliveryIntent!.name,
+            },
+          )
+          .toList();
     }
     final castVoices = Platform.environment['READALOUD_SMOKE_CAST_VOICES'];
     if (castVoices != null) {
@@ -383,6 +399,7 @@ Future<void> main(List<String> args) async {
     receipt['spokenChunks'] = controller.spokenChunkRecords
         .map(
           (chunk) => {
+            'sceneTurns': chunk.sceneTurns.map((t) => t.toMap()).toList(),
             'castId': chunk.castId,
             'voiceId': chunk.voiceId,
             'startWord': chunk.startWordIndex,
@@ -412,11 +429,15 @@ Future<void> main(List<String> args) async {
         Platform.environment['READALOUD_SMOKE_EXPECT_CAST_SEQUENCE'];
     if (expectedCast != null) {
       final actual = controller.spokenChunkRecords
-          .where((c) => c.castId != null && c.castId != 'cast_narrator')
+          .expand(
+            (c) => c.sceneTurns.isEmpty
+                ? [c.castId]
+                : c.sceneTurns.map((t) => t.castId),
+          )
+          .where((id) => id != null && id != 'cast_narrator')
           .map(
-            (c) => controller.characterCastRegistry
-                .forCastId(c.castId!)!
-                .displayLabel,
+            (id) =>
+                controller.characterCastRegistry.forCastId(id!)!.displayLabel,
           )
           .toList();
       if (jsonEncode(actual) != jsonEncode(expectedCast.split(','))) {
@@ -448,12 +469,31 @@ Future<void> main(List<String> args) async {
     }
     if (contractCastId != null) {
       final turns = controller.spokenChunkRecords
-          .where((c) => c.castId == contractCastId)
+          .expand(
+            (c) => c.sceneTurns.isEmpty
+                ? [
+                    {
+                      'castId': c.castId,
+                      'voiceId': c.voiceId,
+                      'completed': c.completed,
+                    },
+                  ]
+                : c.sceneTurns.map(
+                    (t) => {
+                      'castId': t.castId,
+                      'voiceId': t.voiceId,
+                      'completed': c.completed,
+                    },
+                  ),
+          )
+          .where((c) => c['castId'] == contractCastId)
           .toList();
       receipt['characterSpokenTurns'] = turns.length;
-      if (!turns.any((c) => c.voiceId == contractVoiceId && c.completed) ||
+      if (!turns.any(
+            (c) => c['voiceId'] == contractVoiceId && c['completed'] == true,
+          ) ||
           (Platform.environment['READALOUD_SMOKE_AUTO_VOICE_CHANGE'] != '1' &&
-              turns.any((c) => c.voiceId != contractVoiceId))) {
+              turns.any((c) => c['voiceId'] != contractVoiceId))) {
         throw StateError(
           'No correctly selected character turn reached playback',
         );
@@ -568,6 +608,16 @@ Future<void> main(List<String> args) async {
       transport['cancelledPlayStayedSilent'] = true;
     }
     passed = true;
+    final exportPath = Platform.environment['READALOUD_SMOKE_EXPORT_PATH'];
+    if (exportPath != null) {
+      final result = await controller.exportAudioToPath(exportPath);
+      if (result == null || !await File(exportPath).exists()) {
+        throw StateError(
+          'Integrated scene export failed: ${controller.statusMessage}',
+        );
+      }
+      receipt['sceneExportPath'] = exportPath;
+    }
   } catch (error, stack) {
     receipt.addAll({'passed': false, 'error': '$error', 'stack': '$stack'});
   } finally {

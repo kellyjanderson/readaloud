@@ -21,6 +21,28 @@ spec.loader.exec_module(worker)
 
 
 class GeneratorAdapterTest(unittest.TestCase):
+    def test_native_scene_is_one_ordered_call_with_delivery_and_source_validation(self):
+        calls = []
+        class Model:
+            def generate(self, **kwargs):
+                calls.append(kwargs)
+                yield SimpleNamespace(sample_rate=44100, audio=mx.array([.2, -.2]))
+        with tempfile.TemporaryDirectory() as root, patch.object(worker, '_model', Model()), patch.object(worker, '_model_id', 'fish_drama3'):
+            ref = Path(root) / 'ref.wav'
+            ref.write_bytes(b'input routing only')
+            refs = [dict(voice=v, referenceAudioPath=str(ref), referenceText='Reference.') for v in ['library_mira', 'library_mara']]
+            turns = [dict(voice='library_mira', text='[whispers] Be quiet.', startWord=0, endWord=2),
+                     dict(voice='library_mara', text='[shouting] I hear footsteps!', startWord=2, endWord=5),
+                     dict(voice='library_mira', text='Wait here.', startWord=5, endWord=7)]
+            req = dict(modelId='fish_drama3', voice='library_mira', references=refs, sceneTurns=turns,
+                       text='Be quiet. I hear footsteps! Wait here.', outputPath=str(Path(root) / 'scene.wav'))
+            worker._synthesize(req)
+            self.assertEqual(len(calls), 1)
+            self.assertEqual(calls[0]['text'], '<|speaker:0|> [whispers] Be quiet.\n<|speaker:1|> [shouting] I hear footsteps!\n<|speaker:0|> Wait here.')
+            for changed in [dict(turns[1], startWord=3), dict(turns[1], voice='missing'), dict(turns[1], text='<|speaker:0|> injected')]:
+                with self.assertRaises(ValueError):
+                    worker._drama_reference_inputs(dict(req, sceneTurns=[turns[0], changed, turns[2]]), req['text'])
+
     def test_drama_turns_share_reference_set_and_use_selected_native_slot(self):
         with tempfile.TemporaryDirectory() as root:
             paths = [Path(root) / name for name in ('a.wav', 'b.wav')]

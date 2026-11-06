@@ -1,3 +1,4 @@
+import '../models/native_speech_turn.dart';
 import 'dart:async';
 
 import 'package:flutter/foundation.dart';
@@ -195,6 +196,7 @@ class SpeechRuntimeChunkPayload {
     this.capabilityProfileId,
     this.expectedBindingFingerprint,
     this.expectedBindingRevision,
+    this.sceneTurns = const <NativeSpeechTurn>[],
     this.synthesisIdentity = 'legacy-unspecified',
     this.pronunciationArtifacts = const <Map<String, Object?>>[],
     this.missingFallbackWordCount = 0,
@@ -209,6 +211,7 @@ class SpeechRuntimeChunkPayload {
   final String? capabilityProfileId;
   final String? expectedBindingFingerprint;
   final int? expectedBindingRevision;
+  final List<NativeSpeechTurn> sceneTurns;
   final String synthesisIdentity;
   final String speakText;
   final List<int> tokens;
@@ -234,6 +237,7 @@ class SpeechRuntimeChunkPayload {
       'capabilityProfileId': capabilityProfileId,
       'expectedBindingFingerprint': expectedBindingFingerprint,
       'expectedBindingRevision': expectedBindingRevision,
+      'sceneTurns': sceneTurns.map((t) => t.toMap()).toList(),
       'synthesisIdentity': synthesisIdentity,
       'speakText': speakText,
       'tokens': tokens,
@@ -261,6 +265,11 @@ class SpeechRuntimeChunkPayload {
       capabilityProfileId: map['capabilityProfileId'] as String?,
       expectedBindingFingerprint: map['expectedBindingFingerprint'] as String?,
       expectedBindingRevision: map['expectedBindingRevision'] as int?,
+      sceneTurns: List.unmodifiable(
+        (map['sceneTurns'] as List? ?? []).map(
+          (t) => NativeSpeechTurn.fromMap(Map<String, dynamic>.from(t as Map)),
+        ),
+      ),
       synthesisIdentity:
           map['synthesisIdentity'] as String? ?? 'legacy-unspecified',
       speakText: map['speakText']! as String,
@@ -976,6 +985,7 @@ class SpeechRuntime {
         cacheKey: chunk.cacheKey,
         expectedBindingFingerprint: chunk.expectedBindingFingerprint,
         expectedBindingRevision: chunk.expectedBindingRevision,
+        sceneTurns: chunk.sceneTurns,
         synthesisIdentity: chunk.synthesisIdentity,
         boundaryClass: chunk.boundaryClass,
         documentId: chunk.documentId,
@@ -1020,6 +1030,7 @@ class SpeechRuntime {
           cacheKey: chunk.cacheKey,
           expectedBindingFingerprint: chunk.expectedBindingFingerprint,
           expectedBindingRevision: chunk.expectedBindingRevision,
+          sceneTurns: chunk.sceneTurns,
           synthesisIdentity: chunk.synthesisIdentity,
           boundaryClass: chunk.boundaryClass,
           documentId: chunk.documentId,

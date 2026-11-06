@@ -374,6 +374,24 @@ def _drama_reference_inputs(request: dict[str, Any], text: str):
         voices.append(item['voice'])
     if request.get('voice') not in voices:
         raise ValueError('Selected voice is absent from the Drama reference set.')
+    turns = request.get('sceneTurns')
+    if turns is not None:
+        if not isinstance(turns, list) or not 1 <= len(turns) <= 16:
+            raise ValueError('Drama scene requires 1 to 16 ordered turns.')
+        lines, next_word = [], None
+        for turn in turns:
+            if not isinstance(turn, dict) or turn.get('voice') not in voices:
+                raise ValueError('Scene turn has no reference voice.')
+            content = turn.get('text')
+            start, end = turn.get('startWord'), turn.get('endWord')
+            if (not isinstance(content, str) or not content.strip()
+                    or '<|speaker:' in content or not isinstance(start, int)
+                    or not isinstance(end, int) or end <= start
+                    or (next_word is not None and start != next_word)):
+                raise ValueError('Scene text/source spans are invalid.')
+            next_word = end
+            lines.append(f"<|speaker:{voices.index(turn['voice'])}|> {content}")
+        return '\n'.join(lines), audios, transcripts
     slot = voices.index(request['voice'])
     return f'<|speaker:{slot}|> {text}', audios, transcripts
 

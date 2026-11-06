@@ -23,6 +23,19 @@ const fishDrama3ModelContext = SpeechModelContext(
 /// A new model, precision, revision or policy gets no inherited permission.
 const speechAdjustments = <SpeechAdjustmentDefinition>[
   SpeechAdjustmentDefinition(
+    id: 'fish-drama3.shouted',
+    revision: '1',
+    domain: SpeechAdjustmentDomain.delivery,
+    sourceReference:
+        'https://huggingface.co/spaces/fishaudio/Drama-3/blob/main/studio_content.json',
+    rationale:
+        'Explicit whole-turn shouting; native diagnostic accepted by human listening.',
+    origin: fishDrama3ModelContext,
+    targets: [fishDrama3ModelContext],
+    payloadType: 'inline_delivery_cue',
+    payloadValue: '[shouting]',
+  ),
+  SpeechAdjustmentDefinition(
     id: 'fish-drama3.whispered',
     revision: '1',
     domain: SpeechAdjustmentDomain.delivery,

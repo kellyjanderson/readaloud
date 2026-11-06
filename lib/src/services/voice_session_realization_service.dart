@@ -178,10 +178,15 @@ RealizedPerformanceIntent _realizePerformanceIntent(
   String engineId,
 ) {
   // Scoped natural-language controls have no verified reset token. Only lower
-  // one unambiguous whole-segment whisper, and keep it in its own model call.
+  // one unambiguous whole-turn delivery; preserve the turn boundary in scenes.
   // Partial/conflicting intent and other deliveries remain canonical metadata.
+  final control = switch (annotation.deliveryIntent) {
+    DeliveryIntent.whispered => '[whispers]',
+    DeliveryIntent.shouted => '[shouting]',
+    _ => null,
+  };
   if (engineId != 'fish_drama3' ||
-      annotation.deliveryIntent != DeliveryIntent.whispered ||
+      control == null ||
       annotation.startWord != 0 ||
       annotation.endWord != segment.wordCount ||
       annotations
@@ -191,8 +196,8 @@ RealizedPerformanceIntent _realizePerformanceIntent(
     return RealizedPerformanceIntent(annotation: annotation);
   }
   final decision = const SpeechAdjustmentRegistry().resolve(
-    context: const SpeechAdjustmentContext.engineModel(
-      'fish-drama3.whispered',
+    context: SpeechAdjustmentContext.engineModel(
+      'fish-drama3.${annotation.deliveryIntent!.name}',
       '1',
     ),
     target: const EngineCapabilityRegistry()
@@ -200,11 +205,11 @@ RealizedPerformanceIntent _realizePerformanceIntent(
         .modelContext,
     domain: SpeechAdjustmentDomain.delivery,
     payloadType: 'inline_delivery_cue',
-    payloadValue: '[whispers]',
+    payloadValue: control,
   );
   return RealizedPerformanceIntent(
     annotation: annotation,
-    engineControl: decision.allowed ? '[whispers]' : null,
+    engineControl: decision.allowed ? control : null,
     adjustmentDecision: Map.unmodifiable(decision.toMap()),
   );
 }

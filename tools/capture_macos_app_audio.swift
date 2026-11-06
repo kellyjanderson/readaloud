@@ -12,6 +12,8 @@ final class AppAudioCapture: NSObject, SCStreamOutput {
     var frames: Int64 = 0
     var sampleRate: Double = 0
     var failure: Error?
+    var nextPresentationTime: Double?
+    var maxPacketGap: Double = 0
 
     init(destination: URL) { self.destination = destination }
 
@@ -41,6 +43,16 @@ final class AppAudioCapture: NSObject, SCStreamOutput {
                 throw NSError(domain: "ReadAloudCapture", code: 1,
                               userInfo: [NSLocalizedDescriptionKey: "Capture sample rate changed"])
             }
+            let pts = CMTimeGetSeconds(CMSampleBufferGetPresentationTimeStamp(sample))
+            guard pts.isFinite else { throw NSError(domain: "ReadAloudCapture", code: 5) }
+            if let next = nextPresentationTime {
+                maxPacketGap = max(maxPacketGap, abs(pts - next))
+                guard abs(pts - next) < 0.1 else {
+                    throw NSError(domain: "ReadAloudCapture", code: 6,
+                      userInfo: [NSLocalizedDescriptionKey: "Capture packet timestamp discontinuity: \(pts - next) seconds"])
+                }
+            }
+            nextPresentationTime = pts + Double(count) / format.sampleRate
             try file!.write(from: pcm)
             frames += Int64(count)
         } catch { failure = error }

@@ -1,3 +1,4 @@
+import '../models/native_speech_turn.dart';
 import 'speech_planning_supervisor.dart';
 import '../models/chunk_plan.dart';
 import '../models/speech_document.dart';
@@ -75,6 +76,7 @@ abstract interface class TtsResourceProgressCapable {
 
 class TtsProgressUpdate {
   const TtsProgressUpdate({
+    this.sceneTurns = const <NativeSpeechTurn>[],
     required this.startOffset,
     required this.endOffset,
     required this.word,
@@ -92,6 +94,7 @@ class TtsProgressUpdate {
     this.dialogueSpanId,
   });
 
+  final List<NativeSpeechTurn> sceneTurns;
   final int startOffset;
   final int endOffset;
   final String word;

@@ -14,6 +14,7 @@ import 'package:flutter/services.dart';
 import 'package:just_audio/just_audio.dart';
 import 'package:path_provider/path_provider.dart';
 
+import '../models/native_speech_turn.dart';
 import '../models/chunk_plan.dart';
 import '../models/speech_annotation.dart';
 import '../models/speech_document.dart';
@@ -841,6 +842,7 @@ class KokoroTtsEngine
           return;
         }
         completedChunks[chunkId] = ExportedAudioChunk(
+          sceneTurns: plannedChunk.sceneTurns,
           chunkId: chunkId,
           cacheKey: plannedChunk.runtimeCacheKey(
             isInitialChunk:
@@ -1024,7 +1026,9 @@ class KokoroTtsEngine
         ...?request.planningContext?.routes?.castVoiceAssignments.assignments
             .map((a) => a.effectiveVoiceId),
         _selectedVoiceId,
-        ...?request.chunkPlan?.chunks.map((c) => c.voiceId),
+        ...?request.chunkPlan?.chunks.expand(
+          (c) => [c.voiceId, ...c.sceneTurns.map((t) => t.voiceId)],
+        ),
       };
       final suppliedResources = request.preparedResources;
       if (suppliedResources != null) {
@@ -1415,7 +1419,9 @@ class KokoroTtsEngine
         }
         while (current() &&
             kokoroPlayableLead(_admissionLead(), playerSpeed: _player.speed) >=
-                kokoroTargetBufferedLeadTime) {
+                (isDramaEngine(_engineId)
+                    ? policy.low
+                    : kokoroTargetBufferedLeadTime)) {
           await _bufferChanged.future;
         }
         if (!current()) return;
@@ -1749,8 +1755,15 @@ class KokoroTtsEngine
       _rangeActivations.removeWhere((offset, _) => offset < start);
     }
     final segmentRange = chunk.segmentRangeForWordIndex(absoluteWordIndex);
+    final turn = chunk.sceneTurns
+        .where(
+          (t) =>
+              absoluteWordIndex >= t.startWord && absoluteWordIndex < t.endWord,
+        )
+        .firstOrNull;
     _onProgress?.call(
       TtsProgressUpdate(
+        sceneTurns: chunk.sceneTurns,
         startOffset: chunk.startOffset + boundary.start,
         endOffset: chunk.startOffset + boundary.end,
         word: boundary.word,
@@ -1761,11 +1774,11 @@ class KokoroTtsEngine
         wordEndIndex: absoluteWordIndex + 1,
         elapsedInChunk: elapsedInChunk,
         chunkAudioDuration: chunk.duration,
-        voiceId: chunk.voiceId,
+        voiceId: turn?.voiceId ?? chunk.voiceId,
         rate: chunk.rate,
-        routeId: chunk.routeId,
-        castId: chunk.castId,
-        dialogueSpanId: chunk.dialogueSpanId,
+        routeId: turn?.routeId ?? chunk.routeId,
+        castId: turn?.castId ?? chunk.castId,
+        dialogueSpanId: turn?.dialogueSpanId ?? chunk.dialogueSpanId,
       ),
     );
   }
@@ -1890,6 +1903,7 @@ class KokoroTtsEngine
     final playbackChunk = _PlaybackChunk(
       chunkId: chunk.chunkId,
       generationId: generation,
+      sceneTurns: chunk.sceneTurns,
       boundaryClass: chunk.boundaryClass,
       documentId: chunk.documentId,
       segmentIds: chunk.segmentIds,
@@ -2472,6 +2486,94 @@ class KokoroTtsEngine
     required String languageTag,
     KokoroTokenizationWorker? tokenWorker,
   }) async {
+    if (spec.sceneTurns.isNotEmpty) {
+      final prepared = await _preparePlannedChunkWindow(
+        request: request,
+        specs: spec.sceneTurns,
+        initialSearchOffset: searchOffset,
+        languageTag: languageTag,
+        tokenWorker: tokenWorker,
+      );
+      final turns = prepared.chunks;
+      final first = turns.first;
+      final envelope = List<NativeSpeechTurn>.unmodifiable(
+        turns.map(
+          (turn) => NativeSpeechTurn(
+            voiceId: turn.voiceId,
+            text: turn.engineSpeakText,
+            segmentIds: turn.segmentIds,
+            startWord: turn.startWordIndex,
+            endWord: turn.endWordIndex,
+            bindingFingerprint: turn.expectedBinding.fingerprint,
+            bindingRevision: turn.expectedBinding.bindingRevision,
+            castId: turn.castId,
+            routeId: turn.routeId,
+            dialogueSpanId: turn.dialogueSpanId,
+            directions: List.unmodifiable(
+              turn.ttsSegments
+                  .expand((s) => s.performanceIntents)
+                  .map(
+                    (i) => {
+                      'annotationId': i.annotation.annotationId,
+                      'segmentId': i.annotation.segmentId,
+                      'startWord': i.annotation.startWord,
+                      'endWord': i.annotation.endWord,
+                      'source': i.annotation.source.name,
+                      'confidence': i.annotation.confidence,
+                      'delivery': i.annotation.deliveryIntent?.name,
+                      'control': i.engineControl,
+                    },
+                  ),
+            ),
+          ),
+        ),
+      );
+      return _PreparedPlannedChunk(
+        nextSearchOffset: prepared.nextSearchOffset,
+        chunk: _QueuedChunk(
+          chunkId: 'scene_${first.chunkId}',
+          expectedBinding: first.expectedBinding,
+          sceneTurns: envelope,
+          synthesisIdentity: first.synthesisIdentity,
+          synthesisRate: first.synthesisRate,
+          generationOrder: first.generationOrder,
+          segmentIds: spec.segmentIds,
+          cacheKey: spec.cacheKey,
+          voiceId: first.voiceId,
+          boundaryClass: first.boundaryClass,
+          documentId: first.documentId,
+          normalizationVersion: first.normalizationVersion,
+          text: spec.speakText,
+          capabilityProfileId: first.capabilityProfileId,
+          engineSpeakText: turns.map((t) => t.engineSpeakText).join('\n'),
+          startOffset: first.startOffset,
+          startWordIndex: first.startWordIndex,
+          endWordIndex: turns.last.endWordIndex,
+          tokens: List.unmodifiable(turns.expand((t) => t.tokens)),
+          segmentRanges: List.unmodifiable(
+            turns.expand((t) => t.segmentRanges),
+          ),
+          ttsSegments: spec.ttsSegments,
+          translatedPronunciationArtifacts: List.unmodifiable(
+            turns.expand((t) => t.translatedPronunciationArtifacts),
+          ),
+          translatedPayloadUnits: List.unmodifiable(
+            turns.expand((t) => t.translatedPayloadUnits),
+          ),
+          missingFallbackWordCount: turns.fold(
+            0,
+            (n, t) => n + t.missingFallbackWordCount,
+          ),
+          wordBoundaries: _buildWordBoundaries(spec.speakText),
+          finalPhonemeString: '',
+          phonemeTraceLines: const [],
+          routeId: null,
+          castId: null,
+          dialogueSpanId: null,
+          fallbackRecoveryDepth: 0,
+        ),
+      );
+    }
     final binding = _bindingForVoice(
       request.preparedResources ?? _preparedBindings,
       spec.voiceId,
@@ -3156,6 +3258,7 @@ class KokoroTtsEngine
         'capabilityProfileId': chunk.capabilityProfileId,
         'segmentIds': chunk.segmentIds,
         'engineSpeakText': chunk.engineSpeakText,
+        'sceneTurns': chunk.sceneTurns.map((t) => t.toMap()).toList(),
         'missingFallbackWordCount': chunk.missingFallbackWordCount,
         'artifactCount': chunk.translatedPronunciationArtifacts.length,
         'directCount': directCount,
@@ -3200,6 +3303,7 @@ class KokoroTtsEngine
 
 class _QueuedChunk {
   const _QueuedChunk({
+    this.sceneTurns = const <NativeSpeechTurn>[],
     required this.chunkId,
     required this.expectedBinding,
     required this.synthesisIdentity,
@@ -3232,6 +3336,7 @@ class _QueuedChunk {
     required this.fallbackRecoveryDepth,
   });
 
+  final List<NativeSpeechTurn> sceneTurns;
   final String chunkId;
   final PreparedVoiceBinding expectedBinding;
   final String synthesisIdentity;
@@ -3270,6 +3375,7 @@ class _QueuedChunk {
     BreakClass? boundaryClass,
   }) {
     return _QueuedChunk(
+      sceneTurns: sceneTurns,
       chunkId: chunkId ?? this.chunkId,
       expectedBinding: expectedBinding,
       synthesisIdentity: synthesisIdentity,
@@ -3310,6 +3416,7 @@ class _QueuedChunk {
     required bool isResumedChunk,
   }) {
     return SpeechRuntimeChunkPayload(
+      sceneTurns: sceneTurns,
       chunkId: chunkId,
       expectedBindingFingerprint: expectedBinding.fingerprint,
       expectedBindingRevision: expectedBinding.bindingRevision,
@@ -3383,6 +3490,7 @@ List<ExportedPronunciationArtifact> _exportPronunciationArtifacts(
 
 class _PlaybackChunk {
   const _PlaybackChunk({
+    this.sceneTurns = const <NativeSpeechTurn>[],
     required this.chunkId,
     required this.generationId,
     required this.boundaryClass,
@@ -3404,6 +3512,7 @@ class _PlaybackChunk {
     required this.dialogueSpanId,
   });
 
+  final List<NativeSpeechTurn> sceneTurns;
   final String chunkId;
   final String generationId;
   final BreakClass boundaryClass;
