@@ -124,6 +124,11 @@ Future<void> main(List<String> args) async {
                 '"I will," Ben replied. The sun shone on the water.',
       );
     }
+    if (Platform.environment['READALOUD_SMOKE_CHARACTER_ANALYSIS'] == '1') {
+      // Exercise the same opt-in refinement as Settings, without making it a
+      // prerequisite for Play or changing the product activation policy.
+      controller.characterAnalysis.enable();
+    }
     final whisperText = Platform.environment['READALOUD_SMOKE_WHISPER_TEXT'];
     final shoutText = Platform.environment['READALOUD_SMOKE_SHOUT_TEXT'];
     if (whisperText != null || shoutText != null) {
@@ -626,10 +631,25 @@ Future<void> main(List<String> args) async {
       }
       receipt['sceneExportPath'] = exportPath;
     }
+    if (Platform.environment['READALOUD_SMOKE_CHARACTER_ANALYSIS'] == '1' &&
+        (controller.characterAnalysis.error != null ||
+            controller.characterAnalysis.completedWindows == 0)) {
+      throw StateError(
+        'Requested character refinement did not complete: '
+        '${controller.characterAnalysis.error}',
+      );
+    }
     passed = true;
   } catch (error, stack) {
     receipt.addAll({'passed': false, 'error': '$error', 'stack': '$stack'});
   } finally {
+    receipt['characterAnalysis'] = {
+      'enabled': controller.characterAnalysis.enabled,
+      'completedWindows': controller.characterAnalysis.completedWindows,
+      'error': controller.characterAnalysis.error,
+      'busyAtProbeEnd': controller.characterAnalysis.busy,
+    };
+    receipt['engineVersion'] = engine.engineVersion;
     receipt['peakAppAndWorkerFootprintBytes'] = engine.debugPeakMlxRuntimeBytes;
     receipt['maxUiEventLoopDelayMs'] = maxUiDelayMs;
     receipt['totalProbeMs'] = watch.elapsedMilliseconds;
