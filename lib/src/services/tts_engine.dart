@@ -409,6 +409,11 @@ class TtsExportRequest {
     this.ttsArtifactSet,
     this.planningContext,
     this.preparedResources,
+    this.onRenderedScene,
+    this.isCurrent,
+    this.cancelled,
+    this.sourceWordOffset = 0,
+    this.assignmentRevision = 0,
   });
 
   final String text;
@@ -423,6 +428,14 @@ class TtsExportRequest {
   final TtsArtifactSet? ttsArtifactSet;
   final SpeechPlanningContext? planningContext;
   final List<PreparedVoiceBinding>? preparedResources;
+
+  /// Awaited while raw and finalized artifact pins remain held. Publication
+  /// must honor the supplied scene cancellation and current-owner predicate.
+  final Future<void> Function(TtsFinalizedAudioScene)? onRenderedScene;
+  final bool Function()? isCurrent;
+  final Future<void>? cancelled;
+  final int sourceWordOffset;
+  final int assignmentRevision;
 }
 
 class TtsExportResult {

@@ -7,7 +7,7 @@ import 'audio_artifact_store.dart';
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
-import 'package:flutter/foundation.dart' show compute;
+import 'package:flutter/foundation.dart' show compute, visibleForTesting;
 
 import 'package:crypto/crypto.dart' as crypto;
 import 'package:flutter/services.dart';
@@ -69,7 +69,39 @@ class KokoroTtsEngine
        _mlxModelPath = mlxModelPath ?? '',
        _mlxPythonPath = mlxPythonPath ?? '',
        _selectedVoiceId = defaultVoiceIdFor(engineId);
+
+  /// Supplies deterministic native/tokenization owners to exercise the real
+  /// export lifecycle without installing or initializing a model in tests.
+  @visibleForTesting
+  factory KokoroTtsEngine.withExportTestOwners({
+    required AudioPlayer player,
+    required SpeechWorkerResourceOwner processor,
+    required KokoroTokenizationWorker tokenizer,
+    required List<PreparedVoiceBinding> bindings,
+    required AudioArtifactPins artifactPins,
+    required ExportedAudioAssembler exportAssembler,
+    Future<void>? initialization,
+  }) {
+    final engine = KokoroTtsEngine(
+      player: player,
+      artifactPins: artifactPins,
+      exportAssembler: exportAssembler,
+    );
+    engine._resourceProcessor = processor;
+    engine._exportTokenizer = tokenizer;
+    engine._admission = SynthesisAdmissionOwner(
+      processor,
+      exportMayRun: () => true,
+    );
+    engine._preparedBindings = List.unmodifiable(bindings);
+    engine._resourcesReady = true;
+    engine._synthesisIdentity = 'test-synthesis-content';
+    engine._initializationFuture = initialization ?? Future<void>.value();
+    return engine;
+  }
+
   final Future<void> Function()? beforeSynthesis;
+
   final AudioArtifactPins _artifactPins;
   late final _playbackPins = KokoroPlaybackArtifactPins(_artifactPins);
   String _synthesisIdentity = 'uninitialized';
@@ -227,11 +259,16 @@ class KokoroTtsEngine
   Future<void> _resourceTransition = Future<void>.value();
   bool _exportingResources = false;
   bool _exportCancelled = false;
+  Completer<void>? _exportCancellation;
   final _releaseResourcesAfterExport = KokoroDeferredResourceRelease();
   SpeechRuntime? _exportRuntime;
   String? _exportSession;
   Future<void> _cancelExport() async {
+    final drained = _exportDrained;
     _exportCancelled = true;
+    if (_exportCancellation?.isCompleted == false) {
+      _exportCancellation!.complete();
+    }
     _exportAssembler.cancel();
     _exportTokenizer?.cancel();
     final session = _exportSession;
@@ -243,7 +280,7 @@ class KokoroTtsEngine
     _exportLease?.cancelPending();
     _signalBuffer();
     await cancellation;
-    await _exportDrained?.future;
+    await drained?.future;
   }
 
   Completer<void>? _exportDrained;
@@ -1007,7 +1044,17 @@ class KokoroTtsEngine
     }
     _exportingResources = true;
     _exportCancelled = false;
-    _exportDrained = Completer<void>();
+    final drained = _exportDrained = Completer<void>();
+    _exportCancellation = Completer<void>();
+    // This callback belongs only to this export. A late signal must not cancel
+    // the next export or the independent rendered playback generation.
+    unawaited(
+      request.cancelled?.then((_) async {
+        if (identical(_exportDrained, drained) && !drained.isCompleted) {
+          await _cancelExport();
+        }
+      }),
+    );
     try {
       return await _exportAudioWithResources(request);
     } finally {
@@ -1023,7 +1070,7 @@ class KokoroTtsEngine
         }
       } finally {
         _exportingResources = false;
-        _exportDrained!.complete();
+        drained.complete();
         _exportRuntime = null;
         _exportSession = null;
         _exportLease = null;
@@ -1034,8 +1081,25 @@ class KokoroTtsEngine
   Future<TtsExportResult> _exportAudioWithResources(
     TtsExportRequest request,
   ) async {
+    final exportOwner = _exportDrained!;
+    var publicationFailed = false;
+    final supplied = request.preparedResources == null
+        ? null
+        : List<PreparedVoiceBinding>.unmodifiable(request.preparedResources!);
+    bool current() =>
+        identical(_exportDrained, exportOwner) &&
+        !exportOwner.isCompleted &&
+        !_exportCancelled &&
+        !publicationFailed &&
+        request.isCurrent?.call() != false;
+    void requireCurrent() {
+      if (!current()) throw StateError('Export cancelled or superseded.');
+    }
+
+    requireCurrent();
     await initialize();
-    if (_exportCancelled) throw StateError('Export cancelled.');
+    requireCurrent();
+    final cancellation = _exportCancellation!.future;
     final planner = SpeechPlanningSupervisor();
     final exportPins = <AudioArtifactPin>[];
     final context = request.planningContext;
@@ -1046,14 +1110,20 @@ class KokoroTtsEngine
       );
     }
     final voiceId = context?.realization.voiceId ?? _selectedVoiceId;
+    Iterable<String> chunkVoices(ChunkSpec chunk) sync* {
+      yield chunk.voiceId;
+      for (final turn in chunk.sceneTurns) {
+        yield* chunkVoices(turn);
+      }
+    }
+
     final requiredVoices = {
       ...?context?.routes?.castVoiceAssignments.assignments.map(
         (a) => a.effectiveVoiceId,
       ),
       voiceId,
-      ...?request.chunkPlan?.chunks.map((c) => c.voiceId),
+      ...?request.chunkPlan?.chunks.expand(chunkVoices),
     };
-    final supplied = request.preparedResources;
     if (supplied != null) {
       if (!_resourcesReady ||
           requiredVoices.any(
@@ -1087,7 +1157,10 @@ class KokoroTtsEngine
         ownedByExport: true,
       );
     }
-    if (_exportCancelled) throw StateError('Export cancelled.');
+    requireCurrent();
+    final bindings = List<PreparedVoiceBinding>.unmodifiable(
+      supplied ?? _preparedBindings,
+    );
     _exportLease = _admission!.lease(export: true);
     final runtime = SpeechRuntime(
       engineId: _engineId,
@@ -1100,16 +1173,30 @@ class KokoroTtsEngine
     _exportSession = sessionId;
     final outputs = <ExportedAudioChunk>[];
     var completion = Completer<List<ExportedAudioChunk>>();
+    unawaited(completion.future.then<void>((_) {}, onError: (Object _) {}));
     final completedChunks = <String, ExportedAudioChunk>{};
     final pendingChunksById = <String, _QueuedChunk>{};
     var chunks = <_QueuedChunk>[];
     var initial = true;
+    var publicationTail = Future<void>.value();
     final subscription = runtime.events.listen((event) {
       if (event.sessionId != null && event.sessionId != sessionId) return;
       if (event.type == SpeechRuntimeEventType.chunkReady) {
+        if (!current()) {
+          if (!completion.isCompleted) {
+            completion.completeError(
+              StateError('Export cancelled or superseded.'),
+            );
+          }
+          return;
+        }
         if (event.audioPath != null) {
           exportPins.add(_artifactPins.pin(event.audioPath!));
         }
+        if (event.payload['rawAudioPath'] case final String rawPath) {
+          exportPins.add(_artifactPins.pin(rawPath));
+        }
+
         final chunkId = event.chunkId;
         final plannedChunk = pendingChunksById[chunkId];
         if (chunkId == null ||
@@ -1118,51 +1205,82 @@ class KokoroTtsEngine
             event.duration == null) {
           return;
         }
-        completedChunks[chunkId] = ExportedAudioChunk(
-          sceneTurns: plannedChunk.sceneTurns,
-          chunkId: chunkId,
-          cacheKey: plannedChunk.runtimeCacheKey(
-            isInitialChunk:
-                initial && plannedChunk.chunkId == chunks.first.chunkId,
-            isResumedChunk: false,
-          ),
-          audioPath: event.audioPath!,
-          duration: event.duration!,
-          segmentIds: plannedChunk.segmentIds,
-          startWordIndex: plannedChunk.startWordIndex,
-          endWordIndex: plannedChunk.endWordIndex,
-          voiceId: plannedChunk.voiceId,
-          routeId: plannedChunk.routeId,
-          castId: plannedChunk.castId,
-          dialogueSpanId: plannedChunk.dialogueSpanId,
-          capabilityProfileId: plannedChunk.capabilityProfileId,
-          missingFallbackWordCount: plannedChunk.missingFallbackWordCount,
-          boundaryMetadata: event.boundaryClass == null
-              ? null
-              : ExportedBoundaryMetadata(
-                  boundaryClass: event.boundaryClass!.name,
-                  correctionApplied: event.boundaryCorrectionApplied ?? false,
-                  leadingSilenceBefore:
-                      event.leadingSilenceBefore ?? Duration.zero,
-                  leadingSilenceAfter: event.leadingSilence ?? Duration.zero,
-                  trailingSilenceBefore:
-                      event.trailingSilenceBefore ?? Duration.zero,
-                  trailingSilenceAfter: event.trailingSilence ?? Duration.zero,
-                  joinSilenceBefore: event.joinSilenceBefore ?? Duration.zero,
-                  joinSilenceAfter: event.joinSilenceAfter ?? Duration.zero,
-                  isInitialChunk: event.isInitialChunk ?? false,
-                  isResumedChunk: event.isResumedChunk ?? false,
+        final windowCompletion = completion;
+        publicationTail = publicationTail
+            .then((_) async {
+              requireCurrent();
+              final publish = request.onRenderedScene;
+              if (publish != null) {
+                await publish(
+                  _finalizedScene(
+                    chunk: plannedChunk,
+                    event: event,
+                    generationId: generationId,
+                    bindings: bindings,
+                    assignmentRevision: request.assignmentRevision,
+                    cancelled: cancellation,
+                    isCurrent: current,
+                  ),
+                );
+              }
+              requireCurrent();
+              completedChunks[chunkId] = ExportedAudioChunk(
+                sceneTurns: plannedChunk.sceneTurns,
+                chunkId: chunkId,
+                cacheKey: plannedChunk.runtimeCacheKey(
+                  isInitialChunk:
+                      initial && plannedChunk.chunkId == chunks.first.chunkId,
+                  isResumedChunk: false,
                 ),
-          pronunciationArtifacts: _exportPronunciationArtifacts(
-            plannedChunk.translatedPronunciationArtifacts,
-          ),
-        );
-        if (!completion.isCompleted &&
-            completedChunks.length == chunks.length) {
-          completion.complete(
-            chunks.map((c) => completedChunks[c.chunkId]!).toList(),
-          );
-        }
+                audioPath: event.audioPath!,
+                duration: event.duration!,
+                segmentIds: plannedChunk.segmentIds,
+                startWordIndex: plannedChunk.startWordIndex,
+                endWordIndex: plannedChunk.endWordIndex,
+                voiceId: plannedChunk.voiceId,
+                routeId: plannedChunk.routeId,
+                castId: plannedChunk.castId,
+                dialogueSpanId: plannedChunk.dialogueSpanId,
+                capabilityProfileId: plannedChunk.capabilityProfileId,
+                missingFallbackWordCount: plannedChunk.missingFallbackWordCount,
+                boundaryMetadata: event.boundaryClass == null
+                    ? null
+                    : ExportedBoundaryMetadata(
+                        boundaryClass: event.boundaryClass!.name,
+                        correctionApplied:
+                            event.boundaryCorrectionApplied ?? false,
+                        leadingSilenceBefore:
+                            event.leadingSilenceBefore ?? Duration.zero,
+                        leadingSilenceAfter:
+                            event.leadingSilence ?? Duration.zero,
+                        trailingSilenceBefore:
+                            event.trailingSilenceBefore ?? Duration.zero,
+                        trailingSilenceAfter:
+                            event.trailingSilence ?? Duration.zero,
+                        joinSilenceBefore:
+                            event.joinSilenceBefore ?? Duration.zero,
+                        joinSilenceAfter:
+                            event.joinSilenceAfter ?? Duration.zero,
+                        isInitialChunk: event.isInitialChunk ?? false,
+                        isResumedChunk: event.isResumedChunk ?? false,
+                      ),
+                pronunciationArtifacts: _exportPronunciationArtifacts(
+                  plannedChunk.translatedPronunciationArtifacts,
+                ),
+              );
+              if (!windowCompletion.isCompleted &&
+                  completedChunks.length == chunks.length) {
+                windowCompletion.complete(
+                  chunks.map((c) => completedChunks[c.chunkId]!).toList(),
+                );
+              }
+            })
+            .catchError((Object error, StackTrace stack) {
+              publicationFailed = true;
+              if (!windowCompletion.isCompleted) {
+                windowCompletion.completeError(error, stack);
+              }
+            });
       } else if (event.type == SpeechRuntimeEventType.chunkFailed ||
           event.type == SpeechRuntimeEventType.runtimeFailed ||
           event.type == SpeechRuntimeEventType.sessionCancelled) {
@@ -1175,6 +1293,7 @@ class KokoroTtsEngine
     });
     try {
       await runtime.initializeRuntime(preferredVoiceId: voiceId);
+      requireCurrent();
       await runtime.activateSession(
         SpeechRuntimeSessionDescriptor(
           sessionId: sessionId,
@@ -1194,16 +1313,18 @@ class KokoroTtsEngine
       var plan = request.chunkPlan;
       var searchOffset = 0;
       while (true) {
-        if (_exportCancelled) throw StateError('Export cancelled.');
+        requireCurrent();
         final speakRequest = TtsSpeakRequest(
           text: request.text,
           documentId: request.documentId,
           normalizationVersion: request.normalizationVersion,
           chunkPlan: plan,
           speechDocument: request.speechDocument,
-          preparedResources: List.unmodifiable(
-            request.preparedResources ?? _preparedBindings,
-          ),
+          planningContext: request.planningContext,
+          sourceWordOffset: request.sourceWordOffset,
+          assignmentRevision: request.assignmentRevision,
+          isCurrent: current,
+          preparedResources: bindings,
         );
         if (plan == null) {
           chunks = await _prepareChunks(
@@ -1222,6 +1343,7 @@ class KokoroTtsEngine
           chunks = prepared.chunks;
           searchOffset = prepared.nextSearchOffset;
         }
+        requireCurrent();
         if (chunks.isEmpty) break;
         completion = Completer<List<ExportedAudioChunk>>();
         completedChunks.clear();
@@ -1251,6 +1373,7 @@ class KokoroTtsEngine
         if (next == null || context == null) break;
         plan = (await planner.plan(context, startSegmentId: next)).plan;
       }
+      requireCurrent();
       return await _exportAssembler.assemble(
         ExportedAudioAssemblyRequest(
           outputPath: request.outputPath,
@@ -1269,7 +1392,10 @@ class KokoroTtsEngine
     } finally {
       await kokoroDrainExportOwners(
         runtime: runtime.shutdownRuntime,
-        subscription: subscription.cancel,
+        subscription: () async {
+          await subscription.cancel();
+          await publicationTail;
+        },
         planner: planner.shutdown,
         releasePins: () {
           for (final pin in exportPins) {
@@ -1627,6 +1753,9 @@ class KokoroTtsEngine
           // tiny/zero-duration chunks. Only one translation runs ahead of credit.
           await _awaitPlaybackCredit(policy, current);
           if (!current()) return;
+          if (request.isCurrent?.call() == false) {
+            throw StateError('Chunk preparation superseded.');
+          }
           final prepared = await _preparePlannedChunk(
             request: rangeRequest,
             spec: spec,
@@ -2177,6 +2306,69 @@ class KokoroTtsEngine
     );
   }
 
+  TtsFinalizedAudioScene _finalizedScene({
+    required _QueuedChunk chunk,
+    required SpeechRuntimeEvent event,
+    required String generationId,
+    required List<PreparedVoiceBinding> bindings,
+    required int assignmentRevision,
+    required Future<void> cancelled,
+    required bool Function() isCurrent,
+  }) {
+    return TtsFinalizedAudioScene(
+      documentId: chunk.documentId,
+      generationId: generationId,
+      sceneId: chunk.chunkId,
+      text: chunk.text,
+      engineSpeakText: chunk.engineSpeakText,
+      startWordIndex: chunk.startWordIndex,
+      endWordIndex: chunk.endWordIndex,
+      startOffset: chunk.startOffset,
+      sceneTurns: chunk.sceneTurns,
+      preparedBindings: bindings
+          .where(
+            (binding) =>
+                (binding.voiceId == chunk.expectedBinding.voiceId &&
+                    binding.bindingRevision ==
+                        chunk.expectedBinding.bindingRevision &&
+                    binding.fingerprint == chunk.expectedBinding.fingerprint) ||
+                chunk.sceneTurns.any(
+                  (turn) =>
+                      turn.voiceId == binding.voiceId &&
+                      turn.bindingRevision == binding.bindingRevision &&
+                      turn.bindingFingerprint == binding.fingerprint,
+                ),
+          )
+          .toList(),
+      audioPath: event.audioPath!,
+      duration: event.duration!,
+      engineId: engineId,
+      engineVersion: engineVersion,
+      normalizationVersion: chunk.normalizationVersion,
+      capabilityProfileId: chunk.capabilityProfileId,
+      synthesisIdentity: chunk.synthesisIdentity,
+      translationSignature: _runtimeTranslationSignature(
+        capabilityProfileId: chunk.capabilityProfileId,
+        speakText: chunk.engineSpeakText,
+        pronunciationArtifacts: chunk.translatedPronunciationArtifacts,
+        payloadUnits: chunk.translatedPayloadUnits,
+        missingFallbackWordCount: chunk.missingFallbackWordCount,
+        finalPhonemeString: chunk.finalPhonemeString,
+      ),
+      synthesisRate: chunk.synthesisRate,
+      assignmentRevision: assignmentRevision,
+      cancelled: cancelled,
+      isCurrent: isCurrent,
+      rawAudioPath: event.payload['rawAudioPath'] as String?,
+      rawArtifactIdentity: event.payload['rawArtifactIdentity'] as String?,
+      predecessorRawArtifactIdentity:
+          event.payload['predecessorRawArtifactIdentity'] as String?,
+      boundaryPolicyVersion: event.payload['boundaryPolicyVersion'] as String?,
+      boundaryClass: event.boundaryClass?.name,
+      trailingSilenceMicros: event.trailingSilence?.inMicroseconds,
+    );
+  }
+
   Future<void> _handleRuntimeChunkReady(SpeechRuntimeEvent event) async {
     final generation = event.generationId;
     if (generation == null || generation != _activeGenerationId) return;
@@ -2204,60 +2396,19 @@ class KokoroTtsEngine
       final token = _requestToken;
       try {
         await publish(
-          TtsFinalizedAudioScene(
-            documentId: chunk.documentId,
+          _finalizedScene(
+            chunk: chunk,
+            event: event,
             generationId: generation,
-            sceneId: chunk.chunkId,
-            text: chunk.text,
-            engineSpeakText: chunk.engineSpeakText,
-            startWordIndex: chunk.startWordIndex,
-            endWordIndex: chunk.endWordIndex,
-            startOffset: chunk.startOffset,
-            sceneTurns: chunk.sceneTurns,
-            preparedBindings:
-                (publicationRequest?.preparedResources ??
-                        _scenePublicationBindings)
-                    .where(
-                      (binding) =>
-                          binding.fingerprint ==
-                              chunk.expectedBinding.fingerprint ||
-                          chunk.sceneTurns.any(
-                            (turn) =>
-                                turn.bindingFingerprint == binding.fingerprint,
-                          ),
-                    )
-                    .toList(),
-            audioPath: event.audioPath!,
-            duration: event.duration!,
-            engineId: engineId,
-            engineVersion: engineVersion,
-            normalizationVersion: chunk.normalizationVersion,
-            capabilityProfileId: chunk.capabilityProfileId,
-            synthesisIdentity: chunk.synthesisIdentity,
-            translationSignature: _runtimeTranslationSignature(
-              capabilityProfileId: chunk.capabilityProfileId,
-              speakText: chunk.engineSpeakText,
-              pronunciationArtifacts: chunk.translatedPronunciationArtifacts,
-              payloadUnits: chunk.translatedPayloadUnits,
-              missingFallbackWordCount: chunk.missingFallbackWordCount,
-              finalPhonemeString: chunk.finalPhonemeString,
-            ),
-            synthesisRate: chunk.synthesisRate,
+            bindings:
+                publicationRequest?.preparedResources ??
+                _scenePublicationBindings,
             assignmentRevision: publicationRequest!.assignmentRevision,
             cancelled: _continuationCancelled.future,
             isCurrent: () =>
                 token == _requestToken &&
                 generation == _activeGenerationId &&
                 publicationRequest.isCurrent?.call() != false,
-            rawAudioPath: event.payload['rawAudioPath'] as String?,
-            rawArtifactIdentity:
-                event.payload['rawArtifactIdentity'] as String?,
-            predecessorRawArtifactIdentity:
-                event.payload['predecessorRawArtifactIdentity'] as String?,
-            boundaryPolicyVersion:
-                event.payload['boundaryPolicyVersion'] as String?,
-            boundaryClass: event.boundaryClass?.name,
-            trailingSilenceMicros: event.trailingSilence?.inMicroseconds,
           ),
         );
       } catch (error) {
