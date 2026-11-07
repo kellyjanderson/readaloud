@@ -11,6 +11,68 @@ import 'package:read_aloud/src/services/tts_engine.dart';
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
+  for (final hasBoundaryEvidence in [false, true]) {
+    test(
+      'finalized callback preserves ${hasBoundaryEvidence ? 'exact boundary evidence' : 'unknown boundary evidence'}',
+      () async {
+        TtsFinalizedAudioScene? received;
+        final request = TtsSpeakRequest(
+          text: 'one two',
+          onRenderedScene: (scene) async => received = scene,
+        );
+        final cancellation = Completer<void>();
+        await request.onRenderedScene!(
+          TtsFinalizedAudioScene(
+            documentId: 'book',
+            generationId: 'generation-1',
+            sceneId: 'scene-1',
+            text: 'one two',
+            engineSpeakText: 'one two',
+            startWordIndex: 0,
+            endWordIndex: 2,
+            startOffset: 0,
+            sceneTurns: const [],
+            preparedBindings: const [],
+            audioPath: '/validated-test/corrected.wav',
+            duration: const Duration(seconds: 1),
+            engineId: 'kokoro',
+            engineVersion: '12',
+            normalizationVersion: 'normalization-v1',
+            capabilityProfileId: 'kokoro',
+            synthesisIdentity: 'synthesis-content',
+            translationSignature: 'translation-content',
+            synthesisRate: 1,
+            assignmentRevision: 7,
+            cancelled: cancellation.future,
+            isCurrent: () => true,
+            rawAudioPath: '/validated-test/raw.wav',
+            rawArtifactIdentity: 'wav-sha256:raw',
+            predecessorRawArtifactIdentity: 'wav-sha256:predecessor',
+            boundaryPolicyVersion: 'boundary-native-rate-v2',
+            boundaryClass: hasBoundaryEvidence ? 'paragraph' : null,
+            trailingSilenceMicros: hasBoundaryEvidence ? 123456 : null,
+          ),
+        );
+        expect(
+          received!.boundaryClass,
+          hasBoundaryEvidence ? 'paragraph' : isNull,
+        );
+        expect(
+          received!.trailingSilenceMicros,
+          hasBoundaryEvidence ? 123456 : isNull,
+        );
+        expect(received!.boundaryPolicyVersion, 'boundary-native-rate-v2');
+        expect(received!.rawAudioPath, '/validated-test/raw.wav');
+        expect(received!.rawArtifactIdentity, 'wav-sha256:raw');
+        expect(
+          received!.predecessorRawArtifactIdentity,
+          'wav-sha256:predecessor',
+        );
+        expect(received!.audioPath, '/validated-test/corrected.wav');
+      },
+    );
+  }
+
   test(
     'rendered scene uses no model and reports admitted source turns',
     () async {

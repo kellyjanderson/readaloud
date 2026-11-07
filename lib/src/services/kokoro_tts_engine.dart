@@ -2234,6 +2234,8 @@ class KokoroTtsEngine
                 event.payload['predecessorRawArtifactIdentity'] as String?,
             boundaryPolicyVersion:
                 event.payload['boundaryPolicyVersion'] as String?,
+            boundaryClass: event.boundaryClass?.name,
+            trailingSilenceMicros: event.trailingSilence?.inMicroseconds,
           ),
         );
       } catch (error) {

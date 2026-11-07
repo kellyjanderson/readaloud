@@ -150,6 +150,8 @@ class TtsFinalizedAudioScene {
     this.rawArtifactIdentity,
     this.predecessorRawArtifactIdentity,
     this.boundaryPolicyVersion,
+    this.boundaryClass,
+    this.trailingSilenceMicros,
   }) : sceneTurns = List.unmodifiable(
          sceneTurns.map((turn) => NativeSpeechTurn.fromMap(turn.toMap())),
        ),
@@ -180,6 +182,8 @@ class TtsFinalizedAudioScene {
   final String? rawArtifactIdentity;
   final String? predecessorRawArtifactIdentity;
   final String? boundaryPolicyVersion;
+  final String? boundaryClass;
+  final int? trailingSilenceMicros;
 }
 
 abstract interface class ResourcePreparationCapable {
