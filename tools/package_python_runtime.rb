@@ -50,7 +50,8 @@ module PackagedPythonRuntime
 
   MACHO_MAGICS = %w[feedface cefaedfe feedfacf cffaedfe cafebabe bebafeca cafebabf bfbafeca].freeze
   def self.macho?(path)
-    MACHO_MAGICS.include?(File.binread(path, 4).unpack1('H*'))
+    header = File.binread(path, 4)
+    header != nil && MACHO_MAGICS.include?(header.unpack1('H*'))
   end
 
   def self.native?(root, entry, executable)

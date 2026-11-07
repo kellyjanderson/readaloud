@@ -75,6 +75,17 @@ class PackagedPythonRuntimeTest < Minitest::Test
     assert_match(/Expected Mach-O/, assert_raises(RuntimeError) { package }.message)
   end
 
+  def test_empty_package_markers_and_short_data_remain_archive_members
+    File.write(File.join(@tree, '__init__.py'), '')
+    File.binwrite(File.join(@tree, 'short-data'), "\x01\x02")
+    value = package
+    %w[__init__.py short-data].each do |name|
+      assert_equal 'file', value['entries'].find { |entry| entry['path'] == name }['type']
+      bytes = PackagedPythonRuntime.capture('/usr/bin/unzip', '-p', File.join(@output, 'mlx.zip'), name)
+      assert_equal File.binread(File.join(@tree, name)), bytes
+    end
+  end
+
   def test_native_admission_accepts_single_arm64_fat_wrapper_and_refuses_additional_architectures
     arm = File.join(@tree, 'bin/python')
     fat = File.join(@tree, 'bin/fat-tool')
