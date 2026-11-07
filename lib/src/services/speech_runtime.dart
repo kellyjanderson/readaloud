@@ -1,7 +1,9 @@
 import '../models/native_speech_turn.dart';
 import 'dart:async';
+import 'dart:io';
 
 import 'package:flutter/foundation.dart';
+import 'package:crypto/crypto.dart';
 
 import '../models/speech_annotation.dart';
 import 'speech_worker_pipeline.dart';
@@ -724,6 +726,7 @@ class SpeechRuntime {
   final Map<String, _RuntimeChunkWorkItem> _pendingChunksById =
       <String, _RuntimeChunkWorkItem>{};
   final Map<String, String> _lastArtifactByGenerationId = {};
+  final Map<String, String> _lastRawArtifactByGenerationId = {};
   final Set<String> _cacheHitChunkIds = <String>{};
   final Map<String, Duration> _lastTrailingSilenceByGenerationId =
       <String, Duration>{};
@@ -800,6 +803,7 @@ class SpeechRuntime {
     await _pipeline.cancelGeneration(generationId);
     _lastTrailingSilenceByGenerationId.remove(generationId);
     _lastArtifactByGenerationId.remove(generationId);
+    _lastRawArtifactByGenerationId.remove(generationId);
     _pendingChunksById.removeWhere(
       (_, item) => item.generationId == generationId,
     );
@@ -1097,11 +1101,13 @@ class SpeechRuntime {
       await _pipeline.cancelGeneration(generationId);
       _lastTrailingSilenceByGenerationId.remove(generationId);
       _lastArtifactByGenerationId.remove(generationId);
+      _lastRawArtifactByGenerationId.remove(generationId);
     }
 
     _pendingChunksById.removeWhere((_, item) => item.sessionId == sessionId);
     _cacheHitChunkIds.clear();
     _lastArtifactByGenerationId.clear();
+    _lastRawArtifactByGenerationId.clear();
     _activeSessionId = null;
     _activeGenerationId = null;
     _activeDocumentId = null;
@@ -1191,6 +1197,7 @@ class SpeechRuntime {
       case SpeechWorkerEventType.failed:
         _lastTrailingSilenceByGenerationId.remove(event.generationId);
         _lastArtifactByGenerationId.remove(event.generationId);
+        _lastRawArtifactByGenerationId.remove(event.generationId);
         _pendingChunksById.remove(event.chunkId);
         _emit(
           _runtimeEvent(
@@ -1256,6 +1263,8 @@ class SpeechRuntime {
         'isResumedChunk': workItem.chunk.isResumedChunk,
         'previousArtifactIdentity':
             _lastArtifactByGenerationId[workItem.generationId],
+        'predecessorRawArtifactIdentity':
+            _lastRawArtifactByGenerationId[workItem.generationId],
         'previousTrailingSilenceMs':
             workItem.chunk.isInitialChunk || workItem.chunk.isResumedChunk
             ? null
@@ -1272,6 +1281,10 @@ class SpeechRuntime {
       _pendingChunksById.remove(event.chunkId);
       _lastArtifactByGenerationId[workItem.generationId] =
           correction['audioPath'] as String? ?? event.audioPath!;
+      final rawIdentity = correction['rawArtifactIdentity'] as String?;
+      if (rawIdentity != null) {
+        _lastRawArtifactByGenerationId[workItem.generationId] = rawIdentity;
+      }
       final trailingSilence = Duration(
         milliseconds: correction['trailingSilenceAfterMs']! as int,
       );
@@ -1289,6 +1302,13 @@ class SpeechRuntime {
           castId: workItem.chunk.castId,
           dialogueSpanId: workItem.chunk.dialogueSpanId,
           audioPath: correction['audioPath'] as String? ?? event.audioPath,
+          renderProvenance: {
+            'rawAudioPath': event.audioPath,
+            'rawArtifactIdentity': correction['rawArtifactIdentity'],
+            'predecessorRawArtifactIdentity':
+                correction['predecessorRawArtifactIdentity'],
+            'boundaryPolicyVersion': correction['boundaryPolicyVersion'],
+          },
           duration: Duration(
             milliseconds: correction['durationMillis']! as int,
           ),
@@ -1323,6 +1343,7 @@ class SpeechRuntime {
       }
       _lastTrailingSilenceByGenerationId.remove(workItem.generationId);
       _lastArtifactByGenerationId.remove(workItem.generationId);
+      _lastRawArtifactByGenerationId.remove(workItem.generationId);
       _pendingChunksById.remove(event.chunkId);
       _emit(
         _runtimeEvent(
@@ -1352,6 +1373,7 @@ class SpeechRuntime {
     String? castId,
     String? dialogueSpanId,
     String? audioPath,
+    Map<String, Object?>? renderProvenance,
     Duration? duration,
     String? stage,
     int? elapsedMillis,
@@ -1371,7 +1393,10 @@ class SpeechRuntime {
     bool? fatalForSession,
     String? reasonCode,
   }) {
-    final payload = <String, Object?>{'sessionId': sessionId};
+    final payload = <String, Object?>{
+      'sessionId': sessionId,
+      ...?renderProvenance,
+    };
     if (_activeDocumentId != null) {
       payload['documentId'] = _activeDocumentId;
     }
@@ -1548,6 +1573,12 @@ Map<String, Object?> runSpeechRuntimeBoundaryCorrection(
   );
   return <String, Object?>{
     'audioPath': outcome.audioPath,
+    // This computation is already isolated. A content identity survives copying
+    // the raw scene and never treats a local cache pathname as provenance.
+    'rawArtifactIdentity':
+        'wav-sha256:${sha256.convert(File(input['wavFilePath']! as String).readAsBytesSync())}',
+    'predecessorRawArtifactIdentity': input['predecessorRawArtifactIdentity'],
+    'boundaryPolicyVersion': SynthesisBoundaryPolicy.version,
     'applied': outcome.applied,
     'durationMillis': outcome.duration.inMilliseconds,
     'boundaryClass': outcome.candidate.boundaryClass.name,

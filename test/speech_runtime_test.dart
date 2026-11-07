@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/foundation.dart';
+import 'package:crypto/crypto.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:read_aloud/src/models/speech_annotation.dart';
 import 'package:read_aloud/src/services/speech_runtime.dart';
@@ -308,6 +309,15 @@ void main() {
           final retained = await File(event.audioPath!).readAsBytes();
           expect(event.audioPath, isNot(file.path));
           expect(await file.readAsBytes(), bytes);
+          expect(event.payload['rawAudioPath'], file.path);
+          expect(
+            event.payload['rawArtifactIdentity'],
+            'wav-sha256:${sha256.convert(bytes)}',
+          );
+          expect(
+            event.payload['boundaryPolicyVersion'],
+            'boundary-native-rate-v2',
+          );
           final expectedMs = ((retained.length - 44) / 2 / sampleRate * 1000)
               .round();
           expect(event.duration, Duration(milliseconds: expectedMs));
