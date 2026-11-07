@@ -43,7 +43,17 @@ Validate a saved installation without network acquisition:
 
 The native build embeds the separate interpreter/packages using
 `embed_modernbooknlp_runtime.sh` (override `READALOUD_BOOKNLP_RUNTIME_ROOT` to change
-the build input). It includes code, not model weights. Settings prepares missing
+the build input). It assembles/signs the standalone tree outside the bundle and
+packages `Resources/python-runtimes/modernbooknlp.zip` plus a content manifest,
+including the qualified OpenMP library and licenses. It does not archive the
+build venv. First provider creation owns progress/cancellation before awaiting
+verification and extraction into Application Support
+`python-runtimes/v1/modernbooknlp/<signed-tree-digest>/`. The shared installer
+verifies archive bytes, exact inventory, links, modes, file hashes and the signed
+arm64 interpreter before atomic immutable publication. Stop/replacement cancels
+setup and drains its extractor/validation lifetime; damaged published trees fail
+visibly and are never overwritten. Saved portable-book analysis bypasses provider
+creation. It includes code, not model weights. Settings prepares missing
 models under the actual app's Application Support `modernbooknlp/models` directory.
 The shared acquisition helper reports downloaded bytes and verified file counts;
 unmeasured model initialization displays its stage without a spinner. Complete

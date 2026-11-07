@@ -6,9 +6,28 @@ import 'document_analysis_repository.dart';
 
 /// Main-isolate owner of opt-in diagnostic refinement. One active window plus
 /// one replaceable demand, with no playback/preparation dependency or voice edits.
+typedef ModernBookNlpRuntimeFactory =
+    Future<ModernBookNlpProvider> Function({
+      required Future<void> cancelled,
+      required String consumerRevision,
+      required void Function(Map<String, dynamic>) onProgress,
+    });
+
 class ModernBookNlpAnalysis extends ChangeNotifier {
-  ModernBookNlpAnalysis(this.createProvider);
-  final Future<ModernBookNlpProvider> Function() createProvider;
+  ModernBookNlpAnalysis(Future<ModernBookNlpProvider> Function() createProvider)
+    : createProvider =
+          (({
+            required cancelled,
+            required consumerRevision,
+            required onProgress,
+          }) => createProvider());
+  ModernBookNlpAnalysis.withRuntime(this.createProvider);
+  final ModernBookNlpRuntimeFactory createProvider;
+  Completer<void>? _creating;
+  void _cancelCreation() {
+    final creating = _creating;
+    if (creating != null && !creating.isCompleted) creating.complete();
+  }
 
   /// Runs inside this same bounded work lifetime, after durable publication.
   /// The consumer must recheck current() after its off-isolate projection.
@@ -39,7 +58,7 @@ class ModernBookNlpAnalysis extends ChangeNotifier {
 
   ModernBookNlpRequest? _pending, _desired, _active;
   Future<void>? _work;
-  bool enabled = false, ready = false, _closed = false, _analyzing = false;
+  bool enabled = false, ready = false, _closed = false;
   int _windowEpoch = 0, _session = 0, completedWindows = 0;
   String? error;
   Map<String, dynamic>? progress, result;
@@ -58,6 +77,7 @@ class ModernBookNlpAnalysis extends ChangeNotifier {
         (_pending != null && _key(request) == _key(_pending!))) {
       return;
     }
+    if (_active != null && _key(_active!) != _key(request)) _cancelCreation();
     _pending = request;
     _kick();
   }
@@ -81,7 +101,6 @@ class ModernBookNlpAnalysis extends ChangeNotifier {
   }
 
   Future<void> _prepare(bool Function() current) async {
-    _provider ??= await createProvider();
     if (!current()) return;
     if (ready) return;
     progress = {
@@ -90,6 +109,31 @@ class ModernBookNlpAnalysis extends ChangeNotifier {
       'total': null,
     };
     notifyListeners();
+    if (!current()) return;
+    if (_provider == null) {
+      final creating = _creating = Completer<void>();
+      try {
+        final provider = await createProvider(
+          cancelled: creating.future,
+          consumerRevision:
+              '$_session/$_windowEpoch/${_active?.requestId ?? 'prepare'}',
+          onProgress: (p) {
+            if (current() && !creating.isCompleted) {
+              progress = p;
+              notifyListeners();
+            }
+          },
+        );
+        if (!current() || creating.isCompleted) {
+          await provider.close();
+          return;
+        }
+        _provider = provider;
+      } finally {
+        if (identical(_creating, creating)) _creating = null;
+      }
+    }
+    if (!current()) return;
     await _provider!.prepare(
       onProgress: (p) {
         if (current()) {
@@ -144,7 +188,6 @@ class ModernBookNlpAnalysis extends ChangeNotifier {
           } else {
             await _prepare(windowCurrent);
             if (!windowCurrent()) continue;
-            _analyzing = true;
             next = await _provider!.analyze(
               request,
               onProgress: (p) {
@@ -154,7 +197,6 @@ class ModernBookNlpAnalysis extends ChangeNotifier {
                 }
               },
             );
-            _analyzing = false;
             if (!windowCurrent()) continue;
             if (repository != null) {
               progress = {
@@ -184,7 +226,6 @@ class ModernBookNlpAnalysis extends ChangeNotifier {
           if (windowCurrent()) rethrow;
         } finally {
           _active = null;
-          _analyzing = false;
         }
         if (current()) notifyListeners();
       }
@@ -199,13 +240,14 @@ class ModernBookNlpAnalysis extends ChangeNotifier {
   }
 
   void invalidateWindow() {
+    _cancelCreation();
     _windowEpoch++;
     _pending = _desired = null;
     _completedKey = null;
     result = null;
     restoredFromBook = false;
     _embedded.clear();
-    if (_analyzing) unawaited(_provider?.cancel());
+    if (_work != null) unawaited(_provider?.cancel());
   }
 
   Future<void> stop() async {

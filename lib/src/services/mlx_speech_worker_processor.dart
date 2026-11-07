@@ -14,6 +14,7 @@ import 'audio_artifact_store.dart';
 import 'speech_worker_pipeline.dart';
 import 'tts_engine.dart';
 import 'mlx_voice_library.dart';
+import 'packaged_python_runtime.dart';
 
 const String mlxTtsModelVersion = 'mlx-audio-0.6.3-mlx-0.32.4-complete-v3';
 String mlxTtsVersionFor(
@@ -168,6 +169,7 @@ class MlxSpeechWorkerChunkProcessor
   String? _modelRoot;
   String? _helperPath;
   String? _resolvedPythonPath;
+  PackagedRuntimeLease? _runtimeLease;
   String? _modelIdentity;
   bool supportsNativeScenes = false;
   String get runtimeVersion => mlxTtsVersionFor(
@@ -403,21 +405,27 @@ class MlxSpeechWorkerChunkProcessor
 
   Future<String> _findPythonRuntime(Directory mlxRoot) async {
     if (pythonPath.isNotEmpty) return pythonPath;
-    final candidates = <String>[
-      '${File(Platform.resolvedExecutable).parent.parent.path}/Resources/mlx-python/bin/python3.12',
-      '${mlxRoot.path}${Platform.pathSeparator}runtime${Platform.pathSeparator}venv${Platform.pathSeparator}bin${Platform.pathSeparator}python',
-      '${mlxRoot.parent.parent.parent.path}/read_aloud/mlx-tts/runtime/venv/bin/python',
-    ];
-    final home = Platform.environment['HOME'];
-    if (home != null && home.isNotEmpty) {
-      candidates.add(
-        '$home${Platform.pathSeparator}Library${Platform.pathSeparator}Containers${Platform.pathSeparator}com.kellyjanderson.readAloud${Platform.pathSeparator}Data${Platform.pathSeparator}Library${Platform.pathSeparator}Application Support${Platform.pathSeparator}read_aloud${Platform.pathSeparator}mlx-tts${Platform.pathSeparator}runtime${Platform.pathSeparator}venv${Platform.pathSeparator}bin${Platform.pathSeparator}python',
-      );
+    final support = await getApplicationSupportDirectory();
+    if (_closed) throw StateError('MLX inference owner is closed.');
+    final lease = _runtimeLease = PackagedPythonRuntimeOwner.shared.acquire(
+      runtimeId: 'mlx',
+      resources: Directory(
+        '${File(Platform.resolvedExecutable).parent.parent.path}/Resources',
+      ),
+      support: support,
+      consumerRevision: '$engineId/${_activeGeneration ?? 'prepare'}',
+      onProgress: (progress) {
+        if (!_closed) _handleModelLoadProgress(progress);
+      },
+    );
+    try {
+      final executable = await lease.executable;
+      if (_closed) throw StateError('MLX inference owner is closed.');
+      return executable;
+    } finally {
+      await lease.cancelAndDrain();
+      if (identical(_runtimeLease, lease)) _runtimeLease = null;
     }
-    for (final candidate in candidates) {
-      if (await File(candidate).exists()) return candidate;
-    }
-    return candidates.first;
   }
 
   void _handleModelLoadProgress(Map<String, Object?> event) {
@@ -726,6 +734,7 @@ class MlxSpeechWorkerChunkProcessor
     _closed = true;
     if (!_closedSignal.isCompleted) _closedSignal.complete();
     _bindings.clear();
+    await _runtimeLease?.cancelAndDrain();
     await _process?.shutdown();
     _process = null;
     if (identical(_activeInstance, this)) _activeInstance = null;

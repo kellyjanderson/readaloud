@@ -360,6 +360,18 @@ class MacosCandidateTest < Minitest::Test
       else raise "Unexpected fixture inspection: #{command.inspect}"
       end
     end
+    runtimes = File.join(@app, 'Contents/Resources/python-runtimes')
+    FileUtils.mkdir_p(runtimes)
+    PackagedPythonRuntime::IDS.each do |id|
+      archive = File.join(runtimes, id + '.zip')
+      File.write(archive, 'archive bytes; manifest admission fixture only')
+      value = { 'schema' => 1, 'policy' => PackagedPythonRuntime::POLICY, 'runtimeId' => id,
+                'python' => 'Python fixture', 'packages' => [], 'executable' => 'bin/python',
+                'entries' => [{ 'path' => 'bin/python', 'type' => 'file', 'mode' => 0o755, 'size' => 1, 'sha256' => 'f' * 64 }] }
+      value['signedTreeDigest'] = Digest::SHA256.hexdigest(JSON.generate(PackagedPythonRuntime.identity(value)))
+      value['archive'] = MacosCandidate.file_identity(archive)
+      File.write(File.join(runtimes, id + '.json'), JSON.generate(value))
+    end
     with_stubs(capture: inspector) do
       original = MacosCandidate.bundle(@app, identities)
       copy = File.join(@root, 'Copied.app')

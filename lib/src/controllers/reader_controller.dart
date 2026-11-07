@@ -107,7 +107,7 @@ class ReaderController extends ChangeNotifier {
     RenderedSceneRepository? renderedSceneRepository,
   }) : characterAnalysis =
            characterAnalysis ??
-           ModernBookNlpAnalysis(createModernBookNlpProvider),
+           ModernBookNlpAnalysis.withRuntime(createModernBookNlpProvider),
        _preparation =
            preparationSupervisor ??
            DocumentPreparationSupervisor(

@@ -44,9 +44,16 @@ directory or the older sandbox container directory are reused. Checkpoints
 are not committed to Git or bundled into the application. The JSON-lines
 Python worker is bundled as a Flutter asset. Install the build's arm64 Python
 runtime and MLX packages once with `sh tools/install_mlx_tts_runtime.sh`.
-The Xcode embed phase copies this executable runtime into the app bundle and
-signs the interpreter for sandbox inheritance. Model weights remain in the
-cache. The sandbox cannot execute the external build-time interpreter directly.
+The Xcode embed phase assembles and signs the standalone interpreter/packages
+for sandbox inheritance outside the bundle, then packages its signed tree as
+`Resources/python-runtimes/mlx.zip` with an adjacent content manifest. It does
+not archive the build venv. First MLX use verifies and extracts this immutable
+resource into Application Support `python-runtimes/v1/mlx/<signed-tree-digest>/`.
+Archive/tree verification reports measured progress; extraction reports an
+explicit stage. Closing the resource owner cancels and drains installation.
+Model weights remain in the cache. The sandbox cannot execute the external
+build-time interpreter directly. Completed portable-book playback does not
+extract or initialize this runtime.
 
 For development, `READALOUD_TTS_ENGINE` can still override the saved preference
 for the process that launches the macOS app:
@@ -57,10 +64,12 @@ READALOUD_TTS_ENGINE=voxtral_4b tools/flutter run -d macos
 READALOUD_TTS_ENGINE=moss_tts_8b tools/flutter run -d macos
 ```
 
-The default interpreter is installed at
-`<app-support>/read_aloud/mlx-tts/runtime/venv/bin/python`. It must be arm64
+The build input interpreter is installed at
+`<app-support>/read_aloud/mlx-tts/runtime/venv/bin/python`. The packaged app uses
+its verified extracted standalone interpreter. It must be arm64
 with `mlx==0.32.4` and `mlx-audio==0.6.3`. `READALOUD_MLX_PYTHON` can override
-that path when the override is accessible to the sandbox. An alternate local
+the packaged interpreter explicitly when the override is accessible to the sandbox.
+This override has developer provenance and does not qualify a bundled runtime. An alternate local
 checkpoint directory can be supplied with `READALOUD_MLX_TTS_MODEL_PATH`; it
 must be readable from the app sandbox. If no recognized `READALOUD_TTS_ENGINE`
 is present, the saved preference is used (Kokoro on a fresh installation).
