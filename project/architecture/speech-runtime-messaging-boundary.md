@@ -216,7 +216,10 @@ Content classification keeps every supported Mach-O (including extensionless
 executables and arm64 universal libraries), plus adjacent `.metallib` resources,
 in `Resources/python-runtimes/<runtimeId>-native/` with the original relative
 layout. Known interpreter/`.so`/`.dylib` members that are not valid Mach-O fail
-packaging. Every Mach-O is signed and verified before packaging; the interpreter
+packaging. Build-owned copies of universal dependencies are thinned to their
+arm64 slice with system `lipo` before signing; inputs lacking arm64 are refused.
+Managed source runtimes remain untouched. Every Mach-O is signed and verified
+before packaging; the interpreter
 retains sandbox inheritance entitlements. Only Python/data members enter the ZIP.
 The complete signed inventory, modes, link targets, package/Python identities
 and policy determine its digest; source paths and version labels alone do not.
@@ -277,10 +280,28 @@ report stages with unknown totals; stage completion is not overall readiness.
 Focused source tests exercise real `ditto`, signed arm64 fixture preservation,
 corruption, native target/binding tampering, relocation, paths/links/modes,
 per-child homes, immutable reuse, concurrent publishers, revision
-replacement, cancellation and cleanup. These checks do not establish native
+replacement, cancellation and cleanup. These source checks alone do not establish native
 sandboxed Python launch, real MLX/BookNLP behavior, first-use responsiveness,
 fresh launch-to-emitted-audio timing or human listening; those remain separate
 running-app gates in #137.
+
+The [November 7 R5 native receipt](../test-artifacts/s6-finish-checks-20261107/r5-native-qualification.json)
+records the production resolver at `99fb512`, using signed sandbox test apps.
+Real Fish3 regenerated exactly the changed Character's 0:51 scene while preserving
+three neighboring WAV hashes; reopening the published book made zero new exports
+or synthesis callbacks. All four playback captures matched their queued waves,
+with maximum join gaps at most 0.02ms; UI heartbeat maximum was 123ms. Real
+ModernBookNLP analysis/persistence and both extraction-cancellation probes passed.
+All apps quit normally with no owned processes left. These are bounded fixtures,
+not full-book or human listening acceptance. The missing-middle run reused a raw
+audio cache entry and does not resolve the earlier 1021.68ms cold-uncached gap.
+
+Fresh saved-book speech still failed the 2000ms limit: captured onset upper bounds
+were 2378.144ms for direct process launch and 2363.608ms through ordinary macOS
+LaunchServices. Both clocks start before opening, without a Play gate, and require
+expected-waveform alignment. This improves the earlier 4.77–4.91s native-position
+failure but does not close the startup gate. S6 remains unaccepted; prior Save-run
+511ms heartbeat, uncached continuity and human listening limits remain explicit.
 
 The build-owned relocated staging tree omits a CPython bytecode cache only when
 its corresponding `.py` source is present. Sourceless modules, source packages,

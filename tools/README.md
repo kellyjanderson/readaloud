@@ -123,3 +123,19 @@ staging cleanup, progress suppression and resource drain; it launches no model.
 Use the runner's `booknlp` mode with the existing `residentNlpTest` QA identity
 and qualified local analysis models for the real persistence/reuse scenario.
 These probes require normal Quit and process cleanup even on failure.
+
+For the ordinary macOS opening path, use
+`ruby tools/run_radoc_launch_services_smoke.rb APP_BUNDLE BOOK NEW_OUTPUT_DIRECTORY CAPTURE_EXECUTABLE`.
+This launches the same offline target with `open -W -n`, starts the clock before
+LaunchServices, discovers the new app process before Dart readiness, and starts
+app-only capture without delaying Play. It tracks app descendants and requires
+normal Quit and verified process exit. LaunchServices owns the app's exit status;
+the receipt records the launcher's exit separately and never invents an app exit
+code. Use the same waveform comparison/startup summarizer as the direct runner.
+Neither launch method exempts first opening from the two-second requirement.
+
+Runtime packaging accepts empty Python package markers as data. Universal native
+dependencies are thinned to arm64 in the build-owned staging copy before signing
+and manifest hashing; the original managed runtimes are preserved. Current R5
+native evidence and its remaining startup/continuity/listening failures are in
+the [qualification receipt](../project/test-artifacts/s6-finish-checks-20261107/r5-native-qualification.json).
