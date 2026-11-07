@@ -632,6 +632,211 @@
         "elapsedSeconds": 49.808570000110194,
         "errors": []
       }
+    },
+    "s6-offline-warm-20261107": {
+      "native": {
+        "schema": "readaloud-radoc-native-smoke-v1",
+        "passed": true,
+        "dartEntryUnixMicros": 1794048027494048,
+        "emittedAudioCapture": "external evidence required",
+        "humanListening": "external evidence required",
+        "processLaunchUnixMicros": 1794048027142446,
+        "importRequestedMs": 2,
+        "importCompleteMs": 46,
+        "playRequestedMs": 46,
+        "controlledCaptureGate": false,
+        "firstNativePositionUnixMicros": 1794048027674027,
+        "dartEntryToNativePositionMs": 179.979,
+        "launchToNativePositionMs": 531.581,
+        "nativePositionWithinTwoSeconds": true,
+        "sourceEndMs": 19707,
+        "spokenChunks": [
+          {
+            "chunkId": "0:accepted-scene",
+            "startWord": 0,
+            "endWord": 42,
+            "completed": true,
+            "durationMs": 19365,
+            "sceneTurns": [
+              {
+                "voice": "library_fishadrian",
+                "text": "The hallway was dark and quiet. Mira said,",
+                "segmentIds": [
+                  "r0_s_0",
+                  "r0_s_1"
+                ],
+                "startWord": 0,
+                "endWord": 8,
+                "bindingFingerprint": "451da1058114aed7e8610604a2ed448bdeac07293478c20b4c828d24a3d08663",
+                "bindingRevision": 4,
+                "castId": "cast_narrator",
+                "routeId": "route_r0_s_0",
+                "dialogueSpanId": null,
+                "directions": []
+              },
+              {
+                "voice": "library_fishsarah",
+                "text": "[whispers] \"Stay close and keep your voice down.\"",
+                "segmentIds": [
+                  "r0_s_2"
+                ],
+                "startWord": 8,
+                "endWord": 15,
+                "bindingFingerprint": "678db5fa7a5ca4891c28b52210760781df74addce31eadc4e5a14a31b51395f4",
+                "bindingRevision": 4,
+                "castId": "cast_character_mira",
+                "routeId": "route_r0_s_2",
+                "dialogueSpanId": "dlg_r0_s_2",
+                "directions": [
+                  {
+                    "annotationId": "s3_explicit_whispered",
+                    "segmentId": "r0_s_2",
+                    "startWord": 0,
+                    "endWord": 7,
+                    "source": "userOverride",
+                    "confidence": 1.0,
+                    "delivery": "whispered",
+                    "control": "[whispers]"
+                  }
+                ]
+              },
+              {
+                "voice": "library_fishadrian",
+                "text": "Mara said,",
+                "segmentIds": [
+                  "r0_s_3"
+                ],
+                "startWord": 15,
+                "endWord": 17,
+                "bindingFingerprint": "451da1058114aed7e8610604a2ed448bdeac07293478c20b4c828d24a3d08663",
+                "bindingRevision": 4,
+                "castId": "cast_narrator",
+                "routeId": "route_r0_s_3",
+                "dialogueSpanId": null,
+                "directions": []
+              },
+              {
+                "voice": "library_fishsophia",
+                "text": "[shouting] \"I can hear footsteps behind that door!\"",
+                "segmentIds": [
+                  "r0_s_4"
+                ],
+                "startWord": 17,
+                "endWord": 24,
+                "bindingFingerprint": "5e2eb2e0f06de0a5bcb2a73fc978daaebe8b650c5fdf2893934a3b453241c451",
+                "bindingRevision": 4,
+                "castId": "cast_character_mara",
+                "routeId": "route_r0_s_4",
+                "dialogueSpanId": "dlg_r0_s_4",
+                "directions": [
+                  {
+                    "annotationId": "s3_explicit_shouted",
+                    "segmentId": "r0_s_4",
+                    "startWord": 0,
+                    "endWord": 7,
+                    "source": "userOverride",
+                    "confidence": 1.0,
+                    "delivery": "shouted",
+                    "control": "[shouting]"
+                  }
+                ]
+              },
+              {
+                "voice": "library_fishadrian",
+                "text": "Mira said,",
+                "segmentIds": [
+                  "r0_s_5"
+                ],
+                "startWord": 24,
+                "endWord": 26,
+                "bindingFingerprint": "451da1058114aed7e8610604a2ed448bdeac07293478c20b4c828d24a3d08663",
+                "bindingRevision": 4,
+                "castId": "cast_narrator",
+                "routeId": "route_r0_s_5",
+                "dialogueSpanId": null,
+                "directions": []
+              },
+              {
+                "voice": "library_fishsarah",
+                "text": "\"Wait until they pass.\"",
+                "segmentIds": [
+                  "r0_s_6"
+                ],
+                "startWord": 26,
+                "endWord": 30,
+                "bindingFingerprint": "678db5fa7a5ca4891c28b52210760781df74addce31eadc4e5a14a31b51395f4",
+                "bindingRevision": 4,
+                "castId": "cast_character_mira",
+                "routeId": "route_r0_s_6",
+                "dialogueSpanId": "dlg_r0_s_6",
+                "directions": []
+              },
+              {
+                "voice": "library_fishadrian",
+                "text": "The door closed softly. They waited together until the final bell rang.",
+                "segmentIds": [
+                  "r0_s_7",
+                  "r0_s_8"
+                ],
+                "startWord": 30,
+                "endWord": 42,
+                "bindingFingerprint": "451da1058114aed7e8610604a2ed448bdeac07293478c20b4c828d24a3d08663",
+                "bindingRevision": 4,
+                "castId": "cast_narrator",
+                "routeId": "route_r0_s_7",
+                "dialogueSpanId": null,
+                "directions": []
+              }
+            ]
+          }
+        ],
+        "expectedSourceEndWord": 42,
+        "observedSourceEndWord": 42,
+        "queuedAudio": [
+          {
+            "sha256": "0e35de818f9470372af6726cdf7ea30b9156b1023e4f2cac6008e56cd0372c97",
+            "bytes": 1708076,
+            "sampleRate": 44100,
+            "channels": 1,
+            "bitsPerSample": 16,
+            "pcmBytes": 1708032,
+            "peakPcm16": 30963
+          }
+        ],
+        "peakPcm16": 30963,
+        "reopen": {
+          "positionMs": 506,
+          "hasPublishedAudio": true
+        },
+        "pauseMs": 6,
+        "cancelledPlayStayedStopped": true,
+        "restartAfterCancellation": true,
+        "resourceShutdownComplete": true,
+        "forbiddenModelCalls": {},
+        "forbiddenModelCallCount": 0,
+        "maxNativePositionMs": 19365,
+        "maxUiHeartbeatDelayMs": 5,
+        "uiHeartbeatCount": 438,
+        "elapsedMs": 21946,
+        "normalQuit": "runner must request and verify"
+      },
+      "runner": {
+        "passed": true,
+        "deadlineSeconds": 120,
+        "normalQuit": true,
+        "forcedCleanup": false,
+        "launchUtc": "2026-11-07T10:40:27.142446Z",
+        "pid": 95245,
+        "nativePassed": true,
+        "launchToNativePositionMs": 531.581,
+        "nativePositionWithinTwoSeconds": true,
+        "ownedPidsAfterNormalQuit": [],
+        "remainingOwnedPids": [],
+        "exitStatus": 0,
+        "appExitVerified": true,
+        "elapsedSeconds": 34.82214399985969,
+        "errors": []
+      }
     }
   },
   "limits": [
@@ -641,6 +846,7 @@
     "No new S6 selective-regeneration or partial-gap native model run.",
     "CUA getApp timed out by path and registered bundle id; no Save-panel/input proof.",
     "Previous S3 human acceptance is retained; no new human listening requested or inferred.",
-    "No merge or release publication."
+    "No merge or release publication.",
+    "Warm ungated relaunch reached native position in 531.581 ms; this does not erase the 4710.432 ms first launch or measure emitted onset."
   ]
 }

@@ -91,7 +91,7 @@ class KokoroTtsEngine
     engine._exportTokenizer = tokenizer;
     engine._admission = SynthesisAdmissionOwner(
       processor,
-      exportMayRun: () => true,
+      exportMayRun: engine._mayAdmitNativeExport,
     );
     engine._preparedBindings = List.unmodifiable(bindings);
     engine._resourcesReady = true;
@@ -199,6 +199,16 @@ class KokoroTtsEngine
   CancellableSynthesisLease? _playbackLease;
   CancellableSynthesisLease? _exportLease;
   late final _nativePlaybackAdmission = _newPlaybackAdmissionPolicy();
+
+  bool _mayAdmitNativeExport() =>
+      _exportCancelled ||
+      _activeGenerationId == null ||
+      // Saved playback has no competing inference. Its missing next scene may
+      // itself depend on this bounded export, so requiring playable lead here
+      // would form a cycle once the saved prefix drops below low water.
+      _activeGenerationId == _renderedGenerationId ||
+      (_activePlaybackToken != null &&
+          _playableBufferedLeadTime() >= kokoroLowWaterBufferedLeadTime);
 
   KokoroBufferAdmission _newPlaybackAdmissionPolicy() => _usesMlx
       ? KokoroBufferAdmission(
@@ -412,6 +422,7 @@ class KokoroTtsEngine
   bool _pruneScheduled = false;
   String? _lastProgressKey;
   String? _activeGenerationId;
+  String? _renderedGenerationId;
   String? _activeDocumentId;
   String? _activeSessionId;
   String? _firstPendingChunkId;
@@ -659,11 +670,7 @@ class KokoroTtsEngine
           _signalBuffer();
         },
         playbackMayRun: _mayAdmitNativePlayback,
-        exportMayRun: () =>
-            _exportCancelled ||
-            _activeGenerationId == null ||
-            (_activePlaybackToken != null &&
-                _playableBufferedLeadTime() >= kokoroLowWaterBufferedLeadTime),
+        exportMayRun: _mayAdmitNativeExport,
       );
       _playbackLease = _admission!.lease(export: false);
       _speechRuntime = SpeechRuntime(
@@ -879,6 +886,7 @@ class KokoroTtsEngine
       final first = _renderedPlaybackChunk(request, generation);
       if (!current()) return;
       _activeGenerationId = generation;
+      _renderedGenerationId = generation;
       _activeDocumentId = request.documentId;
       _activeSessionId = generation;
       _continuationCancelled = Completer<void>();
@@ -2886,6 +2894,7 @@ class KokoroTtsEngine
     _playbackLease?.cancelPending();
     await cancellation;
     _activeGenerationId = null;
+    _renderedGenerationId = null;
     _producedAudioCredit.clear();
     _firstPendingChunkId = null;
     _firstChunkCompleter = null;
@@ -3336,6 +3345,7 @@ class KokoroTtsEngine
     _activeChunks = const <_PlaybackChunk>[];
     _lastProgressKey = null;
     _activeGenerationId = null;
+    _renderedGenerationId = null;
     _signalBuffer();
     _activeDocumentId = null;
     _activeSessionId = null;

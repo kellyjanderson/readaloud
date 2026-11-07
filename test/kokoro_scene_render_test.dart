@@ -247,7 +247,7 @@ void main() {
   );
 
   test(
-    'cancelled scene rendering preserves valid rendered playback and its pins',
+    'rendering below saved-playback low water admits work and cancellation preserves its pins',
     () async {
       final source = TtsRenderedAudioRequest(
         documentId: 'book',
@@ -284,7 +284,7 @@ void main() {
         ),
       );
       final failure = expectLater(exporting, throwsStateError);
-      await entered.future;
+      await entered.future.timeout(const Duration(seconds: 3));
       cancellation.complete();
       await failure;
       expect(fixture.player.sources, [fixture.raw.path]);

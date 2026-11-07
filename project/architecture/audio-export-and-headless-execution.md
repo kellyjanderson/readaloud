@@ -91,6 +91,9 @@ callback, cancellation/current predicate and source-word offset. Selective book
 regeneration sends one bounded plan with no continuation to this exporter. Its
 existing runtime, tokenizer, resource admission and assembly lifecycle retain
 ownership; export cancellation does not tear down concurrently playing saved
-audio. Dedicated source tests exercise callback provenance, pins and drain. Real
+audio. Saved-audio generations do not compete for inference, so their bounded
+scene exports can run below the playback low-water mark; waiting for that lead
+would deadlock a missing-scene refill. Ordinary synthesized playback retains its
+existing priority rule. Dedicated source tests exercise callback provenance, pins and drain. Real
 save-panel access, copied offline replay, launch timing and emitted continuity
 remain separately qualified in [#137](https://github.com/kellyjanderson/readaloud/issues/137).
