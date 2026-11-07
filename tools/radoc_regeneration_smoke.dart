@@ -23,6 +23,8 @@ import 'package:read_aloud/src/services/kokoro_tts_engine.dart';
 import 'package:read_aloud/src/services/playback_instrumentation_service.dart';
 import 'package:read_aloud/src/services/radoc_audio_package.dart';
 import 'package:read_aloud/src/services/rendered_scene_repository.dart';
+import 'package:read_aloud/src/services/reader_preferences_service.dart';
+import 'package:read_aloud/src/services/work_character_repository.dart';
 import 'package:read_aloud/src/services/tts_engine.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -51,6 +53,9 @@ class _Controller extends ReaderController {
     : super(
         ttsEngine: engine,
         renderedSceneRepository: RenderedSceneRepository(root),
+        preferencesService: ReaderPreferencesService(
+          workRepository: WorkCharacterRepository('${root.path}/works'),
+        ),
         enablePlatformIntakeChannels: false,
         deferInitialSynthesis: true,
       );

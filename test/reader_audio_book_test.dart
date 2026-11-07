@@ -63,51 +63,65 @@ void main() {
     bool lateCharacter = false,
     bool paragraphBreak = false,
     bool changedSource = false,
+    bool middleGap = false,
     String? publishedEngine,
   }) async {
     final service = RadocAudioPackage();
     final members = <String, File>{};
     final ranges = <RadocPreparedRange>[];
     final scenes = <RadocAudioScene>[];
-    final texts = [paragraphBreak ? 'Stay.\n\nClose.' : 'Stay close.', 'Wait here.'];
-    for (var i = 0; i < 2; i++) {
-      final doc = DocumentImportService().importPastedText(texts[i]);
+    final texts = [
+      paragraphBreak ? 'Stay.\n\nClose.' : 'Stay close.',
+      'Wait here.',
+      if (middleGap) 'Keep quiet.',
+    ];
+    for (var i = 0; i < texts.length; i++) {
+      final doc = DocumentImportService().importPastedText(
+        middleGap ? texts.join(' ') : texts[i],
+      );
       final name = 'prepared/$i.json';
-      members[name] = await const ReaderDocumentSerializationService()
-          .writeToFile(
-            document: doc,
-            outputPath: '${temp.path}/$i.json',
-            characters: i != 1 || !lateCharacter
-                ? null
-                : CharacterCastRegistry(
-                    documentId: doc.displayDocument.documentId,
-                    registryVersion: doc.characterCastRegistry.registryVersion,
-                    entries: [
-                      ...doc.characterCastRegistry.entries,
-                      CastEntry(
-                        castId: 'late-mara',
-                        roleKind: CastEntryRoleKind.character,
-                        displayLabel: 'Mara',
-                        confidence: 1,
-                        provenance: CastEntryProvenance.sourceMetadata,
-                        characterState: CharacterState(
-                          explicitGender: GenderEvidence(
-                            value: CharacterGenderIdentityLabel.female,
-                          ),
-                          selectedVoice: const VoiceSelection(
-                            mode: VoiceSelectionMode.explicit,
-                            voiceId: 'other',
-                            revision: 2,
+      if (!middleGap || i == 0) {
+        members[name] = await const ReaderDocumentSerializationService()
+            .writeToFile(
+              document: doc,
+              outputPath: '${temp.path}/$i.json',
+              characters: i != 1 || !lateCharacter
+                  ? null
+                  : CharacterCastRegistry(
+                      documentId: doc.displayDocument.documentId,
+                      registryVersion:
+                          doc.characterCastRegistry.registryVersion,
+                      entries: [
+                        ...doc.characterCastRegistry.entries,
+                        CastEntry(
+                          castId: 'late-mara',
+                          roleKind: CastEntryRoleKind.character,
+                          displayLabel: 'Mara',
+                          confidence: 1,
+                          provenance: CastEntryProvenance.sourceMetadata,
+                          characterState: CharacterState(
+                            explicitGender: GenderEvidence(
+                              value: CharacterGenderIdentityLabel.female,
+                            ),
+                            selectedVoice: const VoiceSelection(
+                              mode: VoiceSelectionMode.explicit,
+                              voiceId: 'other',
+                              revision: 2,
+                            ),
                           ),
                         ),
-                      ),
-                    ],
-                  ),
-          );
-      ranges.add(
-        RadocPreparedRange(member: name, startWord: i * 2, endWord: i * 2 + 2),
-      );
-      if (i == 1 && !secondAudio) continue;
+                      ],
+                    ),
+            );
+        ranges.add(
+          RadocPreparedRange(
+            member: name,
+            startWord: middleGap ? 0 : i * 2,
+            endWord: middleGap ? 6 : i * 2 + 2,
+          ),
+        );
+      }
+      if (i == 1 && (!secondAudio || middleGap)) continue;
       final audio = 'audio/$i.wav';
       members[audio] = await File('${temp.path}/$i.wav').writeAsBytes(_wav());
       final dependencies = <String, dynamic>{
@@ -147,7 +161,7 @@ void main() {
         documentId: 'book',
         sourceId: 'source',
         preparationComplete: true,
-        totalWords: 4,
+        totalWords: middleGap ? 6 : 4,
         preparedRanges: ranges,
         analysisMembers: [],
         scenes: scenes,
@@ -221,18 +235,15 @@ void main() {
       expect(engine.modelCalls, 0);
     },
   );
-  test(
-    'native scene joins preserve paragraph source equivalence',
-    () async {
-      await controller.importFilePaths([
-        (await fixture(paragraphBreak: true)).path,
-      ]);
-      expect(controller.document.speakableText, contains('\n'));
-      await controller.startPlayback();
-      expect(engine.requests, hasLength(1), reason: controller.statusMessage);
-      expect(engine.modelCalls, 0);
-    },
-  );
+  test('native scene joins preserve paragraph source equivalence', () async {
+    await controller.importFilePaths([
+      (await fixture(paragraphBreak: true)).path,
+    ]);
+    expect(controller.document.speakableText, contains('\n'));
+    await controller.startPlayback();
+    expect(engine.requests, hasLength(1), reason: controller.statusMessage);
+    expect(engine.modelCalls, 0);
+  });
   test('changed source words still demand rendering', () async {
     await controller.importFilePaths([
       (await fixture(paragraphBreak: true, changedSource: true)).path,
@@ -241,6 +252,27 @@ void main() {
     expect(engine.requests, isEmpty);
     expect(engine.modelCalls, 1);
   });
+  test(
+    'missing middle scene stops at the next saved span in the same range',
+    () async {
+      engine.renderAvailable = true;
+      await controller.importFilePaths([(await fixture(middleGap: true)).path]);
+      await controller.startPlayback();
+      final first = engine.requests.single;
+      final middle = await first.continuation!.next(
+        0,
+        Completer<void>().future,
+      );
+      expect(engine.exports, hasLength(1));
+      final chunk = engine.exports.single.chunkPlan!.chunks.single;
+      expect(chunk.startWordIndex, 2);
+      expect(chunk.endWordIndex, 4);
+      expect(middle!.text, 'Wait here.');
+      final last = await middle.continuation!.next(1, Completer<void>().future);
+      expect(last!.text, 'Keep quiet.');
+      expect(engine.exports, hasLength(1));
+    },
+  );
   test(
     'partial book gap cannot be reported as EOF and demands model on resume',
     () async {

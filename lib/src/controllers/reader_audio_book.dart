@@ -397,7 +397,9 @@ extension ReaderAudioBookSupport on ReaderController {
     final sceneText = scene.provenance['text'] as String?;
     if (sceneText == null ||
         _joinedBookSource(sceneText) !=
-            _joinedBookSource(range.fragment.speakableText.substring(start, end))) {
+            _joinedBookSource(
+              range.fragment.speakableText.substring(start, end),
+            )) {
       return false;
     }
     final raw = scene.dependencies['raw'] as Map?;
@@ -445,9 +447,13 @@ extension ReaderAudioBookSupport on ReaderController {
     final original = manifest.scenes
         .where((s) => s.startWord <= word && word < s.endWord)
         .firstOrNull;
+    final following = manifest.scenes
+        .where((s) => s.startWord > word && s.startWord < range.range.wordEnd)
+        .firstOrNull;
     final start = (original?.startWord ?? word) - range.range.wordStart;
     final end =
-        (original?.endWord ?? range.range.wordEnd) - range.range.wordStart;
+        (original?.endWord ?? following?.startWord ?? range.range.wordEnd) -
+        range.range.wordStart;
     final base = _planningContext(fromStart: true, document: range.fragment);
     if (base == null) throw StateError('Choose a voice before rendering.');
     final source = base.realization;

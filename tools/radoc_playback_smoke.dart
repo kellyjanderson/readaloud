@@ -18,13 +18,22 @@ import 'package:read_aloud/src/models/spoken_chunk_record.dart';
 import 'package:read_aloud/src/models/voice_profile.dart';
 import 'package:read_aloud/src/services/app_launch_options.dart';
 import 'package:read_aloud/src/services/kokoro_tts_engine.dart';
+import 'package:read_aloud/src/services/reader_preferences_service.dart';
+import 'package:read_aloud/src/services/rendered_scene_repository.dart';
+import 'package:read_aloud/src/services/work_character_repository.dart';
 import 'package:read_aloud/src/services/tts_engine.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 class SmokeController extends ReaderController {
-  SmokeController(KokoroTtsEngine engine)
+  SmokeController(KokoroTtsEngine engine, String statePath)
     : super(
         ttsEngine: engine,
+        preferencesService: ReaderPreferencesService(
+          workRepository: WorkCharacterRepository('$statePath/works'),
+        ),
+        renderedSceneRepository: RenderedSceneRepository(
+          Directory('$statePath/scenes'),
+        ),
         enablePlatformIntakeChannels: false,
         deferInitialSynthesis: true,
       );
@@ -97,7 +106,7 @@ Future<void> main(List<String> args) async {
   receipt['processLaunchUnixMicros'] = launchedAt;
   final player = AudioPlayer(useLazyPreparation: false);
   final engine = OfflinePlaybackEngine(player);
-  final controller = SmokeController(engine);
+  final controller = SmokeController(engine, '${args[1]}.state');
   final audioChecks = <String, Future<Map<String, Object?>>>{};
   final sampleLog = File('${args[1]}.positions.jsonl').openWrite();
   var collectingFirstRun = true;
@@ -162,8 +171,12 @@ Future<void> main(List<String> args) async {
     }
   }
 
-  Future<void> until(bool Function() condition, String description) async {
-    final deadline = watch.elapsedMilliseconds + 60000;
+  Future<void> until(
+    bool Function() condition,
+    String description, {
+    int timeoutMs = 60000,
+  }) async {
+    final deadline = watch.elapsedMilliseconds + timeoutMs;
     while (!condition()) {
       checkFailure();
       if (watch.elapsedMilliseconds >= deadline) {
@@ -218,6 +231,7 @@ Future<void> main(List<String> args) async {
     await until(
       () => controller.playbackState == ReaderPlaybackPrimaryState.completed,
       'Full book source end',
+      timeoutMs: 100000,
     );
     receipt['sourceEndMs'] = watch.elapsedMilliseconds;
     final chunks = controller.spokenChunkRecords;

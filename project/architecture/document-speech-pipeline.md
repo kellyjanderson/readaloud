@@ -223,3 +223,9 @@ synthesis lane; treating it as ordinary synthesis previously prevented this work
 from starting. Ordinary synthesized playback still retains its existing resource
 and low-water admission policy. The export completion metric records the actual
 source span, cache-hit result and raw artifact identity for native qualification.
+
+Scene source validation uses the planner's whitespace-joined textual projection:
+prepared paragraph breaks and native segment-joining spaces are equivalent.
+Words, punctuation, span coverage and canonical speech directions are still
+checked independently. This prevents a successfully regenerated paragraph-spanning
+scene from being rejected when it returns to saved-scene resolution.
