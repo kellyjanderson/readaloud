@@ -101,8 +101,8 @@ Future<void> main(List<String> args) async {
         .toList();
     final allowedDirectories = {
       '${root.path}/python-runtimes',
-      '${root.path}/python-runtimes/v1',
-      '${root.path}/python-runtimes/v1/${args[0]}',
+      '${root.path}/python-runtimes/v2',
+      '${root.path}/python-runtimes/v2/${args[0]}',
     };
     final ownedFiles = leftovers
         .where((e) => e is! Directory || !allowedDirectories.contains(e.path))
