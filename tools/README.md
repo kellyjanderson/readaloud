@@ -104,3 +104,12 @@ its callback receipt against the process launch using `CLOCK_MONOTONIC_RAW`.
 This supplies a conservative upper bound for app-emitted speech, not physical
 speaker latency. Verify a complete candidate and fresh-profile provenance
 separately; a diagnostic build missing required runtimes cannot pass acceptance.
+
+The combined target also accepts `runtime-cancel RUNTIME_ID RECEIPT.json` and
+`booknlp RECEIPT.json`. Use `run_packaged_runtime_smoke.rb APP_BUNDLE NEW_OUTPUT_DIRECTORY runtime-cancel mlx`
+(or `modernbooknlp`) to cancel real first-use extraction in an isolated sandbox.
+The probe uses its own support directory and verifies consumer cancellation,
+staging cleanup, progress suppression and resource drain; it launches no model.
+Use the runner's `booknlp` mode with the existing `residentNlpTest` QA identity
+and qualified local analysis models for the real persistence/reuse scenario.
+These probes require normal Quit and process cleanup even on failure.
