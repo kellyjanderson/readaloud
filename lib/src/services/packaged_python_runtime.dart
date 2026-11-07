@@ -567,13 +567,16 @@ Future<void> _installRuntime(Map<String, Object> args) async {
       );
       if (args['verifyExecutable'] == true) {
         final path = p.join(tree.path, executable);
-        final architectures = await installer.command('/usr/bin/lipo', [
-          '-archs',
+        // lipo is an xcrun shim and cannot run inside an App Sandbox. The
+        // system file inspector requires no developer toolchain. Admit only
+        // one thin arm64 executable, never a universal/non-Mach-O input.
+        final architecture = await installer.command('/usr/bin/file', [
+          '-b',
           path,
         ]);
-        if (architectures != 'arm64') {
+        if (architecture != 'Mach-O 64-bit executable arm64') {
           throw StateError(
-            'Packaged interpreter must be arm64-only: $architectures',
+            'Packaged interpreter must be arm64-only: $architecture',
           );
         }
         await installer.command('/usr/bin/codesign', [
