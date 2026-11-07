@@ -34,6 +34,158 @@ abstract interface class VoiceAssignmentPlaybackCapable {
   TtsPlaybackResumeAnchor? get currentPlaybackResumeAnchor;
 }
 
+/// Player-only admission of an already validated, local rendered scene. The
+/// package owner validates hashes/format/dependencies and retains the file until
+/// admission; the player pins admitted files until native playback releases them.
+abstract interface class RenderedAudioPlaybackCapable {
+  Future<void> playRendered(TtsRenderedAudioRequest request);
+}
+
+class RenderedAudioPlaybackAcknowledgment {
+  const RenderedAudioPlaybackAcknowledgment({
+    required this.documentId,
+    required this.manifestIdentity,
+    required this.intentRevision,
+    required this.generationId,
+  });
+  final String documentId;
+  final String manifestIdentity;
+  final int intentRevision;
+  final String generationId;
+}
+
+/// A single pull consumer; null means verified source EOF, never an audio gap.
+class TtsRenderedAudioContinuation {
+  const TtsRenderedAudioContinuation({required this.next});
+  final Future<TtsRenderedAudioRequest?> Function(
+    int previousSequence,
+    Future<void> cancelled,
+  )
+  next;
+}
+
+class TtsRenderedAudioFormat {
+  const TtsRenderedAudioFormat({
+    required this.sampleRate,
+    required this.channels,
+    required this.bitsPerSample,
+  });
+  final int sampleRate;
+  final int channels;
+  final int bitsPerSample;
+}
+
+class TtsRenderedAudioRequest {
+  TtsRenderedAudioRequest({
+    required this.documentId,
+    required this.manifestIdentity,
+    required this.intentRevision,
+    required this.sceneId,
+    required this.text,
+    required this.startWordIndex,
+    required this.endWordIndex,
+    required this.sourceEndWordIndex,
+    required this.startOffset,
+    required List<NativeSpeechTurn> sceneTurns,
+    required this.audioPath,
+    required this.format,
+    required this.duration,
+    this.rangeSequence = 0,
+    this.isCurrent,
+    this.onPlaybackReady,
+    this.onRangeActive,
+    this.continuation,
+  }) : sceneTurns = List.unmodifiable(
+         sceneTurns.map((turn) => NativeSpeechTurn.fromMap(turn.toMap())),
+       );
+  final String documentId;
+  final String manifestIdentity;
+  final int intentRevision;
+  final String sceneId;
+  final String text;
+  final int startWordIndex;
+  final int endWordIndex;
+  final int sourceEndWordIndex;
+  final int startOffset;
+  final List<NativeSpeechTurn> sceneTurns;
+  final String audioPath;
+
+  /// The package owner has validated a local PCM WAV with this format.
+  final TtsRenderedAudioFormat format;
+  final Duration duration;
+  final int rangeSequence;
+  final bool Function()? isCurrent;
+  final void Function(RenderedAudioPlaybackAcknowledgment)? onPlaybackReady;
+  final void Function()? onRangeActive;
+  final TtsRenderedAudioContinuation? continuation;
+}
+
+/// Finalized synthesis output, with captured dependency evidence. Raw artifact
+/// provenance is optional: a corrected derivative must never masquerade as raw.
+class TtsFinalizedAudioScene {
+  TtsFinalizedAudioScene({
+    required this.documentId,
+    required this.generationId,
+    required this.sceneId,
+    required this.text,
+    required this.engineSpeakText,
+    required this.startWordIndex,
+    required this.endWordIndex,
+    required this.startOffset,
+    required List<NativeSpeechTurn> sceneTurns,
+    required List<PreparedVoiceBinding> preparedBindings,
+    required this.audioPath,
+    required this.duration,
+    required this.engineId,
+    required this.engineVersion,
+    required this.normalizationVersion,
+    required this.capabilityProfileId,
+    required this.synthesisIdentity,
+    required this.translationSignature,
+    required this.synthesisRate,
+    required this.assignmentRevision,
+    required this.cancelled,
+    required this.isCurrent,
+    this.rawAudioPath,
+    this.rawArtifactIdentity,
+    this.predecessorRawArtifactIdentity,
+    this.boundaryPolicyVersion,
+    this.boundaryClass,
+    this.trailingSilenceMicros,
+  }) : sceneTurns = List.unmodifiable(
+         sceneTurns.map((turn) => NativeSpeechTurn.fromMap(turn.toMap())),
+       ),
+       preparedBindings = List.unmodifiable(preparedBindings);
+  final String documentId;
+  final String generationId;
+  final String sceneId;
+  final String text;
+  final String engineSpeakText;
+  final int startWordIndex;
+  final int endWordIndex;
+  final int startOffset;
+  final List<NativeSpeechTurn> sceneTurns;
+  final List<PreparedVoiceBinding> preparedBindings;
+  final String audioPath;
+  final Duration duration;
+  final String engineId;
+  final String engineVersion;
+  final String normalizationVersion;
+  final String capabilityProfileId;
+  final String synthesisIdentity;
+  final String translationSignature;
+  final double synthesisRate;
+  final int assignmentRevision;
+  final Future<void> cancelled;
+  final bool Function() isCurrent;
+  final String? rawAudioPath;
+  final String? rawArtifactIdentity;
+  final String? predecessorRawArtifactIdentity;
+  final String? boundaryPolicyVersion;
+  final String? boundaryClass;
+  final int? trailingSilenceMicros;
+}
+
 abstract interface class ResourcePreparationCapable {
   bool get resourcesReady;
   Future<List<PreparedVoiceBinding>> prepareDocumentResources({
@@ -215,6 +367,7 @@ class TtsSpeakRequest {
     this.sourceWordOffset = 0,
     this.continuation,
     this.onRangeActive,
+    this.onRenderedScene,
   });
 
   final String text;
@@ -236,6 +389,10 @@ class TtsSpeakRequest {
 
   /// Invoked on actual player progress, never on lookahead preparation.
   final void Function()? onRangeActive;
+
+  /// Bounded durable publication, awaited while its own artifact pin is held.
+  /// The callback must honor request cancellation/current ownership itself.
+  final Future<void> Function(TtsFinalizedAudioScene)? onRenderedScene;
 }
 
 class TtsExportRequest {
@@ -252,6 +409,11 @@ class TtsExportRequest {
     this.ttsArtifactSet,
     this.planningContext,
     this.preparedResources,
+    this.onRenderedScene,
+    this.isCurrent,
+    this.cancelled,
+    this.sourceWordOffset = 0,
+    this.assignmentRevision = 0,
   });
 
   final String text;
@@ -266,6 +428,14 @@ class TtsExportRequest {
   final TtsArtifactSet? ttsArtifactSet;
   final SpeechPlanningContext? planningContext;
   final List<PreparedVoiceBinding>? preparedResources;
+
+  /// Awaited while raw and finalized artifact pins remain held. Publication
+  /// must honor the supplied scene cancellation and current-owner predicate.
+  final Future<void> Function(TtsFinalizedAudioScene)? onRenderedScene;
+  final bool Function()? isCurrent;
+  final Future<void>? cancelled;
+  final int sourceWordOffset;
+  final int assignmentRevision;
 }
 
 class TtsExportResult {

@@ -1,0 +1,21 @@
+{
+  "captureSampleRate": 48000,
+  "comparisonSampleRate": 192000,
+  "capturePeak": 0.9432478547096252,
+  "matchedTurns": [
+    {
+      "startWord": 0,
+      "endWord": 42,
+      "castId": "native-scene",
+      "voiceId": "ordered-scene-voices",
+      "captureStartSeconds": 3.2839270833333334,
+      "correlation": 0.9996363209341831,
+      "gapBeforeMs": null
+    }
+  ],
+  "firstSpeechStartSeconds": 3.2839270833333334,
+  "lastSpeechEndSeconds": 22.649369791666665,
+  "maxJoinGapMs": 0,
+  "passed": true,
+  "limit": "Queued-waveform presence/order and joins only; human expression/identity/transcript review required."
+}

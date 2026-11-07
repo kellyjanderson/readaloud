@@ -1,0 +1,15 @@
+{
+  "schema_version": 1,
+  "package_revision": "S6 R1",
+  "publication": "https://github.com/kellyjanderson/readaloud/issues/137#issuecomment-6705166543",
+  "implementation_baseline": "1d7fe27a8f0a98061c382b90ce5efa40cf297120",
+  "documents": [
+    {
+      "path": "dynamic-audio-book.md",
+      "revision": "S6 R1",
+      "source": "https://github.com/kellyjanderson/readaloud/blob/6d3cc28/project/interim/s6-r1/dynamic-audio-book.md",
+      "source_section_sha256": "153059173d7e4c475d2103365a7eebc6b718af103a7b1468fa136172289458c4",
+      "sha256": "153059173d7e4c475d2103365a7eebc6b718af103a7b1468fa136172289458c4"
+    }
+  ]
+}

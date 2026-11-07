@@ -1,0 +1,554 @@
+import 'dart:async';
+import 'dart:io';
+import 'dart:typed_data';
+import 'package:read_aloud/src/models/character.dart';
+import 'package:read_aloud/src/models/character_cast_registry.dart';
+import 'package:read_aloud/src/models/voice_profile.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:read_aloud/src/controllers/reader_controller.dart';
+import 'package:read_aloud/src/models/radoc_audio_manifest.dart';
+import 'package:read_aloud/src/services/audio_artifact_store.dart';
+import 'package:read_aloud/src/services/document_import_service.dart';
+import 'package:read_aloud/src/services/radoc_audio_package.dart';
+import 'package:read_aloud/src/services/reader_document_serialization_service.dart';
+import 'package:read_aloud/src/services/tts_engine.dart';
+import 'package:read_aloud/src/services/rendered_scene_repository.dart';
+
+void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
+  late Directory temp;
+  late _OfflineEngine engine;
+  late ReaderController controller;
+  late RenderedSceneRepository repository;
+  setUp(() async {
+    SharedPreferences.setMockInitialValues({});
+    temp = await Directory.systemTemp.createTemp('reader-book-');
+    engine = _OfflineEngine();
+    repository = RenderedSceneRepository(Directory('${temp.path}/durable'));
+    controller = ReaderController(
+      ttsEngine: engine,
+      deferInitialSynthesis: true,
+      enablePlatformIntakeChannels: false,
+      renderedSceneRepository: repository,
+    );
+    await controller.initialize();
+  });
+  tearDown(() async {
+    await controller.shutdownPreparation();
+    controller.dispose();
+    await temp.delete(recursive: true);
+  });
+  Future<File> fixture({
+    bool secondAudio = true,
+    bool staleDirections = false,
+    bool lateCharacter = false,
+    String? publishedEngine,
+  }) async {
+    final service = RadocAudioPackage();
+    final members = <String, File>{};
+    final ranges = <RadocPreparedRange>[];
+    final scenes = <RadocAudioScene>[];
+    const texts = ['Stay close.', 'Wait here.'];
+    for (var i = 0; i < 2; i++) {
+      final doc = DocumentImportService().importPastedText(texts[i]);
+      final name = 'prepared/$i.json';
+      members[name] = await const ReaderDocumentSerializationService()
+          .writeToFile(
+            document: doc,
+            outputPath: '${temp.path}/$i.json',
+            characters: i != 1 || !lateCharacter
+                ? null
+                : CharacterCastRegistry(
+                    documentId: doc.displayDocument.documentId,
+                    registryVersion: doc.characterCastRegistry.registryVersion,
+                    entries: [
+                      ...doc.characterCastRegistry.entries,
+                      CastEntry(
+                        castId: 'late-mara',
+                        roleKind: CastEntryRoleKind.character,
+                        displayLabel: 'Mara',
+                        confidence: 1,
+                        provenance: CastEntryProvenance.sourceMetadata,
+                        characterState: CharacterState(
+                          explicitGender: GenderEvidence(
+                            value: CharacterGenderIdentityLabel.female,
+                          ),
+                          selectedVoice: const VoiceSelection(
+                            mode: VoiceSelectionMode.explicit,
+                            voiceId: 'other',
+                            revision: 2,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+          );
+      ranges.add(
+        RadocPreparedRange(member: name, startWord: i * 2, endWord: i * 2 + 2),
+      );
+      if (i == 1 && !secondAudio) continue;
+      final audio = 'audio/$i.wav';
+      members[audio] = await File('${temp.path}/$i.wav').writeAsBytes(_wav());
+      final dependencies = <String, dynamic>{
+        'text': texts[i],
+        'rate': 1.0,
+        if (staleDirections && i == 0)
+          'raw': {
+            'canonicalDirections': [
+              {'delivery': 'whispered'},
+            ],
+          },
+      };
+      scenes.add(
+        RadocAudioScene(
+          sceneId: 'scene-$i',
+          startWord: i * 2,
+          endWord: i * 2 + 2,
+          audioMember: audio,
+          dependencyDigest: artifactIdentity(dependencies),
+          dependencies: dependencies,
+          provenance: {'text': texts[i], 'startOffset': 0},
+          sampleRate: 24000,
+          channels: 1,
+          frameCount: 240,
+        ),
+      );
+    }
+    final file = File('${temp.path}/book.radoc');
+    await service.export(
+      destination: file,
+      manifest: RadocAudioManifest(
+        documentId: 'book',
+        sourceId: 'source',
+        preparationComplete: true,
+        totalWords: 4,
+        preparedRanges: ranges,
+        analysisMembers: [],
+        scenes: scenes,
+        intent: {
+          'engineId': ?publishedEngine,
+          'defaultVoiceId': 'published',
+          'multiVoice': true,
+          'rate': 1.0,
+          'voices': [
+            {'id': 'published', 'label': 'Published voice', 'locale': 'en-US'},
+            {'id': 'other', 'label': 'Other voice', 'locale': 'en-US'},
+          ],
+        },
+      ),
+      members: members,
+    );
+    await service.dispose();
+    return file;
+  }
+
+  test(
+    'copied complete book opens, advances and republishes without models',
+    () async {
+      final original = await fixture();
+      final copied = await original.copy('${temp.path}/copied.radoc');
+      await original.delete();
+      await controller.importFilePaths([copied.path]);
+      expect(
+        controller.hasPublishedAudio,
+        true,
+        reason: controller.statusMessage,
+      );
+      expect(controller.document.speakableText, 'Stay close.');
+      await controller.completeInitialIntake();
+      await controller.startPlayback();
+      expect(engine.modelCalls, 0);
+      expect(engine.requests, hasLength(1), reason: controller.statusMessage);
+      final first = engine.requests.single;
+      expect(await File(first.audioPath).exists(), true);
+      expect(controller.isPlaying, true);
+      final canceled = Completer<void>();
+      final next = await first.continuation!.next(
+        first.rangeSequence,
+        canceled.future,
+      );
+      expect(next!.startWordIndex, 2);
+      next.onRangeActive!();
+      expect(controller.document.speakableText, 'Wait here.');
+      expect(
+        await next.continuation!.next(next.rangeSequence, canceled.future),
+        isNull,
+      );
+      final output = await controller.exportDocumentToPath(
+        '${temp.path}/published.radoc',
+      );
+      expect(output, isNotNull, reason: controller.statusMessage);
+      final check = RadocAudioPackage();
+      final book = await check.open(output!);
+      expect(book.manifest.renderingComplete, true);
+      expect(book.manifest.preparedRanges, hasLength(2));
+      expect(book.manifest.scenes, hasLength(2));
+      await check.dispose();
+      await controller.importFilePaths([output.path]);
+      expect(
+        controller.hasPublishedAudio,
+        true,
+        reason: controller.statusMessage,
+      );
+      await controller.startPlayback();
+      expect(engine.requests, hasLength(2), reason: controller.statusMessage);
+      expect(engine.modelCalls, 0);
+    },
+  );
+  test(
+    'partial book gap cannot be reported as EOF and demands model on resume',
+    () async {
+      await controller.importFilePaths([
+        (await fixture(secondAudio: false)).path,
+      ]);
+      await controller.startPlayback();
+      final request = engine.requests.single;
+      await expectLater(
+        request.continuation!.next(0, Completer<void>().future),
+        throwsStateError,
+      );
+      expect(engine.modelCalls, 1);
+      await controller.startPlayback();
+      expect(engine.modelCalls, 2);
+      expect(controller.statusMessage, contains('needs rendering'));
+      expect(engine.requests, hasLength(1));
+    },
+  );
+  test(
+    'republish preserves unread later Character evidence and explicit voice',
+    () async {
+      await controller.importFilePaths([
+        (await fixture(lateCharacter: true)).path,
+      ]);
+      expect(controller.characterCastRegistry.forCastId('late-mara'), isNull);
+      final output = await controller.exportDocumentToPath(
+        '${temp.path}/unread-save.radoc',
+      );
+      expect(output, isNotNull, reason: controller.statusMessage);
+      await controller.importFilePaths([output!.path]);
+      final later = await controller.readPreparedRange(2);
+      final character = later!.fragment.characterCastRegistry.forCastId(
+        'late-mara',
+      );
+      expect(character, isNotNull);
+      expect(
+        character!.explicitGender.value,
+        CharacterGenderIdentityLabel.female,
+      );
+      expect(character.selectedVoice.mode, VoiceSelectionMode.explicit);
+      expect(character.selectedVoice.voiceId, 'other');
+      expect(character.selectedVoice.revision, 2);
+      expect(engine.modelCalls, 0);
+    },
+  );
+  test(
+    'changed direction renders one bounded scene and reuses following audio',
+    () async {
+      engine.renderAvailable = true;
+      await controller.importFilePaths([
+        (await fixture(staleDirections: true)).path,
+      ]);
+      await controller.startPlayback();
+      expect(engine.exports, hasLength(1), reason: controller.statusMessage);
+      final export = engine.exports.single;
+      expect(export.chunkPlan!.chunks, hasLength(1));
+      expect(export.chunkPlan!.nextSegmentId, isNull);
+      expect(export.chunkPlan!.chunks.single.speakText, 'Stay close.');
+      expect(engine.requests, hasLength(1), reason: controller.statusMessage);
+      final first = engine.requests.single;
+      final next = await first.continuation!.next(0, Completer<void>().future);
+      expect(next!.text, 'Wait here.');
+      expect(await File(next.audioPath).readAsBytes(), _wav());
+      expect(engine.exports, hasLength(1));
+      await controller.pausePlayback();
+      engine.renderAvailable = false;
+      await controller.importFilePaths([(await fixture()).path]);
+      await controller.startPlayback();
+      expect(engine.exports, hasLength(1));
+    },
+  );
+  test('one Play survives the demanded published-engine handoff', () async {
+    final old = _OfflineEngine();
+    final replacement = _OfflineEngine()..renderAvailable = true;
+    final c = ReaderController(
+      ttsEngine: old,
+      engineFactory: (id, _) {
+        expect(id, 'fish_drama3');
+        return replacement;
+      },
+      deferInitialSynthesis: true,
+      enablePlatformIntakeChannels: false,
+      renderedSceneRepository: RenderedSceneRepository(
+        Directory('${temp.path}/handoff'),
+      ),
+    );
+    try {
+      await c.initialize();
+      await c.importFilePaths([
+        (await fixture(
+          staleDirections: true,
+          publishedEngine: 'fish_drama3',
+        )).path,
+      ]);
+      await c.startPlayback();
+      expect(replacement.exports, hasLength(1), reason: c.statusMessage);
+      expect(replacement.requests, hasLength(1), reason: c.statusMessage);
+      expect(old.modelCalls, 0);
+      expect(c.runningTtsEngineId, 'fish_drama3');
+    } finally {
+      await c.shutdownPreparation();
+      c.dispose();
+    }
+  });
+  test('Save Audio Book produces v5 before any scene is rendered', () async {
+    await controller.importPastedText('A book awaiting its first reading.');
+    if (!controller.hasCompleteDocumentSnapshot) {
+      final complete = Completer<void>();
+      void changed() {
+        if (controller.hasCompleteDocumentSnapshot && !complete.isCompleted) {
+          complete.complete();
+        }
+      }
+
+      controller.addListener(changed);
+      try {
+        await complete.future.timeout(const Duration(seconds: 3));
+      } finally {
+        controller.removeListener(changed);
+      }
+    }
+    final output = await controller.exportDocumentToPath(
+      '${temp.path}/unrendered.radoc',
+      audioBook: true,
+    );
+    expect(output, isNotNull, reason: controller.statusMessage);
+    final transport = RadocAudioPackage();
+    try {
+      final book = await transport.open(output!);
+      expect(book.manifest.preparationComplete, true);
+      expect(book.manifest.renderingComplete, false);
+      expect(book.manifest.scenes, isEmpty);
+      expect(book.manifest.totalWords, 6);
+    } finally {
+      await transport.dispose();
+    }
+    expect(engine.modelCalls, 0);
+  });
+  test('replacement rejects an old scene continuation', () async {
+    final file = await fixture();
+    await controller.importFilePaths([file.path]);
+    await controller.startPlayback();
+    final request = engine.requests.single;
+    await controller.importFilePaths([file.path]);
+    expect(request.isCurrent!(), false);
+    await expectLater(
+      request.continuation!.next(0, Completer<void>().future),
+      throwsA(anything),
+    );
+    expect(engine.requests, hasLength(1));
+  });
+  test(
+    'newly saved missing passage reopens without its source files or model',
+    () async {
+      final file = await fixture(secondAudio: false);
+      final audio = await File('${temp.path}/new.wav').writeAsBytes(_wav());
+      final saved = await repository.publish(
+        TtsFinalizedAudioScene(
+          documentId: 'ephemeral',
+          generationId: 'ephemeral',
+          sceneId: 'ephemeral',
+          text: 'Wait here.',
+          engineSpeakText: 'Wait here.',
+          startWordIndex: 2,
+          endWordIndex: 4,
+          startOffset: 0,
+          sceneTurns: [],
+          preparedBindings: [],
+          audioPath: audio.path,
+          duration: const Duration(milliseconds: 10),
+          engineId: 'fixture',
+          engineVersion: 'fixture-v1',
+          normalizationVersion: 'fixture-v1',
+          capabilityProfileId: 'fixture-v1',
+          synthesisIdentity: 'fixture',
+          translationSignature: 'fixture',
+          synthesisRate: 1,
+          assignmentRevision: 1,
+          cancelled: Completer<void>().future,
+          isCurrent: () => true,
+        ),
+        sourceId: 'source',
+        intent: {
+          'defaultVoiceId': 'published',
+          'multiVoice': true,
+          'rate': 1.0,
+        },
+      );
+      await audio.delete();
+      await controller.importFilePaths([file.path]);
+      await controller.startPlayback();
+      final first = engine.requests.single;
+      final next = await first.continuation!.next(0, Completer<void>().future);
+      expect(next!.audioPath, saved.audioPath);
+      expect(next.startWordIndex, 2);
+      expect(
+        await next.continuation!.next(1, Completer<void>().future),
+        isNull,
+      );
+      expect(engine.modelCalls, 0);
+    },
+  );
+  test(
+    'changed canonical direction invalidates saved audio before admission',
+    () async {
+      await controller.importFilePaths([
+        (await fixture(staleDirections: true)).path,
+      ]);
+      await controller.startPlayback();
+      expect(engine.modelCalls, 1);
+      expect(engine.requests, isEmpty);
+      expect(controller.statusMessage, contains('needs rendering'));
+    },
+  );
+  test('changed default voice does not play the old saved identity', () async {
+    await controller.importFilePaths([(await fixture()).path]);
+    await controller.selectVoiceById('other');
+    expect(engine.modelCalls, 0);
+    await controller.startPlayback();
+    expect(engine.modelCalls, 1);
+    expect(engine.requests, isEmpty);
+  });
+}
+
+class _OfflineEngine
+    implements TtsEngine, RenderedAudioPlaybackCapable, AudioExportCapable {
+  int modelCalls = 0;
+  bool renderAvailable = false;
+  final exports = <TtsExportRequest>[];
+  final requests = <TtsRenderedAudioRequest>[];
+  @override
+  void Function()? onStart;
+  @override
+  void Function(String?)? onStatus;
+  @override
+  void Function(TtsProgressUpdate)? onProgress;
+  @override
+  void Function()? onComplete;
+  @override
+  void Function(String)? onError;
+  @override
+  void Function(TtsPlaybackActivity)? onActivity;
+  @override
+  void Function(TtsDebugTraceSnapshot)? onDebugTrace;
+  @override
+  Future<void> initialize() async {
+    modelCalls++;
+    if (!renderAvailable) throw StateError('No installed model');
+  }
+
+  @override
+  Future<List<VoiceProfile>> loadVoices() async => [
+    for (final id in ['published', 'other'])
+      VoiceProfile(id: id, label: id, locale: 'en-US', rawValue: const {}),
+  ];
+  @override
+  Future<void> selectVoice(VoiceProfile voice) async {}
+  @override
+  Future<void> setSpeechRate(double rate) async {}
+  @override
+  Future<void> setVolume(double volume) async {}
+  @override
+  Future<TtsExportResult> exportAudio(TtsExportRequest request) async {
+    exports.add(request);
+    final chunk = request.chunkPlan!.chunks.single;
+    await File(request.outputPath).writeAsBytes(_wav());
+    await request.onRenderedScene!(
+      TtsFinalizedAudioScene(
+        documentId: request.documentId!,
+        generationId: 'export-test',
+        sceneId: chunk.chunkId,
+        text: chunk.speakText,
+        engineSpeakText: chunk.speakText,
+        startWordIndex: request.sourceWordOffset + chunk.startWordIndex,
+        endWordIndex: request.sourceWordOffset + chunk.endWordIndex,
+        startOffset: 0,
+        sceneTurns: [],
+        preparedBindings: [],
+        audioPath: request.outputPath,
+        duration: const Duration(milliseconds: 10),
+        engineId: 'kokoro',
+        engineVersion: '2',
+        normalizationVersion: request.normalizationVersion!,
+        capabilityProfileId: 'test',
+        synthesisIdentity: 'test',
+        translationSignature: 'test',
+        synthesisRate: 1,
+        assignmentRevision: request.assignmentRevision,
+        cancelled: request.cancelled!,
+        isCurrent: request.isCurrent!,
+      ),
+    );
+    return TtsExportResult(
+      outputPath: request.outputPath,
+      sidecarPath: '${request.outputPath}.json',
+      duration: const Duration(milliseconds: 10),
+      chunkCount: 1,
+      voiceId: 'published',
+      rate: 1,
+      engineId: 'kokoro',
+      engineVersion: '2',
+    );
+  }
+
+  @override
+  Future<void> playRendered(TtsRenderedAudioRequest request) async {
+    requests.add(request);
+    request.onPlaybackReady?.call(
+      RenderedAudioPlaybackAcknowledgment(
+        documentId: request.documentId,
+        manifestIdentity: request.manifestIdentity,
+        intentRevision: request.intentRevision,
+        generationId: 'test',
+      ),
+    );
+    request.onRangeActive?.call();
+    onStart?.call();
+  }
+
+  @override
+  Future<void> stop() async {}
+  @override
+  Future<void> pause() async {}
+  @override
+  void dispose() {}
+  @override
+  dynamic noSuchMethod(Invocation invocation) {
+    modelCalls++;
+    throw StateError('Unexpected synthesis call ${invocation.memberName}');
+  }
+}
+
+Uint8List _wav() {
+  final b = ByteData(44 + 480);
+  void tag(int i, String s) {
+    for (var k = 0; k < s.length; k++) {
+      b.setUint8(i + k, s.codeUnitAt(k));
+    }
+  }
+
+  tag(0, 'RIFF');
+  b.setUint32(4, b.lengthInBytes - 8, Endian.little);
+  tag(8, 'WAVE');
+  tag(12, 'fmt ');
+  b.setUint32(16, 16, Endian.little);
+  b.setUint16(20, 1, Endian.little);
+  b.setUint16(22, 1, Endian.little);
+  b.setUint32(24, 24000, Endian.little);
+  b.setUint32(28, 48000, Endian.little);
+  b.setUint16(32, 2, Endian.little);
+  b.setUint16(34, 16, Endian.little);
+  tag(36, 'data');
+  b.setUint32(40, 480, Endian.little);
+  return b.buffer.asUint8List();
+}

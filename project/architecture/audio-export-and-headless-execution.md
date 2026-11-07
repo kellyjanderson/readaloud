@@ -65,3 +65,35 @@ These legacy contracts describe intended behavior and acceptance; `final` denote
 - [speech runtime command protocol](../specifications/speech-runtime-command-protocol.md)
 - [speech runtime event protocol](../specifications/speech-runtime-event-protocol.md)
 - [speech runtime lifecycle and ownership](../specifications/speech-runtime-lifecycle-and-ownership.md)
+
+## Portable book publishing
+
+File → **Save Audio Book…** (Cmd-S) writes a `radoc-v5` ZIP package through the
+platform save panel. It includes complete prepared ranges, analysis/Character
+state, canonical directions, voice intent, scene dependencies and available raw
+and final WAVs. Audio coverage may be partial and is explicit; missing audio is
+never EOF. The legacy controller export default retains v4 JSON when no audio is
+available; the Save Audio Book UI explicitly requests v5, including a book whose
+rendering has not started. Original input/checkpoint paths are protected.
+
+The package owner uses the maintained archive codec plus bounded streaming I/O;
+it admits one worker and no queue. Limits are 10,000 members, 64 MiB per member,
+2 GiB total archive, 2 MiB manifest and 8 MiB directory. Export stores members
+without compression and atomically renames a staged archive after current-owner
+admission; import also accepts bounded raw DEFLATE. Cancellation suppresses stale
+publication and drains before cleanup. Metadata and PCM copying stay off the UI
+isolate. The signed macOS target grants only user-selected read/write file access
+for NSSavePanel, retaining sandboxing and app-scoped bookmarks; see the published
+[S6 R2 amendment](../interim/s6-r2/publishing-access.md).
+
+The existing exporter additionally accepts an awaited per-scene publication
+callback, cancellation/current predicate and source-word offset. Selective book
+regeneration sends one bounded plan with no continuation to this exporter. Its
+existing runtime, tokenizer, resource admission and assembly lifecycle retain
+ownership; export cancellation does not tear down concurrently playing saved
+audio. Saved-audio generations do not compete for inference, so their bounded
+scene exports can run below the playback low-water mark; waiting for that lead
+would deadlock a missing-scene refill. Ordinary synthesized playback retains its
+existing priority rule. Dedicated source tests exercise callback provenance, pins and drain. Real
+save-panel access, copied offline replay, launch timing and emitted continuity
+remain separately qualified in [#137](https://github.com/kellyjanderson/readaloud/issues/137).

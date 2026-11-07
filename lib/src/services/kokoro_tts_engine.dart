@@ -7,7 +7,7 @@ import 'audio_artifact_store.dart';
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
-import 'package:flutter/foundation.dart' show compute;
+import 'package:flutter/foundation.dart' show compute, visibleForTesting;
 
 import 'package:crypto/crypto.dart' as crypto;
 import 'package:flutter/services.dart';
@@ -40,6 +40,7 @@ import 'tts_engine.dart';
 class KokoroTtsEngine
     implements
         TtsEngine,
+        RenderedAudioPlaybackCapable,
         VoiceLibraryCapable,
         AudioExportCapable,
         ResourcePreparationCapable,
@@ -68,7 +69,39 @@ class KokoroTtsEngine
        _mlxModelPath = mlxModelPath ?? '',
        _mlxPythonPath = mlxPythonPath ?? '',
        _selectedVoiceId = defaultVoiceIdFor(engineId);
+
+  /// Supplies deterministic native/tokenization owners to exercise the real
+  /// export lifecycle without installing or initializing a model in tests.
+  @visibleForTesting
+  factory KokoroTtsEngine.withExportTestOwners({
+    required AudioPlayer player,
+    required SpeechWorkerResourceOwner processor,
+    required KokoroTokenizationWorker tokenizer,
+    required List<PreparedVoiceBinding> bindings,
+    required AudioArtifactPins artifactPins,
+    required ExportedAudioAssembler exportAssembler,
+    Future<void>? initialization,
+  }) {
+    final engine = KokoroTtsEngine(
+      player: player,
+      artifactPins: artifactPins,
+      exportAssembler: exportAssembler,
+    );
+    engine._resourceProcessor = processor;
+    engine._exportTokenizer = tokenizer;
+    engine._admission = SynthesisAdmissionOwner(
+      processor,
+      exportMayRun: engine._mayAdmitNativeExport,
+    );
+    engine._preparedBindings = List.unmodifiable(bindings);
+    engine._resourcesReady = true;
+    engine._synthesisIdentity = 'test-synthesis-content';
+    engine._initializationFuture = initialization ?? Future<void>.value();
+    return engine;
+  }
+
   final Future<void> Function()? beforeSynthesis;
+
   final AudioArtifactPins _artifactPins;
   late final _playbackPins = KokoroPlaybackArtifactPins(_artifactPins);
   String _synthesisIdentity = 'uninitialized';
@@ -152,6 +185,7 @@ class KokoroTtsEngine
   TtsDebugTraceSession? _debugTraceSession;
 
   Future<void>? _initializationFuture;
+  Future<void>? _playerInitializationFuture;
   bool _initializationClosed = false;
   bool _initializationMayRetry = true;
   KokoroAssetBundle? _assets;
@@ -165,6 +199,16 @@ class KokoroTtsEngine
   CancellableSynthesisLease? _playbackLease;
   CancellableSynthesisLease? _exportLease;
   late final _nativePlaybackAdmission = _newPlaybackAdmissionPolicy();
+
+  bool _mayAdmitNativeExport() =>
+      _exportCancelled ||
+      _activeGenerationId == null ||
+      // Saved playback has no competing inference. Its missing next scene may
+      // itself depend on this bounded export, so requiring playable lead here
+      // would form a cycle once the saved prefix drops below low water.
+      _activeGenerationId == _renderedGenerationId ||
+      (_activePlaybackToken != null &&
+          _playableBufferedLeadTime() >= kokoroLowWaterBufferedLeadTime);
 
   KokoroBufferAdmission _newPlaybackAdmissionPolicy() => _usesMlx
       ? KokoroBufferAdmission(
@@ -209,6 +253,9 @@ class KokoroTtsEngine
   final SpeechPlanningSupervisor _refillPlanner = SpeechPlanningSupervisor();
   Completer<void> _continuationCancelled = Completer<void>();
   final Map<int, void Function()> _rangeActivations = {};
+  TtsSpeakRequest? _scenePublicationRequest;
+  List<PreparedVoiceBinding> _scenePublicationBindings = const [];
+  Future<void> _sceneReadyTail = Future<void>.value();
   Completer<void> _bufferChanged = Completer<void>();
   int _nextReadyWord = 0;
   _PlaybackChunk? _startupFirstChunk;
@@ -222,11 +269,16 @@ class KokoroTtsEngine
   Future<void> _resourceTransition = Future<void>.value();
   bool _exportingResources = false;
   bool _exportCancelled = false;
+  Completer<void>? _exportCancellation;
   final _releaseResourcesAfterExport = KokoroDeferredResourceRelease();
   SpeechRuntime? _exportRuntime;
   String? _exportSession;
   Future<void> _cancelExport() async {
+    final drained = _exportDrained;
     _exportCancelled = true;
+    if (_exportCancellation?.isCompleted == false) {
+      _exportCancellation!.complete();
+    }
     _exportAssembler.cancel();
     _exportTokenizer?.cancel();
     final session = _exportSession;
@@ -238,7 +290,7 @@ class KokoroTtsEngine
     _exportLease?.cancelPending();
     _signalBuffer();
     await cancellation;
-    await _exportDrained?.future;
+    await drained?.future;
   }
 
   Completer<void>? _exportDrained;
@@ -370,6 +422,7 @@ class KokoroTtsEngine
   bool _pruneScheduled = false;
   String? _lastProgressKey;
   String? _activeGenerationId;
+  String? _renderedGenerationId;
   String? _activeDocumentId;
   String? _activeSessionId;
   String? _firstPendingChunkId;
@@ -452,7 +505,10 @@ class KokoroTtsEngine
     return _initializationFuture!;
   }
 
-  Future<void> _initializeInternal() async {
+  Future<void> _initializePlayer() =>
+      _playerInitializationFuture ??= _initializePlayerInternal();
+
+  Future<void> _initializePlayerInternal() async {
     await _playerStateSubscription?.cancel();
     await _positionSubscription?.cancel();
     await _currentIndexSubscription?.cancel();
@@ -509,6 +565,7 @@ class KokoroTtsEngine
     _positionSubscription = _player.positionStream.listen(
       _handlePosition,
       onError: (Object error, StackTrace stackTrace) {
+        if (_activePlaybackToken == null) return;
         _emitActivity(const TtsPlaybackActivity.idle());
         _onError?.call('Audio playback failed: $error');
       },
@@ -516,7 +573,11 @@ class KokoroTtsEngine
     _currentIndexSubscription = _player.currentIndexStream.listen(
       _handleCurrentIndex,
     );
+  }
 
+  Future<void> _initializeInternal() async {
+    await _initializePlayer();
+    _requireInitializationOwner();
     try {
       if (_usesMlx && usesReferenceVoiceLibrary(_engineId)) {
         await MlxVoiceLibrary.load();
@@ -609,11 +670,7 @@ class KokoroTtsEngine
           _signalBuffer();
         },
         playbackMayRun: _mayAdmitNativePlayback,
-        exportMayRun: () =>
-            _exportCancelled ||
-            _activeGenerationId == null ||
-            (_activePlaybackToken != null &&
-                _playableBufferedLeadTime() >= kokoroLowWaterBufferedLeadTime),
+        exportMayRun: _mayAdmitNativeExport,
       );
       _playbackLease = _admission!.lease(export: false);
       _speechRuntime = SpeechRuntime(
@@ -741,13 +798,271 @@ class KokoroTtsEngine
   }
 
   @override
+  Future<void> playRendered(TtsRenderedAudioRequest request) async {
+    _requireInitializationOwner();
+    if (request.isCurrent?.call() == false) return;
+    await _initializePlayer();
+    if (request.isCurrent?.call() == false || _initializationClosed) return;
+    await stop();
+    if (request.isCurrent?.call() == false || _initializationClosed) return;
+    final token = ++_requestToken;
+    _ownPlaybackPreparation(_playRenderedScene(token, request), token);
+  }
+
+  _PlaybackChunk _renderedPlaybackChunk(
+    TtsRenderedAudioRequest request,
+    String generation,
+  ) {
+    final words = _buildWordBoundaries(request.text);
+    if (request.manifestIdentity.isEmpty ||
+        request.documentId.isEmpty ||
+        request.sceneId.isEmpty ||
+        request.startWordIndex < 0 ||
+        request.startOffset < 0 ||
+        request.endWordIndex <= request.startWordIndex ||
+        request.endWordIndex > request.sourceEndWordIndex ||
+        request.endWordIndex - request.startWordIndex != words.length ||
+        request.duration <= Duration.zero ||
+        request.audioPath.isEmpty ||
+        request.format.sampleRate <= 0 ||
+        request.format.channels <= 0 ||
+        !const {16, 24, 32}.contains(request.format.bitsPerSample)) {
+      throw StateError('Invalid rendered scene metadata: ${request.sceneId}.');
+    }
+    var nextTurn = request.startWordIndex;
+    for (final turn in request.sceneTurns) {
+      if (turn.startWord != nextTurn ||
+          turn.endWord <= turn.startWord ||
+          turn.endWord > request.endWordIndex) {
+        throw StateError('Invalid rendered scene source turns.');
+      }
+      nextTurn = turn.endWord;
+    }
+    if (request.sceneTurns.isNotEmpty && nextTurn != request.endWordIndex) {
+      throw StateError('Missing rendered scene source turns.');
+    }
+    final first = request.sceneTurns.firstOrNull;
+    return _PlaybackChunk(
+      chunkId: '${request.rangeSequence}:${request.sceneId}',
+      generationId: generation,
+      boundaryClass: BreakClass.none,
+      documentId: request.documentId,
+      sceneTurns: request.sceneTurns,
+      segmentIds: request.sceneTurns.expand((t) => t.segmentIds).toList(),
+      segmentRanges: [
+        for (final turn in request.sceneTurns)
+          _ChunkSegmentRange(
+            segmentId: turn.segmentIds.firstOrNull ?? request.sceneId,
+            startWordIndex: turn.startWord,
+            endWordIndex: turn.endWord,
+          ),
+      ],
+      startWordIndex: request.startWordIndex,
+      endWordIndex: request.endWordIndex,
+      startOffset: request.startOffset,
+      wordBoundaries: words,
+      duration: request.duration,
+      filePath: request.audioPath,
+      leadingSilence: Duration.zero,
+      trailingSilence: Duration.zero,
+      voiceId: first?.voiceId ?? 'rendered',
+      rate: 1,
+      routeId: first?.routeId,
+      castId: first?.castId,
+      dialogueSpanId: first?.dialogueSpanId,
+    );
+  }
+
+  Future<void> _playRenderedScene(
+    int token,
+    TtsRenderedAudioRequest request,
+  ) async {
+    bool current() =>
+        token == _requestToken &&
+        !_initializationClosed &&
+        request.isCurrent?.call() != false;
+    final generation = 'rendered_$token';
+    try {
+      final first = _renderedPlaybackChunk(request, generation);
+      if (!current()) return;
+      _activeGenerationId = generation;
+      _renderedGenerationId = generation;
+      _activeDocumentId = request.documentId;
+      _activeSessionId = generation;
+      _continuationCancelled = Completer<void>();
+      _rangeActivations.clear();
+      if (request.onRangeActive case final activate?) {
+        _rangeActivations[request.startWordIndex] = activate;
+      }
+      _expectedChunkCount = 1;
+      // A missing continuation before the declared end is a gap, never EOF.
+      _remainingPlannedChunkCount =
+          request.endWordIndex < request.sourceEndWordIndex ||
+              request.continuation != null
+          ? 1
+          : 0;
+      _playbackPins.pin(generation, first.chunkId, first.filePath);
+      _emitActivity(
+        _playbackActivityForPhase(
+          TtsPlaybackPhase.buffering,
+          totalChunkCount: _expectedChunkCount,
+        ),
+      );
+      final installed = await _mutateAudioQueue(() async {
+        if (!current()) return;
+        _activeChunks = [first];
+        _currentChunkIndex = 0;
+        _currentQueueBaseIndex = 0;
+        _nextReadyWord = first.endWordIndex;
+        final ready = await kokoroInstallPreparedPlayback(
+          isCurrent: current,
+          install: () async {
+            await _player.setVolume(_volume);
+            if (!current()) return;
+            await _player.setAudioSources([AudioSource.file(first.filePath)]);
+          },
+          clearStale: () async {
+            final pins = _playbackPins.snapshot(generation: generation);
+            await _player.stop();
+            await _player.clearAudioSources();
+            _playbackPins.releaseSnapshot(pins);
+          },
+        );
+        if (ready) _activePlaybackToken = token;
+      });
+      if (!installed || !current() || _activePlaybackToken != token) return;
+      request.onPlaybackReady?.call(
+        RenderedAudioPlaybackAcknowledgment(
+          documentId: request.documentId,
+          manifestIdentity: request.manifestIdentity,
+          intentRevision: request.intentRevision,
+          generationId: generation,
+        ),
+      );
+      if (!current()) return;
+      _emitProgressForChunkWord(0, 0, elapsedInChunk: Duration.zero);
+      if (!current()) return;
+      _emitActivity(
+        _playbackActivityForPhase(
+          TtsPlaybackPhase.playing,
+          bufferedChunkCount: 1,
+          totalChunkCount: 1,
+        ),
+      );
+      _onStatus?.call(null);
+      _onStart?.call();
+      if (!current()) return;
+      unawaited(
+        _player.play().catchError((Object error, StackTrace stack) async {
+          if (current()) {
+            await _terminatePreparationFailure(
+              'Rendered audio playback failed: $error',
+            );
+          }
+        }),
+      );
+      await _continueRenderedScenes(token, request, generation);
+    } catch (error) {
+      if (current()) {
+        await _terminatePreparationFailure(
+          'Rendered audio playback failed: $error',
+        );
+      }
+    }
+  }
+
+  Future<void> _continueRenderedScenes(
+    int token,
+    TtsRenderedAudioRequest initial,
+    String generation,
+  ) async {
+    bool current() =>
+        token == _requestToken &&
+        generation == _activeGenerationId &&
+        initial.isCurrent?.call() != false;
+    var previous = initial;
+    final policy = _newPlaybackAdmissionPolicy();
+    while (current()) {
+      final continuation = previous.continuation;
+      if (continuation == null) {
+        if (previous.endWordIndex != initial.sourceEndWordIndex) {
+          throw StateError(
+            'Rendered audio coverage gap at word ${previous.endWordIndex}.',
+          );
+        }
+        break;
+      }
+      await _awaitPlaybackCredit(policy, current);
+      if (!current()) return;
+      final following = await Future.any([
+        continuation.next(
+          previous.rangeSequence,
+          _continuationCancelled.future,
+        ),
+        _continuationCancelled.future.then<TtsRenderedAudioRequest?>(
+          (_) => null,
+        ),
+      ]);
+      if (!current()) return;
+      if (following == null) {
+        if (previous.endWordIndex != initial.sourceEndWordIndex) {
+          throw StateError(
+            'Rendered audio coverage gap at word ${previous.endWordIndex}.',
+          );
+        }
+        break;
+      }
+      if (following.isCurrent?.call() == false ||
+          following.rangeSequence != previous.rangeSequence + 1 ||
+          following.startWordIndex != previous.endWordIndex ||
+          following.documentId != initial.documentId ||
+          following.manifestIdentity != initial.manifestIdentity ||
+          following.intentRevision != initial.intentRevision ||
+          following.sourceEndWordIndex != initial.sourceEndWordIndex) {
+        throw StateError('Non-contiguous or stale rendered audio scene.');
+      }
+      final chunk = _renderedPlaybackChunk(following, generation);
+      if (following.onRangeActive case final activate?) {
+        _rangeActivations[following.startWordIndex] = activate;
+      }
+      _playbackPins.pin(generation, chunk.chunkId, chunk.filePath);
+      ++_expectedChunkCount;
+      await _appendReadyChunkToActiveQueue(chunk, generationId: generation);
+      if (!current()) return;
+      await _resumeAfterUnderrunIfPossible();
+      previous = following;
+    }
+    if (current()) {
+      _remainingPlannedChunkCount = 0;
+      _signalBuffer();
+      // A player that exhausted the last source while EOF was being verified
+      // needs the same completion handling as a fresh native completed event.
+      if (_player.processingState == ProcessingState.completed) {
+        _emitFinalProgress();
+        unawaited(_resetPlaybackState());
+        _onComplete?.call();
+      }
+    }
+  }
+
+  @override
   Future<TtsExportResult> exportAudio(TtsExportRequest request) async {
     if (_exportingResources || _resourceShutdown != null) {
       throw StateError('Speech resources are unavailable for export.');
     }
     _exportingResources = true;
     _exportCancelled = false;
-    _exportDrained = Completer<void>();
+    final drained = _exportDrained = Completer<void>();
+    _exportCancellation = Completer<void>();
+    // This callback belongs only to this export. A late signal must not cancel
+    // the next export or the independent rendered playback generation.
+    unawaited(
+      request.cancelled?.then((_) async {
+        if (identical(_exportDrained, drained) && !drained.isCompleted) {
+          await _cancelExport();
+        }
+      }),
+    );
     try {
       return await _exportAudioWithResources(request);
     } finally {
@@ -763,7 +1078,7 @@ class KokoroTtsEngine
         }
       } finally {
         _exportingResources = false;
-        _exportDrained!.complete();
+        drained.complete();
         _exportRuntime = null;
         _exportSession = null;
         _exportLease = null;
@@ -774,8 +1089,25 @@ class KokoroTtsEngine
   Future<TtsExportResult> _exportAudioWithResources(
     TtsExportRequest request,
   ) async {
+    final exportOwner = _exportDrained!;
+    var publicationFailed = false;
+    final supplied = request.preparedResources == null
+        ? null
+        : List<PreparedVoiceBinding>.unmodifiable(request.preparedResources!);
+    bool current() =>
+        identical(_exportDrained, exportOwner) &&
+        !exportOwner.isCompleted &&
+        !_exportCancelled &&
+        !publicationFailed &&
+        request.isCurrent?.call() != false;
+    void requireCurrent() {
+      if (!current()) throw StateError('Export cancelled or superseded.');
+    }
+
+    requireCurrent();
     await initialize();
-    if (_exportCancelled) throw StateError('Export cancelled.');
+    requireCurrent();
+    final cancellation = _exportCancellation!.future;
     final planner = SpeechPlanningSupervisor();
     final exportPins = <AudioArtifactPin>[];
     final context = request.planningContext;
@@ -786,14 +1118,20 @@ class KokoroTtsEngine
       );
     }
     final voiceId = context?.realization.voiceId ?? _selectedVoiceId;
+    Iterable<String> chunkVoices(ChunkSpec chunk) sync* {
+      yield chunk.voiceId;
+      for (final turn in chunk.sceneTurns) {
+        yield* chunkVoices(turn);
+      }
+    }
+
     final requiredVoices = {
       ...?context?.routes?.castVoiceAssignments.assignments.map(
         (a) => a.effectiveVoiceId,
       ),
       voiceId,
-      ...?request.chunkPlan?.chunks.map((c) => c.voiceId),
+      ...?request.chunkPlan?.chunks.expand(chunkVoices),
     };
-    final supplied = request.preparedResources;
     if (supplied != null) {
       if (!_resourcesReady ||
           requiredVoices.any(
@@ -827,7 +1165,10 @@ class KokoroTtsEngine
         ownedByExport: true,
       );
     }
-    if (_exportCancelled) throw StateError('Export cancelled.');
+    requireCurrent();
+    final bindings = List<PreparedVoiceBinding>.unmodifiable(
+      supplied ?? _preparedBindings,
+    );
     _exportLease = _admission!.lease(export: true);
     final runtime = SpeechRuntime(
       engineId: _engineId,
@@ -840,16 +1181,30 @@ class KokoroTtsEngine
     _exportSession = sessionId;
     final outputs = <ExportedAudioChunk>[];
     var completion = Completer<List<ExportedAudioChunk>>();
+    unawaited(completion.future.then<void>((_) {}, onError: (Object _) {}));
     final completedChunks = <String, ExportedAudioChunk>{};
     final pendingChunksById = <String, _QueuedChunk>{};
     var chunks = <_QueuedChunk>[];
     var initial = true;
+    var publicationTail = Future<void>.value();
     final subscription = runtime.events.listen((event) {
       if (event.sessionId != null && event.sessionId != sessionId) return;
       if (event.type == SpeechRuntimeEventType.chunkReady) {
+        if (!current()) {
+          if (!completion.isCompleted) {
+            completion.completeError(
+              StateError('Export cancelled or superseded.'),
+            );
+          }
+          return;
+        }
         if (event.audioPath != null) {
           exportPins.add(_artifactPins.pin(event.audioPath!));
         }
+        if (event.payload['rawAudioPath'] case final String rawPath) {
+          exportPins.add(_artifactPins.pin(rawPath));
+        }
+
         final chunkId = event.chunkId;
         final plannedChunk = pendingChunksById[chunkId];
         if (chunkId == null ||
@@ -858,51 +1213,82 @@ class KokoroTtsEngine
             event.duration == null) {
           return;
         }
-        completedChunks[chunkId] = ExportedAudioChunk(
-          sceneTurns: plannedChunk.sceneTurns,
-          chunkId: chunkId,
-          cacheKey: plannedChunk.runtimeCacheKey(
-            isInitialChunk:
-                initial && plannedChunk.chunkId == chunks.first.chunkId,
-            isResumedChunk: false,
-          ),
-          audioPath: event.audioPath!,
-          duration: event.duration!,
-          segmentIds: plannedChunk.segmentIds,
-          startWordIndex: plannedChunk.startWordIndex,
-          endWordIndex: plannedChunk.endWordIndex,
-          voiceId: plannedChunk.voiceId,
-          routeId: plannedChunk.routeId,
-          castId: plannedChunk.castId,
-          dialogueSpanId: plannedChunk.dialogueSpanId,
-          capabilityProfileId: plannedChunk.capabilityProfileId,
-          missingFallbackWordCount: plannedChunk.missingFallbackWordCount,
-          boundaryMetadata: event.boundaryClass == null
-              ? null
-              : ExportedBoundaryMetadata(
-                  boundaryClass: event.boundaryClass!.name,
-                  correctionApplied: event.boundaryCorrectionApplied ?? false,
-                  leadingSilenceBefore:
-                      event.leadingSilenceBefore ?? Duration.zero,
-                  leadingSilenceAfter: event.leadingSilence ?? Duration.zero,
-                  trailingSilenceBefore:
-                      event.trailingSilenceBefore ?? Duration.zero,
-                  trailingSilenceAfter: event.trailingSilence ?? Duration.zero,
-                  joinSilenceBefore: event.joinSilenceBefore ?? Duration.zero,
-                  joinSilenceAfter: event.joinSilenceAfter ?? Duration.zero,
-                  isInitialChunk: event.isInitialChunk ?? false,
-                  isResumedChunk: event.isResumedChunk ?? false,
+        final windowCompletion = completion;
+        publicationTail = publicationTail
+            .then((_) async {
+              requireCurrent();
+              final publish = request.onRenderedScene;
+              if (publish != null) {
+                await publish(
+                  _finalizedScene(
+                    chunk: plannedChunk,
+                    event: event,
+                    generationId: generationId,
+                    bindings: bindings,
+                    assignmentRevision: request.assignmentRevision,
+                    cancelled: cancellation,
+                    isCurrent: current,
+                  ),
+                );
+              }
+              requireCurrent();
+              completedChunks[chunkId] = ExportedAudioChunk(
+                sceneTurns: plannedChunk.sceneTurns,
+                chunkId: chunkId,
+                cacheKey: plannedChunk.runtimeCacheKey(
+                  isInitialChunk:
+                      initial && plannedChunk.chunkId == chunks.first.chunkId,
+                  isResumedChunk: false,
                 ),
-          pronunciationArtifacts: _exportPronunciationArtifacts(
-            plannedChunk.translatedPronunciationArtifacts,
-          ),
-        );
-        if (!completion.isCompleted &&
-            completedChunks.length == chunks.length) {
-          completion.complete(
-            chunks.map((c) => completedChunks[c.chunkId]!).toList(),
-          );
-        }
+                audioPath: event.audioPath!,
+                duration: event.duration!,
+                segmentIds: plannedChunk.segmentIds,
+                startWordIndex: plannedChunk.startWordIndex,
+                endWordIndex: plannedChunk.endWordIndex,
+                voiceId: plannedChunk.voiceId,
+                routeId: plannedChunk.routeId,
+                castId: plannedChunk.castId,
+                dialogueSpanId: plannedChunk.dialogueSpanId,
+                capabilityProfileId: plannedChunk.capabilityProfileId,
+                missingFallbackWordCount: plannedChunk.missingFallbackWordCount,
+                boundaryMetadata: event.boundaryClass == null
+                    ? null
+                    : ExportedBoundaryMetadata(
+                        boundaryClass: event.boundaryClass!.name,
+                        correctionApplied:
+                            event.boundaryCorrectionApplied ?? false,
+                        leadingSilenceBefore:
+                            event.leadingSilenceBefore ?? Duration.zero,
+                        leadingSilenceAfter:
+                            event.leadingSilence ?? Duration.zero,
+                        trailingSilenceBefore:
+                            event.trailingSilenceBefore ?? Duration.zero,
+                        trailingSilenceAfter:
+                            event.trailingSilence ?? Duration.zero,
+                        joinSilenceBefore:
+                            event.joinSilenceBefore ?? Duration.zero,
+                        joinSilenceAfter:
+                            event.joinSilenceAfter ?? Duration.zero,
+                        isInitialChunk: event.isInitialChunk ?? false,
+                        isResumedChunk: event.isResumedChunk ?? false,
+                      ),
+                pronunciationArtifacts: _exportPronunciationArtifacts(
+                  plannedChunk.translatedPronunciationArtifacts,
+                ),
+              );
+              if (!windowCompletion.isCompleted &&
+                  completedChunks.length == chunks.length) {
+                windowCompletion.complete(
+                  chunks.map((c) => completedChunks[c.chunkId]!).toList(),
+                );
+              }
+            })
+            .catchError((Object error, StackTrace stack) {
+              publicationFailed = true;
+              if (!windowCompletion.isCompleted) {
+                windowCompletion.completeError(error, stack);
+              }
+            });
       } else if (event.type == SpeechRuntimeEventType.chunkFailed ||
           event.type == SpeechRuntimeEventType.runtimeFailed ||
           event.type == SpeechRuntimeEventType.sessionCancelled) {
@@ -915,6 +1301,7 @@ class KokoroTtsEngine
     });
     try {
       await runtime.initializeRuntime(preferredVoiceId: voiceId);
+      requireCurrent();
       await runtime.activateSession(
         SpeechRuntimeSessionDescriptor(
           sessionId: sessionId,
@@ -934,16 +1321,18 @@ class KokoroTtsEngine
       var plan = request.chunkPlan;
       var searchOffset = 0;
       while (true) {
-        if (_exportCancelled) throw StateError('Export cancelled.');
+        requireCurrent();
         final speakRequest = TtsSpeakRequest(
           text: request.text,
           documentId: request.documentId,
           normalizationVersion: request.normalizationVersion,
           chunkPlan: plan,
           speechDocument: request.speechDocument,
-          preparedResources: List.unmodifiable(
-            request.preparedResources ?? _preparedBindings,
-          ),
+          planningContext: request.planningContext,
+          sourceWordOffset: request.sourceWordOffset,
+          assignmentRevision: request.assignmentRevision,
+          isCurrent: current,
+          preparedResources: bindings,
         );
         if (plan == null) {
           chunks = await _prepareChunks(
@@ -962,6 +1351,7 @@ class KokoroTtsEngine
           chunks = prepared.chunks;
           searchOffset = prepared.nextSearchOffset;
         }
+        requireCurrent();
         if (chunks.isEmpty) break;
         completion = Completer<List<ExportedAudioChunk>>();
         completedChunks.clear();
@@ -991,6 +1381,7 @@ class KokoroTtsEngine
         if (next == null || context == null) break;
         plan = (await planner.plan(context, startSegmentId: next)).plan;
       }
+      requireCurrent();
       return await _exportAssembler.assemble(
         ExportedAudioAssemblyRequest(
           outputPath: request.outputPath,
@@ -1009,7 +1400,10 @@ class KokoroTtsEngine
     } finally {
       await kokoroDrainExportOwners(
         runtime: runtime.shutdownRuntime,
-        subscription: subscription.cancel,
+        subscription: () async {
+          await subscription.cancel();
+          await publicationTail;
+        },
         planner: planner.shutdown,
         releasePins: () {
           for (final pin in exportPins) {
@@ -1115,6 +1509,10 @@ class KokoroTtsEngine
       }
 
       final generationId = 'generation_$requestToken';
+      _scenePublicationRequest = request;
+      _scenePublicationBindings = List.unmodifiable(
+        request.preparedResources ?? _preparedBindings,
+      );
       _continuationCancelled = Completer<void>();
       _rangeActivations.clear();
       if (request.onRangeActive case final activate?) {
@@ -1363,6 +1761,9 @@ class KokoroTtsEngine
           // tiny/zero-duration chunks. Only one translation runs ahead of credit.
           await _awaitPlaybackCredit(policy, current);
           if (!current()) return;
+          if (request.isCurrent?.call() == false) {
+            throw StateError('Chunk preparation superseded.');
+          }
           final prepared = await _preparePlannedChunk(
             request: rangeRequest,
             spec: spec,
@@ -1425,6 +1826,15 @@ class KokoroTtsEngine
             throw StateError('Non-contiguous or stale prepared range.');
           }
           rangeRequest = following;
+          _scenePublicationBindings = List.unmodifiable(
+            {
+              for (final binding in [
+                ..._scenePublicationBindings,
+                ...?following.preparedResources,
+              ])
+                binding.fingerprint: binding,
+            }.values,
+          );
           if (following.onRangeActive case final activate?) {
             _rangeActivations[following.sourceWordOffset] = activate;
           }
@@ -1859,7 +2269,16 @@ class KokoroTtsEngine
         );
         _emitBufferingActivity();
       case SpeechRuntimeEventType.chunkReady:
-        unawaited(_handleRuntimeChunkReady(event));
+        // One publication/copy is active at a time. Native synthesis credit
+        // already bounds completed-but-unpublished WAVs and queued ready tasks.
+        final ready = _sceneReadyTail.then(
+          (_) => _handleRuntimeChunkReady(event),
+        );
+        _sceneReadyTail = ready.then<void>(
+          (_) {},
+          onError: (Object _, StackTrace _) {},
+        );
+        _ownPlaybackPreparation(ready, _requestToken);
       case SpeechRuntimeEventType.chunkFailed:
         _handleRuntimeChunkFailure(event);
       case SpeechRuntimeEventType.sessionCancelled:
@@ -1895,6 +2314,69 @@ class KokoroTtsEngine
     );
   }
 
+  TtsFinalizedAudioScene _finalizedScene({
+    required _QueuedChunk chunk,
+    required SpeechRuntimeEvent event,
+    required String generationId,
+    required List<PreparedVoiceBinding> bindings,
+    required int assignmentRevision,
+    required Future<void> cancelled,
+    required bool Function() isCurrent,
+  }) {
+    return TtsFinalizedAudioScene(
+      documentId: chunk.documentId,
+      generationId: generationId,
+      sceneId: chunk.chunkId,
+      text: chunk.text,
+      engineSpeakText: chunk.engineSpeakText,
+      startWordIndex: chunk.startWordIndex,
+      endWordIndex: chunk.endWordIndex,
+      startOffset: chunk.startOffset,
+      sceneTurns: chunk.sceneTurns,
+      preparedBindings: bindings
+          .where(
+            (binding) =>
+                (binding.voiceId == chunk.expectedBinding.voiceId &&
+                    binding.bindingRevision ==
+                        chunk.expectedBinding.bindingRevision &&
+                    binding.fingerprint == chunk.expectedBinding.fingerprint) ||
+                chunk.sceneTurns.any(
+                  (turn) =>
+                      turn.voiceId == binding.voiceId &&
+                      turn.bindingRevision == binding.bindingRevision &&
+                      turn.bindingFingerprint == binding.fingerprint,
+                ),
+          )
+          .toList(),
+      audioPath: event.audioPath!,
+      duration: event.duration!,
+      engineId: engineId,
+      engineVersion: engineVersion,
+      normalizationVersion: chunk.normalizationVersion,
+      capabilityProfileId: chunk.capabilityProfileId,
+      synthesisIdentity: chunk.synthesisIdentity,
+      translationSignature: _runtimeTranslationSignature(
+        capabilityProfileId: chunk.capabilityProfileId,
+        speakText: chunk.engineSpeakText,
+        pronunciationArtifacts: chunk.translatedPronunciationArtifacts,
+        payloadUnits: chunk.translatedPayloadUnits,
+        missingFallbackWordCount: chunk.missingFallbackWordCount,
+        finalPhonemeString: chunk.finalPhonemeString,
+      ),
+      synthesisRate: chunk.synthesisRate,
+      assignmentRevision: assignmentRevision,
+      cancelled: cancelled,
+      isCurrent: isCurrent,
+      rawAudioPath: event.payload['rawAudioPath'] as String?,
+      rawArtifactIdentity: event.payload['rawArtifactIdentity'] as String?,
+      predecessorRawArtifactIdentity:
+          event.payload['predecessorRawArtifactIdentity'] as String?,
+      boundaryPolicyVersion: event.payload['boundaryPolicyVersion'] as String?,
+      boundaryClass: event.boundaryClass?.name,
+      trailingSilenceMicros: event.trailingSilence?.inMicroseconds,
+    );
+  }
+
   Future<void> _handleRuntimeChunkReady(SpeechRuntimeEvent event) async {
     final generation = event.generationId;
     if (generation == null || generation != _activeGenerationId) return;
@@ -1908,6 +2390,54 @@ class KokoroTtsEngine
       return;
     }
     _playbackPins.pin(generation, chunkId, event.audioPath!);
+    final publicationRequest =
+        chunk.publicationRequest ?? _scenePublicationRequest;
+    final publish = publicationRequest?.onRenderedScene;
+    if (publish != null) {
+      // Publication owns separate pins. Pause/reset may release playlist pins
+      // while a bounded copy/hash is settling, including the original raw WAV.
+      final publicationPins = [
+        _artifactPins.pin(event.audioPath!),
+        if (event.payload['rawAudioPath'] case final String path)
+          _artifactPins.pin(path),
+      ];
+      final token = _requestToken;
+      try {
+        await publish(
+          _finalizedScene(
+            chunk: chunk,
+            event: event,
+            generationId: generation,
+            bindings:
+                publicationRequest?.preparedResources ??
+                _scenePublicationBindings,
+            assignmentRevision: publicationRequest!.assignmentRevision,
+            cancelled: _continuationCancelled.future,
+            isCurrent: () =>
+                token == _requestToken &&
+                generation == _activeGenerationId &&
+                publicationRequest.isCurrent?.call() != false,
+          ),
+        );
+      } catch (error) {
+        if (token == _requestToken && generation == _activeGenerationId) {
+          await _terminatePreparationFailure(
+            'Rendered audio publication failed: $error',
+          );
+        }
+        return;
+      } finally {
+        for (final pin in publicationPins) {
+          pin.release();
+        }
+      }
+      if (token != _requestToken ||
+          generation != _activeGenerationId ||
+          publicationRequest.isCurrent?.call() == false) {
+        _playbackPins.release(generation, chunkId);
+        return;
+      }
+    }
     _recordMetric(
       'audioArtifactPinned',
       chunkId: chunkId,
@@ -2273,6 +2803,7 @@ class KokoroTtsEngine
 
     return _QueuedChunk(
       chunkId: '${failedChunk.chunkId}_recover_$sliceIndex',
+      publicationRequest: failedChunk.publicationRequest,
       expectedBinding: failedChunk.expectedBinding,
       synthesisIdentity: failedChunk.synthesisIdentity,
       synthesisRate: failedChunk.synthesisRate,
@@ -2363,6 +2894,7 @@ class KokoroTtsEngine
     _playbackLease?.cancelPending();
     await cancellation;
     _activeGenerationId = null;
+    _renderedGenerationId = null;
     _producedAudioCredit.clear();
     _firstPendingChunkId = null;
     _firstChunkCompleter = null;
@@ -2450,6 +2982,7 @@ class KokoroTtsEngine
       );
       final translatedChunk = tokenization.translatedChunk!;
       final chunk = _QueuedChunk(
+        publicationRequest: request,
         chunkId: request.rangeSequence == 0
             ? spec.chunkId
             : 'range_${request.rangeSequence}_${spec.chunkId}',
@@ -2548,6 +3081,7 @@ class KokoroTtsEngine
       return _PreparedPlannedChunk(
         nextSearchOffset: prepared.nextSearchOffset,
         chunk: _QueuedChunk(
+          publicationRequest: request,
           chunkId: 'scene_${first.chunkId}',
           expectedBinding: first.expectedBinding,
           sceneTurns: envelope,
@@ -2611,6 +3145,7 @@ class KokoroTtsEngine
     final translatedChunk = tokenization.translatedChunk!;
     return _PreparedPlannedChunk(
       chunk: _QueuedChunk(
+        publicationRequest: request,
         chunkId: request.rangeSequence == 0
             ? spec.chunkId
             : 'range_${request.rangeSequence}_${spec.chunkId}',
@@ -2810,9 +3345,12 @@ class KokoroTtsEngine
     _activeChunks = const <_PlaybackChunk>[];
     _lastProgressKey = null;
     _activeGenerationId = null;
+    _renderedGenerationId = null;
     _signalBuffer();
     _activeDocumentId = null;
     _activeSessionId = null;
+    _scenePublicationRequest = null;
+    _scenePublicationBindings = const [];
     _firstPendingChunkId = null;
     _firstChunkCompleter = null;
     _pendingChunksById = <String, _QueuedChunk>{};
@@ -3321,6 +3859,7 @@ class KokoroTtsEngine
 
 class _QueuedChunk {
   const _QueuedChunk({
+    this.publicationRequest,
     this.sceneTurns = const <NativeSpeechTurn>[],
     required this.chunkId,
     required this.expectedBinding,
@@ -3355,6 +3894,7 @@ class _QueuedChunk {
   });
 
   final List<NativeSpeechTurn> sceneTurns;
+  final TtsSpeakRequest? publicationRequest;
   final String chunkId;
   final PreparedVoiceBinding expectedBinding;
   final String synthesisIdentity;
@@ -3393,6 +3933,7 @@ class _QueuedChunk {
     BreakClass? boundaryClass,
   }) {
     return _QueuedChunk(
+      publicationRequest: publicationRequest,
       sceneTurns: sceneTurns,
       chunkId: chunkId ?? this.chunkId,
       expectedBinding: expectedBinding,

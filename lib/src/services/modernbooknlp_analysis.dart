@@ -20,6 +20,14 @@ class ModernBookNlpAnalysis extends ChangeNotifier {
   onResult;
   ModernBookNlpProvider? _provider;
   DocumentAnalysisRepository? repository;
+
+  /// Optional lazy portable-book lookup, owned by this existing one-window
+  /// consumer. It must honor the supplied window revision before publication.
+  Future<DocumentAnalysisRecord?> Function(
+    ModernBookNlpRequest request,
+    bool Function() isCurrent,
+  )?
+  loadBookRecord;
   final Map<String, DocumentAnalysisRecord> _embedded = {};
   bool restoredFromBook = false;
   void restoreRecords(List<DocumentAnalysisRecord> records) {
@@ -121,6 +129,8 @@ class ModernBookNlpAnalysis extends ChangeNotifier {
             'total': null,
           };
           notifyListeners();
+          saved ??= await loadBookRecord?.call(request, windowCurrent);
+          if (!windowCurrent()) continue;
           try {
             saved ??= await repository?.read(request);
           } on FormatException {

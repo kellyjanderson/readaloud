@@ -56,6 +56,8 @@ class BoundaryCorrectionOutcome {
 class SynthesisBoundaryPolicy {
   const SynthesisBoundaryPolicy();
 
+  static const version = 'boundary-native-rate-v2';
+
   static const Duration pathologicalLeadingSilence = Duration(
     milliseconds: 180,
   );
@@ -105,7 +107,7 @@ class SynthesisBoundaryPolicy {
           )
         : <String, dynamic>{};
     final identity = artifactIdentity({
-      'kind': 'boundary-native-rate-v2',
+      'kind': version,
       'rawPcm': sha256.convert(bytes).toString(),
       'rawIdentity': rawMetadata['artifactIdentity'],
       'policy': {
