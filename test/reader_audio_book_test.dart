@@ -61,13 +61,15 @@ void main() {
     bool secondAudio = true,
     bool staleDirections = false,
     bool lateCharacter = false,
+    bool paragraphBreak = false,
+    bool changedSource = false,
     String? publishedEngine,
   }) async {
     final service = RadocAudioPackage();
     final members = <String, File>{};
     final ranges = <RadocPreparedRange>[];
     final scenes = <RadocAudioScene>[];
-    const texts = ['Stay close.', 'Wait here.'];
+    final texts = [paragraphBreak ? 'Stay.\n\nClose.' : 'Stay close.', 'Wait here.'];
     for (var i = 0; i < 2; i++) {
       final doc = DocumentImportService().importPastedText(texts[i]);
       final name = 'prepared/$i.json';
@@ -126,7 +128,12 @@ void main() {
           audioMember: audio,
           dependencyDigest: artifactIdentity(dependencies),
           dependencies: dependencies,
-          provenance: {'text': texts[i], 'startOffset': 0},
+          provenance: {
+            'text': changedSource && i == 0
+                ? 'Go close.'
+                : texts[i].replaceAll(RegExp(r'\s+'), ' '),
+            'startOffset': 0,
+          },
           sampleRate: 24000,
           channels: 1,
           frameCount: 240,
@@ -215,6 +222,26 @@ void main() {
     },
   );
   test(
+    'native scene joins preserve paragraph source equivalence',
+    () async {
+      await controller.importFilePaths([
+        (await fixture(paragraphBreak: true)).path,
+      ]);
+      expect(controller.document.speakableText, contains('\n'));
+      await controller.startPlayback();
+      expect(engine.requests, hasLength(1), reason: controller.statusMessage);
+      expect(engine.modelCalls, 0);
+    },
+  );
+  test('changed source words still demand rendering', () async {
+    await controller.importFilePaths([
+      (await fixture(paragraphBreak: true, changedSource: true)).path,
+    ]);
+    await controller.startPlayback();
+    expect(engine.requests, isEmpty);
+    expect(engine.modelCalls, 1);
+  });
+  test(
     'partial book gap cannot be reported as EOF and demands model on resume',
     () async {
       await controller.importFilePaths([
@@ -265,14 +292,14 @@ void main() {
     () async {
       engine.renderAvailable = true;
       await controller.importFilePaths([
-        (await fixture(staleDirections: true)).path,
+        (await fixture(staleDirections: true, paragraphBreak: true)).path,
       ]);
       await controller.startPlayback();
       expect(engine.exports, hasLength(1), reason: controller.statusMessage);
       final export = engine.exports.single;
       expect(export.chunkPlan!.chunks, hasLength(1));
       expect(export.chunkPlan!.nextSegmentId, isNull);
-      expect(export.chunkPlan!.chunks.single.speakText, 'Stay close.');
+      expect(export.chunkPlan!.chunks.single.speakText, 'Stay. Close.');
       expect(engine.requests, hasLength(1), reason: controller.statusMessage);
       final first = engine.requests.single;
       final next = await first.continuation!.next(0, Completer<void>().future);

@@ -391,8 +391,13 @@ extension ReaderAudioBookSupport on ReaderController {
         : range.fragment.charOffsetForWord(
             scene.endWord - range.range.wordStart,
           );
-    if ((scene.provenance['text'] as String?)?.trim() !=
-        range.fragment.speakableText.substring(start, end).trim()) {
+    // Native scenes join complete prepared segments with spaces. The prepared
+    // surface retains paragraph breaks; compare that same textual projection,
+    // while directions below retain their independent semantic identity.
+    final sceneText = scene.provenance['text'] as String?;
+    if (sceneText == null ||
+        _joinedBookSource(sceneText) !=
+            _joinedBookSource(range.fragment.speakableText.substring(start, end))) {
       return false;
     }
     final raw = scene.dependencies['raw'] as Map?;
@@ -616,10 +621,10 @@ extension ReaderAudioBookSupport on ReaderController {
           : range.fragment.charOffsetForWord(
               scene.endWord - range.range.wordStart,
             );
-      if (text.trim() !=
-          range.fragment.speakableText
-              .substring(sourceStart, sourceEnd)
-              .trim()) {
+      if (_joinedBookSource(text) !=
+          _joinedBookSource(
+            range.fragment.speakableText.substring(sourceStart, sourceEnd),
+          )) {
         throw const FormatException(
           'Saved audio text does not match its prepared source.',
         );
@@ -760,6 +765,9 @@ class _BookScene {
   final String? audioPath, rawAudioPath;
   final int? trailingMicros;
 }
+
+String _joinedBookSource(String text) =>
+    text.replaceAll(RegExp(r'\s+'), ' ').trim();
 
 RadocAudioScene _publishedScene(StoredRenderedScene s) => RadocAudioScene(
   sceneId: s.sceneId,
