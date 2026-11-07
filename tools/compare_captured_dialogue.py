@@ -80,6 +80,7 @@ def compare(receipt, capture_path):
             'startWord': chunk['startWord'], 'endWord': chunk['endWord'],
             'castId': chunk['castId'], 'voiceId': chunk['voiceId'],
             'captureStartSeconds': source_start, 'correlation': score,
+            'activeSpeechStartSeconds': matched / rate,
             'gapBeforeMs': None if gap is None else round(gap * 1000, 2),
         })
         previous_end = source_start + len(source) / rate

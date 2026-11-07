@@ -5,9 +5,10 @@ require 'digest'
 require 'fileutils'
 require 'rbconfig'
 require 'time'
+require 'timeout'
 
-abort 'Usage: run_radoc_playback_smoke.rb APP_EXECUTABLE BOOK NEW_OUTPUT_DIRECTORY' unless ARGV.length == 3
-app, book, output = ARGV.map { |path| File.expand_path(path) }
+abort 'Usage: run_radoc_playback_smoke.rb APP_EXECUTABLE BOOK NEW_OUTPUT_DIRECTORY [CAPTURE_EXECUTABLE]' unless [3, 4].include?(ARGV.length)
+app, book, output, capture = ARGV.map { |path| File.expand_path(path) }
 abort 'Executable missing' unless File.file?(app) && File.executable?(app)
 abort 'Book missing' unless File.file?(book)
 abort 'Output already exists' if File.exist?(output)
@@ -28,6 +29,9 @@ runner_receipt = {passed: false, deadlineSeconds: 120, normalQuit: false, forced
 pid = nil
 status = nil
 errors = []
+capture_pid = nil
+capture_log = nil
+capture_stop = File.join(output, 'capture.stop')
 monotonic = -> { Process.clock_gettime(Process::CLOCK_MONOTONIC) }
 members = -> { pid ? IO.popen(['/usr/bin/pgrep', '-g', pid.to_s], &:read).split.map(&:to_i) : [] }
 File.open(File.join(output, 'app.log'), 'w') do |log|
@@ -36,8 +40,15 @@ File.open(File.join(output, 'app.log'), 'w') do |log|
     deadline = monotonic.call + 120
     runner_receipt[:launchUtc] = launched_at.utc.iso8601(6)
     launch_micros = (launched_at.to_r * 1_000_000).to_i
+    runner_receipt[:launchMonotonicRawNanos] = Process.clock_gettime(Process::CLOCK_MONOTONIC_RAW, :nanosecond)
     pid = Process.spawn({'READALOUD_SMOKE_LAUNCH_UNIX_MICROS' => launch_micros.to_s}, app, copied_book, receipt, out: log, err: log, pgroup: true)
     runner_receipt[:pid] = pid
+    if capture
+      capture_log = File.open(File.join(output, 'capture.log'), 'w')
+      capture_pid = Process.spawn(capture, pid.to_s, File.join(output, 'capture.wav'), '110', capture_stop, out: capture_log, err: capture_log)
+      runner_receipt[:capturePid] = capture_pid
+      runner_receipt[:captureIntroducedPlayGate] = false
+    end
     puts "RADOC_SMOKE_STARTED pid=#{pid} output=#{output}"
     loop do
       exited = Process.wait2(pid, Process::WNOHANG)
@@ -60,6 +71,28 @@ File.open(File.join(output, 'app.log'), 'w') do |log|
   rescue => error
     errors << error.message
   ensure
+    if capture_pid
+      FileUtils.touch(capture_stop)
+      begin
+        _, captured = Timeout.timeout(5) { Process.wait2(capture_pid) }
+        runner_receipt[:captureExitStatus] = captured.exitstatus
+        errors << 'App audio capture failed' unless captured.success?
+      rescue Timeout::Error
+        Process.kill('TERM', capture_pid) rescue Errno::ESRCH
+        begin
+          Timeout.timeout(1) { Process.waitpid(capture_pid) }
+        rescue Timeout::Error
+          Process.kill('KILL', capture_pid) rescue Errno::ESRCH
+          Process.waitpid(capture_pid) rescue Errno::ECHILD
+        rescue Errno::ECHILD
+        end
+        errors << 'App audio capture did not stop normally'
+      rescue StandardError => error
+        errors << "App audio capture cleanup failed: #{error.message}"
+      ensure
+        capture_log&.close
+      end
+    end
     if pid
       # Always attempt normal Quit, including native errors and timeouts. The
       # osascript child and every wait share the original 120-second deadline.

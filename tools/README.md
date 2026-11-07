@@ -93,3 +93,14 @@ checks. Controlled Play gates do not measure first-launch performance; the
 ungated offline runner retains opening-to-native-position timestamps separately,
 and those timestamps alone do not establish audible onset. Current acceptance
 and remaining gates live in [S6 #137](https://github.com/kellyjanderson/readaloud/issues/137).
+
+For opening-to-emitted-speech measurement, pass the compiled capture executable
+as the offline runner's optional fourth argument. It starts app-only capture
+immediately after launch and introduces no Play gate. Compare the capture with
+the exact queued WAVs, then run
+`ruby tools/summarize_startup_audio.rb NATIVE_OUTPUT_DIRECTORY COMPARISON_JSON NEW_RESULT_JSON`.
+The report aligns the first captured signal with the expected speech and compares
+its callback receipt against the process launch using `CLOCK_MONOTONIC_RAW`.
+This supplies a conservative upper bound for app-emitted speech, not physical
+speaker latency. Verify a complete candidate and fresh-profile provenance
+separately; a diagnostic build missing required runtimes cannot pass acceptance.
