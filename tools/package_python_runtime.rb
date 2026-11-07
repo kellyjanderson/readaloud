@@ -47,6 +47,23 @@ module PackagedPythonRuntime
     manifest.slice('policy', 'runtimeId', 'python', 'packages', 'executable', 'entries')
   end
 
+  # Only the build-owned relocated tree may be passed here. Bytecode is a cache
+  # when its exact Python source is present; retain sourceless modules. Omitting
+  # these duplicates reduces first-launch resource verification without removing
+  # runtime features, dependencies, signatures or licenses.
+  def self.omit_redundant_bytecode(root)
+    # Reject escaping links before globbing through any cache directory.
+    entries(root)
+    Dir.glob(File.join(root, '**/__pycache__/*.pyc')).each do |path|
+      name = File.basename(path)[/\A(.+)\.cpython-\d+(?:\.opt-\d+)?\.pyc\z/, 1]
+      next unless name && File.file?(File.join(File.dirname(File.dirname(path)), name + '.py'))
+      File.unlink(path)
+    end
+    Dir.glob(File.join(root, '**/__pycache__')).each do |directory|
+      Dir.rmdir(directory) if !File.symlink?(directory) && File.directory?(directory) && Dir.empty?(directory)
+    end
+  end
+
   def self.validate_resources(resources)
     IDS.to_h do |id|
       path = File.join(resources, 'python-runtimes', id + '.json')
@@ -89,7 +106,7 @@ module PackagedPythonRuntime
     archive = File.join(output, runtime_id + '.zip')
     temporary = archive + ".#{Process.pid}.zip"
     begin
-      capture('/usr/bin/ditto', '-c', '-k', '--norsrc', '--noextattr', root, temporary)
+      capture('/usr/bin/ditto', '-c', '-k', '--zlibCompressionLevel', '9', '--norsrc', '--noextattr', root, temporary)
       raise 'Signed input changed during packaging' unless entries(root) == all
       manifest['archive'] = { 'size' => File.size(temporary), 'sha256' => Digest::SHA256.file(temporary).hexdigest }
       File.rename(temporary, archive)
@@ -102,7 +119,10 @@ module PackagedPythonRuntime
 end
 
 if $PROGRAM_NAME == __FILE__
-  abort 'Usage: package_python_runtime.rb ROOT ID EXECUTABLE OUTPUT' unless ARGV.size == 4
+  omit_bytecode = ARGV.first == '--omit-redundant-bytecode'
+  ARGV.shift if omit_bytecode
+  abort 'Usage: package_python_runtime.rb [--omit-redundant-bytecode] ROOT ID EXECUTABLE OUTPUT' unless ARGV.size == 4
   root, id, executable, output = ARGV
+  PackagedPythonRuntime.omit_redundant_bytecode(root) if omit_bytecode
   PackagedPythonRuntime.package(root: root, runtime_id: id, executable: executable, output: output)
 end

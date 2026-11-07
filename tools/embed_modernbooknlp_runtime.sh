@@ -36,6 +36,6 @@ identity="${EXPANDED_CODE_SIGN_IDENTITY:--}"
 find "$destination" -type f \( -name '*.so' -o -name '*.dylib' \) -exec codesign --force --sign "$identity" {} \;
 codesign --force --sign "$identity" --entitlements "$project_root/tools/mlx_python.entitlements" "$destination/bin/python3.11"
 
-ruby "$project_root/tools/package_python_runtime.rb" "$destination" modernbooknlp bin/python3.11 "$resources/python-runtimes"
+ruby "$project_root/tools/package_python_runtime.rb" --omit-redundant-bytecode "$destination" modernbooknlp bin/python3.11 "$resources/python-runtimes"
 # Delete only obsolete expanded output, never the source runtime.
 rm -rf "$resources/modernbooknlp-python"

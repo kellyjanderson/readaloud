@@ -257,3 +257,16 @@ replacement, cancellation and cleanup. These checks do not establish native
 sandboxed Python launch, real MLX/BookNLP behavior, first-use responsiveness,
 fresh launch-to-emitted-audio timing or human listening; those remain separate
 running-app gates in #137.
+
+The build-owned relocated staging tree omits a CPython bytecode cache only when
+its corresponding `.py` source is present. Sourceless modules, source packages,
+native code/signatures and licenses remain. This explicit embed-script option
+reduces duplicate resource bytes before the signed-tree manifest is generated;
+the packaging API is otherwise read-only. The helper validates contained links
+before omission, and uses maintained ZIP compression at level nine.
+
+MLX model startup loads the voice catalog metadata without materializing every
+Fish recording. Existing binding preparation materializes only requested voices
+and reports their bounded preparation count. An unrelated reference download can
+no longer block model startup; selected reference validation and cancellation
+remain in the binding path. This does not itself establish cold-model continuity.

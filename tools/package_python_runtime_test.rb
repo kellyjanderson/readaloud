@@ -52,4 +52,32 @@ class PackagedPythonRuntimeTest < Minitest::Test
     assert_raises(Errno::ENOENT, RuntimeError) { package }
     assert File.symlink?(File.join(@tree, 'bin/escape'))
   end
+
+  def test_only_bytecode_with_corresponding_source_is_omitted
+    directory = File.join(@tree, 'lib/python3.12/example')
+    cache = File.join(directory, '__pycache__')
+    FileUtils.mkdir_p(cache)
+    File.write(File.join(directory, 'module.py'), 'value = 1')
+    %w[module.cpython-312.pyc module.cpython-312.opt-1.pyc sourceless.cpython-312.pyc].each do |name|
+      File.write(File.join(cache, name), 'bytecode fixture')
+    end
+    original = package.fetch('entries').map { |entry| entry.fetch('path') }
+    assert_includes original, 'lib/python3.12/example/__pycache__/module.cpython-312.pyc'
+    PackagedPythonRuntime.omit_redundant_bytecode(@tree)
+    names = package.fetch('entries').map { |entry| entry.fetch('path') }
+    assert_includes names, 'lib/python3.12/example/module.py'
+    assert_includes names, 'lib/python3.12/example/__pycache__/sourceless.cpython-312.pyc'
+    refute names.any? { |name| name.end_with?('/module.cpython-312.pyc', '/module.cpython-312.opt-1.pyc') }
+  end
+
+  def test_bytecode_omission_refuses_escaping_cache_before_mutation
+    outside = File.join(@temp, 'outside')
+    FileUtils.mkdir_p(outside)
+    cached = File.join(outside, 'module.cpython-312.pyc')
+    File.write(cached, 'must remain untouched')
+    File.write(File.join(@tree, 'module.py'), 'value = 1')
+    File.symlink(outside, File.join(@tree, '__pycache__'))
+    assert_raises(RuntimeError) { PackagedPythonRuntime.omit_redundant_bytecode(@tree) }
+    assert_equal 'must remain untouched', File.read(cached)
+  end
 end

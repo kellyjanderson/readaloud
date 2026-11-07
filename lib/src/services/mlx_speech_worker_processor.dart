@@ -198,19 +198,34 @@ class MlxSpeechWorkerChunkProcessor
     final mlxRoot = Directory(_modelRoot!);
     final engineName = _engineDisplayName(engineId);
     final result = <PreparedVoiceBinding>[];
-    for (final voiceId in voiceIds.toSet()) {
+    final requestedVoices = voiceIds.toSet();
+    for (final voiceId in requestedVoices) {
       final voices = mlxVoicesFor(engineId);
       if (!voices.any((v) => v.id == voiceId)) {
         throw StateError('Unknown voice for $engineName: $voiceId');
       }
       if (usesReferenceVoiceLibrary(engineId)) {
-        final reference = await MlxVoiceLibrary.prepare(
-          voiceId,
-          mlxRoot,
-          cancelled: _closedSignal.future,
+        onResourceProgress?.call(
+          TtsResourceProgress(
+            stage: 'voiceDownload',
+            message:
+                'Preparing selected voice ${result.length + 1} of ${requestedVoices.length}…',
+            completed: result.length,
+            total: requestedVoices.length,
+            unit: 'voices',
+          ),
         );
-        if (_closed) throw StateError('MLX inference owner is closed.');
-        _referencePaths[voiceId] = reference.path;
+        try {
+          final reference = await MlxVoiceLibrary.prepare(
+            voiceId,
+            mlxRoot,
+            cancelled: _closedSignal.future,
+          );
+          if (_closed) throw StateError('MLX inference owner is closed.');
+          _referencePaths[voiceId] = reference.path;
+        } finally {
+          onResourceProgress?.call(null);
+        }
       }
       final binding = PreparedVoiceBinding(
         voiceId: voiceId,
@@ -248,28 +263,8 @@ class MlxSpeechWorkerChunkProcessor
       '${supportDirectory.path}${Platform.pathSeparator}read_aloud${Platform.pathSeparator}mlx-tts',
     );
     await mlxRoot.create(recursive: true);
-    if (isDramaEngine(engineId)) {
-      final voices = MlxVoiceLibrary.profiles
-          .where((v) => v.rawValue['provider'] == 'Fish Official')
-          .toList();
-      for (var i = 0; i < voices.length; i++) {
-        if (_closed) throw StateError('MLX inference owner is closed.');
-        onResourceProgress?.call(
-          TtsResourceProgress(
-            stage: 'voiceDownload',
-            message: 'Preparing Fish voice ${i + 1} of ${voices.length}…',
-            completed: i,
-            total: voices.length,
-            unit: 'voices',
-          ),
-        );
-        await MlxVoiceLibrary.prepare(
-          voices[i].id,
-          mlxRoot,
-          cancelled: _closedSignal.future,
-        );
-      }
-    }
+    // Model startup needs no voice recordings. prepareResources materializes
+    // only voices bound to the demanded scene, including cancellation.
     if (_closed) throw StateError('MLX inference owner is closed.');
     final modelDirectory = await _findInstalledModelDirectory(mlxRoot);
     final installedHelper = File(
