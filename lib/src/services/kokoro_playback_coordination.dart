@@ -317,6 +317,7 @@ bool kokoroIsStartupWarmEnough({
   required int pendingChunkCount,
   required int remainingPlannedChunkCount,
   double playerSpeed = 1,
+  Duration singleChunkLeadTarget = kokoroTargetBufferedLeadTime,
 }) {
   final effectiveLead = kokoroPlayableLead(
     bufferedLeadTime,
@@ -327,7 +328,7 @@ bool kokoroIsStartupWarmEnough({
     return true;
   }
 
-  if (effectiveLead >= kokoroTargetBufferedLeadTime) {
+  if (effectiveLead >= singleChunkLeadTarget) {
     return true;
   }
 

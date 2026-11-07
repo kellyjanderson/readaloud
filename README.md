@@ -21,7 +21,7 @@ The [product definition](project/product-definition.md) defines these standing e
 
 macOS on Apple Silicon is the current functional target. Other Flutter platform folders are retained but are not qualified. The cleanup baseline consolidates the RC2 reader, local MLX engines, full-document display and the visual acceptance runner. It is a development checkpoint, not a claim that all reading-experience requirements pass.
 
-Speaker attribution is heuristic. Current architecture records implementation and evidence limits. Sustained audio continuity, launch timing and human acceptance remain tracked in [RC2 qualification](https://github.com/kellyjanderson/readaloud/issues/91). [Drama 3 integration](https://github.com/kellyjanderson/readaloud/issues/111) adds application-owned model downloads, native-rate audio, 43 reference voice choices and live engine replacement after the cleanup tag. Real Drama audio qualification remains pending the model download; the cleanup tag contains the preserved earlier baseline.
+Speaker attribution is heuristic. Current architecture records implementation and evidence limits. Sustained audio continuity, launch timing and human acceptance remain tracked in [RC2 qualification](https://github.com/kellyjanderson/readaloud/issues/91). [Drama 3 integration](https://github.com/kellyjanderson/readaloud/issues/111) adds application-owned model downloads, native-rate audio, 43 reference voice choices and live engine replacement after the cleanup tag. Bounded native scene playback and export now have running-app evidence and human listening acceptance; sustained continuity, broader voice identity and startup requirements remain open in that issue. The cleanup tag contains the preserved earlier baseline.
 
 ## Features
 

@@ -4,6 +4,19 @@ The resident synthesis worker owns raw inference publication. Each request captu
 
 Raw identity canonically hashes model/voice content binding, engine version, exact effective double rate, normalization, capability and language, supplied tokenizer/profile synthesis identity, text, tokens and pronunciation realization. It does not trust a caller's rounded cache key. The planner also keeps the exact rate. Unchanged content can reuse a validated artifact across invocation revisions; changed bytes, tokens, profile or rate cannot alias it. Existing legacy artifacts are retained but are not accepted as new complete publications.
 
+The MLX adapter uses its own `mlx-python-raw-v2` identity in the existing artifact
+store. It includes native model/reference identities, ordered scene references,
+each ordered turn's voice/text/directions,
+exact rate, language, normalization/capability context, realized speak text
+(including supported delivery controls), pronunciation artifacts and synthesis
+identity. It excludes the caller's planner key because that key also carries
+initial/resumed/continued boundary policy. The old inclusion caused a seek to
+regenerate unchanged stochastic speech. Native binding validation still precedes
+lookup for every scene turn; boundary derivatives still include their separate join/predecessor
+context. Previously rendered v1 artifacts remain on disk; no migration deletes
+or relabels them. Cache reuse proves the same rendered voice survives a replay,
+not that independently generated turns have perceptually identical voices.
+
 `ModelContentSnapshot` copies the mutable source to a private staging directory, hashes that copy, then publishes its digest-addressed directory. Native initialization opens the snapshot path whose bytes were hashed. A replacement of the source path cannot silently pair the old digest with newly opened model bytes. Voice vectors continue to be parsed and digested from the same byte buffer; the existing NumPy shape/type/finite validation remains in place. Snapshots are retained, and no automatic eviction is implemented.
 
 `AudioArtifactStore` writes a private generation containing canonical mono PCM16 WAV, metadata and a complete schema manifest, flushes all files, and atomically renames the directory into its identity bucket. A hit validates schema/completeness, WAV and PCM SHA256, metadata SHA256, canonical RIFF/data sizes, format, frames and duration. Incomplete or corrupt generations are misses. A replacement gets a distinct generation path; published or queued paths are never overwritten. Publication is atomic within the local filesystem, not a claim of survival across sudden power loss. Failed writers remove only their own staging directories.

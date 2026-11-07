@@ -16,11 +16,52 @@ import 'tts_engine.dart';
 import 'mlx_voice_library.dart';
 
 const String mlxTtsModelVersion = 'mlx-audio-0.6.3-mlx-0.32.4-complete-v3';
-String mlxTtsVersionFor(int bits, {String? engineId}) =>
-    '$mlxTtsModelVersion-q$bits${isDramaEngine(engineId ?? '') ? '-native-cast-v1' : ''}';
+String mlxTtsVersionFor(
+  int bits, {
+  String? engineId,
+  bool nativeScenes = true,
+}) =>
+    '$mlxTtsModelVersion-q$bits${isDramaEngine(engineId ?? '') ? (engineId == 'fish_drama3' && bits == 0 && nativeScenes ? '-native-scene-v2' : '-native-cast-v1') : ''}';
 const MethodChannel _mlxLifecycleChannel = MethodChannel(
   'read_aloud/mlx_tts_lifecycle',
 );
+
+/// Raw native input identity. A planner key also contains initial/resumed join
+/// policy; including it here regenerates the same stochastic voice on seek.
+/// Those policies belong to the existing boundary-derivative cache instead.
+String mlxRawAudioIdentity({
+  required SpeechWorkerChunkRequest request,
+  required PreparedVoiceBinding binding,
+  required String engineId,
+  required String engineVersion,
+  required String? modelIdentity,
+  required List<String> referenceDigests,
+}) => artifactIdentity(<String, Object?>{
+  'schema': 'mlx-python-raw-v2',
+  'engineId': engineId,
+  'engineVersion': engineVersion,
+  'modelIdentity': modelIdentity,
+  'voiceId': request.voiceId,
+  'voiceDigest': binding.voiceDigest,
+  if (referenceDigests.isNotEmpty) 'referenceSet': referenceDigests,
+  'rate': request.rate.toString(),
+  'language': request.languageTag,
+  'normalizationVersion': request.normalizationVersion,
+  'capabilityProfileId': request.capabilityProfileId,
+  'speakText': request.speakText,
+  if (request.sceneTurns.isNotEmpty)
+    'sceneTurns': request.sceneTurns
+        .map(
+          (t) => {
+            'voice': t.voiceId,
+            'text': t.text,
+            'directions': t.directions,
+          },
+        )
+        .toList(),
+  'pronunciationArtifacts': request.pronunciationArtifacts,
+  'synthesisIdentity': request.synthesisIdentity,
+});
 
 // Keep isolate closures outside the processor's method context. Dart closures
 // can retain that entire context, including unsendable process completers.
@@ -123,10 +164,18 @@ class MlxSpeechWorkerChunkProcessor
   final void Function(TtsResourceProgress? progress)? onResourceProgress;
   AudioArtifactStore? _store;
   MlxTtsPythonProcess? _process;
+  int get peakRuntimeBytes => _process?.peakRuntimeBytes ?? 0;
   String? _modelRoot;
   String? _helperPath;
   String? _resolvedPythonPath;
   String? _modelIdentity;
+  bool supportsNativeScenes = false;
+  String get runtimeVersion => mlxTtsVersionFor(
+    quantizationBits,
+    engineId: engineId,
+    nativeScenes: supportsNativeScenes,
+  );
+  String? get modelContentIdentity => _modelIdentity;
   String? _activeGeneration;
   Future<void>? _closing;
   final _closedSignal = Completer<void>();
@@ -171,13 +220,10 @@ class MlxSpeechWorkerChunkProcessor
         }),
         modelDigest: artifactIdentity(<String, Object?>{
           'engineId': engineId,
-          'engineVersion': mlxTtsVersionFor(
-            quantizationBits,
-            engineId: engineId,
-          ),
+          'engineVersion': runtimeVersion,
           'modelIdentity': _modelIdentity,
         }),
-        engineVersion: mlxTtsVersionFor(quantizationBits, engineId: engineId),
+        engineVersion: runtimeVersion,
         pronunciationProfileId: pronunciationProfileId,
         bindingRevision: revision,
         documentId: documentId,
@@ -241,6 +287,10 @@ class MlxSpeechWorkerChunkProcessor
     await File(
       '${mlxRoot.path}/fish_drama_models.json',
     ).writeAsString(modelCatalog, flush: true);
+    await File('${mlxRoot.path}/fish_drama_model_checksums.json').writeAsString(
+      await rootBundle.loadString('assets/fish_drama_model_checksums.json'),
+      flush: true,
+    );
     _helperPath = installedHelper.path;
     _modelRoot = mlxRoot.path;
     _resolvedPythonPath = await _findPythonRuntime(mlxRoot);
@@ -278,6 +328,7 @@ class MlxSpeechWorkerChunkProcessor
         onProgress: _handleModelLoadProgress,
       );
       _modelIdentity = loaded['modelIdentity'] as String;
+      supportsNativeScenes = loaded['nativeScenesQualified'] == true;
       if (_closed) throw StateError('MLX inference owner is closed.');
     } finally {
       onResourceProgress?.call(null);
@@ -449,7 +500,33 @@ class MlxSpeechWorkerChunkProcessor
         );
         return;
       }
-      final referenceIds = isDramaEngine(engineId)
+      if (request.sceneTurns.isNotEmpty) {
+        if (!supportsNativeScenes ||
+            engineId != 'fish_drama3' ||
+            quantizationBits != 0 ||
+            request.sceneTurns.length > 16) {
+          throw StateError('Native scenes are unsupported for this target.');
+        }
+        int? nextWord;
+        for (final turn in request.sceneTurns) {
+          final bound = _bindings[turn.voiceId];
+          if (bound == null ||
+              bound.fingerprint != turn.bindingFingerprint ||
+              bound.bindingRevision != turn.bindingRevision ||
+              bound.bindingRevision != binding.bindingRevision ||
+              bound.documentId != request.documentId ||
+              turn.endWord <= turn.startWord ||
+              (nextWord != null && nextWord != turn.startWord)) {
+            throw StateError(
+              'Native scene has stale bindings or non-contiguous source turns.',
+            );
+          }
+          nextWord = turn.endWord;
+        }
+      }
+      final referenceIds = request.sceneTurns.isNotEmpty
+          ? (request.sceneTurns.map((t) => t.voiceId).toSet().toList()..sort())
+          : isDramaEngine(engineId)
           ? (_bindings.values
                 .where(
                   (b) =>
@@ -465,6 +542,9 @@ class MlxSpeechWorkerChunkProcessor
       final firstReference = referenceIds.isEmpty
           ? 0
           : (referenceIds.indexOf(request.voiceId) ~/ 16) * 16;
+      if (request.sceneTurns.isNotEmpty && referenceIds.length > 16) {
+        throw StateError('Native scene exceeds reference capacity.');
+      }
       final references = referenceIds
           .skip(firstReference)
           .take(16)
@@ -478,24 +558,16 @@ class MlxSpeechWorkerChunkProcessor
             },
           )
           .toList();
-      final identity = artifactIdentity(<String, Object?>{
-        'schema': 'mlx-python-raw-v1',
-        'engineId': engineId,
-        'engineVersion': mlxTtsVersionFor(quantizationBits, engineId: engineId),
-        'modelIdentity': _modelIdentity,
-        'cacheKey': request.cacheKey,
-        'voiceId': request.voiceId,
-        'voiceDigest': binding.voiceDigest,
-        if (references.isNotEmpty)
-          'referenceSet': [
-            for (final ref in references) _bindings[ref['voice']]!.voiceDigest,
-          ],
-        'rate': request.rate.toString(),
-        'language': request.languageTag,
-        'speakText': request.speakText,
-        'pronunciationArtifacts': request.pronunciationArtifacts,
-        'synthesisIdentity': request.synthesisIdentity,
-      });
+      final identity = mlxRawAudioIdentity(
+        request: request,
+        binding: binding,
+        engineId: engineId,
+        engineVersion: runtimeVersion,
+        modelIdentity: _modelIdentity,
+        referenceDigests: [
+          for (final ref in references) _bindings[ref['voice']]!.voiceDigest,
+        ],
+      );
       final store = _store;
       if (store == null) {
         event(
@@ -559,12 +631,23 @@ class MlxSpeechWorkerChunkProcessor
           voice: _nativeVoice(engineId, request.voiceId),
           referenceAudioPath: _referencePaths[request.voiceId],
           references: references.isEmpty ? null : references,
+          sceneTurns: request.sceneTurns.isEmpty
+              ? null
+              : request.sceneTurns.map((t) => t.toMap()).toList(),
           referenceText: usesReferenceVoiceLibrary(engineId)
               ? MlxVoiceLibrary.voice(request.voiceId).rawValue['referenceText']
                     as String
               : null,
           language: _nativeLanguage(request.languageTag),
           outputPath: temporaryAudio.path,
+          onProgress: (progress) {
+            if (isCancelled()) return;
+            event(
+              SpeechWorkerEventType.inferencing,
+              stage: progress['stage'] as String? ?? 'inferencing',
+              elapsedMillis: stopwatch.elapsedMilliseconds,
+            );
+          },
         );
         if (isCancelled()) {
           event(SpeechWorkerEventType.cancelled, stage: 'cancelled');
@@ -728,25 +811,32 @@ class MlxTtsPythonProcess {
     String? referenceAudioPath,
     String? referenceText,
     List<Map<String, Object?>>? references,
+    List<Map<String, Object?>>? sceneTurns,
     required String language,
     required String outputPath,
-  }) => _request(<String, Object?>{
-    'command': 'synthesize',
-    'synthesisIdentity': requestId,
-    'modelId': modelId,
-    'sessionId': sessionId,
-    'generationId': generationId,
-    'chunkId': chunkId,
-    'bindingFingerprint': bindingFingerprint,
-    'bindingRevision': bindingRevision,
-    'text': text,
-    'voice': voice,
-    'referenceAudioPath': referenceAudioPath,
-    'referenceText': referenceText,
-    'references': ?references,
-    'language': language,
-    'outputPath': outputPath,
-  }, timeout: const Duration(minutes: 5));
+    void Function(Map<String, Object?>)? onProgress,
+  }) => _request(
+    <String, Object?>{
+      'command': 'synthesize',
+      'synthesisIdentity': requestId,
+      'modelId': modelId,
+      'sessionId': sessionId,
+      'generationId': generationId,
+      'chunkId': chunkId,
+      'bindingFingerprint': bindingFingerprint,
+      'bindingRevision': bindingRevision,
+      'text': text,
+      'voice': voice,
+      'referenceAudioPath': referenceAudioPath,
+      'referenceText': referenceText,
+      'references': ?references,
+      'sceneTurns': ?sceneTurns,
+      'language': language,
+      'outputPath': outputPath,
+    },
+    timeout: const Duration(minutes: 5),
+    progress: onProgress,
+  );
 
   Future<Map<String, Object?>> _request(
     Map<String, Object?> body, {

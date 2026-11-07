@@ -21,9 +21,28 @@ uses a bounded termination fallback. Cancellation retires the active process
 so it cannot return a late result. The adapter does not yet translate canonical
 pronunciation artifacts to model-specific phonemes; it consumes planned text
 and preset voice IDs or selected audio references. The versioned synthetic bank supplies 30 identities to Qwen Base/MOSS; its manifest is loaded once and requested WAVs are verified/materialized by content hash. Reference content/transcript enter binding and raw cache identity. The child passes ref_audio/ref_text to the maintained model API; unknown voices/missing references fail without default substitution. Models without at least 30 usable identities remain below voice-library acceptance (CustomVoice 9, local Voxtral 20). No comparative acoustic or latency acceptance is claimed.
-MLX uses the same admission policy implementation with twelve-second low/twenty-second high lead and the existing 64-chunk cap. Voxtral uses startup warmth; the other MLX adapters start with the first validated chunk. At the five-second MLX warmup deadline, validated audio is admitted even if the target lead is not reached. Voxtral retains full precision by default, with optional saved model-specific in-memory 4-bit quantization; precision participates in model binding and audio-cache identity. Original checkpoint files are retained.
+MLX uses the same admission policy implementation and existing 64-chunk cap. Fish uses twenty-second low/thirty-second high playable lead; the other MLX adapters retain twelve-second low/twenty-second high lead. The long Fish probe demonstrated complete-WAV generation up to 16.5 seconds, so deliberately suspending inference until twelve seconds remained caused starvation despite faster-than-realtime synthesis overall. The Fish single-chunk startup shortcut likewise requires twenty seconds; two ready chunks can still satisfy startup warmth. These bounds do not guarantee continuity on every machine. Voxtral and Fish Drama use startup warmth; the other MLX adapters start with the first validated chunk. At the five-second MLX warmup deadline, validated audio is admitted even if the target lead is not reached. This bounded wait is included in launch-to-audio measurement and does not establish the two-second requirement. Fish's previous bypass could play a tiny opening turn before the following complete WAV was ready. The Python adapter now reports first-native-packet timing separately from whole-chunk publication; packets still remain in the owned incomplete artifact until the complete WAV passes validation. No progressive native playback claim follows from that telemetry. Voxtral retains full precision by default, with optional saved model-specific in-memory 4-bit quantization; precision participates in model binding and audio-cache identity. Original checkpoint files are retained.
 Model installation, launch selection and Voxtral's noncommercial license are documented in
 [MLX TTS engine setup](../../docs/mlx-tts-engines.md).
+
+Fish's next planning window now uses that same twenty-second low watermark.
+The previous independent eight-second planning gate survived the first refill
+repair: a retained long run exhausted its native playlist for 2.367 seconds while
+two subsequent WAVs took 13.428 seconds to arrive. Chunk admission still owns
+the duration/count bounds; the planner admits only one bounded window at a time.
+Initial MLX planning is also bounded to three chunks/scenes instead of requesting
+the complete prepared range. Later windows retain the existing revision and
+cancellation owner.
+
+ReaderController resource preparation makes one attempt per captured playback
+or export intent. The playback pump alone schedules a newer intent. The old
+inner retry loop kept revalidating Fish references after document replacement in
+the retained release hang; its AOT frame checked pre-await revision values.
+Current-intent guards run before native admission and after success/failure;
+binding state is committed before publishing stage completion. Pending resource
+work responds to the same Pause action shown by the reading surface. Unit
+stale-success/error tests and the running file-import/annotation fixture cover
+the repaired path; the original hang evidence remains retained in #111/#113.
 
 The [accepted resource run 2](https://github.com/kellyjanderson/readaloud/issues/53#issuecomment-6395918850) at harness source `25f1dfe` recorded four inferences, two balanced session opens/closes, sixteen tensor releases and final zero sessions/tensors with no native errors. It shares unchanged production behavior with `295677e`; it is not a playback, RSS-isolation or listening result. Assignment295 subsequently failed its listening timeout and then cleaned up to zero sessions/tensors/sources/pins/tasks. The [e18c81d supplemental run](https://github.com/kellyjanderson/readaloud/issues/53#issuecomment-6396165816) exited zero with 133 inferences, three balanced session opens/closes and 532 tensor releases, peak one session/four tensors and final zero native resources, sources, pins and preparation tasks. This bounded cleanup evidence does not establish listening or input during active export.
 
@@ -156,8 +175,28 @@ identity. MLX Audio owns encoding and prefill reuse through its existing
 content-keyed voice cache; Read Aloud adds no tensor/history cache. Ordered
 reference digests participate in raw artifact identity, and only Drama's engine
 version changes for this binding protocol. Non-Drama adapters retain their prior
-identity and behavior. Native multi-turn scene packing/timing remains open;
-implemented fiction routing still synthesizes bounded per-character chunks. Source regressions establish ownership, emitted-sample retention
+identity and behavior. Qualified bf16 Drama packs ordered, contiguous source turns
+into one native scene call, targeting 75 words and at most sixteen turns. The
+second planning pass cannot extend past the realized annotation horizon. Other
+model contexts retain per-character chunks. Native per-turn timestamps remain
+unavailable; word highlighting uses the existing approximate duration mapping.
+Source regressions establish ownership, emitted-sample retention
 and format behavior. They do not establish real Drama acoustic quality, sustained
 memory, M3 performance or uninterrupted chapter playback; native evidence is
 recorded in #111.
+
+
+Scene and delivery qualification uses the bundled immutable bf16 repository file
+manifest, not the selected engine name or a local folder's name. The native
+Python owner verifies file contents with Hugging Face Hub's hashing utility.
+Its app-owned verification receipt is reusable only while the directory, pinned
+manifest and every file's device/inode/size/mtime/ctime remain identical. A
+changed file is rechecked; a mismatch disables native scenes and model-specific
+whisper/shout lowering while retaining canonical content intent. The first
+verification reports completed bytes and may add preparation latency. It runs
+in the existing single native model-load owner, with selection cancellation and
+shutdown retiring that process; it adds no queue or UI-thread hashing. This is
+capability qualification, not portable publishing metadata or a security claim
+against hostile file replacement. Source checks cover altered/missing files,
+receipt reuse and per-request tokenization capability isolation. Runtime and
+startup acceptance remain separate gates in #111.

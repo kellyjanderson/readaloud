@@ -2068,7 +2068,7 @@ class ReaderController extends ChangeNotifier {
   }
 
   Future<void> togglePlayback() async {
-    if (_playbackActivity.isBuffering || _pendingPlayUntilReady) {
+    if (_playbackActivity.isBuffering || hasPendingPlaybackIntent) {
       await pausePlayback();
       return;
     }
@@ -2182,7 +2182,7 @@ class ReaderController extends ChangeNotifier {
     }
     if (!isResourcesReady) {
       try {
-        await _prepareResourceBindings(_documentRevision);
+        await _prepareResourceBindings(documentRevision, isCurrent: current);
       } on _SupersededPreparation {
         return;
       } catch (error) {
@@ -2930,7 +2930,14 @@ class ReaderController extends ChangeNotifier {
       if (!isResourcesReady ||
           _preparedAssignmentRevision != exportAssignmentRevision ||
           !_hasCompleteDocumentSnapshot) {
-        await _prepareResourceBindings(exportRevision, document: document);
+        await _prepareResourceBindings(
+          exportRevision,
+          document: document,
+          isCurrent: () =>
+              !_disposed &&
+              exportRevision == _documentRevision &&
+              _voiceAssignments.isCurrent(exportAssignmentRevision),
+        );
       }
 
       _requireRevision(exportRevision);
@@ -3290,23 +3297,12 @@ class ReaderController extends ChangeNotifier {
   Future<void> _prepareResourceBindings(
     int revision, {
     ReaderDocument? document,
+    required bool Function() isCurrent,
   }) async {
-    while (true) {
-      try {
-        await _prepareResourceBindingsOnce(revision, document: document);
-        return;
-      } on _SupersededPreparation {
-        // A newer cast/voice intent on the same analyzed document must retry;
-        // a replacement document still terminates this owner immediately.
-        _requireRevision(revision);
-      }
-    }
-  }
-
-  Future<void> _prepareResourceBindingsOnce(
-    int revision, {
-    ReaderDocument? document,
-  }) async {
+    // One attempt per owner. The playback pump admits newer intent. An obsolete
+    // document must not retry inside a suspended resource-preparation frame.
+    _requireRevision(revision);
+    if (!isCurrent()) throw const _SupersededPreparation();
     final resourceDocument = document ?? _document;
     final intent = _resourceBindingIntent;
     final assignmentRevision = voiceAssignmentState.requestedRevision;
@@ -3331,6 +3327,25 @@ class ReaderController extends ChangeNotifier {
           unit: 'voices',
         ),
       );
+      void requireCurrent() {
+        _requireRevision(revision);
+        if (!isCurrent() ||
+            intent != _resourceBindingIntent ||
+            !_voiceAssignments.isCurrent(assignmentRevision)) {
+          publishReadingStage(
+            ticket,
+            const PreparationProgress(
+              stage: PreparationStage.resources,
+              state: PreparationWorkState.cancelled,
+              completed: 0,
+              unit: 'voices',
+            ),
+          );
+          throw const _SupersededPreparation();
+        }
+      }
+
+      requireCurrent();
       final bindings = await (resourceEngine as ResourcePreparationCapable)
           .prepareDocumentResources(
             documentId: resourceDocument.displayDocument.documentId,
@@ -3342,11 +3357,7 @@ class ReaderController extends ChangeNotifier {
             pronunciationProfileId: _selectedPronunciationProfile().profileId,
           )
           .catchError((Object error) {
-            _requireRevision(revision);
-            if (intent != _resourceBindingIntent ||
-                !_voiceAssignments.isCurrent(assignmentRevision)) {
-              throw const _SupersededPreparation();
-            }
+            requireCurrent();
             publishReadingStage(
               ticket,
               PreparationProgress(
@@ -3359,11 +3370,7 @@ class ReaderController extends ChangeNotifier {
             );
             throw error;
           });
-      _requireRevision(revision);
-      if (intent != _resourceBindingIntent ||
-          !_voiceAssignments.isCurrent(assignmentRevision)) {
-        throw const _SupersededPreparation();
-      }
+      requireCurrent();
       if (bindings.any(
         (binding) =>
             binding.documentId != resourceDocument.displayDocument.documentId ||
@@ -3376,16 +3383,6 @@ class ReaderController extends ChangeNotifier {
         );
       }
       _resourceBindings = List.unmodifiable(bindings);
-      publishReadingStage(
-        ticket,
-        PreparationProgress(
-          stage: PreparationStage.resources,
-          state: PreparationWorkState.complete,
-          completed: bindings.length,
-          total: bindings.length,
-          unit: 'voices',
-        ),
-      );
       _preparedAssignmentRevision = assignmentRevision;
       _resolvedResourceBindings = List.unmodifiable([
         for (final assignment
@@ -3398,6 +3395,16 @@ class ReaderController extends ChangeNotifier {
                 documentRevision: revision,
               ),
       ]);
+      publishReadingStage(
+        ticket,
+        PreparationProgress(
+          stage: PreparationStage.resources,
+          state: PreparationWorkState.complete,
+          completed: bindings.length,
+          total: bindings.length,
+          unit: 'voices',
+        ),
+      );
     }
   }
 
@@ -3556,9 +3563,11 @@ class ReaderController extends ChangeNotifier {
         updateDocumentId != activePlaybackDocumentId) {
       return;
     }
+    _recordProgress(update);
     final wordOffset = _activePreparedRange?.range.wordStart ?? 0;
     if (wordOffset != 0 && update.wordStartIndex != null) {
       update = TtsProgressUpdate(
+        sceneTurns: update.sceneTurns,
         startOffset: update.startOffset,
         endOffset: update.endOffset,
         word: update.word,
@@ -3578,7 +3587,6 @@ class ReaderController extends ChangeNotifier {
         dialogueSpanId: update.dialogueSpanId,
       );
     }
-    _recordProgress(update);
     final globalOffset = _utteranceStartOffset + update.endOffset;
     final nextWordIndex =
         update.wordEndIndex ?? _document.wordIndexForOffset(globalOffset);
@@ -4372,10 +4380,7 @@ class ReaderController extends ChangeNotifier {
       ),
     );
     try {
-      final window = await _planning.plan(
-        context,
-        maxChunks: _engineId() == 'kokoro' ? 3 : 1000000,
-      );
+      final window = await _planning.plan(context, maxChunks: 3);
       if (_disposed ||
           revision != _documentRevision ||
           intent != _resourceBindingIntent) {
@@ -4718,6 +4723,7 @@ class ReaderController extends ChangeNotifier {
 
     final existing = _spokenChunkRecords[chunkId];
     _spokenChunkRecords[chunkId] = SpokenChunkRecord(
+      sceneTurns: update.sceneTurns,
       chunkId: chunkId,
       documentId: documentId,
       segmentIds:
@@ -4943,6 +4949,7 @@ class ReaderController extends ChangeNotifier {
         .where(
           (record) =>
               record.completed &&
+              record.sceneTurns.map((t) => t.voiceId).toSet().length <= 1 &&
               record.voiceId == voiceId &&
               (record.rate - rate).abs() < 0.001 &&
               record.audioDuration.inMilliseconds > 0 &&

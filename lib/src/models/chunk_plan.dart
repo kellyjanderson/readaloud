@@ -56,11 +56,13 @@ class ChunkSpec {
     required this.startWordIndex,
     required this.endWordIndex,
     required this.ttsSegments,
+    this.sceneTurns = const <ChunkSpec>[],
     this.routeId,
     this.castId,
     this.dialogueSpanId,
   });
 
+  final List<ChunkSpec> sceneTurns;
   final String chunkId;
   final List<String> segmentIds;
   final String speakText;

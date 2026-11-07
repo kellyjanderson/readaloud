@@ -234,6 +234,36 @@ void main() {
       );
     });
 
+    test(
+      'slow native synthesis does not use the single eight-second shortcut',
+      () {
+        bool warm({int count = 1, int seconds = 9, int pending = 1}) =>
+            kokoroIsStartupWarmEnough(
+              bufferedChunkCount: count,
+              bufferedLeadTime: Duration(seconds: seconds),
+              pendingChunkCount: pending,
+              remainingPlannedChunkCount: 0,
+              singleChunkLeadTarget: const Duration(seconds: 20),
+            );
+        expect(
+          warm(),
+          isFalse,
+          reason: 'the next WAV can take longer than nine seconds',
+        );
+        expect(warm(seconds: 20), isTrue);
+        expect(
+          warm(count: 2),
+          isTrue,
+          reason: 'the following turn is already ready',
+        );
+        expect(
+          warm(pending: 0),
+          isTrue,
+          reason: 'a complete short document starts immediately',
+        );
+      },
+    );
+
     test('builds the initial playback queue from first and staged chunks', () {
       final queue = kokoroBuildInitialPlaybackQueue<_FakePlaybackChunk>(
         firstChunk: const _FakePlaybackChunk(

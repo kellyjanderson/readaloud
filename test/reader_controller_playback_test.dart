@@ -5,6 +5,10 @@ import 'package:cross_file/cross_file.dart';
 import 'package:crypto/crypto.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:read_aloud/src/models/native_speech_turn.dart';
+import 'package:read_aloud/src/services/speech_planning_supervisor.dart';
+import 'package:read_aloud/src/models/speech_annotation.dart';
+import 'package:read_aloud/src/services/base_speech_annotation_inference_service.dart';
 import 'package:read_aloud/src/controllers/reader_controller.dart';
 import 'package:read_aloud/src/models/cast_voice_assignment.dart';
 import 'package:read_aloud/src/models/reading_focus_state.dart';
@@ -1365,12 +1369,34 @@ void main() {
             startOffset: 0,
             endOffset: 6,
             word: 'Second',
+            chunkId: 'second-scene',
+            voiceId: 'voice-a',
+            rate: 1,
+            elapsedInChunk: const Duration(milliseconds: 500),
+            chunkAudioDuration: const Duration(seconds: 2),
+            sceneTurns: const [
+              NativeSpeechTurn(
+                voiceId: 'voice-a',
+                text: 'Second distinct words.',
+                segmentIds: ['second'],
+                startWord: 3,
+                endWord: 6,
+                bindingFingerprint: 'binding',
+                bindingRevision: 1,
+              ),
+            ],
             documentId: first.documentId,
             wordStartIndex: 3,
             wordEndIndex: 4,
           ),
         );
         expect(controller.currentWordIndex, 1);
+        expect(controller.spokenChunkRecords.single.startWordIndex, 3);
+        expect(controller.spokenChunkRecords.single.endWordIndex, 4);
+        expect(
+          controller.spokenChunkRecords.single.sceneTurns.single.startWord,
+          3,
+        );
         final third = (await second.continuation!.next(
           2,
           cancellation.future,
@@ -1419,6 +1445,77 @@ void main() {
             expect(controller.canRetryDocumentPreparation, isTrue);
           }
           expect(engine.speakCallCount, 1);
+        },
+      );
+    }
+    for (final fails in [false, true]) {
+      test(
+        'file replacement during resource await retires stale ${fails ? 'error' : 'success'} without retry',
+        () async {
+          final directory = await Directory.systemTemp.createTemp(
+            's3-stale-resource',
+          );
+          addTearDown(() => directory.delete(recursive: true));
+          final file = File('${directory.path}/dialogue.txt');
+          await file.writeAsString(
+            'Mira said, "Stay quiet." Mara replied, "Footsteps!"',
+          );
+          final engine = _ResourceBarrierEngine();
+          final controller = ReaderController(ttsEngine: engine);
+          addTearDown(controller.dispose);
+          await controller.initialize();
+          await controller.importFilePaths([file.path]);
+          final playing = controller.startPlayback();
+          await engine.started.future;
+          final source = controller.document;
+          final segment = source.speechDocument.segments.first;
+          final annotations = const BaseSpeechAnnotationInferenceService()
+              .infer(
+                speechDocument: source.speechDocument,
+                displayDocument: source.displayDocument,
+                explicitIntents: [
+                  SpeechAnnotation(
+                    annotationId: 'explicit-whisper',
+                    segmentId: segment.segmentId,
+                    kind: SpeechAnnotationKind.deliveryIntent,
+                    startWord: 0,
+                    endWord: segment.wordCount,
+                    confidence: 1,
+                    source: SpeechAnnotationSource.userOverride,
+                    deliveryIntent: DeliveryIntent.whispered,
+                  ),
+                ],
+              );
+          await controller.loadDocument(
+            ReaderDocument.fromNormalized(
+              title: source.title,
+              type: source.type,
+              normalizedImportResult: source.normalizedImportResult,
+              baseSpeechAnnotations: annotations,
+              dialogueAttributions: source.dialogueAttributions,
+              characterCastRegistry: source.characterCastRegistry,
+              documentVoiceAttribution: source.documentVoiceAttribution,
+              basePronunciationArtifacts: source.basePronunciationArtifacts,
+            ),
+          );
+          engine.ready = true;
+          if (fails) {
+            engine.barrier.completeError(StateError('obsolete'));
+          } else {
+            engine.barrier.complete(const []);
+          }
+          await playing.timeout(const Duration(seconds: 2));
+          expect(engine.preparations, 1);
+          expect(engine.speakCallCount, 0);
+          await controller.startPlayback();
+          expect(engine.preparations, 2);
+          expect(engine.speakCallCount, 1);
+          expect(
+            controller.document.baseSpeechAnnotations.annotations.any(
+              (a) => a.annotationId == 'explicit-whisper',
+            ),
+            isTrue,
+          );
         },
       );
     }
@@ -3132,7 +3229,17 @@ void main() {
         final chunkPlan = request!.chunkPlan;
         expect(chunkPlan, isNotNull);
 
-        final chunks = chunkPlan!.chunks;
+        final chunks = [...chunkPlan!.chunks];
+        final planner = SpeechPlanningSupervisor();
+        addTearDown(planner.shutdown);
+        if (chunkPlan.nextSegmentId != null) {
+          chunks.addAll(
+            (await planner.plan(
+              request.planningContext!,
+              startSegmentId: chunkPlan.nextSegmentId,
+            )).plan.chunks,
+          );
+        }
         expect(chunks.length, greaterThanOrEqualTo(3));
         expect(chunks[0].speakText, 'John said,');
         expect(chunks[0].voiceId, 'af_bella');
@@ -3317,7 +3424,17 @@ void main() {
         final chunkPlan = request!.chunkPlan;
         expect(chunkPlan, isNotNull);
 
-        final chunks = chunkPlan!.chunks;
+        final chunks = [...chunkPlan!.chunks];
+        final planner = SpeechPlanningSupervisor();
+        addTearDown(planner.shutdown);
+        if (chunkPlan.nextSegmentId != null) {
+          chunks.addAll(
+            (await planner.plan(
+              request.planningContext!,
+              startSegmentId: chunkPlan.nextSegmentId,
+            )).plan.chunks,
+          );
+        }
         expect(
           chunks.map((chunk) => chunk.speakText).toList(growable: false),
           containsAllInOrder(<String>[

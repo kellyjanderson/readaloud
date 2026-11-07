@@ -46,6 +46,7 @@ _model: Any = None
 _model_id: str | None = None
 _model_path: str | None = None
 _model_bits = 0
+_model_native_scenes = False
 _protocol_stdout = sys.stdout
 _active_request_id = ""
 _output_lock = threading.Lock()
@@ -86,10 +87,11 @@ def _report_memory(stop: threading.Event) -> None:
 
 
 def _unload() -> None:
-    global _model, _model_id, _model_path
+    global _model, _model_id, _model_path, _model_native_scenes
     _model = None
     _model_id = None
     _model_path = None
+    _model_native_scenes = False
     gc.collect()
     try:
         import mlx.core as mx
@@ -221,8 +223,60 @@ def _configure_hf_cache(cache_dir: Path, hf_constants: Any) -> None:
     hf_constants.HF_HUB_CACHE = cache
 
 
+def _verify_scene_model(directory: Path, manifest: dict, receipt_root: Path) -> bool:
+    """Offline capability qualification, independent of the selected engine name.
+
+    Hub's verify_repo_checksums requires a network tree query and rehashes every
+    file. Reuse its hashing implementation with our bundled immutable tree and
+    retain an app-owned stat-bound qualification receipt, not model-history data.
+    """
+    from huggingface_hub.utils._verification import compute_file_hash
+    entries = manifest['files']
+    expected_weights = {name for name in entries if name.endswith('.safetensors')}
+    if {p.name for p in directory.glob('*.safetensors')} != expected_weights:
+        return False
+    def snapshot():
+        result = {}
+        for name, expected in entries.items():
+            p = directory / name
+            if not p.is_file() or p.stat().st_size != expected['size']:
+                return None
+            st = p.stat()
+            result[name] = [st.st_dev, st.st_ino, st.st_size, st.st_mtime_ns, st.st_ctime_ns]
+        return result
+    before = snapshot()
+    if before is None:
+        return False
+    identity = hashlib.sha256(json.dumps([str(directory), manifest, before], sort_keys=True).encode()).hexdigest()
+    receipt = receipt_root / f'{identity}.json'
+    try:
+        if json.loads(receipt.read_text()).get('verifiedIdentity') == identity:
+            return True
+    except (OSError, ValueError):
+        pass
+    total = sum(e['size'] for e in entries.values())
+    completed = 0
+    for name, expected in entries.items():
+        _progress('Verifying pinned speech model files…', stage='modelVerification', completed=completed, total=total)
+        if compute_file_hash(directory / name, expected['algorithm']) != expected['digest']:
+            return False
+        completed += expected['size']
+    if snapshot() != before:
+        return False
+    receipt_root.mkdir(parents=True, exist_ok=True)
+    with tempfile.NamedTemporaryFile(mode='w', dir=receipt_root, delete=False) as stream:
+        json.dump({'verifiedIdentity': identity, 'revision': manifest['revision'], 'files': before}, stream)
+        temporary = Path(stream.name)
+    try:
+        temporary.replace(receipt)
+    finally:
+        temporary.unlink(missing_ok=True)
+    _progress('Pinned speech model verified', stage='modelVerification', completed=total, total=total)
+    return True
+
+
 def _load(model_id: str, model_path: str, private_cache_path: str, quantization_bits: int = 0) -> dict[str, Any]:
-    global _model, _model_id, _model_path, _model_bits
+    global _model, _model_id, _model_path, _model_bits, _model_native_scenes
     if quantization_bits not in (0, 4):
         raise ValueError('Supported inference precision: full or 4-bit')
     if model_id not in MODEL_IDS:
@@ -237,7 +291,7 @@ def _load(model_id: str, model_path: str, private_cache_path: str, quantization_
     if not (directory / "config.json").is_file():
         raise FileNotFoundError(f"Model config is missing: {directory / 'config.json'}")
     if _model is not None and _model_id == model_id and _model_path == str(directory) and _model_bits == quantization_bits:
-        return {"modelId": model_id, "loaded": True, "modelIdentity": _model_identity(directory, model_id, quantization_bits)}
+        return {"modelId": model_id, "loaded": True, "nativeScenesQualified": _model_native_scenes, "modelIdentity": _model_identity(directory, model_id, quantization_bits)}
 
     _unload()
     import mlx.core as mx
@@ -255,10 +309,17 @@ def _load(model_id: str, model_path: str, private_cache_path: str, quantization_
         predicate = getattr(_model, 'model_quant_predicate', lambda p, m: True)
         _model, _ = quantize_model(_model, {}, 64, quantization_bits, quant_predicate=predicate)
         mx.eval(_model.parameters())
+    _model_native_scenes = False
+    if model_id == 'fish_drama3' and quantization_bits == 0:
+        manifest = json.loads(Path(__file__).with_name('fish_drama_model_checksums.json').read_text())
+        _model_native_scenes = _verify_scene_model(directory, manifest,
+            Path(private_cache_path).parent / 'model-qualification')
+        if not _model_native_scenes:
+            _progress('Unverified model revision: native scenes and delivery cues are disabled', stage='modelContext')
     _model_bits = quantization_bits
     _model_id = model_id
     _model_path = str(directory)
-    return {"modelId": model_id, "loaded": True, "modelIdentity": _model_identity(directory, model_id, quantization_bits)}
+    return {"modelId": model_id, "loaded": True, "nativeScenesQualified": _model_native_scenes, "modelIdentity": _model_identity(directory, model_id, quantization_bits)}
 
 
 def _qwen_language(language: str) -> str:
@@ -374,6 +435,26 @@ def _drama_reference_inputs(request: dict[str, Any], text: str):
         voices.append(item['voice'])
     if request.get('voice') not in voices:
         raise ValueError('Selected voice is absent from the Drama reference set.')
+    turns = request.get('sceneTurns')
+    if turns is not None:
+        if not _model_native_scenes:
+            raise ValueError('Native scenes require a verified pinned model context.')
+        if not isinstance(turns, list) or not 1 <= len(turns) <= 16:
+            raise ValueError('Drama scene requires 1 to 16 ordered turns.')
+        lines, next_word = [], None
+        for turn in turns:
+            if not isinstance(turn, dict) or turn.get('voice') not in voices:
+                raise ValueError('Scene turn has no reference voice.')
+            content = turn.get('text')
+            start, end = turn.get('startWord'), turn.get('endWord')
+            if (not isinstance(content, str) or not content.strip()
+                    or '<|speaker:' in content or not isinstance(start, int)
+                    or not isinstance(end, int) or end <= start
+                    or (next_word is not None and start != next_word)):
+                raise ValueError('Scene text/source spans are invalid.')
+            next_word = end
+            lines.append(f"<|speaker:{voices.index(turn['voice'])}|> {content}")
+        return '\n'.join(lines), audios, transcripts
     slot = voices.index(request['voice'])
     return f'<|speaker:{slot}|> {text}', audios, transcripts
 
@@ -455,6 +536,9 @@ def _synthesize(request: dict[str, Any]) -> dict[str, Any]:
         pcm = (np.clip(audio, -1.0, 1.0) * 32767).astype('<i2')
         wav.writeframes(pcm.tobytes())
         raw.flush()
+        if wav.getnframes() == len(pcm):
+            _progress('First native audio packet rendered', stage='firstAudioPacket',
+                      completed=len(pcm), unit='frames')
 
     try:
         try:

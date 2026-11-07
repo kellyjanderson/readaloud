@@ -30,20 +30,30 @@ class ChunkPlannerGraph {
   final List<int> _offsets;
   final Map<String, _ChunkRoutingContext> _routes;
 
-  ChunkPlan plan(ChunkPlannerInput input) {
+  ChunkPlan plan(ChunkPlannerInput input, {int? endSegmentIndex}) {
     if (!identical(input.speechDocument, document)) {
       throw ArgumentError("Planning input does not belong to retained graph.");
     }
     final speechDocument = input.speechDocument;
     final startSegmentIndex =
         speechDocument.segmentIndexById[input.startSegmentId] ?? 0;
-    final chunks = <ChunkSpec>[];
+    var chunks = <ChunkSpec>[];
+    final scenes =
+        input.engineId == 'fish_drama3' &&
+        input.engineVersion.endsWith('-q0-native-scene-v2');
     final globalWordOffsets = _offsets;
     final routingContextBySegmentId = _routes;
 
+    final horizon = endSegmentIndex == null
+        ? speechDocument.segments.length
+        : (endSegmentIndex + 1).clamp(
+            startSegmentIndex,
+            speechDocument.segments.length,
+          );
     var cursor = startSegmentIndex;
-    while (cursor < speechDocument.segments.length &&
-        (input.maxChunks == null || chunks.length < input.maxChunks!)) {
+    while (cursor < horizon &&
+        (input.maxChunks == null ||
+            chunks.length < input.maxChunks! * (scenes ? 16 : 1))) {
       final isFirstChunk = chunks.isEmpty;
       final softTarget = isFirstChunk
           ? ChunkPlannerService._firstChunkSoftTargetWords
@@ -55,6 +65,7 @@ class ChunkPlannerGraph {
         startSegmentIndex: cursor,
         globalWordOffsets: globalWordOffsets,
         softTarget: softTarget,
+        endSegmentExclusive: horizon,
         fallbackVoiceId: input.voiceId,
         routingContextBySegmentId: routingContextBySegmentId,
       );
@@ -69,6 +80,13 @@ class ChunkPlannerGraph {
       cursor = built.nextSegmentIndex;
     }
 
+    if (scenes) {
+      chunks = packNativeSceneChunks(chunks);
+      if (input.maxChunks != null) {
+        chunks = chunks.take(input.maxChunks!).toList();
+      }
+      if (chunks.isNotEmpty) cursor = chunks.last.endSegmentIndex + 1;
+    }
     final planDigest = crypto.sha256.convert(
       utf8.encode(
         [
@@ -98,6 +116,7 @@ _BuiltChunk _buildChunk({
   required int startSegmentIndex,
   required List<int> globalWordOffsets,
   required int softTarget,
+  required int endSegmentExclusive,
   required String fallbackVoiceId,
   required Map<String, _ChunkRoutingContext> routingContextBySegmentId,
 }) {
@@ -107,7 +126,7 @@ _BuiltChunk _buildChunk({
   var cursor = startSegmentIndex;
   _ChunkRoutingContext? routingContext;
 
-  while (cursor < speechDocument.segments.length) {
+  while (cursor < endSegmentExclusive) {
     final segment = speechDocument.segments[cursor];
     final segmentRoutingContext =
         routingContextBySegmentId[segment.segmentId] ??
@@ -126,6 +145,12 @@ _BuiltChunk _buildChunk({
       speechSegment: segment,
       ttsArtifactSet: ttsArtifactSet,
     );
+    if (collectedSegments.isNotEmpty &&
+        ttsSegment.performanceIntents.any(
+          (intent) => intent.engineControl != null,
+        )) {
+      break;
+    }
     final candidateWordCount = wordCount + segment.wordCount;
     final wouldExceedHardCap =
         collectedSegments.isNotEmpty &&
@@ -139,6 +164,11 @@ _BuiltChunk _buildChunk({
     wordCount = candidateWordCount;
     routingContext ??= segmentRoutingContext;
     cursor += 1;
+    if (ttsSegment.performanceIntents.any(
+      (intent) => intent.engineControl != null,
+    )) {
+      break;
+    }
 
     final nextSegment = cursor < speechDocument.segments.length
         ? speechDocument.segments[cursor]
@@ -490,4 +520,53 @@ class _ChunkRoutingContext {
   final String? routeId;
   final String? castId;
   final String? dialogueSpanId;
+}
+
+/// Application work-ahead bound, distinct from the library's native splitter.
+List<ChunkSpec> packNativeSceneChunks(List<ChunkSpec> turns) {
+  final result = <ChunkSpec>[];
+  var group = <ChunkSpec>[];
+  var words = 0;
+  final voices = <String>{};
+  void flush() {
+    if (group.isEmpty) return;
+    final first = group.first, last = group.last;
+    result.add(
+      ChunkSpec(
+        chunkId: 'scene_${first.chunkId}',
+        segmentIds: List.unmodifiable(group.expand((c) => c.segmentIds)),
+        speakText: group.map((c) => c.speakText).join(' '),
+        voiceId: first.voiceId,
+        boundaryClass: first.boundaryClass,
+        startSegmentIndex: first.startSegmentIndex,
+        endSegmentIndex: last.endSegmentIndex,
+        estimatedWordCount: words,
+        cacheKey: crypto.sha256
+            .convert(utf8.encode(group.map((c) => c.cacheKey).join('|')))
+            .toString(),
+        startWordIndex: first.startWordIndex,
+        endWordIndex: last.endWordIndex,
+        ttsSegments: List.unmodifiable(group.expand((c) => c.ttsSegments)),
+        sceneTurns: List.unmodifiable(group),
+      ),
+    );
+    group = [];
+    words = 0;
+    voices.clear();
+  }
+
+  for (final turn in turns) {
+    if (group.isNotEmpty &&
+        (group.length >= 16 ||
+            words + turn.estimatedWordCount > 75 ||
+            (!voices.contains(turn.voiceId) && voices.length == 16) ||
+            group.last.endWordIndex != turn.startWordIndex)) {
+      flush();
+    }
+    group.add(turn);
+    words += turn.estimatedWordCount;
+    voices.add(turn.voiceId);
+  }
+  flush();
+  return result;
 }

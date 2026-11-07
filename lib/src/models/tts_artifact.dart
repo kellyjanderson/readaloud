@@ -122,21 +122,29 @@ class RealizedPronunciationArtifact {
   String get spanKey => '$segmentId:$startWord:$endWord';
 }
 
-/// Retains canonical intent even though no current adapter can apply it.
+/// Canonical intent survives even when this engine cannot apply it.
 class RealizedPerformanceIntent {
-  const RealizedPerformanceIntent({required this.annotation});
+  const RealizedPerformanceIntent({
+    required this.annotation,
+    this.engineControl,
+    this.adjustmentDecision,
+  });
 
   final SpeechAnnotation annotation;
+  final String? engineControl;
+  final Map<String, Object?>? adjustmentDecision;
 
   /// This is document intent; applying a model-specific control still requires
   /// a separately registered adjustment and an exact target-context match.
   SpeechAdjustmentContext get context => SpeechAdjustmentContext.content(
     'annotation:${annotation.source.name}:${annotation.annotationId}',
   );
-  String get engineTreatment => 'unsupported';
-  String get fallback => 'engine_default';
+  String get engineTreatment =>
+      engineControl == null ? 'unsupported' : 'inline_delivery_cue';
+  String get fallback => engineControl == null ? 'engine_default' : 'none';
   List<String> get diagnosticCodes => List.unmodifiable([
-    '${annotation.kind.name}.unsupported',
-    '${annotation.kind.name}.fallback.engine_default',
+    '${annotation.kind.name}.$engineTreatment',
+    if (engineControl == null)
+      '${annotation.kind.name}.fallback.engine_default',
   ]);
 }

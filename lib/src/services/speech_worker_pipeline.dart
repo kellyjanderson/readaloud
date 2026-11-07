@@ -1,3 +1,4 @@
+import '../models/native_speech_turn.dart';
 import 'dart:async';
 import 'dart:collection';
 import 'dart:convert';
@@ -67,6 +68,7 @@ class SpeechWorkerChunkRequest {
     this.capabilityProfileId,
     this.expectedBindingFingerprint,
     this.expectedBindingRevision,
+    this.sceneTurns = const <NativeSpeechTurn>[],
     this.synthesisIdentity = 'legacy-unspecified',
     this.pronunciationArtifacts = const <Map<String, Object?>>[],
     this.missingFallbackWordCount = 0,
@@ -88,6 +90,7 @@ class SpeechWorkerChunkRequest {
   final String? capabilityProfileId;
   final String? expectedBindingFingerprint;
   final int? expectedBindingRevision;
+  final List<NativeSpeechTurn> sceneTurns;
   final String synthesisIdentity;
   final List<Map<String, Object?>> pronunciationArtifacts;
   final int missingFallbackWordCount;
@@ -114,6 +117,7 @@ class SpeechWorkerChunkRequest {
       'capabilityProfileId': capabilityProfileId,
       'expectedBindingFingerprint': expectedBindingFingerprint,
       'expectedBindingRevision': expectedBindingRevision,
+      'sceneTurns': sceneTurns.map((t) => t.toMap()).toList(),
       'synthesisIdentity': synthesisIdentity,
       'pronunciationArtifacts': pronunciationArtifacts,
       'missingFallbackWordCount': missingFallbackWordCount,
@@ -138,6 +142,11 @@ class SpeechWorkerChunkRequest {
       capabilityProfileId: map['capabilityProfileId'] as String?,
       expectedBindingFingerprint: map['expectedBindingFingerprint'] as String?,
       expectedBindingRevision: map['expectedBindingRevision'] as int?,
+      sceneTurns: List.unmodifiable(
+        (map['sceneTurns'] as List? ?? []).map(
+          (t) => NativeSpeechTurn.fromMap(Map<String, dynamic>.from(t as Map)),
+        ),
+      ),
       synthesisIdentity:
           map['synthesisIdentity'] as String? ?? 'legacy-unspecified',
       pronunciationArtifacts: List<Map<String, Object?>>.from(

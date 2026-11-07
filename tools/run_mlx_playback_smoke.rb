@@ -21,39 +21,37 @@ else
 end
 File.write(File.join(output, 'executable.sha256'), Digest::SHA256.file(app).hexdigest)
 failures = []
+timeout_seconds = 360 + Integer(ENV.fetch('READALOUD_SMOKE_PLAY_SECONDS', '0'))
 engines.each do |engine|
   pid = nil
+  status = nil
+  normal_quit = false
+  forced_cleanup = false
   receipt = File.join(output, "#{engine}.json")
   begin
     File.open(File.join(output, "#{engine}.log"), 'w') do |log|
-      pid = Process.spawn(app, engine, receipt, out: log, err: log, pgroup: true)
-      if ENV['READALOUD_SMOKE_NORMAL_QUIT'] == '1'
-        normal_quit = false
-        status = Timeout.timeout(360) do
-          loop do
-            exited = Process.wait2(pid, Process::WNOHANG)
-            break exited.last if exited
-            if File.file?(receipt)
-              begin
-                JSON.parse(File.read(receipt)) # Wait until the receipt is complete.
-                normal_quit = system('/usr/bin/osascript', '-e', "tell application #{bundle.inspect} to quit", out: log, err: log)
-                raise 'Normal Quit failed; forced cleanup is not acceptance' unless normal_quit
-                break Timeout.timeout(20) { Process.wait2(pid).last }
-              rescue JSON::ParserError
-                # Writer has not yet finished this bounded receipt.
-              end
+      pid = Process.spawn({'READALOUD_SMOKE_NORMAL_QUIT' => '1'}, app, engine, receipt, out: log, err: log, pgroup: true)
+      status = Timeout.timeout(timeout_seconds) do
+        loop do
+          exited = Process.wait2(pid, Process::WNOHANG)
+          break exited.last if exited
+          if File.file?(receipt)
+            begin
+              JSON.parse(File.read(receipt)) # Wait until the receipt is complete.
+              normal_quit = system('/usr/bin/osascript', '-e', "tell application #{bundle.inspect} to quit", out: log, err: log)
+              raise 'Normal Quit failed; forced cleanup is not acceptance' unless normal_quit
+              break Timeout.timeout(20) { Process.wait2(pid).last }
+            rescue JSON::ParserError
+              # Writer has not yet finished this bounded receipt.
             end
-            sleep 0.2
           end
+          sleep 0.2
         end
-        raise 'Test app exited before normal Quit was requested' unless normal_quit
-        File.write(File.join(output, "#{engine}-cleanup.json"), JSON.pretty_generate({normalQuit: true, pid: pid, exited: true, exitStatus: status.exitstatus}))
-      else
-        _, status = Timeout.timeout(360) { Process.wait2(pid) }
       end
+      raise 'Test app exited before normal Quit was requested' unless normal_quit
       raise "App exited #{status.inspect} without a receipt; see #{engine}.log" unless File.file?(receipt)
       result = JSON.parse(File.read(receipt))
-      raise "Playback failed: #{result}" unless status.success? && result['passed'] && result['positionMs'] >= 500 && result['peakPcm16'] >= 100
+      raise "Playback failed: #{result['error']}; see #{receipt}" unless status.success? && result['passed'] && result['positionMs'] >= 500 && result['peakPcm16'] >= 100
       puts "PASS #{engine}: position=#{result['positionMs']}ms, peak=#{result['peakPcm16']}, elapsed=#{result['elapsedMs']}ms"
     end
   rescue => error
@@ -62,6 +60,19 @@ engines.each do |engine|
   ensure
     # Also reap inference children after failure/timeout; never leave a test app.
     if pid
+      # A timed-out probe may never have written its receipt. Still use the
+      # application's normal shutdown path before any forced cleanup.
+      begin
+        Process.kill(0, pid)
+        normal_quit = system('/usr/bin/osascript', '-e', "tell application #{bundle.inspect} to quit")
+        Timeout.timeout(20) { Process.waitpid(pid) }
+      rescue Errno::ESRCH, Errno::ECHILD
+        # Already reaped after the normal Quit in the primary path.
+      rescue Timeout::Error
+        forced_cleanup = true
+      end
+      members = IO.popen(['pgrep', '-g', pid.to_s], &:read).split.map(&:to_i)
+      forced_cleanup ||= !members.empty?
       begin
         Process.kill('TERM', -pid)
       rescue Errno::ESRCH
@@ -72,6 +83,29 @@ engines.each do |engine|
         Process.kill('KILL', -pid) rescue Errno::ESRCH
         Process.waitpid(pid) rescue Errno::ECHILD
       rescue Errno::ECHILD
+      end
+      remaining = IO.popen(['pgrep', '-g', pid.to_s], &:read).split.map(&:to_i)
+      unless remaining.empty?
+        # A reaped GUI cannot be waited on to join orphaned inference children.
+        deadline = Process.clock_gettime(Process::CLOCK_MONOTONIC) + 5
+        until remaining.empty? || Process.clock_gettime(Process::CLOCK_MONOTONIC) >= deadline
+          sleep 0.1
+          remaining = IO.popen(['pgrep', '-g', pid.to_s], &:read).split.map(&:to_i)
+        end
+        unless remaining.empty?
+          Process.kill('KILL', -pid) rescue Errno::ESRCH
+          sleep 0.2
+          remaining = IO.popen(['pgrep', '-g', pid.to_s], &:read).split.map(&:to_i)
+        end
+      end
+      File.write(File.join(output, "#{engine}-cleanup.json"), JSON.pretty_generate({
+        normalQuit: normal_quit, pid: pid, exited: !remaining.include?(pid),
+        exitStatus: status&.exitstatus,
+        forcedCleanup: forced_cleanup, remainingOwnedPids: remaining,
+      }))
+      if !normal_quit || forced_cleanup || !remaining.empty?
+        failures << engine unless failures.include?(engine)
+        warn "FAIL #{engine}: normal app/child cleanup was not verified"
       end
     end
   end

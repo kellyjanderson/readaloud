@@ -45,7 +45,12 @@ class PlaybackInstrumentationService {
   static final PlaybackInstrumentationService instance =
       PlaybackInstrumentationService._();
 
-  final ListQueue<PlaybackMetricRecord> _recent = ListQueue<PlaybackMetricRecord>();
+  final ListQueue<PlaybackMetricRecord> _recent =
+      ListQueue<PlaybackMetricRecord>();
+
+  /// Explicit test-session sink, including release builds. The owner removes
+  /// it at teardown; normal releases retain neither records nor a listener.
+  void Function(PlaybackMetricRecord)? observer;
 
   void recordMetric({
     required String metric,
@@ -71,6 +76,7 @@ class PlaybackInstrumentationService {
   }
 
   void record(PlaybackMetricRecord record) {
+    observer?.call(record);
     if (!kDebugMode) {
       return;
     }
