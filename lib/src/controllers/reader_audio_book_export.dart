@@ -172,6 +172,9 @@ extension ReaderAudioBookPersistence on ReaderController {
     if (!force && imported == null && stored.isEmpty) return null;
     final stage = await Directory.systemTemp.createTemp('radoc-publish-');
     final transport = RadocAudioPackage(
+      createExportStage: Platform.isMacOS
+          ? const RadocExportStaging().createStage
+          : null,
       onProgress: (p) => _bookProgress(p, revision),
     );
     RadocAudioBook? importedHandle;

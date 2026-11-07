@@ -1151,7 +1151,8 @@ class KokoroTtsEngine
         throw StateError('Export resource reference is stale.');
       }
     } else {
-      if (_activeGenerationId != null) {
+      if (_activeGenerationId != null &&
+          _activeGenerationId != _renderedGenerationId) {
         throw StateError(
           'Export requires prepared resource references during playback.',
         );
@@ -1213,6 +1214,20 @@ class KokoroTtsEngine
             event.duration == null) {
           return;
         }
+        PlaybackInstrumentationService.instance.recordMetric(
+          metric: 'exportChunkReady',
+          documentId: request.documentId ?? 'export-document',
+          sessionId: sessionId,
+          voiceId: plannedChunk.voiceId,
+          engineId: _engineId,
+          chunkId: chunkId,
+          value: <String, Object?>{
+            'cacheHit': event.cacheHit ?? false,
+            'startWord': plannedChunk.startWordIndex,
+            'endWord': plannedChunk.endWordIndex,
+            'rawArtifactIdentity': event.payload['rawArtifactIdentity'],
+          },
+        );
         final windowCompletion = completion;
         publicationTail = publicationTail
             .then((_) async {

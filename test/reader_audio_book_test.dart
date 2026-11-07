@@ -5,6 +5,7 @@ import 'package:read_aloud/src/models/character.dart';
 import 'package:read_aloud/src/models/character_cast_registry.dart';
 import 'package:read_aloud/src/models/voice_profile.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:read_aloud/src/controllers/reader_controller.dart';
 import 'package:read_aloud/src/models/radoc_audio_manifest.dart';
@@ -22,6 +23,18 @@ void main() {
   late ReaderController controller;
   late RenderedSceneRepository repository;
   setUp(() async {
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(
+          const MethodChannel('read_aloud/document_access'),
+          (call) async {
+            if (call.method == 'createRadocExportStage') {
+              return (await Directory.systemTemp.createTemp(
+                'radoc-platform-stage-',
+              )).path;
+            }
+            throw MissingPluginException();
+          },
+        );
     SharedPreferences.setMockInitialValues({});
     temp = await Directory.systemTemp.createTemp('reader-book-');
     engine = _OfflineEngine();
@@ -35,6 +48,11 @@ void main() {
     await controller.initialize();
   });
   tearDown(() async {
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(
+          const MethodChannel('read_aloud/document_access'),
+          null,
+        );
     await controller.shutdownPreparation();
     controller.dispose();
     await temp.delete(recursive: true);

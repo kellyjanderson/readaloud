@@ -207,3 +207,19 @@ are reused. Historical boundaries incompatible with prepared segments are refuse
 rather than expanded silently. Basic source spans remain approximate highlighting,
 not advanced alignment. The S6 acceptance/evidence authority is [#137](https://github.com/kellyjanderson/readaloud/issues/137);
 source implementation does not waive launch, emitted-audio or human gates.
+
+The macOS Save Audio Book path obtains only the chosen destination through the
+native Save panel. A utility-queue Foundation `itemReplacementDirectory` request
+allocates private staging on the destination volume; it does not require access
+to arbitrary siblings. Package cancellation/deadline ownership begins before that
+request, and stale returned directories are cleaned. The existing archive worker
+flushes output, obtains current-owner commit admission and renames atomically;
+it never falls back to cross-device copying. Native allocation and publication
+errors propagate to the controller's diagnostics and visible failure state.
+
+When saved audio is playing, a missing scene may prepare its model bindings and
+enter the existing native export owner. Rendered playback does not occupy the
+synthesis lane; treating it as ordinary synthesis previously prevented this work
+from starting. Ordinary synthesized playback still retains its existing resource
+and low-water admission policy. The export completion metric records the actual
+source span, cache-hit result and raw artifact identity for native qualification.

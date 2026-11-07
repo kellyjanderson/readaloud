@@ -322,11 +322,14 @@ Future<void> main(List<String> args) async {
       }
       nextWord = chunk.endWordIndex;
     }
-    final expected = session.controller.preparedWordCount;
+    // The initial explicit-direction fixture is a complete loadDocument
+    // snapshot, so its incremental preparedWordCount is deliberately zero.
+    // Every phase must traverse the same independently recorded source extent.
+    final expected = (receipt['fixture']! as Map)['words']! as int;
     if (chunks.isEmpty ||
         nextWord != expected ||
         expected <= 0 ||
-        !session.controller.isPreparationComplete ||
+        !session.controller.hasCompleteDocumentSnapshot ||
         maxPosition < 500) {
       throw StateError(
         'No complete native traversal in $name: $nextWord/$expected',

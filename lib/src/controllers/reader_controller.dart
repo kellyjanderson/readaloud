@@ -67,6 +67,7 @@ import '../services/tts_engine.dart';
 import '../models/native_speech_turn.dart';
 import '../models/radoc_audio_manifest.dart';
 import '../services/radoc_audio_package.dart';
+import '../services/radoc_export_staging.dart';
 import '../services/audio_artifact_store.dart';
 import '../services/rendered_scene_repository.dart';
 import '../services/synthesis_boundary_policy.dart';
@@ -3142,6 +3143,7 @@ class ReaderController extends ChangeNotifier {
       );
     } catch (error) {
       if (current()) {
+        _logDiagnostic('Document publication failed', error: error);
         _recordCheckpointExportFailure(error);
         _statusMessage = _preparationFailed
             ? 'The prepared checkpoint is damaged. Retry document preparation before saving.'

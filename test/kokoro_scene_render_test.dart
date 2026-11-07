@@ -249,6 +249,7 @@ void main() {
   test(
     'rendering below saved-playback low water admits work and cancellation preserves its pins',
     () async {
+      fixture.processor.allowPreparation = true;
       final source = TtsRenderedAudioRequest(
         documentId: 'book',
         sceneId: 'saved-scene',
@@ -276,6 +277,7 @@ void main() {
       final entered = Completer<TtsFinalizedAudioScene>();
       final exporting = fixture.engine.exportAudio(
         fixture.request(
+          prepareOnDemand: true,
           cancelled: cancellation.future,
           publish: (scene) async {
             entered.complete(scene);
@@ -366,6 +368,7 @@ class _Fixture {
 
   TtsExportRequest request({
     List<PreparedVoiceBinding>? bindings,
+    bool prepareOnDemand = false,
     Future<void> Function(TtsFinalizedAudioScene)? publish,
     Future<void>? cancelled,
     bool Function()? isCurrent,
@@ -391,7 +394,7 @@ class _Fixture {
         ),
       ],
     ),
-    preparedResources: bindings ?? this.bindings,
+    preparedResources: prepareOnDemand ? null : (bindings ?? this.bindings),
     sourceWordOffset: 100,
     assignmentRevision: 13,
     cancelled: cancelled,
@@ -517,6 +520,8 @@ class _Processor
     implements
         SpeechWorkerResourceOwner,
         CancellableSpeechWorkerChunkProcessor {
+  bool allowPreparation = false;
+
   _Processor(this.rawPath);
   final String rawPath;
   final requests = <SpeechWorkerChunkRequest>[];
@@ -550,7 +555,23 @@ class _Processor
     required int revision,
     required Iterable<String> voiceIds,
     String pronunciationProfileId = 'kokoro-default',
-  }) async => throw StateError('Already prepared.');
+  }) async {
+    if (!allowPreparation) throw StateError('Unexpected resource preparation.');
+    return voiceIds
+        .map(
+          (voice) => PreparedVoiceBinding(
+            voiceId: voice,
+            voiceDigest: 'digest-$voice',
+            modelDigest: 'model',
+            engineVersion: '12',
+            pronunciationProfileId: pronunciationProfileId,
+            bindingRevision: revision,
+            documentId: documentId,
+          ),
+        )
+        .toList();
+  }
+
   @override
   Future<void> releaseResources() async {}
   @override

@@ -68,9 +68,9 @@ struct CaptureMain {
 
     static func capture() async throws {
         let args = CommandLine.arguments
-        guard args.count == 4, let pid = Int32(args[1]), pid > 0,
+        guard (args.count == 4 || args.count == 5), let pid = Int32(args[1]), pid > 0,
               let seconds = Double(args[3]), seconds > 0, seconds <= 300 else {
-            fatalError("Usage: CAPTURE PID NEW_OUTPUT.wav SECONDS (1–300)")
+            fatalError("Usage: CAPTURE PID NEW_OUTPUT.wav SECONDS (1–300) [STOP_FILE]")
         }
         guard CGPreflightScreenCaptureAccess() else {
             throw NSError(domain: "ReadAloudCapture", code: 2,
@@ -110,7 +110,12 @@ struct CaptureMain {
         try stream.addStreamOutput(output, type: .audio, sampleHandlerQueue: output.queue)
         try await stream.startCapture()
         print("Capturing app PID \(pid), bundle \(bundle)")
-        try await Task.sleep(nanoseconds: UInt64(seconds * 1_000_000_000))
+        fflush(stdout)
+        let deadline = ProcessInfo.processInfo.systemUptime + seconds
+        while ProcessInfo.processInfo.systemUptime < deadline {
+            if args.count == 5 && FileManager.default.fileExists(atPath: args[4]) { break }
+            try await Task.sleep(nanoseconds: 100_000_000)
+        }
         try await stream.stopCapture()
         let result = output.queue.sync { () -> (Int64, Double, Error?) in
             output.file = nil
