@@ -1,0 +1,15 @@
+{
+  "schema_version": 1,
+  "package_revision": "S6 R4",
+  "publication": "https://github.com/kellyjanderson/readaloud/issues/137#issuecomment-6711048248",
+  "implementation_baseline": "6f98390",
+  "documents": [
+    {
+      "path": "runtime-packaging.md",
+      "revision": "S6 R4",
+      "source": "https://github.com/kellyjanderson/readaloud/blob/c4873ccc273f997236ca4b214a78f8e9670d7d50/project/interim/s6-r4/runtime-packaging.md",
+      "source_section_sha256": "29afdef7ce87b709b56cc50f731842560abd674670e11bc444e6dc548aa5efdd",
+      "sha256": "29afdef7ce87b709b56cc50f731842560abd674670e11bc444e6dc548aa5efdd"
+    }
+  ]
+}
