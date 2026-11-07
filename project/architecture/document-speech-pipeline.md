@@ -229,3 +229,8 @@ prepared paragraph breaks and native segment-joining spaces are equivalent.
 Words, punctuation, span coverage and canonical speech directions are still
 checked independently. This prevents a successfully regenerated paragraph-spanning
 scene from being rejected when it returns to saved-scene resolution.
+
+If a saved scene descriptor is absent, regeneration ends at the next saved
+scene's start within that prepared range. It does not extend to the whole range
+and overlap valid following audio. An existing invalid scene retains its own
+source bounds. This preserves the next scene for ordinary saved-scene resolution.
