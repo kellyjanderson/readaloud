@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
@@ -60,6 +61,156 @@ void main() {
     );
     return output;
   }
+
+  test(
+    'platform stage exports and atomically replaces an existing book',
+    () async {
+      await service.dispose();
+      final replacementRoot = await Directory(
+        '${temp.path}/replacement',
+      ).create();
+      final stages = <Directory>[];
+      service = RadocAudioPackage(
+        createExportStage: (destination) async {
+          expect(destination.path, '${temp.path}/book.radoc');
+          final stage = await replacementRoot.createTemp('platform-');
+          stages.add(stage);
+          return stage;
+        },
+      );
+      final output = await exportBook();
+      await output.writeAsString('previous complete book');
+      await exportBook();
+      expect(await RadocAudioPackage.isPackage(output), isTrue);
+      expect(stages, hasLength(2));
+      for (final stage in stages) {
+        expect(await stage.exists(), isFalse);
+      }
+      final book = await service.open(output);
+      expect(book.manifest.documentId, manifest.documentId);
+      expect(
+        await (await service.materializeMember(
+          book,
+          'audio/0.wav',
+        )).readAsBytes(),
+        await files['audio/0.wav']!.readAsBytes(),
+      );
+    },
+  );
+
+  test(
+    'cancel during native allocation drains and removes late stage',
+    () async {
+      await service.dispose();
+      final allocation = Completer<Directory>();
+      service = RadocAudioPackage(createExportStage: (_) => allocation.future);
+      final destination = await File(
+        '${temp.path}/prior.radoc',
+      ).writeAsString('prior');
+      final export = service.export(
+        destination: destination,
+        manifest: manifest,
+        members: files,
+      );
+      final rejected = expectLater(
+        export,
+        throwsA(isA<RadocPackageCancelled>()),
+      );
+      var drained = false;
+      final drain = service.cancelAndDrain().then((_) => drained = true);
+      await expectLater(service.open(destination), throwsStateError);
+      expect(drained, isFalse);
+      final stage = await temp.createTemp('platform-');
+      allocation.complete(stage);
+      await rejected;
+      await drain;
+      expect(drained, isTrue);
+      expect(await stage.exists(), isFalse);
+      expect(await destination.readAsString(), 'prior');
+    },
+  );
+
+  test(
+    'platform allocation failure preserves output without sibling fallback',
+    () async {
+      await service.dispose();
+      service = RadocAudioPackage(
+        createExportStage: (_) async =>
+            throw const FileSystemException('Denied'),
+      );
+      final destination = await File(
+        '${temp.path}/prior.radoc',
+      ).writeAsString('prior');
+      await expectLater(
+        service.export(
+          destination: destination,
+          manifest: manifest,
+          members: files,
+        ),
+        throwsA(isA<FileSystemException>()),
+      );
+      expect(await destination.readAsString(), 'prior');
+      expect(
+        await temp.list().any((e) => e.path.contains('.radoc-stage-')),
+        isFalse,
+      );
+    },
+  );
+
+  test(
+    'stale native-stage publication preserves output and removes stage',
+    () async {
+      await service.dispose();
+      var current = true;
+      final stage = await temp.createTemp('platform-');
+      service = RadocAudioPackage(
+        createExportStage: (_) async => stage,
+        onProgress: (progress) {
+          if (progress.stage == 'publication') current = false;
+        },
+      );
+      final destination = await File(
+        '${temp.path}/prior.radoc',
+      ).writeAsString('prior');
+      await expectLater(
+        service.export(
+          destination: destination,
+          manifest: manifest,
+          members: files,
+          isCurrent: () => current,
+        ),
+        throwsA(isA<RadocPackageCancelled>()),
+      );
+      expect(current, isFalse);
+      expect(await destination.readAsString(), 'prior');
+      expect(await stage.exists(), isFalse);
+    },
+  );
+
+  test(
+    'worker failure cleans platform stage without modifying source or output',
+    () async {
+      await service.dispose();
+      final stage = await temp.createTemp('platform-');
+      service = RadocAudioPackage(createExportStage: (_) async => stage);
+      final source = files['audio/0.wav']!;
+      await source.writeAsBytes([0, 1, 2]);
+      final destination = await File(
+        '${temp.path}/prior.radoc',
+      ).writeAsString('prior');
+      await expectLater(
+        service.export(
+          destination: destination,
+          manifest: manifest,
+          members: files,
+        ),
+        throwsA(isA<RadocPackageException>()),
+      );
+      expect(await destination.readAsString(), 'prior');
+      expect(await source.readAsBytes(), [0, 1, 2]);
+      expect(await stage.exists(), isFalse);
+    },
+  );
 
   test(
     'copied book retains independent prepared/analysis/intent/audio offline',

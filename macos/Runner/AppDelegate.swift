@@ -130,6 +130,8 @@ class AppDelegate: FlutterAppDelegate {
       }
 
       switch call.method {
+      case "createRadocExportStage":
+        self.handleCreateRadocExportStage(call: call, result: result)
       case "createPersistentRestoreToken":
         self.handleCreatePersistentRestoreToken(call: call, result: result)
       case "openPersistentRestoreToken":
@@ -142,6 +144,46 @@ class AppDelegate: FlutterAppDelegate {
         self.handleClosePersistentRestoreToken(call: call, result: result)
       default:
         result(FlutterMethodNotImplemented)
+      }
+    }
+  }
+
+  private func handleCreateRadocExportStage(
+    call: FlutterMethodCall,
+    result: @escaping FlutterResult
+  ) {
+    guard let arguments = call.arguments as? [String: Any],
+      let path = arguments["path"] as? String,
+      path.hasPrefix("/"), !path.hasSuffix("/")
+    else {
+      result(FlutterError(code: "radoc_stage_invalid_destination",
+        message: "Choose an audio-book destination before saving.", details: nil))
+      return
+    }
+
+    // NSSavePanel grants the selected file, not its parent directory. Foundation
+    // chooses an accessible replacement directory on that file's volume. Do not
+    // substitute temporaryDirectory: rename must never become a copying save.
+    // One RadocAudioPackage request owns this allocation and its eventual cleanup;
+    // no app/UI state crosses the utility worker, and replies return on main.
+    DispatchQueue.global(qos: .utility).async {
+      do {
+        let stage = try FileManager.default.url(
+          for: .itemReplacementDirectory,
+          in: .userDomainMask,
+          appropriateFor: URL(fileURLWithPath: path),
+          create: true
+        )
+        DispatchQueue.main.async { result(stage.path) }
+      } catch {
+        let failure = error as NSError
+        NSLog("[read_aloud.radoc_export] Replacement-directory allocation failed: \(failure)")
+        DispatchQueue.main.async {
+          result(FlutterError(code: "radoc_stage_failed",
+            message: "Could not prepare a safe audio-book save at the selected location.",
+            details: ["domain": failure.domain, "code": failure.code,
+              "description": failure.localizedDescription]))
+        }
       }
     }
   }

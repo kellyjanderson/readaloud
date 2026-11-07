@@ -92,11 +92,20 @@ class RadocAudioPackage {
   RadocAudioPackage({
     this.limits = const RadocPackageLimits(),
     this.onProgress,
+    this.createExportStage,
     Directory? cacheDirectory,
   }) : _cacheDirectory = cacheDirectory?.absolute.path;
 
   final RadocPackageLimits limits;
   final void Function(RadocPackageProgress)? onProgress;
+
+  /// Supplies a fresh, exclusively owned directory on the destination volume.
+  /// macOS sandbox callers use the platform item-replacement directory: a save
+  /// panel's file grant does not permit creating arbitrary sibling directories.
+  /// The service owns cleanup, including cancellation while this future waits.
+  /// This factory must perform filesystem work off the UI thread and must not
+  /// alter the destination. A cross-volume stage fails at rename, without copy.
+  final Future<Directory> Function(File destination)? createExportStage;
   final String? _cacheDirectory;
   final Set<String> _caches = {};
   _Active? _active;
@@ -268,7 +277,15 @@ class RadocAudioPackage {
       }
     });
     final timer = Timer(limits.operationTimeout, active.cancel);
+    Directory? exportStage;
     try {
+      if (operation == 'export' && createExportStage != null) {
+        exportStage = await createExportStage!(File(payload['path'] as String));
+        if (active.cancelled || !_current(isCurrent)) {
+          throw const RadocPackageCancelled();
+        }
+        payload = {...payload, 'exportStage': exportStage.absolute.path};
+      }
       await Isolate.spawn(
         _packageWorker,
         _Work(receive.sendPort, operation, payload, limits),
@@ -282,11 +299,27 @@ class RadocAudioPackage {
       timer.cancel();
       await subscription.cancel();
       receive.close();
-      _active = null;
-      active.drained.complete();
+      try {
+        // The worker normally removes this directory. Retain ownership here
+        // too, for cancellation during native allocation or a spawn failure.
+        final stagePath = exportStage?.path;
+        if (stagePath != null) {
+          await _removeExportStage(stagePath);
+        }
+      } finally {
+        _active = null;
+        active.drained.complete();
+      }
     }
   }
 }
+
+// Keep the cleanup isolate's closure out of _run's context, which also owns
+// unsendable ReceivePorts/completers. Only this immutable path crosses over.
+Future<void> _removeExportStage(String path) => Isolate.run(() async {
+  final stage = Directory(path);
+  if (await stage.exists()) await stage.delete(recursive: true);
+});
 
 class _Active {
   SendPort? port;
@@ -436,7 +469,10 @@ Future<RadocAudioManifest> _export(_Worker owner) async {
     );
   }
   _bound(sources.length + 1, limits.maxMembers, 'member count');
-  final stage = await destination.parent.createTemp('.radoc-stage-');
+  final suppliedStage = payload['exportStage'] as String?;
+  final stage = suppliedStage == null
+      ? await destination.parent.createTemp('.radoc-stage-')
+      : Directory(suppliedStage);
   try {
     final members = <RadocAudioMember>[];
     final staged = <String, File>{};
