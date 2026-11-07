@@ -1,0 +1,15 @@
+{
+  "schema_version": 1,
+  "package_revision": "S6 R5",
+  "publication": "https://github.com/kellyjanderson/readaloud/issues/137#issuecomment-6711654830",
+  "implementation_baseline": "5060dac",
+  "documents": [
+    {
+      "path": "runtime-placement.md",
+      "revision": "S6 R5",
+      "source": "https://github.com/kellyjanderson/readaloud/blob/8b06ad4d7152ac81e0ab692cff98a6bc0f9e76d6/project/interim/s6-r5/runtime-placement.md",
+      "source_section_sha256": "560779024ddfba340fc89bb1fb3630c92ec5bbab2caf3b22298d53e7db76abd4",
+      "sha256": "560779024ddfba340fc89bb1fb3630c92ec5bbab2caf3b22298d53e7db76abd4"
+    }
+  ]
+}
