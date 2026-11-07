@@ -63,3 +63,33 @@ voices or dialogue, and none of these tools modifies the MLX runtime.
 reuse and portable `.radoc` reopen without a model in a fresh working store. It
 uses silent speech; follow the isolated bundle and normal-Quit instructions in the
 [provider guide](../docs/modernbooknlp-provider.md#saved-book-analysis).
+
+## Portable audio-book qualification
+
+`tools/s6_acceptance_smoke.dart` combines two native entry points in one isolated
+build: `BOOK.radoc RECEIPT.json` runs model-forbidden saved playback;
+`fish_drama3 RECEIPT.json` runs real scene regeneration. Build with
+`sh tools/build_macos_release.sh tools/s6_acceptance_smoke.dart`, then copy and
+re-sign a separate QA bundle identity before running either probe. Restore
+`lib/main.dart` for a normal application build.
+
+`run_radoc_playback_smoke.rb APP_EXECUTABLE BOOK NEW_OUTPUT_DIRECTORY` checks
+copied-book playback, publication/reopen, transport and resource shutdown.
+`run_radoc_regeneration_smoke.rb APP_BUNDLE NEW_OUTPUT_DIRECTORY CAPTURE_EXECUTABLE`
+checks a four-scene fixture, one Character voice edit, saved reuse and a missing
+middle scene. It needs a working local Fish model/runtime and two distinct Fish
+voices; `READALOUD_REGEN_VOICE_BEFORE` and `READALOUD_REGEN_VOICE_AFTER` select them.
+Use a fresh output directory inside the QA sandbox container. The regeneration
+probe isolates its Character and rendered-scene repositories. Both runners
+request normal Quit and verify their owned processes have exited, including
+failure paths.
+
+Compile `capture_macos_app_audio.swift` for the capture executable. The runner
+starts a separate app-only capture before each Play gate and stops it at source
+completion. Compare emitted audio with the exact queued WAVs using
+`compare_captured_dialogue.py` and the managed MLX Python. Internal source-end,
+package hashes, native waveform comparison and human listening are distinct
+checks. Controlled Play gates do not measure first-launch performance; the
+ungated offline runner retains opening-to-native-position timestamps separately,
+and those timestamps alone do not establish audible onset. Current acceptance
+and remaining gates live in [S6 #137](https://github.com/kellyjanderson/readaloud/issues/137).

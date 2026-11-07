@@ -23,6 +23,16 @@ The native slot rechecks current effective playback lead before each admitted pl
 
 Kokoro constructs its native player with eager source preparation because the application already bounds the playlist. A pinned-backend native trace exposed duplicate `AVPlayerItem` insertion from lazy queue rebuilding during prefix removal. Eager preparation removes that lazy treadmill path; acceptance still requires the current running-bundle queue and audio evidence recorded in P3. Injected players used by probes must use the same preparation setting.
 
+The vendored just_audio 0.10.5 Darwin adapter preserves pointer-identical buffered
+queue prefixes during sequential append and pruning. It computes the desired
+queue with upstream order and per-source lazy preparation rules, then appends only
+missing items. Loading, seeking, looping, replacement and non-prefix changes retain
+the upstream rebuild. This removes repeated successor removal that coincided with
+short pauses inside current speech. No new scheduling owner is introduced; native
+callbacks, cancellation and disposal remain upstream-owned. See the [patch rationale
+and native regression checks](../../third_party/just_audio/README.local.md); running-app
+acoustic and transport qualification remains recorded in S6 [#137](https://github.com/kellyjanderson/readaloud/issues/137).
+
 Lease cancellation removes queued native admission even when the export lead gate is closed; already active native calls drain before their cancelled terminal. Pause signals admission after generation state settles. Natural document completion defers release while an export lease is active, then releases only if its resource and playback epochs remain current; pause, a replacement document and replay cannot inherit that release debt. The controller normalizes Kokoro intent into the supported 0.7–1.4 range before planning, and direct incompatible prepared plans are rejected. Cache plan identity, export and inference therefore use the same effective rate; independent player speed affects only playable wall-time lead.
 
 When synthesis fails with an unplanned suffix, the engine terminates that session with an error rather than rebuilding only admitted chunks and silently truncating the document. Existing bounded fallback recovery remains available only after the entire suffix has been materialized. Policy constants and transport traces are not perceptual continuity guarantees; measured evidence and limitations are recorded in [P3](https://github.com/kellyjanderson/readaloud/issues/52).
