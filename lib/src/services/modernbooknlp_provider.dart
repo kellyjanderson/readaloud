@@ -10,9 +10,11 @@ class ModernBookNlpProvider {
     required this.pythonPath,
     required this.helperPath,
     required this.runtimePath,
+    this.pythonHome,
     this.timeout = const Duration(minutes: 2),
   });
   final String pythonPath, helperPath, runtimePath;
+  final String? pythonHome;
   final Duration timeout;
   Process? _child;
   bool _busy = false, _closed = false;
@@ -117,6 +119,7 @@ class ModernBookNlpProvider {
       pythonPath,
       ['-u', '-B', helperPath, runtimePath, '--serve'],
       environment: {
+        'PYTHONHOME': ?pythonHome,
         'TOKENIZERS_PARALLELISM': 'false',
         'OMP_NUM_THREADS': '4',
         'HF_HUB_DISABLE_XET': '1',

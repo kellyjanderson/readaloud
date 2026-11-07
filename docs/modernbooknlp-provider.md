@@ -44,15 +44,23 @@ Validate a saved installation without network acquisition:
 The native build embeds the separate interpreter/packages using
 `embed_modernbooknlp_runtime.sh` (override `READALOUD_BOOKNLP_RUNTIME_ROOT` to change
 the build input). It assembles/signs the standalone tree outside the bundle and
-packages `Resources/python-runtimes/modernbooknlp.zip` plus a content manifest,
-including the qualified OpenMP library and licenses. It does not archive the
+packages Python/data as `Resources/python-runtimes/modernbooknlp.zip` plus a
+schema-2 content manifest. All Mach-O code and adjacent Metal resources remain
+in `Resources/python-runtimes/modernbooknlp-native/`, including the qualified
+OpenMP binary; licenses remain in the data inventory. It does not archive the
 build venv. First provider creation owns progress/cancellation before awaiting
 verification and extraction into Application Support
-`python-runtimes/v1/modernbooknlp/<signed-tree-digest>/`. The shared installer
-verifies archive bytes, exact inventory, links, modes, file hashes and the signed
+`python-runtimes/v2/modernbooknlp/<signed-tree-digest>-<bundle-location-digest>/`.
+This immutable data view has explicit manifest-owned links to verified bundled
+native files. The provider's own child receives this home through `PYTHONHOME`,
+independently of MLX; explicit injected interpreters receive no inferred home.
+The shared installer verifies current bundled targets, archive bytes, exact
+inventory, links, modes, file hashes and the signed
 arm64 interpreter before atomic immutable publication. Stop/replacement cancels
 setup and drains its extractor/validation lifetime; damaged published trees fail
-visibly and are never overwritten. Saved portable-book analysis bypasses provider
+visibly and are never overwritten. App relocation creates a new view without
+rewriting published links; removed/changed native targets require reinstalling
+the app. No native code is extracted or re-signed. Saved portable-book analysis bypasses provider
 creation. It includes code, not model weights. Settings prepares missing
 models under the actual app's Application Support `modernbooknlp/models` directory.
 The shared acquisition helper reports downloaded bytes and verified file counts;

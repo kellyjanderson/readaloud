@@ -203,17 +203,27 @@ startup acceptance remain separate gates in #111.
 
 ## Lazy packaged Python runtimes
 
-[S6 R4](https://github.com/kellyjanderson/readaloud/issues/137#issuecomment-6711048248)
-changes executable distribution, without qualifying neural cold startup or
+[S6 R5](https://github.com/kellyjanderson/readaloud/issues/137#issuecomment-6711654830)
+replaces R4's extracted native code after macOS refused its execution. It retains
+R4's resource-owner lifecycle, without qualifying neural cold startup or
 relaxing the opening-to-audible requirement. `package_python_runtime.rb` receives
 the existing relocated standalone tree after signing, including the installed
 site packages, licenses and the qualified BookNLP OpenMP replacement. It reads
 the exact Python version header and package metadata without executing an
 inheritance-signed interpreter from the build shell. It creates a ZIP with
-macOS `ditto` and a bounded manifest under `Resources/python-runtimes/`.
+macOS `ditto` and a schema-2 manifest under `Resources/python-runtimes/`.
+Content classification keeps every supported Mach-O (including extensionless
+executables and arm64 universal libraries), plus adjacent `.metallib` resources,
+in `Resources/python-runtimes/<runtimeId>-native/` with the original relative
+layout. Known interpreter/`.so`/`.dylib` members that are not valid Mach-O fail
+packaging. Every Mach-O is signed and verified before packaging; the interpreter
+retains sandbox inheritance entitlements. Only Python/data members enter the ZIP.
 The complete signed inventory, modes, link targets, package/Python identities
 and policy determine its digest; source paths and version labels alone do not.
-Both archives/manifests are mandatory for full candidate admission.
+Explicit `bundledNative` members bind each code/resource target's bundle path,
+mode, size and post-sign hash. Both archives/manifests and native roots are
+mandatory for full candidate admission. No native code is extracted, copied or
+re-signed in Application Support, and no quarantine/security policy is changed.
 
 `PackagedPythonRuntimeOwner` projects progress on the main isolate and admits
 at most one attempt per runtime ID (MLX and BookNLP), with no request queue.
@@ -228,14 +238,27 @@ metadata. Application policy owns exact inventory, safe parents and contained
 relative links, file size/hash/mode checks and signed arm64 interpreter admission.
 
 Attempts stage privately on the destination volume under Application Support
-`python-runtimes/v1/<runtimeId>/`. Verified output receives a flushed completion
-receipt and is published as `<signedTreeDigest>` through macOS `renamex_np` with
+`python-runtimes/v2/<runtimeId>/`. Before acquisition the installer verifies the
+current bundled native inventory, file types, contained paths, modes and hashes.
+An attempt extracts only the exact declared data inventory, then creates only
+explicit manifest-owned links to verified native targets. Ordinary relative
+links may leave the view only through the exact declared native target.
+Verified output receives a flushed completion receipt and is published as
+`<signedTreeDigest>-<canonicalBundleLocationDigest>` through macOS `renamex_np` with
 `RENAME_EXCL`. This narrow platform call supplies atomic no-replace semantics
 that ordinary directory rename cannot provide for an existing empty corrupt
 directory. Another process's winning publication is fully verified and reused;
 only the losing attempt's staging is removed. Published trees are immutable and
 never evicted, repaired in place or replaced. Corrupt output fails visibly.
-Existing publications are fully verified before reuse.
+Existing publications are fully verified before reuse. Relocation creates a new
+view and never rewrites an old view's links. Old R4/v1 publications are not reused.
+Missing/changed bundle code fails acquisition with reinstall guidance.
+
+Acquisition returns `VerifiedPythonRuntime` with the bundled interpreter and
+immutable Python home. MLX and BookNLP pass that home as `PYTHONHOME` only to
+their own child process. Each keeps its independent runtime; global environment
+state never changes. Explicit developer interpreter overrides and injected
+providers keep their provenance and receive no inferred packaged home.
 
 A lease cancels its consumer result immediately and suppresses later callbacks.
 Last-interest cancellation signals the installer, kills/reaps its owned child,
@@ -252,7 +275,8 @@ Progress counts actual verified archive bytes and tree file bytes, with actual
 verified entry counts in the tree message. Extraction and executable verification
 report stages with unknown totals; stage completion is not overall readiness.
 Focused source tests exercise real `ditto`, signed arm64 fixture preservation,
-corruption, paths/links/modes, immutable reuse, concurrent publishers, revision
+corruption, native target/binding tampering, relocation, paths/links/modes,
+per-child homes, immutable reuse, concurrent publishers, revision
 replacement, cancellation and cleanup. These checks do not establish native
 sandboxed Python launch, real MLX/BookNLP behavior, first-use responsiveness,
 fresh launch-to-emitted-audio timing or human listening; those remain separate
@@ -262,7 +286,7 @@ The build-owned relocated staging tree omits a CPython bytecode cache only when
 its corresponding `.py` source is present. Sourceless modules, source packages,
 native code/signatures and licenses remain. This explicit embed-script option
 reduces duplicate resource bytes before the signed-tree manifest is generated;
-the packaging API is otherwise read-only. The helper validates contained links
+the packaging input is otherwise read-only. The helper validates contained links
 before omission, and uses maintained ZIP compression at level nine.
 
 MLX model startup loads the voice catalog metadata without materializing every

@@ -362,12 +362,23 @@ class MacosCandidateTest < Minitest::Test
     end
     runtimes = File.join(@app, 'Contents/Resources/python-runtimes')
     FileUtils.mkdir_p(runtimes)
+    native_fixture = File.join(@root, 'native-fixture')
+    source_fixture = native_fixture + '.c'
+    File.write(source_fixture, 'int main(void) { return 0; }')
+    PackagedPythonRuntime.capture('/usr/bin/clang', '-arch', 'arm64', source_fixture, '-o', native_fixture)
+    PackagedPythonRuntime.capture('/usr/bin/codesign', '--force', '--sign', '-', native_fixture)
     PackagedPythonRuntime::IDS.each do |id|
       archive = File.join(runtimes, id + '.zip')
       File.write(archive, 'archive bytes; manifest admission fixture only')
-      value = { 'schema' => 1, 'policy' => PackagedPythonRuntime::POLICY, 'runtimeId' => id,
+      native_root = "python-runtimes/#{id}-native"
+      native_path = File.join(@app, 'Contents/Resources', native_root, 'bin/python')
+      FileUtils.mkdir_p(File.dirname(native_path))
+      FileUtils.copy_file(native_fixture, native_path, true)
+      value = { 'schema' => 2, 'policy' => PackagedPythonRuntime::POLICY, 'runtimeId' => id,
                 'python' => 'Python fixture', 'packages' => [], 'executable' => 'bin/python',
-                'entries' => [{ 'path' => 'bin/python', 'type' => 'file', 'mode' => 0o755, 'size' => 1, 'sha256' => 'f' * 64 }] }
+                'nativeRoot' => native_root,
+                'entries' => [{ 'path' => 'bin/python', 'type' => 'bundledNative', 'bundlePath' => "#{native_root}/bin/python",
+                                'mode' => 0o755, 'size' => File.size(native_path), 'sha256' => Digest::SHA256.file(native_path).hexdigest }] }
       value['signedTreeDigest'] = Digest::SHA256.hexdigest(JSON.generate(PackagedPythonRuntime.identity(value)))
       value['archive'] = MacosCandidate.file_identity(archive)
       File.write(File.join(runtimes, id + '.json'), JSON.generate(value))

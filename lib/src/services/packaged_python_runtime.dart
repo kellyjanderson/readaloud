@@ -8,8 +8,19 @@ import 'package:archive/archive_io.dart';
 import 'package:crypto/crypto.dart';
 import 'package:path/path.dart' as p;
 
-const _policy = 'signed-standalone-ditto-v1';
+const _policy = 'bundled-native-data-view-v2';
 const _runtimeIds = {'mlx', 'modernbooknlp'};
+
+/// Exact packaged code and its immutable data view. Only the owning Python
+/// child receives [pythonHome]; this never changes the application environment.
+class VerifiedPythonRuntime {
+  const VerifiedPythonRuntime({
+    required this.executable,
+    required this.pythonHome,
+  });
+  final String executable;
+  final String pythonHome;
+}
 
 class PackagedRuntimeCancelled implements Exception {
   const PackagedRuntimeCancelled();
@@ -18,8 +29,9 @@ class PackagedRuntimeCancelled implements Exception {
 /// One consumer interest. Cancellation settles the consumer immediately; drain
 /// waits for owned extraction/validation cleanup if this was the last interest.
 class PackagedRuntimeLease {
-  PackagedRuntimeLease._(this.executable, this._release);
-  final Future<String> executable;
+  PackagedRuntimeLease._(this.runtime, this._release);
+  final Future<VerifiedPythonRuntime> runtime;
+  Future<String> get executable => runtime.then((value) => value.executable);
   final Future<void> Function() _release;
   Future<void>? _released;
   Future<void> cancelAndDrain() => _released ??= _release();
@@ -61,7 +73,7 @@ class PackagedPythonRuntimeOwner {
         'Runtime installer is draining or consumer limit reached. Retry.',
       );
     }
-    final result = Completer<String>();
+    final result = Completer<VerifiedPythonRuntime>();
     final interest = _Interest(consumerRevision, result, onProgress);
     selected.interests.add(interest);
     // Consume errors even when the caller cancels before awaiting the result.
@@ -156,10 +168,16 @@ class PackagedPythonRuntimeOwner {
           for (final interest in List<_Interest>.of(attempt.interests)) {
             _project(attempt, interest);
           }
-        } else if (event is Map && event['result'] is String) {
+        } else if (event is Map && event['result'] is Map) {
           for (final interest in attempt.interests) {
             if (!interest.result.isCompleted) {
-              interest.result.complete(event['result'] as String);
+              final value = event['result'] as Map;
+              interest.result.complete(
+                VerifiedPythonRuntime(
+                  executable: value['executable'] as String,
+                  pythonHome: value['pythonHome'] as String,
+                ),
+              );
             }
           }
           break;
@@ -207,7 +225,7 @@ class PackagedPythonRuntimeOwner {
 class _Interest {
   _Interest(this.revision, this.result, this.onProgress);
   final String revision;
-  final Completer<String> result;
+  final Completer<VerifiedPythonRuntime> result;
   final void Function(Map<String, dynamic>)? onProgress;
 }
 
@@ -263,7 +281,11 @@ class _Installer {
     });
   }
 
-  Future<String> hash(File file, {bool archive = false}) async {
+  Future<String> hash(
+    File file, {
+    bool archive = false,
+    String? nativeLabel,
+  }) async {
     final output = _DigestSink();
     final sink = sha256.startChunkedConversion(output);
     var completed = 0;
@@ -273,10 +295,13 @@ class _Installer {
       check();
       sink.add(bytes);
       completed += bytes.length;
-      if (archive && DateTime.now().difference(last).inMilliseconds >= 100) {
+      if ((archive || nativeLabel != null) &&
+          DateTime.now().difference(last).inMilliseconds >= 100) {
         progress(
-          'runtimeArchive',
-          'Verifying packaged runtime archive',
+          archive ? 'runtimeArchive' : 'runtimeNativeFile',
+          archive
+              ? 'Verifying packaged runtime archive'
+              : 'Verifying bundled native $nativeLabel',
           completed: completed,
           total: total,
         );
@@ -363,7 +388,8 @@ Future<void> _installRuntime(Map<String, Object> args) async {
   });
   events.send(control.sendPort);
   Directory? staging;
-  String? result, failure;
+  Map<String, String>? result;
+  String? failure;
   try {
     final id = args['runtimeId'] as String;
     final resources = args['resources'] as String;
@@ -390,13 +416,15 @@ Future<void> _installRuntime(Map<String, Object> args) async {
         'python',
         'packages',
         'executable',
+        'nativeRoot',
         'entries',
       ])
         key: manifest[key],
     };
-    if (manifest['schema'] != 1 ||
+    if (manifest['schema'] != 2 ||
         manifest['policy'] != _policy ||
         manifest['runtimeId'] != id ||
+        manifest['nativeRoot'] != 'python-runtimes/$id-native' ||
         !RegExp(r'^[a-f0-9]{64}$').hasMatch(digest) ||
         sha256.convert(utf8.encode(jsonEncode(identity))).toString() !=
             digest ||
@@ -413,7 +441,7 @@ Future<void> _installRuntime(Map<String, Object> args) async {
       final type = entry['type'];
       if (!_safePath(path) ||
           (previous != null && previous.compareTo(path) >= 0) ||
-          !['file', 'directory', 'link'].contains(type) ||
+          !['file', 'directory', 'link', 'bundledNative'].contains(type) ||
           entry['mode'] is! int ||
           (entry['mode'] as int) < 0 ||
           (entry['mode'] as int) > 511) {
@@ -423,11 +451,15 @@ Future<void> _installRuntime(Map<String, Object> args) async {
       }
       previous = path;
       byPath[path] = entry;
-      if (type == 'file' &&
+      if ((type == 'file' || type == 'bundledNative') &&
           (entry['size'] is! int ||
               (entry['size'] as int) < 0 ||
               !RegExp(r'^[a-f0-9]{64}$').hasMatch('${entry['sha256']}'))) {
         throw FormatException('Invalid runtime file identity: $path');
+      }
+      if (type == 'bundledNative' &&
+          entry['bundlePath'] != '${manifest['nativeRoot']}/$path') {
+        throw FormatException('Invalid bundled native binding: $path');
       }
       if (type == 'link') {
         final target = entry['target'] as String;
@@ -455,21 +487,101 @@ Future<void> _installRuntime(Map<String, Object> args) async {
     }
     final executable = manifest['executable'] as String;
     if (!_safePath(executable) ||
-        byPath[executable]?['type'] != 'file' ||
+        byPath[executable]?['type'] != 'bundledNative' ||
         ((byPath[executable]!['mode'] as int) & 73) == 0) {
       throw const FormatException(
         'Runtime interpreter is not an executable file.',
       );
     }
+    final canonicalResources = await Directory(
+      resources,
+    ).resolveSymbolicLinks();
+    final nativeRoot = Directory(
+      p.join(resources, manifest['nativeRoot'] as String),
+    );
+    if (await FileSystemEntity.type(nativeRoot.path, followLinks: false) !=
+        FileSystemEntityType.directory) {
+      throw StateError(
+        'Missing or linked bundled native root. Reinstall this application.',
+      );
+    }
+    final canonicalNative = await nativeRoot.resolveSymbolicLinks();
+    if (!p.isWithin(canonicalResources, canonicalNative)) {
+      throw StateError('Bundled native root escapes application resources.');
+    }
+    final nativeTargets = <String, String>{};
+    final nativeEntries = entries
+        .where((entry) => entry['type'] == 'bundledNative')
+        .toList();
+    final nativeInventory = <String>{};
+    await for (final item in nativeRoot.list(
+      recursive: true,
+      followLinks: false,
+    )) {
+      installer.check();
+      if (await FileSystemEntity.type(item.path, followLinks: false) !=
+          FileSystemEntityType.directory) {
+        nativeInventory.add(
+          p
+              .relative(item.path, from: nativeRoot.path)
+              .split(p.separator)
+              .join('/'),
+        );
+      }
+    }
+    if (nativeInventory.length != nativeEntries.length) {
+      throw StateError(
+        'Undeclared or missing bundled native files. Reinstall this application.',
+      );
+    }
+    for (final entry in nativeEntries) {
+      installer.check();
+      final relative = entry['path'] as String;
+      final path = p.join(resources, entry['bundlePath'] as String);
+      final canonical = await File(path).resolveSymbolicLinks();
+      final stat = await FileStat.stat(path);
+      if (!nativeInventory.contains(relative) ||
+          await FileSystemEntity.type(path, followLinks: false) !=
+              FileSystemEntityType.file ||
+          !p.isWithin(canonicalNative, canonical) ||
+          stat.mode & 4095 != entry['mode'] ||
+          stat.size != entry['size'] ||
+          await installer.hash(File(path), nativeLabel: relative) !=
+              entry['sha256']) {
+        throw StateError(
+          'Bundled native content/type/mode mismatch: $relative. Reinstall this application.',
+        );
+      }
+      // Parent links are forbidden too, even if their target remains contained.
+      var ancestor = p.dirname(path);
+      while (ancestor != nativeRoot.path) {
+        if (await FileSystemEntity.type(ancestor, followLinks: false) !=
+            FileSystemEntityType.directory) {
+          throw StateError('Linked bundled native parent: $relative');
+        }
+        ancestor = p.dirname(ancestor);
+      }
+      nativeTargets[relative] = canonical;
+      installer.progress(
+        'runtimeNative',
+        'Verified ${nativeTargets.length} of ${nativeEntries.length} bundled $id native targets',
+        completed: nativeTargets.length,
+        total: nativeEntries.length,
+        unit: 'entries',
+      );
+    }
+    final bundleIdentity = sha256
+        .convert(utf8.encode(canonicalResources))
+        .toString();
     final parent = Directory(
-      p.join(args['support'] as String, 'python-runtimes', 'v1', id),
+      p.join(args['support'] as String, 'python-runtimes', 'v2', id),
     );
     // Reject existing links anywhere below the application-owned support root.
     final supportPath = args['support'] as String;
     for (final directory in [
       Directory(supportPath),
       Directory(p.join(supportPath, 'python-runtimes')),
-      Directory(p.join(supportPath, 'python-runtimes', 'v1')),
+      Directory(p.join(supportPath, 'python-runtimes', 'v2')),
       parent,
     ]) {
       final type = await FileSystemEntity.type(
@@ -488,7 +600,7 @@ Future<void> _installRuntime(Map<String, Object> args) async {
         FileSystemEntityType.directory) {
       throw StateError('Runtime publication parent is not a directory.');
     }
-    final published = Directory(p.join(parent.path, digest));
+    final published = Directory(p.join(parent.path, '$digest-$bundleIdentity'));
     Future<void> verify(Directory tree, {required bool receipt}) async {
       installer.progress(
         'runtimeInventory',
@@ -523,13 +635,36 @@ Future<void> _installRuntime(Map<String, Object> args) async {
         installer.check();
         final path = p.join(tree.path, entry['path'] as String);
         final kind = await FileSystemEntity.type(path, followLinks: false);
-        if (entry['type'] == 'link') {
+        if (entry['type'] == 'bundledNative') {
+          if (kind != FileSystemEntityType.link ||
+              await Link(path).target() != nativeTargets[entry['path']] ||
+              await Link(path).resolveSymbolicLinks() !=
+                  nativeTargets[entry['path']]) {
+            throw StateError('Runtime native link mismatch: $path');
+          }
+        } else if (entry['type'] == 'link') {
           if (kind != FileSystemEntityType.link ||
               await Link(path).target() != entry['target']) {
             throw StateError('Runtime link mismatch: $path');
           }
           final resolved = await Link(path).resolveSymbolicLinks();
-          if (!p.isWithin(canonicalTree, resolved)) {
+          // Resolve the declared logical chain, admitting only its exact final
+          // native entry. A link to any other external target fails closed.
+          var logical = entry['path'] as String;
+          final visited = <String>{};
+          while (byPath[logical]?['type'] == 'link') {
+            if (!visited.add(logical)) {
+              throw StateError('Cyclic runtime link: $path');
+            }
+            logical = p.posix.normalize(
+              p.posix.join(
+                p.posix.dirname(logical),
+                byPath[logical]!['target'] as String,
+              ),
+            );
+          }
+          if (!p.isWithin(canonicalTree, resolved) &&
+              nativeTargets[logical] != resolved) {
             throw StateError('Runtime link escapes: $path');
           }
         } else {
@@ -566,7 +701,7 @@ Future<void> _installRuntime(Map<String, Object> args) async {
         'Verifying signed arm64 $id interpreter',
       );
       if (args['verifyExecutable'] == true) {
-        final path = p.join(tree.path, executable);
+        final path = nativeTargets[executable]!;
         // lipo is an xcrun shim and cannot run inside an App Sandbox. The
         // system file inspector requires no developer toolchain. Admit only
         // one thin arm64 executable, never a universal/non-Mach-O input.
@@ -593,7 +728,9 @@ Future<void> _installRuntime(Map<String, Object> args) async {
           throw StateError('Invalid runtime completion receipt.');
         }
         final value = jsonDecode(await receiptFile.readAsString());
-        if (value['policy'] != _policy || value['signedTreeDigest'] != digest) {
+        if (value['policy'] != _policy ||
+            value['signedTreeDigest'] != digest ||
+            value['bundleIdentity'] != bundleIdentity) {
           throw StateError('Invalid runtime completion receipt.');
         }
       }
@@ -638,6 +775,7 @@ Future<void> _installRuntime(Map<String, Object> args) async {
           if (!_safePath(name) ||
               !seen.add(name) ||
               entry == null ||
+              entry['type'] == 'bundledNative' ||
               (member.isSymbolicLink
                       ? 'link'
                       : member.isDirectory
@@ -651,7 +789,7 @@ Future<void> _installRuntime(Map<String, Object> args) async {
             throw FormatException('Unsafe/mismatched ZIP member: $name');
           }
         }
-        if (seen.length != entries.length) {
+        if (seen.length != entries.length - nativeEntries.length) {
           throw const FormatException(
             'ZIP inventory differs from signed manifest.',
           );
@@ -673,10 +811,23 @@ Future<void> _installRuntime(Map<String, Object> args) async {
         archive.path,
         staging.path,
       ]);
+      for (final entry in nativeEntries) {
+        installer.check();
+        final path = p.join(staging.path, entry['path'] as String);
+        if (await FileSystemEntity.type(path, followLinks: false) !=
+            FileSystemEntityType.notFound) {
+          throw StateError('Native entry was present in data archive: $path');
+        }
+        await Link(path).create(nativeTargets[entry['path']]!);
+      }
       await verify(staging, receipt: false);
       installer.progress('runtimePublish', 'Publishing verified $id runtime');
       await File(p.join(staging.path, '.complete.json')).writeAsString(
-        jsonEncode({'policy': _policy, 'signedTreeDigest': digest}),
+        jsonEncode({
+          'policy': _policy,
+          'signedTreeDigest': digest,
+          'bundleIdentity': bundleIdentity,
+        }),
         flush: true,
       );
       installer.check();
@@ -690,7 +841,10 @@ Future<void> _installRuntime(Map<String, Object> args) async {
       }
     }
     installer.check();
-    result = p.join(published.path, executable);
+    result = {
+      'executable': nativeTargets[executable]!,
+      'pythonHome': published.path,
+    };
   } catch (error) {
     failure = '$error';
   } finally {

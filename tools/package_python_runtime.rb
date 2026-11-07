@@ -5,11 +5,12 @@ require 'digest'
 require 'find'
 require 'fileutils'
 require 'open3'
+require 'tmpdir'
 
 # Build-time only: input is the relocated, signed standalone tree, never a venv.
 # The adjacent manifest and archive become trusted resources of the signed app.
 module PackagedPythonRuntime
-  POLICY = 'signed-standalone-ditto-v1'
+  POLICY = 'bundled-native-data-view-v2'
   IDS = %w[mlx modernbooknlp].freeze
   def self.capture(*args)
     output, status = Open3.capture2e(*args)
@@ -44,7 +45,39 @@ module PackagedPythonRuntime
   end
 
   def self.identity(manifest)
-    manifest.slice('policy', 'runtimeId', 'python', 'packages', 'executable', 'entries')
+    manifest.slice('policy', 'runtimeId', 'python', 'packages', 'executable', 'nativeRoot', 'entries')
+  end
+
+  MACHO_MAGICS = %w[feedface cefaedfe feedfacf cffaedfe cafebabe bebafeca cafebabf bfbafeca].freeze
+  def self.macho?(path)
+    MACHO_MAGICS.include?(File.binread(path, 4).unpack1('H*'))
+  end
+
+  def self.native?(root, entry, executable)
+    return false unless entry['type'] == 'file'
+    path = File.join(root, entry.fetch('path'))
+    code = macho?(path)
+    if (entry['path'] == executable || entry['path'].match?(/(?:\.so(?:\.\d+)*|\.dylib)\z/)) && !code
+      raise "Expected Mach-O native code: #{entry['path']}"
+    end
+    code || entry['path'].end_with?('.metallib')
+  end
+
+  def self.verify_native(path)
+    return unless macho?(path) # Metal resources are bound as adjacent native data.
+    raise "Native code must be arm64-only: #{path}" unless capture('/usr/bin/lipo', '-archs', path) == 'arm64'
+    capture('/usr/bin/codesign', '--verify', '--strict', path)
+  end
+
+  def self.sign_native(root, identity, entitlements, executable)
+    entries(root).each do |entry|
+      next unless native?(root, entry, executable)
+      path = File.join(root, entry.fetch('path'))
+      next unless macho?(path)
+      args = ['/usr/bin/codesign', '--force', '--sign', identity]
+      args += ['--entitlements', entitlements] if entry['path'] == executable
+      capture(*args, path)
+    end
   end
 
   # Only the build-owned relocated tree may be passed here. Bytecode is a cache
@@ -69,13 +102,28 @@ module PackagedPythonRuntime
       path = File.join(resources, 'python-runtimes', id + '.json')
       raise "Missing/oversized packaged runtime manifest: #{id}" unless File.file?(path) && File.size(path).between?(1, 32 * 1024 * 1024)
       manifest = JSON.parse(File.read(path))
-      valid = manifest['schema'] == 1 && manifest['policy'] == POLICY && manifest['runtimeId'] == id &&
+      valid = manifest['schema'] == 2 && manifest['policy'] == POLICY && manifest['runtimeId'] == id &&
+        manifest['nativeRoot'] == "python-runtimes/#{id}-native" &&
         manifest['entries'].is_a?(Array) && !manifest['entries'].empty? && manifest['entries'].size <= 100_000 &&
         manifest['signedTreeDigest'] == Digest::SHA256.hexdigest(JSON.generate(identity(manifest)))
       raise "Invalid packaged runtime identity: #{id}" unless valid
       archive = File.join(resources, 'python-runtimes', id + '.zip')
       expected = manifest.fetch('archive')
       raise "Missing/corrupt packaged runtime archive: #{id}" unless File.file?(archive) && File.size(archive) == expected['size'] && Digest::SHA256.file(archive).hexdigest == expected['sha256']
+      native_root = File.join(resources, manifest.fetch('nativeRoot'))
+      raise "Linked native root: #{id}" if File.symlink?(native_root)
+      natives = manifest.fetch('entries').select { |entry| entry['type'] == 'bundledNative' }
+      expected_paths = natives.map { |entry| entry.fetch('path') }.sort
+      actual = entries(native_root).reject { |entry| entry['type'] == 'directory' }
+      raise "Undeclared/missing native member: #{id}" unless actual.map { |entry| entry['path'] } == expected_paths
+      natives.each do |entry|
+        path = File.join(resources, entry.fetch('bundlePath'))
+        raise "Invalid native binding: #{id}" unless entry['bundlePath'] == "#{manifest['nativeRoot']}/#{entry['path']}" &&
+          !File.symlink?(path) && File.file?(path) && File.realpath(path).start_with?(File.realpath(native_root) + '/') &&
+          File.size(path) == entry['size'] && File.stat(path).mode & 0o777 == entry['mode'] && Digest::SHA256.file(path).hexdigest == entry['sha256']
+        verify_native(path)
+      end
+      raise "Interpreter is not bundled native: #{id}" unless natives.any? { |entry| entry['path'] == manifest['executable'] && macho?(File.join(native_root, entry['path'])) }
       expanded = File.join(resources, id == 'mlx' ? 'mlx-python' : 'modernbooknlp-python')
       raise "Obsolete expanded runtime remains: #{id}" if File.exist?(expanded) || File.symlink?(expanded)
       [id, { 'signed_tree_digest' => manifest['signedTreeDigest'], 'python' => manifest['python'], 'packages' => manifest['packages'], 'archive' => expected }]
@@ -99,14 +147,35 @@ module PackagedPythonRuntime
         raise "Invalid package metadata: #{path}" if item.values.any?(&:nil?)
       end
     end.sort_by { |item| [item['name'], item['version']] }
-    manifest = { 'schema' => 1, 'policy' => POLICY, 'runtimeId' => runtime_id,
-                 'python' => python, 'packages' => packages, 'executable' => executable, 'entries' => all }
+    native_relative = "python-runtimes/#{runtime_id}-native"
+    native_entries = all.select { |entry| native?(root, entry, executable) }
+    native_entries.each { |entry| verify_native(File.join(root, entry.fetch('path'))) }
+    raise 'Interpreter must be a thin arm64 Mach-O executable' unless capture('/usr/bin/file', '-b', File.join(root, executable)) == 'Mach-O 64-bit executable arm64'
+    logical = all.map do |entry|
+      native_entries.include?(entry) ? entry.merge('type' => 'bundledNative', 'bundlePath' => "#{native_relative}/#{entry['path']}") : entry
+    end
+    manifest = { 'schema' => 2, 'policy' => POLICY, 'runtimeId' => runtime_id,
+                 'python' => python, 'packages' => packages, 'executable' => executable, 'nativeRoot' => native_relative, 'entries' => logical }
     manifest['signedTreeDigest'] = Digest::SHA256.hexdigest(JSON.generate(identity(manifest)))
     FileUtils.mkdir_p(output)
     archive = File.join(output, runtime_id + '.zip')
     temporary = archive + ".#{Process.pid}.zip"
     begin
-      capture('/usr/bin/ditto', '-c', '-k', '--zlibCompressionLevel', '9', '--norsrc', '--noextattr', root, temporary)
+      native_root = File.join(output, runtime_id + '-native')
+      # These are build-owned outputs, never source or published runtime views.
+      FileUtils.rm_rf(native_root)
+      FileUtils.mkdir_p(native_root)
+      Dir.mktmpdir('readaloud-runtime-data-') do |data|
+        capture('/usr/bin/ditto', root, data)
+        native_entries.each do |entry|
+          relative = entry.fetch('path')
+          target = File.join(native_root, relative)
+          FileUtils.mkdir_p(File.dirname(target))
+          FileUtils.copy_file(File.join(root, relative), target, true)
+          File.unlink(File.join(data, relative))
+        end
+        capture('/usr/bin/ditto', '-c', '-k', '--zlibCompressionLevel', '9', '--norsrc', '--noextattr', data, temporary)
+      end
       raise 'Signed input changed during packaging' unless entries(root) == all
       manifest['archive'] = { 'size' => File.size(temporary), 'sha256' => Digest::SHA256.file(temporary).hexdigest }
       File.rename(temporary, archive)
@@ -119,6 +188,12 @@ module PackagedPythonRuntime
 end
 
 if $PROGRAM_NAME == __FILE__
+  if ARGV.first == '--sign-native'
+    ARGV.shift
+    abort 'Usage: --sign-native ROOT IDENTITY ENTITLEMENTS EXECUTABLE' unless ARGV.size == 4
+    PackagedPythonRuntime.sign_native(*ARGV)
+    exit
+  end
   omit_bytecode = ARGV.first == '--omit-redundant-bytecode'
   ARGV.shift if omit_bytecode
   abort 'Usage: package_python_runtime.rb [--omit-redundant-bytecode] ROOT ID EXECUTABLE OUTPUT' unless ARGV.size == 4

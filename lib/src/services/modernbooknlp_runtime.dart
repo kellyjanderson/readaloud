@@ -32,7 +32,7 @@ Future<ModernBookNlpProvider> createModernBookNlpProvider({
     }),
   );
   try {
-    final python = await lease.executable;
+    final runtime = await lease.runtime;
     if (obsolete) throw const PackagedRuntimeCancelled();
     final root = Directory(p.join(support.path, 'modernbooknlp'));
     final helpers = Directory(p.join(root.path, 'helpers'));
@@ -50,7 +50,8 @@ Future<ModernBookNlpProvider> createModernBookNlpProvider({
     }
     if (obsolete) throw const PackagedRuntimeCancelled();
     return ModernBookNlpProvider(
-      pythonPath: python,
+      pythonPath: runtime.executable,
+      pythonHome: runtime.pythonHome,
       helperPath: p.join(helpers.path, 'modernbooknlp_worker.py'),
       runtimePath: p.join(root.path, 'models'),
     );

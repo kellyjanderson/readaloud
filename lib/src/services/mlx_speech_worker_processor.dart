@@ -169,6 +169,7 @@ class MlxSpeechWorkerChunkProcessor
   String? _modelRoot;
   String? _helperPath;
   String? _resolvedPythonPath;
+  String? _resolvedPythonHome;
   PackagedRuntimeLease? _runtimeLease;
   String? _modelIdentity;
   bool supportsNativeScenes = false;
@@ -301,6 +302,7 @@ class MlxSpeechWorkerChunkProcessor
     if (_closed) throw StateError('MLX inference owner is closed.');
     final worker = _process ??= MlxTtsPythonProcess(
       pythonPath: _resolvedPythonPath!,
+      pythonHome: _resolvedPythonHome,
       helperPath: _helperPath!,
       privateCacheDirectory: Directory(
         '${mlxRoot.path}${Platform.pathSeparator}runtime-cache',
@@ -414,9 +416,10 @@ class MlxSpeechWorkerChunkProcessor
       },
     );
     try {
-      final executable = await lease.executable;
+      final runtime = await lease.runtime;
       if (_closed) throw StateError('MLX inference owner is closed.');
-      return executable;
+      _resolvedPythonHome = runtime.pythonHome;
+      return runtime.executable;
     } finally {
       await lease.cancelAndDrain();
       if (identical(_runtimeLease, lease)) _runtimeLease = null;
@@ -614,6 +617,7 @@ class MlxSpeechWorkerChunkProcessor
       String? publishedAudioPath;
       final worker = _process ??= MlxTtsPythonProcess(
         pythonPath: _resolvedPythonPath ?? pythonPath,
+        pythonHome: _resolvedPythonHome,
         helperPath: _helperPath ?? '',
         privateCacheDirectory: Directory(
           '${_modelRoot ?? ''}${Platform.pathSeparator}runtime-cache',
@@ -747,9 +751,11 @@ class MlxTtsPythonProcess {
     required this.pythonPath,
     required this.helperPath,
     required this.privateCacheDirectory,
+    this.pythonHome,
     this.memorySampler,
   });
   final String pythonPath;
+  final String? pythonHome;
   final String helperPath;
   final Directory privateCacheDirectory;
   final Future<int> Function(int childPid)? memorySampler;
@@ -930,6 +936,7 @@ class MlxTtsPythonProcess {
       workingDirectory: privateCacheDirectory.path,
       environment: {
         ...Platform.environment,
+        'PYTHONHOME': ?pythonHome,
         'PYTHONUNBUFFERED': '1',
         'PYTHONDONTWRITEBYTECODE': '1',
         'HF_HUB_CACHE': '${privateCacheDirectory.path}/hub',

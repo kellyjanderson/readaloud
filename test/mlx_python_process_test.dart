@@ -18,6 +18,7 @@ loaded=false
 STDIN.each_line do |line|
   r=JSON.parse(line)
   if r['command']=='load'
+    File.write(ARGV[0] || 'python-home',ENV.fetch('PYTHONHOME','unset'))
     loaded=true
     puts JSON.generate(id:r['id'],ok:true,modelIdentity:'pinned-model')
   else
@@ -98,6 +99,30 @@ end
     await expectLater(synth('malformed'), throwsStateError);
     expect((await synth('recovered'))['ok'], true);
   });
+  test(
+    'packaged home is scoped to its child; explicit override has no inferred home',
+    () async {
+      final inherited = Platform.environment['PYTHONHOME'];
+      await load();
+      expect(
+        await File('${root.path}/cache/python-home').readAsString(),
+        inherited ?? 'unset',
+      );
+      await worker.shutdown();
+      worker = MlxTtsPythonProcess(
+        pythonPath: '${root.path}/python',
+        pythonHome: '${root.path}/verified-mlx-home',
+        helperPath: '${root.path}/worker.rb',
+        privateCacheDirectory: Directory('${root.path}/other-cache'),
+      );
+      await load();
+      expect(
+        await File('${root.path}/other-cache/python-home').readAsString(),
+        '${root.path}/verified-mlx-home',
+      );
+      expect(Platform.environment['PYTHONHOME'], inherited);
+    },
+  );
   test('child memory telemetry retires an over-budget runtime', () async {
     await load();
     sampledBytes = 99000000000;

@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:crypto/crypto.dart';
+import 'package:archive/archive_io.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:path/path.dart' as p;
 import 'package:read_aloud/src/services/packaged_python_runtime.dart';
@@ -25,6 +26,7 @@ void main() {
           'python',
           'packages',
           'executable',
+          'nativeRoot',
           'entries',
         ])
           key: value[key],
@@ -65,7 +67,7 @@ void main() {
     timeout: timeout,
   );
   Future<void> noStaging() async {
-    final root = Directory(p.join(support.path, 'python-runtimes/v1/mlx'));
+    final root = Directory(p.join(support.path, 'python-runtimes/v2/mlx'));
     if (await root.exists()) {
       expect(
         await root
@@ -89,9 +91,23 @@ void main() {
     resources = await Directory(p.join(temp.path, 'Resources')).create();
     support = Directory(p.join(temp.path, 'support'));
     await Directory(p.join(source.path, 'bin')).create();
-    await File(
+    final c = File(p.join(temp.path, 'fixture.c'));
+    await c.writeAsString(
+      '#include <stdio.h>\nint main(void) { puts("Python fixture"); return 0; }\n',
+    );
+    await command('/usr/bin/clang', [
+      '-arch',
+      'arm64',
+      c.path,
+      '-o',
       p.join(source.path, 'bin/python'),
-    ).writeAsString('#!/bin/sh\necho "Python fixture"\n');
+    ]);
+    await command('/usr/bin/codesign', [
+      '--force',
+      '--sign',
+      '-',
+      p.join(source.path, 'bin/python'),
+    ]);
     await command('/bin/chmod', ['755', p.join(source.path, 'bin/python')]);
     await File(
       p.join(source.path, 'license'),
@@ -110,13 +126,14 @@ void main() {
     () async {
       final progress = <Map<String, dynamic>>[];
       final lease = acquire(onProgress: progress.add);
-      final executable = await lease.executable;
+      final runtime = await lease.runtime;
+      final executable = runtime.executable;
       expect(
         (await Process.run(executable, ['--version'])).stdout,
         'Python fixture\n',
       );
       expect(
-        await Link(p.join(p.dirname(executable), 'alias')).target(),
+        await Link(p.join(runtime.pythonHome, 'bin/alias')).target(),
         'python',
       );
       expect((await File(executable).stat()).mode & 511, 493);
@@ -160,7 +177,10 @@ void main() {
       );
       await first.cancelAndDrain();
       await failure;
-      expect(await second.executable, contains('/python-runtimes/v1/mlx/'));
+      expect(
+        (await second.runtime).pythonHome,
+        contains('/python-runtimes/v2/mlx/'),
+      );
       await second.cancelAndDrain();
       expect(
         stages.where((s) => s == 'runtimeExtract').length,
@@ -187,16 +207,16 @@ void main() {
     'changed signed content produces a different path while preserving old readers',
     () async {
       final first = acquire();
-      final old = await first.executable;
+      final old = (await first.runtime).pythonHome;
       await first.cancelAndDrain();
       await File(
         p.join(source.path, 'license'),
       ).writeAsString('new preserved license');
       await package();
       final second = acquire();
-      expect(await second.executable, isNot(old));
+      expect((await second.runtime).pythonHome, isNot(old));
       expect(
-        await File(p.join(p.dirname(p.dirname(old)), 'license')).readAsString(),
+        await File(p.join(old, 'license')).readAsString(),
         'preserved license',
       );
       await second.cancelAndDrain();
@@ -212,6 +232,164 @@ void main() {
     await lease.cancelAndDrain();
     await noStaging();
   });
+  test(
+    'data archive excludes native code; home contains only declared native links',
+    () async {
+      final archive = ZipDecoder().decodeBytes(
+        await File(
+          p.join(resources.path, 'python-runtimes/mlx.zip'),
+        ).readAsBytes(),
+      );
+      expect(
+        archive.files.map((file) => file.name),
+        isNot(contains('bin/python')),
+      );
+      final lease = acquire();
+      final runtime = await lease.runtime;
+      expect(
+        runtime.executable,
+        contains('/Resources/python-runtimes/mlx-native/bin/python'),
+      );
+      expect(
+        await Link(p.join(runtime.pythonHome, 'bin/python')).target(),
+        runtime.executable,
+      );
+      expect(
+        await Link(
+          p.join(runtime.pythonHome, 'bin/alias'),
+        ).resolveSymbolicLinks(),
+        runtime.executable,
+      );
+      await lease.cancelAndDrain();
+    },
+  );
+  test('relocation publishes a new home without rewriting old links', () async {
+    final first = acquire();
+    final old = await first.runtime;
+    await first.cancelAndDrain();
+    final moved = Directory(p.join(temp.path, 'MovedResources'));
+    await command('/usr/bin/ditto', [resources.path, moved.path]);
+    resources = moved;
+    final second = acquire();
+    final current = await second.runtime;
+    expect(current.pythonHome, isNot(old.pythonHome));
+    expect(current.executable, startsWith(await moved.resolveSymbolicLinks()));
+    expect(
+      await Link(p.join(old.pythonHome, 'bin/python')).target(),
+      old.executable,
+    );
+    expect(
+      await Link(p.join(current.pythonHome, 'bin/python')).target(),
+      current.executable,
+    );
+    await second.cancelAndDrain();
+  });
+  test('changed native content changes complete runtime identity', () async {
+    final first = acquire();
+    final old = await first.runtime;
+    await first.cancelAndDrain();
+    final c = File(p.join(temp.path, 'changed.c'));
+    await c.writeAsString('int main(void) { return 42; }');
+    await command('/usr/bin/clang', [
+      '-arch',
+      'arm64',
+      c.path,
+      '-o',
+      p.join(source.path, 'bin/python'),
+    ]);
+    await command('/usr/bin/codesign', [
+      '--force',
+      '--sign',
+      '-',
+      p.join(source.path, 'bin/python'),
+    ]);
+    await package();
+    final second = acquire();
+    expect((await second.runtime).pythonHome, isNot(old.pythonHome));
+    await second.cancelAndDrain();
+  });
+  for (final corruption in [
+    'hash',
+    'mode',
+    'type',
+    'bundlePath',
+    'missing',
+    'extra',
+    'parent',
+  ]) {
+    test(
+      'bundled native $corruption fails even when reusing a published home',
+      () async {
+        final first = acquire();
+        final runtime = await first.runtime;
+        await first.cancelAndDrain();
+        final value = manifest();
+        final native = (value['entries'] as List)
+            .cast<Map<String, dynamic>>()
+            .singleWhere((entry) => entry['type'] == 'bundledNative');
+        final target = File(runtime.executable);
+        switch (corruption) {
+          case 'hash':
+            await target.writeAsString('changed code');
+          case 'mode':
+            await command('/bin/chmod', ['700', target.path]);
+          case 'type':
+            await target.delete();
+            await Link(target.path).create(p.join(source.path, 'bin/python'));
+          case 'bundlePath':
+            native['bundlePath'] = '../outside';
+            writeManifest(value);
+          case 'missing':
+            await target.delete();
+          case 'extra':
+            await File(
+              p.join(p.dirname(target.path), 'undeclared'),
+            ).writeAsString('unexpected');
+          case 'parent':
+            final directory = Directory(p.dirname(target.path));
+            final saved = '${directory.path}-saved';
+            await directory.rename(saved);
+            await Link(directory.path).create(saved);
+        }
+        final second = acquire();
+        await expectLater(second.runtime, throwsStateError);
+        await second.cancelAndDrain();
+        expect(await Directory(runtime.pythonHome).exists(), true);
+        await noStaging();
+      },
+    );
+  }
+  test(
+    'published native links cannot be redirected to an undeclared target',
+    () async {
+      final first = acquire();
+      final runtime = await first.runtime;
+      await first.cancelAndDrain();
+      final link = Link(p.join(runtime.pythonHome, 'bin/python'));
+      await link.delete();
+      await link.create(p.join(source.path, 'bin/python'));
+      final second = acquire();
+      await expectLater(second.runtime, throwsStateError);
+      await second.cancelAndDrain();
+    },
+  );
+  test(
+    'incomplete data archive with a matching archive hash fails inventory validation',
+    () async {
+      final value = manifest();
+      final archive = File(p.join(resources.path, 'python-runtimes/mlx.zip'));
+      await command('/usr/bin/zip', ['-d', archive.path, 'license']);
+      value['archive'] = {
+        'size': await archive.length(),
+        'sha256': sha256.convert(await archive.readAsBytes()).toString(),
+      };
+      writeManifest(value);
+      final lease = acquire();
+      await expectLater(lease.runtime, throwsStateError);
+      await lease.cancelAndDrain();
+      await noStaging();
+    },
+  );
   test('manifest digest mismatch is rejected', () async {
     final value = manifest()..['python'] = 'unrelated';
     writeManifest(value, identity: false);
@@ -261,9 +439,10 @@ void main() {
       'corrupt published $corruption fails without repair or replacement',
       () async {
         final first = acquire();
-        final executable = await first.executable;
+        final runtime = await first.runtime;
+        final executable = p.join(runtime.pythonHome, 'license');
         await first.cancelAndDrain();
-        final tree = Directory(p.dirname(p.dirname(executable)));
+        final tree = Directory(runtime.pythonHome);
         switch (corruption) {
           case 'file':
             await File(executable).writeAsString('corrupt');
@@ -290,7 +469,12 @@ void main() {
       },
     );
   }
-  for (final stage in ['runtimeArchive', 'runtimeExtract', 'runtimeTree']) {
+  for (final stage in [
+    'runtimeNative',
+    'runtimeArchive',
+    'runtimeExtract',
+    'runtimeTree',
+  ]) {
     test(
       'last-interest cancellation during $stage settles immediately and drains staging',
       () async {
@@ -382,7 +566,10 @@ void main() {
       );
       final second = acquire();
       await expectLater(first.executable, throwsStateError);
-      expect(await second.executable, contains('/python-runtimes/v1/mlx/'));
+      expect(
+        (await second.runtime).pythonHome,
+        contains('/python-runtimes/v2/mlx/'),
+      );
       await first.cancelAndDrain();
       await second.cancelAndDrain();
       await noStaging();

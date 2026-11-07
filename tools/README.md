@@ -105,6 +105,16 @@ This supplies a conservative upper bound for app-emitted speech, not physical
 speaker latency. Verify a complete candidate and fresh-profile provenance
 separately; a diagnostic build missing required runtimes cannot pass acceptance.
 
+Full candidates require both schema-2 packaged Python manifests, data ZIPs and
+native roots. Embed scripts classify Mach-O by content, sign all native code,
+retain adjacent Metal libraries in `Resources/python-runtimes/<id>-native/`,
+and archive only Python/data. The manifest binds exact post-sign code and data;
+the installer publishes a version-2 immutable data home with explicit links to
+the verified bundle. Each Python child receives only its own `PYTHONHOME`.
+No executable code is extracted or re-signed in Application Support. Source
+packaging checks remain separate from real sandboxed MLX/BookNLP qualification
+and fresh opening-to-emitted-speech timing.
+
 The combined target also accepts `runtime-cancel RUNTIME_ID RECEIPT.json` and
 `booknlp RECEIPT.json`. Use `run_packaged_runtime_smoke.rb APP_BUNDLE NEW_OUTPUT_DIRECTORY runtime-cancel mlx`
 (or `modernbooknlp`) to cancel real first-use extraction in an isolated sandbox.

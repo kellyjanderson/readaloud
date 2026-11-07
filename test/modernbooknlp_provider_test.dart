@@ -16,6 +16,7 @@ $stdout.sync=true
 STDIN.each_line do |line|
 r=JSON.parse(line)
 File.write(ARGV[0]+'/pid',Process.pid)
+File.write(ARGV[0]+'/python-home',ENV.fetch('PYTHONHOME','unset'))
 if r['text']=='block'
   sleep 30
 elsif r['text']=='oversize'
@@ -94,6 +95,30 @@ end
     );
     await reaped();
   });
+  test(
+    'BookNLP home belongs only to its child and injected override stays explicit',
+    () async {
+      final inherited = Platform.environment['PYTHONHOME'];
+      await provider.analyze(request('valid'));
+      expect(
+        await File('${root.path}/python-home').readAsString(),
+        inherited ?? 'unset',
+      );
+      await provider.close();
+      provider = ModernBookNlpProvider(
+        pythonPath: '${root.path}/python',
+        pythonHome: '${root.path}/verified-booknlp-home',
+        helperPath: '${root.path}/worker.rb',
+        runtimePath: root.path,
+      );
+      await provider.analyze(request('valid'));
+      expect(
+        await File('${root.path}/python-home').readAsString(),
+        '${root.path}/verified-booknlp-home',
+      );
+      expect(Platform.environment['PYTHONHOME'], inherited);
+    },
+  );
   test('oversized output is bounded and child is reaped', () async {
     await expectLater(provider.analyze(request('oversize')), throwsStateError);
     await reaped();

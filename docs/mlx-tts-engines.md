@@ -46,9 +46,15 @@ Python worker is bundled as a Flutter asset. Install the build's arm64 Python
 runtime and MLX packages once with `sh tools/install_mlx_tts_runtime.sh`.
 The Xcode embed phase assembles and signs the standalone interpreter/packages
 for sandbox inheritance outside the bundle, then packages its signed tree as
-`Resources/python-runtimes/mlx.zip` with an adjacent content manifest. It does
-not archive the build venv. First MLX use verifies and extracts this immutable
-resource into Application Support `python-runtimes/v1/mlx/<signed-tree-digest>/`.
+`Resources/python-runtimes/mlx.zip` with an adjacent schema-2 content manifest.
+All Mach-O code and Metal libraries remain signed/bound in the app under
+`Resources/python-runtimes/mlx-native/`; the ZIP contains only Python/data.
+It does not archive the build venv. First MLX use verifies the bundled targets
+and extracts data into an immutable Application Support view under
+`python-runtimes/v2/mlx/<signed-tree-digest>-<bundle-location-digest>/`, containing
+only explicit verified links to the app's native code. The bundled interpreter
+receives this view as its own `PYTHONHOME`. Moving the app creates a new view;
+changed/missing bundle code fails visibly. No native code runs from extraction.
 Archive/tree verification reports measured progress; extraction reports an
 explicit stage. Closing the resource owner cancels and drains installation.
 Model weights remain in the cache. The sandbox cannot execute the external
