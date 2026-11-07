@@ -1689,6 +1689,15 @@ class KokoroTtsEngine
             throw StateError('Non-contiguous or stale prepared range.');
           }
           rangeRequest = following;
+          _scenePublicationBindings = List.unmodifiable(
+            {
+              for (final binding in [
+                ..._scenePublicationBindings,
+                ...?following.preparedResources,
+              ])
+                binding.fingerprint: binding,
+            }.values,
+          );
           if (following.onRangeActive case final activate?) {
             _rangeActivations[following.sourceWordOffset] = activate;
           }
@@ -2181,7 +2190,8 @@ class KokoroTtsEngine
       return;
     }
     _playbackPins.pin(generation, chunkId, event.audioPath!);
-    final publicationRequest = _scenePublicationRequest;
+    final publicationRequest =
+        chunk.publicationRequest ?? _scenePublicationRequest;
     final publish = publicationRequest?.onRenderedScene;
     if (publish != null) {
       // Publication owns separate pins. Pause/reset may release playlist pins
@@ -2204,7 +2214,19 @@ class KokoroTtsEngine
             endWordIndex: chunk.endWordIndex,
             startOffset: chunk.startOffset,
             sceneTurns: chunk.sceneTurns,
-            preparedBindings: _scenePublicationBindings,
+            preparedBindings:
+                (publicationRequest?.preparedResources ??
+                        _scenePublicationBindings)
+                    .where(
+                      (binding) =>
+                          binding.fingerprint ==
+                              chunk.expectedBinding.fingerprint ||
+                          chunk.sceneTurns.any(
+                            (turn) =>
+                                turn.bindingFingerprint == binding.fingerprint,
+                          ),
+                    )
+                    .toList(),
             audioPath: event.audioPath!,
             duration: event.duration!,
             engineId: engineId,
@@ -2622,6 +2644,7 @@ class KokoroTtsEngine
 
     return _QueuedChunk(
       chunkId: '${failedChunk.chunkId}_recover_$sliceIndex',
+      publicationRequest: failedChunk.publicationRequest,
       expectedBinding: failedChunk.expectedBinding,
       synthesisIdentity: failedChunk.synthesisIdentity,
       synthesisRate: failedChunk.synthesisRate,
@@ -2799,6 +2822,7 @@ class KokoroTtsEngine
       );
       final translatedChunk = tokenization.translatedChunk!;
       final chunk = _QueuedChunk(
+        publicationRequest: request,
         chunkId: request.rangeSequence == 0
             ? spec.chunkId
             : 'range_${request.rangeSequence}_${spec.chunkId}',
@@ -2897,6 +2921,7 @@ class KokoroTtsEngine
       return _PreparedPlannedChunk(
         nextSearchOffset: prepared.nextSearchOffset,
         chunk: _QueuedChunk(
+          publicationRequest: request,
           chunkId: 'scene_${first.chunkId}',
           expectedBinding: first.expectedBinding,
           sceneTurns: envelope,
@@ -2960,6 +2985,7 @@ class KokoroTtsEngine
     final translatedChunk = tokenization.translatedChunk!;
     return _PreparedPlannedChunk(
       chunk: _QueuedChunk(
+        publicationRequest: request,
         chunkId: request.rangeSequence == 0
             ? spec.chunkId
             : 'range_${request.rangeSequence}_${spec.chunkId}',
@@ -3672,6 +3698,7 @@ class KokoroTtsEngine
 
 class _QueuedChunk {
   const _QueuedChunk({
+    this.publicationRequest,
     this.sceneTurns = const <NativeSpeechTurn>[],
     required this.chunkId,
     required this.expectedBinding,
@@ -3706,6 +3733,7 @@ class _QueuedChunk {
   });
 
   final List<NativeSpeechTurn> sceneTurns;
+  final TtsSpeakRequest? publicationRequest;
   final String chunkId;
   final PreparedVoiceBinding expectedBinding;
   final String synthesisIdentity;
@@ -3744,6 +3772,7 @@ class _QueuedChunk {
     BreakClass? boundaryClass,
   }) {
     return _QueuedChunk(
+      publicationRequest: publicationRequest,
       sceneTurns: sceneTurns,
       chunkId: chunkId ?? this.chunkId,
       expectedBinding: expectedBinding,

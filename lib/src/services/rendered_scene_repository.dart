@@ -107,6 +107,8 @@ class RenderedSceneRepository {
           'predecessorRawArtifactIdentity':
               scene.predecessorRawArtifactIdentity,
           'boundaryPolicyVersion': scene.boundaryPolicyVersion,
+          'boundaryClass': scene.boundaryClass,
+          'trailingSilenceMicros': scene.trailingSilenceMicros,
         },
         isCurrent: scene.isCurrent,
         cancelled: scene.cancelled,
@@ -150,6 +152,22 @@ class RenderedSceneRepository {
             'word': word,
             'intent': intent,
             'limit': maxScenes,
+          }, isCurrent: isCurrent))
+          as StoredRenderedScene?;
+
+  /// Playback already knows scene starts from its bounded source manifest.
+  /// Read only that span's versions; never enumerate a whole book to start audio.
+  Future<StoredRenderedScene?> sceneStartingAt(
+    String sourceId,
+    int startWord, {
+    bool Function()? isCurrent,
+  }) async =>
+      (await _execute({
+            'operation': 'read',
+            'sourceId': sourceId,
+            'word': startWord,
+            'exactStart': true,
+            'limit': 1,
           }, isCurrent: isCurrent))
           as StoredRenderedScene?;
 
@@ -336,6 +354,7 @@ Map<String, dynamic> _stageScene(Map<String, dynamic> r) {
           .toList()
         ..sort((a, b) => artifactIdentity(a).compareTo(artifactIdentity(b)));
   final rawDependencies = <String, dynamic>{
+    'canonicalDirections': (r['intent'] as Map)['canonicalDirections'],
     for (final key in [
       'text',
       'engineSpeakText',
@@ -403,6 +422,8 @@ Map<String, dynamic> _stageScene(Map<String, dynamic> r) {
       'rawArtifactIdentity': r['rawArtifactIdentity'],
       'predecessorRawArtifactIdentity': r['predecessorRawArtifactIdentity'],
       'boundaryPolicyVersion': r['boundaryPolicyVersion'],
+      'boundaryClass': r['boundaryClass'],
+      'trailingSilenceMicros': r['trailingSilenceMicros'],
       'bindings': r['bindings'],
     },
     for (final key in [
@@ -429,8 +450,9 @@ Map<String, dynamic> _stageScene(Map<String, dynamic> r) {
   if (utf8.encode(envelope).length > RenderedSceneRepository.maxMetadataBytes) {
     throw const FormatException('Scene metadata exceeds bounded size.');
   }
-  final directory = Directory('${r['root']}/scenes/${artifactIdentity(source)}')
-    ..createSync(recursive: true);
+  final directory = Directory(
+    '${r['root']}/scenes/${artifactIdentity(source)}/$start',
+  )..createSync(recursive: true);
   final nonce = List.generate(
     4,
     (_) => Random.secure().nextInt(1 << 32),
@@ -454,13 +476,16 @@ Map<String, dynamic> _stageScene(Map<String, dynamic> r) {
 Future<Map<String, dynamic>> _readScenes(Map<String, dynamic> r) async {
   final source = r['sourceId'] as String;
   final directory = Directory(
-    '${r['root']}/scenes/${artifactIdentity(source)}',
+    '${r['root']}/scenes/${artifactIdentity(source)}${r['exactStart'] == true ? '/${r['word']}' : ''}',
   );
   if (!directory.existsSync()) return {'scenes': <Object>[]};
   final store = AudioArtifactStore(Directory('${r['root']}/artifacts'));
   final selected = <String, Map<String, dynamic>>{};
   var count = 0;
-  await for (final entry in directory.list(followLinks: false)) {
+  await for (final entry in directory.list(
+    followLinks: false,
+    recursive: r['exactStart'] != true,
+  )) {
     if (entry is! File || !entry.path.endsWith('.json')) continue;
     if (++count > RenderedSceneRepository.maxScenes * 4) {
       throw const FormatException(

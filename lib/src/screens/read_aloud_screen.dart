@@ -224,6 +224,7 @@ class _ReadAloudScreenState extends State<ReadAloudScreen> {
     }
     if (widget.initialInputPaths.isNotEmpty) {
       await _controller.importFilePaths(widget.initialInputPaths);
+      await _controller.completeInitialIntake();
       return;
     }
     await WidgetsBinding.instance.endOfFrame;
@@ -231,6 +232,7 @@ class _ReadAloudScreenState extends State<ReadAloudScreen> {
       return;
     }
     await _controller.restoreLastOpenedDocument();
+    await _controller.completeInitialIntake();
   }
 
   bool _usesDesktopNativeMenus() {

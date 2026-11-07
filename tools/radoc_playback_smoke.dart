@@ -194,6 +194,15 @@ Future<void> main(List<String> args) async {
     if (!controller.hasPublishedAudio) throw StateError('No published audio');
     receipt['importCompleteMs'] = watch.elapsedMilliseconds;
     receipt['playRequestedMs'] = watch.elapsedMilliseconds;
+    final captureGate = Platform.environment['READALOUD_RADOC_CAPTURE_GATE'];
+    receipt['controlledCaptureGate'] = captureGate != null;
+    if (captureGate != null) {
+      stdout.writeln('RADOC_CAPTURE_WAITING');
+      await until(
+        () => File(captureGate).existsSync(),
+        'External capture readiness',
+      );
+    }
     unawaited(controller.startPlayback());
     await until(() => firstNativePositionAt != null, 'First native position');
     receipt['firstNativePositionUnixMicros'] = firstNativePositionAt;

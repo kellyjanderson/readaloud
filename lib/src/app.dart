@@ -22,7 +22,7 @@ class ReadAloudApp extends StatefulWidget {
 
 class _ReadAloudAppState extends State<ReadAloudApp> {
   late final ReaderController _controller =
-      widget.controller ?? ReaderController();
+      widget.controller ?? ReaderController(deferInitialSynthesis: true);
 
   ThemeData _buildLightTheme() {
     const tokens = ReadAloudThemeTokens.light;
