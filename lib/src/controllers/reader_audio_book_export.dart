@@ -135,7 +135,11 @@ extension ReaderAudioBookPersistence on ReaderController {
   /// Explicit publishing enumerates committed ranges sequentially. PCM and
   /// prepared graph serialization stay on their existing worker paths. A book
   /// with no rendered output retains the legacy JSON export route.
-  Future<File?> _exportAudioBookToPath(String outputPath, int revision) async {
+  Future<File?> _exportAudioBookToPath(
+    String outputPath,
+    int revision, {
+    bool force = false,
+  }) async {
     final intent = _bookIntent();
     final assignment = voiceAssignmentState.requestedRevision;
     final speed = currentSpeed;
@@ -165,7 +169,7 @@ extension ReaderAudioBookPersistence on ReaderController {
       }
     }
     _requireRevision(revision);
-    if (imported == null && stored.isEmpty) return null;
+    if (!force && imported == null && stored.isEmpty) return null;
     final stage = await Directory.systemTemp.createTemp('radoc-publish-');
     final transport = RadocAudioPackage(
       onProgress: (p) => _bookProgress(p, revision),
@@ -186,9 +190,6 @@ extension ReaderAudioBookPersistence on ReaderController {
       final members = <String, File>{};
       final ranges = <RadocPreparedRange>[];
       final count = _publicationSequence == 0 ? 1 : _publicationSequence;
-      final selections = Map<String, String>.of(
-        _characters.selections(_voicePreferenceDocumentId),
-      );
       var totalWords = 0;
       for (var i = 1; i <= count; i++) {
         _requireRevision(revision);
@@ -197,6 +198,13 @@ extension ReaderAudioBookPersistence on ReaderController {
             : await readPreparedRange(i);
         _requireRevision(revision);
         final document = range?.fragment ?? _document;
+        _characters.restoreDocument(
+          _voicePreferenceDocumentId,
+          document.characterCastRegistry,
+        );
+        final selections = Map<String, String>.of(
+          _characters.selections(_voicePreferenceDocumentId),
+        );
         final start = range?.range.wordStart ?? 0;
         final end = range?.range.wordEnd ?? document.wordCount;
         if (start != totalWords) {

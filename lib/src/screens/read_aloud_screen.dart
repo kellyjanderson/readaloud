@@ -26,6 +26,7 @@ enum _AppMenuAction {
   paste,
   sample,
   saveAudio,
+  saveBook,
   readerOptions,
   settings,
   liveFeed,
@@ -259,6 +260,12 @@ class _ReadAloudScreenState extends State<ReadAloudScreen> {
       const PopupMenuDivider(),
       const _OverflowMenuSectionLabel(label: 'Output'),
       PopupMenuItem<_AppMenuAction>(
+        value: _AppMenuAction.saveBook,
+        enabled:
+            !_controller.isExporting && _controller.hasCompleteDocumentSnapshot,
+        child: const Text('Save Audio Book'),
+      ),
+      PopupMenuItem<_AppMenuAction>(
         value: _AppMenuAction.saveAudio,
         enabled: !_controller.isExporting && _controller.canExportAudio,
         child: Text(_controller.isExporting ? 'Saving Audio...' : 'Save Audio'),
@@ -397,6 +404,18 @@ class _ReadAloudScreenState extends State<ReadAloudScreen> {
       PlatformMenuItemGroup(
         members: <PlatformMenuItem>[
           PlatformMenuItem(
+            label: 'Save Audio Book...',
+            shortcut: const SingleActivator(
+              LogicalKeyboardKey.keyS,
+              meta: true,
+            ),
+            onSelected:
+                !_controller.isExporting &&
+                    _controller.hasCompleteDocumentSnapshot
+                ? () => unawaited(_handleAppMenuAction(_AppMenuAction.saveBook))
+                : null,
+          ),
+          PlatformMenuItem(
             label: _controller.isExporting
                 ? 'Saving Audio...'
                 : 'Save Audio...',
@@ -451,6 +470,27 @@ class _ReadAloudScreenState extends State<ReadAloudScreen> {
     }
   }
 
+  Future<void> _saveBook() async {
+    try {
+      final picked = await FilePicker.platform.saveFile(
+        dialogTitle: 'Save Audio Book',
+        fileName:
+            '${_controller.document.title.replaceAll(RegExp(r'[\\/:*?"<>|]'), '_')}.radoc',
+        type: FileType.custom,
+        allowedExtensions: const ['radoc'],
+      );
+      if (picked == null || picked.trim().isEmpty) return;
+      await _controller.exportDocumentToPath(
+        picked.toLowerCase().endsWith('.radoc') ? picked : '$picked.radoc',
+        audioBook: true,
+      );
+    } catch (error) {
+      if (mounted) {
+        _controller.showStatusMessage('Could not save the audio book: $error');
+      }
+    }
+  }
+
   Future<void> _handleAppMenuAction(_AppMenuAction action) async {
     switch (action) {
       case _AppMenuAction.notices:
@@ -479,6 +519,12 @@ class _ReadAloudScreenState extends State<ReadAloudScreen> {
           return;
         }
         await _saveAudio();
+      case _AppMenuAction.saveBook:
+        if (_controller.isExporting ||
+            !_controller.hasCompleteDocumentSnapshot) {
+          return;
+        }
+        await _saveBook();
       case _AppMenuAction.readerOptions:
         await _showReaderOptionsSheet();
       case _AppMenuAction.settings:

@@ -121,7 +121,7 @@ Future<void> main(List<String> args) async {
       if (source is! UriAudioSource || source.uri.scheme != 'file') continue;
       final path = source.uri.toFilePath();
       if (!audioChecks.containsKey(path) && audioChecks.length < 256) {
-        audioChecks[path] = Isolate.run(() => _inspectWav(path)).then(
+        audioChecks[path] = _inspectWavOnWorker(path).then(
           (value) => value,
           onError: (Object error) => <String, Object?>{
             'path': path,
@@ -418,3 +418,6 @@ Future<Map<String, Object?>> _inspectWav(String path) async {
     await input.close();
   }
 }
+
+Future<Map<String, Object?>> _inspectWavOnWorker(String path) =>
+    Isolate.run(() => _inspectWav(path));

@@ -342,6 +342,8 @@ void main() {
     expect(find.text('Workspace'), findsNothing);
     expect(find.byType(PopupMenuDivider), findsAtLeastNWidgets(3));
     final document = controller.document;
+    await tester.ensureVisible(find.text('Open Source Notices'));
+    await tester.pumpAndSettle();
     await tester.tap(find.text('Open Source Notices'));
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 350));

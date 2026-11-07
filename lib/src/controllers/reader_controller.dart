@@ -753,6 +753,7 @@ class ReaderController extends ChangeNotifier {
   }
 
   Future<void> _voiceChoicesEdited() async {
+    _audioBook?.cancelRender();
     final initial = _isInitialVoiceBuffering;
     final retrying =
         _resumeAfterPreparation &&
@@ -1701,7 +1702,15 @@ class ReaderController extends ChangeNotifier {
       if (_voices.isEmpty) {
         throw StateError('No installed speech voices are available.');
       }
-      final initialVoice = _findVoiceById(_selectedVoiceId) ?? _voices.first;
+      final savedVoice = _findVoiceById(_selectedVoiceId);
+      if (_audioBook != null &&
+          _selectedVoiceId != null &&
+          savedVoice == null) {
+        throw StateError(
+          'Install the saved voice $_selectedVoiceId to render this passage.',
+        );
+      }
+      final initialVoice = savedVoice ?? _voices.first;
       _selectedVoiceId = initialVoice.id;
       _voiceSpeeds.putIfAbsent(_selectedVoiceId!, () => 1.0);
       await _ttsEngine.selectVoice(initialVoice);
@@ -2124,6 +2133,7 @@ class ReaderController extends ChangeNotifier {
   Future<void> startPlayback() async {
     if (_disposed) return;
     if (_audioBook != null && isDocumentPrepared) {
+      _audioBook?.cancelRender();
       _resumeAfterPreparation = true;
       ++_playbackIntent;
       _playbackStartPending = true;
@@ -2490,6 +2500,7 @@ class ReaderController extends ChangeNotifier {
   }
 
   Future<void> pausePlayback() async {
+    _audioBook?.cancelRender();
     unawaited(_audioBook?.package.cancelAndDrain());
     _pendingPlayUntilReady = false;
     final engine = _ttsEngine;
@@ -2809,6 +2820,7 @@ class ReaderController extends ChangeNotifier {
   }
 
   Future<void> _replaceEngine() async {
+    _synthesisInitialized = false;
     ++_startupRevision;
     ++_playbackIntent;
     _pendingPlayUntilReady = false;
@@ -3039,9 +3051,12 @@ class ReaderController extends ChangeNotifier {
   /// Exports a regular v4 snapshot that the normal Open Document route reads.
   /// Only a complete in-memory graph or complete committed checkpoint qualifies.
   /// Replacement/cancellation suppresses the atomic rename of a staged export.
-  Future<File?> exportDocumentToPath(String outputPath) async {
+  Future<File?> exportDocumentToPath(
+    String outputPath, {
+    bool audioBook = false,
+  }) async {
     if (_documentExportWork != null) return null;
-    final work = _exportDocumentToPath(outputPath);
+    final work = _exportDocumentToPath(outputPath, forceAudioBook: audioBook);
     _documentExportWork = work;
     try {
       return await work;
@@ -3050,7 +3065,10 @@ class ReaderController extends ChangeNotifier {
     }
   }
 
-  Future<File?> _exportDocumentToPath(String outputPath) async {
+  Future<File?> _exportDocumentToPath(
+    String outputPath, {
+    bool forceAudioBook = false,
+  }) async {
     if (!hasCompleteDocumentSnapshot || _isExporting) return null;
     final revision = _documentRevision;
     final assignments = Map<String, String>.unmodifiable(
@@ -3069,7 +3087,11 @@ class ReaderController extends ChangeNotifier {
         sourcePath: _currentDocumentPath,
       );
       _requireRevision(revision);
-      final audioBook = await _exportAudioBookToPath(outputPath, revision);
+      final audioBook = await _exportAudioBookToPath(
+        outputPath,
+        revision,
+        force: forceAudioBook,
+      );
       if (audioBook != null) return audioBook;
       final request = _activePreparationRequest;
       final repository = _preparation.repository;

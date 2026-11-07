@@ -64,7 +64,7 @@ File.open(File.join(output, 'app.log'), 'w') do |log|
       # Always attempt normal Quit, including native errors and timeouts. The
       # osascript child and every wait share the original 120-second deadline.
       unless status
-        quit_pid = Process.spawn('/usr/bin/osascript', '-e', "tell application #{bundle.inspect} to quit", out: log, err: log)
+        quit_pid = Process.spawn('/usr/bin/osascript', '-e', "ignoring application responses\ntell application #{bundle.inspect} to quit\nend ignoring", out: log, err: log)
         quit_deadline = [deadline - 5, monotonic.call + 10].min
         quit_status = nil
         while monotonic.call < quit_deadline

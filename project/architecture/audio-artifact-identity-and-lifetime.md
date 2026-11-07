@@ -30,3 +30,24 @@ Source validation uses private temporary bytes only. Focused tests cover exact-r
 The [accepted native resource run 2](https://github.com/kellyjanderson/readaloud/issues/53#issuecomment-6395918850) used private fixture bytes at `25f1dfe`, a resource-harness copy repair with unchanged `295677e` product behavior. A after resident B was rejected before events/cache/inference; B reused unchanged content. Changed same-ID voice bytes missed and changed PCM; a valid appended unknown model field changed identity, loaded/inferred successfully and retained functional PCM. An incomplete publication regenerated and deliberate metadata corruption was rejected. Independent hash/RIFF/strict decoding checks and the [worker record](https://github.com/kellyjanderson/readaloud/issues/53#issuecomment-6395908697) establish those cases. Four native inferences, two session creates/closes and sixteen tensor releases ended at zero sessions/tensors with no native errors. The idle listening app overlapped untouched, so no isolated memory benchmark is claimed. Failed run 1 remains a copy-permission setup failure, with its unrun cases unclaimed. Playback/export-input and acoustic/FINAL acceptance remain separate.
 
 Sources: [artifact store](../../lib/src/services/audio_artifact_store.dart), [raw identity](../../lib/src/services/kokoro_audio_identity.dart), [model snapshots](../../lib/src/services/model_content_snapshot.dart), [boundary policy](../../lib/src/services/synthesis_boundary_policy.dart), [runtime](../../lib/src/services/speech_runtime.dart), [focused tests](../../test/audio_artifact_store_test.dart).
+
+## Durable scene publications
+
+`RenderedSceneRepository` registers finalized native scenes through an awaited
+engine callback while both raw and final artifact pins remain held. Its worker
+uses the existing immutable artifact store and commits metadata only for the
+current document/assignment owner. One active request is admitted; cancellation
+kills and joins pure worker work before reuse. Published versions are retained.
+A source/start-word index permits bounded opening lookup without enumerating the
+book. Explicit publishing enumerates committed metadata sequentially.
+
+Scene dependencies retain ordered turns, used content bindings, canonical source
+directions, pronunciation/translation identity, exact rate and engine/capability
+versions. Raw identity excludes ephemeral assignment revisions and predecessor
+context; final derivatives retain the raw predecessor and boundary-policy version.
+A changed predecessor can recalculate the next scene's derivative from retained
+raw speech using the existing boundary policy, without another inference. Missing
+raw/boundary evidence fails actionably. Package replay verifies content hashes;
+matching IDs alone are not acoustic identity proof. No new eviction policy is
+introduced. [S6 #137](https://github.com/kellyjanderson/readaloud/issues/137) owns current
+native/offline/regeneration acceptance.

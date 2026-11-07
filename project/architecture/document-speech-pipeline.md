@@ -181,3 +181,29 @@ portable media/audio manifests remain proposed in [R19](https://github.com/kelly
 and [R20](https://github.com/kellyjanderson/readaloud/issues/110#issuecomment-6671095679).
 The separate C++17/C ABI interval stub has Python/Dart bindings; Read Aloud does not
 yet link it. NLP offsets must never be treated as emitted-audio timestamps.
+
+## S6 portable audio books
+
+The normal intake route recognizes the `read-aloud-audio-book` ZIP envelope
+(`radoc-v5`) before reading legacy JSON. `RadocAudioPackage` validates a bounded
+manifest and archive directory on its worker, then materializes only requested
+prepared ranges, analysis records and WAV members. Member hashes, sizes, names,
+coverage and PCM formats are checked; unknown versions and corrupt demanded
+members fail visibly. Legacy v1–v4 JSON remains readable.
+
+A book session retains its security-scoped input lease and private materialized
+files until player stop and package/boundary worker drain. The controller keeps
+at most eight prepared ranges. Later ranges merge their Character evidence into
+the existing WorkCharacterStore without replacing newer local selections; an
+explicit republish also merges unread ranges before serializing their registry.
+Analysis records remain separately loadable through the existing analysis owner.
+
+Normal app startup defers synthesis until launch/open/restore intake is known.
+Complete rendered books enter the existing player's rendered-audio capability
+without model initialization, voice loading, binding preparation or inference.
+A missing or invalid scene demands the existing bounded export/synthesis path,
+commits its output, and returns to saved-scene resolution. Valid following scenes
+are reused. Historical boundaries incompatible with prepared segments are refused
+rather than expanded silently. Basic source spans remain approximate highlighting,
+not advanced alignment. The S6 acceptance/evidence authority is [#137](https://github.com/kellyjanderson/readaloud/issues/137);
+source implementation does not waive launch, emitted-audio or human gates.
