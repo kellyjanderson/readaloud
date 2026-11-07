@@ -75,6 +75,19 @@ module PackagedPythonRuntime
       next unless native?(root, entry, executable)
       path = File.join(root, entry.fetch('path'))
       next unless macho?(path)
+      architectures = capture('/usr/bin/lipo', '-archs', path).split
+      raise "Native code lacks required arm64 slice: #{path}" unless architectures.include?('arm64')
+      if architectures != ['arm64']
+        # This is the build-owned standalone copy. Third-party wheels may be
+        # universal2; retain the supported target before signing/hashing, never
+        # alter the managed source runtime or a published installation.
+        Dir.mktmpdir('readaloud-arm64-', File.dirname(path)) do |directory|
+          output = File.join(directory, 'native')
+          capture('/usr/bin/lipo', path, '-thin', 'arm64', '-output', output)
+          File.chmod(File.stat(path).mode & 0o777, output)
+          File.rename(output, path)
+        end
+      end
       args = ['/usr/bin/codesign', '--force', '--sign', identity]
       args += ['--entitlements', entitlements] if entry['path'] == executable
       capture(*args, path)

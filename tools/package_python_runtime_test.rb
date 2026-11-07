@@ -98,6 +98,11 @@ class PackagedPythonRuntimeTest < Minitest::Test
     PackagedPythonRuntime.capture('/usr/bin/lipo', '-create', arm, intel, '-output', fat)
     PackagedPythonRuntime.capture('/usr/bin/codesign', '--force', '--sign', '-', fat)
     assert_match(/arm64-only/, assert_raises(RuntimeError) { package }.message)
+    before = File.binread(fat)
+    PackagedPythonRuntime.sign_native(@tree, '-', File.expand_path('mlx_python.entitlements', __dir__), 'bin/python')
+    assert_equal 'arm64', PackagedPythonRuntime.capture('/usr/bin/lipo', '-archs', fat)
+    refute_equal before, File.binread(fat)
+    assert package['entries'].any? { |entry| entry['path'] == 'bin/fat-tool' && entry['type'] == 'bundledNative' }
   end
 
   def test_candidate_rejects_changed_native_code_and_undeclared_native_members
