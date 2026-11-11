@@ -1028,8 +1028,7 @@ class MlxTtsPythonProcess {
       'modelPath': modelPath,
       'quantizationBits': quantizationBits,
       'privateCachePath': privateCachePath,
-      if (sizingEstimateBytes != null)
-        'sizingEstimateBytes': sizingEstimateBytes,
+      'sizingEstimateBytes': ?sizingEstimateBytes,
       if (modelCacheDirectories.isNotEmpty)
         'modelCacheDirectories': List<String>.unmodifiable(
           modelCacheDirectories,

@@ -412,7 +412,9 @@ Future<void> main(List<String> args) async {
     stdout.writeln('S7_VARIANT_NATIVE_STARTED');
     await c.initialize().timeout(budget(100));
     await WidgetsBinding.instance.endOfFrame;
-    await c.completeInitialIntake().timeout(budget(10));
+    // First installation can hash the full checkpoint before loading. This is
+    // a bounded qualification setup budget, not a startup/document-load pass.
+    await c.completeInitialIntake().timeout(budget(90));
     require(
       c.engineSession.active?.engineId == initial && c.startupError == null,
       'Initial managed variant unavailable: ${c.startupError}',
