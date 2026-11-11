@@ -316,7 +316,7 @@ Future<void> main(List<String> args) async {
     mark(name);
     final gate = Platform.environment['READALOUD_RADOC_CAPTURE_GATE_PREFIX'];
     receipt['controlledCaptureGate'] = gate != null;
-    if (gate != null) {
+    if (gate != null && name != 'prime') {
       stdout.writeln(
         'RADOC_REGEN_CAPTURE_WAITING phase=$name path=$gate.$name',
       );
@@ -420,6 +420,33 @@ Future<void> main(List<String> args) async {
     final referenceBook =
         Platform.environment['READALOUD_REGEN_REFERENCE_BOOK'];
     if (referenceBook != null) {
+      if (Platform.environment['READALOUD_REGEN_PRIME_RETIRED_ENGINE'] == '1') {
+        final prime = createSession('retired-engine-prime');
+        mark('prime-load');
+        await prime.controller.initialize().timeout(
+          const Duration(seconds: 30),
+        );
+        await prime.controller.completeInitialIntake().timeout(
+          const Duration(minutes: 3),
+        );
+        await prime.controller.importPastedText(
+          'The little lantern burned beside the quiet garden gate.',
+        );
+        await until(
+          () => prime.controller.isPreparationComplete,
+          'Prime document preparation',
+          prime.controller,
+          seconds: 30,
+        );
+        await playToEnd(prime, 'prime');
+        mark('prime-retire');
+        await prime.close();
+        receipt['primedRetiredEngine'] = true;
+        // Isolate the following simulated launch's preferences as in the full
+        // sequence. The old engine is fully drained before creating another.
+        // ignore: invalid_use_of_visible_for_testing_member
+        SharedPreferences.setMockInitialValues({});
+      }
       // Reuse a previously verified complete book to isolate a cold missing
       // scene without repeating initial/changed/saved-reuse playback.
       final initial = await _inspectBook(referenceBook);
