@@ -457,6 +457,7 @@ Future<void> main(List<String> args) async {
       await playFor(60, 'sustained-$initial');
     } else {
       await playFor(3, 'initial-A8');
+      await c.jumpBySeconds(-1000000);
       await c.jumpBySeconds(12);
       final anchor = c.currentWordIndex;
       final document = c.document.displayDocument.documentId;
