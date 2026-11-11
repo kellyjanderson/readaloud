@@ -286,39 +286,74 @@ class _Installer {
     bool archive = false,
     String? nativeLabel,
   }) async {
+    // Serial pure-Dart SHA-256 was a measured installed-runtime startup cost.
+    // Use macOS CommonCrypto instead of custom crypto or per-file subprocesses;
+    // the manifest algorithm and exact byte coverage remain unchanged. Each
+    // file owns its context/buffer, freed on success, failure or cancellation.
+    final digest = Platform.isMacOS ? _PlatformSha256() : null;
     final output = _DigestSink();
-    final sink = sha256.startChunkedConversion(output);
-    var completed = 0;
-    final total = await file.length();
-    var last = DateTime.now();
-    await for (final bytes in file.openRead()) {
+    final sink = digest == null ? sha256.startChunkedConversion(output) : null;
+    try {
+      var completed = 0;
+      final total = await file.length();
+      var last = DateTime.now();
+      await for (final bytes in file.openRead()) {
+        check();
+        if (digest != null) {
+          digest.add(bytes);
+        } else {
+          sink!.add(bytes);
+        }
+        completed += bytes.length;
+        if ((archive || nativeLabel != null) &&
+            DateTime.now().difference(last).inMilliseconds >= 100) {
+          progress(
+            archive ? 'runtimeArchive' : 'runtimeNativeFile',
+            archive
+                ? 'Verifying packaged runtime archive'
+                : 'Verifying bundled native $nativeLabel',
+            completed: completed,
+            total: total,
+          );
+          last = DateTime.now();
+        }
+      }
+      sink?.close();
       check();
-      sink.add(bytes);
-      completed += bytes.length;
-      if ((archive || nativeLabel != null) &&
-          DateTime.now().difference(last).inMilliseconds >= 100) {
+      if (archive) {
         progress(
-          archive ? 'runtimeArchive' : 'runtimeNativeFile',
-          archive
-              ? 'Verifying packaged runtime archive'
-              : 'Verifying bundled native $nativeLabel',
+          'runtimeArchive',
+          'Packaged runtime archive verified',
           completed: completed,
           total: total,
         );
-        last = DateTime.now();
       }
+      return digest?.finish() ?? output.value.toString();
+    } finally {
+      digest?.dispose();
     }
-    sink.close();
-    check();
-    if (archive) {
-      progress(
-        'runtimeArchive',
-        'Packaged runtime archive verified',
-        completed: completed,
-        total: total,
+  }
+
+  // Finite batches use the existing async filesystem API, rather than a custom
+  // scheduler/pool. At most 16 files/contexts are live per runtime attempt (two
+  // known runtimes). Future.wait drains the whole batch even after a failure;
+  // no verification result, cleanup or next batch can outlive its owner.
+  Future<void> verifyEntries<T>(
+    List<T> entries,
+    Future<void> Function(T) verify,
+  ) async {
+    for (var start = 0; start < entries.length; start += 16) {
+      check();
+      final end = start + 16 < entries.length ? start + 16 : entries.length;
+      await Future.wait(
+        entries.sublist(start, end).map((entry) async {
+          check();
+          await verify(entry);
+          check();
+        }),
       );
     }
-    return output.value.toString();
+    check();
   }
 
   Future<String> command(
@@ -368,6 +403,99 @@ class _DigestSink implements Sink<Digest> {
   void add(Digest data) => value = data;
   @override
   void close() {}
+}
+
+// Public macOS CommonCrypto/CommonDigest.h ABI: CC_LONG is uint32_t and
+// CC_SHA256_CTX contains count[2], hash[8], wbuf[16]. No Python, shell utility,
+// helper executable or application-global environment is involved.
+final class _Sha256Context extends Struct {
+  @Array(2)
+  external Array<Uint32> count;
+  @Array(8)
+  external Array<Uint32> hash;
+  @Array(16)
+  external Array<Uint32> wbuf;
+}
+
+class _PlatformSha256 {
+  static final _lib = DynamicLibrary.open(
+    '/usr/lib/system/libcommonCrypto.dylib',
+  );
+  static final _libc = DynamicLibrary.process();
+  static final _allocate = _libc
+      .lookupFunction<
+        Pointer<Void> Function(IntPtr),
+        Pointer<Void> Function(int)
+      >('malloc');
+  static final _free = _libc
+      .lookupFunction<
+        Void Function(Pointer<Void>),
+        void Function(Pointer<Void>)
+      >('free');
+  static final _initialize = _lib
+      .lookupFunction<
+        Int32 Function(Pointer<_Sha256Context>),
+        int Function(Pointer<_Sha256Context>)
+      >('CC_SHA256_Init');
+  static final _update = _lib
+      .lookupFunction<
+        Int32 Function(Pointer<_Sha256Context>, Pointer<Void>, Uint32),
+        int Function(Pointer<_Sha256Context>, Pointer<Void>, int)
+      >('CC_SHA256_Update');
+  static final _finish = _lib
+      .lookupFunction<
+        Int32 Function(Pointer<Uint8>, Pointer<_Sha256Context>),
+        int Function(Pointer<Uint8>, Pointer<_Sha256Context>)
+      >('CC_SHA256_Final');
+  static const _bufferSize = 64 * 1024;
+  late final Pointer<_Sha256Context> _context;
+  late final Pointer<Uint8> _buffer;
+
+  _PlatformSha256() {
+    _context = _allocate(sizeOf<_Sha256Context>()).cast<_Sha256Context>();
+    if (_context == nullptr) throw StateError('SHA-256 allocation failed.');
+    _buffer = _allocate(_bufferSize).cast<Uint8>();
+    if (_buffer == nullptr) {
+      _free(_context.cast<Void>());
+      throw StateError('SHA-256 buffer allocation failed.');
+    }
+    try {
+      if (_initialize(_context) != 1) {
+        throw StateError('SHA-256 initialization failed.');
+      }
+    } catch (_) {
+      dispose();
+      rethrow;
+    }
+  }
+
+  void add(List<int> bytes) {
+    for (var offset = 0; offset < bytes.length; offset += _bufferSize) {
+      final end = offset + _bufferSize < bytes.length
+          ? offset + _bufferSize
+          : bytes.length;
+      final length = end - offset;
+      _buffer.asTypedList(length).setRange(0, length, bytes, offset);
+      if (_update(_context, _buffer.cast<Void>(), length) != 1) {
+        throw StateError('SHA-256 update failed.');
+      }
+    }
+  }
+
+  String finish() {
+    if (_finish(_buffer, _context) != 1) {
+      throw StateError('SHA-256 finalization failed.');
+    }
+    return _buffer
+        .asTypedList(32)
+        .map((byte) => byte.toRadixString(16).padLeft(2, '0'))
+        .join();
+  }
+
+  void dispose() {
+    _free(_buffer.cast<Void>());
+    _free(_context.cast<Void>());
+  }
 }
 
 bool _safePath(String path) =>
@@ -534,7 +662,7 @@ Future<void> _installRuntime(Map<String, Object> args) async {
         'Undeclared or missing bundled native files. Reinstall this application.',
       );
     }
-    for (final entry in nativeEntries) {
+    await installer.verifyEntries(nativeEntries, (entry) async {
       installer.check();
       final relative = entry['path'] as String;
       final path = p.join(resources, entry['bundlePath'] as String);
@@ -569,7 +697,7 @@ Future<void> _installRuntime(Map<String, Object> args) async {
         total: nativeEntries.length,
         unit: 'entries',
       );
-    }
+    });
     final bundleIdentity = sha256
         .convert(utf8.encode(canonicalResources))
         .toString();
@@ -631,7 +759,7 @@ Future<void> _installRuntime(Map<String, Object> args) async {
           .fold<int>(0, (n, e) => n + (e['size'] as int));
       var bytes = 0, count = 0;
       var last = DateTime.now();
-      for (final entry in entries) {
+      await installer.verifyEntries(entries, (entry) async {
         installer.check();
         final path = p.join(tree.path, entry['path'] as String);
         final kind = await FileSystemEntity.type(path, followLinks: false);
@@ -695,7 +823,7 @@ Future<void> _installRuntime(Map<String, Object> args) async {
           );
           last = DateTime.now();
         }
-      }
+      });
       installer.progress(
         'runtimeExecutable',
         'Verifying signed arm64 $id interpreter',
