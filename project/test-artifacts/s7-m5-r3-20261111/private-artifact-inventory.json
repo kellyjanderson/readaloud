@@ -884,5 +884,29 @@
         "sha256": "a96b06a165c8b1a97a92ea948054ebf45b2c1dd70e18fccddc3f228b05d4578d"
       }
     ]
+  },
+  {
+    "run": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-queue-packets-v29-20261111",
+    "runnerPassed": false,
+    "nativePassed": false,
+    "frameworkSha256": "c2835c71107261b4fed3574e1ef6b3dd5ed5da5639d17db086521125520fb8fa",
+    "executableSha256": "4f62ec3c47b945881aecd8831d0467a6f1a74e1c29210041bec96335fc8ce7bf",
+    "privateArtifacts": [
+      {
+        "path": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-queue-packets-v29-20261111/app.log",
+        "bytes": 194,
+        "sha256": "9f130d6e8d287f563fee46585906932d624cf897ec6182c84fdd3e9556e34554"
+      },
+      {
+        "path": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-queue-packets-v29-20261111/capture.log",
+        "bytes": 165,
+        "sha256": "2a6369ad093e3a96c4b2831d8ea03dfa60148706b9a6bb9eb51a8694b4e02379"
+      },
+      {
+        "path": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-queue-packets-v29-20261111/coreaudio.log",
+        "bytes": 119,
+        "sha256": "acba72a904c091cbb7c53df297137b0ba92423f617cec954ccabbf14738f1d8a"
+      }
+    ]
   }
 ]

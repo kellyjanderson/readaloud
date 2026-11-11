@@ -110,6 +110,16 @@ native samples observed an inactive app. Profilerexit0 and normal Quit/exit/
 no-orphan cleanup passed. Production remains unchanged while the next replay
 differential isolates per-item playback work from MLX.
 
+The first prerecorded replay control v29 did not reach Play: ScreenCaptureKit
+could not find the requested app/display and the capture-readiness gate timed
+out. Normal Quit/no-orphan cleanup passed. A subsequent read-only CoreGraphics
+query reported one online display, asleep, with the session screen locked.
+This is a native-test prerequisite blocker, not evidence of a new audio defect.
+The diagnostic harness was also corrected to initialize its native player
+before waiting for capture frames; Play still waits for actual capture readiness.
+That correction is source-analyzed/built, not a successful native rerun. Native
+checks wait for the user to unlock; independent source work can continue.
+
 The QA-only lazy-preparation comparison v23 still failed at690ms native delay.
 It is not the production default or a completed fix. Both independent captures
 have identical PCM over their acoustic overlap, including a199.3125ms exact-zero

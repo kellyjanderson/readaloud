@@ -1,0 +1,9 @@
+Analyzing s7_queue_replay.dart...                               
+
+warning • The '!' will have no effect because the receiver can't be null • tools/s7_queue_replay.dart:174:42 • unnecessary_non_null_assertion
+warning • The '!' will have no effect because the receiver can't be null • tools/s7_queue_replay.dart:371:17 • unnecessary_non_null_assertion
+warning • The '!' will have no effect because the receiver can't be null • tools/s7_queue_replay.dart:459:15 • unnecessary_non_null_assertion
+warning • The '!' will have no effect because the receiver can't be null • tools/s7_queue_replay.dart:460:15 • unnecessary_non_null_assertion
+warning • The '!' will have no effect because the receiver can't be null • tools/s7_queue_replay.dart:481:30 • unnecessary_non_null_assertion
+
+5 issues found. (ran in 1.6s)
