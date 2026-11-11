@@ -53,6 +53,24 @@ Read Aloud automatically saves prepared ranges and can reuse a complete checkpoi
 
 Use **File → Save Audio Book…** (Cmd-S) to choose a `.radoc` destination after input preparation is complete. The book retains available generated scenes as well as prepared content; a partially rendered book requires its speech model for missing passages. A completed audio book can replay copied audio without its original source or installed synthesis model. Illustrations, advanced timing and multimedia are deferred. Legacy graph export remains available through the controller API. Such files open through the normal picker and retain prepared text, speech direction, attribution evidence and explicit cast voice choices. A fresh preference store restores the saved choices; existing local choices take precedence over an older file. Invalid assignment data is refused before changing the document or preferences. External asset files and native synthesis resources are not embedded or restored merely by exporting the graph.
 
+## Preparation and Activity
+
+The reader's status area shows the current work or an error that needs attention.
+A progress bar appears when completed work and its total are known. Counts may
+grow as more input is discovered; Finishing means the counted work still needs
+validation. When enough text is ready ahead of playback, the reader says it is
+ready and prepares more as you listen.
+
+Open **Activity** for details; the app remembers that choice. Completed entries
+leave the view after a short pause, while current errors stay available to copy
+or retry. Reduced motion removes the fade. Use **Copy** to copy the full status
+and details even when some text is outside the visible area. The controls can
+also be reached with the keyboard.
+
+**Cancel document** stops document preparation. Model preparation has its own
+Cancel and Retry controls in Settings. Cancelling a model keeps reusable
+downloaded files, and Retry begins a fresh attempt; speech still waits for Play.
+
 ## Verification boundary
 
 RC2 UI and document-intake behavior is integrated through PR #99 on the feature branch; its focused widget coverage includes selection controls and `.radoc` picker success/refusal. The exact John/Maria example exposed a comma-terminated dialogue-tag attribution bug; PR #77 fixes that case and its focused import tests pass. The current status and remaining scope for the [single-choice voice selector report #78](https://github.com/kellyjanderson/readaloud/issues/78) are maintained in its issue block. These source changes and automated checks do not establish acoustic acceptance on the current integrated app build.
