@@ -241,6 +241,8 @@ Future<void> main(List<String> args) async {
   final receipt = <String, Object?>{
     'schema': 'readaloud-native-variant-v1',
     'mode': mode,
+    'inferencePolicyDiagnostic':
+        Platform.environment['READALOUD_S7_INFERENCE_POLICY'],
     'lazyNativePreparationExperiment':
         Platform.environment['READALOUD_S7_LAZY_NATIVE_PREPARATION'] == '1',
     'passed': false,

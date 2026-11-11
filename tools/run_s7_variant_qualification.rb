@@ -16,6 +16,8 @@ secondary_capture = File.expand_path(secondary_capture) if secondary_capture
 abort 'Missing secondary capture executable' if secondary_capture && !File.executable?(secondary_capture)
 abort 'Invalid mode' unless MODES.include?(mode)
 replay_mode = ENV['READALOUD_S7_REPLAY_MODE']
+inference_policy = ENV['READALOUD_S7_INFERENCE_POLICY']
+abort 'Invalid QA inference policy' unless inference_policy.nil? || inference_policy == 'background-utility'
 if replay_mode
   abort 'Replay requires cached-8bit and packets|joined' unless mode == 'cached-8bit' && %w[packets joined].include?(replay_mode)
   replay_input = ENV['READALOUD_S7_REPLAY_INPUT']
@@ -70,6 +72,10 @@ end
 if ENV['READALOUD_S7_EXTENDED_NATIVE_DIAGNOSTIC'] == '1'
   result[:extendedNativeDiagnostic] = true
   result[:errors] << 'Extended native diagnosis; standard qualification remains separate'
+end
+if inference_policy
+  result[:inferencePolicyDiagnostic] = 'background-utility'
+  result[:errors] << 'QA-only child scheduling differential; production policy unchanged'
 end
 # Read only bounded uncompressed PCM or float WAV. This checks app-emitted signal
 # separately from player intent, never labels energy as an exact speech match.
