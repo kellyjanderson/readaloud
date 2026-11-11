@@ -2,6 +2,7 @@
 // Build target: tools/radoc_playback_smoke.dart. Arguments: BOOK RECEIPT.
 // The runner owns normal Quit. This entrypoint never exits the process.
 import 'dart:async';
+import 'native_main_responsiveness_probe.dart';
 import 'dart:convert';
 import 'dart:io';
 import 'dart:isolate';
@@ -139,6 +140,7 @@ Future<void> main(List<String> args) async {
   var maxUiDelayMs = 0;
   var heartbeatCount = 0;
   var probePhase = 'startup';
+  final nativeMain = NativeMainResponsivenessProbe()..start(() => probePhase);
   var previousTickPhase = probePhase;
   final delayedTicks = <Map<String, Object?>>[];
   // The interactive File → Save Audio Book path requests audioBook=true
@@ -405,6 +407,13 @@ Future<void> main(List<String> args) async {
     receipt['stack'] = '$stack';
   } finally {
     heartbeat.cancel();
+    final mainReceipt = await nativeMain.close();
+    receipt['nativeMainResponsiveness'] = mainReceipt;
+    if (mainReceipt['passed'] != true) {
+      receipt['passed'] = false;
+      receipt['nativeMainError'] =
+          'Native main-thread response exceeded its bound or failed.';
+    }
     try {
       await engine.stop();
       await controller.shutdownPreparation();

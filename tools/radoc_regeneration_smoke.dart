@@ -3,6 +3,7 @@
 // Optional READALOUD_RADOC_CAPTURE_GATE_PREFIX waits for PREFIX.PHASE files.
 // Root runner owns external capture, human listening and normal Quit. No exit().
 import 'dart:async';
+import 'native_main_responsiveness_probe.dart';
 import 'dart:convert';
 import 'dart:io';
 import 'dart:isolate';
@@ -172,6 +173,7 @@ Future<void> main(List<String> args) async {
   ).createTemp('s6-regeneration-');
   final watch = Stopwatch()..start();
   var phase = 'setup';
+  final nativeMain = NativeMainResponsivenessProbe()..start(() => phase);
   var synthesisCallbacks = 0;
   final exports = <Map<String, Object?>>[];
   final metrics = <Map<String, Object?>>[];
@@ -612,6 +614,9 @@ Future<void> main(List<String> args) async {
   } finally {
     mark('shutdown');
     heartbeat.cancel();
+    final mainReceipt = await nativeMain.close();
+    receipt['nativeMainResponsiveness'] = mainReceipt;
+    if (mainReceipt['passed'] != true) receipt['passed'] = false;
     final cleanupErrors = <String>[];
     for (final session in sessions) {
       try {
