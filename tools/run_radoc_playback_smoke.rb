@@ -18,8 +18,10 @@ abort 'Release signing/entitlement preflight failed' unless system(RbConfig.ruby
 FileUtils.mkdir_p(output)
 copied_book = File.join(output, 'copied-input.radoc')
 FileUtils.cp(book, copied_book)
+startup_book = File.join(output, 'startup-input.radoc')
+FileUtils.cp(book, startup_book)
 File.write(File.join(output, 'fixture.json'), JSON.pretty_generate({
-  sourcePath: book, copiedPath: copied_book, bytes: File.size(book),
+  sourcePath: book, copiedPath: copied_book, startupPath: startup_book, bytes: File.size(book),
   sha256: Digest::SHA256.file(book).hexdigest,
   copiedSha256: Digest::SHA256.file(copied_book).hexdigest,
   executable: app, executableSha256: Digest::SHA256.file(app).hexdigest,
@@ -41,7 +43,7 @@ File.open(File.join(output, 'app.log'), 'w') do |log|
     runner_receipt[:launchUtc] = launched_at.utc.iso8601(6)
     launch_micros = (launched_at.to_r * 1_000_000).to_i
     runner_receipt[:launchMonotonicRawNanos] = Process.clock_gettime(Process::CLOCK_MONOTONIC_RAW, :nanosecond)
-    pid = Process.spawn({'READALOUD_SMOKE_LAUNCH_UNIX_MICROS' => launch_micros.to_s}, app, copied_book, receipt, out: log, err: log, pgroup: true)
+    pid = Process.spawn({'READALOUD_SMOKE_LAUNCH_UNIX_MICROS' => launch_micros.to_s}, app, copied_book, receipt, startup_book, out: log, err: log, pgroup: true)
     runner_receipt[:pid] = pid
     if capture
       capture_log = File.open(File.join(output, 'capture.log'), 'w')
@@ -62,6 +64,8 @@ File.open(File.join(output, 'app.log'), 'w') do |log|
     end
     result = JSON.parse(File.read(receipt))
     runner_receipt[:nativeReceipt] = receipt
+    %w[timingClockDomain appStartupCompleteMonotonicRawNanos appStartupCompleteUnixMicros documentLoadRequestedMonotonicRawNanos documentLoadRequestedUnixMicros playRequestedMonotonicRawNanos playRequestedUnixMicros].each { |key| runner_receipt[key] = result[key] if result.key?(key) }
+    raise 'Missing post-startup native timing boundaries' unless result['timingClockDomain'] == 'CLOCK_MONOTONIC_RAW' && result['appStartupCompleteMonotonicRawNanos'].is_a?(Integer) && result['documentLoadRequestedMonotonicRawNanos'].is_a?(Integer) && runner_receipt[:launchMonotonicRawNanos] <= result['appStartupCompleteMonotonicRawNanos'] && result['appStartupCompleteMonotonicRawNanos'] <= result['documentLoadRequestedMonotonicRawNanos']
     runner_receipt[:nativePassed] = result['passed']
     runner_receipt[:launchToNativePositionMs] = result['launchToNativePositionMs']
     runner_receipt[:nativePositionWithinTwoSeconds] = result['nativePositionWithinTwoSeconds']

@@ -18,7 +18,9 @@ abort 'Target app already running' unless matching.call.empty?
 FileUtils.mkdir_p(output)
 copied = File.join(output, 'copied-input.radoc')
 FileUtils.cp(book, copied)
-File.write(File.join(output, 'fixture.json'), JSON.pretty_generate({sourcePath: book, copiedPath: copied, sha256: Digest::SHA256.file(book).hexdigest, copiedSha256: Digest::SHA256.file(copied).hexdigest, executable: app, executableSha256: Digest::SHA256.file(app).hexdigest}))
+startup_book = File.join(output, 'startup-input.radoc')
+FileUtils.cp(book, startup_book)
+File.write(File.join(output, 'fixture.json'), JSON.pretty_generate({sourcePath: book, copiedPath: copied, startupPath: startup_book, sha256: Digest::SHA256.file(book).hexdigest, copiedSha256: Digest::SHA256.file(copied).hexdigest, executable: app, executableSha256: Digest::SHA256.file(app).hexdigest}))
 receipt = File.join(output, 'receipt.json')
 app_log = File.join(output, 'app.log')
 File.write(app_log, '')
@@ -51,7 +53,7 @@ begin
   result[:launchUtc] = launched.utc.iso8601(6)
   micros = (launched.to_r * 1_000_000).to_i
   result[:launchMonotonicRawNanos] = Process.clock_gettime(Process::CLOCK_MONOTONIC_RAW, :nanosecond)
-  opener = Process.spawn('/usr/bin/open', '-W', '-n', '-a', bundle, '--stdout', app_log, '--stderr', app_log, '--env', "READALOUD_SMOKE_LAUNCH_UNIX_MICROS=#{micros}", '--args', copied, receipt, pgroup: true)
+  opener = Process.spawn('/usr/bin/open', '-W', '-n', '-a', bundle, '--stdout', app_log, '--stderr', app_log, '--env', "READALOUD_SMOKE_LAUNCH_UNIX_MICROS=#{micros}", '--args', copied, receipt, startup_book, pgroup: true)
   result[:launcherPid] = opener
   discovery_end = clock.call + 15
   loop do
@@ -93,6 +95,8 @@ begin
     sleep 0.05
   end
   native = JSON.parse(File.read(receipt))
+  %w[timingClockDomain appStartupCompleteMonotonicRawNanos appStartupCompleteUnixMicros documentLoadRequestedMonotonicRawNanos documentLoadRequestedUnixMicros playRequestedMonotonicRawNanos playRequestedUnixMicros].each { |key| result[key] = native[key] if native.key?(key) }
+  raise 'Missing post-startup native timing boundaries' unless native['timingClockDomain'] == 'CLOCK_MONOTONIC_RAW' && native['appStartupCompleteMonotonicRawNanos'].is_a?(Integer) && native['documentLoadRequestedMonotonicRawNanos'].is_a?(Integer) && result[:launchMonotonicRawNanos] <= native['appStartupCompleteMonotonicRawNanos'] && native['appStartupCompleteMonotonicRawNanos'] <= native['documentLoadRequestedMonotonicRawNanos']
   result.merge!(nativeReceipt: receipt, nativePassed: native['passed'], launchToNativePositionMs: native['launchToNativePositionMs'], nativePositionWithinTwoSeconds: native['nativePositionWithinTwoSeconds'])
   raise "Native playback failed: #{native['error']}" unless native['passed'] && native['forbiddenModelCallCount'] == 0 && native['peakPcm16'].to_i >= 100 && native['maxNativePositionMs'].to_i >= 500
 rescue => error

@@ -102,6 +102,20 @@ class AppDelegate: FlutterAppDelegate {
         result(FlutterMethodNotImplemented)
         return
       }
+      if call.method == "timingClockSnapshot" {
+        var raw = timespec()
+        guard clock_gettime(CLOCK_MONOTONIC_RAW, &raw) == 0 else {
+          result(FlutterError(code: "timing_clock_unavailable",
+            message: "Could not sample CLOCK_MONOTONIC_RAW.", details: nil))
+          return
+        }
+        result([
+          "clockDomain": "CLOCK_MONOTONIC_RAW",
+          "monotonicRawNanos": Int64(raw.tv_sec) * 1_000_000_000 + Int64(raw.tv_nsec),
+          "unixMicros": Int64(Date().timeIntervalSince1970 * 1_000_000)
+        ])
+        return
+      }
       if call.method == "speechWorkActivityCount" {
         result(self.speechWorkActivities.count)
         return

@@ -13,6 +13,8 @@ Future<void> main(List<String> args) async {
     await first_load.main(args.skip(1).toList(), packetCancellation: true);
   } else if (args.isNotEmpty && args.first == 'first-load') {
     await first_load.main(args.skip(1).toList());
+  } else if (args.isNotEmpty && args.first == 'load-after-startup') {
+    await first_load.main(args.skip(1).toList(), loadAfterStartup: true);
   } else if (args.isNotEmpty && args.first == 'runtime-cancel') {
     await runtime.main(args.skip(1).toList());
   } else if (args.isNotEmpty && args.first == 'booknlp') {

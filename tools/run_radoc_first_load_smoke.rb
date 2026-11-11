@@ -1,6 +1,6 @@
 #!/usr/bin/env ruby
-# First load through production intake and Fish; no capture or model-ready gate.
-# Requires s6_acceptance_smoke first-load dispatch; does not build or launch CI.
+# Default measures target load after ordinary startup; no capture/Play gate.
+# Explicit first-load retains launch diagnostic; packet-cancel retains cold cancellation.
 require 'json'
 require 'digest'
 require 'fileutils'
@@ -8,10 +8,10 @@ require 'rbconfig'
 require 'timeout'
 require 'time'
 
-abort 'Usage: run_radoc_first_load_smoke.rb APP_BUNDLE FISH_ENGINE INPUT_DOCUMENT NEW_OUTPUT CAPTURE [first-load|packet-cancel]' unless [5, 6].include?(ARGV.length)
+abort 'Usage: run_radoc_first_load_smoke.rb APP_BUNDLE FISH_ENGINE INPUT_DOCUMENT NEW_OUTPUT CAPTURE [load-after-startup|first-load|packet-cancel]' unless [5, 6].include?(ARGV.length)
 bundle, engine, book, output, capture, mode = ARGV
-mode ||= 'first-load'
-abort 'Invalid probe mode' unless %w[first-load packet-cancel].include?(mode)
+mode ||= 'load-after-startup'
+abort 'Invalid probe mode' unless %w[load-after-startup first-load packet-cancel].include?(mode)
 bundle, book, output, capture = [bundle, book, output, capture].map { |p| File.expand_path(p) }
 abort 'Expected Fish engine' unless engine.start_with?('fish_drama3')
 abort 'Missing existing model' unless File.directory?(ENV.fetch('READALOUD_MLX_TTS_MODEL_PATH', ''))
@@ -103,7 +103,11 @@ begin
     sleep 0.05
   end
   native = JSON.parse(File.read(receipt))
+  %w[timingClockDomain appStartupCompleteMonotonicRawNanos appStartupCompleteUnixMicros documentLoadRequestedMonotonicRawNanos documentLoadRequestedUnixMicros playRequestedMonotonicRawNanos playRequestedUnixMicros].each { |key| result[key] = native[key] if native.key?(key) }
   result.merge!(nativeReceipt: receipt, nativePassed: native['passed'], launchToNativePositionMs: native['launchToNativePositionMs'], nativePositionWithinTwoSeconds: native['nativePositionWithinTwoSeconds'])
+  if mode == 'load-after-startup'
+    raise 'Missing post-startup native timing boundaries' unless native['timingClockDomain'] == 'CLOCK_MONOTONIC_RAW' && native['appStartupCompleteMonotonicRawNanos'].is_a?(Integer) && native['documentLoadRequestedMonotonicRawNanos'].is_a?(Integer) && result[:launchMonotonicRawNanos] <= native['appStartupCompleteMonotonicRawNanos'] && native['appStartupCompleteMonotonicRawNanos'] <= native['documentLoadRequestedMonotonicRawNanos'] && native['startupSynthesisCallbacks'] == 0 && native['startupNativeSources'] == 0
+  end
   raise "Native playback failed: #{native['error']}" unless native['passed'] && native['controlledCaptureGate'] == false && native['resourceShutdownComplete'] == true && (mode == 'packet-cancel' ? native['sceneIncompleteAtFirstPacket'] == true && native['packetPauseCoverage'] == 'native packet before complete scene; paused' : native['observedSourceEndWord'] == native['originalSourceExpectedWordCount'] && native['peakPcm16'].to_i >= 100 && native.dig('nativePlaybackPositions', 'sampledSourcePositionTotalMs').to_i >= 500)
 rescue => error
   errors << error.message

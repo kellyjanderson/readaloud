@@ -25,6 +25,7 @@ import 'package:read_aloud/src/services/work_character_repository.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'native_main_responsiveness_probe.dart';
 import 'native_playback_position_probe.dart';
+import 'native_timing_clock.dart';
 
 // This separate scope deliberately captures only sendable paths. A closure
 // created inside main's stream callback can retain its unsendable owner context.
@@ -73,7 +74,11 @@ class _Controller extends ReaderController {
   Future<bool> restoreLastOpenedDocument() async => false;
 }
 
-Future<void> main(List<String> args, {bool packetCancellation = false}) async {
+Future<void> main(
+  List<String> args, {
+  bool packetCancellation = false,
+  bool loadAfterStartup = false,
+}) async {
   final entered = DateTime.now().microsecondsSinceEpoch;
   final clock = Stopwatch()..start();
   WidgetsFlutterBinding.ensureInitialized();
@@ -119,6 +124,13 @@ Future<void> main(List<String> args, {bool packetCancellation = false}) async {
     'runRoot': root.path,
     'dartEntryUnixMicros': entered,
     'controlledCaptureGate': false,
+    'timingMode': loadAfterStartup
+        ? 'load-after-startup'
+        : 'launch-with-document-diagnostic',
+    'documentLoadClockScope': loadAfterStartup
+        ? 'Explicit target import after ordinary no-target app startup; all '
+              'target intake, preparation, binding and synthesis included'
+        : 'No independent post-startup target load; launch diagnostic only',
     'rawAudioCache': 'fresh private per-run store; existing model assets only',
     'emittedAudioCapture': 'external waveform comparison required',
     'humanListening': 'not established by this probe',
@@ -275,11 +287,15 @@ Future<void> main(List<String> args, {bool packetCancellation = false}) async {
   }
 
   Future<void>? play;
+  Future<void>? targetImport;
   Object? playError;
+  String? startupDocumentId;
   runApp(
     ReadAloudApp(
       controller: c,
-      launchOptions: AppLaunchOptions(inputPaths: [args[1]]),
+      launchOptions: AppLaunchOptions(
+        inputPaths: loadAfterStartup ? const [] : [args[1]],
+      ),
     ),
   );
   var previousResourceStage = '';
@@ -303,6 +319,42 @@ Future<void> main(List<String> args, {bool packetCancellation = false}) async {
     stdout.writeln('RADOC_FIRST_LOAD_RESOURCE ${jsonEncode(event)}');
   });
   try {
+    if (loadAfterStartup) {
+      phase = 'ordinary-app-startup';
+      await c.initialize();
+      // The screen uses this same existing intake/model-startup path. The
+      // cached initialize future and production retry owner prevent duplicates.
+      await WidgetsBinding.instance.endOfFrame;
+      await c.completeInitialIntake();
+      checkFailure();
+      if (c.isInitializing ||
+          synthesisCalls != 0 ||
+          checks.isNotEmpty ||
+          player.sequence.isNotEmpty ||
+          player.playing ||
+          firstPosition != null) {
+        throw StateError('Ordinary startup synthesized or admitted audio');
+      }
+      receipt['startupSynthesisCallbacks'] = synthesisCalls;
+      receipt['startupNativeSources'] = player.sequence.length;
+      receipt['startupPreparedWordCount'] = c.preparedWordCount;
+      startupDocumentId = c.document.displayDocument.documentId;
+      receipt['startupDocumentId'] = startupDocumentId;
+      (await NativeTimingClockSnapshot.capture()).record(
+        receipt,
+        'appStartupComplete',
+      );
+      phase = 'target-document-load';
+      (await NativeTimingClockSnapshot.capture()).record(
+        receipt,
+        'documentLoadRequested',
+      );
+      // Invoke the real intake immediately after the native timestamp. Do not
+      // await whole-document completion before registering target Play.
+      targetImport = c.importFilePaths([args[1]]).catchError((Object error) {
+        playError = error;
+      });
+    }
     if (packetCancellation) {
       receipt['cancellationScope'] =
           'Controller commands through normal app/player; native flags and '
@@ -583,14 +635,30 @@ Future<void> main(List<String> args, {bool packetCancellation = false}) async {
       }
       return; // The shared finally drains all owners and writes the receipt.
     }
-    // Screen owns normal initialize/import/completeInitialIntake. Never await
-    // model readiness or whole preparation before registering the Play intent.
-    await until(() => c.preparedWordCount > 0, 'First prepared content');
+    // Startup-with-document remains an ungated launch diagnostic. The R25
+    // mode has finished ordinary startup but never waits for whole TARGET
+    // preparation before registering the Play intent.
+    await until(
+      () =>
+          (playError != null) ||
+          (c.preparedWordCount > 0 &&
+              (!loadAfterStartup ||
+                  c.document.displayDocument.documentId != startupDocumentId)),
+      'First target prepared content',
+    );
+    if (playError != null) throw StateError('Target import failed: $playError');
     receipt['playRequestedMs'] = clock.elapsedMilliseconds;
     receipt['preparedWordsAtPlay'] = c.preparedWordCount;
+    receipt['targetDocumentIdAtPlay'] = c.document.displayDocument.documentId;
     receipt['preparationCompleteAtPlay'] = c.isPreparationComplete;
     receipt['initializingAtPlay'] = c.isInitializing;
     phase = 'play-request';
+    if (loadAfterStartup) {
+      (await NativeTimingClockSnapshot.capture()).record(
+        receipt,
+        'playRequested',
+      );
+    }
     play = c.startPlayback().catchError((Object error) {
       playError = error;
     });
@@ -611,6 +679,7 @@ Future<void> main(List<String> args, {bool packetCancellation = false}) async {
       'Complete original source',
     );
     await play;
+    await targetImport;
     if (playError != null) throw StateError('Play failed: $playError');
     final chunks = c.spokenChunkRecords;
     receipt['observedChunkRecords'] = [
@@ -732,6 +801,7 @@ Future<void> main(List<String> args, {bool packetCancellation = false}) async {
     }
     try {
       await play?.timeout(const Duration(seconds: 5));
+      await targetImport?.timeout(const Duration(seconds: 5));
     } catch (error) {
       cleanup.add('$error');
     }
