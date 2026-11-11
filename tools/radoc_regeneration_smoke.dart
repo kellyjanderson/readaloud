@@ -241,6 +241,18 @@ Future<void> main(List<String> args) async {
       _Controller(engine, Directory('${runRoot.path}/$name')),
     );
     sessions.add(session);
+    var lastStage = '';
+    var observedStages = 0;
+    session.controller.addListener(() {
+      final progress = session.controller.speechResourceProgress;
+      final stage = progress?.stage ?? session.controller.statusMessage ?? '';
+      if (stage == lastStage || stage.isEmpty || observedStages >= 128) return;
+      lastStage = stage;
+      observedStages++;
+      stdout.writeln(
+        'RADOC_REGEN_RESOURCE ${jsonEncode({'phase': phase, 'elapsedMs': watch.elapsedMilliseconds, 'stage': stage, 'message': progress?.message})}',
+      );
+    });
     runApp(
       ReadAloudApp(
         controller: session.controller,

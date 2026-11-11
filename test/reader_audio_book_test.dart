@@ -64,6 +64,7 @@ void main() {
     bool paragraphBreak = false,
     bool changedSource = false,
     bool middleGap = false,
+    bool historicalEndInsideSegment = false,
     String? publishedEngine,
   }) async {
     final service = RadocAudioPackage();
@@ -138,7 +139,7 @@ void main() {
         RadocAudioScene(
           sceneId: 'scene-$i',
           startWord: i * 2,
-          endWord: i * 2 + 2,
+          endWord: historicalEndInsideSegment && i == 0 ? 1 : i * 2 + 2,
           audioMember: audio,
           dependencyDigest: artifactIdentity(dependencies),
           dependencies: dependencies,
@@ -345,6 +346,27 @@ void main() {
       expect(engine.exports, hasLength(1));
     },
   );
+  test(
+    'historical boundary inside a prepared segment refuses rendering',
+    () async {
+      engine.renderAvailable = true;
+      await controller.importFilePaths([
+        (await fixture(historicalEndInsideSegment: true)).path,
+      ]);
+      await controller.startPlayback();
+      expect(controller.statusMessage, contains('inside a prepared segment'));
+      expect(engine.exports, isEmpty);
+      expect(engine.requests, isEmpty);
+      expect(controller.isPlaying, isFalse);
+      expect(controller.hasPendingPlaybackIntent, isFalse);
+      await controller.importFilePaths([(await fixture()).path]);
+      await controller.startPlayback();
+      expect(engine.exports, isEmpty);
+      expect(engine.requests, hasLength(1));
+      expect(engine.requests.single.isCurrent!(), isTrue);
+    },
+  );
+
   test('one Play survives the demanded published-engine handoff', () async {
     final old = _OfflineEngine();
     final replacement = _OfflineEngine()..renderAvailable = true;
