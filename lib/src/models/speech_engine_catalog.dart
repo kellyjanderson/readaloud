@@ -17,7 +17,7 @@ bool isDramaEngine(String id) =>
 bool isMlxEngine(String? id) =>
     id != 'kokoro' && speechEngineLabels.containsKey(id);
 
-/// A declaration from the bundled Fish catalog, not proof of installed bytes,
+/// A declaration from a validated Fish catalog, not proof of installed bytes,
 /// runtime compatibility, acoustic capabilities or measured memory use.
 final class FishDramaVariantDescriptor {
   FishDramaVariantDescriptor._({
@@ -70,10 +70,10 @@ final class FishDramaIntegrityManifest {
   final Map<String, FishDramaFileIntegrity> files;
 }
 
-/// Typed view of the same bundled JSON consumed by the Python model owner.
+/// Typed view of the same validated JSON consumed by the Python model owner.
 ///
 /// Parsing is synchronous and side-effect free: callers own asset loading. This
-/// initial boundary does not replace the downloader, cache or runtime selection.
+/// boundary does not replace the downloader, cache or runtime selection.
 final class FishDramaCatalog {
   FishDramaCatalog._(Map<String, FishDramaVariantDescriptor> variants)
     : variants = Map.unmodifiable(variants);

@@ -1,0 +1,15 @@
+{
+  "schemaVersion": 1,
+  "catalogVersion": 1,
+  "sourceRevision": "b69d45dd11df3bd574c9533223d3537e0bb5c83e",
+  "runtime": {
+    "id": "mlx-audio-0.6.3-mlx-0.32.4-complete-v3",
+    "architecture": "fish_drama3",
+    "platform": "macos-arm64",
+    "capabilities": "installed-code-only"
+  },
+  "files": {
+    "fish_drama_models.json": "1a3430aa5c1d79a09e7659ce38e7916b2504a220cedf1953f546a96ec0efe2e4",
+    "fish_drama_model_checksums.json": "2b9f6ae926849759c2971d665ebdfe2070f7cdf1e8e9140e49e1c1df31fd00eb"
+  }
+}
