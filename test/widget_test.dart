@@ -37,6 +37,42 @@ void main() {
     debugDefaultTargetPlatformOverride = null;
   });
 
+  testWidgets(
+    'Settings exposes Cancel while loading and Retry after cancellation',
+    (tester) async {
+      final loading = _FailedSessionEngine();
+      final controller = ReaderController(
+        preferencesService: _MemoryReaderPreferencesService(),
+        ttsEngine: _AccessibleTtsEngine(),
+        engineFactory: (_, _) => loading,
+        enablePlatformIntakeChannels: false,
+      );
+      addTearDown(controller.dispose);
+      await tester.pumpWidget(ReadAloudApp(controller: controller));
+      await tester.pump(const Duration(milliseconds: 300));
+      await tester.tap(find.byKey(const Key('reader-overflow-menu')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Settings').last);
+      await tester.pumpAndSettle();
+      final switching = controller.setTtsEngineId('fish_drama3');
+      await tester.pump();
+      await tester.pump();
+      final cancel = find.text('Cancel speech engine preparation');
+      expect(cancel, findsOneWidget);
+      await tester.ensureVisible(cancel);
+      await tester.tap(cancel);
+      await tester.pump();
+      expect(find.text('Retry speech engine'), findsOneWidget);
+      expect(find.text('Cancel speech engine preparation'), findsNothing);
+      loading.release.complete();
+      await switching;
+      await tester.pumpAndSettle();
+      expect(controller.engineSession.active, isNull);
+      expect(controller.startupError, isNull);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
   testWidgets('transport exposes actions and state through semantics', (
     tester,
   ) async {

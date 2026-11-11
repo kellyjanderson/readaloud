@@ -35,6 +35,77 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
   test(
+    'explicit resource cancellation fences stale completion and retries honestly',
+    () async {
+      SharedPreferences.setMockInitialValues({});
+      final initial = _FakeTtsEngine();
+      final held = _ModelPreparationEngine()..hold = true;
+      final recovered = _ModelPreparationEngine();
+      var creations = 0;
+      final controller = ReaderController(
+        ttsEngine: initial,
+        engineFactory: (_, _) => creations++ == 0 ? held : recovered,
+        enablePlatformIntakeChannels: false,
+      );
+      addTearDown(controller.dispose);
+      await controller.initialize();
+      await controller.importPastedText('A retained reading anchor.');
+      final document = controller.document;
+      final switching = controller.setTtsEngineId('fish_drama3');
+      await held.started.future;
+      final staleError = held._onError;
+      final cancel = controller.cancelSpeechResourcePreparation();
+      final cancelAgain = controller.cancelSpeechResourcePreparation();
+      expect(controller.engineSession.phase, EngineSessionPhase.cancelled);
+      expect(controller.engineSession.active, isNull);
+      expect(controller.engineSession.lastWorking!.engineId, 'kokoro');
+      expect(controller.isInitializing, false);
+      staleError?.call('late cancelled failure');
+      await Future.wait([switching, cancel, cancelAgain]);
+      expect(creations, 1);
+      expect(controller.startupError, isNull);
+      expect(controller.engineSession.phase, EngineSessionPhase.cancelled);
+      expect(controller.document, same(document));
+      await controller.retryInitialization();
+      expect(creations, 2);
+      expect(recovered.closed, false);
+      expect(controller.engineSession.active!.engineId, 'fish_drama3');
+      expect(recovered.speakCallCount, 0);
+    },
+  );
+
+  test(
+    'new selection during cancellation wins without reviving cancelled target',
+    () async {
+      SharedPreferences.setMockInitialValues({});
+      final held = _HeldSessionEngine()..fail = true;
+      final recovered = _FakeTtsEngine();
+      final created = <String>[];
+      final controller = ReaderController(
+        ttsEngine: _FakeTtsEngine(),
+        engineFactory: (id, _) {
+          created.add(id);
+          return id == 'fish_drama3' ? held : recovered;
+        },
+        enablePlatformIntakeChannels: false,
+      );
+      addTearDown(controller.dispose);
+      await controller.initialize();
+      final first = controller.setTtsEngineId('fish_drama3');
+      await held.started.future;
+      final cancelled = controller.cancelSpeechResourcePreparation();
+      final latest = controller.setTtsEngineId('fish_drama3_4bit');
+      await Future<void>.delayed(Duration.zero);
+      held.release.complete();
+      await Future.wait([first, cancelled, latest]);
+      expect(created, ['fish_drama3', 'fish_drama3_4bit']);
+      expect(controller.engineSession.active!.engineId, 'fish_drama3_4bit');
+      expect(controller.startupError, isNull);
+      expect(recovered.speakCallCount, 0);
+    },
+  );
+
+  test(
     'new default resolves once without persisting an explicit engine choice',
     () async {
       SharedPreferences.setMockInitialValues({});

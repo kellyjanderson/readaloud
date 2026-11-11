@@ -1,4 +1,6 @@
 import '../widgets/modernbooknlp_settings.dart';
+import '../widgets/model_disk_capacity.dart';
+import '../models/engine_session.dart';
 import '../models/speech_engine_catalog.dart';
 import 'dart:async';
 import 'dart:math' as math;
@@ -667,12 +669,14 @@ class _ReadAloudScreenState extends State<ReadAloudScreen> {
                         'Fast mode trades some model precision for faster speech generation. Changes apply in this session.',
                       ),
                     ],
+                    ModelDiskCapacity(engineId: selectedEngineId),
+                    const SizedBox(height: 16),
                     ModernBookNlpSettings(
                       analysis: _controller.characterAnalysis,
                     ),
                     const SizedBox(height: 12),
                     SizedBox(
-                      height: 100,
+                      height: 170,
                       child: ListenableBuilder(
                         listenable: _controller,
                         builder: (context, _) {
@@ -695,7 +699,17 @@ class _ReadAloudScreenState extends State<ReadAloudScreen> {
                                     fraction: progress.fraction,
                                     label: resourceProgressLabel(progress),
                                   ),
-                                if (_controller.startupError != null)
+                                if (_controller.isInitializing)
+                                  TextButton(
+                                    onPressed: _controller
+                                        .cancelSpeechResourcePreparation,
+                                    child: const Text(
+                                      'Cancel speech engine preparation',
+                                    ),
+                                  ),
+                                if (_controller.startupError != null ||
+                                    _controller.engineSession.phase ==
+                                        EngineSessionPhase.cancelled)
                                   TextButton(
                                     onPressed: _controller.retryInitialization,
                                     child: const Text('Retry speech engine'),

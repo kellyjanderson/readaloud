@@ -122,6 +122,37 @@ class AppDelegate: FlutterAppDelegate {
         }
         return
       }
+      if call.method == "modelDiskSpace" {
+        // Fixed application-owned persistent-store volume; no caller path or
+        // model directory traversal. Only the platform filesystem query runs
+        // on the utility queue, and channel completion returns on main.
+        DispatchQueue.global(qos: .utility).async {
+          do {
+            guard let support = FileManager.default.urls(
+              for: .applicationSupportDirectory, in: .userDomainMask
+            ).first else {
+              throw CocoaError(.fileNoSuchFile)
+            }
+            let attributes = try FileManager.default.attributesOfFileSystem(
+              forPath: support.path
+            )
+            guard let available = attributes[.systemFreeSize] as? NSNumber else {
+              throw CocoaError(.fileReadUnknown)
+            }
+            let snapshot: [String: Any] = [
+              "availableBytes": available.int64Value,
+              "checkedAtUnixMicros": Int64(Date().timeIntervalSince1970 * 1_000_000)
+            ]
+            DispatchQueue.main.async { result(snapshot) }
+          } catch {
+            DispatchQueue.main.async {
+              result(FlutterError(code: "model_disk_space_unavailable",
+                message: "Could not query available space on the model-store volume.", details: nil))
+            }
+          }
+        }
+        return
+      }
       if call.method == "timingClockSnapshot" {
         var raw = timespec()
         guard clock_gettime(CLOCK_MONOTONIC_RAW, &raw) == 0 else {

@@ -1763,10 +1763,39 @@ class ReaderController extends ChangeNotifier {
   /// One startup attempt owns all callbacks and publication. Failed attempts
   /// expose their root cause independently of playback and can be retried.
   Future<void> retryInitialization() {
+    if (_modelPreparationCancelled) return _resumeModelPreparation();
     if (_runningEngineRetired && _engineSwitch == null) return _switchEngine();
     return _engineStartup ??= _initializeEngine().whenComplete(
       () => _engineStartup = null,
     );
+  }
+
+  bool _modelPreparationCancelled = false;
+
+  /// Cancels the resource owner without changing selection, narrator intent,
+  /// or the reading anchor. Epoch fencing takes effect before native drain.
+  Future<void> cancelSpeechResourcePreparation() {
+    if (_modelPreparationCancelled) return _engineSwitch ?? Future.value();
+    if (!_isInitializing) return Future.value();
+    _requestEngineReplacement();
+    _modelPreparationCancelled = true;
+    _speechResourceProgress = null;
+    _isInitializing = false;
+    _statusMessage = 'Speech engine preparation cancelled. Retry to resume.';
+    _publishEnginePhase(EngineSessionPhase.cancelled);
+    final drain = _switchEngine();
+    notifyListeners();
+    return drain;
+  }
+
+  Future<void> _resumeModelPreparation() async {
+    final epoch = _engineEpoch;
+    await _engineSwitch;
+    if (_disposed || epoch != _engineEpoch || !_modelPreparationCancelled) {
+      return;
+    }
+    _modelPreparationCancelled = false;
+    await _switchEngine();
   }
 
   Future<void> _initializeEngine() async {
@@ -2900,7 +2929,9 @@ class ReaderController extends ChangeNotifier {
     final newlyExplicit = !_hasExplicitEngineChoice;
     _hasExplicitEngineChoice = true;
     _engineSelectionReason = null;
-    if (_selectedTtsEngineId == engineId && _startupError == null) {
+    if (_selectedTtsEngineId == engineId &&
+        _startupError == null &&
+        !_modelPreparationCancelled) {
       if (newlyExplicit) {
         await _persistPreferences();
         if (!_disposed) notifyListeners();
@@ -2944,6 +2975,7 @@ class ReaderController extends ChangeNotifier {
   }
 
   void _requestEngineReplacement({bool preserveBookPlay = false}) {
+    _modelPreparationCancelled = false;
     ++_engineEpoch;
     ++_startupRevision;
     ++_previewRevision;
@@ -2985,7 +3017,7 @@ class ReaderController extends ChangeNotifier {
   }
 
   Future<void> _replaceEngine() async {
-    _isInitializing = true;
+    _isInitializing = !_modelPreparationCancelled;
     _invalidateResourceBindings();
     _currentRealization = null;
     notifyListeners();
@@ -2994,7 +3026,9 @@ class ReaderController extends ChangeNotifier {
           (ttsEngineRestartRequired || _runningEngineRetired)) {
         final old = _ttsEngine;
         _detachEngineCallbacks(old);
-        _publishEnginePhase(EngineSessionPhase.unloading);
+        if (!_modelPreparationCancelled) {
+          _publishEnginePhase(EngineSessionPhase.unloading);
+        }
         notifyListeners();
         if (old is ResourcePreparationCapable) {
           // This owner cancels export/generation out of band before joining
@@ -3005,7 +3039,7 @@ class ReaderController extends ChangeNotifier {
         }
         old.dispose();
         await _engineStartup;
-        if (_disposed) return;
+        if (_disposed || _modelPreparationCancelled) return;
         _resetPreviewState();
         _isPlaying = false;
         _activePlaybackDocumentId = null;
@@ -3027,7 +3061,7 @@ class ReaderController extends ChangeNotifier {
         if (epoch == _engineEpoch) break;
       }
     } catch (error) {
-      if (_disposed) return;
+      if (_disposed || _modelPreparationCancelled) return;
       _startupError = 'Speech engine switch failed: $error';
       _publishEnginePhase(EngineSessionPhase.failed);
       _statusMessage = _startupError;
