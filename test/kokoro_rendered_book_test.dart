@@ -1,4 +1,6 @@
 import 'dart:async';
+import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:just_audio/just_audio.dart';
@@ -7,6 +9,7 @@ import 'package:read_aloud/src/models/prepared_voice_binding.dart';
 import 'package:read_aloud/src/models/voice_profile.dart';
 import 'package:read_aloud/src/services/kokoro_tts_engine.dart';
 import 'package:read_aloud/src/services/tts_engine.dart';
+import 'package:read_aloud/src/services/speech_audio_packet.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -339,6 +342,266 @@ void main() {
       await _until(() => completed == 1);
       expect(engine.debugPlaybackPinCount, 0);
     },
+  );
+
+  test(
+    'packets play before publication, retain scene identity and defer EOF',
+    () async {
+      final temp = Directory.systemTemp.createTempSync('packet-playback-');
+      addTearDown(() => temp.deleteSync(recursive: true));
+      final player = _FakePlayer();
+      final engine = _NoModelEngine(player);
+      addTearDown(() => _close(engine));
+      final done = Completer<TtsRenderedSceneCompletion>();
+      final progress = <TtsProgressUpdate>[];
+      final errors = <String>[];
+      var completed = 0;
+      engine.onProgress = progress.add;
+      engine.onError = errors.add;
+      engine.onComplete = () => completed++;
+      final second = _packetScene(temp, done.future, index: 1, start: 500);
+      await engine.playRendered(
+        _packetScene(
+          temp,
+          done.future,
+          continuation: TtsRenderedAudioContinuation(
+            next: (_, _) async => second,
+          ),
+        ),
+      );
+      await _until(() => player.sources.length == 2);
+      expect(player.playCalls, 1);
+      expect(done.isCompleted, isFalse);
+      expect(progress.single.chunkId, 'scene');
+      expect(progress.single.chunkAudioDuration, isNull);
+      expect(progress.single.elapsedInChunk, isNull);
+      expect(engine.currentPlaybackResumeAnchor!.chunkId, 'scene');
+      player.moveTo(1);
+      player.advance(const Duration(milliseconds: 400));
+      expect(progress.last.wordStartIndex, 0);
+      player.complete();
+      expect(completed, 0);
+      expect(progress.last.wordStartIndex, 0);
+      done.complete(
+        const TtsRenderedSceneCompletion(
+          sceneId: 'scene',
+          frameCount: 1000,
+          packetCount: 2,
+          duration: Duration(seconds: 1),
+          onsetTrimFrames: 0,
+        ),
+      );
+      await _until(() => completed == 1);
+      expect(progress.map((p) => p.chunkId).toSet(), {'scene'});
+      expect(progress.last.wordEndIndex, 2);
+      expect(player.installCalls, 1);
+      expect(player.addCalls, 1);
+      expect(errors, isEmpty);
+      expect(engine.debugPlaybackPinCount, 0);
+    },
+  );
+
+  for (final allSilent in [false, true]) {
+    test(
+      'leading silent packets ${allSilent ? 'finish silently' : 'retain exact onset PCM'}',
+      () async {
+        final temp = Directory.systemTemp.createTempSync('packet-onset-');
+        addTearDown(() => temp.deleteSync(recursive: true));
+        final player = _FakePlayer();
+        final engine = _NoModelEngine(player);
+        addTearDown(() => _close(engine));
+        final done = Completer<TtsRenderedSceneCompletion>();
+        final second = _packetScene(
+          temp,
+          done.future,
+          index: 1,
+          start: 500,
+          silent: allSilent,
+        );
+        final first = _packetScene(
+          temp,
+          done.future,
+          silent: true,
+          continuation: TtsRenderedAudioContinuation(
+            next: (_, _) async => second,
+          ),
+        );
+        final raw = <int>[
+          ...File(first.audioPath).readAsBytesSync().sublist(44),
+          ...File(second.audioPath).readAsBytesSync().sublist(44),
+        ];
+        final trim = allSilent ? 880 : 380;
+        if (allSilent) {
+          done.complete(
+            TtsRenderedSceneCompletion(
+              sceneId: 'scene',
+              frameCount: 1000,
+              packetCount: 2,
+              duration: const Duration(milliseconds: 120),
+              onsetTrimFrames: trim,
+            ),
+          );
+        }
+        await engine.playRendered(first);
+        await _until(() => player.playCalls == 1);
+        expect(player.sources, hasLength(allSilent ? 1 : 2));
+        final played = <int>[
+          for (final path in player.sources)
+            ...File(path).readAsBytesSync().sublist(44),
+        ];
+        expect(played, raw.sublist(trim * 2));
+        if (!allSilent) {
+          expect(done.isCompleted, isFalse);
+          done.complete(
+            TtsRenderedSceneCompletion(
+              sceneId: 'scene',
+              frameCount: 1000,
+              packetCount: 2,
+              duration: const Duration(milliseconds: 620),
+              onsetTrimFrames: trim,
+            ),
+          );
+        }
+      },
+    );
+  }
+
+  for (final malformed in [true, false]) {
+    test(
+      'packet ${malformed ? 'coverage refusal' : 'late publication failure'} stops early playback',
+      () async {
+        final temp = Directory.systemTemp.createTempSync('packet-failure-');
+        addTearDown(() => temp.deleteSync(recursive: true));
+        final player = _FakePlayer();
+        final engine = _NoModelEngine(player);
+        addTearDown(() => _close(engine));
+        final done = Completer<TtsRenderedSceneCompletion>();
+        final errors = <String>[];
+        var completed = 0;
+        engine.onError = errors.add;
+        engine.onComplete = () => completed++;
+        final next = Completer<TtsRenderedAudioRequest?>();
+        await engine.playRendered(
+          _packetScene(
+            temp,
+            done.future,
+            continuation: TtsRenderedAudioContinuation(
+              next: (_, _) => next.future,
+            ),
+          ),
+        );
+        await _until(() => player.playCalls == 1);
+        if (malformed) {
+          next.complete(_packetScene(temp, done.future, index: 1, start: 501));
+        } else {
+          done.completeError(StateError('final publication refused'));
+        }
+        await _until(() => errors.isNotEmpty);
+        await _until(() => engine.debugPlaybackPinCount == 0);
+        expect(completed, 0);
+        expect(player.addCalls, 0);
+        if (malformed) done.completeError(StateError('aborted'));
+      },
+    );
+  }
+
+  test(
+    'stop releases packet continuation and ignores late publication failure',
+    () async {
+      final temp = Directory.systemTemp.createTempSync('packet-stop-');
+      addTearDown(() => temp.deleteSync(recursive: true));
+      final player = _FakePlayer();
+      final engine = _NoModelEngine(player);
+      addTearDown(() => _close(engine));
+      final done = Completer<TtsRenderedSceneCompletion>();
+      final next = Completer<TtsRenderedAudioRequest?>();
+      final errors = <String>[];
+      engine.onError = errors.add;
+      await engine.playRendered(
+        _packetScene(
+          temp,
+          done.future,
+          continuation: TtsRenderedAudioContinuation(
+            next: (_, _) => next.future,
+          ),
+        ),
+      );
+      await _until(() => player.playCalls == 1);
+      await engine.stop();
+      done.completeError(StateError('obsolete publication'));
+      next.completeError(StateError('obsolete pull'));
+      await Future<void>.delayed(Duration.zero);
+      expect(errors, isEmpty);
+      expect(engine.debugPlaybackPinCount, 0);
+      expect(engine.pendingPlaybackPreparationTasks, 0);
+    },
+  );
+}
+
+TtsRenderedAudioRequest _packetScene(
+  Directory temp,
+  Future<TtsRenderedSceneCompletion> completion, {
+  int index = 0,
+  int start = 0,
+  bool silent = false,
+  TtsRenderedAudioContinuation? continuation,
+}) {
+  final path = '${temp.path}/packet-$index.wav';
+  final header = ByteData(44)
+    ..setUint32(0, 0x52494646)
+    ..setUint32(4, 1036, Endian.little)
+    ..setUint32(8, 0x57415645)
+    ..setUint32(12, 0x666d7420)
+    ..setUint32(16, 16, Endian.little)
+    ..setUint16(20, 1, Endian.little)
+    ..setUint16(22, 1, Endian.little)
+    ..setUint32(24, 1000, Endian.little)
+    ..setUint32(28, 2000, Endian.little)
+    ..setUint16(32, 2, Endian.little)
+    ..setUint16(34, 16, Endian.little)
+    ..setUint32(36, 0x64617461)
+    ..setUint32(40, 1000, Endian.little);
+  final pcm = ByteData(1000);
+  // A deliberately non-silent deterministic fixture tests placement/coverage,
+  // not speech quality or acoustic continuity.
+  for (var i = 0; i < 500 && !silent; i++) {
+    pcm.setInt16(i * 2, i.isEven ? 2000 : -2000, Endian.little);
+  }
+  File(path).writeAsBytesSync([
+    ...header.buffer.asUint8List(),
+    ...pcm.buffer.asUint8List(),
+  ]);
+  return TtsRenderedAudioRequest(
+    documentId: 'book',
+    manifestIdentity: 'manifest',
+    intentRevision: 1,
+    sceneId: 'scene',
+    text: 'one two',
+    startWordIndex: 0,
+    endWordIndex: 2,
+    sourceEndWordIndex: 2,
+    startOffset: 0,
+    sceneTurns: const [],
+    audioPath: path,
+    format: const TtsRenderedAudioFormat(
+      sampleRate: 1000,
+      channels: 1,
+      bitsPerSample: 16,
+    ),
+    duration: const Duration(milliseconds: 500),
+    rangeSequence: index,
+    audioPacket: SpeechAudioPacket(
+      sessionId: 'producer',
+      generationId: 'producer-generation',
+      chunkId: 'scene',
+      audioPath: path,
+      packetIndex: index,
+      frameStart: start,
+      frameCount: 500,
+      sampleRate: 1000,
+    ),
+    sceneCompletion: completion,
+    continuation: continuation,
   );
 }
 

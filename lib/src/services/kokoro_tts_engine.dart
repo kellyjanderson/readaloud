@@ -7,6 +7,7 @@ import 'audio_artifact_store.dart';
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'dart:typed_data';
 import 'package:flutter/foundation.dart' show compute, visibleForTesting;
 
 import 'package:crypto/crypto.dart' as crypto;
@@ -36,6 +37,8 @@ import 'playback_instrumentation_service.dart';
 import 'speech_runtime.dart';
 import 'tts_debug_trace_session.dart';
 import 'tts_engine.dart';
+import 'speech_audio_packet.dart';
+import 'synthesis_boundary_policy.dart';
 
 class KokoroTtsEngine
     implements
@@ -127,7 +130,7 @@ class KokoroTtsEngine
     final chunk = _activeChunks[_currentChunkIndex];
     return TtsPlaybackResumeAnchor(
       documentId: chunk.documentId,
-      chunkId: chunk.chunkId,
+      chunkId: chunk.sourceSceneId,
       startWordIndex: chunk.startWordIndex,
     );
   }
@@ -432,6 +435,8 @@ class KokoroTtsEngine
   Completer<_PlaybackChunk>? _firstChunkCompleter;
   Map<String, _QueuedChunk> _pendingChunksById = <String, _QueuedChunk>{};
   final Map<String, DateTime> _queuedAtByChunkId = <String, DateTime>{};
+  final Map<String, _PacketScene> _packetScenes = {};
+  Duration? _previousPacketTrailingSilence;
   int _expectedChunkCount = 0;
   int _remainingPlannedChunkCount = 0;
   bool _waitingForUnderrunRecovery = false;
@@ -656,6 +661,7 @@ class KokoroTtsEngine
         beforeProcess: beforeSynthesis,
         onPlaybackCompleted: (event) {
           if (event.generationId != _activeGenerationId) return;
+          if (_packetScenes.containsKey(event.chunkId)) return;
           final duration = event.duration;
           if (duration == null) {
             throw StateError('Completed playback WAV omitted duration');
@@ -825,7 +831,7 @@ class KokoroTtsEngine
         request.endWordIndex <= request.startWordIndex ||
         request.endWordIndex > request.sourceEndWordIndex ||
         request.endWordIndex - request.startWordIndex != words.length ||
-        request.duration <= Duration.zero ||
+        (request.audioPacket == null && request.duration <= Duration.zero) ||
         request.audioPath.isEmpty ||
         request.format.sampleRate <= 0 ||
         request.format.channels <= 0 ||
@@ -846,7 +852,10 @@ class KokoroTtsEngine
     }
     final first = request.sceneTurns.firstOrNull;
     return _PlaybackChunk(
-      chunkId: '${request.rangeSequence}:${request.sceneId}',
+      chunkId: request.audioPacket == null
+          ? '${request.rangeSequence}:${request.sceneId}'
+          : request.sceneId,
+      sourceSceneIdOverride: request.sceneId,
       generationId: generation,
       boundaryClass: BreakClass.none,
       documentId: request.documentId,
@@ -876,6 +885,190 @@ class KokoroTtsEngine
     );
   }
 
+  /// Both synthesis and saved-book repair enter the same ordered packet owner.
+  /// File scanning and immutable onset derivatives run on a worker isolate.
+  Future<List<_PlaybackChunk>> _preparePacketPlayback({
+    required SpeechAudioPacket packet,
+    required _PlaybackChunk parent,
+    required bool isInitial,
+    Duration? previousTrailing,
+    required bool Function() current,
+  }) async {
+    final state = _packetScenes.putIfAbsent(
+      parent.chunkId,
+      () => _PacketScene(
+        sceneId: parent.chunkId,
+        sessionId: packet.sessionId,
+        generationId: packet.generationId,
+        sampleRate: packet.sampleRate,
+      ),
+    );
+    state.parent = parent;
+    state.admit(packet);
+    _playbackPins.pin(
+      parent.generationId,
+      '${parent.chunkId}:raw:${packet.packetIndex}',
+      packet.audioPath,
+    );
+    final leading = await compute(_packetLeadingFrames, packet.toMap());
+    if (!current()) return const [];
+    if (state.onsetTrimFrames == null) {
+      state.leadingFrames += leading;
+      state.leadingPackets.add(packet);
+      if (leading == packet.frameCount) return const [];
+      state.onsetTrimFrames = const SynthesisBoundaryPolicy().onsetTrimFrames(
+        leadingSilentFrames: state.leadingFrames,
+        sampleRate: packet.sampleRate,
+        boundaryClass: parent.boundaryClass,
+        isInitialChunk: isInitial,
+        isResumedChunk: false,
+        previousTrailingSilence: previousTrailing,
+      );
+    } else {
+      state.leadingPackets.add(packet);
+    }
+    return _flushPacketLeading(state, current);
+  }
+
+  Future<List<_PlaybackChunk>> _flushPacketLeading(
+    _PacketScene state,
+    bool Function() current,
+  ) async {
+    final parent = state.parent!;
+    final ready = <_PlaybackChunk>[];
+    for (final raw in state.leadingPackets) {
+      final trim = (state.onsetTrimFrames! - raw.frameStart).clamp(
+        0,
+        raw.frameCount,
+      );
+      if (trim == raw.frameCount) {
+        _playbackPins.release(
+          parent.generationId,
+          '${parent.chunkId}:raw:${raw.packetIndex}',
+        );
+        continue;
+      }
+      final path = trim == 0
+          ? raw.audioPath
+          : await compute(_trimPacketWav, <String, Object?>{
+              'path': raw.audioPath,
+              'trim': trim,
+            });
+      if (!current()) return const [];
+      final playable = parent.packetCopy(raw, state, path, trim);
+      _playbackPins.pin(parent.generationId, playable.chunkId, path);
+      _playbackPins.release(
+        parent.generationId,
+        '${parent.chunkId}:raw:${raw.packetIndex}',
+      );
+      ready.add(playable);
+    }
+    state.leadingPackets.clear();
+    return ready;
+  }
+
+  Future<List<_PlaybackChunk>> _finishPacketScene(
+    String sceneId,
+    TtsRenderedSceneCompletion completion,
+  ) async {
+    final state = _packetScenes[sceneId];
+    if (state == null) throw StateError('Missing streamed scene $sceneId.');
+    final pendingSilence = state.onsetTrimFrames == null;
+    if (pendingSilence) state.onsetTrimFrames = completion.onsetTrimFrames;
+    if (completion.sceneId != sceneId ||
+        completion.packetCount != state.packetCount ||
+        completion.frameCount != state.frameCount ||
+        completion.duration <= Duration.zero ||
+        completion.onsetTrimFrames < 0 ||
+        completion.onsetTrimFrames >= completion.frameCount ||
+        (completion.duration.inMicroseconds -
+                    (completion.frameCount - completion.onsetTrimFrames) *
+                        Duration.microsecondsPerSecond ~/
+                        state.sampleRate)
+                .abs() >
+            1000 ||
+        completion.onsetTrimFrames != state.onsetTrimFrames) {
+      throw StateError('Incomplete or inconsistent streamed scene $sceneId.');
+    }
+    state.completion = completion;
+    _signalBuffer();
+    return pendingSilence
+        ? _flushPacketLeading(
+            state,
+            () => state.parent?.generationId == _activeGenerationId,
+          )
+        : const [];
+  }
+
+  Future<List<_PlaybackChunk>> _awaitRenderedCompletion(
+    TtsRenderedAudioRequest request,
+    bool Function() current,
+  ) async {
+    if (request.audioPacket == null) return const [];
+    final future = request.sceneCompletion;
+    if (future == null) {
+      throw StateError('Packet scene omitted final publication.');
+    }
+    final result = await Future.any<TtsRenderedSceneCompletion?>([
+      future,
+      _continuationCancelled.future.then((_) => null),
+    ]);
+    if (!current() || result == null) return const [];
+    final ready = await _finishPacketScene(request.sceneId, result);
+    if (_activePlaybackToken != null && current()) {
+      for (final chunk in ready) {
+        await _appendReadyChunkToActiveQueue(
+          chunk,
+          generationId: _activeGenerationId,
+        );
+      }
+      await _resumeAfterUnderrunIfPossible();
+    }
+    return ready;
+  }
+
+  Future<List<_PlaybackChunk>> _renderedChunks(
+    TtsRenderedAudioRequest request,
+    String generation,
+    bool Function() current,
+  ) async {
+    final parent = _renderedPlaybackChunk(request, generation);
+    final packet = request.audioPacket;
+    if (packet == null) return [parent];
+    if (packet.chunkId != request.sceneId ||
+        packet.audioPath != request.audioPath ||
+        packet.sampleRate != request.format.sampleRate ||
+        packet.channels != request.format.channels ||
+        packet.bitsPerSample != request.format.bitsPerSample ||
+        request.sceneCompletion == null) {
+      throw StateError('Packet does not match its parent rendered scene.');
+    }
+    // Observe late publication failures immediately, including while a pull is held.
+    if (!_packetScenes.containsKey(request.sceneId)) {
+      unawaited(
+        request.sceneCompletion!.then<void>(
+          (_) {},
+          onError: (Object error) {
+            if (current()) {
+              unawaited(
+                _terminatePreparationFailure(
+                  'Streamed scene publication failed: $error',
+                ),
+              );
+            }
+          },
+        ),
+      );
+    }
+    return _preparePacketPlayback(
+      packet: packet,
+      parent: parent,
+      isInitial: request.isInitialScene,
+      previousTrailing: request.previousTrailingSilence,
+      current: current,
+    );
+  }
+
   Future<void> _playRenderedScene(
     int token,
     TtsRenderedAudioRequest request,
@@ -886,13 +1079,37 @@ class KokoroTtsEngine
         request.isCurrent?.call() != false;
     final generation = 'rendered_$token';
     try {
-      final first = _renderedPlaybackChunk(request, generation);
-      if (!current()) return;
       _activeGenerationId = generation;
       _renderedGenerationId = generation;
       _activeDocumentId = request.documentId;
       _activeSessionId = generation;
       _continuationCancelled = Completer<void>();
+      var consumed = request;
+      var firstChunks = await _renderedChunks(consumed, generation, current);
+      while (firstChunks.isEmpty && current()) {
+        final next = consumed.continuation;
+        if (next == null) {
+          firstChunks = await _awaitRenderedCompletion(consumed, current);
+          break;
+        }
+        final following = await Future.any<TtsRenderedAudioRequest?>([
+          next.next(consumed.rangeSequence, _continuationCancelled.future),
+          _continuationCancelled.future.then((_) => null),
+        ]);
+        if (!current()) return;
+        if (following == null) {
+          firstChunks = await _awaitRenderedCompletion(consumed, current);
+          break;
+        }
+        if (following.sceneId != consumed.sceneId ||
+            following.rangeSequence != consumed.rangeSequence + 1) {
+          throw StateError('Incomplete silent packet scene.');
+        }
+        consumed = following;
+        firstChunks = await _renderedChunks(consumed, generation, current);
+      }
+      if (!current()) return;
+      final first = firstChunks.first;
       _rangeActivations.clear();
       if (request.onRangeActive case final activate?) {
         _rangeActivations[request.startWordIndex] = activate;
@@ -901,7 +1118,8 @@ class KokoroTtsEngine
       // A missing continuation before the declared end is a gap, never EOF.
       _remainingPlannedChunkCount =
           request.endWordIndex < request.sourceEndWordIndex ||
-              request.continuation != null
+              request.continuation != null ||
+              request.audioPacket != null
           ? 1
           : 0;
       _playbackPins.pin(generation, first.chunkId, first.filePath);
@@ -913,7 +1131,7 @@ class KokoroTtsEngine
       );
       final installed = await _mutateAudioQueue(() async {
         if (!current()) return;
-        _activeChunks = [first];
+        _activeChunks = firstChunks;
         _currentChunkIndex = 0;
         _currentQueueBaseIndex = 0;
         _nextReadyWord = first.endWordIndex;
@@ -922,7 +1140,9 @@ class KokoroTtsEngine
           install: () async {
             await _player.setVolume(_volume);
             if (!current()) return;
-            await _player.setAudioSources([AudioSource.file(first.filePath)]);
+            await _player.setAudioSources(
+              firstChunks.map((c) => AudioSource.file(c.filePath)).toList(),
+            );
           },
           clearStale: () async {
             final pins = _playbackPins.snapshot(generation: generation);
@@ -964,7 +1184,7 @@ class KokoroTtsEngine
           }
         }),
       );
-      await _continueRenderedScenes(token, request, generation);
+      await _continueRenderedScenes(token, consumed, generation);
     } catch (error) {
       if (current()) {
         await _terminatePreparationFailure(
@@ -988,6 +1208,8 @@ class KokoroTtsEngine
     while (current()) {
       final continuation = previous.continuation;
       if (continuation == null) {
+        await _awaitRenderedCompletion(previous, current);
+        if (!current()) return;
         if (previous.endWordIndex != initial.sourceEndWordIndex) {
           throw StateError(
             'Rendered audio coverage gap at word ${previous.endWordIndex}.',
@@ -1008,6 +1230,8 @@ class KokoroTtsEngine
       ]);
       if (!current()) return;
       if (following == null) {
+        await _awaitRenderedCompletion(previous, current);
+        if (!current()) return;
         if (previous.endWordIndex != initial.sourceEndWordIndex) {
           throw StateError(
             'Rendered audio coverage gap at word ${previous.endWordIndex}.',
@@ -1015,22 +1239,52 @@ class KokoroTtsEngine
         }
         break;
       }
+      final sameScene =
+          previous.audioPacket != null &&
+          following.audioPacket != null &&
+          following.sceneId == previous.sceneId;
+      if (!sameScene) {
+        await _awaitRenderedCompletion(previous, current);
+        if (!current()) return;
+      }
       if (following.isCurrent?.call() == false ||
           following.rangeSequence != previous.rangeSequence + 1 ||
-          following.startWordIndex != previous.endWordIndex ||
+          (sameScene
+              ? following.startWordIndex != previous.startWordIndex ||
+                    following.endWordIndex != previous.endWordIndex ||
+                    following.text != previous.text ||
+                    following.startOffset != previous.startOffset ||
+                    jsonEncode(
+                          following.sceneTurns.map((t) => t.toMap()).toList(),
+                        ) !=
+                        jsonEncode(
+                          previous.sceneTurns.map((t) => t.toMap()).toList(),
+                        ) ||
+                    following.boundaryClass != previous.boundaryClass ||
+                    following.isInitialScene != previous.isInitialScene ||
+                    following.previousTrailingSilence !=
+                        previous.previousTrailingSilence ||
+                    !identical(
+                      following.sceneCompletion,
+                      previous.sceneCompletion,
+                    )
+              : following.startWordIndex != previous.endWordIndex) ||
           following.documentId != initial.documentId ||
           following.manifestIdentity != initial.manifestIdentity ||
           following.intentRevision != initial.intentRevision ||
           following.sourceEndWordIndex != initial.sourceEndWordIndex) {
         throw StateError('Non-contiguous or stale rendered audio scene.');
       }
-      final chunk = _renderedPlaybackChunk(following, generation);
+      final chunks = await _renderedChunks(following, generation, current);
+      if (!current()) return;
       if (following.onRangeActive case final activate?) {
         _rangeActivations[following.startWordIndex] = activate;
       }
-      _playbackPins.pin(generation, chunk.chunkId, chunk.filePath);
-      ++_expectedChunkCount;
-      await _appendReadyChunkToActiveQueue(chunk, generationId: generation);
+      for (final chunk in chunks) {
+        _playbackPins.pin(generation, chunk.chunkId, chunk.filePath);
+        ++_expectedChunkCount;
+        await _appendReadyChunkToActiveQueue(chunk, generationId: generation);
+      }
       if (!current()) return;
       await _resumeAfterUnderrunIfPossible();
       previous = following;
@@ -1188,12 +1442,72 @@ class KokoroTtsEngine
     unawaited(completion.future.then<void>((_) {}, onError: (Object _) {}));
     final completedChunks = <String, ExportedAudioChunk>{};
     final pendingChunksById = <String, _QueuedChunk>{};
+    final packetCompletions = <String, Completer<TtsRenderedSceneCompletion>>{};
+    final packetCoverage = <String, _PacketScene>{};
+    var previousTrailing = request.predecessorTrailingSilence;
     var chunks = <_QueuedChunk>[];
     var initial = true;
     var publicationTail = Future<void>.value();
     final subscription = runtime.events.listen((event) {
       if (event.sessionId != null && event.sessionId != sessionId) return;
-      if (event.type == SpeechRuntimeEventType.chunkReady) {
+      if (event.type == SpeechRuntimeEventType.chunkPacketReady) {
+        final packet = event.audioPacket;
+        final chunk = pendingChunksById[event.chunkId];
+        if (packet == null ||
+            chunk == null ||
+            request.onPlayablePacket == null ||
+            !current()) {
+          return;
+        }
+        final done = packetCompletions.putIfAbsent(chunk.chunkId, () {
+          final value = Completer<TtsRenderedSceneCompletion>();
+          unawaited(value.future.then<void>((_) {}, onError: (Object _) {}));
+          return value;
+        });
+        exportPins.add(_artifactPins.pin(packet.audioPath));
+        final windowCompletion = completion;
+        publicationTail = publicationTail
+            .then((_) async {
+              requireCurrent();
+              final coverage = packetCoverage.putIfAbsent(
+                chunk.chunkId,
+                () => _PacketScene(
+                  sceneId: chunk.chunkId,
+                  sessionId: packet.sessionId,
+                  generationId: packet.generationId,
+                  sampleRate: packet.sampleRate,
+                ),
+              );
+              coverage.admit(packet);
+              await request.onPlayablePacket!(
+                TtsPlayableAudioPacket(
+                  packet: packet,
+                  sceneId: chunk.chunkId,
+                  text: chunk.text,
+                  startWordIndex: chunk.startWordIndex,
+                  endWordIndex: chunk.endWordIndex,
+                  startOffset: chunk.startOffset,
+                  sceneTurns: chunk.sceneTurns,
+                  sceneCompletion: done.future,
+                  boundaryClass: chunk.boundaryClass,
+                  isInitialScene:
+                      (event.isInitialChunk ?? false) ||
+                      (event.isResumedChunk ?? false),
+                  previousTrailingSilence: _packetPreviousTrailing(
+                    event,
+                    previousTrailing,
+                  ),
+                ),
+              );
+            })
+            .catchError((Object error, StackTrace stack) {
+              publicationFailed = true;
+              if (!done.isCompleted) done.completeError(error, stack);
+              if (!windowCompletion.isCompleted) {
+                windowCompletion.completeError(error, stack);
+              }
+            });
+      } else if (event.type == SpeechRuntimeEventType.chunkReady) {
         if (!current()) {
           if (!completion.isCompleted) {
             completion.completeError(
@@ -1250,6 +1564,19 @@ class KokoroTtsEngine
                 );
               }
               requireCurrent();
+              final done = packetCompletions[chunkId];
+              if (done != null) {
+                final result = _completionFromEvent(chunkId, event);
+                final coverage = packetCoverage[chunkId]!;
+                if (result.packetCount != coverage.packetCount ||
+                    result.frameCount != coverage.frameCount) {
+                  throw StateError(
+                    'Export packet coverage does not match completed scene.',
+                  );
+                }
+                if (!done.isCompleted) done.complete(result);
+              }
+              previousTrailing = event.trailingSilence;
               completedChunks[chunkId] = ExportedAudioChunk(
                 sceneTurns: plannedChunk.sceneTurns,
                 chunkId: chunkId,
@@ -1303,6 +1630,10 @@ class KokoroTtsEngine
             })
             .catchError((Object error, StackTrace stack) {
               publicationFailed = true;
+              final done = packetCompletions[chunkId];
+              if (done != null && !done.isCompleted) {
+                done.completeError(error, stack);
+              }
               if (!windowCompletion.isCompleted) {
                 windowCompletion.completeError(error, stack);
               }
@@ -1334,6 +1665,10 @@ class KokoroTtsEngine
           isReplay: false,
           isResumedPlayback: false,
           narrationState: const {},
+          enableAudioPackets: request.onPlayablePacket != null,
+          predecessorRawArtifactIdentity:
+              request.predecessorRawArtifactIdentity,
+          predecessorTrailingSilence: request.predecessorTrailingSilence,
         ),
       );
       var plan = request.chunkPlan;
@@ -1416,6 +1751,13 @@ class KokoroTtsEngine
         ),
       );
     } finally {
+      for (final done in packetCompletions.values) {
+        if (!done.isCompleted) {
+          done.completeError(
+            StateError('Export ended before scene publication.'),
+          );
+        }
+      }
       await kokoroDrainExportOwners(
         runtime: runtime.shutdownRuntime,
         subscription: () async {
@@ -1584,6 +1926,7 @@ class KokoroTtsEngine
           isReplay: !request.isResumedPlayback,
           isResumedPlayback: request.isResumedPlayback,
           narrationState: const <String, Object?>{},
+          enableAudioPackets: _usesMlx,
         ),
       );
 
@@ -2057,6 +2400,10 @@ class KokoroTtsEngine
 
     final chunkIndex = _currentChunkIndex.clamp(0, _activeChunks.length - 1);
     final chunk = _activeChunks[chunkIndex];
+    if (chunk.packetScene != null) {
+      _emitProgressForChunkWord(chunkIndex, 0, elapsedInChunk: position);
+      return;
+    }
     if (chunk.wordBoundaries.isEmpty || chunk.duration.inMilliseconds <= 0) {
       return;
     }
@@ -2110,6 +2457,16 @@ class KokoroTtsEngine
             _releasePlaybackPin(chunk);
           }
           _activeChunks = _activeChunks.sublist(count);
+          final representedScenes = _activeChunks
+              .map((c) => c.sourceSceneId)
+              .toSet();
+          _packetScenes.removeWhere(
+            (id, state) =>
+                state.completion != null &&
+                !representedScenes.contains(id) &&
+                !_pendingChunksById.containsKey(id) &&
+                !_stagedReadyChunks.any((c) => c.sourceSceneId == id),
+          );
           _currentQueueBaseIndex = 0;
           _currentChunkIndex = _player.currentIndex ?? 0;
           _lastProgressKey = null;
@@ -2177,11 +2534,46 @@ class KokoroTtsEngine
       return;
     }
     final chunk = _activeChunks[chunkIndex];
+    final packetScene = chunk.packetScene;
+    Duration? sceneElapsed = elapsedInChunk;
+    Duration? sceneDuration = chunk.duration;
+    if (packetScene != null) {
+      final completion = packetScene.completion;
+      sceneDuration = completion?.duration;
+      if (completion == null) {
+        wordIndex = packetScene.lastWordIndex;
+        sceneElapsed = null;
+      } else {
+        final framePosition =
+            chunk.packetFrameStart -
+            completion.onsetTrimFrames +
+            elapsedInChunk.inMicroseconds *
+                packetScene.sampleRate ~/
+                Duration.microsecondsPerSecond;
+        sceneElapsed = Duration(
+          microseconds:
+              framePosition.clamp(0, completion.frameCount) *
+              Duration.microsecondsPerSecond ~/
+              packetScene.sampleRate,
+        );
+        wordIndex =
+            ((sceneElapsed.inMicroseconds /
+                        completion.duration.inMicroseconds) *
+                    chunk.wordBoundaries.length)
+                .floor()
+                .clamp(
+                  packetScene.lastWordIndex,
+                  chunk.wordBoundaries.length - 1,
+                );
+      }
+      packetScene.lastWordIndex = wordIndex;
+    }
     if (wordIndex < 0 || wordIndex >= chunk.wordBoundaries.length) {
       return;
     }
 
-    final progressKey = '$chunkIndex:$wordIndex';
+    final progressKey =
+        '${chunk.sourceSceneId}:${chunk.startWordIndex + wordIndex}:${sceneDuration == null}';
     if (_lastProgressKey == progressKey) {
       return;
     }
@@ -2213,12 +2605,12 @@ class KokoroTtsEngine
         endOffset: chunk.startOffset + boundary.end,
         word: boundary.word,
         documentId: chunk.documentId,
-        chunkId: chunk.chunkId,
+        chunkId: chunk.sourceSceneId,
         segmentId: segmentRange?.segmentId ?? chunk.segmentIds.firstOrNull,
         wordStartIndex: absoluteWordIndex,
         wordEndIndex: absoluteWordIndex + 1,
-        elapsedInChunk: elapsedInChunk,
-        chunkAudioDuration: chunk.duration,
+        elapsedInChunk: sceneElapsed,
+        chunkAudioDuration: sceneDuration,
         voiceId: turn?.voiceId ?? chunk.voiceId,
         rate: chunk.rate,
         routeId: turn?.routeId ?? chunk.routeId,
@@ -2234,6 +2626,10 @@ class KokoroTtsEngine
     }
     final lastChunkIndex = _activeChunks.length - 1;
     final lastChunk = _activeChunks[lastChunkIndex];
+    if (lastChunk.packetScene != null &&
+        lastChunk.packetScene!.completion == null) {
+      return;
+    }
     if (lastChunk.wordBoundaries.isEmpty) {
       return;
     }
@@ -2296,7 +2692,34 @@ class KokoroTtsEngine
           (_) {},
           onError: (Object _, StackTrace _) {},
         );
-        _ownPlaybackPreparation(ready, _requestToken);
+        _ownPlaybackPreparation(
+          ready.catchError((Object error) async {
+            if (event.generationId == _activeGenerationId) {
+              await _terminatePreparationFailure(
+                'Scene finalization failed: $error',
+              );
+            }
+          }),
+          _requestToken,
+        );
+      case SpeechRuntimeEventType.chunkPacketReady:
+        final packetReady = _sceneReadyTail.then(
+          (_) => _handleRuntimePacket(event),
+        );
+        _sceneReadyTail = packetReady.then<void>(
+          (_) {},
+          onError: (Object _, StackTrace _) {},
+        );
+        _ownPlaybackPreparation(
+          packetReady.catchError((Object error) async {
+            if (event.generationId == _activeGenerationId) {
+              await _terminatePreparationFailure(
+                'Streamed audio failed: $error',
+              );
+            }
+          }),
+          _requestToken,
+        );
       case SpeechRuntimeEventType.chunkFailed:
         _handleRuntimeChunkFailure(event);
       case SpeechRuntimeEventType.sessionCancelled:
@@ -2465,6 +2888,39 @@ class KokoroTtsEngine
       },
     );
 
+    final packetScene = _packetScenes[chunkId];
+    _previousPacketTrailingSilence = event.trailingSilence;
+    if (packetScene != null) {
+      final silence = await _finishPacketScene(
+        chunkId,
+        _completionFromEvent(chunkId, event),
+      );
+      for (final ready in silence) {
+        if (_startupFirstChunk == null && chunkId == _firstPendingChunkId) {
+          _firstPendingChunkId = null;
+          _startupFirstChunk = ready;
+          _firstChunkCompleter?.complete(ready);
+        } else {
+          _stageReadyChunk(ready);
+        }
+      }
+      if (_activePlaybackToken != null) {
+        await _flushStagedReadyChunksToActiveQueue(generationId: generation);
+      }
+      _previousPacketTrailingSilence = event.trailingSilence;
+      _playbackPins.release(generation, chunkId);
+      _signalBuffer();
+      if (_player.processingState == ProcessingState.completed) {
+        await _resumeAfterUnderrunIfPossible();
+        if (!kokoroShouldEnterUnderrunRecovery(_playbackQueueSnapshot())) {
+          _emitFinalProgress();
+          unawaited(_resetPlaybackState());
+          _onComplete?.call();
+        }
+      }
+      return;
+    }
+
     final playbackChunk = _PlaybackChunk(
       chunkId: chunk.chunkId,
       generationId: generation,
@@ -2565,6 +3021,90 @@ class KokoroTtsEngine
     await _resumeAfterUnderrunIfPossible();
   }
 
+  TtsRenderedSceneCompletion _completionFromEvent(
+    String sceneId,
+    SpeechRuntimeEvent event,
+  ) => TtsRenderedSceneCompletion(
+    sceneId: sceneId,
+    packetCount: event.payload['streamedPacketCount'] as int? ?? 0,
+    frameCount: event.payload['streamedFrameCount'] as int? ?? 0,
+    onsetTrimFrames: event.payload['onsetTrimFrames'] as int? ?? 0,
+    duration: event.duration!,
+  );
+
+  Duration? _packetPreviousTrailing(
+    SpeechRuntimeEvent event,
+    Duration? fallback,
+  ) {
+    final ms = event.payload['previousTrailingSilenceMs'];
+    return ms is int ? Duration(milliseconds: ms) : fallback;
+  }
+
+  Future<void> _handleRuntimePacket(SpeechRuntimeEvent event) async {
+    final generation = event.generationId;
+    final packet = event.audioPacket;
+    if (generation == null ||
+        generation != _activeGenerationId ||
+        packet == null) {
+      return;
+    }
+    final chunk = _pendingChunksById[event.chunkId];
+    if (chunk == null ||
+        packet.chunkId != chunk.chunkId ||
+        packet.sessionId != _activeSessionId ||
+        packet.generationId != generation) {
+      throw StateError('Stale or unplanned audio packet.');
+    }
+    final parent = _PlaybackChunk(
+      chunkId: chunk.chunkId,
+      generationId: generation,
+      boundaryClass: chunk.boundaryClass,
+      documentId: chunk.documentId,
+      sceneTurns: chunk.sceneTurns,
+      segmentIds: chunk.segmentIds,
+      segmentRanges: chunk.segmentRanges,
+      startWordIndex: chunk.startWordIndex,
+      endWordIndex: chunk.endWordIndex,
+      startOffset: chunk.startOffset,
+      wordBoundaries: chunk.wordBoundaries,
+      duration: packet.duration,
+      filePath: packet.audioPath,
+      leadingSilence: Duration.zero,
+      trailingSilence: Duration.zero,
+      voiceId: chunk.voiceId,
+      rate: _speechRate,
+      routeId: chunk.routeId,
+      castId: chunk.castId,
+      dialogueSpanId: chunk.dialogueSpanId,
+    );
+    final ready = await _preparePacketPlayback(
+      packet: packet,
+      parent: parent,
+      isInitial:
+          (event.isInitialChunk ?? false) || (event.isResumedChunk ?? false),
+      previousTrailing: _packetPreviousTrailing(
+        event,
+        _previousPacketTrailingSilence,
+      ),
+      current: () => generation == _activeGenerationId,
+    );
+    if (generation != _activeGenerationId) return;
+    for (final playback in ready) {
+      if (_startupFirstChunk == null && chunk.chunkId == _firstPendingChunkId) {
+        _firstPendingChunkId = null;
+        _startupFirstChunk = playback;
+        _firstChunkCompleter?.complete(playback);
+        _signalBuffer();
+      } else {
+        _stageReadyChunk(playback);
+      }
+    }
+    if (_activePlaybackToken != null) {
+      await _flushStagedReadyChunksToActiveQueue(generationId: generation);
+      await _resumeAfterUnderrunIfPossible();
+    }
+  }
+
   void _handleRuntimeChunkFailure(SpeechRuntimeEvent event) {
     if (event.generationId != null &&
         _activeGenerationId != null &&
@@ -2576,6 +3116,14 @@ class KokoroTtsEngine
       return;
     }
     final failedChunk = _pendingChunksById.remove(chunkId);
+    if (_packetScenes.containsKey(chunkId)) {
+      unawaited(
+        _terminatePreparationFailure(
+          'Synthesis failed after early audio: ${event.message ?? 'Unknown worker failure.'}',
+        ),
+      );
+      return;
+    }
     final failedWasPriorityChunk = chunkId == _firstPendingChunkId;
     final generationId = event.generationId;
     if (failedChunk != null && generationId != null) {
@@ -3356,6 +3904,8 @@ class KokoroTtsEngine
   }
 
   void _clearPlaybackStateFields() {
+    _packetScenes.clear();
+    _previousPacketTrailingSilence = null;
     _producedAudioCredit.clear();
     _activePlaybackToken = null;
     _currentChunkIndex = 0;
@@ -3464,6 +4014,13 @@ class KokoroTtsEngine
   }
 
   bool _isStartupWarmEnough(_PlaybackChunk firstChunk) {
+    if (firstChunk.packetScene != null) {
+      return _initialBufferedQueueLeadTime(
+                _startupBufferedChunks(firstChunk),
+              ) >=
+              const Duration(milliseconds: 300) ||
+          (_pendingChunksById.isEmpty && _remainingPlannedChunkCount == 0);
+    }
     // A tiny opening turn can finish before the next complete WAV is ready.
     // Fish needs the same bounded startup lead as Voxtral. This wait is part
     // of measured launch-to-audio time, never a reset of the startup clock.
@@ -3494,7 +4051,11 @@ class KokoroTtsEngine
     final contiguous = <_PlaybackChunk>[firstChunk];
     var end = firstChunk.endWordIndex;
     for (final chunk in ordered.skip(1)) {
-      if (chunk.startWordIndex != end) break;
+      if (chunk.startWordIndex != end &&
+          !(chunk.packetScene != null &&
+              chunk.sourceSceneId == contiguous.last.sourceSceneId)) {
+        break;
+      }
       contiguous.add(chunk);
       end = chunk.endWordIndex;
     }
@@ -3551,17 +4112,23 @@ class KokoroTtsEngine
         return;
       }
 
-      if (playbackChunk.startWordIndex != _nextReadyWord) {
+      final sameScene =
+          _activeChunks.isNotEmpty &&
+          playbackChunk.packetScene != null &&
+          _activeChunks.last.sourceSceneId == playbackChunk.sourceSceneId;
+      if (!sameScene && playbackChunk.startWordIndex != _nextReadyWord) {
         _stageReadyChunk(playbackChunk);
         return;
       }
-      final insertIndex = kokoroPlaybackInsertIndex<_PlaybackChunk>(
-        activeChunks: _activeChunks,
-        incomingChunk: playbackChunk,
-        chunkIdOf: (chunk) => chunk.chunkId,
-        startWordIndexOf: (chunk) => chunk.startWordIndex,
-        startOffsetOf: (chunk) => chunk.startOffset,
-      );
+      final insertIndex = sameScene
+          ? _activeChunks.length
+          : kokoroPlaybackInsertIndex<_PlaybackChunk>(
+              activeChunks: _activeChunks,
+              incomingChunk: playbackChunk,
+              chunkIdOf: (chunk) => chunk.chunkId,
+              startWordIndexOf: (chunk) => chunk.startWordIndex,
+              startOffsetOf: (chunk) => chunk.startOffset,
+            );
       if (insertIndex <= _currentChunkIndex) {
         _recordMetric(
           'lateChunkDiscarded',
@@ -3661,7 +4228,9 @@ class KokoroTtsEngine
       activeChunkCount: _activeChunks.length,
       currentChunkIndex: _currentChunkIndex,
       currentQueueBaseIndex: _currentQueueBaseIndex,
-      pendingChunkCount: _pendingChunksById.length,
+      pendingChunkCount:
+          _pendingChunksById.length +
+          _packetScenes.values.where((s) => s.completion == null).length,
       remainingPlannedChunkCount: _remainingPlannedChunkCount,
       playerRelativeIndex: _player.currentIndex,
     );
@@ -4088,6 +4657,10 @@ class _PlaybackChunk {
     required this.routeId,
     required this.castId,
     required this.dialogueSpanId,
+    this.packetScene,
+    this.packetFrameStart = 0,
+    this.packetIndex = -1,
+    this.sourceSceneIdOverride,
   });
 
   final List<NativeSpeechTurn> sceneTurns;
@@ -4110,6 +4683,48 @@ class _PlaybackChunk {
   final String? routeId;
   final String? castId;
   final String? dialogueSpanId;
+  final _PacketScene? packetScene;
+  final int packetFrameStart;
+  final int packetIndex;
+  final String? sourceSceneIdOverride;
+  String get sourceSceneId =>
+      packetScene?.sceneId ?? sourceSceneIdOverride ?? chunkId;
+
+  _PlaybackChunk packetCopy(
+    SpeechAudioPacket packet,
+    _PacketScene scene,
+    String path,
+    int trimmedFrames,
+  ) => _PlaybackChunk(
+    chunkId: '$chunkId:packet:${packet.packetIndex.toString().padLeft(4, '0')}',
+    generationId: generationId,
+    boundaryClass: boundaryClass,
+    documentId: documentId,
+    sceneTurns: sceneTurns,
+    segmentIds: segmentIds,
+    segmentRanges: segmentRanges,
+    startWordIndex: startWordIndex,
+    endWordIndex: endWordIndex,
+    startOffset: startOffset,
+    wordBoundaries: wordBoundaries,
+    duration: Duration(
+      microseconds:
+          (packet.frameCount - trimmedFrames) *
+          Duration.microsecondsPerSecond ~/
+          packet.sampleRate,
+    ),
+    filePath: path,
+    leadingSilence: Duration.zero,
+    trailingSilence: Duration.zero,
+    voiceId: voiceId,
+    rate: rate,
+    routeId: routeId,
+    castId: castId,
+    dialogueSpanId: dialogueSpanId,
+    packetScene: scene,
+    packetFrameStart: packet.frameStart + trimmedFrames,
+    packetIndex: packet.packetIndex,
+  );
 
   _ChunkSegmentRange? segmentRangeForWordIndex(int absoluteWordIndex) {
     for (final range in segmentRanges) {
@@ -4120,6 +4735,82 @@ class _PlaybackChunk {
     }
     return segmentRanges.isEmpty ? null : segmentRanges.last;
   }
+}
+
+class _PacketScene {
+  _PacketScene({
+    required this.sceneId,
+    required this.sessionId,
+    required this.generationId,
+    required this.sampleRate,
+  });
+  final String sceneId;
+  final String sessionId;
+  final String generationId;
+  final int sampleRate;
+  var packetCount = 0;
+  var frameCount = 0;
+  var leadingFrames = 0;
+  int? onsetTrimFrames;
+  var lastWordIndex = 0;
+  final leadingPackets = <SpeechAudioPacket>[];
+  TtsRenderedSceneCompletion? completion;
+  _PlaybackChunk? parent;
+  void admit(SpeechAudioPacket packet) {
+    if (completion != null ||
+        packet.chunkId != sceneId ||
+        packet.sessionId != sessionId ||
+        packet.generationId != generationId ||
+        packet.sampleRate != sampleRate ||
+        packet.packetIndex != packetCount ||
+        packet.frameStart != frameCount) {
+      throw StateError('Non-contiguous or mismatched packet for $sceneId.');
+    }
+    packetCount++;
+    frameCount = packet.frameEnd;
+  }
+}
+
+int _packetLeadingFrames(Map<String, Object?> values) {
+  final packet = SpeechAudioPacket.fromMap(values);
+  final bytes = File(packet.audioPath).readAsBytesSync();
+  final wav = AudioArtifactStore.validateWav(bytes);
+  if (wav.sampleRate != packet.sampleRate ||
+      bytes.length != 44 + packet.frameCount * 2) {
+    throw const FormatException(
+      'Packet WAV does not match declared frame coverage.',
+    );
+  }
+  final pcm = ByteData.sublistView(bytes, 44);
+  var leading = 0;
+  while (leading < packet.frameCount &&
+      SynthesisBoundaryPolicy.isSilentSample(
+        pcm.getInt16(leading * 2, Endian.little),
+      )) {
+    leading++;
+  }
+  return leading;
+}
+
+String _trimPacketWav(Map<String, Object?> values) {
+  final path = values['path']! as String;
+  final trim = values['trim']! as int;
+  final bytes = File(path).readAsBytesSync();
+  AudioArtifactStore.validateWav(bytes);
+  final header = Uint8List.fromList(bytes.sublist(0, 44));
+  final data = bytes.sublist(44 + trim * 2);
+  ByteData.sublistView(header)
+    ..setUint32(4, 36 + data.length, Endian.little)
+    ..setUint32(40, data.length, Endian.little);
+  final target = '$path.onset-$trim.wav';
+  File(target).writeAsBytesSync(
+    (BytesBuilder(copy: false)
+          ..add(header)
+          ..add(data))
+        .takeBytes(),
+    flush: true,
+  );
+  return target;
 }
 
 int _comparePlaybackChunkOrder(_PlaybackChunk left, _PlaybackChunk right) {
