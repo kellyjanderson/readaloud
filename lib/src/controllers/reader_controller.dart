@@ -2134,6 +2134,7 @@ class ReaderController extends ChangeNotifier {
 
   Future<void> startPlayback() async {
     if (_disposed) return;
+    _playbackRequestedAt ??= DateTime.now();
     if (_audioBook != null && isDocumentPrepared) {
       _audioBook?.cancelRender();
       _resumeAfterPreparation = true;
@@ -2303,7 +2304,7 @@ class ReaderController extends ChangeNotifier {
     _utteranceStartOffset = _document.charOffsetForWord(_currentWordIndex);
     _utteranceStartedAt = DateTime.now();
     _playbackState = ReaderPlaybackPrimaryState.bufferingFirstChunk;
-    _playbackRequestedAt = DateTime.now();
+    _playbackRequestedAt ??= DateTime.now();
     _recordPositionMapConfidenceIfNeeded();
     _activePlaybackDocumentId = _document.displayDocument.documentId;
     _activeAssignmentRevision = assignmentRevision;
@@ -4820,7 +4821,6 @@ class ReaderController extends ChangeNotifier {
         documentId == null ||
         wordStartIndex == null ||
         wordEndIndex == null ||
-        chunkAudioDuration == null ||
         voiceId == null ||
         rate == null) {
       return;
@@ -4847,7 +4847,11 @@ class ReaderController extends ChangeNotifier {
           (math.max(existing?.endWordIndex ?? wordEndIndex, wordEndIndex) -
                   (existing?.startWordIndex ?? wordStartIndex))
               .clamp(1, _document.wordCount),
-      audioDuration: chunkAudioDuration,
+      // Early packets establish source ownership before a scene duration is
+      // known. Zero on an incomplete record is unknown, not measured silence;
+      // replace it with the real total once final publication supplies it.
+      audioDuration:
+          chunkAudioDuration ?? existing?.audioDuration ?? Duration.zero,
       playbackOffset: update.elapsedInChunk ?? Duration.zero,
       voiceId: voiceId,
       rate: rate,

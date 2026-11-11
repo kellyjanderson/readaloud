@@ -59,7 +59,7 @@ begin
   result[:launchUtc] = launched.utc.iso8601(6)
   micros = (launched.to_r * 1_000_000).to_i
   result[:launchMonotonicRawNanos] = Process.clock_gettime(Process::CLOCK_MONOTONIC_RAW, :nanosecond)
-  opener = Process.spawn('/usr/bin/open', '-W', '-n', '-a', bundle, '--stdout', app_log, '--stderr', app_log, '--env', "READALOUD_SMOKE_LAUNCH_UNIX_MICROS=#{micros}", '--env', "READALOUD_FIRST_LOAD_EXPECTED_WORDS=#{expected_words}", *%w[READALOUD_MLX_TTS_MODEL_PATH READALOUD_MLX_PYTHON READALOUD_SMOKE_QUANTIZATION_BITS].filter_map { |key| ['--env', "#{key}=#{ENV[key]}"] if ENV[key] }.flatten, '--args', 'first-load', engine, copied, receipt, pgroup: true)
+  opener = Process.spawn('/usr/bin/open', '-W', '-n', '-a', bundle, '--stdout', app_log, '--stderr', app_log, '--env', "READALOUD_SMOKE_LAUNCH_UNIX_MICROS=#{micros}", '--env', "READALOUD_FIRST_LOAD_EXPECTED_WORDS=#{expected_words}", *%w[READALOUD_MLX_TTS_MODEL_PATH READALOUD_MLX_PYTHON READALOUD_SMOKE_QUANTIZATION_BITS READALOUD_DISABLE_SPEECH_ACTIVITY].filter_map { |key| ['--env', "#{key}=#{ENV[key]}"] if ENV[key] }.flatten, '--args', 'first-load', engine, copied, receipt, pgroup: true)
   result[:launcherPid] = opener
   discovery_end = clock.call + 15
   loop do

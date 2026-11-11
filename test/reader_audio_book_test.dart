@@ -185,6 +185,49 @@ void main() {
   }
 
   test(
+    'unknown packet duration retains the initial parent source anchor',
+    () async {
+      await controller.importFilePaths([(await fixture()).path]);
+      await controller.startPlayback();
+      engine.onProgress!(
+        const TtsProgressUpdate(
+          startOffset: 0,
+          endOffset: 2,
+          word: 'Go',
+          documentId: 'book',
+          chunkId: 'scene-0',
+          wordStartIndex: 0,
+          wordEndIndex: 1,
+          voiceId: 'published',
+          rate: 1,
+        ),
+      );
+      final pending = controller.spokenChunkRecords.single;
+      expect(pending.startWordIndex, 0);
+      expect(pending.audioDuration, Duration.zero);
+      expect(pending.completed, false);
+      engine.onProgress!(
+        const TtsProgressUpdate(
+          startOffset: 3,
+          endOffset: 7,
+          word: 'now',
+          documentId: 'book',
+          chunkId: 'scene-0',
+          wordStartIndex: 1,
+          wordEndIndex: 2,
+          chunkAudioDuration: Duration(seconds: 1),
+          elapsedInChunk: Duration(milliseconds: 900),
+          voiceId: 'published',
+          rate: 1,
+        ),
+      );
+      final known = controller.spokenChunkRecords.single;
+      expect(known.startWordIndex, 0);
+      expect(known.endWordIndex, 2);
+      expect(known.audioDuration, const Duration(seconds: 1));
+    },
+  );
+  test(
     'copied complete book opens, advances and republishes without models',
     () async {
       final original = await fixture();

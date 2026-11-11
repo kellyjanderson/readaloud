@@ -618,7 +618,7 @@ extension ReaderAudioBookSupport on ReaderController {
     final revision = _documentRevision;
     // Keep initialization and any first missing-scene render on the user's
     // original Play clock. Readiness is not a new measurement start.
-    _playbackRequestedAt = DateTime.now();
+    _playbackRequestedAt ??= DateTime.now();
     bool current() =>
         session.current &&
         !_disposed &&

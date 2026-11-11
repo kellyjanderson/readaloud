@@ -16,6 +16,7 @@ import 'package:read_aloud/src/models/spoken_chunk_record.dart';
 import 'package:read_aloud/src/services/app_launch_options.dart';
 import 'package:read_aloud/src/services/audio_artifact_store.dart';
 import 'package:read_aloud/src/services/kokoro_tts_engine.dart';
+import 'package:read_aloud/src/services/native_speech_work_activity.dart';
 import 'package:read_aloud/src/services/playback_instrumentation_service.dart';
 import 'package:read_aloud/src/services/radoc_audio_package.dart';
 import 'package:read_aloud/src/services/reader_preferences_service.dart';
@@ -197,6 +198,25 @@ Future<void> main(List<String> args) async {
       launchOptions: AppLaunchOptions(inputPaths: [args[1]]),
     ),
   );
+  var previousResourceStage = '';
+  final resourceStages = <Map<String, Object?>>[];
+  receipt['resourceStages'] = resourceStages;
+  c.addListener(() {
+    final progress = c.speechResourceProgress;
+    final stage = progress?.stage ?? '';
+    if (stage.isEmpty ||
+        stage == previousResourceStage ||
+        resourceStages.length >= 128)
+      return;
+    previousResourceStage = stage;
+    final event = <String, Object?>{
+      'elapsedMs': clock.elapsedMilliseconds,
+      'stage': stage,
+      'message': progress?.message,
+    };
+    resourceStages.add(event);
+    stdout.writeln('RADOC_FIRST_LOAD_RESOURCE ${jsonEncode(event)}');
+  });
   try {
     // Screen owns normal initialize/import/completeInitialIntake. Never await
     // model readiness or whole preparation before registering the Play intent.
@@ -228,6 +248,16 @@ Future<void> main(List<String> args) async {
     await play;
     if (playError != null) throw StateError('Play failed: $playError');
     final chunks = c.spokenChunkRecords;
+    receipt['observedChunkRecords'] = [
+      for (final chunk in chunks)
+        {
+          'chunkId': chunk.chunkId,
+          'startWord': chunk.startWordIndex,
+          'endWord': chunk.endWordIndex,
+          'completed': chunk.completed,
+          'durationMicros': chunk.audioDuration.inMicroseconds,
+        },
+    ];
     var end = 0;
     for (final chunk in chunks) {
       if (!chunk.completed || chunk.startWordIndex != end) {
@@ -341,6 +371,17 @@ Future<void> main(List<String> args) async {
     await sequence.cancel();
     await position.cancel();
     await copying;
+    final activity = await NativeSpeechWorkActivity.snapshot();
+    receipt['speechWorkActivity'] = activity;
+    receipt['speechWorkActivitySuppressed'] =
+        Platform.environment['READALOUD_DISABLE_SPEECH_ACTIVITY'] == '1';
+    if (activity == null ||
+        activity['active'] != 0 ||
+        activity['started'] != activity['ended'] ||
+        (receipt['speechWorkActivitySuppressed'] != true &&
+            (activity['started'] as int? ?? 0) == 0)) {
+      cleanup.add('Native speech activity missing, unused or not drained.');
+    }
     PlaybackInstrumentationService.instance.observer = null;
     await metrics.close();
     await positions.close();

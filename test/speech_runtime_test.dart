@@ -316,7 +316,7 @@ void main() {
           );
           expect(
             event.payload['boundaryPolicyVersion'],
-            'boundary-native-rate-v2',
+            'boundary-native-rate-v3',
           );
           final expectedMs = ((retained.length - 44) / 2 / sampleRate * 1000)
               .round();

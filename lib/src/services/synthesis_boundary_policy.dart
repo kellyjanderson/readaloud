@@ -56,7 +56,7 @@ class BoundaryCorrectionOutcome {
 class SynthesisBoundaryPolicy {
   const SynthesisBoundaryPolicy();
 
-  static const version = 'boundary-native-rate-v2';
+  static const version = 'boundary-native-rate-v3';
 
   static const Duration pathologicalLeadingSilence = Duration(
     milliseconds: 180,
