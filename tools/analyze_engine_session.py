@@ -41,13 +41,16 @@ def analyze(receipt, runner, timing, capture_path):
     require(activity['active'] == 0 and activity['started'] == activity['ended'] and
             activity['started'] > 0, 'Unbalanced native activities')
     events = receipt['events']
+    unavailable = receipt.get('unavailableEngineId', 'fish_drama3_8bit')
+    require(unavailable in ('fish_drama3_8bit', 'fish_drama3_4bit'),
+            'Invalid unavailable variant identity')
     failed = [e for e in events if e['event'] == 'offline-failed']
     complete = [e for e in events if e['event'] == 'complete']
     require(len(failed) == len(complete) == 1 and
-            failed[0]['selected'] == 'fish_drama3_8bit' and failed[0]['active'] is None and
+            failed[0]['selected'] == unavailable and failed[0]['active'] is None and
             failed[0]['lastWorking'] == 'fish_drama3' and
             failed[0]['sessionPhase'] == 'failed', 'Offline selected/active failure absent')
-    require(not any(e['active'] == 'fish_drama3_8bit' for e in events),
+    require(not any(e['active'] == unavailable for e in events),
             'Unavailable variant became active')
     final = complete[0]
     require(final['selected'] == final['active'] == final['lastWorking'] == 'fish_drama3'

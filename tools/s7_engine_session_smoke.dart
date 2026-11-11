@@ -123,6 +123,7 @@ Future<void> main(List<String> args) async {
     'modelSource': source,
     'ownedAlias': alias.path,
     'offline': true,
+    'unavailableEngineId': 'fish_drama3_4bit',
     'events': events,
     'factoryEvents': factoryEvents,
     'limits':
@@ -229,7 +230,7 @@ Future<void> main(List<String> args) async {
     require(anchor > 0, 'Need a nonzero retained reading anchor');
     receipt['retainedAnchor'] = anchor;
     phase = 'offline-unavailable';
-    await c.setTtsEngineId('fish_drama3_8bit');
+    await c.setTtsEngineId('fish_drama3_4bit');
     require(
       c.engineSession.phase.name == 'failed' &&
           c.engineSession.active == null &&
@@ -266,11 +267,11 @@ Future<void> main(List<String> args) async {
       'Switch lost reading or narrator intent',
     );
     phase = 'latest-wins';
-    final b = c.setTtsEngineId('fish_drama3_8bit');
+    final b = c.setTtsEngineId('fish_drama3_4bit');
     await until(
       () =>
           c.isSwitchingEngine &&
-          c.engineSession.selected.engineId == 'fish_drama3_8bit',
+          c.engineSession.selected.engineId == 'fish_drama3_4bit',
       'B switch entered retirement',
     );
     final a = c.setTtsEngineId('fish_drama3');
@@ -306,7 +307,7 @@ Future<void> main(List<String> args) async {
       synthesisCalls > beforePreview && players.last.position == Duration.zero,
       'Preview missed its pre-position cancellation window',
     );
-    final previewB = c.setTtsEngineId('fish_drama3_8bit');
+    final previewB = c.setTtsEngineId('fish_drama3_4bit');
     await until(() => c.isSwitchingEngine, 'Preview replacement');
     final previewA = c.setTtsEngineId('fish_drama3');
     await Future.wait([previewB, previewA, preview]);
@@ -337,7 +338,7 @@ Future<void> main(List<String> args) async {
       synthesisCalls > beforeExport,
       'Export did not enter the real synthesis owner',
     );
-    final exportB = c.setTtsEngineId('fish_drama3_8bit');
+    final exportB = c.setTtsEngineId('fish_drama3_4bit');
     await until(() => c.isSwitchingEngine, 'Export replacement');
     final exportA = c.setTtsEngineId('fish_drama3');
     await Future.wait<Object?>([exportB, exportA, export]);
@@ -354,7 +355,7 @@ Future<void> main(List<String> args) async {
       receipt['cancelledPlayTerminal'] = '$error';
     });
     await until(() => c.hasPendingPlaybackIntent, 'Pending Play');
-    final pendingB = c.setTtsEngineId('fish_drama3_8bit');
+    final pendingB = c.setTtsEngineId('fish_drama3_4bit');
     await until(() => c.isSwitchingEngine, 'Pending Play replacement');
     final pendingA = c.setTtsEngineId('fish_drama3');
     await Future.wait([pendingB, pendingA, pending]);
