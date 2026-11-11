@@ -22,6 +22,7 @@ import traceback
 import wave
 import weakref
 from pathlib import Path
+from concurrent.futures import ThreadPoolExecutor
 from typing import Any
 
 
@@ -146,6 +147,7 @@ def _timing(stage: str, started: float) -> None:
     message = {
         'modelBuildAndCodec': 'Speech model and codec constructed',
         'modelMappedCheckpoint': 'Speech model checkpoint views prepared',
+        'modelPagePrefault': 'Speech model checkpoint pages read',
         'modelVerification': 'Speech model qualification checked',
         'modelWeights': 'Remaining speech model weights ready',
         'modelWeightsAndVerification': 'Speech model weights and qualification ready',
@@ -467,6 +469,26 @@ def _mapped_checkpoint(file: str, *, allow_repack: bool = True) -> tuple[dict, l
     return weights, owners, mapped, copied
 
 
+def _prefault_checkpoint_pages(mapping: Any, file: str) -> int:
+    """Read one byte per OS page; never write, copy or transform the weights."""
+    import numpy as np
+
+    started = time.monotonic()
+    page_size = os.sysconf('SC_PAGE_SIZE')
+    pages = (mapping.size + page_size - 1) // page_size
+    completed = checksum = 0
+    # Limit each reduction to 256 MiB of address space (one byte per page).
+    # The strided NumPy view has no full-weight temporary or Python byte loop.
+    for begin in range(0, mapping.size, page_size * 65536):
+        sample = mapping[begin:min(mapping.size, begin + page_size * 65536):page_size]
+        checksum = (checksum + int(np.sum(sample, dtype=np.uint64))) % (1 << 64)
+        completed += sample.size
+        _progress(f'Read checkpoint pages for {Path(file).name}',
+                  stage='modelPagePrefault', completed=completed, total=pages, unit='pages')
+    _timing('modelPagePrefault', started)
+    return checksum
+
+
 @contextlib.contextmanager
 def _mapped_model_weights(directory: Path):
     """One exact-directory provider adapter, restored on every exit.
@@ -479,7 +501,15 @@ def _mapped_model_weights(directory: Path):
     import mlx.core as mx
 
     original = provider.load_weights
-    allow_repack = os.environ.get('READALOUD_MAPPED_MODEL_LOAD') != 'aligned'
+    mode = os.environ.get('READALOUD_MAPPED_MODEL_LOAD')
+    allow_repack = mode not in ('aligned', 'mapped_prefault')
+    # One CPU producer, four admitted mappings at most. This context spans the
+    # provider load AND remaining weight evaluation, allowing page reads to
+    # overlap existing host I/O/codec construction. Every task owns a strong
+    # mapping reference and drains before readiness, failure or restoration.
+    pool = (ThreadPoolExecutor(max_workers=1, thread_name_prefix='speech-prefault')
+            if mode == 'mapped_prefault' else None)
+    pending = []
     def load_weights(path):
         if Path(path).resolve() != directory:
             return original(path)
@@ -501,6 +531,13 @@ def _mapped_model_weights(directory: Path):
                 _mapped_model_owners.extend(owners)
                 mapped += shared_bytes
                 copied += copied_bytes
+                if pool is not None and shared_bytes:
+                    if len(pending) >= 4:
+                        pending.pop(0).result()
+                    # Aligned-only load adds exactly one mapping. Capture it
+                    # before a later accounting refresh can prune old entries.
+                    mapping = _mapped_model_mappings[-1][0]()
+                    pending.append(pool.submit(_prefault_checkpoint_pages, mapping, file))
         _refresh_mapped_budget()
         _progress(f'Checkpoint bytes: mapped={mapped}, GPU copied={copied}, provider fallback={fallback}',
                   stage='modelCheckpointStorage')
@@ -510,7 +547,16 @@ def _mapped_model_weights(directory: Path):
     try:
         yield
     finally:
-        provider.load_weights = original
+        try:
+            if pool is not None and sys.exc_info()[0] is None:
+                for future in pending:
+                    future.result()
+        finally:
+            try:
+                if pool is not None:
+                    pool.shutdown(wait=True, cancel_futures=True)
+            finally:
+                provider.load_weights = original
 
 
 def _load(model_id: str, model_path: str, private_cache_path: str, quantization_bits: int = 0) -> dict[str, Any]:
@@ -547,7 +593,7 @@ def _load(model_id: str, model_path: str, private_cache_path: str, quantization_
     # evaluation with the existing CPU checksum/receipt work below. There is
     # one stream/tree per model, no executor or additional queued model job.
     overlap_weights = model_id == 'fish_drama3' and quantization_bits == 0
-    use_maps = overlap_weights and os.environ.get('READALOUD_MAPPED_MODEL_LOAD') in ('1', 'aligned')
+    use_maps = overlap_weights and os.environ.get('READALOUD_MAPPED_MODEL_LOAD') in ('1', 'aligned', 'mapped_prefault')
     if use_maps:
         manifest = json.loads(Path(__file__).with_name('fish_drama_model_checksums.json').read_text())
         use_maps = _verify_scene_model(directory, manifest,
@@ -557,8 +603,8 @@ def _load(model_id: str, model_path: str, private_cache_path: str, quantization_
         adapter = _mapped_model_weights(directory) if use_maps else contextlib.nullcontext()
         with mx.stream(_model_load_stream), adapter:
             _model = load(str(directory), lazy=True)
-        _model_pending_parameters = _model.parameters()
-        mx.async_eval(_model_pending_parameters)
+            _model_pending_parameters = _model.parameters()
+            mx.async_eval(_model_pending_parameters)
     else:
         _model = load(str(directory), lazy=False)
     _timing('modelBuildAndCodec', build_started)

@@ -10,6 +10,7 @@ import wave
 import os
 import subprocess
 import sys
+import threading
 from types import SimpleNamespace
 from types import MethodType
 import unittest
@@ -173,6 +174,67 @@ class MappedCheckpointTest(unittest.TestCase):
                 self.assertEqual(weights['float'].tolist(), [101, 98, 103, 96])
                 original_read.assert_called_once_with(str(unaligned))
                 self.assertEqual(len(worker._mapped_model_mappings), 1)
+
+    def test_prefault_reads_exact_page_count_without_changing_mapping_bytes(self):
+        import numpy as np
+        with tempfile.TemporaryDirectory() as root:
+            path = Path(root) / 'pages'
+            page = os.sysconf('SC_PAGE_SIZE')
+            source = bytes(range(256)) * (page * 3 // 256) + b'final'
+            path.write_bytes(source)
+            mapping = np.memmap(path, mode='c', dtype=np.uint8)
+            with patch.object(worker, '_progress') as progress, patch.object(worker, '_timing'):
+                checksum = worker._prefault_checkpoint_pages(mapping, str(path))
+            self.assertEqual(checksum, sum(source[::page]))
+            self.assertEqual(path.read_bytes(), source)
+            self.assertEqual(mapping.tobytes(), source)
+            self.assertEqual(progress.call_args.kwargs['completed'], 4)
+            self.assertEqual(progress.call_args.kwargs['total'], 4)
+            self.assertEqual(progress.call_args.kwargs['unit'], 'pages')
+
+    def test_prefault_joins_after_weight_evaluation_before_loaded_and_restores_hook(self):
+        from mlx_audio import utils as provider
+        started, evaluated, done = threading.Event(), threading.Event(), threading.Event()
+        original = provider.load_weights
+        def prefetch(mapping, file):
+            started.set()
+            self.assertTrue(evaluated.wait(timeout=5), 'weight evaluation must run before prefault join')
+            done.set()
+            return 0
+        def load(path, **kwargs):
+            weights = provider.load_weights(Path(path))
+            self.assertTrue(started.wait(timeout=5))
+            return SimpleNamespace(parameters=lambda: weights)
+        with tempfile.TemporaryDirectory() as root:
+            directory = Path(root)
+            (directory / 'config.json').write_text('{}')
+            self._checkpoint(directory / 'aligned.safetensors', 0)
+            with patch.dict(os.environ, {'READALOUD_MAPPED_MODEL_LOAD': 'mapped_prefault'}), \
+                    patch('subprocess.check_output', return_value=b'137438953472'), \
+                    patch.object(worker, '_verify_scene_model', return_value=True), \
+                    patch.object(worker, '_prefault_checkpoint_pages', side_effect=prefetch), \
+                    patch('mlx_audio.tts.load', side_effect=load), \
+                    patch.object(mx, 'async_eval', side_effect=lambda *a: evaluated.set()), \
+                    patch.object(worker, '_timing'):
+                response = worker._load('fish_drama3', root, root)
+            self.assertTrue(response['loaded'])
+            self.assertTrue(done.is_set())
+            self.assertIs(provider.load_weights, original)
+            self.assertFalse(any(t.name.startswith('speech-prefault') for t in threading.enumerate()))
+
+    def test_prefault_failure_drains_and_restores_provider_before_return(self):
+        from mlx_audio import utils as provider
+        with tempfile.TemporaryDirectory() as root:
+            directory = Path(root).resolve()
+            self._checkpoint(directory / 'aligned.safetensors', 0)
+            original = provider.load_weights
+            with patch.dict(os.environ, {'READALOUD_MAPPED_MODEL_LOAD': 'mapped_prefault'}), \
+                    patch.object(worker, '_prefault_checkpoint_pages', side_effect=RuntimeError('page read failed')):
+                with self.assertRaisesRegex(RuntimeError, 'page read failed'):
+                    with worker._mapped_model_weights(directory):
+                        provider.load_weights(directory)
+            self.assertIs(provider.load_weights, original)
+            self.assertFalse(any(t.name.startswith('speech-prefault') for t in threading.enumerate()))
 
     def test_mapped_load_is_opt_in_and_qualified_before_adapter_can_read(self):
         worker._unload()
