@@ -684,6 +684,134 @@ class ModelDownloadReuseTest(unittest.TestCase):
                 repair.assert_not_called()
             self.assertEqual({name: (corrupt / name).stat() for name in content}, before)
 
+    def test_real_hub_repairs_shared_blob_and_regular_snapshot_copy(self):
+        from huggingface_hub import file_download, _snapshot_download
+        from huggingface_hub.utils import XetFileData
+        from huggingface_hub.utils._shared_blobs import publish_blob_to_shared_store, shared_blob_target
+        for layout in ['shared', 'regular', 'regular-good-blob']:
+            with self.subTest(layout=layout), self.fixture() as (cache, snapshot, manifest, content):
+                bad = snapshot / 'model.safetensors'
+                entry = manifest['files'][bad.name]
+                blobs = snapshot.parent.parent / 'blobs'; blobs.mkdir()
+                blob = blobs / entry['digest']
+                xet_hash = 'b' * 64
+                blob.write_bytes(content[bad.name])
+                if layout == 'shared':
+                    self.assertTrue(publish_blob_to_shared_store(blob_path=str(blob), xet_hash=xet_hash,
+                        cache_dir=cache, expected_size=entry['size']))
+                    bad.unlink(); file_download._create_symlink(str(blob), str(bad), new_blob=False)
+                    shared = shared_blob_target(blob, cache)
+                    self.assertIsNotNone(shared)
+                    shared.chmod(0o600); shared.write_bytes(b'x' * entry['size'])
+                    self.assertTrue(blob.is_symlink())
+                    self.assertTrue(worker._owned_hf_file(bad, snapshot, entry))
+                else:
+                    bad.write_bytes(b'x' * entry['size'])
+                    if layout == 'regular':
+                        blob.write_bytes(b'y' * entry['size'])
+                blob_before = blob.stat()
+                good = {name: (snapshot / name).stat() for name in content if name != bad.name}
+                other = cache / 'other-variant'; other.write_bytes(b'preserve other variant')
+                partial = blobs / 'unrelated.incomplete'; partial.write_bytes(b'preserve partial')
+                # Real tree metadata avoids a network tree query; only the
+                # metadata endpoint and byte transport are substituted below.
+                tree = {name: _snapshot_download.TreeCacheEntry(size=len(data), blob_id='0' * 40,
+                            lfs_sha256=manifest['files'][name]['digest'], lfs_size=len(data),
+                            xet_hash=xet_hash if name == bad.name and layout == 'shared' else None)
+                        for name, data in content.items()}
+                _snapshot_download.write_tree_cache(str(snapshot.parent.parent), manifest['revision'], tree)
+                def metadata(**kwargs):
+                    self.assertEqual((kwargs['repo_id'], kwargs['revision'], kwargs['filename']),
+                                     (manifest['repo'], manifest['revision'], bad.name))
+                    return ('https://fixture.invalid/model', entry['digest'], manifest['revision'], entry['size'],
+                            XetFileData(xet_hash, 'https://fixture.invalid/refresh') if layout == 'shared' else None, None)
+                def http_bytes(url, stream, **kwargs):
+                    stream.write(content[bad.name])
+                def xet_bytes(**kwargs):
+                    kwargs['incomplete_path'].write_bytes(content[bad.name])
+                with patch.object(file_download, '_get_metadata_or_catch_error', side_effect=metadata), \
+                        patch.object(file_download, 'http_get', side_effect=http_bytes) as http, \
+                        patch.object(file_download, 'xet_get', side_effect=xet_bytes) as xet:
+                    self.assertEqual(worker._download_model('fish_drama3', str(cache)).resolve(), snapshot.resolve())
+                expected_transfers = {'shared': (0, 1), 'regular': (1, 0), 'regular-good-blob': (0, 0)}
+                self.assertEqual((http.call_count, xet.call_count), expected_transfers[layout])
+                self.assertEqual(bad.read_bytes(), content[bad.name])
+                self.assertTrue(bad.is_symlink())
+                if layout == 'shared':
+                    self.assertTrue(blob.is_symlink())
+                    self.assertIsNotNone(shared_blob_target(blob, cache))
+                if layout == 'regular-good-blob':
+                    self.assertEqual(blob.stat(), blob_before)
+                for name, before in good.items():
+                    self.assertEqual((snapshot / name).stat(), before)
+                self.assertEqual(other.read_bytes(), b'preserve other variant')
+                self.assertEqual(partial.read_bytes(), b'preserve partial')
+
+    def test_nested_cache_redirects_are_never_accepted_or_mutated(self):
+        import huggingface_hub
+        from huggingface_hub.utils._shared_blobs import publish_blob_to_shared_store
+        for redirected in ['repository', 'snapshots', 'revision', 'blobs', 'locks', 'shared-prefix']:
+            with self.subTest(redirected=redirected), self.fixture() as (cache, snapshot, manifest, content):
+                outside = cache.parent / 'user-folder'; outside.mkdir()
+                protected = outside / 'protected'; protected.write_bytes(b'user data')
+                repository = snapshot.parent.parent
+                if redirected == 'repository':
+                    destination = repository
+                elif redirected == 'snapshots':
+                    destination = snapshot.parent
+                elif redirected == 'revision':
+                    destination = snapshot
+                elif redirected == 'blobs':
+                    destination = repository / 'blobs'; destination.mkdir()
+                elif redirected == 'locks':
+                    destination = cache / '.locks'; destination.mkdir()
+                else:
+                    blob_dir = repository / 'blobs'; blob_dir.mkdir()
+                    blob = blob_dir / manifest['files']['model.safetensors']['digest']
+                    blob.write_bytes(content['model.safetensors'])
+                    self.assertTrue(publish_blob_to_shared_store(blob_path=str(blob), xet_hash='b' * 64,
+                        cache_dir=cache, expected_size=len(content['model.safetensors'])))
+                    destination = cache / 'blobs' / 'bb'
+                moved = outside / 'moved'; destination.replace(moved)
+                destination.symlink_to(moved, target_is_directory=True)
+                bad = snapshot / 'model.safetensors'
+                bad.write_bytes(b'x' * len(content[bad.name]))
+                before = protected.stat(), protected.read_bytes(), bad.stat(), bad.read_bytes()
+                real_download = huggingface_hub.snapshot_download
+                def offline_only(**kwargs):
+                    self.assertTrue(kwargs.get('local_files_only'), 'unsafe download')
+                    return real_download(**kwargs)
+                with patch('huggingface_hub.hf_hub_download', side_effect=AssertionError('unsafe repair')), \
+                        patch('huggingface_hub.snapshot_download', side_effect=offline_only):
+                    with self.assertRaisesRegex(ValueError, 'redirected|outside the managed'):
+                        worker._download_model('fish_drama3', str(cache))
+                self.assertEqual((protected.stat(), protected.read_bytes(), bad.stat(), bad.read_bytes()), before)
+
+    def test_bad_repair_payload_never_replaces_existing_snapshot_copy(self):
+        from huggingface_hub import file_download
+        with self.fixture() as (cache, snapshot, manifest, content):
+            bad = snapshot / 'model.safetensors'
+            entry = manifest['files'][bad.name]
+            bad.write_bytes(b'y' * entry['size'])
+            before = bad.stat(), bad.read_bytes()
+            def metadata(**kwargs):
+                return ('https://fixture.invalid/model', entry['digest'], manifest['revision'], entry['size'], None, None)
+            def corrupt_transport(url, stream, **kwargs):
+                stream.write(b'x' * entry['size'])
+            with patch.object(file_download, '_get_metadata_or_catch_error', side_effect=metadata), \
+                    patch.object(file_download, 'http_get', side_effect=corrupt_transport):
+                with self.assertRaisesRegex(ValueError, 'Repaired model blob failed pinned integrity'):
+                    worker._download_model('fish_drama3', str(cache))
+            self.assertEqual((bad.stat(), bad.read_bytes()), before)
+            self.assertFalse((cache.parent / 'model-qualification').exists())
+
+    def test_configured_cache_root_alias_remains_managed(self):
+        with self.fixture() as (cache, snapshot, manifest, _):
+            alias = cache.parent / 'configured-root'; alias.symlink_to(cache, target_is_directory=True)
+            self.assertTrue(worker._is_managed_snapshot(snapshot, alias, manifest['repo'], manifest['revision']))
+            self.assertTrue(worker._owned_hf_file(snapshot / 'model.safetensors', snapshot, manifest['files']['model.safetensors']))
+            self.assertEqual(worker._download_model('fish_drama3', str(alias)).resolve(), snapshot.resolve())
+
     def test_same_size_corruption_repairs_only_bad_owned_file_and_preserves_variant(self):
         import huggingface_hub
         with self.fixture() as (cache, snapshot, manifest, content):

@@ -285,6 +285,8 @@ def _download_model(model_id: str, private_cache_path: str,
     # executable path or debug/release mode is part of this persistent identity.
     repair = None
     for cache_dir in candidates:
+        if not _owned_hf_cache_layout(cache_dir, repo_id, revision):
+            continue
         try:
             cached = Path(snapshot_download(repo_id=repo_id, revision=revision,
                           cache_dir=str(cache_dir), local_files_only=True))
@@ -306,6 +308,18 @@ def _download_model(model_id: str, private_cache_path: str,
     # failure must never start a second copy in a different cache.
     if repair:
         private_cache, cached, invalid = repair
+    if not _owned_hf_cache_layout(private_cache, repo_id, revision):
+        raise ValueError(f'Cannot acquire model through redirected Hugging Face cache folders: {private_cache}')
+    if manifest:
+        for name, entry in manifest['files'].items():
+            repository = private_cache / ('models--' + repo_id.replace('/', '--'))
+            pointer = repository / 'snapshots' / revision / name
+            blob = repository / 'blobs' / entry['digest']
+            lock = private_cache / '.locks' / repository.name / (entry['digest'] + '.lock')
+            if (not _owned_cache_path(pointer, private_cache, allow_leaf_symlink=True) or
+                    not _owned_hf_blob(blob, private_cache) or not _owned_cache_path(lock, private_cache)):
+                raise ValueError(f'Cannot repair model file outside the managed Hugging Face cache: {pointer}')
+    if repair:
         # HF owns transfer locking, resumable partials and atomic blob writes.
         # Force only corrupt present files; ordinary snapshot acquisition below
         # resumes missing files. Never unlink blobs or arbitrary explicit paths.
@@ -315,9 +329,12 @@ def _download_model(model_id: str, private_cache_path: str,
                 if not _owned_hf_file(path, cached, manifest['files'][name]):
                     raise ValueError(f'Cannot repair model file outside the managed Hugging Face cache: {path}')
                 _progress(f'Repairing corrupt speech model file: {name}', stage='modelRepair')
+                if _repair_snapshot_pointer(path, cached, manifest['files'][name], require_verified_blob=False):
+                    continue  # A good existing blob repairs a corrupt copy offline.
                 hf_hub_download(repo_id=repo_id, filename=name, revision=revision,
                                 cache_dir=str(private_cache), force_download=True,
                                 tqdm_class=_download_progress_class(manifest['files'][name]['size'], 0))
+                _repair_snapshot_pointer(path, cached, manifest['files'][name])
     private_cache.mkdir(parents=True, exist_ok=True)
     _progress('Checking saved files and remaining download size…', stage='modelCache')
     plan = snapshot_download(repo_id=repo_id, revision=revision,
@@ -349,15 +366,110 @@ def _download_model(model_id: str, private_cache_path: str,
 def _is_managed_snapshot(directory: Path, cache_dir: Path, repo: str, revision: str) -> bool:
     expected = cache_dir / ('models--' + repo.replace('/', '--')) / 'snapshots' / revision
     # HF normalizes macOS /var -> /private/var and user cache symlinks.
-    return directory.resolve() == expected.resolve()
+    return (directory.resolve() == expected.resolve() and
+            _owned_hf_cache_layout(cache_dir, repo, revision) and
+            _owned_cache_path(directory, cache_dir))
+
+
+def _anchored_cache_path(path: Path, cache_dir: Path) -> Path | None:
+    """Resolve the configured root alias, never a nested cache redirect."""
+    lexical_root = cache_dir.expanduser().absolute()
+    lexical_path = Path(os.path.abspath(path.expanduser()))
+    for root in (lexical_root, lexical_root.resolve()):
+        try:
+            return lexical_root.resolve() / lexical_path.relative_to(root)
+        except ValueError:
+            pass
+    # An absolute HF pointer can retain the original /var spelling after the
+    # cache lookup normalized its root to /private/var (or another root alias).
+    for root in lexical_path.parents:
+        if root.resolve() == lexical_root.resolve():
+            return lexical_root.resolve() / lexical_path.relative_to(root)
+    return None
+
+
+def _owned_cache_path(path: Path, cache_dir: Path, *, allow_leaf_symlink: bool = False) -> bool:
+    anchored = _anchored_cache_path(path, cache_dir)
+    if anchored is None:
+        return False
+    current = cache_dir.expanduser().resolve()
+    parts = anchored.relative_to(current).parts
+    for index, part in enumerate(parts):
+        current = current / part
+        leaf = index == len(parts) - 1
+        if current.is_symlink() and not (leaf and allow_leaf_symlink):
+            return False
+        if not leaf and current.exists() and not current.is_dir():
+            return False
+    return True
+
+
+def _owned_hf_cache_layout(cache_dir: Path, repo: str, revision: str | None) -> bool:
+    folder = 'models--' + repo.replace('/', '--')
+    paths = [cache_dir / folder / name for name in ('blobs', 'snapshots', 'refs')]
+    paths += [cache_dir / '.locks' / folder, cache_dir / 'blobs']
+    if revision:
+        paths.append(cache_dir / folder / 'snapshots' / revision)
+    return all(_owned_cache_path(path, cache_dir) for path in paths)
 
 
 def _owned_hf_file(path: Path, snapshot: Path, entry: dict) -> bool:
+    cache_dir = snapshot.parent.parent.parent
+    if not _owned_cache_path(path, cache_dir, allow_leaf_symlink=True):
+        return False
     if path.is_symlink():
         blobs = snapshot.parent.parent / 'blobs'
         target = blobs / entry['digest']
-        return not blobs.is_symlink() and not target.is_symlink() and path.resolve() == target.resolve()
-    return path.resolve().is_relative_to(snapshot.resolve())
+        # Check the first hop before resolving HF's optional shared-store hop.
+        link = Path(os.path.abspath(path.parent / os.readlink(path)))
+        if _anchored_cache_path(link, cache_dir) != _anchored_cache_path(target, cache_dir):
+            return False
+        return _owned_hf_blob(target, cache_dir)
+    return path.is_file() and path.resolve().is_relative_to(snapshot.resolve())
+
+
+def _owned_hf_blob(blob: Path, cache_dir: Path) -> bool:
+    from huggingface_hub.utils._shared_blobs import (is_shared_blobs_dir,
+                                                    shared_blob_target, shared_blobs_dir)
+    if not _owned_cache_path(blob, cache_dir, allow_leaf_symlink=True):
+        return False
+    if blob.is_symlink():
+        shared = shared_blob_target(blob, cache_dir)
+        return (is_shared_blobs_dir(shared_blobs_dir(cache_dir)) and shared is not None and
+                _owned_cache_path(shared, cache_dir))
+    return not blob.exists() or blob.is_file()
+
+
+def _repair_snapshot_pointer(path: Path, snapshot: Path, entry: dict,
+                             *, require_verified_blob: bool = True) -> bool:
+    """HF force-download refreshes blobs but retains existing regular copies."""
+    from huggingface_hub.file_download import _create_symlink
+    from huggingface_hub.utils import WeakFileLock
+    from huggingface_hub.utils._verification import compute_file_hash
+
+    def matches(candidate):
+        return (candidate.is_file() and candidate.stat().st_size == entry['size'] and
+                compute_file_hash(candidate, entry['algorithm']) == entry['digest'])
+
+    cache_dir = snapshot.parent.parent.parent
+    blob = snapshot.parent.parent / 'blobs' / entry['digest']
+    lock = cache_dir / '.locks' / snapshot.parent.parent.name / (entry['digest'] + '.lock')
+    if not _owned_cache_path(lock, cache_dir):
+        raise ValueError('Cannot repair model through a redirected Hugging Face lock path')
+    with WeakFileLock(str(lock)):
+        if not _owned_hf_file(path, snapshot, entry):
+            raise ValueError(f'Cannot repair model file outside the managed Hugging Face cache: {path}')
+        if matches(path):
+            return True
+        # Only replace an owned, still-corrupt pointer/copy with verified bytes.
+        if not _owned_hf_blob(blob, cache_dir):
+            raise ValueError(f'Cannot repair model blob outside the managed Hugging Face cache: {blob}')
+        if not matches(blob):
+            if not require_verified_blob:
+                return False
+            raise ValueError(f'Repaired model blob failed pinned integrity verification: {blob}')
+        _create_symlink(str(blob), str(path), new_blob=False)
+        return True
 
 
 def _configure_hf_cache(cache_dir: Path, hf_constants: Any) -> None:
