@@ -43,7 +43,7 @@ final class FishDramaVariantDescriptor {
   final int estimatedPeakBytes;
   final List<String> requiredFiles;
 
-  /// Absent where no matching bundled checksums exist (currently 8-bit/4-bit).
+  /// May be absent when reading a legacy single-checkpoint checksum manifest.
   /// Presence declares expected integrity; it does not verify any local file.
   final FishDramaIntegrityManifest? integrityManifest;
 
@@ -85,7 +85,29 @@ final class FishDramaCatalog {
     required String checksumsJson,
   }) {
     final models = _object(jsonDecode(modelsJson), 'Fish catalog');
-    final manifest = _parseManifest(jsonDecode(checksumsJson));
+    final checksums = _object(jsonDecode(checksumsJson), 'Fish checksums');
+    final Map<String, FishDramaIntegrityManifest>? manifests;
+    final FishDramaIntegrityManifest? legacyManifest;
+    if (checksums.containsKey('schemaVersion')) {
+      _fields(checksums, const {'schemaVersion', 'variants'}, 'Fish checksums');
+      if (checksums['schemaVersion'] is! int ||
+          checksums['schemaVersion'] != 2) {
+        throw const FormatException('Unsupported Fish checksum schema version');
+      }
+      final entries = _object(checksums['variants'], 'Fish checksum variants');
+      _fields(
+        entries,
+        speechEngineLabels.keys.where(isDramaEngine).toSet(),
+        'Fish checksum variants',
+      );
+      manifests = entries.map(
+        (id, value) => MapEntry(id, _parseManifest(value)),
+      );
+      legacyManifest = null;
+    } else {
+      manifests = null;
+      legacyManifest = _parseManifest(checksums);
+    }
     final variants = <String, FishDramaVariantDescriptor>{};
     final identities = <String>{};
     var matchedManifest = false;
@@ -144,7 +166,13 @@ final class FishDramaCatalog {
         throw FormatException('Duplicate pinned checkpoint identity for $id');
       }
       FishDramaIntegrityManifest? integrity;
-      if (repository == manifest.repository && revision == manifest.revision) {
+      final manifest = manifests?[id] ?? legacyManifest!;
+      final matches =
+          repository == manifest.repository && revision == manifest.revision;
+      if (manifests != null && !matches) {
+        throw FormatException('Checksum identity does not match $id');
+      }
+      if (matches) {
         if (!manifest.files.keys.toSet().containsAll(files)) {
           throw FormatException(
             'Checksum manifest does not cover $id required files',
