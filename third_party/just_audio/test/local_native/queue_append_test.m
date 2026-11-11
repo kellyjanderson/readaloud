@@ -8,9 +8,11 @@
 @interface AudioPlayer (QueueTest)
 - (void)enqueueFrom:(int)index;
 - (void)concatenatingRemoveRange:(NSString *)catId start:(int)start end:(int)end shuffleOrder:(NSArray<NSNumber *> *)shuffleOrder;
+- (void)concatenatingInsertAll:(NSString *)catId index:(int)index sources:(NSArray *)sources shuffleOrder:(NSArray<NSNumber *> *)shuffleOrder;
 @end
 
 @interface TestItem : NSObject
+@property id audioSource;
 - (BOOL)isPlaybackBufferEmpty;
 @end
 @implementation TestItem
@@ -23,14 +25,38 @@
 @property NSUInteger removals;
 @property NSUInteger rateChanges;
 @property (nonatomic) float rate;
+@property (copy) void (^afterCurrentRead)(void);
+@property (copy) void (^beforeItemsRead)(void);
+@property (copy) void (^afterItemsRead)(void);
 - (NSArray *)items;
 - (id)currentItem;
 - (void)insertItem:(id)item afterItem:(id)previous;
 - (void)removeItem:(id)item;
 @end
 @implementation TestQueue
-- (NSArray *)items { return [_storage copy]; }
-- (id)currentItem { return _storage.firstObject; }
+- (NSArray *)items {
+    if (_beforeItemsRead) {
+        void (^action)(void) = _beforeItemsRead;
+        _beforeItemsRead = nil;
+        action();
+    }
+    NSArray *snapshot = [_storage copy];
+    if (_afterItemsRead) {
+        void (^action)(void) = _afterItemsRead;
+        _afterItemsRead = nil;
+        action();
+    }
+    return snapshot;
+}
+- (id)currentItem {
+    id current = _storage.firstObject;
+    if (_afterCurrentRead) {
+        void (^action)(void) = _afterCurrentRead;
+        _afterCurrentRead = nil;
+        action();
+    }
+    return current;
+}
 - (void)setRate:(float)rate { _rate = rate; _rateChanges++; }
 - (void)insertItem:(id)item afterItem:(id)previous {
     NSCAssert(previous == nil, @"enqueue appends at tail");
@@ -59,6 +85,7 @@
 @property NSUInteger endUpdates;
 @property NSUInteger positionUpdates;
 @property (copy) void (^onRemoveObserver)(void);
+@property NSArray *insertionSources;
 @end
 @implementation TestPlayer
 - (void)updateEndAction { _endUpdates++; }
@@ -74,6 +101,7 @@
     }
 }
 - (void)broadcastPlaybackEvent {}
+- (NSMutableArray *)decodeAudioSources:(NSArray *)sources { return [_insertionSources mutableCopy]; }
 @end
 
 static NSArray<TestSource *> *sources(NSUInteger count, BOOL lazy) {
@@ -215,7 +243,55 @@ int main(void) {
         expect(p, @[r[3].item,r[2].item,r[4].item], 0, 0, YES);
         NSCAssert([[p valueForKey:@"_index"] intValue] == 1, @"shuffle lost current source identity");
 
-        NSLog(@"PASS: 18 native queue scenarios (recording queue; no app/audio)");
+        // Advancing immediately after the caller reads currentItem used to
+        // invalidate enqueueFrom:'s target and destructively replay that item.
+        p = removalPlayer(r, @[@0,@1,@2,@3,@4], @[r[2].item,r[3].item,r[4].item], 2, NO);
+        TestQueue *callerRace = (id)p.player;
+        NSMutableArray *callerStorage = callerRace.storage;
+        callerRace.afterCurrentRead = ^{ [callerStorage removeObjectAtIndex:0]; };
+        [p concatenatingRemoveRange:@"root" start:0 end:2 shuffleOrder:@[@0,@1,@2]];
+        expect(p, @[r[3].item,r[4].item], 0, 0, YES);
+        NSCAssert([[p valueForKey:@"_index"] intValue] == 1, @"caller snapshot race lost live current item");
+
+        // The native head can advance between the old target guard and queue
+        // snapshot; snapshot-derived preservation must never enter the rebuild.
+        p = removalPlayer(r, @[@0,@1,@2,@3,@4], @[r[2].item,r[3].item,r[4].item], 2, NO);
+        TestQueue *snapshotRace = (id)p.player;
+        NSMutableArray *snapshotStorage = snapshotRace.storage;
+        snapshotRace.beforeItemsRead = ^{ [snapshotStorage removeObjectAtIndex:0]; };
+        [p concatenatingRemoveRange:@"root" start:0 end:2 shuffleOrder:@[@0,@1,@2]];
+        expect(p, @[r[3].item,r[4].item], 0, 0, YES);
+
+        // Advancement after copying the queue snapshot also preserves current
+        // audio: only its tail may be extended, never the stale copied head.
+        p = removalPlayer(r, @[@0,@1,@2,@3,@4], @[r[2].item,r[3].item,r[4].item], 2, NO);
+        TestQueue *copiedRace = (id)p.player;
+        NSMutableArray *copiedStorage = copiedRace.storage;
+        copiedRace.afterItemsRead = ^{ [copiedStorage removeObjectAtIndex:0]; };
+        [p concatenatingRemoveRange:@"root" start:0 end:2 shuffleOrder:@[@0,@1,@2]];
+        expect(p, @[r[3].item,r[4].item], 0, 0, YES);
+        NSCAssert([[p valueForKey:@"_index"] intValue] == 1, @"copied snapshot race did not report current item");
+
+        // Production append has the same caller-snapshot race. Its suffix must
+        // be appended after the surviving native head, without replaying it.
+        NSArray<TestSource *> *a = sources(4, NO);
+        p = removalPlayer(@[a[0],a[1]], @[@0,@1], @[a[0].item,a[1].item], 0, NO);
+        p.insertionSources = @[a[2],a[3]];
+        TestQueue *appendRace = (id)p.player;
+        NSMutableArray *appendStorage = appendRace.storage;
+        appendRace.afterCurrentRead = ^{ [appendStorage removeObjectAtIndex:0]; };
+        [p concatenatingInsertAll:@"root" index:2 sources:@[] shuffleOrder:@[@0,@1,@2,@3]];
+        expect(p, @[a[1].item,a[2].item,a[3].item], 2, 0, YES);
+
+        // An intentional insertion into the queued future is not an identical
+        // prefix extension and continues to use the existing reorder fallback.
+        a = sources(3, NO);
+        p = removalPlayer(@[a[0],a[1]], @[@0,@1], @[a[0].item,a[1].item], 0, NO);
+        p.insertionSources = @[a[2]];
+        [p concatenatingInsertAll:@"root" index:1 sources:@[] shuffleOrder:@[@0,@1,@2]];
+        expect(p, @[a[0].item,a[2].item,a[1].item], 2, 1, YES);
+
+        NSLog(@"PASS: 23 native queue scenarios (recording queue; no app/audio)");
     }
     } @catch (NSException *exception) {
         NSLog(@"FAIL: %@", exception.reason);

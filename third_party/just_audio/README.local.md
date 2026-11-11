@@ -30,8 +30,8 @@ scheduling, decoding or lifecycle infrastructure.
 ## Exact change and ownership
 
 Only `AudioPlayer.m` changes upstream runtime behavior. At `enqueueFrom:` entry,
-a loop-off, non-loading, non-seeking call whose target is the current native
-item computes the desired queue using `_order` and the existing per-source
+a loop-off, non-loading, non-seeking call whose target is the native queue
+snapshot's head computes the desired queue using `_order` and the existing per-source
 `lazyLoading`/`TREADMILL_SIZE` rules. An existing queue must be a pointer-identical
 prefix of that desired queue. Only after this check does the fast path update
 the index/end state, append the missing suffix and update the end action. It
@@ -39,6 +39,14 @@ does not remove items, seek, change rate or update playback position. A prune
 of an already played prefix therefore performs no native queue mutation when
 AVQueuePlayer has already removed those items. Non-prefix edits, item
 replacement, loading, seeking and loop modes retain the original rebuild.
+
+Concatenating insert/remove calls explicitly request current-item preservation;
+other callers retain the requested target. Preservation derives its head and
+prefix check from one immutable native queue snapshot. Native advancement after
+the caller's current-item read or during prefix computation can only consume a
+prefix of that snapshot, so appending the missing tail remains safe and does
+not rebuild or replay the surviving queue. A removed current item or a changed
+future order still fails the prefix check and follows the existing fallback.
 
 Played-prefix removal also resolves the new source index from the actual native
 current-item identity after rebuilding the source tree. Its removed-current
@@ -75,13 +83,16 @@ FLUTTER_FRAMEWORK_DIR=/absolute/path/containing/FlutterMacOS.framework \
 
 The script compiles all vendored Objective-C sources against the selected
 FlutterMacOS and system AVFoundation frameworks, then invokes the production
-`enqueueFrom:` and prefix-removal methods with a recording queue. Eighteen scenarios cover preserved
+`enqueueFrom:` and concatenating insert/removal methods with a recording queue. Twenty-three scenarios cover preserved
 future items, complete/pruned no-ops, actual shuffle order, lazy/mixed lazy
 preparation, native treadmill replenishment, non-prefix reorder/removal,
 pending seek, loading, both loop modes, target replacement, two-predecessor
 removal, native advancement during removal, removed-current successor fallback
-and shuffled removal. The batch-removal regression rejects the uncorrected
-implementation. The script
+and shuffled removal. Additional cases advance the native head after the caller
+reads it, before/after the queue snapshot, and during append; intentional future
+insertion still uses the reorder fallback. The batch-removal regression rejects
+the uncorrected implementation, and the snapshot-race regression rejects the
+earlier identity-reindex-only fix. The script
 cleans up its temporary executable/module cache and starts no Flutter engine,
 application or audio playback. These are native compilation and queue-call
 checks, not emitted-audio evidence.
