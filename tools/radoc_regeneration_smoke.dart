@@ -4,6 +4,7 @@
 // Root runner owns external capture, human listening and normal Quit. No exit().
 import 'dart:async';
 import 'native_main_responsiveness_probe.dart';
+import 'native_playback_position_probe.dart';
 import 'package:read_aloud/src/services/native_speech_work_activity.dart';
 import 'dart:convert';
 import 'dart:io';
@@ -341,6 +342,7 @@ Future<void> main(List<String> args) async {
       },
     );
     var maxPosition = 0;
+    final nativePosition = NativePlaybackPositionProbe(session.player);
     final deadline = DateTime.now().add(const Duration(minutes: 8));
     while (session.controller.playbackState !=
         ReaderPlaybackPrimaryState.completed) {
@@ -350,6 +352,7 @@ Future<void> main(List<String> args) async {
         throw TimeoutException('Full source end in $name');
       }
       if (session.player.playing) {
+        nativePosition.sample(session.player.position);
         maxPosition = math.max(
           maxPosition,
           session.player.position.inMilliseconds,
@@ -379,7 +382,8 @@ Future<void> main(List<String> args) async {
         nextWord != expected ||
         expected <= 0 ||
         !session.controller.hasCompleteDocumentSnapshot ||
-        maxPosition < 500) {
+        nativePosition.sampledPositionTotalMs < 500 ||
+        nativePosition.overflow) {
       throw StateError(
         'No complete native traversal in $name: $nextWord/$expected',
       );
@@ -389,6 +393,7 @@ Future<void> main(List<String> args) async {
       'playFutureCompleted': playFinished,
       'elapsedMs': watch.elapsedMilliseconds - began,
       'maxNativePositionMs': maxPosition,
+      'nativePlaybackPositions': nativePosition.toMap(),
       'sourceEndWord': nextWord,
       'chunks': [
         for (final c in chunks)

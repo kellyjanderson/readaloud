@@ -102,7 +102,7 @@ begin
   end
   native = JSON.parse(File.read(receipt))
   result.merge!(nativeReceipt: receipt, nativePassed: native['passed'], launchToNativePositionMs: native['launchToNativePositionMs'], nativePositionWithinTwoSeconds: native['nativePositionWithinTwoSeconds'])
-  raise "Native playback failed: #{native['error']}" unless native['passed'] && native['controlledCaptureGate'] == false && native['resourceShutdownComplete'] == true && native['observedSourceEndWord'] == native['originalSourceExpectedWordCount'] && native['peakPcm16'].to_i >= 100 && native['maxNativePositionMs'].to_i >= 500
+  raise "Native playback failed: #{native['error']}" unless native['passed'] && native['controlledCaptureGate'] == false && native['resourceShutdownComplete'] == true && native['observedSourceEndWord'] == native['originalSourceExpectedWordCount'] && native['peakPcm16'].to_i >= 100 && native.dig('nativePlaybackPositions', 'sampledSourcePositionTotalMs').to_i >= 500
 rescue => error
   errors << error.message
 ensure

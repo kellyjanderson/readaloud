@@ -24,6 +24,7 @@ import 'package:read_aloud/src/services/rendered_scene_repository.dart';
 import 'package:read_aloud/src/services/work_character_repository.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'native_main_responsiveness_probe.dart';
+import 'native_playback_position_probe.dart';
 
 // Isolation seams only. Initialization remains the production controller owner;
 // the screen and this observer share that one future instead of racing it.
@@ -126,7 +127,7 @@ Future<void> main(List<String> args) async {
       if (source is! UriAudioSource || source.uri.scheme != 'file') continue;
       final path = source.uri.toFilePath();
       if (checks.containsKey(path)) continue;
-      if (checks.length >= 256) {
+      if (checks.length >= 512) {
         overflow = true;
         continue;
       }
@@ -155,7 +156,9 @@ Future<void> main(List<String> args) async {
       copying = check.then<void>((_) {});
     }
   });
+  final nativePosition = NativePlaybackPositionProbe(player);
   final position = player.positionStream.listen((p) {
+    nativePosition.sample(p);
     if (player.playing && p > Duration.zero) {
       firstPosition ??= DateTime.now().microsecondsSinceEpoch;
     }
@@ -296,10 +299,12 @@ Future<void> main(List<String> args) async {
         end != expected ||
         !c.isPreparationComplete ||
         !c.hasCompleteDocumentSnapshot ||
-        maxPosition < 500) {
+        nativePosition.sampledPositionTotalMs < 500 ||
+        nativePosition.overflow) {
       throw StateError('Incomplete original source: $end/$expected');
     }
     final queued = await Future.wait(checks.values);
+    receipt['nativePlaybackPositions'] = nativePosition.toMap();
     receipt['queuedAudio'] = queued;
     if (overflow ||
         queued.length < 2 ||
@@ -387,6 +392,7 @@ Future<void> main(List<String> args) async {
     await metrics.close();
     await positions.close();
     receipt.addAll({
+      'nativePlaybackPositions': nativePosition.toMap(),
       'maxNativePositionMs': maxPosition,
       'maxUiHeartbeatDelayMs': maxDelay,
       'delayedTicks': delays,
