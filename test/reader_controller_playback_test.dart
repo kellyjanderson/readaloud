@@ -35,6 +35,162 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
   test(
+    'early retry joins held default selection without loading old default',
+    () async {
+      SharedPreferences.setMockInitialValues({});
+      final selector = _HeldDefaultSelection();
+      final created = <String>[];
+      final controller = ReaderController(
+        defaultEngineSelection: selector,
+        engineFactory: (id, _) {
+          created.add(id);
+          return _ModelPreparationEngine();
+        },
+        enablePlatformIntakeChannels: false,
+      );
+      addTearDown(controller.dispose);
+      final initializing = controller.initialize();
+      await selector.started.future;
+      await controller.cancelSpeechResourcePreparation();
+      var finished = false;
+      final retry = controller.retryInitialization().then(
+        (_) => finished = true,
+      );
+      await Future<void>.delayed(Duration.zero);
+      expect(finished, isFalse);
+      expect(created, isEmpty);
+      expect(controller.engineSession.active, isNull);
+      selector.ready.complete();
+      await Future.wait([initializing, retry]);
+      expect(created, ['fish_drama3_8bit']);
+      expect(controller.engineSession.active!.engineId, 'fish_drama3_8bit');
+    },
+  );
+
+  for (final holdDefault in [false, true]) {
+    test(
+      'early cancellation survives held ${holdDefault ? 'default selection' : 'preferences'} until explicit retry',
+      () async {
+        SharedPreferences.setMockInitialValues({
+          if (!holdDefault) 'reader.ttsEngineId': 'fish_drama3_8bit',
+          'reader.narratorVoiceIds.v1': jsonEncode({
+            'fish_drama3_8bit': 'af_bella',
+          }),
+          'reader.fontScale': 1.4,
+          'reader.lastOpenedDocumentPath': '/saved/book.radoc',
+        });
+        final preferences = _HeldPreferences();
+        final selector = _HeldDefaultSelection();
+        final created = <String>[];
+        final engine = _ModelPreparationEngine();
+        final controller = ReaderController(
+          preferencesService: preferences,
+          defaultEngineSelection: selector,
+          engineFactory: (id, _) {
+            created.add(id);
+            return engine;
+          },
+          enablePlatformIntakeChannels: false,
+        );
+        addTearDown(controller.dispose);
+        final initializing = controller.initialize();
+        if (holdDefault) {
+          preferences.ready.complete();
+          await selector.started.future;
+        }
+        await controller.cancelSpeechResourcePreparation();
+        await controller.cancelSpeechResourcePreparation();
+        if (holdDefault) {
+          selector.ready.complete();
+        } else {
+          preferences.ready.complete();
+        }
+        await initializing;
+        expect(controller.engineSession.phase, EngineSessionPhase.cancelled);
+        expect(controller.engineSession.selected.engineId, 'fish_drama3_8bit');
+        expect(controller.engineSession.active, isNull);
+        expect(controller.isInitializing, isFalse);
+        expect(controller.fontScale, 1.4);
+        expect(created, isEmpty);
+        expect(engine.preparations, 0);
+        await controller.retryInitialization();
+        expect(created, ['fish_drama3_8bit']);
+        expect(engine.preparations, 1);
+        expect(engine.lastSelectedVoiceId, 'af_bella');
+        expect(controller.engineSession.active!.engineId, 'fish_drama3_8bit');
+        expect(engine.speakCallCount, 0);
+      },
+    );
+  }
+
+  test(
+    'early retry waits for hydration and later selection owns replacement',
+    () async {
+      SharedPreferences.setMockInitialValues({
+        'reader.ttsEngineId': 'fish_drama3_8bit',
+      });
+      final preferences = _HeldPreferences();
+      final retired = _ModelPreparationEngine();
+      final created = <String>[];
+      final controller = ReaderController(
+        preferencesService: preferences,
+        ttsEngine: retired,
+        engineFactory: (id, _) {
+          created.add(id);
+          return _ModelPreparationEngine();
+        },
+        enablePlatformIntakeChannels: false,
+      );
+      addTearDown(controller.dispose);
+      final initializing = controller.initialize();
+      await controller.cancelSpeechResourcePreparation();
+      var retried = false;
+      final retry = controller.retryInitialization().then(
+        (_) => retried = true,
+      );
+      final latest = controller.setTtsEngineId('fish_drama3_4bit');
+      await Future<void>.delayed(Duration.zero);
+      expect(created, isEmpty);
+      expect(retried, isFalse);
+      preferences.ready.complete();
+      await Future.wait([initializing, retry, latest]);
+      expect(created, ['fish_drama3_4bit']);
+      expect(retired.disposals, 1);
+      expect(controller.engineSession.active!.engineId, 'fish_drama3_4bit');
+    },
+  );
+
+  test(
+    'a second early cancel invalidates retry waiting for preferences',
+    () async {
+      SharedPreferences.setMockInitialValues({
+        'reader.ttsEngineId': 'fish_drama3_8bit',
+      });
+      final preferences = _HeldPreferences();
+      final created = <String>[];
+      final controller = ReaderController(
+        preferencesService: preferences,
+        ttsEngine: _FakeTtsEngine(),
+        engineFactory: (id, _) {
+          created.add(id);
+          return _ModelPreparationEngine();
+        },
+        enablePlatformIntakeChannels: false,
+      );
+      addTearDown(controller.dispose);
+      final initializing = controller.initialize();
+      await controller.cancelSpeechResourcePreparation();
+      final retry = controller.retryInitialization();
+      await controller.cancelSpeechResourcePreparation();
+      preferences.ready.complete();
+      await Future.wait([initializing, retry]);
+      expect(created, isEmpty);
+      expect(controller.engineSession.phase, EngineSessionPhase.cancelled);
+      expect(controller.engineSession.active, isNull);
+    },
+  );
+
+  test(
     'explicit resource cancellation fences stale completion and retries honestly',
     () async {
       SharedPreferences.setMockInitialValues({});
@@ -4423,6 +4579,20 @@ class _HeldPreferences extends ReaderPreferencesService {
   Future<ReaderPreferences> load() async {
     await ready.future;
     return super.load();
+  }
+}
+
+class _HeldDefaultSelection extends QualifiedEngineSelectionService {
+  final started = Completer<void>();
+  final ready = Completer<void>();
+  @override
+  Future<DefaultEngineSelection> select() async {
+    started.complete();
+    await ready.future;
+    return const DefaultEngineSelection(
+      'fish_drama3_8bit',
+      'held measured default',
+    );
   }
 }
 

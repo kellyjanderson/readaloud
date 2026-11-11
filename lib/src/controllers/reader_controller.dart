@@ -1500,7 +1500,8 @@ class ReaderController extends ChangeNotifier {
       _engineSelectionReason =
           'Saved engine $_selectedTtsEngineId is unavailable in this application. Choose an available engine in Settings; your saved choice is preserved.';
     }
-    if (_providedTtsEngine == null &&
+    if (!_modelPreparationCancelled &&
+        _providedTtsEngine == null &&
         _knownTtsEngineIds.contains(_selectedTtsEngineId)) {
       _ttsEngine.dispose();
       _ttsEngine = _createEngine(
@@ -1513,8 +1514,12 @@ class ReaderController extends ChangeNotifier {
         : _selectedTtsEngineId;
     _loadingEngineId = _selectedTtsEngineId;
     _loadingBits = _voxtralQuantizationBits;
-    _publishEnginePhase(EngineSessionPhase.loading);
-    _bindEngineCallbacks();
+    _publishEnginePhase(
+      _modelPreparationCancelled
+          ? EngineSessionPhase.cancelled
+          : EngineSessionPhase.loading,
+    );
+    if (!_modelPreparationCancelled) _bindEngineCallbacks();
 
     _narratorVoiceIds.addAll(preferences.narratorVoiceIds);
     // Migrate the saved legacy choice into its engine's scope once.
@@ -1551,8 +1556,9 @@ class ReaderController extends ChangeNotifier {
     _lastOpenedDirectoryAccessToken =
         preferences.lastOpenedDirectoryAccessToken;
     if (!_preferencesReady.isCompleted) _preferencesReady.complete();
+    if (_modelPreparationCancelled) notifyListeners();
 
-    final startup = deferInitialSynthesis
+    final startup = deferInitialSynthesis || _modelPreparationCancelled
         ? Future<void>.value()
         : retryInitialization();
     if (deferInitialSynthesis) _isInitializing = false;
@@ -1771,11 +1777,19 @@ class ReaderController extends ChangeNotifier {
   }
 
   bool _modelPreparationCancelled = false;
+  int _modelPreparationResumeRevision = 0;
 
   /// Cancels the resource owner without changing selection, narrator intent,
   /// or the reading anchor. Epoch fencing takes effect before native drain.
   Future<void> cancelSpeechResourcePreparation() {
-    if (_modelPreparationCancelled) return _engineSwitch ?? Future.value();
+    ++_modelPreparationResumeRevision;
+    if (_modelPreparationCancelled) {
+      _isInitializing = false;
+      _statusMessage = 'Speech engine preparation cancelled. Retry to resume.';
+      _publishEnginePhase(EngineSessionPhase.cancelled);
+      notifyListeners();
+      return _engineSwitch ?? Future.value();
+    }
     if (!_isInitializing) return Future.value();
     _requestEngineReplacement();
     _modelPreparationCancelled = true;
@@ -1790,8 +1804,15 @@ class ReaderController extends ChangeNotifier {
 
   Future<void> _resumeModelPreparation() async {
     final epoch = _engineEpoch;
+    final revision = _modelPreparationResumeRevision;
+    // Hydration owns the saved/default selection. Joining it before replacement
+    // prevents an early Retry from constructing the placeholder default.
+    await _preferencesReady.future;
     await _engineSwitch;
-    if (_disposed || epoch != _engineEpoch || !_modelPreparationCancelled) {
+    if (_disposed ||
+        epoch != _engineEpoch ||
+        revision != _modelPreparationResumeRevision ||
+        !_modelPreparationCancelled) {
       return;
     }
     _modelPreparationCancelled = false;
