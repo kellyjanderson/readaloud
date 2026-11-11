@@ -11,7 +11,7 @@ import 'work_character_store.dart';
 
 class ReaderPreferences {
   const ReaderPreferences({
-    this.ttsEngineId = 'kokoro',
+    this.ttsEngineId = '',
     this.voxtralQuantizationBits = 0,
     required this.fontFamily,
     required this.fontScale,
@@ -36,6 +36,9 @@ class ReaderPreferences {
   static const String defaultTtsEngineId = 'kokoro';
 
   final String ttsEngineId;
+
+  /// Empty means no user selection; an automatic effective default is not intent.
+  bool get hasExplicitTtsEngineChoice => ttsEngineId.isNotEmpty;
   final int voxtralQuantizationBits;
   final String fontFamily;
   final double fontScale;
@@ -133,9 +136,7 @@ class ReaderPreferencesService {
     final characters = snapshot.restore();
     return ReaderPreferences(
       voxtralQuantizationBits: preferences.getInt(_voxtralBitsKey) == 4 ? 4 : 0,
-      ttsEngineId:
-          preferences.getString(_ttsEngineIdKey) ??
-          ReaderPreferences.defaultTtsEngineId,
+      ttsEngineId: preferences.getString(_ttsEngineIdKey) ?? '',
       selectedVoiceId: preferences.getString(_selectedVoiceIdKey),
       narratorVoiceIds: _decodeNarratorVoiceIds(
         preferences.getString(_narratorVoiceIdsKey),
@@ -172,7 +173,7 @@ class ReaderPreferencesService {
 
   Future<void> save({
     int voxtralQuantizationBits = 0,
-    String ttsEngineId = ReaderPreferences.defaultTtsEngineId,
+    String ttsEngineId = '',
     required String fontFamily,
     required double fontScale,
     required ReaderAppearanceMode appearanceMode,
@@ -209,7 +210,11 @@ class ReaderPreferencesService {
       await preferences.setString(_selectedVoiceIdKey, selectedVoiceId);
     }
 
-    await preferences.setString(_ttsEngineIdKey, ttsEngineId);
+    if (ttsEngineId.isEmpty) {
+      await preferences.remove(_ttsEngineIdKey);
+    } else {
+      await preferences.setString(_ttsEngineIdKey, ttsEngineId);
+    }
 
     await preferences.setString(_fontFamilyKey, fontFamily);
     await preferences.setDouble(_fontScaleKey, fontScale);

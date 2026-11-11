@@ -30,7 +30,42 @@
       "special_tokens_map.json",
       "tokenizer.json",
       "tokenizer_config.json"
-    ]
+    ],
+    "profile": {
+      "engineFamily": "fish_drama3",
+      "configSource": "https://huggingface.co/mlx-community/fish-audio-drama-3-bf16/resolve/8c5496f9af370bb9342ab98130b27b5389d1b1cb/config.json",
+      "quantizationLayout": {
+        "configDtype": "bfloat16",
+        "defaultBits": null,
+        "groupSize": null,
+        "overrides": [],
+        "unlistedModules": "not-asserted",
+        "codecPrecision": "not-declared"
+      },
+      "runtime": {
+        "id": "mlx-audio-0.6.3-mlx-0.32.4-complete-v3",
+        "architecture": "fish_drama3",
+        "platform": "macos-arm64"
+      },
+      "nativeFormat": {
+        "codec": "checkpoint codec.safetensors",
+        "sampleRate": 44100,
+        "channels": 1,
+        "pcm": "float32"
+      },
+      "capabilities": {
+        "referenceVoices": "supported",
+        "nativeScenes": "bounded-qualified",
+        "streaming": "runtime-validated",
+        "speed": "post-processing"
+      },
+      "qualification": {
+        "state": "bounded-native-evidence",
+        "evidence": "https://github.com/kellyjanderson/readaloud/issues/111",
+        "memory": "requires-measured-runtime-device-envelope"
+      },
+      "sourceLineage": "Pinned conversions have different source dates; cross-precision quality is not established."
+    }
   },
   "fish_drama3_8bit": {
     "label": "Fish Audio Drama 3 · 8-bit",
@@ -57,7 +92,49 @@
       "special_tokens_map.json",
       "tokenizer.json",
       "tokenizer_config.json"
-    ]
+    ],
+    "profile": {
+      "engineFamily": "fish_drama3",
+      "configSource": "https://huggingface.co/mlx-community/fish-audio-drama-3-8bit/resolve/fedc7cc92bab5a180709cbaae6208d10b390bb97/config.json",
+      "quantizationLayout": {
+        "configDtype": "bfloat16",
+        "defaultBits": 8,
+        "groupSize": 64,
+        "overrides": [
+          {
+            "scope": "experts",
+            "bits": 8,
+            "groupSize": 64,
+            "moduleCount": 120
+          }
+        ],
+        "unlistedModules": "not-asserted",
+        "codecPrecision": "not-declared"
+      },
+      "runtime": {
+        "id": "mlx-audio-0.6.3-mlx-0.32.4-complete-v3",
+        "architecture": "fish_drama3",
+        "platform": "macos-arm64"
+      },
+      "nativeFormat": {
+        "codec": "checkpoint codec.safetensors",
+        "sampleRate": 44100,
+        "channels": 1,
+        "pcm": "float32"
+      },
+      "capabilities": {
+        "referenceVoices": "supported",
+        "nativeScenes": "unqualified",
+        "streaming": "runtime-validated",
+        "speed": "post-processing"
+      },
+      "qualification": {
+        "state": "requires-qualification",
+        "evidence": null,
+        "memory": "requires-measured-runtime-device-envelope"
+      },
+      "sourceLineage": "Pinned conversions have different source dates; cross-precision quality is not established."
+    }
   },
   "fish_drama3_4bit": {
     "label": "Fish Audio Drama 3 · 4-bit",
@@ -80,6 +157,60 @@
       "special_tokens_map.json",
       "tokenizer.json",
       "tokenizer_config.json"
-    ]
+    ],
+    "profile": {
+      "engineFamily": "fish_drama3",
+      "configSource": "https://huggingface.co/mlx-community/fish-audio-drama-3-4bit/resolve/2b0c8028998533972e77359cce56b8bf1c5d6d4a/config.json",
+      "quantizationLayout": {
+        "configDtype": "bfloat16",
+        "defaultBits": 8,
+        "groupSize": 64,
+        "overrides": [
+          {
+            "scope": "dense",
+            "bits": 8,
+            "groupSize": 64,
+            "moduleCount": 251
+          },
+          {
+            "scope": "experts",
+            "bits": 4,
+            "groupSize": 64,
+            "moduleCount": 120
+          },
+          {
+            "scope": "tower",
+            "bits": 8,
+            "groupSize": 64,
+            "moduleCount": 87
+          }
+        ],
+        "unlistedModules": "not-asserted",
+        "codecPrecision": "not-declared"
+      },
+      "runtime": {
+        "id": "mlx-audio-0.6.3-mlx-0.32.4-complete-v3",
+        "architecture": "fish_drama3",
+        "platform": "macos-arm64"
+      },
+      "nativeFormat": {
+        "codec": "checkpoint codec.safetensors",
+        "sampleRate": 44100,
+        "channels": 1,
+        "pcm": "float32"
+      },
+      "capabilities": {
+        "referenceVoices": "supported",
+        "nativeScenes": "unqualified",
+        "streaming": "runtime-validated",
+        "speed": "post-processing"
+      },
+      "qualification": {
+        "state": "requires-qualification",
+        "evidence": null,
+        "memory": "requires-measured-runtime-device-envelope"
+      },
+      "sourceLineage": "Pinned conversions have different source dates; cross-precision quality is not established."
+    }
   }
 }

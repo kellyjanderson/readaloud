@@ -59,6 +59,7 @@ import '../services/english_pronunciation_profile_selector.dart';
 import '../services/playback_instrumentation_service.dart';
 import '../services/pronunciation_resource_layering_service.dart';
 import '../services/reader_preferences_service.dart';
+import '../services/qualified_engine_selection_service.dart';
 import '../services/reader_document_repository.dart';
 import '../services/file_source_revision.dart';
 import '../services/reader_document_serialization_service.dart';
@@ -102,6 +103,7 @@ class ReaderController extends ChangeNotifier {
     ReaderDocumentRepository? documentRepository,
     DocumentAccessService? documentAccessService,
     ReaderPreferencesService? preferencesService,
+    QualifiedEngineSelectionService? defaultEngineSelection,
     TtsEngine? ttsEngine,
     TtsEngine Function(String, int)? engineFactory,
     bool enablePlatformIntakeChannels = true,
@@ -123,6 +125,8 @@ class ReaderController extends ChangeNotifier {
        _documentAccessService =
            documentAccessService ?? createDocumentAccessService(),
        _preferencesService = preferencesService ?? ReaderPreferencesService(),
+       _defaultEngineSelection =
+           defaultEngineSelection ?? QualifiedEngineSelectionService(),
        _engineFactory = engineFactory,
        _providedTtsEngine = ttsEngine,
        _ttsEngine = ttsEngine ?? createDefaultTtsEngine(),
@@ -1186,6 +1190,10 @@ class ReaderController extends ChangeNotifier {
 
   final DocumentAccessService _documentAccessService;
   final ReaderPreferencesService _preferencesService;
+  final QualifiedEngineSelectionService _defaultEngineSelection;
+  bool _hasExplicitEngineChoice = false;
+  String? _engineSelectionReason;
+  String? get engineSelectionReason => _engineSelectionReason;
   ReaderPreferences? _pendingPreferences;
   Future<void>? _preferenceSavePump;
   int _preferenceSnapshotRevision = 0;
@@ -1470,7 +1478,9 @@ class ReaderController extends ChangeNotifier {
     }
     _voxtralQuantizationBits = preferences.voxtralQuantizationBits;
     _runningVoxtralQuantizationBits = _voxtralQuantizationBits;
-    _selectedTtsEngineId = _knownTtsEngineIds.contains(preferences.ttsEngineId)
+    if (_disposed) return;
+    _hasExplicitEngineChoice = preferences.hasExplicitTtsEngineChoice;
+    _selectedTtsEngineId = _hasExplicitEngineChoice
         ? preferences.ttsEngineId
         : ReaderPreferences.defaultTtsEngineId;
     final launchEngine = Platform.isMacOS
@@ -1479,8 +1489,19 @@ class ReaderController extends ChangeNotifier {
     if (_providedTtsEngine == null &&
         _knownTtsEngineIds.contains(launchEngine)) {
       _selectedTtsEngineId = launchEngine!;
+      _hasExplicitEngineChoice = true;
+    } else if (!_hasExplicitEngineChoice && _providedTtsEngine == null) {
+      final selection = await _defaultEngineSelection.select();
+      if (_disposed) return;
+      _selectedTtsEngineId = selection.engineId;
+      _engineSelectionReason = selection.reason;
     }
-    if (_providedTtsEngine == null) {
+    if (!_knownTtsEngineIds.contains(_selectedTtsEngineId)) {
+      _engineSelectionReason =
+          'Saved engine $_selectedTtsEngineId is unavailable in this application. Choose an available engine in Settings; your saved choice is preserved.';
+    }
+    if (_providedTtsEngine == null &&
+        _knownTtsEngineIds.contains(_selectedTtsEngineId)) {
       _ttsEngine.dispose();
       _ttsEngine = _createEngine(
         _selectedTtsEngineId,
@@ -1490,7 +1511,7 @@ class ReaderController extends ChangeNotifier {
     _runningTtsEngineId = _ttsEngine is TtsEngineIdentityCapable
         ? (_ttsEngine as TtsEngineIdentityCapable).engineId
         : _selectedTtsEngineId;
-    _loadingEngineId = _runningTtsEngineId;
+    _loadingEngineId = _selectedTtsEngineId;
     _loadingBits = _voxtralQuantizationBits;
     _publishEnginePhase(EngineSessionPhase.loading);
     _bindEngineCallbacks();
@@ -1498,9 +1519,12 @@ class ReaderController extends ChangeNotifier {
     _narratorVoiceIds.addAll(preferences.narratorVoiceIds);
     // Migrate the saved legacy choice into its engine's scope once.
     if (preferences.selectedVoiceId case final voice?) {
-      final legacyScope = preferences.ttsEngineId == 'voxtral_4b'
-          ? '${preferences.ttsEngineId}:${preferences.voxtralQuantizationBits}'
-          : preferences.ttsEngineId;
+      final legacyEngine = preferences.hasExplicitTtsEngineChoice
+          ? preferences.ttsEngineId
+          : ReaderPreferences.defaultTtsEngineId;
+      final legacyScope = legacyEngine == 'voxtral_4b'
+          ? '$legacyEngine:${preferences.voxtralQuantizationBits}'
+          : legacyEngine;
       _narratorVoiceIds.putIfAbsent(legacyScope, () => voice);
     }
     _selectedVoiceId = _narratorVoiceIds[_narratorScope];
@@ -1758,6 +1782,11 @@ class ReaderController extends ChangeNotifier {
     _publishEnginePhase(EngineSessionPhase.loading);
     notifyListeners();
     try {
+      if (!_knownTtsEngineIds.contains(_loadingEngineId)) {
+        throw StateError(
+          _engineSelectionReason ?? 'Selected engine is unavailable.',
+        );
+      }
       await engine.initialize().timeout(const Duration(seconds: 30));
       if (!current()) return;
       final voices = await engine.loadVoices();
@@ -2868,7 +2897,16 @@ class ReaderController extends ChangeNotifier {
   }) async {
     await _preferencesReady.future;
     if (!_knownTtsEngineIds.contains(engineId)) return;
-    if (_selectedTtsEngineId == engineId && _startupError == null) return;
+    final newlyExplicit = !_hasExplicitEngineChoice;
+    _hasExplicitEngineChoice = true;
+    _engineSelectionReason = null;
+    if (_selectedTtsEngineId == engineId && _startupError == null) {
+      if (newlyExplicit) {
+        await _persistPreferences();
+        if (!_disposed) notifyListeners();
+      }
+      return;
+    }
     _rememberNarratorIntent();
     final publishedNarrator = preserveBookPlay ? _selectedVoiceId : null;
     _selectedTtsEngineId = engineId;
@@ -3925,7 +3963,7 @@ class ReaderController extends ChangeNotifier {
     _rememberNarratorIntent();
     _pendingPreferences = ReaderPreferences(
       voxtralQuantizationBits: _voxtralQuantizationBits,
-      ttsEngineId: _selectedTtsEngineId,
+      ttsEngineId: _hasExplicitEngineChoice ? _selectedTtsEngineId : '',
       selectedVoiceId: _selectedVoiceId,
       narratorVoiceIds: Map.unmodifiable(_narratorVoiceIds),
       voiceSpeeds: Map.unmodifiable(_voiceSpeeds),

@@ -26,6 +26,7 @@ import 'package:read_aloud/src/services/document_import_service.dart';
 import 'package:read_aloud/src/services/document_preparation_supervisor.dart';
 import 'package:read_aloud/src/services/playback_instrumentation_service.dart';
 import 'package:read_aloud/src/services/reader_preferences_service.dart';
+import 'package:read_aloud/src/services/qualified_engine_selection_service.dart';
 import 'package:read_aloud/src/services/reader_document_repository.dart';
 import 'package:read_aloud/src/services/reader_document_serialization_service.dart';
 import 'dart:io';
@@ -33,6 +34,69 @@ import 'package:read_aloud/src/services/tts_engine.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
+  test(
+    'new default resolves once without persisting an explicit engine choice',
+    () async {
+      SharedPreferences.setMockInitialValues({});
+      final selector = _FixedDefaultSelection('fish_drama3_8bit');
+      final created = <String>[];
+      final controller = ReaderController(
+        defaultEngineSelection: selector,
+        engineFactory: (id, _) {
+          created.add(id);
+          return _FakeTtsEngine();
+        },
+        enablePlatformIntakeChannels: false,
+      );
+      addTearDown(controller.dispose);
+      await controller.initialize();
+      expect(selector.calls, 1);
+      expect(created, ['fish_drama3_8bit']);
+      expect(controller.selectedTtsEngineId, 'fish_drama3_8bit');
+      final preferences = await SharedPreferences.getInstance();
+      expect(preferences.containsKey('reader.ttsEngineId'), false);
+      await controller.setTtsEngineId('fish_drama3_8bit');
+      expect(preferences.getString('reader.ttsEngineId'), 'fish_drama3_8bit');
+      expect(selector.calls, 1);
+    },
+  );
+
+  test(
+    'explicit Kokoro bypasses quality selection; unknown choice stays unavailable',
+    () async {
+      for (final id in ['kokoro', 'future_engine_variant']) {
+        SharedPreferences.setMockInitialValues({'reader.ttsEngineId': id});
+        final selector = _FixedDefaultSelection('fish_drama3');
+        final created = <String>[];
+        final controller = ReaderController(
+          defaultEngineSelection: selector,
+          engineFactory: (engineId, _) {
+            created.add(engineId);
+            return _FakeTtsEngine();
+          },
+          enablePlatformIntakeChannels: false,
+        );
+        await controller.initialize();
+        expect(selector.calls, 0);
+        expect(controller.selectedTtsEngineId, id);
+        if (id == 'kokoro') {
+          expect(created, ['kokoro']);
+          expect(controller.startupError, isNull);
+        } else {
+          expect(created, isEmpty);
+          expect(controller.engineSession.active, isNull);
+          expect(controller.startupError, contains('unavailable'));
+          expect(
+            (await SharedPreferences.getInstance()).getString(
+              'reader.ttsEngineId',
+            ),
+            id,
+          );
+        }
+        controller.dispose();
+      }
+    },
+  );
   test(
     'launch prepares selected model and settings can cancel model preparation',
     () async {
@@ -4266,6 +4330,17 @@ class _RecordingPreparationSupervisor extends DocumentPreparationSupervisor {
     );
     results.add(result);
     return result;
+  }
+}
+
+class _FixedDefaultSelection extends QualifiedEngineSelectionService {
+  _FixedDefaultSelection(this.id);
+  final String id;
+  int calls = 0;
+  @override
+  Future<DefaultEngineSelection> select() async {
+    calls++;
+    return DefaultEngineSelection(id, 'test measured default');
   }
 }
 

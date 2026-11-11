@@ -107,6 +107,80 @@ void main() {
     expect(catalog.variants['fish_drama3_4bit']!.integrityManifest, isNull);
   });
 
+  test(
+    'descriptor records mixed quantization without claiming codec precision',
+    () {
+      final catalog = parse();
+      final four = catalog.variants['fish_drama3_4bit']!;
+      expect(four.profile!.defaultBits, 8);
+      expect(
+        four.profile!.overrides.map((g) => [g.scope, g.bits, g.moduleCount]),
+        [
+          ['dense', 8, 251],
+          ['experts', 4, 120],
+          ['tower', 8, 87],
+        ],
+      );
+      expect(four.profile!.codecPrecision, 'not-declared');
+      expect(four.profile!.nativeScenes, 'unqualified');
+      expect(
+        catalog
+            .variants['fish_drama3_8bit']!
+            .profile!
+            .overrides
+            .single
+            .moduleCount,
+        120,
+      );
+      expect(
+        catalog.variants['fish_drama3']!.profile!.nativeScenes,
+        'bounded-qualified',
+      );
+      expect(
+        four.expectedDiskBytes,
+        four.requiredFiles.fold<int>(
+          0,
+          (n, file) => n + four.integrityManifest!.files[file]!.sizeBytes,
+        ),
+      );
+      expect(four.licenseIntegrity!.digest, isNotEmpty);
+      expect(four.noticeIntegrity!.digest, isNotEmpty);
+      expect(four.configIntegrity!.digest, isNotEmpty);
+    },
+  );
+
+  test(
+    'legacy descriptors without profile remain readable and unqualified',
+    () {
+      for (final value in models.values) {
+        (value as Map).remove('profile');
+      }
+      expect(parse().variants.values.every((v) => v.profile == null), true);
+    },
+  );
+
+  for (final mutation in <String, void Function(Map<String, dynamic>)>{
+    'wrong config pin': (p) =>
+        p['configSource'] = 'https://example.com/config.json',
+    'new executable runtime': (p) => p['runtime']['id'] = 'new-python-code',
+    'new scene capability': (p) =>
+        p['capabilities']['nativeScenes'] = 'bounded-qualified',
+    'new native format': (p) => p['nativeFormat']['sampleRate'] = 48000,
+    'claimed qualified memory': (p) =>
+        p['qualification']['memory'] = 'qualified',
+    'unknown profile field': (p) => p['executable'] = 'custom.py',
+    'fractional precision': (p) => p['quantizationLayout']['defaultBits'] = 8.0,
+    'guessed codec precision': (p) =>
+        p['quantizationLayout']['codecPrecision'] = 'bfloat16',
+  }.entries) {
+    test('rejects profile ${mutation.key}', () {
+      mutation.value(
+        models['fish_drama3_4bit']['profile'] as Map<String, dynamic>,
+      );
+      expect(parse, throwsFormatException);
+    });
+  }
+
   test('catalog and nested collections are immutable', () {
     final catalog = parse();
     final descriptor = catalog.variants['fish_drama3']!;

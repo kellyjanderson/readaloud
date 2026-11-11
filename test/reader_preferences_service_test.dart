@@ -130,6 +130,7 @@ void main() {
       final preferences = await service.load();
 
       expect(preferences.voxtralQuantizationBits, 0);
+      expect(preferences.hasExplicitTtsEngineChoice, false);
 
       expect(preferences.fontFamily, ReaderPreferences.defaultFontFamily);
       expect(preferences.fontScale, ReaderPreferences.defaultFontScale);
@@ -148,6 +149,33 @@ void main() {
       expect(preferences.lastOpenedDirectoryPath, isNull);
       expect(preferences.lastOpenedDirectoryAccessToken, isNull);
     });
+
+    test(
+      'unset, explicit Kokoro and unknown choices survive saves distinctly',
+      () async {
+        final service = ReaderPreferencesService();
+        for (final id in ['', 'kokoro', 'future_engine_variant']) {
+          await service.save(
+            ttsEngineId: id,
+            fontFamily: 'serif',
+            fontScale: 1,
+            appearanceMode: ReaderAppearanceMode.system,
+            multiVoiceEnabled: true,
+            voiceSpeeds: {},
+            storedDocumentCastVoiceAssignments: {},
+          );
+          final value = await service.load();
+          expect(value.ttsEngineId, id);
+          expect(value.hasExplicitTtsEngineChoice, id.isNotEmpty);
+          expect(
+            (await SharedPreferences.getInstance()).containsKey(
+              'reader.ttsEngineId',
+            ),
+            id.isNotEmpty,
+          );
+        }
+      },
+    );
 
     test('persists last opened document and folder paths', () async {
       final service = ReaderPreferencesService();
