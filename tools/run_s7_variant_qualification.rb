@@ -46,6 +46,7 @@ profiles = []
 profile_stalls = ENV['READALOUD_S7_PROFILE_STALLS'] == '1'
 profile_continuously = ENV['READALOUD_S7_PROFILE_STALLS'] == 'continuous'
 profile_instruments = ENV['READALOUD_S7_PROFILE_STALLS'] == 'timeprofiler'
+profile_seconds = ENV['READALOUD_S7_EXTENDED_NATIVE_DIAGNOSTIC'] == '1' ? 190 : 70
 if profile_stalls || profile_continuously || profile_instruments
   result[:diagnosticProfiling] = true
   result[:errors] << 'Diagnostic native sampling enabled; timing is instrumented'
@@ -152,10 +153,10 @@ begin
         File.write(options_path, JSON.pretty_generate(options) + "\n")
         result[:nativeRecordingOptions] = options
         ['/usr/bin/xcrun', 'xctrace', 'record', '--template', 'Time Profiler',
-         '--attach', pid.to_s, '--time-limit', '70s', '--recording-options', options_path,
+         '--attach', pid.to_s, '--time-limit', "#{profile_seconds}s", '--recording-options', options_path,
          '--output', File.join(output, 'native-time.trace')]
       else
-        ['/usr/bin/sample', pid.to_s, '70', '10', '-file', File.join(output, 'native-continuous.sample.txt')]
+        ['/usr/bin/sample', pid.to_s, profile_seconds.to_s, '10', '-file', File.join(output, 'native-continuous.sample.txt')]
       end
       profiles << {pid: Process.spawn(*command, out: log, err: log), status: nil}
     end
