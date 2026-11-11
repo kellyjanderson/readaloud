@@ -171,7 +171,7 @@ Future<Map<String, Object?>> _prepare(String input, String root) => Isolate.run(
             reference['sampleRate'] == 44100 &&
             reference['channels'] == 1 &&
             reference['bitsPerSample'] == 16 &&
-            reference['pcmBytes'] == data!.length,
+            reference['pcmBytes'] == data.length,
         'Source format receipt mismatch',
       );
       final payload = data!;
@@ -368,7 +368,7 @@ Future<void> main(List<String> args) async {
       c.report(
         'replay',
         preceding + player.position.inMicroseconds * 44100 ~/ 1000000,
-        prepared!['totalFrames'] as int,
+        prepared['totalFrames'] as int,
       );
     }
   });
@@ -456,8 +456,8 @@ Future<void> main(List<String> args) async {
     receipt['sourceProvenance'] = prepared;
     c.report(
       phase,
-      prepared!['totalFrames'] as int,
-      prepared!['totalFrames'] as int,
+      prepared['totalFrames'] as int,
+      prepared['totalFrames'] as int,
     );
     phase = 'capture-wait';
     c.report(phase, null, null);
@@ -478,7 +478,7 @@ Future<void> main(List<String> args) async {
         (_) => requestPump(),
       );
     } else {
-      final joined = prepared!['joined'] as Map;
+      final joined = prepared['joined'] as Map;
       final path = joined['path'] as String;
       await mutate('setAudioSources', path, () async {
         await player.setAudioSources([AudioSource.file(path)]);
