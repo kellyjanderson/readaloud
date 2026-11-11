@@ -335,10 +335,8 @@ Future<void> main(List<String> args) async {
 
   final native = NativeMainResponsivenessProbe()..start(() => phase);
   final subscription = player.positionStream.listen(position.sample);
-  final heartbeat = Timer.periodic(const Duration(milliseconds: 100), (_) {
+  void sampleActualPlayer() {
     final now = watch.elapsedMilliseconds;
-    maxUi = math.max(maxUi, now - lastTick - 100);
-    lastTick = now;
     position.sample(player.position);
     final index = player.currentIndex;
     final source = index != null && index >= 0 && index < player.sequence.length
@@ -371,6 +369,13 @@ Future<void> main(List<String> args) async {
         prepared['totalFrames'] as int,
       );
     }
+  }
+
+  final heartbeat = Timer.periodic(const Duration(milliseconds: 100), (_) {
+    final now = watch.elapsedMilliseconds;
+    maxUi = math.max(maxUi, now - lastTick - 100);
+    lastTick = now;
+    sampleActualPlayer();
   });
   Future<void> mutate(
     String operation,
@@ -507,7 +512,7 @@ Future<void> main(List<String> args) async {
       playbackError = e;
     });
     await until(
-      () => player.playing && player.position > Duration.zero,
+      () => player.playing && position.sampledPositionTotalMs >= 50,
       'Real player movement',
     );
     segment['firstPositionUnixMicros'] = DateTime.now().microsecondsSinceEpoch;
@@ -533,6 +538,9 @@ Future<void> main(List<String> args) async {
       'Audible Pause boundary',
       seconds: 2,
     );
+    // A periodic observation can fall in the previous short packet. Record
+    // the actual current source/position at Pause instead of inferring it.
+    sampleActualPlayer();
     segment['pauseRequestedUnixMicros'] = DateTime.now().microsecondsSinceEpoch;
     cancelled = true;
     pumpTimer?.cancel();
