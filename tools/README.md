@@ -132,7 +132,7 @@ app-only capture without delaying Play. It tracks app descendants and requires
 normal Quit and verified process exit. LaunchServices owns the app's exit status;
 the receipt records the launcher's exit separately and never invents an app exit
 code. Use the same waveform comparison/startup summarizer as the direct runner.
-Neither launch method exempts first opening from the two-second requirement.
+Both launch methods report the two-second goal and the five-second reusable-`.radoc` hard limit. The startup summarizer accepts an optional final `first-load` argument for a first load requiring preparation or synthesis, applying its ten-second hard limit. Its default class is `radoc` for these offline saved-book probes. Classification depends on the document reuse state, independently of cold/warm process state. The report records goal and hard-limit outcomes separately. `rc2_timing_report.rb` accepts `load_class: radoc|first-load` per case, independently of its process condition. Legacy `condition: radoc` selects the reusable-book limit; other legacy conditions select the first-load limit. Set `load_class` explicitly when cold/warm process state and document reuse differ.
 
 Runtime packaging accepts empty Python package markers as data. Universal native
 dependencies are thinned to arm64 in the build-owned staging copy before signing

@@ -32,10 +32,35 @@ class Rc2TimingReportTest < Minitest::Test
 
   def test_one_slow_trial_cannot_hide_behind_mean_or_percentile
     input = receipt
-    trials(input).last['audible_us'] = 2_002_000
+    trials(input).last['audible_us'] = 10_002_000
     result = Rc2TimingReport.evaluate(input)
     assert_equal 'fail', result[:verdict]
-    assert_equal 2001.0, result[:cases].first[:launch_to_audible][:max_ms]
+    assert_equal 10001.0, result[:cases].first[:launch_to_audible][:max_ms]
+  end
+
+  def test_two_second_goal_is_reported_without_failing_a_valid_load
+    input = receipt
+    trials(input).last['audible_us'] = 3_001_000
+    result = Rc2TimingReport.evaluate(input)
+    assert_equal 'pass', result[:verdict]
+    assert_equal false, result[:cases].first[:goal_met]
+    assert_equal 10000, result[:cases].first[:hard_limit_ms]
+  end
+
+  def test_radoc_hard_limit_and_load_class_independent_of_process_state
+    input = receipt
+    input['cases'].first['load_class'] = 'radoc'
+    trials(input).last['audible_us'] = 5_001_000
+    result = Rc2TimingReport.evaluate(input)
+    assert_equal 'pass', result[:verdict]
+    assert_equal 5000, result[:cases].first[:hard_limit_ms]
+    assert_equal false, result[:cases].first[:goal_met]
+    trials(input).last['audible_us'] += 1
+    assert_equal 'fail', Rc2TimingReport.evaluate(input)[:verdict]
+    input['cases'].first['load_class'] = 'first-load'
+    assert_equal 'pass', Rc2TimingReport.evaluate(input)[:verdict]
+    input['cases'].first['load_class'] = 'unknown'
+    assert_equal 'fail', Rc2TimingReport.evaluate(input)[:verdict]
   end
 
   def test_pcm_or_player_callback_cannot_replace_actual_output
@@ -73,11 +98,11 @@ class Rc2TimingReportTest < Minitest::Test
 
   def test_exact_limits_pass_and_document_intake_is_measured_separately
     input = receipt
-    trials(input).first.merge!('document_open_us' => 50_000, 'audible_us' => 2_001_000,
+    trials(input).first.merge!('document_open_us' => 50_000, 'audible_us' => 10_001_000,
                               'input_ack_us' => 100_000, 'max_main_stall_us' => 100_000)
     result = Rc2TimingReport.evaluate(input)
     assert_equal 'pass', result[:verdict]
-    assert_equal [1951.0], result[:cases].first[:document_open_to_audible][:samples_ms]
+    assert_equal [9951.0], result[:cases].first[:document_open_to_audible][:samples_ms]
   end
 
   def test_empty_matrix_and_non_native_debug_build_fail

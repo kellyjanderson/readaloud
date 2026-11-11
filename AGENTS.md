@@ -6,7 +6,7 @@ This is the authoritative process. Current architecture and versioned interim de
 
 Apply the [product definition](project/product-definition.md) and [README reading expectations](README.md) to every design, implementation and acceptance decision. They are requirements, not assertions of current conformance; [issue #83](https://github.com/kellyjanderson/readaloud/issues/83) records the present gaps.
 
-- With a document available and Play requested promptly, opening the app to smooth audible speech must take at most two seconds, regardless of document size. Do not hide initialization/preparation time by moving the measurement start.
+- With a document available and Play requested promptly, aim for smooth audible speech within two seconds of opening the app. The hard limits are five seconds for loading a reusable .radoc and ten seconds for a first load requiring preparation or synthesis, regardless of document size. Include initialization and preparation in the measurement.
 - All reading work is dynamic and incremental, including acquisition, parsing, normalization, mapping, analysis, planning, resource binding, synthesis and persistence. Character discovery is only an example. Do not require whole-document completion before first speech; maintain bounded work ahead of playback and explicit revision/cancellation ownership.
 - Keep the interface responsive throughout. Pending playback must be cancellable without waiting for background work to drain; obsolete completion must not trigger speech.
 - Work exceeding one or two seconds requires a dynamic progress bar with real completed-work accounting, truthful stage/total/wait states and actionable failure. No pretend progress or premature 100%.

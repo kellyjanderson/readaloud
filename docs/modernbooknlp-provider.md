@@ -183,7 +183,7 @@ passage in 0.75 seconds, with approximately 4.61 GB peak process RSS. Cached loa
 was about 5.5 seconds; six subsequent tiny windows took 0.66–0.75 seconds each. The first run passed five of six smoke cases; the unidentified-speaker case raised
 an upstream `IndexError`. After the output-list shape correction, all six passed,
 including explicit unknown preservation. Both receipts remain in the issue evidence.
-Do not equate these measurements with two-second app startup, physical process-tree
+Do not equate these measurements with the two-second app startup goal, physical process-tree
 memory, a held-out quality score, or smooth Fish playback.
 
 Remaining promotion gates: independent literary and private City labels, fair

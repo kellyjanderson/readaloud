@@ -1,7 +1,7 @@
 #!/usr/bin/env ruby
 # Refs #83, #86. Offline evidence validation; never launches or changes the app.
 # Input is a JSON object with candidate and cases. Each case has id, condition
-# (fresh/warm/radoc), scenario (launch/document-open; defaults to launch),
+# (fresh/warm/radoc), optional load_class (radoc/first-load), scenario (launch/document-open; defaults to launch),
 # fixture_sha256 and trials. Each trial has id, valid (bool),
 # monotonic microsecond events, input_ack_us, max_main_stall_us and output_evidence
 # {path, sha256, route, basis: "recorded-output"}. Events are launch_us,
@@ -13,10 +13,10 @@
 # entrypoint, capture_route. This validates receipts, not their authenticity or
 # acoustic meaning; original captures/traces must still be independently checked.
 require 'json'
+require_relative 'startup_timing_policy'
 
 module Rc2TimingReport
   EVENTS = %w[launch_us first_interactive_us play_us first_pcm_us audible_us].freeze
-  LIMIT_US = 2_000_000
   UI_LIMIT_US = 100_000
   SHA256 = /\A[0-9a-f]{64}\z/
 
@@ -47,6 +47,14 @@ module Rc2TimingReport
       case_errors = []
       case_errors << 'case id missing' if record['id'].to_s.empty?
       case_errors << 'condition must be fresh/warm/radoc' unless %w[fresh warm radoc].include?(record['condition'])
+      load_class = record.fetch('load_class', record['condition'] == 'radoc' ? 'radoc' : 'first-load')
+      begin
+        hard_limit_ms = StartupTimingPolicy.hard_limit_ms(load_class)
+      rescue ArgumentError => error
+        case_errors << error.message
+        hard_limit_ms = 0
+      end
+      hard_limit_us = hard_limit_ms * 1000
       scenario = record.fetch('scenario', 'launch')
       case_errors << 'scenario must be launch/document-open' unless %w[launch document-open].include?(scenario)
       case_errors << 'fixture_sha256 invalid' unless SHA256.match?(record['fixture_sha256'].to_s)
@@ -75,7 +83,7 @@ module Rc2TimingReport
             trial['first_pcm_us'].between?(trial['launch_us'], trial['audible_us'])
           latency = trial['audible_us'] - trial['launch_us']
           samples << latency
-          problems << 'launch-to-audible exceeds 2000 ms' if scenario == 'launch' && latency > LIMIT_US
+          problems << "launch-to-audible exceeds #{hard_limit_ms} ms hard limit" if scenario == 'launch' && latency > hard_limit_us
           problems << 'document-open trial is missing document_open_us' if scenario == 'document-open' && !trial.key?('document_open_us')
           if trial.key?('document_open_us')
             opened = trial['document_open_us']
@@ -83,7 +91,7 @@ module Rc2TimingReport
               problems << 'document_open_us invalid'
             else
               open_samples << trial['audible_us'] - opened
-              problems << 'document-open-to-audible exceeds 2000 ms' if open_samples.last > LIMIT_US
+              problems << "document-open-to-audible exceeds #{hard_limit_ms} ms hard limit" if open_samples.last > hard_limit_us
             end
           end
         end
@@ -105,6 +113,12 @@ module Rc2TimingReport
       end
       case_errors << 'one or more trials failed or are incomplete' if trial_results.any? { |r| %w[fail incomplete].include?(r[:verdict]) }
       {id: record['id'], condition: record['condition'], scenario: scenario, fixture_sha256: record['fixture_sha256'],
+       timing_policy: StartupTimingPolicy::REVISION, load_class: load_class,
+       goal_ms: StartupTimingPolicy::GOAL_MS, hard_limit_ms: hard_limit_ms,
+       hard_limit_met: !(scenario == 'launch' ? samples : open_samples).empty? &&
+         (scenario == 'launch' ? samples : open_samples).all? { |n| n <= hard_limit_us },
+       goal_met: !(scenario == 'launch' ? samples : open_samples).empty? &&
+         (scenario == 'launch' ? samples : open_samples).all? { |n| n <= StartupTimingPolicy::GOAL_MS * 1000 },
        verdict: case_errors.empty? ? 'pass' : 'fail', errors: case_errors,
        launch_to_audible: percentiles(samples), document_open_to_audible: percentiles(open_samples),
        trials: trial_results}

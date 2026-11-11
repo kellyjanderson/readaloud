@@ -1,11 +1,11 @@
 # Read Aloud Product Definition
 
-Last updated: October 25, 2026
+Last updated: November 10, 2026
 Status: Standing product requirements; current implementation does not yet meet all requirements
 
 ## Mandatory Reading Experience
 
-With the intended document available and Play requested promptly, the user must hear smooth, uninterrupted speech within **two seconds of opening the app, regardless of document size**. Measure opening-to-audible-output, including initialization and preparation. Record Play separately; do not autoplay to satisfy timing. For documents opened after launch, also measure document-open-to-audio. Human delay, missing inputs/assets and access failures must be reported honestly rather than disguised as successful latency results. Cold-process, warm-process and reusable-document runs require separate evidence; document size is not an exemption.
+With the intended document available and Play requested promptly, the startup **goal is two seconds** from opening the app to smooth, uninterrupted speech. The hard limits are **five seconds for loading a reusable `.radoc`** and **ten seconds for a first load requiring preparation or synthesis**, regardless of document size. A result above two seconds misses the goal. A result above its applicable hard limit fails startup acceptance. Classify the load by reusable document state, independently of whether the app process is cold or warm. A `.radoc` that needs new preparation or synthesis before first speech uses the first-load limit. Measure opening-to-audible-output, including initialization and preparation. Record Play separately; do not autoplay to satisfy timing. For documents opened after launch, also measure document-open-to-audio. Human delay, missing inputs/assets and access failures must be reported honestly rather than disguised as successful latency results. Cold-process, warm-process and reusable-document runs require separate evidence; document size is not an exemption.
 
 The interface must always feel responsive: scrolling, menus, voice selection, pause/cancel and document replacement must remain usable during preparation, inference, persistence and export. A pending Play must be visible and cancellable immediately at the intent level even if native work takes longer to drain. Old requests must never start unexpected speech. Smooth speech means sustained playback without starvation, missing or duplicated words, or unintended replay; authored pauses are preserved.
 
@@ -13,7 +13,7 @@ The interface must always feel responsive: scrolling, menus, voice selection, pa
 
 Characters and other derived knowledge evolve as content is encountered. Keep stable content identities and positions, provenance and uncertainty; retain explicit user choices when new evidence arrives. Late discoveries must not silently rewrite already-spoken material or override newer playback intent. A jump prioritizes the new position rather than waiting for all preceding background work.
 
-Every operation exceeding one or two seconds must show a dynamic progress bar driven by actual completed work. Show the operation/stage, completed units and honest totals; disclose unknown or expanding totals. Distinguish work, waiting, stalled/failed and completed states. Do not invent percentages, leave the only feedback motionless without explanation, or show 100% while required downstream work is still pending. Progress does not excuse UI blocking or replace the two-second startup requirement.
+Every operation exceeding one or two seconds must show a dynamic progress bar driven by actual completed work. Show the operation/stage, completed units and honest totals; disclose unknown or expanding totals. Distinguish work, waiting, stalled/failed and completed states. Do not invent percentages, leave the only feedback motionless without explanation, or show 100% while required downstream work is still pending. Progress does not excuse UI blocking or extend either startup hard limit.
 
 These are user requirements, not proof of present capability. The source-linked [issue #83 report](https://github.com/kellyjanderson/readaloud/issues/83) owns active findings and acceptance work. Current architecture remains the authority for implemented behavior. Current-release scope remains with its existing coordinator.
 

@@ -13,7 +13,7 @@ Drama bf16 has running-app playback evidence at native 44.1 kHz, including
 short fiction turns and explicit Character choices. Full qualification remains
 owned by [the Drama issue](https://github.com/kellyjanderson/readaloud/issues/111).
 Builds, source tests and playback position do not establish listening quality or
-the two-second launch-to-speech requirement.
+the startup goal and hard limits in the [product definition](../project/product-definition.md).
 
 ## Model downloads and cache
 
@@ -253,7 +253,7 @@ shortcut requires twenty playable seconds, or a ready following chunk;
 Qwen and MOSS start with their first validated chunk. At the five-second MLX
 warmup deadline, already validated audio can start rather than failing solely
 because the target lead was not reached. Cancellation and stale-result checks
-continue to apply. This does not establish the two-second startup requirement.
+continue to apply. Startup acceptance uses the goal and hard limits in the [product definition](../project/product-definition.md).
 
 For a sustained native check, set `READALOUD_SMOKE_DOCUMENT_PATH` to a local text
 file, `READALOUD_SMOKE_PLAY_SECONDS=45`, and
@@ -362,8 +362,7 @@ against the pinned revision before enabling native scenes and delivery controls,
 including when a local model folder is supplied. First verification shows real
 byte progress; unchanged file state reuses its local verification receipt. An
 unverified checkpoint keeps plain delivery and separate turns while preserving
-saved directions. This verification adds first-run preparation time; the standing
-two-second opening-to-speech requirement remains unmet.
+saved directions. This verification adds first-run preparation time and belongs inside the ten-second first-load hard limit. The startup goal remains two seconds. Qualification against the revised limits requires emitted-audio evidence.
 Word highlighting remains an estimate over scene duration. Perceptual continuity across scene boundaries,
 speech-rate handling and broader #111 acceptance remain open.
 
