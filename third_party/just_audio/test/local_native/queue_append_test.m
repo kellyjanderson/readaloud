@@ -9,6 +9,8 @@
 - (void)enqueueFrom:(int)index;
 - (void)concatenatingRemoveRange:(NSString *)catId start:(int)start end:(int)end shuffleOrder:(NSArray<NSNumber *> *)shuffleOrder;
 - (void)concatenatingInsertAll:(NSString *)catId index:(int)index sources:(NSArray *)sources shuffleOrder:(NSArray<NSNumber *> *)shuffleOrder;
+- (void)onComplete:(NSNotification *)notification;
+- (void)updateOrder;
 @end
 
 @interface TestItem : NSObject
@@ -109,6 +111,7 @@ static NSArray<TestSource *> *sources(NSUInteger count, BOOL lazy) {
     for (NSUInteger i = 0; i < count; i++) {
         TestSource *source = [[TestSource alloc] initWithId:[@(i) stringValue]];
         source.item = [TestItem new];
+        [(TestItem *)source.item setAudioSource:source];
         source.lazyLoading = lazy;
         [result addObject:source];
     }
@@ -291,7 +294,24 @@ int main(void) {
         [p concatenatingInsertAll:@"root" index:1 sources:@[] shuffleOrder:@[@0,@1,@2]];
         expect(p, @[a[0].item,a[2].item,a[1].item], 2, 1, YES);
 
-        NSLog(@"PASS: 23 native queue scenarios (recording queue; no app/audio)");
+        // Production completion publishes logical next index while the native
+        // queue can still own the just-ended item. A second distinct completion
+        // proves the older predecessor is no longer the physical head.
+        NSArray<TestSource *> *lag = sources(4, NO);
+        p = removalPlayer(lag, @[@0,@1,@2,@3], @[lag[0].item,lag[1].item,lag[2].item,lag[3].item], 0, NO);
+        [p updateOrder];
+        [p onComplete:[NSNotification notificationWithName:@"ended" object:lag[0].item]];
+        NSCAssert([[p valueForKey:@"_index"] intValue] == 1, @"completion did not publish logical next index");
+        NSCAssert((id)p.player.currentItem == lag[0].item, @"fixture lost native head lag");
+        TestQueue *lagQueue = (id)p.player;
+        [lagQueue.storage removeObjectAtIndex:0]; // physical advance to item 1
+        [p onComplete:[NSNotification notificationWithName:@"ended" object:lag[1].item]];
+        NSCAssert([[p valueForKey:@"_index"] intValue] == 2, @"second completion did not advance logical index");
+        p.endUpdates = 0;
+        [p concatenatingRemoveRange:@"root" start:0 end:1 shuffleOrder:@[@0,@1,@2]];
+        expect(p, @[lag[1].item,lag[2].item,lag[3].item], 0, 0, YES);
+
+        NSLog(@"PASS: 24 native queue scenarios (recording queue; no app/audio)");
     }
     } @catch (NSException *exception) {
         NSLog(@"FAIL: %@", exception.reason);

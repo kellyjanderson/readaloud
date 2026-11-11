@@ -401,6 +401,63 @@ void main() {
     },
   );
 
+  test(
+    'pruning retains native head when logical index leads, and pins until removal ACK',
+    () async {
+      final player = _FakePlayer()..removeGate = Completer<void>();
+      final engine = _NoModelEngine(player);
+      addTearDown(() => _close(engine));
+      final last = _scene(
+        id: 'last',
+        start: 4,
+        end: 6,
+        sourceEnd: 6,
+        sequence: 2,
+        offset: 16,
+      );
+      final middle = _scene(
+        id: 'middle',
+        start: 2,
+        end: 4,
+        sourceEnd: 6,
+        sequence: 1,
+        offset: 8,
+        continuation: TtsRenderedAudioContinuation(next: (_, _) async => last),
+      );
+      await engine.playRendered(
+        _scene(
+          id: 'first',
+          sourceEnd: 6,
+          continuation: TtsRenderedAudioContinuation(
+            next: (_, _) async => middle,
+          ),
+        ),
+      );
+      await _until(() => player.sources.length == 3);
+      final sourcePaths = [...player.sources];
+      expect(engine.debugPlaybackPinCount, 3);
+      // onComplete advertises index 1 while native playback still owns source 0.
+      player.announceNextBeforeNativeAdvance(1);
+      await Future<void>.delayed(Duration.zero);
+      expect(player.removeCalls, 0);
+      expect(player.sources, sourcePaths);
+      expect(engine.debugPlaybackPinCount, 3);
+      // Completing the next distinct source proves source 0 is no longer live.
+      player.nativeHeadIndex = 1;
+      player.announceNextBeforeNativeAdvance(2);
+      await _until(() => player.removeCalls == 1);
+      expect(player.removalRanges, [(0, 1)]);
+      expect(player.sources, sourcePaths); // native ACK is still held
+      expect(engine.debugPlaybackPinCount, 3);
+      player.removeGate!.complete();
+      await _until(() => engine.debugPlaybackPinCount == 2);
+      expect(player.sources, sourcePaths.sublist(1));
+      expect(player.sources[player.nativeHeadIndex], sourcePaths[1]);
+      // The retained predecessor is history, not playable future lead.
+      expect(engine.debugPlayableBufferedLead, const Duration(seconds: 1));
+    },
+  );
+
   for (final indexJump in [false, true]) {
     test(
       'native ${indexJump ? 'index jump skips' : 'scene transition emits'} verified scene end without final position tick',
@@ -787,6 +844,10 @@ class _FakePlayer extends Fake implements AudioPlayer {
   final indexes = StreamController<int?>.broadcast(sync: true);
   final sources = <String>[];
   Completer<void>? installGate;
+  Completer<void>? removeGate;
+  var nativeHeadIndex = 0;
+  var removeCalls = 0;
+  final removalRanges = <(int, int)>[];
   var installCalls = 0;
   var addCalls = 0;
   var playCalls = 0;
@@ -840,8 +901,20 @@ class _FakePlayer extends Fake implements AudioPlayer {
   Future<void> insertAudioSource(int index, AudioSource source) async =>
       sources.insert(index, _path(source));
   @override
-  Future<void> removeAudioSourceRange(int start, int end) async =>
-      sources.removeRange(start, end);
+  Future<void> removeAudioSourceRange(int start, int end) async {
+    removeCalls++;
+    removalRanges.add((start, end));
+    if (start <= nativeHeadIndex && nativeHeadIndex < end) {
+      throw StateError('Prune removed the still-live native head.');
+    }
+    await removeGate?.future;
+    sources.removeRange(start, end);
+    if (start == 0) {
+      _index -= end - start;
+      nativeHeadIndex -= end - start;
+    }
+  }
+
   @override
   Future<void> clearAudioSources() async => sources.clear();
   @override
@@ -861,6 +934,12 @@ class _FakePlayer extends Fake implements AudioPlayer {
   }
 
   void moveTo(int index) {
+    _index = index;
+    nativeHeadIndex = index;
+    indexes.add(index);
+  }
+
+  void announceNextBeforeNativeAdvance(int index) {
     _index = index;
     indexes.add(index);
   }

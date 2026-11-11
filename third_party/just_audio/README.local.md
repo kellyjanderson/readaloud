@@ -57,6 +57,15 @@ the resulting enqueue skipped the still-playing source. Resolving identity also
 accounts for native advancement during removal. Source/shuffle order and the
 existing removed-current successor policy remain intact.
 
+The application also retains one logical predecessor when pruning played
+history. Upstream `onComplete:` publishes the next logical index before the
+native current-item transition necessarily settles. Removing every logical
+predecessor can therefore intentionally remove the still-live native head and
+force the removed-current fallback. A following distinct item cannot complete
+without native playback advancing to it, so one retained predecessor fences
+that transition without a timed delay. Application pins remain held until
+native removal acknowledges, and lead/capacity accounting excludes history.
+
 In particular, dynamically inserted URI sources retain upstream's default
 non-lazy setting. The patch does not cap them to two items or change their
 preparation policy. Read Aloud remains responsible for bounding work ahead.
@@ -83,7 +92,7 @@ FLUTTER_FRAMEWORK_DIR=/absolute/path/containing/FlutterMacOS.framework \
 
 The script compiles all vendored Objective-C sources against the selected
 FlutterMacOS and system AVFoundation frameworks, then invokes the production
-`enqueueFrom:` and concatenating insert/removal methods with a recording queue. Twenty-three scenarios cover preserved
+`enqueueFrom:`, completion and concatenating insert/removal methods with a recording queue. Twenty-four scenarios cover preserved
 future items, complete/pruned no-ops, actual shuffle order, lazy/mixed lazy
 preparation, native treadmill replenishment, non-prefix reorder/removal,
 pending seek, loading, both loop modes, target replacement, two-predecessor
@@ -92,7 +101,9 @@ and shuffled removal. Additional cases advance the native head after the caller
 reads it, before/after the queue snapshot, and during append; intentional future
 insertion still uses the reorder fallback. The batch-removal regression rejects
 the uncorrected implementation, and the snapshot-race regression rejects the
-earlier identity-reindex-only fix. The script
+earlier identity-reindex-only fix. The completion scenario demonstrates the
+logical-ahead/physical-head state and safe one-predecessor retention using the
+production completion and removal methods. The script
 cleans up its temporary executable/module cache and starts no Flutter engine,
 application or audio playback. These are native compilation and queue-call
 checks, not emitted-audio evidence.

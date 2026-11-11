@@ -2467,18 +2467,23 @@ class KokoroTtsEngine
   }
 
   void _prunePlayedHistory() {
-    if (_pruneScheduled || _currentChunkIndex <= 0) return;
+    if (_pruneScheduled || _currentChunkIndex <= 1) return;
     _pruneScheduled = true;
     final token = _activePlaybackToken;
     unawaited(
       _mutateAudioQueue(() async {
         try {
           if (token == null || token != _activePlaybackToken) return;
-          final count = _player.currentIndex ?? 0;
-          if (count <= 0 || count >= _activeChunks.length) return;
-          // Remove only completed predecessors. Native current source/position
-          // remains installed; suppress intermediate index notifications while the
-          // platform rebases indexes, then read its settled index.
+          final currentIndex = _player.currentIndex ?? 0;
+          if (currentIndex <= 1 || currentIndex >= _activeChunks.length) return;
+          // just_audio broadcasts the next logical index from onComplete before
+          // AVQueuePlayer's physical current item necessarily advances. Retain
+          // that one predecessor until another distinct item completes. The next
+          // item cannot complete without native playback having advanced to it,
+          // so older predecessors are safe to remove without replacing the live
+          // native head. Existing lead/credit accounting starts at currentIndex,
+          // excluding this retained history. Pins release only after native ACK.
+          final count = currentIndex - 1;
           _pruningHistory = true;
           final pruned = _activeChunks.take(count).toList(growable: false);
           await _player.removeAudioSourceRange(0, count);
