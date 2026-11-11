@@ -1,6 +1,15 @@
 /* User judgments collected for the final release candidate. */
 window.HUMAN_ACCEPTANCE_SCENARIOS = [
   {
+    id: 'cancel-first-play',
+    issue: 140,
+    title: 'Cancel while speech is preparing',
+    passageId: 'quick-two-speaker',
+    question: 'Can you cancel the pending Play promptly? Does the app remain silent until you request Play again?',
+    steps: ['Start with Read Aloud closed, then open the supplied candidate.', 'Paste the passage and press Play. While speech preparation is visible, press Cancel pending Play.', 'Wait for preparation to settle. Press Play again and listen. If preparation finishes before you can cancel, skip this case and say so in the note.'],
+    expected: 'The control responds promptly, no cancelled speech starts later, and a fresh Play still works.'
+  },
+  {
     id: 'fast-two-speaker-dialogue',
     issue: 111,
     title: 'Fast back-and-forth · two voices',
@@ -24,7 +33,7 @@ window.HUMAN_ACCEPTANCE_SCENARIOS = [
     fixtureId: 'expressive-book',
     question: 'Can you follow the characters by voice? Do their delivery and the transitions between scenes sound natural?',
     steps: ['Open the provided audio book with File → Open.', 'Press Play and listen through the marked scenes.', 'Quit and reopen Read Aloud. Open the same book and listen to the exchange again.'],
-    expected: 'The characters keep their voices across scenes and after reopening. The marked delivery is audible, and the transitions sound continuous.'
+    expected: 'The characters keep their voices across scenes and after reopening. The marked delivery is audible, transitions sound continuous, and every marked passage includes its final words without skips, repetition or cut-off endings.'
   },
   {
     id: 'edited-book-voice',
