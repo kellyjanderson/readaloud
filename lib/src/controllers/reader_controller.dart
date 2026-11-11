@@ -10,6 +10,7 @@ import '../services/character_analysis_adapter.dart';
 import '../services/work_character_store.dart';
 import '../models/speech_engine_catalog.dart';
 import '../services/speech_planning_supervisor.dart';
+import '../services/speech_audio_packet.dart';
 import '../services/voice_assignment_coordinator.dart';
 import '../models/voice_assignment_state.dart';
 import 'dart:async';

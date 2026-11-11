@@ -14,6 +14,7 @@ import 'package:read_aloud/src/services/document_import_service.dart';
 import 'package:read_aloud/src/services/radoc_audio_package.dart';
 import 'package:read_aloud/src/services/reader_document_serialization_service.dart';
 import 'package:read_aloud/src/services/tts_engine.dart';
+import 'package:read_aloud/src/services/speech_audio_packet.dart';
 import 'package:read_aloud/src/services/rendered_scene_repository.dart';
 
 void main() {
@@ -510,6 +511,61 @@ void main() {
       expect(controller.statusMessage, contains('needs rendering'));
     },
   );
+  test('missing opening packet plays before complete publication', () async {
+    engine.renderAvailable = true;
+    engine.packetGate = Completer<void>();
+    await controller.importFilePaths([
+      (await fixture(staleDirections: true)).path,
+    ]);
+    await controller.startPlayback().timeout(const Duration(seconds: 3));
+    final opening = engine.requests.single;
+    expect(opening.audioPacket, isNotNull);
+    expect(opening.startWordIndex, 0);
+    expect(opening.endWordIndex, 2);
+    expect(engine.packetGate!.isCompleted, false);
+    expect(await repository.sceneStartingAt('source', 0), isNull);
+    final next = opening.continuation!.next(0, Completer<void>().future);
+    engine.packetGate!.complete();
+    final saved = await next.timeout(const Duration(seconds: 3));
+    expect(saved!.audioPacket, isNull);
+    expect(saved.startWordIndex, 2);
+    expect((await opening.sceneCompletion!).packetCount, 1);
+  });
+
+  test(
+    'late render failure cannot become packet EOF or persisted success',
+    () async {
+      engine.renderAvailable = true;
+      engine.packetGate = Completer<void>();
+      engine.failAfterPacket = true;
+      await controller.importFilePaths([
+        (await fixture(staleDirections: true)).path,
+      ]);
+      await controller.startPlayback();
+      final opening = engine.requests.single;
+      final next = opening.continuation!.next(0, Completer<void>().future);
+      final rejected = expectLater(next, throwsStateError);
+      engine.packetGate!.complete();
+      await rejected;
+      expect(await repository.sceneStartingAt('source', 0), isNull);
+    },
+  );
+
+  test('replacement cancels and drains a held packet producer', () async {
+    engine.renderAvailable = true;
+    engine.packetGate = Completer<void>();
+    final file = await fixture(staleDirections: true);
+    await controller.importFilePaths([file.path]);
+    await controller.startPlayback();
+    final old = engine.requests.single;
+    await controller
+        .importFilePaths([file.path])
+        .timeout(const Duration(seconds: 3));
+    expect(old.isCurrent!(), false);
+    expect(engine.requests, hasLength(1));
+    expect(await repository.sceneStartingAt('source', 0), isNull);
+  });
+
   test('changed default voice does not play the old saved identity', () async {
     await controller.importFilePaths([(await fixture()).path]);
     await controller.selectVoiceById('other');
@@ -524,6 +580,8 @@ class _OfflineEngine
     implements TtsEngine, RenderedAudioPlaybackCapable, AudioExportCapable {
   int modelCalls = 0;
   bool renderAvailable = false;
+  Completer<void>? packetGate;
+  bool failAfterPacket = false;
   final exports = <TtsExportRequest>[];
   final requests = <TtsRenderedAudioRequest>[];
   @override
@@ -562,6 +620,43 @@ class _OfflineEngine
     exports.add(request);
     final chunk = request.chunkPlan!.chunks.single;
     await File(request.outputPath).writeAsBytes(_wav());
+    Completer<TtsRenderedSceneCompletion>? packetCompletion;
+    if (packetGate != null) {
+      packetCompletion = Completer<TtsRenderedSceneCompletion>();
+      unawaited(
+        packetCompletion.future.then<void>(
+          (_) {},
+          onError: (Object _, StackTrace _) {},
+        ),
+      );
+      await request.onPlayablePacket!(
+        TtsPlayableAudioPacket(
+          packet: SpeechAudioPacket(
+            sessionId: request.sessionId!,
+            generationId: 'export-test',
+            chunkId: chunk.chunkId,
+            audioPath: request.outputPath,
+            packetIndex: 0,
+            frameStart: 0,
+            frameCount: 240,
+            sampleRate: 24000,
+          ),
+          sceneId: chunk.chunkId,
+          text: chunk.speakText,
+          startWordIndex: request.sourceWordOffset + chunk.startWordIndex,
+          endWordIndex: request.sourceWordOffset + chunk.endWordIndex,
+          startOffset: 0,
+          sceneTurns: const [],
+          sceneCompletion: packetCompletion.future,
+        ),
+      );
+      await Future.any([packetGate!.future, request.cancelled!]);
+      if (request.isCurrent?.call() == false || failAfterPacket) {
+        final error = StateError('Packet render failed or became obsolete.');
+        packetCompletion.completeError(error);
+        throw error;
+      }
+    }
     await request.onRenderedScene!(
       TtsFinalizedAudioScene(
         documentId: request.documentId!,
@@ -586,6 +681,15 @@ class _OfflineEngine
         assignmentRevision: request.assignmentRevision,
         cancelled: request.cancelled!,
         isCurrent: request.isCurrent!,
+      ),
+    );
+    packetCompletion?.complete(
+      TtsRenderedSceneCompletion(
+        sceneId: chunk.chunkId,
+        frameCount: 240,
+        packetCount: 1,
+        duration: const Duration(milliseconds: 10),
+        onsetTrimFrames: 0,
       ),
     );
     return TtsExportResult(

@@ -17,11 +17,14 @@ class _ReaderAudioBook {
   bool current = true;
   Future<_BookAudio>? boundaryWork;
   Completer<void>? renderCancellation;
+  Future<void>? renderWork;
+  _BookRenderStream? renderStream;
   void cancelRender() {
     final cancellation = renderCancellation;
     if (cancellation != null && !cancellation.isCompleted) {
       cancellation.complete();
     }
+    unawaited(renderStream?.cancelConsumer());
   }
 
   Future<void>? _closing;
@@ -29,6 +32,11 @@ class _ReaderAudioBook {
   Future<void> _close() async {
     current = false;
     cancelRender();
+    try {
+      await renderWork;
+    } catch (_) {
+      /* The stream's owner reports the failed render. */
+    }
     await package.cancelAndDrain();
     try {
       await boundaryWork;
@@ -437,11 +445,12 @@ extension ReaderAudioBookSupport on ReaderController {
   /// One missing native scene uses the existing export owner. It commits raw
   /// and finalized output before the rendered player admits it; the next
   /// scene is resolved afresh, so valid following audio never enters inference.
-  Future<_BookScene> _renderBookScene(
+  Future<_BookRenderStream> _beginRenderBookScene(
     _ReaderAudioBook session,
     int word,
     bool Function() current, {
     Future<void>? cancelled,
+    _BookScene? previous,
   }) async {
     _audioGapWord = word;
     _statusMessage = 'This passage needs audio. Preparing its speech model…';
@@ -498,8 +507,12 @@ extension ReaderAudioBookSupport on ReaderController {
       ),
     );
     session.cancelRender();
+    await session.renderWork?.catchError((Object _, StackTrace _) {});
+    if (!current()) throw const PlanningCancelled();
     final cancellation = Completer<void>();
     session.renderCancellation = cancellation;
+    final stream = _BookRenderStream(cancellation);
+    session.renderStream = stream;
     if (cancelled != null) {
       unawaited(
         cancelled.then((_) {
@@ -510,55 +523,95 @@ extension ReaderAudioBookSupport on ReaderController {
     bool renderCurrent() => current() && !cancellation.isCompleted;
     final planner = SpeechPlanningSupervisor();
     unawaited(cancellation.future.then((_) => planner.cancel()));
-    Directory? staging;
-    try {
-      final window = await planner.plan(context, maxChunks: 1);
-      if (!renderCurrent()) throw const PlanningCancelled();
-      if (window.plan.chunks.isEmpty) throw StateError('No planned scene.');
-      final chunk = window.plan.chunks.single;
-      // Native scene boundaries are whole prepared segments. Refuse an
-      // incompatible historical partition instead of synthesizing past it.
-      if (chunk.startWordIndex != start || chunk.endWordIndex > end) {
-        throw StateError('Saved scene boundaries need renewed preparation.');
-      }
-      staging = await Directory.systemTemp.createTemp('radoc-scene-render-');
-      await (engine as AudioExportCapable).exportAudio(
-        TtsExportRequest(
-          text: range.fragment.speakableText,
-          outputPath: p.join(staging.path, 'scene.wav'),
-          documentId: manifest.documentId,
-          documentTitle: range.fragment.title,
-          sourceDescription: range.fragment.sourceDescription,
-          sessionId: 'book_${_playbackIntent}_$word',
-          normalizationVersion: bounded.normalizationVersion,
-          chunkPlan: ChunkPlan(planId: window.plan.planId, chunks: [chunk]),
-          speechDocument: bounded,
-          ttsArtifactSet: window.realization.ttsArtifactSet,
-          planningContext: context,
-          sourceWordOffset: range.range.wordStart,
-          assignmentRevision: voiceAssignmentState.requestedRevision,
-          isCurrent: renderCurrent,
-          cancelled: cancellation.future,
-          onRenderedScene: _renderedSceneWriter(
-            document: range.fragment,
+    Future<void> produce() async {
+      Directory? staging;
+      _BookScene? finished;
+      Object? failure;
+      StackTrace? failureStack;
+      try {
+        final window = await planner.plan(context, maxChunks: 1);
+        if (!renderCurrent()) throw const PlanningCancelled();
+        if (window.plan.chunks.isEmpty) throw StateError('No planned scene.');
+        final chunk = window.plan.chunks.single;
+        // Native scene boundaries are whole prepared segments. Refuse an
+        // incompatible historical partition instead of synthesizing past it.
+        if (chunk.startWordIndex != start || chunk.endWordIndex > end) {
+          throw StateError('Saved scene boundaries need renewed preparation.');
+        }
+        staging = await Directory.systemTemp.createTemp('radoc-scene-render-');
+        await (engine as AudioExportCapable).exportAudio(
+          TtsExportRequest(
+            text: range.fragment.speakableText,
+            outputPath: p.join(staging.path, 'scene.wav'),
+            documentId: manifest.documentId,
+            documentTitle: range.fragment.title,
+            sourceDescription: range.fragment.sourceDescription,
+            sessionId: 'book_${_playbackIntent}_$word',
+            normalizationVersion: bounded.normalizationVersion,
+            chunkPlan: ChunkPlan(planId: window.plan.planId, chunks: [chunk]),
+            speechDocument: bounded,
+            ttsArtifactSet: window.realization.ttsArtifactSet,
+            planningContext: context,
             sourceWordOffset: range.range.wordStart,
+            assignmentRevision: voiceAssignmentState.requestedRevision,
+            isCurrent: renderCurrent,
+            cancelled: cancellation.future,
+            predecessorRawArtifactIdentity:
+                previous?.scene.provenance['rawArtifactIdentity'] as String?,
+            predecessorTrailingSilence: previous == null
+                ? null
+                : Duration(
+                    microseconds:
+                        previous.trailingMicros ??
+                        previous.scene.provenance['trailingSilenceMicros']
+                            as int? ??
+                        0,
+                  ),
+            onPlayablePacket: (packet) async {
+              if (!renderCurrent()) throw const PlanningCancelled();
+              stream.add(packet);
+            },
+            onRenderedScene: _renderedSceneWriter(
+              document: range.fragment,
+              sourceWordOffset: range.range.wordStart,
+            ),
           ),
-        ),
-      );
-      if (!renderCurrent()) throw const PlanningCancelled();
-      final result = await _findBookScene(session, word, renderCurrent);
-      if (result == null) throw StateError('Rendered scene was not committed.');
-      _audioGapWord = null;
-      _statusMessage = null;
-      _notifyAudioBookChanged();
-      return result;
-    } finally {
-      await planner.shutdown();
-      if (identical(session.renderCancellation, cancellation)) {
-        session.renderCancellation = null;
+        );
+        if (!renderCurrent()) throw const PlanningCancelled();
+        finished = await _findBookScene(session, word, renderCurrent);
+        if (finished == null) {
+          throw StateError('Rendered scene was not committed.');
+        }
+        _audioGapWord = null;
+        _statusMessage = null;
+        _notifyAudioBookChanged();
+      } catch (error, stack) {
+        failure = error;
+        failureStack = stack;
+      } finally {
+        try {
+          await planner.shutdown();
+          if (staging != null) await staging.delete(recursive: true);
+        } catch (error, stack) {
+          failure ??= error;
+          failureStack ??= stack;
+        } finally {
+          if (identical(session.renderCancellation, cancellation)) {
+            session.renderCancellation = null;
+          }
+        }
       }
-      if (staging != null) await staging.delete(recursive: true);
+      if (failure != null) {
+        stream.fail(failure, failureStack!);
+      } else {
+        stream.complete(finished!);
+      }
     }
+
+    final work = produce();
+    session.renderWork = work;
+    unawaited(work);
+    return stream;
   }
 
   Future<bool> _startAudioBookPlayback(
@@ -566,6 +619,9 @@ extension ReaderAudioBookSupport on ReaderController {
     int playbackIntent,
   ) async {
     final revision = _documentRevision;
+    // Keep initialization and any first missing-scene render on the user's
+    // original Play clock. Readiness is not a new measurement start.
+    _playbackRequestedAt = DateTime.now();
     bool current() =>
         session.current &&
         !_disposed &&
@@ -578,6 +634,8 @@ extension ReaderAudioBookSupport on ReaderController {
         (_currentWordIndex + (_activePreparedRange?.range.wordStart ?? 0));
     if (_playbackEndedAtDocumentEnd || word >= manifest.totalWords) word = 0;
     var firstScene = await _findBookScene(session, word, current);
+    _BookRenderStream? rendering;
+    _BookPlaybackPart? firstPart;
     if (!current()) return true;
     if (firstScene == null) {
       final publishedEngine = manifest.intent['engineId'] as String?;
@@ -602,9 +660,12 @@ extension ReaderAudioBookSupport on ReaderController {
         }
         return true;
       }
-      firstScene = await _renderBookScene(session, word, current);
+      rendering = await _beginRenderBookScene(session, word, current);
+      firstPart = await rendering.take();
+      if (firstPart == null) throw StateError('Rendering produced no audio.');
       if (!current()) return true;
     }
+    firstPart ??= _BookPlaybackPart.complete(firstScene!);
     final engine = _ttsEngine;
     if (engine is! RenderedAudioPlaybackCapable) {
       throw StateError('The selected player cannot open published audio.');
@@ -615,13 +676,92 @@ extension ReaderAudioBookSupport on ReaderController {
     _activePlaybackIntent = playbackIntent;
     _acknowledgedPlaybackIntent = null;
     _playbackState = ReaderPlaybackPrimaryState.bufferingFirstChunk;
-    _playbackRequestedAt = DateTime.now();
     _playbackEndedAtDocumentEnd = false;
     var sequence = 0;
-    var wordEnd = firstScene.scene.endWord;
+    var wordEnd = firstPart.endWord;
     _BookScene? previousScene;
+    String? activePacketScene;
     late TtsRenderedAudioContinuation continuation;
-    Future<TtsRenderedAudioRequest> request(_BookScene value, int i) async {
+    Future<TtsRenderedAudioRequest> request(
+      _BookPlaybackPart part,
+      int i,
+    ) async {
+      if (part.packet case final packet?) {
+        final rangeIndex = manifest.preparedRanges.indexWhere(
+          (r) =>
+              r.startWord <= packet.startWordIndex &&
+              packet.endWordIndex <= r.endWord,
+        );
+        if (rangeIndex < 0) {
+          throw const FormatException('Packet scene crosses prepared range.');
+        }
+        final range = await readPreparedRange(rangeIndex + 1);
+        if (!current() || range == null) throw const PlanningCancelled();
+        final start = range.fragment.charOffsetForWord(
+          packet.startWordIndex - range.range.wordStart,
+        );
+        final end = packet.endWordIndex == range.range.wordEnd
+            ? range.fragment.speakableText.length
+            : range.fragment.charOffsetForWord(
+                packet.endWordIndex - range.range.wordStart,
+              );
+        if (_joinedBookSource(packet.text) !=
+            _joinedBookSource(
+              range.fragment.speakableText.substring(start, end),
+            )) {
+          throw const FormatException('Packet scene does not match source.');
+        }
+        return TtsRenderedAudioRequest(
+          documentId: manifest.documentId,
+          manifestIdentity: session.book.manifestDigest,
+          intentRevision: playbackIntent,
+          sceneId: packet.sceneId,
+          text: packet.text,
+          startWordIndex: packet.startWordIndex,
+          endWordIndex: packet.endWordIndex,
+          sourceEndWordIndex: manifest.totalWords,
+          startOffset: packet.startOffset,
+          sceneTurns: packet.sceneTurns,
+          audioPath: packet.packet.audioPath,
+          audioPacket: packet.packet,
+          sceneCompletion: packet.sceneCompletion,
+          boundaryClass: packet.boundaryClass,
+          isInitialScene: packet.isInitialScene,
+          previousTrailingSilence: packet.previousTrailingSilence,
+          format: TtsRenderedAudioFormat(
+            sampleRate: packet.packet.sampleRate,
+            channels: packet.packet.channels,
+            bitsPerSample: packet.packet.bitsPerSample,
+          ),
+          duration: packet.packet.duration,
+          rangeSequence: i,
+          isCurrent: current,
+          continuation: continuation,
+          onPlaybackReady: (ack) {
+            if (current() &&
+                ack.documentId == manifest.documentId &&
+                ack.manifestIdentity == session.book.manifestDigest &&
+                ack.intentRevision == playbackIntent) {
+              _acknowledgedPlaybackIntent = playbackIntent;
+            }
+          },
+          onRangeActive: () {
+            final identity = '${packet.sceneId}:${packet.startWordIndex}';
+            if (!current() || activePacketScene == identity) return;
+            activePacketScene = identity;
+            _document = range.fragment;
+            _activePreparedRange = range;
+            _currentWordIndex = packet.startWordIndex - range.range.wordStart;
+            _utteranceStartOffset = 0;
+            _mergeDiscoveredCast(
+              range.fragment.characterCastRegistry,
+              document: range.fragment,
+            );
+            _notifyAudioBookChanged();
+          },
+        );
+      }
+      final value = part.scene!;
       final scene = value.scene;
       final rangeIndex = manifest.preparedRanges.indexWhere(
         (r) => r.startWord <= scene.startWord && scene.endWord <= r.endWord,
@@ -724,42 +864,63 @@ extension ReaderAudioBookSupport on ReaderController {
         if (previous != sequence) {
           throw StateError('Out-of-order audio scene demand.');
         }
-        if (wordEnd == manifest.totalWords && manifest.preparationComplete) {
-          return null;
-        }
         var canceled = false;
         unawaited(
           cancelled.then((_) {
             canceled = true;
           }),
         );
-        final next =
-            await _findBookScene(
-              session,
-              wordEnd,
-              () => !canceled && current(),
-            ) ??
-            await _renderBookScene(
-              session,
-              wordEnd,
-              () => !canceled && current(),
-              cancelled: cancelled,
-            );
+        if (rendering case final active?) {
+          final nextPacket = await active.take();
+          if (canceled || !current()) throw const PlanningCancelled();
+          if (nextPacket != null) {
+            final result = await request(nextPacket, sequence + 1);
+            if (canceled || !current()) throw const PlanningCancelled();
+            ++sequence;
+            return result;
+          }
+          previousScene = await active.result;
+          wordEnd = previousScene!.scene.endWord;
+          rendering = null;
+        }
+        if (wordEnd == manifest.totalWords && manifest.preparationComplete) {
+          return null;
+        }
+        final next = await _findBookScene(
+          session,
+          wordEnd,
+          () => !canceled && current(),
+        );
+        _BookPlaybackPart part;
+        if (next == null) {
+          rendering = await _beginRenderBookScene(
+            session,
+            wordEnd,
+            () => !canceled && current(),
+            cancelled: cancelled,
+            previous: previousScene,
+          );
+          final first = await rendering!.take();
+          if (first == null) throw StateError('Rendering produced no audio.');
+          part = first;
+        } else {
+          part = _BookPlaybackPart.complete(next);
+        }
         if (canceled || !current()) throw const PlanningCancelled();
-        if (next.scene.startWord != wordEnd) {
+        if (part.startWord != wordEnd) {
           _audioGapWord = wordEnd;
           throw StateError(
             'Audio ends at word $wordEnd. Press Play to render the next passage with its speech model.',
           );
         }
-        final result = await request(next, sequence + 1);
+        final result = await request(part, sequence + 1);
         if (canceled || !current()) throw const PlanningCancelled();
         ++sequence;
-        wordEnd = next.scene.endWord;
+        wordEnd = part.endWord;
         return result;
       },
     );
-    final first = await request(firstScene, 0);
+    final first = await request(firstPart, 0);
     if (!current()) return true;
     await (engine as RenderedAudioPlaybackCapable).playRendered(first);
     return true;
@@ -788,6 +949,79 @@ class _BookScene {
   final RadocAudioScene scene;
   final String? audioPath, rawAudioPath;
   final int? trailingMicros;
+}
+
+/// Playback metadata is either a committed scene or a packet from an owned
+/// render. A packet never masquerades as a checksummed, complete package scene.
+class _BookPlaybackPart {
+  const _BookPlaybackPart.complete(this.scene) : packet = null;
+  const _BookPlaybackPart.packet(this.packet) : scene = null;
+  final _BookScene? scene;
+  final TtsPlayableAudioPacket? packet;
+  int get startWord => packet?.startWordIndex ?? scene!.scene.startWord;
+  int get endWord => packet?.endWordIndex ?? scene!.scene.endWord;
+}
+
+/// One producer and one pull consumer. Dart's stream owns delivery/cancellation;
+/// scene packet limits bound its queued metadata while the player is paused.
+class _BookRenderStream {
+  _BookRenderStream(this.cancellation) {
+    _iterator = StreamIterator(_events.stream);
+    unawaited(cancellation.future.then((_) => cancelConsumer()));
+    // A replacement can abandon the result before it fails. Its stream/current
+    // consumer still receives the error, without an unobserved future error.
+    unawaited(
+      _result.future.then<void>((_) {}, onError: (Object _, StackTrace _) {}),
+    );
+  }
+  final Completer<void> cancellation;
+  final _events = StreamController<_BookPlaybackPart>();
+  late final StreamIterator<_BookPlaybackPart> _iterator;
+  final _result = Completer<_BookScene>();
+  int _packets = 0;
+  bool _ended = false;
+  Future<_BookScene> get result => _result.future;
+
+  void add(TtsPlayableAudioPacket packet) {
+    if (_ended || cancellation.isCompleted) throw const PlanningCancelled();
+    if (++_packets > SpeechAudioPacket.maxPackets) {
+      throw StateError('Native scene packet buffer limit exceeded.');
+    }
+    _events.add(_BookPlaybackPart.packet(packet));
+  }
+
+  void complete(_BookScene scene) {
+    if (_ended) return;
+    if (cancellation.isCompleted) {
+      fail(const PlanningCancelled(), StackTrace.current);
+      return;
+    }
+    _ended = true;
+    _result.complete(scene);
+    // A valid cache hit/legacy export can complete without producing packets.
+    if (_packets == 0) _events.add(_BookPlaybackPart.complete(scene));
+    unawaited(_events.close());
+  }
+
+  void fail(Object error, StackTrace stack) {
+    if (_ended) return;
+    _ended = true;
+    _result.completeError(error, stack);
+    if (!cancellation.isCompleted) _events.addError(error, stack);
+    unawaited(_events.close());
+  }
+
+  Future<_BookPlaybackPart?> take() async {
+    if (cancellation.isCompleted) throw const PlanningCancelled();
+    final hasNext = await Future.any([
+      _iterator.moveNext(),
+      cancellation.future.then((_) => false),
+    ]);
+    if (cancellation.isCompleted) throw const PlanningCancelled();
+    return hasNext ? _iterator.current : null;
+  }
+
+  Future<void> cancelConsumer() => _iterator.cancel();
 }
 
 String _joinedBookSource(String text) =>

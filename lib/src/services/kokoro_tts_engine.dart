@@ -857,7 +857,9 @@ class KokoroTtsEngine
           : request.sceneId,
       sourceSceneIdOverride: request.sceneId,
       generationId: generation,
-      boundaryClass: BreakClass.none,
+      boundaryClass: request.audioPacket == null
+          ? BreakClass.none
+          : request.boundaryClass,
       documentId: request.documentId,
       sceneTurns: request.sceneTurns,
       segmentIds: request.sceneTurns.expand((t) => t.segmentIds).toList(),

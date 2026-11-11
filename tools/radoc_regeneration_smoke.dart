@@ -4,6 +4,7 @@
 // Root runner owns external capture, human listening and normal Quit. No exit().
 import 'dart:async';
 import 'native_main_responsiveness_probe.dart';
+import 'package:read_aloud/src/services/native_speech_work_activity.dart';
 import 'dart:convert';
 import 'dart:io';
 import 'dart:isolate';
@@ -739,6 +740,20 @@ Future<void> main(List<String> args) async {
       } catch (error) {
         cleanupErrors.add('$error');
       }
+    }
+    final activity = await NativeSpeechWorkActivity.snapshot();
+    receipt['speechWorkActivity'] = activity;
+    receipt['speechWorkActivitySuppressed'] =
+        Platform.environment['READALOUD_DISABLE_SPEECH_ACTIVITY'] == '1';
+    if (activity == null ||
+        activity['active'] != 0 ||
+        activity['started'] != activity['ended'] ||
+        (receipt['speechWorkActivitySuppressed'] != true &&
+            (activity['started'] as int? ?? 0) == 0)) {
+      receipt['passed'] = false;
+      cleanupErrors.add(
+        'Native speech activities missing, unused or not drained.',
+      );
     }
     PlaybackInstrumentationService.instance.observer = null;
     receipt.addAll({

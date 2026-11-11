@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 
 /// A bounded, request-owned macOS activity. It requests timing/I/O precision
@@ -13,6 +14,7 @@ class NativeSpeechWorkActivity {
 
   static Future<NativeSpeechWorkActivity> begin() async {
     if (!Platform.isMacOS ||
+        defaultTargetPlatform != TargetPlatform.macOS ||
         Platform.environment['READALOUD_DISABLE_SPEECH_ACTIVITY'] == '1') {
       return NativeSpeechWorkActivity._(null);
     }

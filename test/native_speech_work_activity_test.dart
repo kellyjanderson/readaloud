@@ -1,4 +1,5 @@
 import 'package:flutter/services.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:read_aloud/src/services/native_speech_work_activity.dart';
 
@@ -7,6 +8,7 @@ void main() {
   const channel = MethodChannel('read_aloud/mlx_tts_lifecycle');
   final calls = <MethodCall>[];
   setUp(() {
+    debugDefaultTargetPlatformOverride = TargetPlatform.macOS;
     calls.clear();
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(channel, (call) async {
@@ -15,6 +17,7 @@ void main() {
         });
   });
   tearDown(() {
+    debugDefaultTargetPlatformOverride = null;
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(channel, null);
   });
