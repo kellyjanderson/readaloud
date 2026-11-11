@@ -21,7 +21,7 @@ uses a bounded termination fallback. Cancellation retires the active process
 so it cannot return a late result. The adapter does not yet translate canonical
 pronunciation artifacts to model-specific phonemes; it consumes planned text
 and preset voice IDs or selected audio references. The versioned synthetic bank supplies 30 identities to Qwen Base/MOSS; its manifest is loaded once and requested WAVs are verified/materialized by content hash. Reference content/transcript enter binding and raw cache identity. The child passes ref_audio/ref_text to the maintained model API; unknown voices/missing references fail without default substitution. Models without at least 30 usable identities remain below voice-library acceptance (CustomVoice 9, local Voxtral 20). No comparative acoustic or latency acceptance is claimed.
-MLX uses the same admission policy implementation and existing 64-chunk cap. Fish uses twenty-second low/thirty-second high playable lead; the other MLX adapters retain twelve-second low/twenty-second high lead. The long Fish probe demonstrated complete-WAV generation up to 16.5 seconds, so deliberately suspending inference until twelve seconds remained caused starvation despite faster-than-realtime synthesis overall. The Fish single-chunk startup shortcut likewise requires twenty seconds; two ready chunks can still satisfy startup warmth. These bounds do not guarantee continuity on every machine. Voxtral and Fish Drama use startup warmth; the other MLX adapters start with the first validated chunk. At the five-second MLX warmup deadline, validated audio is admitted even if the target lead is not reached. This bounded wait is included in launch-to-audio measurement and does not establish the startup goal or applicable hard limit in the product definition. Fish's previous bypass could play a tiny opening turn before the following complete WAV was ready. The Python adapter now reports first-native-packet timing separately from whole-chunk publication; packets still remain in the owned incomplete artifact until the complete WAV passes validation. No progressive native playback claim follows from that telemetry. Voxtral retains full precision by default, with optional saved model-specific in-memory 4-bit quantization; precision participates in model binding and audio-cache identity. Original checkpoint files are retained.
+MLX uses the same admission policy implementation and existing 64-chunk cap. Fish uses twenty-second low/thirty-second high steady-state playable lead; the other MLX adapters retain twelve-second low/twenty-second high lead. The long Fish probe demonstrated complete-WAV generation up to 16.5 seconds, so deliberately suspending inference until twelve seconds remained caused starvation despite faster-than-realtime synthesis overall. Complete-chunk Fish startup retains its twenty-second/two-chunk warmth policy. Incremental packet playback instead starts with 300 ms of validated playable audio, or the complete remaining short passage. This threshold is distinct from steady-state inference admission. At the five-second MLX warmup deadline, validated audio is admitted even if target warmth is not reached. All waiting remains inside launch-to-audio accounting; neither threshold proves continuity or startup acceptance. The opt-in packet route validates immutable WAV pieces before complete-scene publication through the existing ordered owner; see [artifact lifetime](audio-artifact-identity-and-lifetime.md). Voxtral retains full precision by default, with optional saved model-specific in-memory 4-bit quantization; precision participates in model binding and audio-cache identity. Original checkpoint files are retained.
 Model installation, launch selection and Voxtral's noncommercial license are documented in
 [MLX TTS engine setup](../../docs/mlx-tts-engines.md).
 
@@ -256,6 +256,21 @@ never evicted, repaired in place or replaced. Corrupt output fails visibly.
 Existing publications are fully verified before reuse. Relocation creates a new
 view and never rewrites an old view's links. Old R4/v1 publications are not reused.
 Missing/changed bundle code fails acquisition with reinstall guidance.
+
+On macOS the installer hashes with the existing platform CommonCrypto SHA256
+implementation through FFI and an owned 64 KiB read buffer. File validation uses
+finite batches of at most sixteen tasks; cancellation/failure joins the current
+batch before installer reuse. Exact digest, mode, type, link, inventory, arm64 and
+signature checks remain mandatory on reuse. The faster hashing implementation
+does not turn an installed runtime receipt into permission to skip verification.
+
+macOS keeps Flutter UI and platform runners separate. Each MLX process request
+owns a native `ProcessInfo` activity requesting user-initiated, latency-critical
+execution while allowing idle system sleep. Native ownership is capped at eight
+unique tokens; release is idempotent and occurs on success, failure, retirement
+and shutdown. No machine preference is changed. Native counters expose starts,
+ends, peak and remaining owners for bounded acceptance. This is scheduling intent,
+not proof of a specific historical stall cause or a universal responsiveness fix.
 
 Acquisition returns `VerifiedPythonRuntime` with the bundled interpreter and
 immutable Python home. MLX and BookNLP pass that home as `PYTHONHOME` only to
