@@ -607,6 +607,83 @@ class ModelDownloadReuseTest(unittest.TestCase):
             self.assertEqual(len(receipts), 1)
             self.assertEqual(json.loads(receipts[0].read_text())['revision'], manifest['revision'])
 
+    def test_extra_app_cache_reuses_offline_across_two_build_paths_and_deduplicates(self):
+        import huggingface_hub
+        with self.fixture() as (extra, snapshot, _, _):
+            env_cache = extra.parent / 'environment-cache'
+            alias = extra.parent / 'environment-alias'; alias.symlink_to(env_cache, target_is_directory=True)
+            real_download = huggingface_hub.snapshot_download
+            calls = []
+            def offline_only(**kwargs):
+                self.assertTrue(kwargs.get('local_files_only'), 'Extra installed cache attempted network')
+                calls.append(Path(kwargs['cache_dir']).resolve())
+                return real_download(**kwargs)
+            with patch.dict(os.environ, {'HF_HUB_CACHE': str(env_cache)}), \
+                    patch('huggingface_hub.snapshot_download', side_effect=offline_only):
+                for name in ['build-one', 'build-two']:
+                    private = extra.parent / name / 'hub'
+                    result = worker._download_model('fish_drama3', str(private),
+                        [str(alias), str(env_cache), str(extra), str(extra)])
+                    self.assertEqual(result.resolve(), snapshot.resolve())
+                    self.assertFalse(private.exists())
+            self.assertEqual(calls, [extra.parent.joinpath('build-one/hub').resolve(), env_cache.resolve(), extra.resolve(),
+                                     extra.parent.joinpath('build-two/hub').resolve(), env_cache.resolve(), extra.resolve()])
+
+    def test_extra_corrupt_cache_repairs_in_place_without_duplicate_private_copy(self):
+        import huggingface_hub
+        with self.fixture() as (extra, snapshot, manifest, content):
+            private = extra.parent / 'new-build' / 'hub'
+            env_cache = extra.parent / 'environment-cache'
+            bad = snapshot / 'model.safetensors'; bad.write_bytes(b'x' * len(content[bad.name]))
+            good = (snapshot / 'codec.safetensors').stat()
+            real_download = huggingface_hub.snapshot_download
+            writes = []
+            offline = []
+            def download(**kwargs):
+                if kwargs.get('local_files_only'):
+                    offline.append(Path(kwargs['cache_dir']).resolve())
+                    return real_download(**kwargs)
+                self.assertEqual(offline, [private.resolve(), env_cache.resolve(), extra.resolve()])
+                self.assertEqual(kwargs['cache_dir'], str(extra))
+                writes.append(kwargs)
+                if kwargs.get('dry_run'):
+                    return [SimpleNamespace(file_size=len(data), will_download=False) for data in content.values()]
+                return str(snapshot)
+            def repair(**kwargs):
+                self.assertEqual(offline, [private.resolve(), env_cache.resolve(), extra.resolve()])
+                self.assertEqual((kwargs['cache_dir'], kwargs['filename'], kwargs['repo_id'], kwargs['revision']),
+                    (str(extra), bad.name, manifest['repo'], manifest['revision']))
+                self.assertTrue(kwargs['force_download'])
+                bad.write_bytes(content[bad.name])
+            with patch.dict(os.environ, {'HF_HUB_CACHE': str(env_cache)}), \
+                    patch('huggingface_hub.snapshot_download', side_effect=download), \
+                    patch('huggingface_hub.hf_hub_download', side_effect=repair) as repair_call:
+                self.assertEqual(worker._download_model('fish_drama3', str(private), [str(extra)]), snapshot)
+                repair_call.assert_called_once()
+            self.assertEqual(len(writes), 2)
+            self.assertFalse(private.exists())
+            self.assertEqual((snapshot / 'codec.safetensors').stat(), good)
+
+    def test_valid_extra_cache_wins_over_corrupt_private_without_repair(self):
+        import huggingface_hub
+        with self.fixture() as (extra, snapshot, manifest, content):
+            private = extra.parent / 'private'
+            corrupt = private / snapshot.relative_to(extra)
+            corrupt.mkdir(parents=True)
+            for name, data in content.items():
+                (corrupt / name).write_bytes(b'x' * len(data))
+            before = {name: (corrupt / name).stat() for name in content}
+            real_download = huggingface_hub.snapshot_download
+            def offline_only(**kwargs):
+                self.assertTrue(kwargs.get('local_files_only'))
+                return real_download(**kwargs)
+            with patch.dict(os.environ, {'HF_HUB_CACHE': str(private)}), \
+                    patch('huggingface_hub.snapshot_download', side_effect=offline_only), \
+                    patch('huggingface_hub.hf_hub_download') as repair:
+                self.assertEqual(worker._download_model('fish_drama3', str(private), [str(extra)]).resolve(), snapshot.resolve())
+                repair.assert_not_called()
+            self.assertEqual({name: (corrupt / name).stat() for name in content}, before)
+
     def test_same_size_corruption_repairs_only_bad_owned_file_and_preserves_variant(self):
         import huggingface_hub
         with self.fixture() as (cache, snapshot, manifest, content):
@@ -870,6 +947,42 @@ class ModelAssetVerificationTest(unittest.TestCase):
             self.assertEqual(worker.main(), 0)
         self.assertEqual(len(replies), len(requests))
         self.assertTrue(all(not reply['ok'] and 'must be a boolean' in reply['error'] for reply in replies))
+
+    def test_model_cache_directories_request_is_strict_and_forwarded(self):
+        invalid = [None, False, True, 'cache/path', 1, {}, [None], [True], [''], ['   '], [1]]
+        requests = [dict(id=str(i), command='load', modelId='fish_drama3', modelCacheDirectories=value)
+                    for i, value in enumerate(invalid)]
+        requests += [dict(id='valid', command='load', modelId='fish_drama3', modelPath='', privateCachePath='private',
+                          requireVerifiedModelAssets=True, modelCacheDirectories=['legacy/models', 'current/hub']),
+                     dict(id='legacy', command='load', modelId='fish_drama3')]
+        replies = []
+        with patch.object(sys, 'stdin', io.StringIO(''.join(json.dumps(r) + '\n' for r in requests))), \
+                patch.object(worker, '_load', return_value=dict(loaded=True)) as load, \
+                patch.object(worker, '_reply', side_effect=lambda request_id, **payload: replies.append(payload)), \
+                patch.object(worker, '_unload'), contextlib.redirect_stderr(io.StringIO()):
+            self.assertEqual(worker.main(), 0)
+        self.assertEqual(len(replies), len(requests))
+        self.assertTrue(all(not reply['ok'] and 'list of nonempty path strings' in reply['error'] for reply in replies[:-2]))
+        self.assertTrue(all(reply['ok'] for reply in replies[-2:]))
+        self.assertEqual(load.call_count, 2)
+        self.assertEqual(load.call_args_list[0].args, ('fish_drama3', '', 'private', 0, True, ['legacy/models', 'current/hub']))
+        self.assertEqual(load.call_args_list[1].args, ('fish_drama3', '', '', 0, False, []))
+
+    def test_load_forwards_extra_caches_and_validates_before_acquisition(self):
+        worker._unload()
+        with self.fixture('fish_drama3_4bit') as (cache, snapshot, _, _):
+            with patch.object(worker, '_download_model', return_value=snapshot) as download, \
+                    patch('subprocess.check_output', return_value=b'137438953472'), \
+                    patch('mlx_audio.tts.load', return_value=SimpleNamespace()), patch.object(worker, '_timing'):
+                result = worker._load('fish_drama3_4bit', '', str(cache), require_verified_model_assets=True,
+                                     model_cache_directories=['legacy/models', 'current/hub'])
+                self.assertTrue(result['modelAssetsVerified'])
+                download.assert_called_once_with('fish_drama3_4bit', str(cache), ['legacy/models', 'current/hub'])
+                for value in ['wrong', False, ['']]:
+                    with self.assertRaisesRegex(ValueError, 'list of nonempty path strings'):
+                        worker._load('fish_drama3_4bit', '', str(cache), model_cache_directories=value)
+                download.assert_called_once()
+        worker._unload()
 
 
 if __name__ == "__main__":

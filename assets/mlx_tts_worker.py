@@ -246,13 +246,24 @@ def _model_manifest(model_id: str) -> dict:
                          'Update the application before loading this model.') from error
 
 
-def _download_model(model_id: str, private_cache_path: str) -> Path:
+def _validated_model_cache_directories(value: Any) -> list[str]:
+    if (not isinstance(value, list) or
+            any(not isinstance(path, str) or not path.strip() for path in value)):
+        raise ValueError('modelCacheDirectories must be a list of nonempty path strings')
+    return value
+
+
+def _download_model(model_id: str, private_cache_path: str,
+                    additional_cache_paths: tuple[str, ...] | list[str] = ()) -> Path:
     # The protocol thread owns this one acquisition. HF provides file locking,
     # bounded transfer workers and resume; cancelling retires the child, leaving
     # completed blobs/partials in the same cache for the next request.
     from huggingface_hub import snapshot_download, hf_hub_download
     from huggingface_hub import constants as hf_constants
 
+    if not isinstance(additional_cache_paths, (list, tuple)):
+        raise ValueError('modelCacheDirectories must be a list of nonempty path strings')
+    extra_paths = _validated_model_cache_directories(list(additional_cache_paths))
     spec = DRAMA_MODELS.get(model_id)
     repo_id = spec['repo'] if spec else MODEL_REPOSITORIES[model_id]
     revision = spec['revision'] if spec else None
@@ -263,7 +274,13 @@ def _download_model(model_id: str, private_cache_path: str) -> Path:
     configured_cache = Path(os.environ.get('HF_HUB_CACHE') or
                             os.environ.get('HUGGINGFACE_HUB_CACHE') or
                             str(hf_constants.HF_HUB_CACHE)).expanduser()
-    candidates = list(dict.fromkeys([private_cache, configured_cache]))
+    candidates = []
+    identities = set()
+    for path in [private_cache, configured_cache, *(Path(path).expanduser() for path in extra_paths)]:
+        identity = path.resolve()
+        if identity not in identities:
+            identities.add(identity)
+            candidates.append(path)
     # Check every accessible cache before any network request. No build number,
     # executable path or debug/release mode is part of this persistent identity.
     repair = None
@@ -422,12 +439,15 @@ def _verify_scene_model(directory: Path, manifest: dict, receipt_root: Path,
 
 
 def _load(model_id: str, model_path: str, private_cache_path: str, quantization_bits: int = 0,
-          require_verified_model_assets: bool = False) -> dict[str, Any]:
+          require_verified_model_assets: bool = False,
+          model_cache_directories: list[str] | None = None) -> dict[str, Any]:
     global _model, _model_id, _model_path, _model_bits, _model_native_scenes
     global _model_load_stream, _model_pending_parameters
     load_started = time.monotonic()
     if type(require_verified_model_assets) is not bool:
         raise ValueError('requireVerifiedModelAssets must be a boolean')
+    model_cache_directories = _validated_model_cache_directories(
+        [] if model_cache_directories is None else model_cache_directories)
     if quantization_bits not in (0, 4):
         raise ValueError('Supported inference precision: full or 4-bit')
     if model_id not in MODEL_IDS:
@@ -438,7 +458,8 @@ def _load(model_id: str, model_path: str, private_cache_path: str, quantization_
         estimated = DRAMA_MODELS[model_id]['estimatedPeakBytes']
         if estimated > min(100_000_000_000, physical * .85):
             raise MemoryError('This Drama variant needs more memory than this Mac can safely provide. Select a smaller variant.')
-    directory = Path(model_path).expanduser().resolve() if model_path else _download_model(model_id, private_cache_path).resolve()
+    directory = (Path(model_path).expanduser().resolve() if model_path else
+                 _download_model(model_id, private_cache_path, model_cache_directories).resolve())
     if not (directory / "config.json").is_file():
         raise FileNotFoundError(f"Model config is missing: {directory / 'config.json'}")
     verified = False
@@ -855,6 +876,7 @@ def main() -> int:
                         str(request.get("privateCachePath", "")),
                         int(request.get('quantizationBits', 0)),
                         request.get('requireVerifiedModelAssets', False),
+                        _validated_model_cache_directories(request.get('modelCacheDirectories', [])),
                     )
                 elif command == "synthesize":
                     response = _synthesize(request)
