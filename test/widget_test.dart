@@ -57,6 +57,14 @@ void main() {
       final switching = controller.setTtsEngineId('fish_drama3');
       await tester.pump();
       await tester.pump();
+      expect(
+        tester
+            .widget<DropdownButtonFormField<String>>(
+              find.byKey(const Key('tts-engine-settings-dropdown')),
+            )
+            .initialValue,
+        'fish_drama3',
+      );
       final cancel = find.text('Cancel speech engine preparation');
       expect(cancel, findsOneWidget);
       await tester.ensureVisible(cancel);

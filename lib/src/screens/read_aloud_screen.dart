@@ -588,176 +588,180 @@ class _ReadAloudScreenState extends State<ReadAloudScreen> {
   Future<void> _showSettingsDialog() async {
     await showDialog<void>(
       context: context,
-      builder: (dialogContext) {
-        var selectedEngineId = _controller.selectedTtsEngineId;
-        var selectedBits = _controller.voxtralQuantizationBits;
-        return StatefulBuilder(
-          builder: (context, setDialogState) => AlertDialog(
-            title: const Text('Settings'),
-            content: SizedBox(
-              width: 420,
-              child: SingleChildScrollView(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text('Text-to-speech engine'),
-                    const SizedBox(height: 8),
-                    DropdownButtonFormField<String>(
-                      key: const Key('tts-engine-settings-dropdown'),
-                      initialValue: selectedEngineId,
-                      isExpanded: true,
-                      decoration: const InputDecoration(
-                        border: OutlineInputBorder(),
-                      ),
-                      items:
-                          <String, String>{
-                                ...speechEngineLabels,
-                                if (!speechEngineLabels.containsKey(
-                                  selectedEngineId,
-                                ))
-                                  selectedEngineId:
-                                      '$selectedEngineId (unavailable)',
-                              }.entries
-                              .map(
-                                (entry) => DropdownMenuItem(
-                                  value: entry.key,
-                                  enabled: speechEngineLabels.containsKey(
-                                    entry.key,
-                                  ),
-                                  child: Text(
-                                    entry.value,
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                  ),
-                                ),
-                              )
-                              .toList(),
-                      onChanged: (engineId) async {
-                        if (engineId == null) return;
-                        setDialogState(() => selectedEngineId = engineId);
-                        await _controller.setTtsEngineId(engineId);
-                        if (!dialogContext.mounted) return;
-                        setDialogState(() {});
-                      },
-                    ),
-                    const SizedBox(height: 8),
-                    SizedBox(
-                      height: 64,
-                      child: SingleChildScrollView(
-                        child: Text(switch (selectedEngineId) {
-                          'fish_drama3' ||
-                          'fish_drama3_8bit' ||
-                          'fish_drama3_4bit' =>
-                            'Fish Official reference voices plus the existing voice bank. Memory needs vary; smaller variants may still exceed available memory. Downloads when selected.',
-                          'qwen3_tts_base_1_7b' || 'moss_tts_8b' =>
-                            '43 reference voices, including 13 Fish voices. Choose and preview them in Voice Management; the same library is available for character assignments.',
-                          'qwen3_tts_1_7b' =>
-                            '9 fixed speakers. Below the required 30 voices; use Qwen Base for the larger reference library.',
-                          'voxtral_4b' =>
-                            '20 presets. Below the required 30 voices; this local runtime cannot create reference voices.',
-                          _ =>
-                            '54 catalog voices across languages. Manage and preview voices in Voice Management.',
-                        }),
-                      ),
-                    ),
-                    if (selectedEngineId == 'voxtral_4b') ...[
-                      const SizedBox(height: 16),
-                      const Text('Voxtral performance'),
+      builder: (dialogContext) => ListenableBuilder(
+        listenable: _controller,
+        builder: (context, _) {
+          var selectedEngineId = _controller.selectedTtsEngineId;
+          var selectedBits = _controller.voxtralQuantizationBits;
+          return StatefulBuilder(
+            builder: (context, setDialogState) => AlertDialog(
+              title: const Text('Settings'),
+              content: SizedBox(
+                width: 420,
+                child: SingleChildScrollView(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text('Text-to-speech engine'),
                       const SizedBox(height: 8),
-                      DropdownButtonFormField<int>(
-                        key: const Key('voxtral-precision-settings-dropdown'),
-                        initialValue: selectedBits,
+                      DropdownButtonFormField<String>(
+                        key: const Key('tts-engine-settings-dropdown'),
+                        initialValue: selectedEngineId,
                         isExpanded: true,
                         decoration: const InputDecoration(
                           border: OutlineInputBorder(),
                         ),
-                        items: const [
-                          DropdownMenuItem(
-                            value: 4,
-                            child: Text('Fast (4-bit)'),
-                          ),
-                          DropdownMenuItem(
-                            value: 0,
-                            child: Text('Full precision'),
-                          ),
-                        ],
-                        onChanged: (bits) async {
-                          if (bits == null) return;
-                          await _controller.setVoxtralQuantizationBits(bits);
+                        items:
+                            <String, String>{
+                                  ...speechEngineLabels,
+                                  if (!speechEngineLabels.containsKey(
+                                    selectedEngineId,
+                                  ))
+                                    selectedEngineId:
+                                        '$selectedEngineId (unavailable)',
+                                }.entries
+                                .map(
+                                  (entry) => DropdownMenuItem(
+                                    value: entry.key,
+                                    enabled: speechEngineLabels.containsKey(
+                                      entry.key,
+                                    ),
+                                    child: Text(
+                                      entry.value,
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  ),
+                                )
+                                .toList(),
+                        onChanged: (engineId) async {
+                          if (engineId == null) return;
+                          setDialogState(() => selectedEngineId = engineId);
+                          await _controller.setTtsEngineId(engineId);
                           if (!dialogContext.mounted) return;
-                          setDialogState(() => selectedBits = bits);
+                          setDialogState(() {});
                         },
                       ),
                       const SizedBox(height: 8),
-                      const Text(
-                        'Fast mode trades some model precision for faster speech generation. Changes apply in this session.',
+                      SizedBox(
+                        height: 64,
+                        child: SingleChildScrollView(
+                          child: Text(switch (selectedEngineId) {
+                            'fish_drama3' ||
+                            'fish_drama3_8bit' ||
+                            'fish_drama3_4bit' =>
+                              'Fish Official reference voices plus the existing voice bank. Memory needs vary; smaller variants may still exceed available memory. Downloads when selected.',
+                            'qwen3_tts_base_1_7b' || 'moss_tts_8b' =>
+                              '43 reference voices, including 13 Fish voices. Choose and preview them in Voice Management; the same library is available for character assignments.',
+                            'qwen3_tts_1_7b' =>
+                              '9 fixed speakers. Below the required 30 voices; use Qwen Base for the larger reference library.',
+                            'voxtral_4b' =>
+                              '20 presets. Below the required 30 voices; this local runtime cannot create reference voices.',
+                            _ =>
+                              '54 catalog voices across languages. Manage and preview voices in Voice Management.',
+                          }),
+                        ),
+                      ),
+                      if (selectedEngineId == 'voxtral_4b') ...[
+                        const SizedBox(height: 16),
+                        const Text('Voxtral performance'),
+                        const SizedBox(height: 8),
+                        DropdownButtonFormField<int>(
+                          key: const Key('voxtral-precision-settings-dropdown'),
+                          initialValue: selectedBits,
+                          isExpanded: true,
+                          decoration: const InputDecoration(
+                            border: OutlineInputBorder(),
+                          ),
+                          items: const [
+                            DropdownMenuItem(
+                              value: 4,
+                              child: Text('Fast (4-bit)'),
+                            ),
+                            DropdownMenuItem(
+                              value: 0,
+                              child: Text('Full precision'),
+                            ),
+                          ],
+                          onChanged: (bits) async {
+                            if (bits == null) return;
+                            await _controller.setVoxtralQuantizationBits(bits);
+                            if (!dialogContext.mounted) return;
+                            setDialogState(() => selectedBits = bits);
+                          },
+                        ),
+                        const SizedBox(height: 8),
+                        const Text(
+                          'Fast mode trades some model precision for faster speech generation. Changes apply in this session.',
+                        ),
+                      ],
+                      ModelDiskCapacity(engineId: selectedEngineId),
+                      const SizedBox(height: 16),
+                      ModernBookNlpSettings(
+                        analysis: _controller.characterAnalysis,
+                      ),
+                      const SizedBox(height: 12),
+                      SizedBox(
+                        height: 170,
+                        child: ListenableBuilder(
+                          listenable: _controller,
+                          builder: (context, _) {
+                            final progress = _controller.speechResourceProgress;
+                            return SingleChildScrollView(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  SelectableText(
+                                    'Selected: ${_ttsEngineLabel(_controller.selectedTtsEngineId)}. '
+                                    '${_controller.engineSession.active == null ? 'No active engine' : 'Active: ${_ttsEngineLabel(_controller.engineSession.active!.engineId)}'}. '
+                                    '${_controller.engineSession.phase.name}. '
+                                    '${_controller.engineSelectionReason ?? ''} '
+                                    '${_controller.startupError ?? progress?.message ?? ''}'
+                                    '${_controller.engineSession.active == null && _controller.engineSession.lastWorking != null ? ' Last working: ${_ttsEngineLabel(_controller.engineSession.lastWorking!.engineId)} (reload required).' : ''}',
+                                  ),
+                                  if (progress != null &&
+                                      _controller.startupError == null)
+                                    MeasuredProgress(
+                                      fraction: progress.fraction,
+                                      label: resourceProgressLabel(progress),
+                                    ),
+                                  if (_controller.isInitializing)
+                                    TextButton(
+                                      onPressed: _controller
+                                          .cancelSpeechResourcePreparation,
+                                      child: const Text(
+                                        'Cancel speech engine preparation',
+                                      ),
+                                    ),
+                                  if (_controller.startupError != null ||
+                                      _controller.engineSession.phase ==
+                                          EngineSessionPhase.cancelled)
+                                    TextButton(
+                                      onPressed:
+                                          _controller.retryInitialization,
+                                      child: const Text('Retry speech engine'),
+                                    ),
+                                ],
+                              ),
+                            );
+                          },
+                        ),
                       ),
                     ],
-                    ModelDiskCapacity(engineId: selectedEngineId),
-                    const SizedBox(height: 16),
-                    ModernBookNlpSettings(
-                      analysis: _controller.characterAnalysis,
-                    ),
-                    const SizedBox(height: 12),
-                    SizedBox(
-                      height: 170,
-                      child: ListenableBuilder(
-                        listenable: _controller,
-                        builder: (context, _) {
-                          final progress = _controller.speechResourceProgress;
-                          return SingleChildScrollView(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                SelectableText(
-                                  'Selected: ${_ttsEngineLabel(_controller.selectedTtsEngineId)}. '
-                                  '${_controller.engineSession.active == null ? 'No active engine' : 'Active: ${_ttsEngineLabel(_controller.engineSession.active!.engineId)}'}. '
-                                  '${_controller.engineSession.phase.name}. '
-                                  '${_controller.engineSelectionReason ?? ''} '
-                                  '${_controller.startupError ?? progress?.message ?? ''}'
-                                  '${_controller.engineSession.active == null && _controller.engineSession.lastWorking != null ? ' Last working: ${_ttsEngineLabel(_controller.engineSession.lastWorking!.engineId)} (reload required).' : ''}',
-                                ),
-                                if (progress != null &&
-                                    _controller.startupError == null)
-                                  MeasuredProgress(
-                                    fraction: progress.fraction,
-                                    label: resourceProgressLabel(progress),
-                                  ),
-                                if (_controller.isInitializing)
-                                  TextButton(
-                                    onPressed: _controller
-                                        .cancelSpeechResourcePreparation,
-                                    child: const Text(
-                                      'Cancel speech engine preparation',
-                                    ),
-                                  ),
-                                if (_controller.startupError != null ||
-                                    _controller.engineSession.phase ==
-                                        EngineSessionPhase.cancelled)
-                                  TextButton(
-                                    onPressed: _controller.retryInitialization,
-                                    child: const Text('Retry speech engine'),
-                                  ),
-                              ],
-                            ),
-                          );
-                        },
-                      ),
-                    ),
-                  ],
+                  ),
                 ),
               ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.of(dialogContext).pop(),
+                  child: const Text('Done'),
+                ),
+              ],
             ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.of(dialogContext).pop(),
-                child: const Text('Done'),
-              ),
-            ],
-          ),
-        );
-      },
+          );
+        },
+      ),
     );
   }
 
