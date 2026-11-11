@@ -3037,9 +3037,9 @@ class ReaderController extends ChangeNotifier {
         } else {
           await old.stop();
         }
-        old.dispose();
         await _engineStartup;
         if (_disposed || _modelPreparationCancelled) return;
+        old.dispose();
         _resetPreviewState();
         _isPlaying = false;
         _activePlaybackDocumentId = null;

@@ -20,6 +20,7 @@ import 'tts_engine.dart';
 import 'mlx_voice_library.dart';
 import 'packaged_python_runtime.dart';
 import 'fish_drama_catalog_store.dart';
+import 'qualified_engine_selection_service.dart';
 
 const String mlxTtsModelVersion = 'mlx-audio-0.6.3-mlx-0.32.4-complete-v3';
 String mlxTtsVersionFor(
@@ -397,6 +398,9 @@ class MlxSpeechWorkerChunkProcessor
       ),
       bundledChecksumsJson: await rootBundle.loadString(
         'assets/fish_drama_model_checksums.json',
+      ),
+      bundledManifestJson: await rootBundle.loadString(
+        'assets/fish_drama_catalog_update.json',
       ),
     );
     final snapshot = await catalogStore.load();
@@ -972,6 +976,8 @@ class MlxTtsPythonProcess {
     this.pythonHome,
     this.memorySampler,
     this.runtimeMemorySampler,
+    this.deviceIdentitySampler,
+    this.qualificationRecords = qualifiedModelMemoryRecords,
   });
   final String pythonPath;
   final String? pythonHome;
@@ -982,6 +988,8 @@ class MlxTtsPythonProcess {
   /// Production samples the complete process tree natively. The integer seam
   /// above is retained for legacy process tests only, and denotes a total.
   final Future<RuntimeMemorySnapshot> Function()? runtimeMemorySampler;
+  final Future<String> Function()? deviceIdentitySampler;
+  final Iterable<QualifiedModelMemoryRecord> qualificationRecords;
   static int observedPeakRuntimeBytes = 0;
   static RuntimeMemorySnapshot? observedLastMemorySnapshot;
   static const _memoryPolicy = RuntimeMemoryPolicy();
@@ -1422,16 +1430,37 @@ class MlxTtsPythonProcess {
     final snapshot = await _memorySnapshot();
     final modelId = load['modelId'] as String;
     RuntimeMemoryDecision decision;
+    var measuredEnvelope = false;
     if (isDramaEngine(modelId)) {
       final estimate = load['sizingEstimateBytes'];
-      // This path executes an explicit selected model. No bundled Fish envelope
-      // is measured yet; never call it a qualified default or change the choice.
+      final pin = load['expectedVerifiedModelIdentity'];
+      final device = deviceIdentitySampler != null
+          ? await deviceIdentitySampler!().timeout(const Duration(seconds: 3))
+          : runtimeMemorySampler != null
+          ? '' // Platform-free injected samples do not invent a hardware ID.
+          : await _mlxLifecycleChannel
+                    .invokeMethod<String>('runtimeDeviceIdentity')
+                    .timeout(const Duration(seconds: 3)) ??
+                '';
+      final identity = '$fishDramaCatalogRuntime|$pin';
+      final envelope = pin is String
+          ? qualifiedMemoryEnvelopeFor(
+              runtimeIdentity: identity,
+              deviceIdentity: device,
+              engineId: modelId,
+              records: qualificationRecords,
+            )
+          : null;
+      measuredEnvelope = envelope != null;
+      // Reapply the exact reviewed envelope at actual load/reload time. An
+      // explicit unqualified choice remains monitored qualification; metadata
+      // estimates cannot become automatic-selection evidence.
       decision = _memoryPolicy.admit(
         sample: snapshot,
         now: DateTime.now(),
-        runtimeIdentity:
-            '$modelId:${load['expectedVerifiedModelIdentity'] ?? 'unverified'}',
-        deviceIdentity: '',
+        runtimeIdentity: identity,
+        deviceIdentity: device,
+        envelope: envelope,
         explicitQualification: true,
         sizingEstimateBytes: estimate is int ? estimate : null,
       );
@@ -1449,7 +1478,7 @@ class MlxTtsPythonProcess {
       'message': decision.reason,
       'processTreeFootprintBytes': snapshot.totalFootprintBytes,
       'additionalBudgetBytes': decision.budgetBytes,
-      'measuredEnvelope': false,
+      'measuredEnvelope': measuredEnvelope,
     });
   }
 

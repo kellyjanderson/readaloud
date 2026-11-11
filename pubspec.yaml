@@ -94,6 +94,7 @@ flutter:
     - assets/gb_silver.json
     - assets/fish_drama_models.json
     - assets/fish_drama_model_checksums.json
+    - assets/fish_drama_catalog_update.json
     - assets/fish_voice_library.json
     - assets/mlx_tts_worker.py
     - assets/modernbooknlp_worker.py

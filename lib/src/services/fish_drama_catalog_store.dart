@@ -67,6 +67,7 @@ final class FishDramaCatalogStore {
     required this.root,
     required this.bundledModelsJson,
     required this.bundledChecksumsJson,
+    this.bundledManifestJson,
     this.transport,
     this.timeout = const Duration(seconds: 8),
   });
@@ -74,6 +75,7 @@ final class FishDramaCatalogStore {
   final Directory root;
   final String bundledModelsJson;
   final String bundledChecksumsJson;
+  final String? bundledManifestJson;
   final FishDramaCatalogTransport? transport;
   final Duration timeout;
   Future<FishDramaCatalogSnapshot>? _loading;
@@ -91,7 +93,7 @@ final class FishDramaCatalogStore {
     _checkOpen();
     // Invalid bundled data is a packaging error, never hidden by a disk cache.
     final bundled = await _parseSnapshotOffThread(
-      null,
+      bundledManifestJson,
       bundledModelsJson,
       bundledChecksumsJson,
     );
@@ -101,7 +103,13 @@ final class FishDramaCatalogStore {
         throw const FormatException('Oversized saved Fish catalog');
       }
       final envelope = await _persisted.readAsString();
-      selected = await _parseEnvelopeOffThread(envelope);
+      final saved = await _parseEnvelopeOffThread(envelope);
+      // An older on-disk update must not downgrade a newer trusted bundle.
+      // Same-version collisions likewise retain the reviewed bundled payload.
+      if (saved.catalogVersion > bundled.catalogVersion ||
+          saved.identity == bundled.identity) {
+        selected = saved;
+      }
     } on FileSystemException {
       // No saved catalog, unreadable cache or interrupted first publication.
     } on FormatException {

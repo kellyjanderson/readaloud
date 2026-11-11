@@ -26,7 +26,7 @@ Current adapter work is centered on Kokoro with generic fallback capability beha
 `FishDramaCatalog` in [speech_engine_catalog.dart](../../lib/src/models/speech_engine_catalog.dart)
 provides an additive, immutable Dart view of the existing
 [Fish variant catalog](../../assets/fish_drama_models.json), which remains shared
-with the Python model owner. Saved engine IDs, labels and production defaults are
+with the Python model owner. Saved engine IDs and labels are
 unchanged. Asset loading belongs to the caller; parsing has no I/O, scheduling or
 download side effects. The model catalog requires a
 pinned commit and the fixed `mlx-community` Hugging Face repository policy,
@@ -114,3 +114,37 @@ These legacy contracts describe intended behavior and acceptance; `final` denote
 - [platform capability and fallback policy](../specifications/platform-capability-and-fallback-policy.md)
 - [pronunciation fallback and traceability](../specifications/pronunciation-fallback-and-traceability.md)
 - [tts runtime chunk request derivation](../specifications/tts-runtime-chunk-request-derivation.md)
+
+## Model resource admission and catalog lifetime
+
+[Fish catalog storage](../../lib/src/services/fish_drama_catalog_store.dart) loads
+validated last-valid data above the bundled version floor. One session freezes
+its descriptor, checksums and helper path; a bounded fixed-origin data-only
+refresh can affect a later session. Terminal shutdown cancels/drains its HTTP
+owner. Document resource release retains the session catalog. Profile metadata
+does not enter the legacy generated-audio content identity or confer native
+scene qualification on new weights.
+
+[Memory policy](../../lib/src/services/runtime_memory_policy.dart) combines
+native app/descendant enumeration with fresh, lifetime-fenced child self samples
+through the [registry](../../lib/src/services/runtime_memory_registry.dart).
+macOS permits the BSD process table where sandboxed libproc enumeration is
+denied. Unknown descendants and stale/missing coverage fail closed. Sampling is
+utility-queue owned; the main isolate admits at most one sample per owner.
+Physical footprint already includes charged native/Metal/audio allocations;
+MLX allocator counters are not added again. Reclaimable-cache headroom uses
+Mach free minus speculative plus file-backed pages, with a reserve of the larger
+of 2 GB or 5% of RAM and normal kernel pressure. A 1 GB guard precedes the
+100,000,000,000-byte ceiling. Neither periodic samples nor allocator limits prove
+all between-sample maxima.
+
+[Qualified selection](../../lib/src/services/qualified_engine_selection_service.dart)
+runs only for an unset choice. It uses the current offline catalog and exact
+checkpoint/runtime/device receipts, ordered bf16, 8bit, 4bit. Explicit and unknown
+saved choices remain intent. Unknown envelopes do not become defaults from
+estimates. Reviewed [M5 resource observations](../test-artifacts/s7-m5-r2-20261111/memory-qualification.json)
+supply conservative additional admission budgets: observed whole-tree peaks
+plus 25%, rounded up to decimal GB. Actual load/reload reapplies the same exact
+receipt and current headroom. A deliberate unqualified choice remains clearly
+monitored qualification. M3 has no reviewed record. Human listening and release
+qualification remain separate gates in issue #112 and S11.

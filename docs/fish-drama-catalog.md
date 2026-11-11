@@ -51,7 +51,7 @@ network completions cannot replace a captured current-session snapshot.
 
 To prepare an update, first commit the two catalog assets, then point the
 manifest at that exact commit and record their SHA-256 digests. Increment the
-catalog version for any metadata or payload change. The version 1 manifest in
+catalog version for any metadata or payload change. The version 2 manifest in
 this change describes the existing bundled checkpoints; it does not select a
 new default or establish runtime/acoustic qualification. Catalog integrity and
 runtime compatibility do not qualify a new checkpoint for native scenes, memory
@@ -63,3 +63,12 @@ fixed-origin pinned URLs, schema/runtime/hash rejection, executable-file
 rejection, rollback/collision rejection, coalescing, cancellation, timeout and
 last-valid retention. They do not establish model-download completion or native
 playback acceptance.
+
+The bundled manifest supplies a version floor: older saved updates and
+same-version collisions cannot replace a newer trusted bundle. Version 2 adds
+exact configuration quantization declarations, supported runtime/platform,
+native format and declarative capability/qualification profiles. Disk totals and
+notice/config digests derive from the complete integrity map. Legacy catalogs
+remain readable. These declarations cannot create a measured memory envelope
+or enable native scenes for different weights. Normal sessions freeze both
+metadata files and their helper in an immutable catalog-specific directory.

@@ -30,7 +30,7 @@ import 'radoc_first_load_smoke.dart' show copyQueuedAudioEvidence;
 
 class _Controller extends ReaderController {
   _Controller(
-    KokoroTtsEngine initial,
+    KokoroTtsEngine? initial,
     KokoroTtsEngine Function(String, int) factory,
     Directory root,
   ) : super(
@@ -73,6 +73,7 @@ Future<List<Map<String, Object?>>> _provenance(String root) =>
 Future<void> main(List<String> args) async {
   WidgetsFlutterBinding.ensureInitialized();
   const modes = [
+    'default-policy',
     'cached-bf16',
     'cached-8bit',
     'cached-4bit',
@@ -98,6 +99,7 @@ Future<void> main(List<String> args) async {
   if (await output.exists()) throw StateError('Preserve existing receipt.');
   final root = await output.parent.createTemp('s7-variants-');
   final initial = switch (mode) {
+    'default-policy' => 'fish_drama3',
     'cached-bf16' => 'fish_drama3',
     'cached-4bit' => 'fish_drama3_4bit',
     _ => 'fish_drama3_8bit',
@@ -106,7 +108,7 @@ Future<void> main(List<String> args) async {
   // read through normal application discovery. No aliases/modelPath override.
   // ignore: invalid_use_of_visible_for_testing_member
   SharedPreferences.setMockInitialValues({
-    'reader.ttsEngineId': initial,
+    if (mode != 'default-policy') 'reader.ttsEngineId': initial,
     'reader.selectedVoiceId': 'library_fishadrian',
   });
   final catalog = FishDramaCatalog.fromJson(
@@ -198,7 +200,11 @@ Future<void> main(List<String> args) async {
     return engine;
   }
 
-  final c = _Controller(factory(initial, 0), factory, root);
+  final c = _Controller(
+    mode == 'default-policy' ? null : factory(initial, 0),
+    factory,
+    root,
+  );
   final native = NativeMainResponsivenessProbe()..start(() => phase);
   var lastTick = 0, maxUi = 0;
   final samples = <Map<String, Object?>>[];
@@ -206,6 +212,7 @@ Future<void> main(List<String> args) async {
     final now = watch.elapsedMilliseconds;
     maxUi = math.max(maxUi, now - lastTick - 100);
     lastTick = now;
+    if (players.isEmpty) return;
     if (samples.length < 2700) {
       final p = players.last;
       positions.last.sample(p.position);
@@ -419,6 +426,18 @@ Future<void> main(List<String> args) async {
       c.engineSession.active?.engineId == initial && c.startupError == null,
       'Initial managed variant unavailable: ${c.startupError}',
     );
+    receipt['engineSelectionReason'] = c.engineSelectionReason;
+    if (mode == 'default-policy') {
+      require(
+        (c.engineSelectionReason ?? '').startsWith('Automatic default:'),
+        'Unselected startup did not use the qualified quality policy',
+      );
+      final preferences = await SharedPreferences.getInstance();
+      require(
+        !preferences.containsKey('reader.ttsEngineId'),
+        'Automatic selection was incorrectly persisted as explicit intent',
+      );
+    }
     const places = [
       'Alderbrook',
       'Bellhaven',
@@ -459,7 +478,8 @@ Future<void> main(List<String> args) async {
       c.selectedVoice?.id == 'library_fishadrian',
       'Narrator unavailable',
     );
-    if (mode == 'cached-bf16' ||
+    if (mode == 'default-policy' ||
+        mode == 'cached-bf16' ||
         mode == 'cached-8bit' ||
         mode == 'cached-4bit') {
       await playFor(60, 'sustained-$initial');
@@ -472,6 +492,21 @@ Future<void> main(List<String> args) async {
       final voice = c.selectedVoice!.id;
       require(anchor > 0, 'Nonzero retained anchor required');
       receipt['retainedAnchor'] = anchor;
+      if (!online) {
+        phase = 'rapid-latest-selection';
+        final obsolete = c.setTtsEngineId('fish_drama3_4bit');
+        await until(() => c.isSwitchingEngine, 'Rapid switch retirement');
+        final latest = c.setTtsEngineId(initial);
+        await Future.wait([obsolete, latest]).timeout(budget(90));
+        require(
+          c.engineSession.active?.engineId == initial &&
+              c.startupError == null &&
+              !c.hasPendingPlaybackIntent &&
+              !c.isPlaying,
+          'Rapid selection installed an obsolete target or resumed speech',
+        );
+        receipt['rapidLatestSelectionValidated'] = true;
+      }
       if (online) {
         phase = 'online-download-4bit';
         final pending = c.setTtsEngineId('fish_drama3_4bit');
@@ -493,17 +528,31 @@ Future<void> main(List<String> args) async {
         );
         receipt['downloadBaselineBytes'] = baseline;
         receipt['downloadInterruptedAt'] = snapshot('download-interruption');
-        final returned = c.setTtsEngineId(initial);
-        await Future.wait([pending, returned]).timeout(budget(90));
+        final cancelled = c.cancelSpeechResourcePreparation();
+        final twice = c.cancelSpeechResourcePreparation();
         require(
-          c.engineSession.active?.engineId == initial && c.startupError == null,
-          'Retired download affected A',
+          c.engineSession.phase.name == 'cancelled' &&
+              c.engineSession.selected.engineId == 'fish_drama3_4bit' &&
+              c.engineSession.active == null &&
+              c.engineSession.lastWorking?.engineId == initial &&
+              !c.hasPendingPlaybackIntent &&
+              !c.isPlaying,
+          'Explicit download cancellation did not fence the current owner',
         );
+        await Future.wait([pending, cancelled, twice]).timeout(budget(30));
+        require(
+          c.engineSession.phase.name == 'cancelled' &&
+              c.engineSession.active == null &&
+              c.startupError == null,
+          'Retired download published late state',
+        );
+        receipt['doubleCancelValidated'] = true;
         receipt['downloadRetiredWithoutLateActivation'] = true;
         // Explicit retry uses retained cache/partials through the existing owner.
         // A large incomplete transfer may exceed this case's 240s work budget;
         // that is a failed/partial receipt, never an assumed resume success.
       }
+      if (online) await c.retryInitialization().timeout(budget(90));
       await switchTo('fish_drama3_4bit', anchor, document, voice);
       receipt['retryValidated'] = online;
       await playFor(3, 'B4');
@@ -517,6 +566,14 @@ Future<void> main(List<String> args) async {
       await switchTo(initial, backAnchor, document, voice);
       await playFor(3, 'returned-A8');
     }
+    await Future<void>.delayed(const Duration(seconds: 1));
+    require(
+      !c.hasPendingPlaybackIntent &&
+          !c.isPlaying &&
+          players.every((player) => !player.playing),
+      'Unexpected speech after final Pause',
+    );
+    receipt['quietTailObservationMs'] = 1000;
     receipt['functionalPassed'] = true;
   } catch (error, stack) {
     receipt['error'] = '$error';

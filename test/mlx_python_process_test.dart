@@ -9,6 +9,7 @@ import 'package:read_aloud/src/models/speech_engine_catalog.dart';
 import 'package:read_aloud/src/services/mlx_speech_worker_processor.dart';
 import 'package:read_aloud/src/services/runtime_memory_policy.dart';
 import 'package:read_aloud/src/services/fish_drama_catalog_store.dart';
+import 'package:read_aloud/src/services/qualified_engine_selection_service.dart';
 
 // Real child processes with a tiny protocol stub: no MLX weights or network.
 RuntimeMemorySnapshot memorySnapshot({
@@ -563,16 +564,63 @@ end
     expect((await synth('recovered'))['ok'], true);
   });
   Future<void> useNativeSampler(
-    Future<RuntimeMemorySnapshot> Function() sampler,
-  ) async {
+    Future<RuntimeMemorySnapshot> Function() sampler, {
+    Iterable<QualifiedModelMemoryRecord> records = const [],
+  }) async {
     await worker.shutdown();
     worker = MlxTtsPythonProcess(
       pythonPath: '${root.path}/python',
       helperPath: '${root.path}/worker.rb',
       privateCacheDirectory: Directory('${root.path}/cache'),
       runtimeMemorySampler: sampler,
+      deviceIdentitySampler: () async => 'fixture-mac',
+      qualificationRecords: records,
     );
   }
+
+  test(
+    'actual load reapplies the exact qualified envelope over a smaller estimate',
+    () async {
+      var available = 90000000000;
+      await useNativeSampler(
+        () async => memorySnapshot(available: available),
+        records: [
+          QualifiedModelMemoryRecord(
+            engineId: 'fish_drama3',
+            checkpointIdentity: pinnedIdentity,
+            envelope: QualifiedMemoryEnvelope(
+              runtimeIdentity: '$fishDramaCatalogRuntime|$pinnedIdentity',
+              deviceIdentity: 'fixture-mac',
+              additionalPeakBytes: 90000000000,
+              evidence:
+                  'https://github.com/kellyjanderson/readaloud/issues/112',
+            ),
+          ),
+        ],
+      );
+      final progress = <Map<String, Object?>>[];
+      Future<Map<String, Object?>> attempt() => worker.loadModel(
+        modelId: 'fish_drama3',
+        modelPath: '',
+        quantizationBits: 0,
+        privateCachePath: root.path,
+        onProgress: progress.add,
+        sizingEstimateBytes: 40000000000,
+        requireVerifiedModelAssets: true,
+        expectedVerifiedModelIdentity: pinnedIdentity,
+      );
+      await expectLater(attempt(), throwsStateError);
+      expect(await File('${root.path}/cache/load.pid').exists(), false);
+      available = 110000000000;
+      await attempt();
+      expect(
+        progress
+            .where((p) => p['stage'] == 'memoryAdmission')
+            .last['measuredEnvelope'],
+        true,
+      );
+    },
+  );
 
   test(
     'admission uses the captured descriptor sizing rather than bundled data',

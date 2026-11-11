@@ -7,7 +7,7 @@ require 'fileutils'
 require 'timeout'
 require 'rbconfig'
 
-MODES = %w[cached-bf16 cached-8bit cached-4bit cached-aba online-cancel-retry].freeze
+MODES = %w[default-policy cached-bf16 cached-8bit cached-4bit cached-aba online-cancel-retry].freeze
 abort 'Usage: run_s7_variant_qualification.rb APP MODE NEW_OUTPUT CAPTURE' unless ARGV.size == 4
 bundle, mode, output, capture = ARGV
 bundle, output, capture = [bundle, output, capture].map { |p| File.expand_path(p) }
@@ -99,7 +99,7 @@ end
 
 begin
   log = File.open(log_path, 'w')
-  env = {'HF_HUB_OFFLINE' => mode.start_with?('cached-') ? '1' : nil,
+  env = {'HF_HUB_OFFLINE' => mode == 'online-cancel-retry' ? nil : '1',
          'READALOUD_MLX_PYTHON' => nil, 'READALOUD_MLX_TTS_MODEL_PATH' => nil,
          'READALOUD_S7_INSPECT' => nil}
   pid = Process.spawn(env, app, mode, receipt, out: log, err: log, pgroup: true)

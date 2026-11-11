@@ -68,8 +68,10 @@ final class RuntimeMemorySnapshot {
   });
 }
 
-/// A measured *additional* child-tree envelope for an exact runtime/device.
-/// Catalog sizing estimates cannot construct or stand in for qualification.
+/// A reviewed additional admission budget derived from measured observations
+/// and a documented margin for an exact runtime/device. It is distinct from an
+/// observed peak and does not guarantee every between-sample maximum. Catalog
+/// sizing estimates cannot construct or stand in for qualification.
 final class QualifiedMemoryEnvelope {
   const QualifiedMemoryEnvelope({
     required this.runtimeIdentity,

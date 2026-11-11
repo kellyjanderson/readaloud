@@ -9,6 +9,46 @@ import 'package:read_aloud/src/services/qualified_engine_selection_service.dart'
 import 'package:read_aloud/src/services/runtime_memory_policy.dart';
 
 void main() {
+  test(
+    'checked-in admission budgets have exact local evidence and current pins',
+    () async {
+      final current = FishDramaCatalog.fromJson(
+        modelsJson: await File('assets/fish_drama_models.json').readAsString(),
+        checksumsJson: await File(
+          'assets/fish_drama_model_checksums.json',
+        ).readAsString(),
+      );
+      for (final record in qualifiedModelMemoryRecords) {
+        expect(
+          record.checkpointIdentity,
+          current.variants[record.engineId]!.pinnedIdentity,
+        );
+        expect(
+          record.envelope.runtimeIdentity,
+          '$fishDramaCatalogRuntime|${record.checkpointIdentity}',
+        );
+        final uri = Uri.parse(record.envelope.evidence);
+        final relative = uri.pathSegments.skip(4).join('/');
+        expect(relative, startsWith('project/test-artifacts/'));
+        final evidence = jsonDecode(await File(relative).readAsString()) as Map;
+        expect(evidence['deviceIdentity'], record.envelope.deviceIdentity);
+        final key = switch (record.engineId) {
+          'fish_drama3' => 'bf16',
+          'fish_drama3_8bit' => '8bit',
+          _ => '4bit',
+        };
+        final measured = evidence['variants'][key] as Map;
+        expect(
+          record.envelope.additionalPeakBytes,
+          measured['admissionAdditionalEnvelopeBytes'],
+        );
+        expect(
+          record.envelope.additionalPeakBytes,
+          greaterThan(measured['observedWholeTreePeakBytes'] as int),
+        );
+      }
+    },
+  );
   TestWidgetsFlutterBinding.ensureInitialized();
   final now = DateTime(2026, 11, 11);
   const device = 'Apple M5 Max/137438953472';
@@ -66,7 +106,6 @@ void main() {
       final result = await service([]).select();
       expect(result.engineId, 'kokoro');
       expect(result.reason, contains('no qualified Fish memory envelope'));
-      expect(qualifiedModelMemoryRecords, isEmpty);
     },
   );
   test(

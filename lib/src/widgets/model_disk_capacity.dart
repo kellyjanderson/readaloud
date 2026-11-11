@@ -20,6 +20,9 @@ Future<Map<String, int?>> loadModelDiskRequirements() async {
     bundledChecksumsJson: await rootBundle.loadString(
       'assets/fish_drama_model_checksums.json',
     ),
+    bundledManifestJson: await rootBundle.loadString(
+      'assets/fish_drama_catalog_update.json',
+    ),
   );
   try {
     final snapshot = await store.load();

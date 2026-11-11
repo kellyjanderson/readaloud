@@ -66,7 +66,9 @@ void main() {
       expect(controller.startupError, isNull);
       expect(controller.engineSession.phase, EngineSessionPhase.cancelled);
       expect(controller.document, same(document));
+      expect(held.disposals, 0);
       await controller.retryInitialization();
+      expect(held.disposals, 1);
       expect(creations, 2);
       expect(recovered.closed, false);
       expect(controller.engineSession.active!.engineId, 'fish_drama3');
@@ -4869,6 +4871,13 @@ class _ModelPreparationEngine extends _FakeTtsEngine
     implements ModelPreparationCapable, ResourcePreparationCapable {
   bool hold = false, closed = false;
   int preparations = 0;
+  int disposals = 0;
+  @override
+  void dispose() {
+    disposals++;
+    super.dispose();
+  }
+
   final started = Completer<void>();
   final released = Completer<void>();
   @override

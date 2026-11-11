@@ -89,6 +89,22 @@ def _physical_footprint() -> int:
     return int(info.counters[7])  # ri_phys_footprint
 
 
+def _physical_memory_bytes() -> int:
+    # Query the maintained platform API directly. Spawning sysctl here would
+    # create a briefly unmeasured descendant during whole-tree admission.
+    libc = ctypes.CDLL(None, use_errno=True)
+    libc.sysctlbyname.argtypes = [ctypes.c_char_p, ctypes.c_void_p,
+                                  ctypes.POINTER(ctypes.c_size_t), ctypes.c_void_p,
+                                  ctypes.c_size_t]
+    libc.sysctlbyname.restype = ctypes.c_int
+    value = ctypes.c_uint64()
+    size = ctypes.c_size_t(ctypes.sizeof(value))
+    if (libc.sysctlbyname(b'hw.memsize', ctypes.byref(value), ctypes.byref(size), None, 0)
+            != 0 or size.value != ctypes.sizeof(value) or value.value <= 0):
+        raise OSError(ctypes.get_errno(), 'Could not sample physical memory')
+    return int(value.value)
+
+
 def _report_memory(stop: threading.Event) -> None:
     # One daemon per child, no job queue. Process retirement owns cancellation.
     while not stop.is_set():
@@ -271,6 +287,11 @@ def _download_model(model_id: str, private_cache_path: str,
     # The protocol thread owns this one acquisition. HF provides file locking,
     # bounded transfer workers and resume; cancelling retires the child, leaving
     # completed blobs/partials in the same cache for the next request.
+    # Hub transfers are thread-owned in this one worker. tqdm's supported lock
+    # API avoids creating a multiprocessing resource tracker solely for its
+    # progress lock; no unaccounted inference/download child is introduced.
+    from tqdm import tqdm
+    tqdm.set_lock(threading.RLock())
     from huggingface_hub import snapshot_download, hf_hub_download
     from huggingface_hub import constants as hf_constants
 
@@ -597,8 +618,7 @@ def _load(model_id: str, model_path: str, private_cache_path: str, quantization_
     if model_id not in MODEL_IDS:
         raise ValueError(f"Unknown model ID: {model_id}")
     if model_id in DRAMA_MODELS:
-        import subprocess
-        physical = int(subprocess.check_output(['/usr/sbin/sysctl', '-n', 'hw.memsize']))
+        physical = _physical_memory_bytes()
         estimated = DRAMA_MODELS[model_id]['estimatedPeakBytes']
         if estimated > min(100_000_000_000, physical * .85):
             raise MemoryError('This Drama variant needs more memory than this Mac can safely provide. Select a smaller variant.')
@@ -706,7 +726,13 @@ def _model_identity(directory: Path, model_id: str, bits: int) -> str:
     # their config and weight file identities, so they cannot share old caches.
     files = [(f.name, f.stat().st_size, f.stat().st_mtime_ns)
              for f in sorted(directory.glob("*.safetensors"))]
-    value = [str(directory), DRAMA_MODELS.get(model_id), bits, files,
+    spec = DRAMA_MODELS.get(model_id)
+    # Preserve existing content identities when adding descriptive capability,
+    # layout/notice/qualification metadata. Those declarations do not change
+    # the pinned weights, config or synthesis settings already fingerprinted.
+    if spec is not None:
+        spec = {key: value for key, value in spec.items() if key != 'profile'}
+    value = [str(directory), spec, bits, files,
              hashlib.sha256((directory / "config.json").read_bytes()).hexdigest()]
     return hashlib.sha256(json.dumps(value, sort_keys=True).encode()).hexdigest()
 

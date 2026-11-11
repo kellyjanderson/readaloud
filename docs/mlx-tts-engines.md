@@ -5,11 +5,15 @@ see [catalog refresh and fallback](fish-drama-catalog.md). Current sessions reta
 their captured model revision and integrity manifest throughout loading.
 
 Read Aloud offers Fish Audio Drama 3 (bf16, 8-bit and 4-bit), Qwen3-TTS
-1.7B Base/CustomVoice, Voxtral TTS 4B and MOSS-TTS v1.5. Kokoro remains the
-default. On macOS choose **Read Aloud > Settings… > Text-to-speech engine**.
+1.7B Base/CustomVoice, Voxtral TTS 4B and MOSS-TTS v1.5. New installs choose the highest qualified Fish precision that fits measured
+headroom and the 100,000,000,000-byte process-tree ceiling. Exact checkpoint,
+runtime and device qualification is required; unknown devices use a disclosed
+Kokoro fallback. Existing explicit choices remain selected. On macOS choose **Read Aloud > Settings… > Text-to-speech engine**.
 Selecting an engine starts its download and loading immediately. A saved MLX
-selection does the same at launch. Settings shows progress and offers retry on
-failure. Switching away cancels preparation, drains the old inference process,
+selection does the same at launch. Settings shows measured progress, model-file totals and a fresh available-volume
+measurement with its timestamp. The total is not the remaining download size or
+a guarantee of future space. Cancel retains resumable data; Retry resumes
+preparation without changing the selected model. Switching away cancels preparation, drains the old inference process,
 and prepares the latest selection without restarting or rebuilding the app.
 The document and reading position remain available; resume playback explicitly.
 Settings shows the selected engine separately from a validated active engine
@@ -397,3 +401,8 @@ speech-rate handling and broader #111 acceptance remain open.
 Sources: [Drama bf16 model card](https://huggingface.co/mlx-community/fish-audio-drama-3-bf16),
 [MLX Audio Drama implementation](https://github.com/Blaizzy/mlx-audio/tree/main/mlx_audio/tts/models/fish_drama3),
 [Fish public voice API](https://docs.fish.audio/api-reference/endpoint/model/list-models).
+
+S7 memory admission uses reviewed, bounded M5 Max/128 GiB observations with a
+documented 25% margin. Derived admission budgets are distinct from observed
+peaks. Complete app/child coverage, OS headroom and normal pressure are checked
+before and after loading and during work. Physical M3 qualification remains open.

@@ -111,3 +111,19 @@ These legacy contracts describe intended behavior and acceptance; `final` denote
 - [desktop reader title chrome minimization](../specifications/desktop-reader-title-chrome-minimization.md)
 - [mobile overflow menu domain grouping](../specifications/mobile-overflow-menu-domain-grouping.md)
 - [studio workspace entry and reader isolation](../specifications/studio-workspace-entry-and-reader-isolation.md)
+
+## Model setup cancellation and capacity
+
+Settings exposes complete manifest file totals and a fresh timestamped volume
+measurement through [model_disk_capacity.dart](../../lib/src/widgets/model_disk_capacity.dart).
+Unavailable queries retain an explicit unknown/failure state. Each opening or
+manual refresh owns one bounded request; no polling queue exists.
+
+Model Cancel immediately invalidates engine/startup/preview/playback ownership,
+clears active identity and publishes cancelled while native retirement drains.
+The selected and last-working identities remain intent. Double Cancel shares the
+same drain. Retry rebuilds the closed owner; a later selection supersedes the
+cancelled target. A cancelled owner is disposed once at replacement or final
+controller disposal. No old success, error or progress can restore it, and Retry
+does not request speech. Barrier and Settings tests cover these boundaries;
+current running-app evidence and its limits are indexed by issue #112.

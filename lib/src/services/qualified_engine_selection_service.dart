@@ -10,9 +10,50 @@ import 'runtime_memory_policy.dart';
 import 'runtime_memory_registry.dart';
 
 /// Trusted application qualification receipts, never refreshed model metadata.
-/// Leave empty until measured additional peaks and sustained reading evidence
-/// have been reconciled for the exact checkpoint/runtime/device combination.
-const qualifiedModelMemoryRecords = <QualifiedModelMemoryRecord>[];
+/// Reviewed bounded M5 observations plus a conservative 25% admission margin.
+/// These budgets are distinct from measured peaks and do not certify M3,
+/// arbitrary contexts, acoustic quality or the overall native acceptance gate.
+const qualifiedModelMemoryRecords = <QualifiedModelMemoryRecord>[
+  QualifiedModelMemoryRecord(
+    engineId: "fish_drama3",
+    checkpointIdentity:
+        "mlx-community/fish-audio-drama-3-bf16@8c5496f9af370bb9342ab98130b27b5389d1b1cb",
+    envelope: QualifiedMemoryEnvelope(
+      runtimeIdentity:
+          "mlx-audio-0.6.3-mlx-0.32.4-complete-v3|mlx-community/fish-audio-drama-3-bf16@8c5496f9af370bb9342ab98130b27b5389d1b1cb",
+      deviceIdentity: "Apple M5 Max/137438953472",
+      additionalPeakBytes: 95000000000,
+      evidence:
+          "https://github.com/kellyjanderson/readaloud/blob/53cfec0a68b907461dc5ed4fc66e1b77cbbe9d06/project/test-artifacts/s7-m5-r2-20261111/memory-qualification.json",
+    ),
+  ),
+  QualifiedModelMemoryRecord(
+    engineId: "fish_drama3_8bit",
+    checkpointIdentity:
+        "mlx-community/fish-audio-drama-3-8bit@fedc7cc92bab5a180709cbaae6208d10b390bb97",
+    envelope: QualifiedMemoryEnvelope(
+      runtimeIdentity:
+          "mlx-audio-0.6.3-mlx-0.32.4-complete-v3|mlx-community/fish-audio-drama-3-8bit@fedc7cc92bab5a180709cbaae6208d10b390bb97",
+      deviceIdentity: "Apple M5 Max/137438953472",
+      additionalPeakBytes: 57000000000,
+      evidence:
+          "https://github.com/kellyjanderson/readaloud/blob/53cfec0a68b907461dc5ed4fc66e1b77cbbe9d06/project/test-artifacts/s7-m5-r2-20261111/memory-qualification.json",
+    ),
+  ),
+  QualifiedModelMemoryRecord(
+    engineId: "fish_drama3_4bit",
+    checkpointIdentity:
+        "mlx-community/fish-audio-drama-3-4bit@2b0c8028998533972e77359cce56b8bf1c5d6d4a",
+    envelope: QualifiedMemoryEnvelope(
+      runtimeIdentity:
+          "mlx-audio-0.6.3-mlx-0.32.4-complete-v3|mlx-community/fish-audio-drama-3-4bit@2b0c8028998533972e77359cce56b8bf1c5d6d4a",
+      deviceIdentity: "Apple M5 Max/137438953472",
+      additionalPeakBytes: 33000000000,
+      evidence:
+          "https://github.com/kellyjanderson/readaloud/blob/53cfec0a68b907461dc5ed4fc66e1b77cbbe9d06/project/test-artifacts/s7-m5-r2-20261111/memory-qualification.json",
+    ),
+  ),
+];
 
 /// Shared by default selection and actual model-load admission. Both must use
 /// the same exact checkpoint/runtime/device receipt; refresh metadata has no
@@ -206,6 +247,9 @@ class QualifiedEngineSelectionService {
       ),
       bundledChecksumsJson: await rootBundle.loadString(
         'assets/fish_drama_model_checksums.json',
+      ),
+      bundledManifestJson: await rootBundle.loadString(
+        'assets/fish_drama_catalog_update.json',
       ),
     );
     try {

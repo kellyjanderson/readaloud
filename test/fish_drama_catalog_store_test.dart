@@ -66,6 +66,8 @@ void main() {
             )
             as Map<String, dynamic>;
     requests = [];
+    // Test fixture version sequence is independent of the bundled release.
+    manifest['catalogVersion'] = 1;
     stores = [];
   });
   tearDown(() async {
@@ -73,6 +75,21 @@ void main() {
       await owner.close();
     }
     await root.delete(recursive: true);
+  });
+
+  test('newer trusted bundle supersedes an older saved update', () async {
+    final old = store();
+    expect((await old.refresh()).succeeded, true);
+    await old.close();
+    final bundled = Map<String, dynamic>.from(manifest)..['catalogVersion'] = 2;
+    final next = FishDramaCatalogStore(
+      root: root,
+      bundledModelsJson: models,
+      bundledChecksumsJson: checksums,
+      bundledManifestJson: jsonEncode(bundled),
+    );
+    stores.add(next);
+    expect((await next.load()).catalogVersion, 2);
   });
 
   void reviseCheckpoint() {

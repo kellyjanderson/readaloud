@@ -25,6 +25,31 @@ spec.loader.exec_module(worker)
 
 
 class GeneratorAdapterTest(unittest.TestCase):
+    def test_physical_memory_query_has_no_unaccounted_subprocess(self):
+        with patch('subprocess.Popen', side_effect=AssertionError('Unexpected descendant')):
+            self.assertGreater(worker._physical_memory_bytes(), 1_000_000_000)
+
+    def test_descriptor_profile_does_not_invalidate_legacy_audio_identity(self):
+        with tempfile.TemporaryDirectory() as root:
+            directory = Path(root)
+            (directory / 'config.json').write_text('{}')
+            (directory / 'model.safetensors').write_bytes(b'identity fixture')
+            original = dict(worker.DRAMA_MODELS['fish_drama3'])
+            legacy = {key: value for key, value in original.items() if key != 'profile'}
+            with patch.dict(worker.DRAMA_MODELS, {'fish_drama3': legacy}):
+                before = worker._model_identity(directory, 'fish_drama3', 0)
+            with patch.dict(worker.DRAMA_MODELS, {'fish_drama3': dict(original, profile={'declaration': 'updated'})}):
+                self.assertEqual(worker._model_identity(directory, 'fish_drama3', 0), before)
+            with patch.dict(worker.DRAMA_MODELS, {'fish_drama3': dict(original, revision='f' * 40)}):
+                self.assertNotEqual(worker._model_identity(directory, 'fish_drama3', 0), before)
+
+    def test_invalid_admitted_memory_limits_never_reach_model_acquisition(self):
+        for limit in (True, 0, -1, 100_000_000_000, '80000000000', 1.5):
+            with self.subTest(limit=limit), patch.object(worker, '_download_model',
+                    side_effect=AssertionError('Acquisition before limit validation')):
+                with self.assertRaisesRegex(ValueError, 'Invalid admitted runtime memory limit'):
+                    worker._load('fish_drama3', '', 'unused', runtime_memory_limit_bytes=limit)
+
     def test_catalog_refresh_cannot_grant_native_scene_qualification(self):
         self.assertTrue(worker._has_scene_qualification('fish_drama3', 0))
         changed = dict(worker.DRAMA_MODELS['fish_drama3'], revision='f' * 40)
@@ -59,7 +84,7 @@ class GeneratorAdapterTest(unittest.TestCase):
                 self.assertIs(worker._model_pending_parameters, parameters)
                 events.append('verify')
                 return True
-            with patch('subprocess.check_output', return_value=b'137438953472'), \
+            with patch.object(worker, '_physical_memory_bytes', return_value=137438953472), \
                     patch('mlx_audio.tts.load', side_effect=lambda *a, **k: (events.append(('load', k)), model)[1]), \
                     patch.object(mx, 'new_stream', return_value=stream), \
                     patch.object(mx, 'stream', return_value=contextlib.nullcontext()), \
@@ -82,7 +107,7 @@ class GeneratorAdapterTest(unittest.TestCase):
         model = SimpleNamespace(parameters=lambda: parameters)
         with tempfile.TemporaryDirectory() as root:
             (Path(root) / 'config.json').write_text('{}')
-            with patch('subprocess.check_output', return_value=b'137438953472'), \
+            with patch.object(worker, '_physical_memory_bytes', return_value=137438953472), \
                     patch('mlx_audio.tts.load', return_value=model), \
                     patch.object(mx, 'async_eval'), patch.object(mx, 'eval') as join, \
                     patch.object(mx, 'synchronize') as synchronize, \
@@ -1089,7 +1114,7 @@ class ModelAssetVerificationTest(unittest.TestCase):
     def test_verified_quantized_load_is_direct_and_rechecks_resident_assets(self):
         worker._unload()
         with self.fixture('fish_drama3_8bit') as (cache, snapshot, manifest, content):
-            with patch('subprocess.check_output', return_value=b'137438953472'), \
+            with patch.object(worker, '_physical_memory_bytes', return_value=137438953472), \
                     patch('mlx_audio.tts.load', return_value=SimpleNamespace()) as load, \
                     patch('mlx_audio.lm.convert.quantize_model', side_effect=AssertionError('prequantized variant must load directly')), \
                     patch.object(worker, '_timing'):
@@ -1110,7 +1135,7 @@ class ModelAssetVerificationTest(unittest.TestCase):
         worker._unload()
         with self.fixture() as (cache, snapshot, _, content):
             bad = snapshot / 'model.safetensors'; bad.write_bytes(b'x' * len(content[bad.name]))
-            with patch('subprocess.check_output', return_value=b'137438953472'), \
+            with patch.object(worker, '_physical_memory_bytes', return_value=137438953472), \
                     patch('mlx_audio.tts.load') as load:
                 with self.assertRaisesRegex(ValueError, 'no weights were loaded'):
                     worker._load('fish_drama3', str(snapshot), str(cache), require_verified_model_assets=True)
@@ -1145,14 +1170,14 @@ class ModelAssetVerificationTest(unittest.TestCase):
         self.assertTrue(all(not reply['ok'] and 'list of nonempty path strings' in reply['error'] for reply in replies[:-2]))
         self.assertTrue(all(reply['ok'] for reply in replies[-2:]))
         self.assertEqual(load.call_count, 2)
-        self.assertEqual(load.call_args_list[0].args, ('fish_drama3', '', 'private', 0, True, ['legacy/models', 'current/hub']))
-        self.assertEqual(load.call_args_list[1].args, ('fish_drama3', '', '', 0, False, []))
+        self.assertEqual(load.call_args_list[0].args, ('fish_drama3', '', 'private', 0, True, ['legacy/models', 'current/hub'], None))
+        self.assertEqual(load.call_args_list[1].args, ('fish_drama3', '', '', 0, False, [], None))
 
     def test_load_forwards_extra_caches_and_validates_before_acquisition(self):
         worker._unload()
         with self.fixture('fish_drama3_4bit') as (cache, snapshot, _, _):
             with patch.object(worker, '_download_model', return_value=snapshot) as download, \
-                    patch('subprocess.check_output', return_value=b'137438953472'), \
+                    patch.object(worker, '_physical_memory_bytes', return_value=137438953472), \
                     patch('mlx_audio.tts.load', return_value=SimpleNamespace()), patch.object(worker, '_timing'):
                 result = worker._load('fish_drama3_4bit', '', str(cache), require_verified_model_assets=True,
                                      model_cache_directories=['legacy/models', 'current/hub'])
