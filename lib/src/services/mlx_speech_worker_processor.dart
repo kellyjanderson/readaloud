@@ -1,5 +1,7 @@
 import 'native_speech_work_activity.dart';
 import 'speech_audio_packet.dart';
+import 'runtime_memory_policy.dart';
+import 'runtime_memory_registry.dart';
 import '../models/speech_engine_catalog.dart';
 import 'dart:async';
 import 'dart:convert';
@@ -237,6 +239,7 @@ class MlxSpeechWorkerChunkProcessor
     this.quantizationBits = 0,
     this.onStatus,
     this.onResourceProgress,
+    this.runtimeMemorySampler,
     AudioArtifactStore? artifactStore,
   }) : _store = artifactStore {
     _activeInstance = this;
@@ -260,10 +263,20 @@ class MlxSpeechWorkerChunkProcessor
   final int quantizationBits;
   final void Function(String? message)? onStatus;
   final void Function(TtsResourceProgress? progress)? onResourceProgress;
+  final Future<RuntimeMemorySnapshot> Function()? runtimeMemorySampler;
   AudioArtifactStore? _store;
   MlxTtsPythonProcess? _process;
   FishDramaCatalogStore? _catalogStore;
-  int get peakRuntimeBytes => _process?.peakRuntimeBytes ?? 0;
+  int _retainedPeakRuntimeBytes = 0;
+  int get peakRuntimeBytes {
+    final current = _process?.peakRuntimeBytes ?? 0;
+    return current > _retainedPeakRuntimeBytes
+        ? current
+        : _retainedPeakRuntimeBytes;
+  }
+
+  static RuntimeMemorySnapshot? get debugNativeMemorySnapshot =>
+      MlxTtsPythonProcess.observedLastMemorySnapshot;
   String? _modelRoot;
   String? _helperPath;
   String? _resolvedPythonPath;
@@ -455,6 +468,7 @@ class MlxSpeechWorkerChunkProcessor
     );
     if (_closed) throw StateError('MLX inference owner is closed.');
     final worker = _process ??= MlxTtsPythonProcess(
+      runtimeMemorySampler: runtimeMemorySampler,
       pythonPath: _resolvedPythonPath!,
       pythonHome: _resolvedPythonHome,
       helperPath: _helperPath!,
@@ -785,6 +799,7 @@ class MlxSpeechWorkerChunkProcessor
       final temporaryAudio = attempt.audio;
       String? publishedAudioPath;
       final worker = _process ??= MlxTtsPythonProcess(
+        runtimeMemorySampler: runtimeMemorySampler,
         pythonPath: _resolvedPythonPath ?? pythonPath,
         pythonHome: _resolvedPythonHome,
         helperPath: _helperPath ?? '',
@@ -934,6 +949,7 @@ class MlxSpeechWorkerChunkProcessor
     _bindings.clear();
     await _runtimeLease?.cancelAndDrain();
     await _process?.shutdown();
+    _retainedPeakRuntimeBytes = peakRuntimeBytes;
     _process = null;
     if (identical(_activeInstance, this)) _activeInstance = null;
   }
@@ -952,13 +968,20 @@ class MlxTtsPythonProcess {
     required this.privateCacheDirectory,
     this.pythonHome,
     this.memorySampler,
+    this.runtimeMemorySampler,
   });
   final String pythonPath;
   final String? pythonHome;
   final String helperPath;
   final Directory privateCacheDirectory;
   final Future<int> Function(int childPid)? memorySampler;
+
+  /// Production samples the complete process tree natively. The integer seam
+  /// above is retained for legacy process tests only, and denotes a total.
+  final Future<RuntimeMemorySnapshot> Function()? runtimeMemorySampler;
   static int observedPeakRuntimeBytes = 0;
+  static RuntimeMemorySnapshot? observedLastMemorySnapshot;
+  static const _memoryPolicy = RuntimeMemoryPolicy();
   Process? _child;
   Future<void>? _starting;
   Future<void>? _retiring;
@@ -977,9 +1000,7 @@ class MlxTtsPythonProcess {
   int _cancelEpoch = 0;
   Timer? _memoryTimer;
   bool _samplingMemory = false;
-  int? _childFootprint;
-  DateTime? _lastChildFootprint;
-  DateTime? _childStartedAt;
+  Object? _memoryToken;
   int peakRuntimeBytes = 0;
 
   Future<Map<String, Object?>> loadModel({
@@ -1084,6 +1105,13 @@ class MlxTtsPythonProcess {
       activity = await NativeSpeechWorkActivity.begin();
       await _retiring;
       final needsLoad = _child == null && body['command'] == 'synthesize';
+      final load = body['command'] == 'load'
+          ? body
+          : (needsLoad ? _loadSpec : null);
+      if (load != null) await _admitModelMemory(load, progress);
+      if (_disposed || epoch != _cancelEpoch) {
+        throw const MlxTtsRequestCancelled();
+      }
       await (_starting ??= _start().whenComplete(() => _starting = null));
       if (_disposed || epoch != _cancelEpoch) {
         throw const MlxTtsRequestCancelled();
@@ -1104,7 +1132,17 @@ class MlxTtsPythonProcess {
       if (_disposed || epoch != _cancelEpoch) {
         throw const MlxTtsRequestCancelled();
       }
-      return await _exchange(child, body, timeout, progress, audioPacket);
+      final response = await _exchange(
+        child,
+        body,
+        timeout,
+        progress,
+        audioPacket,
+      );
+      if (_disposed || epoch != _cancelEpoch) {
+        throw const MlxTtsRequestCancelled();
+      }
+      return response;
     } catch (_) {
       await _retire(); // Errors, malformed replies and timeouts poison the child.
       rethrow;
@@ -1155,6 +1193,13 @@ class MlxTtsPythonProcess {
           'The worker did not verify the selected pinned model.',
         );
       }
+      if (body['command'] == 'load' && memorySampler == null) {
+        final snapshot = await _memorySnapshot();
+        if (!identical(_child, child)) throw const MlxTtsRequestCancelled();
+        _recordMemory(snapshot);
+        final decision = _memoryPolicy.monitor(snapshot, DateTime.now());
+        if (!decision.allowed) throw StateError(decision.reason);
+      }
       return response;
     } finally {
       if (identical(_pendingResponse, completion)) {
@@ -1183,9 +1228,9 @@ class MlxTtsPythonProcess {
       },
     );
     _child = child;
-    _childFootprint = null;
-    _lastChildFootprint = null;
-    _childStartedAt = DateTime.now();
+    final memoryToken = _memoryToken = RuntimeMemoryRegistry.shared.register(
+      child.pid,
+    );
     bool current() => identical(_child, child);
     _stdoutSubscription = child.stdout
         .transform(utf8.decoder)
@@ -1202,8 +1247,23 @@ class MlxTtsPythonProcess {
                 if (footprint is! int || footprint <= 0) {
                   throw FormatException('Invalid memory sample: $response');
                 }
-                _childFootprint = footprint;
-                _lastChildFootprint = DateTime.now();
+                final sampled = response['sampledUnixMicros'];
+                if (memorySampler == null &&
+                    (sampled is! int || response['processId'] != child.pid)) {
+                  throw const FormatException(
+                    'Unidentified inference memory sample',
+                  );
+                }
+                RuntimeMemoryRegistry.shared.update(
+                  child.pid,
+                  memoryToken,
+                  footprint,
+                  sampledAt: sampled is int
+                      ? DateTime.fromMicrosecondsSinceEpoch(sampled)
+                      : null,
+                );
+                // Self telemetry is diagnostic/trigger only. The native total
+                // already includes this PID, so adding it would double-count.
                 unawaited(_sampleMemory(child));
                 return;
               }
@@ -1295,33 +1355,26 @@ class MlxTtsPythonProcess {
     if (_samplingMemory || !identical(_child, child)) return;
     _samplingMemory = true;
     try {
-      if (memorySampler == null) {
-        final age = DateTime.now().difference(
-          _lastChildFootprint ?? _childStartedAt!,
-        );
-        if (age > const Duration(seconds: 30)) {
-          throw StateError('Inference memory telemetry stopped');
-        }
-        if (_childFootprint == null) return;
+      final int bytes;
+      RuntimeMemoryDecision? decision;
+      if (memorySampler != null) {
+        bytes = await memorySampler!(child.pid);
+      } else {
+        final snapshot = await _memorySnapshot();
+        if (!identical(_child, child)) return;
+        _recordMemory(snapshot);
+        bytes = snapshot.totalFootprintBytes;
+        decision = _memoryPolicy.monitor(snapshot, DateTime.now());
+        if (!snapshot.complete) throw StateError(decision.reason);
       }
-      final childBytes = _childFootprint ?? 0;
-      final bytes =
-          await (memorySampler?.call(child.pid) ??
-              _mlxLifecycleChannel
-                  .invokeMethod<int>('runtimeFootprint')
-                  .then(
-                    (bytes) =>
-                        (bytes ??
-                            (throw StateError('Missing memory footprint'))) +
-                        childBytes,
-                  ));
       if (!identical(_child, child)) return;
       if (bytes > observedPeakRuntimeBytes) observedPeakRuntimeBytes = bytes;
       if (bytes > peakRuntimeBytes) peakRuntimeBytes = bytes;
-      if (bytes >= 99000000000) {
+      if (decision?.allowed == false || bytes >= 99000000000) {
         _fail(
           StateError(
-            'Speech runtime reached the 100 GB memory ceiling. Select a smaller Drama variant.',
+            decision?.reason ??
+                'Speech runtime reached the 100 GB memory ceiling. Select a smaller Drama variant.',
           ),
         );
         unawaited(_retire());
@@ -1334,6 +1387,69 @@ class MlxTtsPythonProcess {
     } finally {
       _samplingMemory = false;
     }
+  }
+
+  Future<RuntimeMemorySnapshot> _memorySnapshot() async {
+    if (runtimeMemorySampler != null) {
+      return runtimeMemorySampler!().timeout(const Duration(seconds: 3));
+    }
+    final map = await _mlxLifecycleChannel
+        .invokeMapMethod<Object?, Object?>('runtimeMemorySnapshot')
+        .timeout(const Duration(seconds: 3));
+    if (map == null) throw StateError('Missing process-tree memory snapshot');
+    return RuntimeMemoryRegistry.shared.reconcile(map);
+  }
+
+  void _recordMemory(RuntimeMemorySnapshot snapshot) {
+    observedLastMemorySnapshot = snapshot;
+    if (!snapshot.complete) return; // A partial sum is not a measured peak.
+    final bytes = snapshot.totalFootprintBytes;
+    if (bytes > observedPeakRuntimeBytes) observedPeakRuntimeBytes = bytes;
+    if (bytes > peakRuntimeBytes) peakRuntimeBytes = bytes;
+  }
+
+  Future<void> _admitModelMemory(
+    Map<String, Object?> load,
+    void Function(Map<String, Object?>)? progress,
+  ) async {
+    // Legacy process stubs intentionally replace all memory accounting.
+    if (memorySampler != null) return;
+    final snapshot = await _memorySnapshot();
+    final modelId = load['modelId'] as String;
+    RuntimeMemoryDecision decision;
+    if (isDramaEngine(modelId)) {
+      final catalog =
+          jsonDecode(
+                await rootBundle.loadString('assets/fish_drama_models.json'),
+              )
+              as Map;
+      final estimate = (catalog[modelId] as Map)['estimatedPeakBytes'];
+      // This path executes an explicit selected model. No bundled Fish envelope
+      // is measured yet; never call it a qualified default or change the choice.
+      decision = _memoryPolicy.admit(
+        sample: snapshot,
+        now: DateTime.now(),
+        runtimeIdentity: modelId,
+        deviceIdentity: '',
+        explicitQualification: true,
+        sizingEstimateBytes: estimate is int ? estimate : null,
+      );
+    } else {
+      decision = _memoryPolicy.monitor(snapshot, DateTime.now());
+    }
+    _recordMemory(snapshot);
+    if (!decision.allowed) throw StateError(decision.reason);
+    load['runtimeMemoryLimitBytes'] = decision.budgetBytes < 85000000000
+        ? decision.budgetBytes
+        : 85000000000;
+    progress?.call({
+      'type': 'progress',
+      'stage': 'memoryAdmission',
+      'message': decision.reason,
+      'processTreeFootprintBytes': snapshot.totalFootprintBytes,
+      'additionalBudgetBytes': decision.budgetBytes,
+      'measuredEnvelope': false,
+    });
   }
 
   void _fail(Object error) {
@@ -1367,7 +1483,12 @@ class MlxTtsPythonProcess {
     await _stderrSubscription?.cancel();
     _stdoutSubscription = null;
     _stderrSubscription = null;
-    if (identical(_child, child)) _child = null;
+    if (identical(_child, child)) {
+      final token = _memoryToken;
+      if (token != null) RuntimeMemoryRegistry.shared.remove(child.pid, token);
+      _memoryToken = null;
+      _child = null;
+    }
   }
 
   Future<void> shutdown() => _shutdown ??= _close();

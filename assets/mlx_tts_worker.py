@@ -93,7 +93,8 @@ def _report_memory(stop: threading.Event) -> None:
     # One daemon per child, no job queue. Process retirement owns cancellation.
     while not stop.is_set():
         try:
-            _reply("", type="memory", footprintBytes=_physical_footprint())
+            _reply("", type="memory", footprintBytes=_physical_footprint(),
+                   processId=os.getpid(), sampledUnixMicros=time.time_ns() // 1000)
         except Exception as error:
             _reply("", type="memory", error=str(error))
             return
@@ -579,12 +580,16 @@ def _verify_scene_model(directory: Path, manifest: dict, receipt_root: Path,
 
 def _load(model_id: str, model_path: str, private_cache_path: str, quantization_bits: int = 0,
           require_verified_model_assets: bool = False,
-          model_cache_directories: list[str] | None = None) -> dict[str, Any]:
+          model_cache_directories: list[str] | None = None,
+          runtime_memory_limit_bytes: int | None = None) -> dict[str, Any]:
     global _model, _model_id, _model_path, _model_bits, _model_native_scenes
     global _model_load_stream, _model_pending_parameters
     load_started = time.monotonic()
     if type(require_verified_model_assets) is not bool:
         raise ValueError('requireVerifiedModelAssets must be a boolean')
+    if runtime_memory_limit_bytes is not None and (type(runtime_memory_limit_bytes) is not int
+            or not 0 < runtime_memory_limit_bytes < 100_000_000_000):
+        raise ValueError('Invalid admitted runtime memory limit')
     model_cache_directories = _validated_model_cache_directories(
         [] if model_cache_directories is None else model_cache_directories)
     if quantization_bits not in (0, 4):
@@ -621,7 +626,9 @@ def _load(model_id: str, model_path: str, private_cache_path: str, quantization_
     _unload()
     import mlx.core as mx
     # Reserve headroom for Flutter, Python, codec and allocator overhead.
-    mx.set_memory_limit(85_000_000_000)
+    # This is an allocator guard, not an additional footprint measurement.
+    # The app's measured whole-tree/headroom admission can lower the limit.
+    mx.set_memory_limit(min(85_000_000_000, runtime_memory_limit_bytes or 85_000_000_000))
     mx.set_cache_limit(1_000_000_000)
     from mlx_audio.tts import load
 
@@ -1017,6 +1024,7 @@ def main() -> int:
                         int(request.get('quantizationBits', 0)),
                         request.get('requireVerifiedModelAssets', False),
                         _validated_model_cache_directories(request.get('modelCacheDirectories', [])),
+                        request.get('runtimeMemoryLimitBytes'),
                     )
                 elif command == "synthesize":
                     response = _synthesize(request)

@@ -7,8 +7,21 @@ import 'package:flutter/foundation.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:read_aloud/src/models/speech_engine_catalog.dart';
 import 'package:read_aloud/src/services/mlx_speech_worker_processor.dart';
+import 'package:read_aloud/src/services/runtime_memory_policy.dart';
 
 // Real child processes with a tiny protocol stub: no MLX weights or network.
+RuntimeMemorySnapshot memorySnapshot({
+  RuntimeMemoryPressure pressure = RuntimeMemoryPressure.normal,
+  int available = 110000000000,
+}) => RuntimeMemorySnapshot(
+  totalFootprintBytes: 1000000000,
+  physicalMemoryBytes: 128000000000,
+  availableMemoryBytes: available,
+  pressure: pressure,
+  complete: true,
+  sampledAt: DateTime.now(),
+);
+
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
   const activityChannel = MethodChannel('read_aloud/mlx_tts_lifecycle');
@@ -280,6 +293,7 @@ end
             .replaceAll('FIXTURE_PIN', jsonEncode(variant.pinnedIdentity)),
       );
       final processor = MlxSpeechWorkerChunkProcessor(
+        runtimeMemorySampler: () async => memorySnapshot(),
         engineId: 'fish_drama3',
         modelPath: '',
         pythonPath: executable.path,
@@ -515,6 +529,7 @@ end
       );
       await worker.shutdown();
       worker = MlxTtsPythonProcess(
+        memorySampler: (_) async => sampledBytes,
         pythonPath: '${root.path}/python',
         pythonHome: '${root.path}/verified-mlx-home',
         helperPath: '${root.path}/worker.rb',
@@ -544,6 +559,82 @@ end
     sampledBytes = 0;
     expect((await synth('recovered'))['ok'], true);
   });
+  Future<void> useNativeSampler(
+    Future<RuntimeMemorySnapshot> Function() sampler,
+  ) async {
+    await worker.shutdown();
+    worker = MlxTtsPythonProcess(
+      pythonPath: '${root.path}/python',
+      helperPath: '${root.path}/worker.rb',
+      privateCacheDirectory: Directory('${root.path}/cache'),
+      runtimeMemorySampler: sampler,
+    );
+  }
+
+  test(
+    'insufficient whole-tree headroom rejects before spawning a model',
+    () async {
+      await useNativeSampler(
+        () async => memorySnapshot(available: 20000000000),
+      );
+      await expectLater(
+        load(),
+        throwsA(
+          isA<StateError>().having(
+            (e) => e.message,
+            'reason',
+            contains('headroom'),
+          ),
+        ),
+      );
+      expect(await File('${root.path}/cache/load.pid').exists(), false);
+    },
+  );
+  test(
+    'end-of-load pressure prevents validation and retires rejected child',
+    () async {
+      var samples = 0;
+      await useNativeSampler(
+        () async => memorySnapshot(
+          pressure: ++samples == 2
+              ? RuntimeMemoryPressure.warning
+              : RuntimeMemoryPressure.normal,
+        ),
+      );
+      await expectLater(
+        load(),
+        throwsA(
+          isA<StateError>().having(
+            (e) => e.message,
+            'reason',
+            contains('pressure'),
+          ),
+        ),
+      );
+      await load();
+      expect((await synth('recovered'))['ok'], true);
+    },
+  );
+  test(
+    'cancel during memory admission cannot spawn or publish a late model',
+    () async {
+      final held = Completer<RuntimeMemorySnapshot>();
+      await useNativeSampler(() => held.future);
+      final loading = load();
+      final cancelled = expectLater(
+        loading,
+        throwsA(isA<MlxTtsRequestCancelled>()),
+      );
+      // beginSpeechWork is the first asynchronous step before native admission.
+      while (!activityCalls.any((c) => c.method == 'beginSpeechWork')) {
+        await Future<void>.delayed(Duration.zero);
+      }
+      worker.cancelActiveRequest();
+      held.complete(memorySnapshot());
+      await cancelled;
+      expect(await File('${root.path}/cache/load.pid').exists(), false);
+    },
+  );
   test(
     'admission is reserved before process start and shutdown joins it',
     () async {

@@ -95,8 +95,8 @@ class AppDelegate: FlutterAppDelegate {
       name: "read_aloud/booknlp_lifecycle",
       binaryMessenger: resolvedFlutterViewController.engine.binaryMessenger
     )
-    // Each process samples itself: sandbox policy denies cross-process libproc
-    // queries. Dart combines this value with its current child's telemetry.
+    // Sampling is utility-queue owned. Dart admits at most one in-flight sample
+    // and fences completions by child identity; the main thread only replies.
     mlxLifecycleChannel?.setMethodCallHandler { [weak self] call, result in
       guard let self else {
         result(FlutterMethodNotImplemented)
@@ -170,6 +170,14 @@ class AppDelegate: FlutterAppDelegate {
         result(nil)
         return
       }
+      if call.method == "runtimeMemorySnapshot" {
+        let owner = getpid()
+        DispatchQueue.global(qos: .utility).async {
+          let snapshot = Self.sampleRuntimeMemory(owner: owner)
+          DispatchQueue.main.async { result(snapshot) }
+        }
+        return
+      }
       guard call.method == "runtimeFootprint" else {
         result(FlutterMethodNotImplemented)
         return
@@ -228,6 +236,104 @@ class AppDelegate: FlutterAppDelegate {
         result(FlutterMethodNotImplemented)
       }
     }
+  }
+
+  /// Supported libproc/Mach counters, no shell or process-name matching. A
+  /// denied child query, changing tree or bounded traversal reports incomplete;
+  /// it must never masquerade as a complete app-only measurement. phys_footprint
+  /// includes charged native/Metal pages: MLX allocator counters are not added.
+  private static func sampleRuntimeMemory(owner: pid_t) -> [String: Any] {
+    var complete = true
+    func descendants() -> Set<pid_t> {
+      var seen: Set<pid_t> = [owner]
+      var pending: [pid_t] = [owner]
+      while let parent = pending.popLast() {
+        var children = [pid_t](repeating: 0, count: 128)
+        errno = 0
+        let count = children.withUnsafeMutableBytes {
+          proc_listchildpids(parent, $0.baseAddress, Int32($0.count))
+        }
+        guard count >= 0, errno == 0, count < children.count else {
+          complete = false
+          continue
+        }
+        for child in children.prefix(Int(count)) where child > 0 {
+          if seen.insert(child).inserted {
+            guard seen.count <= 512 else {
+              complete = false
+              return seen
+            }
+            pending.append(child)
+          }
+        }
+      }
+      return seen
+    }
+    let processIds = descendants()
+    var enumerationComplete = complete
+    var total: UInt64 = 0
+    var samples: [[String: Any]] = []
+    var unavailable: [pid_t] = []
+    for pid in processIds.sorted() {
+      var info = rusage_info_v2()
+      let status = withUnsafeMutablePointer(to: &info) { pointer in
+        pointer.withMemoryRebound(to: rusage_info_t?.self, capacity: 1) {
+          proc_pid_rusage(pid, RUSAGE_INFO_V2, $0)
+        }
+      }
+      if status == 0 {
+        total += info.ri_phys_footprint
+        samples.append(["pid": pid, "footprintBytes": info.ri_phys_footprint])
+      } else {
+        complete = false
+        unavailable.append(pid)
+      }
+    }
+    // Footprint denial may be reconciled with supervisor-owned child self
+    // telemetry. Enumeration denial or a changing tree cannot be reconciled.
+    let footprintComplete = complete
+    complete = enumerationComplete
+    if descendants() != processIds { complete = false }
+    enumerationComplete = complete
+    complete = footprintComplete && enumerationComplete
+    var statistics = vm_statistics64()
+    var count = mach_msg_type_number_t(MemoryLayout<vm_statistics64>.size / MemoryLayout<integer_t>.size)
+    let host = mach_host_self()
+    defer { mach_port_deallocate(mach_task_self_, host) }
+    let status = withUnsafeMutablePointer(to: &statistics) { pointer in
+      pointer.withMemoryRebound(to: integer_t.self, capacity: Int(count)) {
+        host_statistics64(host, HOST_VM_INFO64, $0, &count)
+      }
+    }
+    var pageSize: vm_size_t = 0
+    let pageStatus = host_page_size(host, &pageSize)
+    if status != KERN_SUCCESS || pageStatus != KERN_SUCCESS { complete = false }
+    // Conservative available pages: free plus reclaimable purgeable pages.
+    // Do not add inactive as well (purgeable can overlap it), or count all RAM.
+    let available = (UInt64(statistics.free_count) + UInt64(statistics.purgeable_count)) * UInt64(pageSize)
+    var pressure: Int32 = 0
+    var pressureSize = MemoryLayout<Int32>.size
+    let pressureStatus = sysctlbyname("kern.memorystatus_vm_pressure_level", &pressure, &pressureSize, nil, 0)
+    let pressureName: String
+    switch pressureStatus == 0 ? pressure : 0 {
+    case 1: pressureName = "normal"
+    case 2: pressureName = "warning"
+    case 4: pressureName = "critical"
+    default: pressureName = "unknown"
+    }
+    return [
+      "totalFootprintBytes": total,
+      "physicalMemoryBytes": ProcessInfo.processInfo.physicalMemory,
+      "availableMemoryBytes": available,
+      "availableMemoryBasis": "host-free-plus-purgeable-pages",
+      "pressure": pressureName,
+      "complete": complete,
+      "enumerationComplete": enumerationComplete && status == KERN_SUCCESS && pageStatus == KERN_SUCCESS,
+      "processIds": processIds.sorted(),
+      "processes": samples,
+      "unavailableProcessIds": unavailable.sorted(),
+      "sampledUnixMicros": Int64(Date().timeIntervalSince1970 * 1_000_000)
+    ]
   }
 
   private func handleCreateRadocExportStage(
