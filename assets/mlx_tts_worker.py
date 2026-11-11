@@ -9,10 +9,8 @@ from __future__ import annotations
 import contextlib
 import ctypes
 import gc
-import glob
 import hashlib
 import json
-import math
 import os
 import sys
 import tempfile
@@ -20,9 +18,7 @@ import threading
 import time
 import traceback
 import wave
-import weakref
 from pathlib import Path
-from concurrent.futures import ThreadPoolExecutor
 from typing import Any
 
 
@@ -53,11 +49,6 @@ _model_bits = 0
 _model_native_scenes = False
 _model_load_stream: Any = None
 _model_pending_parameters: Any = None
-_mapped_model_owners: list[Any] = []
-_mapped_model_mappings: list[list[Any]] = []
-_mapped_model_bytes = 0
-_mapped_model_untracked_bytes = 0
-_MODEL_MEMORY_LIMIT = 85_000_000_000
 _protocol_stdout = sys.stdout
 _active_request_id = ""
 _output_lock = threading.Lock()
@@ -83,9 +74,7 @@ def _physical_footprint() -> int:
     info = RusageInfoV2()
     if libproc.proc_pid_rusage(os.getpid(), 2, ctypes.byref(info)) != 0:
         raise OSError(ctypes.get_errno(), "Could not sample inference memory")
-    # External file-backed Metal buffers can be absent from phys_footprint.
-    # Count their complete mapping size conservatively, including cold pages.
-    return int(info.counters[7]) + _mapped_model_bytes  # ri_phys_footprint
+    return int(info.counters[7])  # ri_phys_footprint
 
 
 def _report_memory(stop: threading.Event) -> None:
@@ -104,20 +93,15 @@ def _unload() -> None:
     # If a join fails, retain its model/tree/stream ownership until retry or
     # process retirement. Never drop a stream that may still own queued work.
     _join_model_weights()
-    if _mapped_model_owners:
-        import mlx.core as mx
-        mx.synchronize(mx.gpu)
     _model = None
     _model_id = None
     _model_path = None
     _model_native_scenes = False
     _model_load_stream = None
-    _mapped_model_owners.clear()
     gc.collect()
     try:
         import mlx.core as mx
 
-        _refresh_mapped_budget()
         mx.clear_cache()
     except Exception:
         pass
@@ -146,8 +130,6 @@ def _timing(stage: str, started: float) -> None:
     }, separators=(',', ':')), file=sys.stderr, flush=True)
     message = {
         'modelBuildAndCodec': 'Speech model and codec constructed',
-        'modelMappedCheckpoint': 'Speech model checkpoint views prepared',
-        'modelPagePrefault': 'Speech model checkpoint pages read',
         'modelVerification': 'Speech model qualification checked',
         'modelWeights': 'Remaining speech model weights ready',
         'modelWeightsAndVerification': 'Speech model weights and qualification ready',
@@ -337,298 +319,6 @@ def _verify_scene_model(directory: Path, manifest: dict, receipt_root: Path) -> 
     return True
 
 
-def _refresh_mapped_budget() -> None:
-    global _mapped_model_bytes, _mapped_model_untracked_bytes
-    import mlx.core as mx
-
-    _mapped_model_mappings[:] = [entry for entry in _mapped_model_mappings
-                                if entry[0]() is not None]
-    _mapped_model_bytes = sum(size for _, size, _ in _mapped_model_mappings)
-    # The pinned MLX allocator already counts DLPack-imported payload buffers
-    # in get_active_memory(). Only mapping bytes outside those registered
-    # buffers need an additional reservation; subtracting the entire mapping
-    # would count every shared weight twice. phys_footprint has different
-    # semantics and still receives the conservative full-mapping addition.
-    _mapped_model_untracked_bytes = sum(size - registered
-        for _, size, registered in _mapped_model_mappings)
-    remaining = _MODEL_MEMORY_LIMIT - _mapped_model_untracked_bytes
-    if remaining <= 0 or mx.get_active_memory() > remaining:
-        raise MemoryError('Mapped speech weights and MLX allocations exceed the memory ceiling.')
-    mx.set_memory_limit(remaining)
-
-
-def _checkpoint_tensor_window(shape, offset: int, nbytes: int, itemsize: int,
-                              file_words: int):
-    if (itemsize not in (1, 2, 4, 8) or offset < 0 or nbytes <= 0
-            or nbytes != math.prod(shape) * itemsize or offset % itemsize):
-        return None
-    first, end = offset // 4, (offset + nbytes + 3) // 4
-    words = end - first
-    expanded = words * 4 // itemsize
-    if (end > file_words or words >= 2**31 or expanded >= 2**31
-            or words * 4 % itemsize):
-        return None
-    return first, words, offset % 4 // itemsize, math.prod(shape)
-
-
-def _mapped_tensor_view(buffer: Any, dtype: Any, shape, offset: int,
-                        nbytes: int, itemsize: int):
-    import mlx.core as mx
-    window = _checkpoint_tensor_window(shape, offset, nbytes, itemsize, buffer.size)
-    if window is None:
-        return None
-    first, words, begin, count = window
-    # Keep as_strided's internally flattened input and every expanded typed
-    # window below INT32_MAX. Never expand the complete file to uint8/uint16.
-    raw = mx.as_strided(buffer, shape=(words,), strides=(1,), offset=first)
-    unit = {1: mx.uint8, 2: mx.uint16, 4: mx.uint32, 8: mx.uint64}[itemsize]
-    selected = raw.view(unit)[begin:begin + count]
-    return selected.view(dtype).reshape(shape)
-
-
-def _mapped_checkpoint(file: str, *, allow_repack: bool = True,
-                       whole_file_buffer: bool = False) -> tuple[dict, list[Any], int, int] | None:
-    """Exact-byte, private-COW views; GPU-repack misaligned tensor bytes.
-
-    safe_open owns format/offset validation. Its tensor reader copies and lacks
-    NumPy BF16 support, so NumPy/DLPack supplies the missing shared-buffer path.
-    No production operation writes a map. Retained MLX owners prevent donation;
-    private COW additionally prevents any accidental write reaching the file.
-    """
-    import mlx.core as mx
-    import numpy as np
-    from safetensors import safe_open
-
-    dtypes = {'BF16': (np.uint16, mx.bfloat16), 'F16': (np.float16, mx.float16),
-              'F32': (np.float32, mx.float32), 'I32': (np.int32, mx.int32),
-              'I64': (np.int64, mx.int64), 'U32': (np.uint32, mx.uint32),
-              'U64': (np.uint64, mx.uint64), 'I16': (np.int16, mx.int16),
-              'U16': (np.uint16, mx.uint16), 'I8': (np.int8, mx.int8),
-              'U8': (np.uint8, mx.uint8), 'BOOL': (np.bool_, mx.bool_)}
-    with safe_open(file, framework='numpy', backend='mmap') as validated:
-        with open(file, 'rb') as source:
-            header_size = int.from_bytes(source.read(8), 'little')
-            if not 0 < header_size < 100_000_000:
-                raise ValueError('Invalid checkpoint header size')
-            header = json.loads(source.read(header_size))
-        entries = []
-        for key in validated.keys():
-            metadata = validated.get_slice(key)
-            dtype, shape = metadata.get_dtype(), metadata.get_shape()
-            if dtype not in dtypes or not shape or any(not 0 < n < 2**31 for n in shape):
-                return None  # Original provider owns unsupported layouts.
-            spec = header[key]
-            if spec['dtype'] != dtype or spec['shape'] != shape:
-                raise ValueError('Checkpoint metadata disagrees with validated tensors')
-            start, end = spec['data_offsets']
-            itemsize = np.dtype(dtypes[dtype][0]).itemsize
-            if (start < 0 or end < start or end - start != itemsize * math.prod(shape)
-                    or 8 + header_size + end > Path(file).stat().st_size):
-                raise ValueError('Checkpoint tensor exceeds its declared byte bounds')
-            entries.append((key, dtype, shape, 8 + header_size + start, end - start))
-
-    repack = any(offset % np.dtype(dtypes[dtype][0]).itemsize
-                 for _, dtype, _, offset, _ in entries)
-    if whole_file_buffer:
-        # as_strided internally flattens even a 2D input. Use one page-aligned
-        # uint32 buffer instead; files >=8 GiB or uncovered final bytes retain
-        # the original per-tensor provider route.
-        size = Path(file).stat().st_size
-        file_words = size // 4
-        if not 0 < file_words < 2**31 or not any(
-                _checkpoint_tensor_window(shape, offset, nbytes,
-                    np.dtype(dtypes[dtype][0]).itemsize, file_words) is not None
-                for _, dtype, shape, offset, nbytes in entries):
-            return None
-    elif repack and not allow_repack:
-        return None  # Aligned-only A/B keeps the original unaligned reader.
-
-    # Register before wrapping/copying so both the external input and any MLX
-    # copy are charged throughout preparation. Weak references retain the
-    # charge until evaluated copy graphs have actually released their inputs.
-    size = Path(file).stat().st_size
-    if _mapped_model_untracked_bytes + size + mx.get_active_memory() > _MODEL_MEMORY_LIMIT:
-        raise MemoryError('Checkpoint mapping would exceed the speech memory ceiling.')
-    mapping = np.memmap(file, dtype=np.uint8, mode='c')
-    accounting = [weakref.ref(mapping), size, 0]
-    _mapped_model_mappings.append(accounting)
-    _refresh_mapped_budget()
-
-    def import_view(view):
-        # Transfer this byte reservation to the allocator before importing.
-        # This protocol thread is the sole producer and has joined the prior
-        # shard; no other model job can consume the temporarily granted room.
-        reserved = view.nbytes
-        accounting[2] += reserved
-        _refresh_mapped_budget()
-        before = mx.get_active_memory()
-        try:
-            result = mx.from_dlpack(view, copy=False)
-        except Exception:
-            accounting[2] -= reserved
-            _refresh_mapped_budget()
-            raise
-        registered = min(reserved, max(0, mx.get_active_memory() - before))
-        accounting[2] -= reserved - registered
-        _refresh_mapped_budget()
-        return result
-    weights, owners, inputs = {}, [], []
-    mapped = copied = 0
-    if whole_file_buffer:
-        buffer_view = np.ndarray((file_words,), dtype=np.uint32, buffer=mapping)
-        try:
-            buffer = import_view(buffer_view)
-        except (ValueError, BufferError):
-            return None
-        owners.extend((mapping, buffer_view, buffer))
-        original = None
-        for key, dtype, shape, offset, nbytes in entries:
-            itemsize = np.dtype(dtypes[dtype][0]).itemsize
-            value = _mapped_tensor_view(buffer, dtypes[dtype][1], shape, offset, nbytes, itemsize)
-            if value is None:
-                # The provider still owns each unsupported tensor. Its other
-                # lazy arrays are discarded without evaluation or extra I/O.
-                if original is None:
-                    original = mx.load(file)
-                value = original[key]
-                copied += nbytes  # Provider fallback bytes in this mode.
-            else:
-                owners.append(value)
-                mapped += nbytes
-            weights[key] = value
-        mx.eval(weights)
-        return weights, owners, mapped, copied
-    for key, dtype, shape, offset, nbytes in entries:
-        np_dtype, mx_dtype = dtypes[dtype]
-        if repack:
-            # uint8 has no alignment restriction. Copy before viewing the exact
-            # bytes as BF16/etc; directly viewing an odd address is incorrect.
-            view = np.ndarray(tuple(shape) + (np.dtype(np_dtype).itemsize,),
-                              dtype=np.uint8, buffer=mapping, offset=offset)
-            try:
-                raw = import_view(view)
-            except (ValueError, BufferError):
-                return None
-            inputs.extend((view, raw))
-            # The pinned MLX API has no public copy primitive. Unsigned-byte
-            # addition of zero allocates aligned GPU storage without changing
-            # a single payload bit, including BF16 NaNs and signed zero.
-            aligned = mx.add(raw, mx.array(0, dtype=mx.uint8), stream=mx.gpu)
-            value = aligned.view(mx_dtype, stream=mx.gpu).reshape(shape)
-            owners.extend((aligned, value))
-            copied += nbytes
-        else:
-            view = np.ndarray(tuple(shape), dtype=np_dtype, buffer=mapping, offset=offset)
-            try:
-                raw = import_view(view)
-            except (ValueError, BufferError):
-                return None
-            value = raw.view(mx_dtype) if dtype == 'BF16' else raw
-            owners.extend((mapping, view, raw, value))
-            mapped += nbytes
-        weights[key] = value
-    mx.eval(weights)
-    mx.synchronize(mx.gpu)
-    # For repacked shards no returned owner points at the source mapping.
-    # DLPack keeps any still-needed input alive independently of this scope.
-    return weights, owners, mapped, copied
-
-
-def _prefault_checkpoint_pages(mapping: Any, file: str) -> int:
-    """Read one byte per OS page; never write, copy or transform the weights."""
-    import numpy as np
-
-    started = time.monotonic()
-    page_size = os.sysconf('SC_PAGE_SIZE')
-    pages = (mapping.size + page_size - 1) // page_size
-    completed = checksum = 0
-    # Limit each reduction to 256 MiB of address space (one byte per page).
-    # The strided NumPy view has no full-weight temporary or Python byte loop.
-    for begin in range(0, mapping.size, page_size * 65536):
-        sample = mapping[begin:min(mapping.size, begin + page_size * 65536):page_size]
-        checksum = (checksum + int(np.sum(sample, dtype=np.uint64))) % (1 << 64)
-        completed += sample.size
-        _progress(f'Read checkpoint pages for {Path(file).name}',
-                  stage='modelPagePrefault', completed=completed, total=pages, unit='pages')
-    _timing('modelPagePrefault', started)
-    return checksum
-
-
-@contextlib.contextmanager
-def _mapped_model_weights(directory: Path):
-    """One exact-directory provider adapter, restored on every exit.
-
-    The public loader has no reader injection. Model construction, sanitize,
-    quantization, codec loading and strict checks remain the provider's own.
-    Qualification must have succeeded before this context is entered.
-    """
-    from mlx_audio import utils as provider
-    import mlx.core as mx
-
-    original = provider.load_weights
-    mode = os.environ.get('READALOUD_MAPPED_MODEL_LOAD')
-    allow_repack = mode not in ('aligned', 'mapped_prefault')
-    whole_file_buffer = mode == 'file_buffer'
-    # One CPU producer, four admitted mappings at most. This context spans the
-    # provider load AND remaining weight evaluation, allowing page reads to
-    # overlap existing host I/O/codec construction. Every task owns a strong
-    # mapping reference and drains before readiness, failure or restoration.
-    pool = (ThreadPoolExecutor(max_workers=1, thread_name_prefix='speech-prefault')
-            if mode == 'mapped_prefault' else None)
-    pending = []
-    def load_weights(path):
-        if Path(path).resolve() != directory:
-            return original(path)
-        files = glob.glob(str(Path(path) / '*.safetensors'))
-        if not files:
-            return original(path)
-        started = time.monotonic()
-        weights = {}
-        mapped = copied = fallback = 0
-        for file in files:  # Preserve the original provider's merge order.
-            _refresh_mapped_budget()
-            loaded = _mapped_checkpoint(file, allow_repack=allow_repack,
-                                        whole_file_buffer=whole_file_buffer)
-            if loaded is None:
-                weights.update(mx.load(file))
-                fallback += Path(file).stat().st_size
-            else:
-                shard, owners, shared_bytes, copied_bytes = loaded
-                weights.update(shard)
-                _mapped_model_owners.extend(owners)
-                mapped += shared_bytes
-                if whole_file_buffer:
-                    fallback += copied_bytes
-                else:
-                    copied += copied_bytes
-                if pool is not None and shared_bytes:
-                    if len(pending) >= 4:
-                        pending.pop(0).result()
-                    # Aligned-only load adds exactly one mapping. Capture it
-                    # before a later accounting refresh can prune old entries.
-                    mapping = _mapped_model_mappings[-1][0]()
-                    pending.append(pool.submit(_prefault_checkpoint_pages, mapping, file))
-        _refresh_mapped_budget()
-        _progress(f'Checkpoint bytes: mapped={mapped}, GPU copied={copied}, provider fallback={fallback}',
-                  stage='modelCheckpointStorage')
-        _timing('modelMappedCheckpoint', started)
-        return weights
-    provider.load_weights = load_weights
-    try:
-        yield
-    finally:
-        try:
-            if pool is not None and sys.exc_info()[0] is None:
-                for future in pending:
-                    future.result()
-        finally:
-            try:
-                if pool is not None:
-                    pool.shutdown(wait=True, cancel_futures=True)
-            finally:
-                provider.load_weights = original
-
-
 def _load(model_id: str, model_path: str, private_cache_path: str, quantization_bits: int = 0) -> dict[str, Any]:
     global _model, _model_id, _model_path, _model_bits, _model_native_scenes
     global _model_load_stream, _model_pending_parameters
@@ -652,7 +342,7 @@ def _load(model_id: str, model_path: str, private_cache_path: str, quantization_
     _unload()
     import mlx.core as mx
     # Reserve headroom for Flutter, Python, codec and allocator overhead.
-    mx.set_memory_limit(_MODEL_MEMORY_LIMIT)
+    mx.set_memory_limit(85_000_000_000)
     mx.set_cache_limit(1_000_000_000)
     from mlx_audio.tts import load
 
@@ -663,18 +353,12 @@ def _load(model_id: str, model_path: str, private_cache_path: str, quantization_
     # evaluation with the existing CPU checksum/receipt work below. There is
     # one stream/tree per model, no executor or additional queued model job.
     overlap_weights = model_id == 'fish_drama3' and quantization_bits == 0
-    use_maps = overlap_weights and os.environ.get('READALOUD_MAPPED_MODEL_LOAD') in ('1', 'aligned', 'mapped_prefault', 'file_buffer')
-    if use_maps:
-        manifest = json.loads(Path(__file__).with_name('fish_drama_model_checksums.json').read_text())
-        use_maps = _verify_scene_model(directory, manifest,
-            Path(private_cache_path).parent / 'model-qualification')
     if overlap_weights:
         _model_load_stream = mx.new_stream(mx.gpu)
-        adapter = _mapped_model_weights(directory) if use_maps else contextlib.nullcontext()
-        with mx.stream(_model_load_stream), adapter:
+        with mx.stream(_model_load_stream):
             _model = load(str(directory), lazy=True)
-            _model_pending_parameters = _model.parameters()
-            mx.async_eval(_model_pending_parameters)
+        _model_pending_parameters = _model.parameters()
+        mx.async_eval(_model_pending_parameters)
     else:
         _model = load(str(directory), lazy=False)
     _timing('modelBuildAndCodec', build_started)
@@ -694,8 +378,6 @@ def _load(model_id: str, model_path: str, private_cache_path: str, quantization_
             manifest = json.loads(Path(__file__).with_name('fish_drama_model_checksums.json').read_text())
             _model_native_scenes = _verify_scene_model(directory, manifest,
                 Path(private_cache_path).parent / 'model-qualification')
-            if use_maps and not _model_native_scenes:
-                raise ValueError('Mapped speech checkpoint changed during preparation')
             _timing('modelVerification', verification_started)
             if not _model_native_scenes:
                 _progress('Unverified model revision: native scenes and delivery cues are disabled', stage='modelContext')
