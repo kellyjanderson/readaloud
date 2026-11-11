@@ -186,8 +186,13 @@ yet link it. NLP offsets must never be treated as emitted-audio timestamps.
 
 The normal intake route recognizes the `read-aloud-audio-book` ZIP envelope
 (`radoc-v5`) before reading legacy JSON. `RadocAudioPackage` validates a bounded
-manifest and archive directory on its worker, then materializes only requested
-prepared ranges, analysis records and WAV members. Member hashes, sizes, names,
+manifest and archive directory on its worker. Opening a book verifies and
+materializes its first prepared range using that same index, before the
+controller installs the session. It then materializes later prepared ranges,
+analysis records and WAV members on demand. The opening request uses the
+package's existing single-operation lane, deadline and revision checks. The
+controller holds the private file through worker decoding and rejects obsolete
+results before publishing a range. Member hashes, sizes, names,
 coverage and PCM formats are checked; unknown versions and corrupt demanded
 members fail visibly. Legacy v1–v4 JSON remains readable.
 

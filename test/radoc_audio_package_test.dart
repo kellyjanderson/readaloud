@@ -316,18 +316,46 @@ void main() {
       final checked = _checksummed(manifest, members);
       members.remove('prepared/1.json');
       final zip = await _writeZip(temp, checked, members);
-      final book = await service.open(zip);
-      expect(
-        await (await service.materializeMember(
-          book,
-          'prepared/0.json',
-        )).exists(),
-        isTrue,
-      );
+      final book = await service.open(zip, materializeOpeningRange: true);
+      final opening = File(book.openingRangePath!);
+      expect(await opening.readAsBytes(), members['prepared/0.json']);
+      expect(await opening.parent.list().map((item) => item.path).toList(), [
+        opening.path,
+      ]);
       await expectLater(
         service.materializeMember(book, 'prepared/1.json'),
         throwsA(isA<RadocPackageException>()),
       );
+    },
+  );
+
+  test(
+    'obsolete opening range is rejected and its private cache removed',
+    () async {
+      var current = true;
+      await service.dispose();
+      final cacheRoot = Directory('${temp.path}/cache');
+      service = RadocAudioPackage(
+        cacheDirectory: cacheRoot,
+        onProgress: (progress) {
+          if (progress.stage == 'read' &&
+              progress.member == 'prepared/0.json') {
+            current = false;
+          }
+        },
+      );
+      final zip = await exportBook();
+      await expectLater(
+        service.open(
+          zip,
+          materializeOpeningRange: true,
+          isCurrent: () => current,
+        ),
+        throwsA(isA<RadocPackageCancelled>()),
+      );
+      expect(current, isFalse);
+      expect(await cacheRoot.list().isEmpty, isTrue);
+      expect((await service.open(zip)).openingRangePath, isNull);
     },
   );
 

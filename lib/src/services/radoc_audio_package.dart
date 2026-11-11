@@ -71,6 +71,7 @@ class RadocAudioBook {
     required this.manifestDigest,
     required this.packagePath,
     required String cachePath,
+    this.openingRangePath,
   }) : _cachePath = cachePath;
   final RadocAudioManifest manifest;
 
@@ -78,6 +79,10 @@ class RadocAudioBook {
   final String manifestDigest;
   final String packagePath;
   final String _cachePath;
+
+  /// Verified opening prepared range, when requested at open time.
+  /// The package owns this file until disposal.
+  final String? openingRangePath;
 }
 
 /// One active request, zero waiting queue. All archive, JSON, hash and bulk I/O
@@ -127,10 +132,15 @@ class RadocAudioPackage {
     }
   }
 
-  Future<RadocAudioBook> open(File file, {bool Function()? isCurrent}) async {
+  Future<RadocAudioBook> open(
+    File file, {
+    bool materializeOpeningRange = false,
+    bool Function()? isCurrent,
+  }) async {
     final book = await _run<RadocAudioBook>('open', {
       'path': file.absolute.path,
       'cacheRoot': _cacheDirectory,
+      'materializeOpeningRange': materializeOpeningRange,
     }, isCurrent);
     _caches.add(book._cachePath);
     return book;
@@ -421,8 +431,21 @@ Future<void> _packageWorker(_Work work) async {
           await parent.create(recursive: true);
           final cache = await parent.createTemp('radoc-audio-');
           try {
+            final opening = index.manifest.preparedRanges.firstOrNull;
+            final openingPath =
+                work.payload['materializeOpeningRange'] == true &&
+                    opening != null &&
+                    opening.startWord == 0
+                ? await _materializeIndexed(
+                    index,
+                    opening.member,
+                    cache.path,
+                    owner,
+                  )
+                : null;
             await owner.checkpoint();
             result = RadocAudioBook._(
+              openingRangePath: openingPath,
               manifest: index.manifest,
               manifestDigest: index.digest,
               packagePath: work.payload['path'] as String,
@@ -854,17 +877,30 @@ Future<String> _materialize(_Worker owner) async {
   final book = owner.work.payload['book'] as RadocAudioBook;
   final name = owner.work.payload['member'] as String;
   final index = await _openIndex(book.packagePath, owner);
-  Directory? stage;
   try {
     if (index.digest != book.manifestDigest) {
       throw const RadocPackageException('Package manifest changed after open.');
     }
+    return await _materializeIndexed(index, name, book._cachePath, owner);
+  } finally {
+    await index.input.close();
+  }
+}
+
+Future<String> _materializeIndexed(
+  _Index index,
+  String name,
+  String cachePath,
+  _Worker owner,
+) async {
+  Directory? stage;
+  try {
     final descriptor = index.manifest.members.firstWhere((m) => m.name == name);
     final header = index.headers[name];
     if (header == null) {
       throw RadocPackageException('Missing package member: $name');
     }
-    stage = await Directory(book._cachePath).createTemp('pending-');
+    stage = await Directory(cachePath).createTemp('pending-');
     final target = File('${stage.path}/member');
     final output = await target.open(mode: FileMode.write);
     final digest = _DigestSink();
@@ -896,12 +932,11 @@ Future<String> _materialize(_Worker owner) async {
       (scene) => scene.audioMember == name || scene.rawAudioMember == name,
     );
     final finalPath =
-        '${book._cachePath}/${descriptor.sha256}.${audio ? 'wav' : 'json'}';
+        '$cachePath/${descriptor.sha256}.${audio ? 'wav' : 'json'}';
     await owner.admit();
     target.renameSync(finalPath);
     return finalPath;
   } finally {
-    await index.input.close();
     if (stage != null) await stage.delete(recursive: true);
   }
 }

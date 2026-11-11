@@ -91,7 +91,11 @@ extension ReaderAudioBookSupport on ReaderController {
         // Platform-free tests have no security-scoped file access service.
       }
       _requireRevision(revision);
-      final book = await package.open(File(path), isCurrent: current);
+      final book = await package.open(
+        File(path),
+        materializeOpeningRange: true,
+        isCurrent: current,
+      );
       _requireRevision(revision);
       if (book.manifest.preparedRanges.isEmpty ||
           book.manifest.preparedRanges.first.startWord != 0) {
@@ -99,6 +103,12 @@ extension ReaderAudioBookSupport on ReaderController {
           'This audio book has no prepared opening range.',
         );
       }
+      final openingPath = book.openingRangePath;
+      if (openingPath == null) {
+        throw const FormatException('Missing opening range.');
+      }
+      final opening = await _readBookRangeFile(openingPath);
+      _requireRevision(revision);
       session = _ReaderAudioBook(package, book, _selectedTtsEngineId, lease);
       _audioBook = session;
       characterAnalysis.loadBookRecord = (request, isCurrent) async {
@@ -134,9 +144,7 @@ extension ReaderAudioBookSupport on ReaderController {
       _publicationSequence = book.manifest.preparedRanges.length;
       _preparedWordCount = book.manifest.preparedRanges.last.endWord;
       _preparationComplete = book.manifest.preparationComplete;
-      final first = await _readAudioBookRange(session, 1, revision);
-      _requireRevision(revision);
-      if (first == null) throw const FormatException('Missing opening range.');
+      final first = _publishBookRange(session, 1, opening);
       _documentIdentityRedirects[first.fragment.displayDocument.documentId] =
           book.manifest.documentId;
       // These are published voice descriptions, not claims that models exist.
@@ -232,56 +240,66 @@ extension ReaderAudioBookSupport on ReaderController {
         descriptor.member,
         isCurrent: current,
       );
-      final path = file.path;
-      final restored = await _readBookRangeFile(path);
+      final restored = await _readBookRangeFile(file.path);
       _requireRevision(revision);
       if (!session.current) throw const PlanningCancelled();
-      final document = restored.document;
-      if (document.wordCount != descriptor.endWord - descriptor.startWord) {
-        throw const FormatException(
-          'Prepared audio book range has incorrect word coverage.',
-        );
-      }
-      _characters.migrateLegacy({
-        manifest.documentId: restored.userVoiceAssignments,
-      });
-      _characters.restoreDocument(
-        manifest.documentId,
-        document.characterCastRegistry,
-      );
-      final publication = DocumentPreparationPublication(
-        request: _activePreparationRequest!,
-        sequence: sequence,
-        range: PreparedDocumentRange(
-          sourceStart: 0,
-          sourceEnd: document.speakableText.length,
-          wordStart: descriptor.startWord,
-          wordEnd: descriptor.endWord,
-          segmentStart: 0,
-          segmentEnd: document.speechDocument.segments.length,
-        ),
-        fragment: document,
-        coverage: const {
-          PreparationStage.normalization,
-          PreparationStage.mapping,
-          PreparationStage.analysis,
-          PreparationStage.pronunciation,
-        },
-        progress: const [],
-        isLast:
-            manifest.preparationComplete &&
-            sequence == manifest.preparedRanges.length,
-      );
-      _preparedRanges.add(publication);
-      if (_preparedRanges.length > ReaderController.preparedRangeCapacity) {
-        _preparedRanges.removeAt(
-          identical(_preparedRanges.first, _activePreparedRange) ? 1 : 0,
-        );
-      }
-      return publication;
+      return _publishBookRange(session, sequence, restored);
     } finally {
       await reader.dispose();
     }
+  }
+
+  DocumentPreparationPublication _publishBookRange(
+    _ReaderAudioBook session,
+    int sequence,
+    ({ReaderDocument document, Map<String, String> userVoiceAssignments})
+    restored,
+  ) {
+    final manifest = session.book.manifest;
+    final descriptor = manifest.preparedRanges[sequence - 1];
+    final document = restored.document;
+    if (document.wordCount != descriptor.endWord - descriptor.startWord) {
+      throw const FormatException(
+        'Prepared audio book range has incorrect word coverage.',
+      );
+    }
+    _characters.migrateLegacy({
+      manifest.documentId: restored.userVoiceAssignments,
+    });
+    _characters.restoreDocument(
+      manifest.documentId,
+      document.characterCastRegistry,
+    );
+    final publication = DocumentPreparationPublication(
+      request: _activePreparationRequest!,
+      sequence: sequence,
+      range: PreparedDocumentRange(
+        sourceStart: 0,
+        sourceEnd: document.speakableText.length,
+        wordStart: descriptor.startWord,
+        wordEnd: descriptor.endWord,
+        segmentStart: 0,
+        segmentEnd: document.speechDocument.segments.length,
+      ),
+      fragment: document,
+      coverage: const {
+        PreparationStage.normalization,
+        PreparationStage.mapping,
+        PreparationStage.analysis,
+        PreparationStage.pronunciation,
+      },
+      progress: const [],
+      isLast:
+          manifest.preparationComplete &&
+          sequence == manifest.preparedRanges.length,
+    );
+    _preparedRanges.add(publication);
+    if (_preparedRanges.length > ReaderController.preparedRangeCapacity) {
+      _preparedRanges.removeAt(
+        identical(_preparedRanges.first, _activePreparedRange) ? 1 : 0,
+      );
+    }
+    return publication;
   }
 
   /// Match only effective choices used by this scene. An unrelated Character
