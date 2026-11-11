@@ -357,6 +357,35 @@ def _refresh_mapped_budget() -> None:
     mx.set_memory_limit(remaining)
 
 
+def _checkpoint_tensor_window(shape, offset: int, nbytes: int, itemsize: int,
+                              file_words: int):
+    if (itemsize not in (1, 2, 4, 8) or offset < 0 or nbytes <= 0
+            or nbytes != math.prod(shape) * itemsize or offset % itemsize):
+        return None
+    first, end = offset // 4, (offset + nbytes + 3) // 4
+    words = end - first
+    expanded = words * 4 // itemsize
+    if (end > file_words or words >= 2**31 or expanded >= 2**31
+            or words * 4 % itemsize):
+        return None
+    return first, words, offset % 4 // itemsize, math.prod(shape)
+
+
+def _mapped_tensor_view(buffer: Any, dtype: Any, shape, offset: int,
+                        nbytes: int, itemsize: int):
+    import mlx.core as mx
+    window = _checkpoint_tensor_window(shape, offset, nbytes, itemsize, buffer.size)
+    if window is None:
+        return None
+    first, words, begin, count = window
+    # Keep as_strided's internally flattened input and every expanded typed
+    # window below INT32_MAX. Never expand the complete file to uint8/uint16.
+    raw = mx.as_strided(buffer, shape=(words,), strides=(1,), offset=first)
+    unit = {1: mx.uint8, 2: mx.uint16, 4: mx.uint32, 8: mx.uint64}[itemsize]
+    selected = raw.view(unit)[begin:begin + count]
+    return selected.view(dtype).reshape(shape)
+
+
 def _mapped_checkpoint(file: str, *, allow_repack: bool = True,
                        whole_file_buffer: bool = False) -> tuple[dict, list[Any], int, int] | None:
     """Exact-byte, private-COW views; GPU-repack misaligned tensor bytes.
@@ -400,21 +429,16 @@ def _mapped_checkpoint(file: str, *, allow_repack: bool = True,
 
     repack = any(offset % np.dtype(dtypes[dtype][0]).itemsize
                  for _, dtype, _, offset, _ in entries)
-    buffer_shape = None
     if whole_file_buffer:
-        # One contiguous byte buffer per file. Factor large files rather than
-        # creating a >INT32_MAX dimension or using a noncontiguous extent view.
+        # as_strided internally flattens even a 2D input. Use one page-aligned
+        # uint32 buffer instead; files >=8 GiB or uncovered final bytes retain
+        # the original per-tensor provider route.
         size = Path(file).stat().st_size
-        if size < 2**31:
-            buffer_shape = (size,)
-        else:
-            for divisor in range(2, 65537):
-                if size % divisor == 0 and size // divisor < 2**31:
-                    buffer_shape = (divisor, size // divisor)
-                    break
-        if buffer_shape is None or not any(
-                offset % np.dtype(dtypes[dtype][0]).itemsize == 0
-                for _, dtype, _, offset, _ in entries):
+        file_words = size // 4
+        if not 0 < file_words < 2**31 or not any(
+                _checkpoint_tensor_window(shape, offset, nbytes,
+                    np.dtype(dtypes[dtype][0]).itemsize, file_words) is not None
+                for _, dtype, shape, offset, nbytes in entries):
             return None
     elif repack and not allow_repack:
         return None  # Aligned-only A/B keeps the original unaligned reader.
@@ -451,7 +475,7 @@ def _mapped_checkpoint(file: str, *, allow_repack: bool = True,
     weights, owners, inputs = {}, [], []
     mapped = copied = 0
     if whole_file_buffer:
-        buffer_view = mapping.reshape(buffer_shape)
+        buffer_view = np.ndarray((file_words,), dtype=np.uint32, buffer=mapping)
         try:
             buffer = import_view(buffer_view)
         except (ValueError, BufferError):
@@ -460,7 +484,8 @@ def _mapped_checkpoint(file: str, *, allow_repack: bool = True,
         original = None
         for key, dtype, shape, offset, nbytes in entries:
             itemsize = np.dtype(dtypes[dtype][0]).itemsize
-            if offset % itemsize:
+            value = _mapped_tensor_view(buffer, dtypes[dtype][1], shape, offset, nbytes, itemsize)
+            if value is None:
                 # The provider still owns each unsupported tensor. Its other
                 # lazy arrays are discarded without evaluation or extra I/O.
                 if original is None:
@@ -468,14 +493,7 @@ def _mapped_checkpoint(file: str, *, allow_repack: bool = True,
                 value = original[key]
                 copied += nbytes  # Provider fallback bytes in this mode.
             else:
-                byte_shape = tuple(shape) + (itemsize,)
-                stride, strides = 1, []
-                for dimension in reversed(byte_shape):
-                    strides.insert(0, stride)
-                    stride *= dimension
-                raw = mx.as_strided(buffer, shape=byte_shape, strides=strides, offset=offset)
-                value = raw.view(dtypes[dtype][1]).reshape(shape)
-                owners.extend((raw, value))
+                owners.append(value)
                 mapped += nbytes
             weights[key] = value
         mx.eval(weights)

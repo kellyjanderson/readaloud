@@ -36,9 +36,19 @@ class MappedCheckpointTest(unittest.TestCase):
         })
         data = path.read_bytes()
         size = int.from_bytes(data[:8], 'little')
-        padding = (alignment - (8 + size) % 8) % 8
-        path.write_bytes((size + padding).to_bytes(8, 'little') + data[8:8+size]
-                         + b' ' * padding + data[8+size:])
+        header = json.loads(data[8:8+size])
+        # Stable fixture payload order: BF16 precedes the unaligned F32/tail
+        # case regardless of the native writer's unordered-map iteration.
+        payload = b''
+        for key in ('bf', 'float'):
+            start, end = header[key]['data_offsets']
+            chunk = data[8+size+start:8+size+end]
+            header[key]['data_offsets'] = [len(payload), len(payload) + len(chunk)]
+            payload += chunk
+        encoded = json.dumps(header, separators=(',', ':')).encode()
+        padding = (alignment - (8 + len(encoded)) % 8) % 8
+        path.write_bytes((len(encoded) + padding).to_bytes(8, 'little')
+                         + encoded + b' ' * padding + payload)
 
     def test_real_runtime_all_byte_alignments_preserve_exact_bf16_and_gpu_values(self):
         import numpy as np
@@ -217,7 +227,7 @@ class MappedCheckpointTest(unittest.TestCase):
                     self.assertEqual(np.asarray(buffer).ctypes.data, mapping.ctypes.data)
                     # Full-file registration plus only any unaligned F32
                     # tensor: mapped views add no individual registrations.
-                    self.assertEqual(mx.get_active_memory() - baseline, path.stat().st_size + copied)
+                    self.assertEqual(mx.get_active_memory() - baseline, path.stat().st_size // 4 * 4 + copied)
                     self.assertEqual(copied, 16 if alignment % 4 else 0)
                     self.assertEqual(fallback.call_count, 1 if copied else 0)
                     header_size = int.from_bytes(before[:8], 'little')
@@ -233,22 +243,33 @@ class MappedCheckpointTest(unittest.TestCase):
                         self.assertEqual(result.tolist(), (expected[key] * 2 + 1).tolist())
                     self.assertEqual(path.read_bytes(), before)
 
-    def test_file_buffer_contiguous_2d_base_preserves_validated_tensor_views(self):
+    def test_sparse_file_larger_than_2gib_keeps_bounded_uint32_tensor_windows(self):
         import numpy as np
         with tempfile.TemporaryDirectory() as root:
-            path = Path(root) / 'bytes'
-            path.write_bytes(bytes(range(128)))
+            path = Path(root) / 'sparse-bytes'
+            size, offset = (1 << 31) + 4098, (1 << 31) + 128
+            expected = np.array([0x3fa0, 0xc020, 0x4070, 0x3f00], dtype=np.uint16)
+            with path.open('wb') as source:
+                source.truncate(size)
+                source.seek(offset)
+                source.write(expected.tobytes())
+            self.assertLess(path.stat().st_blocks * 512, 65536)
             mapping = np.memmap(path, mode='c', dtype=np.uint8)
-            view = mapping.reshape(4, 32)
+            view = np.ndarray((size // 4,), dtype=np.uint32, buffer=mapping)
             before = mx.get_active_memory()
             buffer = mx.from_dlpack(view, copy=False)
-            self.assertEqual(mx.get_active_memory() - before, 128)
-            for offset in (0, 2, 4, 6):
-                value = mx.as_strided(buffer, shape=(8, 2), strides=(2, 1), offset=offset).view(mx.uint16).reshape(8)
+            self.assertEqual(mx.get_active_memory() - before, size // 4 * 4)
+            for extra in (0, 2):
+                value = worker._mapped_tensor_view(buffer, mx.bfloat16, (2,), offset + extra, 4, 2)
                 mx.eval(value)
-                expected = np.ndarray((8,), dtype=np.uint16, buffer=mapping, offset=offset)
-                self.assertEqual(value.tolist(), expected.tolist())
-                self.assertEqual(np.asarray(value).ctypes.data, mapping.ctypes.data + offset)
+                bits = value.view(mx.uint16)
+                self.assertEqual(bits.tolist(), expected[extra//2:extra//2+2].tolist())
+                self.assertEqual(np.asarray(bits).ctypes.data, mapping.ctypes.data + offset + extra)
+                output = value * 2 + 1
+                mx.eval(output)  # Only this two-element GPU read is evaluated.
+                self.assertEqual(output.tolist(), (mx.array(expected[extra//2:extra//2+2]).view(mx.bfloat16)*2+1).tolist())
+            self.assertIsNone(worker._mapped_tensor_view(buffer, mx.bfloat16, (1,), size - 2, 2, 2))
+            self.assertIsNone(worker._mapped_tensor_view(buffer, mx.bfloat16, (1,), offset + 1, 2, 2))
 
     def test_prefault_joins_after_weight_evaluation_before_loaded_and_restores_hook(self):
         from mlx_audio import utils as provider
