@@ -285,7 +285,9 @@ Future<void> main(List<String> args) async {
       previewSettled = true;
     });
     await until(
-      () => synthesisCalls > beforePreview || previewSettled,
+      // speak() acknowledges owned background preparation before synthesis.
+      // A settled preview Future is therefore not a failed preparation window.
+      () => synthesisCalls > beforePreview,
       'Preview synthesis boundary',
     );
     receipt['previewPreparationObservation'] = {
