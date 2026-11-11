@@ -32,6 +32,7 @@ class EngineSessionEvidenceTest(unittest.TestCase):
         self.receipt = dict(
             schema='readaloud-native-engine-session-v1', passed=True,
             functionalPassed=True, resourceShutdownComplete=True, offline=True,
+            previewCancelledBeforeAudio=True, exportCancelledWithoutPublication=True,
             shutdownErrors=[], nativeMainResponsiveness=dict(passed=True, maxRoundTripMs=200),
             maxUiHeartbeatDelayMs=10, speechWorkActivity=dict(active=0, started=4, ended=4),
             retainedAnchor=9, positivePauseRequestedUnixMicros=1650000,

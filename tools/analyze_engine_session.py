@@ -23,7 +23,8 @@ def require(ok, message):
 def analyze(receipt, runner, timing, capture_path):
     require(receipt.get('schema') == 'readaloud-native-engine-session-v1', 'Wrong schema')
     require(all(receipt.get(k) is True for k in
-                ('passed', 'functionalPassed', 'resourceShutdownComplete', 'offline')),
+                ('passed', 'functionalPassed', 'resourceShutdownComplete', 'offline',
+                 'previewCancelledBeforeAudio', 'exportCancelledWithoutPublication')),
             'Native session gates failed')
     require(receipt.get('shutdownErrors') == [], 'Native cleanup errors')
     require(receipt.get('nativeMainResponsiveness', {}).get('passed') is True and

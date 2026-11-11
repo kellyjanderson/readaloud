@@ -34,7 +34,7 @@ status = nil
 last_children = nil
 begin
   log = File.open(log_path, 'w')
-  pid = Process.spawn({'HF_HUB_OFFLINE' => '1', 'READALOUD_MLX_PYTHON' => nil,
+  pid = Process.spawn({'HF_HUB_OFFLINE' => '1', 'READALOUD_S7_INSPECT' => ENV['READALOUD_S7_INSPECT'], 'READALOUD_MLX_PYTHON' => nil,
                        'READALOUD_MLX_TTS_MODEL_PATH' => nil},
                       app, model, receipt, out: log, err: log, pgroup: true)
   result[:pid] = pid
@@ -52,7 +52,7 @@ begin
       raise 'Could not activate test app' unless activated
     end
     children = IO.popen(['/usr/bin/pgrep', '-P', pid.to_s], &:read).split
-    rows = children.empty? ? '' : IO.popen(['/bin/ps', '-p', children.join(','), '-o', 'pid=,command='], &:read)
+    rows = children.empty? ? '' : IO.popen(['/bin/ps', '-ww', '-p', children.join(','), '-o', 'pid=,command='], &:read)
     models = rows.lines.filter_map { |line| line.split.first.to_i if line.include?('mlx_tts_worker.py') }.sort
     result[:observedMlxSamples] += 1 unless models.empty?
     result[:maxMlxChildren] = [result[:maxMlxChildren], models.size].max

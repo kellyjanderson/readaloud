@@ -235,6 +235,20 @@ Future<void> main(List<String> args) async {
       'Unavailable variant published an active identity',
     );
     events.add(snapshot('offline-failed'));
+    if (Platform.environment['READALOUD_S7_INSPECT'] == '1') {
+      // Observe the actual failed selected/active feedback in Settings. This
+      // explicit QA gate is not a startup/load timing measurement.
+      receipt['inspectionRequested'] = true;
+      stdout.writeln('WAITING_S7_INSPECTION');
+      final gate = File('${output.parent.path}/inspection.done');
+      final end = watch.elapsedMilliseconds + 90000;
+      while (!await gate.exists()) {
+        if (watch.elapsedMilliseconds > end)
+          throw TimeoutException('UI inspection');
+        await Future<void>.delayed(const Duration(milliseconds: 50));
+      }
+      receipt['inspectionReleased'] = true;
+    }
     phase = 'return-to-bf16';
     await c.setTtsEngineId('fish_drama3');
     require(
@@ -263,6 +277,63 @@ Future<void> main(List<String> args) async {
           c.startupError == null,
       'Obsolete B installed or failed A',
     );
+    phase = 'preview-replacement';
+    final beforePreview = synthesisCalls;
+    var previewSettled = false;
+    final preview = c.previewVoice(voice!).whenComplete(() {
+      previewSettled = true;
+    });
+    await until(
+      () => synthesisCalls > beforePreview || previewSettled,
+      'Preview synthesis boundary',
+    );
+    require(
+      synthesisCalls > beforePreview && !players.last.playing,
+      'Preview did not enter cancellable preparation before audio',
+    );
+    final previewB = c.setTtsEngineId('fish_drama3_8bit');
+    await until(() => c.isSwitchingEngine, 'Preview replacement');
+    final previewA = c.setTtsEngineId('fish_drama3');
+    await Future.wait([previewB, previewA, preview]);
+    require(
+      c.engineSession.active?.engineId == 'fish_drama3' &&
+          !c.isPlaying &&
+          players.every((p) => !p.playing),
+      'Retired preview affected the replacement',
+    );
+    receipt['previewCancelledBeforeAudio'] = true;
+    events.add(snapshot('preview-retired'));
+    phase = 'export-replacement';
+    await until(
+      () => c.hasCompleteDocumentSnapshot,
+      'Complete export snapshot',
+    );
+    final exportedPath = '${root.path}/cancelled-export.wav';
+    final beforeExport = synthesisCalls;
+    var exportSettled = false;
+    final export = c.exportAudioToPath(exportedPath).whenComplete(() {
+      exportSettled = true;
+    });
+    await until(
+      () => synthesisCalls > beforeExport || exportSettled,
+      'Export synthesis boundary',
+    );
+    require(
+      synthesisCalls > beforeExport,
+      'Export did not enter the real synthesis owner',
+    );
+    final exportB = c.setTtsEngineId('fish_drama3_8bit');
+    await until(() => c.isSwitchingEngine, 'Export replacement');
+    final exportA = c.setTtsEngineId('fish_drama3');
+    await Future.wait<Object?>([exportB, exportA, export]);
+    require(
+      !await File(exportedPath).exists() &&
+          c.engineSession.active?.engineId == 'fish_drama3' &&
+          c.startupError == null,
+      'Retired export published output or affected the replacement',
+    );
+    receipt['exportCancelledWithoutPublication'] = true;
+    events.add(snapshot('export-retired'));
     phase = 'pending-play-replacement';
     final pending = c.startPlayback().catchError((Object error) {
       receipt['cancelledPlayTerminal'] = '$error';
