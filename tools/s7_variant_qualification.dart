@@ -388,6 +388,35 @@ Future<void> main(List<String> args) async {
       '$label sustained interval',
       seconds: seconds + 2,
     );
+    if (seconds == 60) {
+      // A silent source has no acoustic identity. Finish this warm probe on an
+      // audible source so the unchanged strict analyzer can bound its final
+      // Pause-interrupted WAV. Never accept a silent tail by player intent.
+      final boundaryStarted = watch.elapsedMilliseconds;
+      await until(
+        () {
+          final index = player.currentIndex;
+          if (index == null || index >= player.sequence.length) return false;
+          final source = player.sequence[index];
+          if (source is! UriAudioSource || source.uri.scheme != 'file') {
+            return false;
+          }
+          final path = source.uri.toFilePath();
+          for (final queued in evidence.reversed) {
+            if (queued['sourcePath'] != path) continue;
+            final reference = queued['reference'];
+            return reference is Map &&
+                reference['peakPcm16'] is num &&
+                (reference['peakPcm16'] as num) > 327.68;
+          }
+          return false;
+        },
+        '$label identifiable Pause boundary',
+        seconds: 2,
+      );
+      row['audibleBoundaryWaitMs'] =
+          watch.elapsedMilliseconds - boundaryStarted;
+    }
     row['pauseRequestedUnixMicros'] = DateTime.now().microsecondsSinceEpoch;
     await c.pausePlayback().timeout(budget(10));
     row['pauseReturnedUnixMicros'] = DateTime.now().microsecondsSinceEpoch;

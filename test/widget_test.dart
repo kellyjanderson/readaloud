@@ -774,18 +774,18 @@ void main() {
     );
   });
 
-  testWidgets(
-    'speech progress does not resend unchanged native menus',
-    (tester) async {
-      debugDefaultTargetPlatformOverride = TargetPlatform.macOS;
+  testWidgets('speech progress does not resend unchanged native menus', (
+    tester,
+  ) async {
+    debugDefaultTargetPlatformOverride = TargetPlatform.macOS;
+    try {
       final menuUpdates = <MethodCall>[];
-      binding.defaultBinaryMessenger.setMockMethodCallHandler(
-        menuChannel,
-        (call) async {
-          if (call.method == 'Menu.setMenus') menuUpdates.add(call);
-          return null;
-        },
-      );
+      binding.defaultBinaryMessenger.setMockMethodCallHandler(menuChannel, (
+        call,
+      ) async {
+        if (call.method == 'Menu.setMenus') menuUpdates.add(call);
+        return null;
+      });
       final engine = _AccessibleTtsEngine();
       final controller = ReaderController(
         preferencesService: _MemoryReaderPreferencesService(),
@@ -825,81 +825,87 @@ void main() {
         expect(controller.currentWordIndex, index + 1);
       }
       expect(progressNotifications, greaterThanOrEqualTo(3));
+      await tester.pump(const Duration(milliseconds: 500));
       expect(menuUpdates, hasLength(updatesBeforeProgress));
       expect(tester.takeException(), isNull);
-    },
-  );
+    } finally {
+      debugDefaultTargetPlatformOverride = null;
+    }
+  });
 
   testWidgets(
     'native menus update for document export and live input state changes',
     (tester) async {
       debugDefaultTargetPlatformOverride = TargetPlatform.macOS;
-      final menuUpdates = <MethodCall>[];
-      binding.defaultBinaryMessenger.setMockMethodCallHandler(
-        menuChannel,
-        (call) async {
+      try {
+        final menuUpdates = <MethodCall>[];
+        binding.defaultBinaryMessenger.setMockMethodCallHandler(menuChannel, (
+          call,
+        ) async {
           if (call.method == 'Menu.setMenus') menuUpdates.add(call);
           return null;
-        },
-      );
-      final controller = _DesktopMenuController();
-      addTearDown(controller.dispose);
-      await tester.pumpWidget(
-        MaterialApp(home: ReadAloudScreen(controller: controller)),
-      );
-      await tester.pumpAndSettle();
-      expect(menuUpdates, isNotEmpty);
+        });
+        final controller = _DesktopMenuController();
+        addTearDown(controller.dispose);
+        await tester.pumpWidget(
+          MaterialApp(home: ReadAloudScreen(controller: controller)),
+        );
+        await tester.pumpAndSettle();
+        expect(menuUpdates, isNotEmpty);
 
-      Map<Object?, Object?> item(String label) => _serializedMenuItems(
-        menuUpdates.last.arguments,
-      ).singleWhere((item) => item['label'] == label);
+        Map<Object?, Object?> item(String label) => _serializedMenuItems(
+          menuUpdates.last.arguments,
+        ).singleWhere((item) => item['label'] == label);
 
-      Future<void> expectMenuUpdate(VoidCallback change) async {
-        final previousUpdates = menuUpdates.length;
-        change();
-        await tester.pump();
-        expect(menuUpdates, hasLength(previousUpdates + 1));
-        // Repeating the same state still notifies listeners, but does not
-        // require another native menu update.
-        controller.updateMenuState();
-        await tester.pump();
-        expect(menuUpdates, hasLength(previousUpdates + 1));
+        Future<void> expectMenuUpdate(VoidCallback change) async {
+          final previousUpdates = menuUpdates.length;
+          change();
+          await tester.pump();
+          expect(menuUpdates, hasLength(previousUpdates + 1));
+          // Repeating the same state still notifies listeners, but does not
+          // require another native menu update.
+          controller.updateMenuState();
+          await tester.pump();
+          expect(menuUpdates, hasLength(previousUpdates + 1));
+        }
+
+        expect(item('Save Audio Book...')['enabled'], isFalse);
+        expect(item('Save Audio...')['enabled'], isFalse);
+        await expectMenuUpdate(
+          () => controller.updateMenuState(completeDocument: true),
+        );
+        expect(item('Save Audio Book...')['enabled'], isTrue);
+        expect(item('Save Audio...')['enabled'], isFalse);
+        await expectMenuUpdate(
+          () => controller.updateMenuState(audioExport: true),
+        );
+        expect(item('Save Audio...')['enabled'], isTrue);
+        await expectMenuUpdate(
+          () => controller.updateMenuState(exporting: true),
+        );
+        expect(item('Save Audio Book...')['enabled'], isFalse);
+        expect(item('Saving Audio...')['enabled'], isFalse);
+        await expectMenuUpdate(
+          () => controller.updateMenuState(exporting: false),
+        );
+        expect(item('Save Audio Book...')['enabled'], isTrue);
+        expect(item('Save Audio...')['enabled'], isTrue);
+        await expectMenuUpdate(
+          () => controller.updateMenuState(completeDocument: false),
+        );
+        expect(item('Save Audio Book...')['enabled'], isFalse);
+        await expectMenuUpdate(
+          () => controller.updateMenuState(liveInput: true),
+        );
+        expect(item('Stop Live Feed')['enabled'], isTrue);
+        await expectMenuUpdate(
+          () => controller.updateMenuState(liveInput: false),
+        );
+        expect(item('Live Feed...')['enabled'], isTrue);
+        expect(tester.takeException(), isNull);
+      } finally {
+        debugDefaultTargetPlatformOverride = null;
       }
-
-      expect(item('Save Audio Book...')['enabled'], isFalse);
-      expect(item('Save Audio...')['enabled'], isFalse);
-      await expectMenuUpdate(
-        () => controller.updateMenuState(completeDocument: true),
-      );
-      expect(item('Save Audio Book...')['enabled'], isTrue);
-      expect(item('Save Audio...')['enabled'], isFalse);
-      await expectMenuUpdate(
-        () => controller.updateMenuState(audioExport: true),
-      );
-      expect(item('Save Audio...')['enabled'], isTrue);
-      await expectMenuUpdate(
-        () => controller.updateMenuState(exporting: true),
-      );
-      expect(item('Save Audio Book...')['enabled'], isFalse);
-      expect(item('Saving Audio...')['enabled'], isFalse);
-      await expectMenuUpdate(
-        () => controller.updateMenuState(exporting: false),
-      );
-      expect(item('Save Audio Book...')['enabled'], isTrue);
-      expect(item('Save Audio...')['enabled'], isTrue);
-      await expectMenuUpdate(
-        () => controller.updateMenuState(completeDocument: false),
-      );
-      expect(item('Save Audio Book...')['enabled'], isFalse);
-      await expectMenuUpdate(
-        () => controller.updateMenuState(liveInput: true),
-      );
-      expect(item('Stop Live Feed')['enabled'], isTrue);
-      await expectMenuUpdate(
-        () => controller.updateMenuState(liveInput: false),
-      );
-      expect(item('Live Feed...')['enabled'], isTrue);
-      expect(tester.takeException(), isNull);
     },
   );
 
