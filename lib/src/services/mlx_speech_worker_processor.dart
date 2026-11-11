@@ -1230,14 +1230,21 @@ class MlxTtsPythonProcess {
     await privateCacheDirectory.create(recursive: true);
     // QA-only scheduling differential. taskpolicy execs the same owned child;
     // default inference policy is unchanged until native/audio qualification.
-    final diagnosticBackground =
+    final diagnosticPolicy =
+        Platform.environment['READALOUD_S7_INFERENCE_POLICY'];
+    final diagnosticUtility =
         Platform.isMacOS &&
-        Platform.environment['READALOUD_S7_INFERENCE_POLICY'] ==
-            'background-utility';
+        (diagnosticPolicy == 'background-utility' ||
+            diagnosticPolicy == 'utility');
     final child = await Process.start(
-      diagnosticBackground ? '/usr/sbin/taskpolicy' : pythonPath,
+      diagnosticUtility ? '/usr/sbin/taskpolicy' : pythonPath,
       [
-        if (diagnosticBackground) ...['-b', '-c', 'utility', pythonPath],
+        if (diagnosticUtility) ...[
+          if (diagnosticPolicy == 'background-utility') '-b',
+          '-c',
+          'utility',
+          pythonPath,
+        ],
         '-u',
         '-B',
         helperPath,

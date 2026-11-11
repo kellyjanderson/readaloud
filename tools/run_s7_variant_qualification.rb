@@ -17,7 +17,7 @@ abort 'Missing secondary capture executable' if secondary_capture && !File.execu
 abort 'Invalid mode' unless MODES.include?(mode)
 replay_mode = ENV['READALOUD_S7_REPLAY_MODE']
 inference_policy = ENV['READALOUD_S7_INFERENCE_POLICY']
-abort 'Invalid QA inference policy' unless inference_policy.nil? || inference_policy == 'background-utility'
+abort 'Invalid QA inference policy' unless inference_policy.nil? || %w[background-utility utility].include?(inference_policy)
 if replay_mode
   abort 'Replay requires cached-8bit and packets|joined' unless mode == 'cached-8bit' && %w[packets joined].include?(replay_mode)
   replay_input = ENV['READALOUD_S7_REPLAY_INPUT']
@@ -74,7 +74,7 @@ if ENV['READALOUD_S7_EXTENDED_NATIVE_DIAGNOSTIC'] == '1'
   result[:errors] << 'Extended native diagnosis; standard qualification remains separate'
 end
 if inference_policy
-  result[:inferencePolicyDiagnostic] = 'background-utility'
+  result[:inferencePolicyDiagnostic] = inference_policy
   result[:errors] << 'QA-only child scheduling differential; production policy unchanged'
 end
 # Read only bounded uncompressed PCM or float WAV. This checks app-emitted signal
