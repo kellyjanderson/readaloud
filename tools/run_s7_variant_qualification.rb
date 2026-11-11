@@ -175,6 +175,7 @@ ensure
       Process.waitpid(pid) rescue Errno::ECHILD
     end
     result[:appExitStatus] = status&.exitstatus
+    result[:errors] << 'App failed during normal Quit' if status && !status.success?
     group = IO.popen(['/usr/bin/pgrep', '-g', pid.to_s], &:read).split.map(&:to_i)
     alive_owned = owned.select do |child|
       begin
