@@ -126,8 +126,10 @@ begin
     raise 'Native app exited before receipt' if Process.waitpid(pid, Process::WNOHANG)
     raise 'Variant probe 270s deadline' if Process.clock_gettime(Process::CLOCK_MONOTONIC) > deadline
     wave = File.join(output, 'capture.wav')
-    secondary_armed = !secondary_capture || File.file?(File.join(output, 'coreaudio.wav.armed.json'))
-    if !capture_ready && File.file?(wave) && File.size(wave) > 4096 && secondary_armed
+    # Some processes register with CoreAudio only on first Play. A secondary
+    # diagnostic must not deadlock that Play waiting for a tap to be installed.
+    # Its actual first frame bounds its own independently observed interval.
+    if !capture_ready && File.file?(wave) && File.size(wave) > 4096
       File.write(File.join(output, 'capture.ready'), 'Audio frames observed')
       capture_ready = true
       result[:captureReadyObservedUnixMicros] = (Time.now.to_r * 1_000_000).to_i
