@@ -14,15 +14,15 @@ void main() {
   tearDown(() => messenger.setMockMethodCallHandler(channel, null));
 
   test('main probe admits one request and joins it on close', () async {
-    final reply = Completer<int>();
+    final reply = Completer<Map<String, Object?>>();
     var requests = 0;
     messenger.setMockMethodCallHandler(channel, (call) {
-      expect(call.method, 'speechWorkActivityCount');
+      expect(call.method, 'speechWorkActivityProbe');
       requests++;
       return reply.future;
     });
     final probe = NativeMainResponsivenessProbe()..start(() => 'modelLoad');
-    await Future<void>.delayed(const Duration(milliseconds: 350));
+    await Future<void>.delayed(const Duration(milliseconds: 450));
     expect(requests, 1);
     var closed = false;
     final closing = probe.close().then((value) {
@@ -31,10 +31,19 @@ void main() {
     });
     await Future<void>.delayed(Duration.zero);
     expect(closed, isFalse);
-    reply.complete(1);
+    reply.complete({
+      'owners': 1,
+      'nativeEntryUnixMicros': DateTime.now().microsecondsSinceEpoch,
+      'applicationActive': true,
+    });
     final receipt = await closing;
     expect(receipt['samples'], 1);
+    expect(receipt['applicationActiveSamples'], 1);
     expect(receipt['error'], isNull);
+    expect(receipt['passed'], isFalse);
+    final delayed = (receipt['delayedRequests'] as List).single as Map;
+    expect(delayed['applicationActive'], isTrue);
+    expect(delayed['nativeEntryUnixMicros'], isA<int>());
     await Future<void>.delayed(const Duration(milliseconds: 150));
     expect(requests, 1);
   });

@@ -120,6 +120,17 @@ class AppDelegate: FlutterAppDelegate {
         result(self.speechWorkActivities.count)
         return
       }
+      if call.method == "speechWorkActivityProbe" {
+        // Diagnostic wall-clock entry distinguishes channel delivery from work
+        // inside this immediate handler. The QA roundtrip gate stays monotonic.
+        let entered = Int64(Date().timeIntervalSince1970 * 1_000_000)
+        result([
+          "owners": self.speechWorkActivities.count,
+          "nativeEntryUnixMicros": entered,
+          "applicationActive": NSApp.isActive
+        ])
+        return
+      }
       if call.method == "speechWorkActivitySnapshot" {
         result([
           "active": self.speechWorkActivities.count,

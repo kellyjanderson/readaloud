@@ -15,6 +15,7 @@ gate = File.join(output, 'capture-ready')
 captures = {}
 normal = false
 forced = false
+activated = false
 pid = nil
 status = nil
 begin
@@ -28,6 +29,13 @@ begin
     contents = File.read(File.join(output, 'app.log'))
     %w[initial changed reused missing].each do |phase|
       if contents.include?("RADOC_REGEN_CAPTURE_WAITING phase=#{phase} ") && !captures.key?(phase)
+        if phase == 'initial'
+          # A directly spawned macOS bundle need not become the active app.
+          # Exercise the foreground reading interaction explicitly; per-sample
+          # native receipts retain active/inactive state without waiving250ms.
+          activated = system('/usr/bin/osascript', '-e', "tell application #{bundle.inspect} to activate")
+          raise 'Could not activate native test application' unless activated
+        end
         capture_log = File.open(File.join(output, "#{phase}-capture.log"), 'w')
         stop = File.join(output, "#{phase}.stop")
         cap_pid = Process.spawn(capture, pid.to_s, File.join(output, "#{phase}.wav"), '300', stop, out: capture_log, err: capture_log)
@@ -76,7 +84,7 @@ ensure
       Process.waitpid(pid) rescue Errno::ECHILD
     end
     remaining = IO.popen(['pgrep', '-g', pid.to_s], &:read).split.map(&:to_i)
-    File.write(File.join(output, 'cleanup.json'), JSON.pretty_generate({normalQuit: normal, forcedCleanup: forced, exitStatus: status&.exitstatus, remainingOwnedPids: remaining, captures: captures.transform_values { |v| v.reject { |k,_| k == :log } }}))
+    File.write(File.join(output, 'cleanup.json'), JSON.pretty_generate({normalQuit: normal, applicationActivationRequested: activated, forcedCleanup: forced, exitStatus: status&.exitstatus, remainingOwnedPids: remaining, captures: captures.transform_values { |v| v.reject { |k,_| k == :log } }}))
     abort 'Normal app/child cleanup failed' unless normal && !forced && remaining.empty?
   end
 end
