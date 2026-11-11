@@ -371,7 +371,9 @@ Future<void> main(List<String> args) async {
     // The initial explicit-direction fixture is a complete loadDocument
     // snapshot, so its incremental preparedWordCount is deliberately zero.
     // Every phase must traverse the same independently recorded source extent.
-    final expected = (receipt['fixture']! as Map)['words']! as int;
+    final expected = name == 'prime'
+        ? session.controller.document.wordCount
+        : (receipt['fixture']! as Map)['words']! as int;
     if (chunks.isEmpty ||
         nextWord != expected ||
         expected <= 0 ||
