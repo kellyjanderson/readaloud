@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:flutter/services.dart';
 
@@ -9,6 +10,8 @@ class NativeMainResponsivenessProbe {
   final _channel = const MethodChannel('read_aloud/mlx_tts_lifecycle');
   final List<Map<String, Object?>> _delays = [];
   Timer? _timer;
+  Timer? _slowRequest;
+  int _slowRequests = 0;
   Future<void>? _pending;
   bool _closed = false;
   int _samples = 0, _maximumMs = 0;
@@ -21,6 +24,16 @@ class NativeMainResponsivenessProbe {
       final started = _clock.elapsedMilliseconds;
       final requestedUnixMicros = DateTime.now().microsecondsSinceEpoch;
       final stage = phase();
+      if (Platform.environment['READALOUD_S7_PROFILE_STALLS'] == '1' &&
+          _slowRequests < 4) {
+        _slowRequest = Timer(const Duration(milliseconds: 200), () {
+          if (_closed) return;
+          _slowRequests++;
+          stdout.writeln(
+            'NATIVE_MAIN_PROBE_PENDING ${requestedUnixMicros} $stage',
+          );
+        });
+      }
       _pending = _channel
           .invokeMapMethod<String, Object?>('speechWorkActivityProbe')
           .then<void>(
@@ -64,6 +77,8 @@ class NativeMainResponsivenessProbe {
             },
           )
           .whenComplete(() {
+            _slowRequest?.cancel();
+            _slowRequest = null;
             _pending = null;
           });
     });
@@ -71,6 +86,7 @@ class NativeMainResponsivenessProbe {
 
   Future<Map<String, Object?>> close() async {
     _timer?.cancel();
+    _slowRequest?.cancel();
     // One outstanding native request may finish while the UI isolate drains.
     // The native handler reads its bounded owner count and returns immediately.
     // A utility-queue footprint query would mix background scheduling/I/O into

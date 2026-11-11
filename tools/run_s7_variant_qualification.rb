@@ -42,6 +42,12 @@ status = nil
 owned = []
 last_children = nil
 native = nil
+profiles = []
+profile_stalls = ENV['READALOUD_S7_PROFILE_STALLS'] == '1'
+if profile_stalls
+  result[:diagnosticProfiling] = true
+  result[:errors] << 'Diagnostic native sampling enabled; timing is instrumented'
+end
 # Read only bounded uncompressed PCM or float WAV. This checks app-emitted signal
 # separately from player intent, never labels energy as an exact speech match.
 def emitted_signal(path, timing_path, segments)
@@ -125,6 +131,12 @@ begin
   until File.exist?(receipt)
     raise 'Native app exited before receipt' if Process.waitpid(pid, Process::WNOHANG)
     raise 'Variant probe 270s deadline' if Process.clock_gettime(Process::CLOCK_MONOTONIC) > deadline
+    if profile_stalls && profiles.length < 4 &&
+        File.read(log_path).scan('NATIVE_MAIN_PROBE_PENDING').length > profiles.length
+      path = File.join(output, "native-stall-#{profiles.length + 1}.sample.txt")
+      profiles << Process.spawn('/usr/bin/sample', pid.to_s, '1', '2', '-file', path,
+        out: log, err: log)
+    end
     wave = File.join(output, 'capture.wav')
     # Some processes register with CoreAudio only on first Play. A secondary
     # diagnostic must not deadlock that Play waiting for a tap to be installed.
@@ -161,6 +173,15 @@ begin
 rescue StandardError => e
   result[:errors] << e.message
 ensure
+  profiles.each do |profile|
+    begin
+      Timeout.timeout(5) { Process.waitpid(profile) }
+    rescue Timeout::Error
+      Process.kill('TERM', profile) rescue Errno::ESRCH
+      Process.waitpid(profile) rescue Errno::ECHILD
+      result[:errors] << 'Native sampler did not stop'
+    end
+  end
   FileUtils.touch(stop) if cap || secondary_cap
   if secondary_cap
     begin
