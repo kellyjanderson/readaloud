@@ -197,6 +197,7 @@ class _PreparationStatusState extends State<PreparationStatus> {
           (p) =>
               p.visibleState == OperationState.running ||
               p.visibleState == OperationState.finalizing ||
+              p.state == OperationState.waiting ||
               p.state == OperationState.queued,
         )
         .firstOrNull;
@@ -206,7 +207,10 @@ class _PreparationStatusState extends State<PreparationStatus> {
     final paused = current.any((p) => p.state == OperationState.idleDemand);
     final resource = current
         .where(
-          (p) => p.ownerKind == OperationOwnerKind.model && !p.state.isTerminal,
+          (p) =>
+              p.ownerKind == OperationOwnerKind.model &&
+              !p.state.isTerminal &&
+              p.state != OperationState.idleDemand,
         )
         .firstOrNull;
     final winner = problem ?? resource ?? active;
@@ -215,9 +219,8 @@ class _PreparationStatusState extends State<PreparationStatus> {
         (problem == null
             ? null
             : '${_operationStageName(problem.stage)}: ${problem.error ?? problem.message ?? 'Needs attention'}') ??
-        resource?.message ??
+        (winner == null ? null : _operationSummary(winner)) ??
         widget.message ??
-        (active == null ? null : '${_operationStageName(active.stage)}…') ??
         (widget.isInitializing
             ? 'Preparing speech — you can open a document now.'
             : paused
@@ -252,10 +255,11 @@ class _PreparationStatusState extends State<PreparationStatus> {
                         winner != null &&
                         !_details)
                       MeasuredProgress(
-                        fraction:
-                            winner.visibleState == OperationState.finalizing
-                            ? 1
-                            : winner.fraction,
+                        fraction: switch (winner.visibleState) {
+                          OperationState.finalizing => 1,
+                          OperationState.waiting => null,
+                          _ => winner.fraction,
+                        },
                         label:
                             '${_operationStageName(winner.stage)} · ${_operationCounter(winner)}',
                       ),
@@ -383,6 +387,16 @@ class _PreparationStatusState extends State<PreparationStatus> {
     );
   }
 }
+
+String _operationSummary(ReaderOperation p) =>
+    p.message ??
+    switch (p.visibleState) {
+      OperationState.finalizing =>
+        '${_operationStageName(p.stage)} · Finishing…',
+      OperationState.waiting => '${_operationStageName(p.stage)} · Waiting…',
+      OperationState.queued => '${_operationStageName(p.stage)} · Queued',
+      _ => '${_operationStageName(p.stage)}…',
+    };
 
 String _operationCounter(ReaderOperation p) {
   if (!p.completedKnown) return 'Completed-work count not yet available';

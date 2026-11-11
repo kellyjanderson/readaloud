@@ -9,6 +9,194 @@ import 'package:read_aloud/src/services/tts_engine.dart';
 import 'package:read_aloud/src/widgets/preparation_status.dart';
 
 void main() {
+  ReaderOperation operation({
+    String id = 'save-1',
+    String stage = 'persistence',
+    OperationOwnerKind owner = OperationOwnerKind.readingStage,
+    OperationState state = OperationState.running,
+    int completed = 2,
+    int? total = 8,
+    String? message,
+    String? error,
+    bool readerBlocking = true,
+  }) => ReaderOperation(
+    operationId: id,
+    ownerKind: owner,
+    ownerEpoch: 1,
+    stage: stage,
+    state: state,
+    completedUnits: completed,
+    totalUnits: total,
+    unit: 'bytes',
+    updatedAt: DateTime(2026),
+    message: message,
+    error: error,
+    readerBlocking: readerBlocking,
+  );
+
+  Future<void> renderOperations(
+    WidgetTester tester,
+    List<ReaderOperation> operations, {
+    String? startupError,
+    bool isComplete = true,
+  }) => tester.pumpWidget(
+    MaterialApp(
+      home: Scaffold(
+        body: PreparationStatus(
+          progress: const [],
+          operations: operations,
+          isImporting: false,
+          isInitializing: false,
+          isComplete: isComplete,
+          message: isComplete ? 'Ready to read' : null,
+          startupError: startupError,
+        ),
+      ),
+    ),
+  );
+
+  testWidgets('completed document summary follows owned running work', (
+    tester,
+  ) async {
+    for (final total in <int?>[8, null]) {
+      await renderOperations(tester, [
+        operation(total: total, message: 'Writing prepared document'),
+      ]);
+      expect(find.text('Writing prepared document'), findsOneWidget);
+      expect(find.text('Ready to read'), findsNothing);
+      if (total == null) {
+        expect(
+          find.text('Saving prepared document · 2 bytes; total unknown'),
+          findsOneWidget,
+        );
+        expect(find.byType(LinearProgressIndicator), findsNothing);
+      } else {
+        expect(
+          find.text('Saving prepared document · 2 of 8 bytes · 25%'),
+          findsOneWidget,
+        );
+        expect(
+          tester
+              .widget<LinearProgressIndicator>(
+                find.byType(LinearProgressIndicator),
+              )
+              .value,
+          .25,
+        );
+      }
+    }
+  });
+
+  testWidgets(
+    'counted and explicit finalizing wait for owned terminal success',
+    (tester) async {
+      for (final pending in [
+        operation(completed: 8),
+        operation(
+          stage: 'planning',
+          state: OperationState.finalizing,
+          total: null,
+        ),
+      ]) {
+        await renderOperations(tester, [pending]);
+        final stage = pending.stage == 'planning'
+            ? 'Preparing speech'
+            : 'Saving prepared document';
+        expect(find.text('$stage · Finishing…'), findsOneWidget);
+        expect(find.text('Ready to read'), findsNothing);
+        expect(find.textContaining('100%'), findsNothing);
+        expect(find.byType(LinearProgressIndicator), findsNothing);
+        await renderOperations(tester, [
+          pending.withState(OperationState.succeeded),
+        ]);
+        expect(find.text('Ready to read'), findsOneWidget);
+        expect(find.textContaining('Finishing'), findsNothing);
+      }
+      await tester.pumpWidget(const SizedBox());
+    },
+  );
+
+  testWidgets('blocking wait owns summary while idle demand remains ready', (
+    tester,
+  ) async {
+    await renderOperations(tester, [
+      operation(stage: 'planning', state: OperationState.waiting),
+    ]);
+    expect(find.text('Preparing speech · Waiting…'), findsOneWidget);
+    expect(find.text('Ready to read'), findsNothing);
+    expect(find.byType(LinearProgressIndicator), findsNothing);
+    for (final owner in OperationOwnerKind.values) {
+      await renderOperations(tester, [
+        operation(owner: owner, state: OperationState.idleDemand),
+      ], isComplete: false);
+      expect(
+        find.text('Ready to read — more will be prepared as you listen.'),
+        findsOneWidget,
+      );
+      expect(find.byType(MeasuredProgress), findsNothing);
+      expect(find.byType(CircularProgressIndicator), findsNothing);
+    }
+  });
+
+  testWidgets('header and bar share resource priority over reading work', (
+    tester,
+  ) async {
+    await renderOperations(tester, [
+      operation(message: 'Writing prepared document'),
+      operation(
+        id: 'model-1',
+        owner: OperationOwnerKind.model,
+        stage: 'resources',
+        completed: 4,
+        message: 'Loading speech model',
+      ),
+    ]);
+    expect(find.text('Loading speech model'), findsOneWidget);
+    expect(find.text('Writing prepared document'), findsNothing);
+    expect(find.text('Preparing voices · 4 of 8 bytes · 50%'), findsOneWidget);
+    expect(
+      tester
+          .widget<LinearProgressIndicator>(find.byType(LinearProgressIndicator))
+          .value,
+      .5,
+    );
+  });
+
+  testWidgets('current failure survives unrelated resource and completion', (
+    tester,
+  ) async {
+    final operations = [
+      operation(state: OperationState.failed, error: 'Destination unavailable'),
+      operation(
+        id: 'model-1',
+        owner: OperationOwnerKind.model,
+        stage: 'resources',
+        message: 'Loading speech model',
+      ),
+      operation(
+        id: 'background-1',
+        stage: 'analysis',
+        state: OperationState.succeeded,
+        readerBlocking: false,
+      ),
+    ];
+    await renderOperations(tester, operations);
+    expect(
+      find.text('Saving prepared document: Destination unavailable'),
+      findsOneWidget,
+    );
+    expect(find.byType(MeasuredProgress), findsNothing);
+    expect(find.text('Ready to read'), findsNothing);
+    await renderOperations(
+      tester,
+      operations,
+      startupError: 'Speech startup failed',
+    );
+    expect(find.text('Speech startup failed'), findsOneWidget);
+    expect(find.byType(MeasuredProgress), findsNothing);
+    await tester.pumpWidget(const SizedBox());
+  });
+
   testWidgets('Clear error is keyboard operable and carries exact identity', (
     tester,
   ) async {
