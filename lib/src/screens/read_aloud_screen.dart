@@ -35,6 +35,14 @@ enum _AppMenuAction {
   notices,
 }
 
+typedef _DesktopMenuInputs = ({
+  TargetPlatform platform,
+  bool isExporting,
+  bool hasCompleteDocumentSnapshot,
+  bool canExportAudio,
+  bool isLiveReadEnabled,
+});
+
 class ReadAloudScreen extends StatefulWidget {
   const ReadAloudScreen({
     super.key,
@@ -55,6 +63,8 @@ class _ReadAloudScreenState extends State<ReadAloudScreen> {
   bool _isDraggingFiles = false;
   int _intakeIntent = 0;
   bool _noticesOpen = false;
+  _DesktopMenuInputs? _desktopMenuInputs;
+  List<PlatformMenuItem>? _desktopMenus;
 
   @override
   void initState() {
@@ -300,7 +310,20 @@ class _ReadAloudScreenState extends State<ReadAloudScreen> {
   }
 
   List<PlatformMenuItem> _buildDesktopMenus() {
-    return <PlatformMenuItem>[
+    final inputs = (
+      platform: defaultTargetPlatform,
+      isExporting: _controller.isExporting,
+      hasCompleteDocumentSnapshot: _controller.hasCompleteDocumentSnapshot,
+      canExportAudio: _controller.canExportAudio,
+      isLiveReadEnabled: _controller.isLiveReadEnabled,
+    );
+    if (_desktopMenuInputs == inputs) {
+      return _desktopMenus!;
+    }
+
+    // PlatformMenuBar compares descendant identities. Preserve them through
+    // speech/download progress so AppKit only rebuilds when menu inputs change.
+    final menus = <PlatformMenuItem>[
       PlatformMenu(
         label: 'Read Aloud',
         menus: _buildDesktopApplicationMenuItems(),
@@ -317,6 +340,8 @@ class _ReadAloudScreenState extends State<ReadAloudScreen> {
         ],
       ),
     ];
+    _desktopMenuInputs = inputs;
+    return _desktopMenus = menus;
   }
 
   List<PlatformMenuItem> _buildDesktopApplicationMenuItems() {

@@ -775,6 +775,135 @@ void main() {
   });
 
   testWidgets(
+    'speech progress does not resend unchanged native menus',
+    (tester) async {
+      debugDefaultTargetPlatformOverride = TargetPlatform.macOS;
+      final menuUpdates = <MethodCall>[];
+      binding.defaultBinaryMessenger.setMockMethodCallHandler(
+        menuChannel,
+        (call) async {
+          if (call.method == 'Menu.setMenus') menuUpdates.add(call);
+          return null;
+        },
+      );
+      final engine = _AccessibleTtsEngine();
+      final controller = ReaderController(
+        preferencesService: _MemoryReaderPreferencesService(),
+        ttsEngine: engine,
+        enablePlatformIntakeChannels: false,
+      );
+      addTearDown(controller.dispose);
+      await tester.pumpWidget(
+        MaterialApp(home: ReadAloudScreen(controller: controller)),
+      );
+      await tester.pumpAndSettle();
+      controller.togglePlayback();
+      await _awaitSpeak(tester, engine);
+      expect(engine.speakCount, 1);
+      engine.start();
+      await tester.pump();
+
+      expect(menuUpdates, isNotEmpty);
+      final updatesBeforeProgress = menuUpdates.length;
+      var progressNotifications = 0;
+      controller.addListener(() => progressNotifications++);
+      for (var index = 0; index < 3; index++) {
+        final span = controller.document.wordSpans[index];
+        engine.progress(
+          TtsProgressUpdate(
+            startOffset: span.start,
+            endOffset: span.end,
+            word: controller.document.speakableText.substring(
+              span.start,
+              span.end,
+            ),
+            wordStartIndex: index,
+            wordEndIndex: index + 1,
+          ),
+        );
+        await tester.pump(const Duration(milliseconds: 300));
+        expect(controller.currentWordIndex, index + 1);
+      }
+      expect(progressNotifications, greaterThanOrEqualTo(3));
+      expect(menuUpdates, hasLength(updatesBeforeProgress));
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets(
+    'native menus update for document export and live input state changes',
+    (tester) async {
+      debugDefaultTargetPlatformOverride = TargetPlatform.macOS;
+      final menuUpdates = <MethodCall>[];
+      binding.defaultBinaryMessenger.setMockMethodCallHandler(
+        menuChannel,
+        (call) async {
+          if (call.method == 'Menu.setMenus') menuUpdates.add(call);
+          return null;
+        },
+      );
+      final controller = _DesktopMenuController();
+      addTearDown(controller.dispose);
+      await tester.pumpWidget(
+        MaterialApp(home: ReadAloudScreen(controller: controller)),
+      );
+      await tester.pumpAndSettle();
+      expect(menuUpdates, isNotEmpty);
+
+      Map<Object?, Object?> item(String label) => _serializedMenuItems(
+        menuUpdates.last.arguments,
+      ).singleWhere((item) => item['label'] == label);
+
+      Future<void> expectMenuUpdate(VoidCallback change) async {
+        final previousUpdates = menuUpdates.length;
+        change();
+        await tester.pump();
+        expect(menuUpdates, hasLength(previousUpdates + 1));
+        // Repeating the same state still notifies listeners, but does not
+        // require another native menu update.
+        controller.updateMenuState();
+        await tester.pump();
+        expect(menuUpdates, hasLength(previousUpdates + 1));
+      }
+
+      expect(item('Save Audio Book...')['enabled'], isFalse);
+      expect(item('Save Audio...')['enabled'], isFalse);
+      await expectMenuUpdate(
+        () => controller.updateMenuState(completeDocument: true),
+      );
+      expect(item('Save Audio Book...')['enabled'], isTrue);
+      expect(item('Save Audio...')['enabled'], isFalse);
+      await expectMenuUpdate(
+        () => controller.updateMenuState(audioExport: true),
+      );
+      expect(item('Save Audio...')['enabled'], isTrue);
+      await expectMenuUpdate(
+        () => controller.updateMenuState(exporting: true),
+      );
+      expect(item('Save Audio Book...')['enabled'], isFalse);
+      expect(item('Saving Audio...')['enabled'], isFalse);
+      await expectMenuUpdate(
+        () => controller.updateMenuState(exporting: false),
+      );
+      expect(item('Save Audio Book...')['enabled'], isTrue);
+      expect(item('Save Audio...')['enabled'], isTrue);
+      await expectMenuUpdate(
+        () => controller.updateMenuState(completeDocument: false),
+      );
+      expect(item('Save Audio Book...')['enabled'], isFalse);
+      await expectMenuUpdate(
+        () => controller.updateMenuState(liveInput: true),
+      );
+      expect(item('Stop Live Feed')['enabled'], isTrue);
+      await expectMenuUpdate(
+        () => controller.updateMenuState(liveInput: false),
+      );
+      expect(item('Live Feed...')['enabled'], isTrue);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets(
     'desktop shell hides the overflow menu and registers native menus',
     (WidgetTester tester) async {
       debugDefaultTargetPlatformOverride = TargetPlatform.macOS;
@@ -854,6 +983,55 @@ Iterable<String> _collectMenuLabels(Iterable<PlatformMenuItem> items) sync* {
     if (item.label.isNotEmpty) {
       yield item.label;
     }
+  }
+}
+
+Iterable<Map<Object?, Object?>> _serializedMenuItems(Object? value) sync* {
+  if (value is Map) {
+    yield value;
+    for (final child in value.values) {
+      yield* _serializedMenuItems(child);
+    }
+  } else if (value is Iterable) {
+    for (final child in value) {
+      yield* _serializedMenuItems(child);
+    }
+  }
+}
+
+class _DesktopMenuController extends ReaderController {
+  _DesktopMenuController()
+    : super(
+        preferencesService: _MemoryReaderPreferencesService(),
+        ttsEngine: _FakeTtsEngine(),
+        enablePlatformIntakeChannels: false,
+      );
+
+  bool _exporting = false;
+  bool _completeDocument = false;
+  bool _audioExport = false;
+  bool _liveInput = false;
+
+  @override
+  bool get isExporting => _exporting;
+  @override
+  bool get hasCompleteDocumentSnapshot => _completeDocument;
+  @override
+  bool get canExportAudio => _audioExport;
+  @override
+  bool get isLiveReadEnabled => _liveInput;
+
+  void updateMenuState({
+    bool? exporting,
+    bool? completeDocument,
+    bool? audioExport,
+    bool? liveInput,
+  }) {
+    _exporting = exporting ?? _exporting;
+    _completeDocument = completeDocument ?? _completeDocument;
+    _audioExport = audioExport ?? _audioExport;
+    _liveInput = liveInput ?? _liveInput;
+    notifyListeners();
   }
 }
 
@@ -1017,6 +1195,7 @@ class _FakeTtsEngine implements TtsEngine {
 class _AccessibleTtsEngine extends _FakeTtsEngine {
   void Function()? _start;
   void Function(TtsPlaybackActivity)? _activity;
+  void Function(TtsProgressUpdate)? _progress;
   final firstSpeak = Completer<void>();
   int speakCount = 0;
   int pauseCount = 0;
@@ -1027,6 +1206,12 @@ class _AccessibleTtsEngine extends _FakeTtsEngine {
   @override
   set onActivity(void Function(TtsPlaybackActivity)? callback) =>
       _activity = callback;
+
+  @override
+  set onProgress(void Function(TtsProgressUpdate)? callback) =>
+      _progress = callback;
+
+  void progress(TtsProgressUpdate update) => _progress?.call(update);
 
   @override
   Future<void> speak(TtsSpeakRequest request) async {
