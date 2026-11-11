@@ -1,0 +1,72 @@
+[
+  {
+    "packet": "packet-0000.wav",
+    "captureStartSeconds": 62.19613020833333,
+    "fullActiveCorrelation": 0.7534060689763153
+  },
+  {
+    "packet": "packet-0001.wav",
+    "captureStartSeconds": 43.153708333333334,
+    "fullActiveCorrelation": 0.9998934290802862
+  },
+  {
+    "packet": "packet-0002.wav",
+    "captureStartSeconds": 57.92148958333333,
+    "fullActiveCorrelation": 0.6724488563214587
+  },
+  {
+    "packet": "packet-0003.wav",
+    "captureStartSeconds": 43.6529375,
+    "fullActiveCorrelation": 0.9998134668766389
+  },
+  {
+    "packet": "packet-0004.wav",
+    "captureStartSeconds": 45.531677083333335,
+    "fullActiveCorrelation": 0.560166129300642
+  },
+  {
+    "packet": "packet-0005.wav",
+    "captureStartSeconds": 44.163776041666665,
+    "fullActiveCorrelation": 0.9999649323177079
+  },
+  {
+    "packet": "packet-0007.wav",
+    "captureStartSeconds": 44.67461458333334,
+    "fullActiveCorrelation": 0.999917043344058
+  },
+  {
+    "packet": "packet-0008.wav",
+    "captureStartSeconds": 44.99969791666667,
+    "fullActiveCorrelation": 0.8046780773920722
+  },
+  {
+    "packet": "packet-0009.wav",
+    "captureStartSeconds": 45.185453124999995,
+    "fullActiveCorrelation": 0.9998480253141756
+  },
+  {
+    "packet": "packet-0010.wav",
+    "captureStartSeconds": 45.466249999999995,
+    "fullActiveCorrelation": 0.6769731417384958
+  },
+  {
+    "packet": "packet-0011.wav",
+    "captureStartSeconds": 45.83558854166667,
+    "fullActiveCorrelation": 0.9999359180267372
+  },
+  {
+    "packet": "packet-0012.wav",
+    "captureStartSeconds": 46.17293229166666,
+    "fullActiveCorrelation": 0.71281282996691
+  },
+  {
+    "packet": "packet-0013.wav",
+    "captureStartSeconds": 46.4045,
+    "fullActiveCorrelation": 0.9999292233929888
+  },
+  {
+    "packet": "packet-0014.wav",
+    "captureStartSeconds": 45.675984375,
+    "fullActiveCorrelation": 0.5082018212194298
+  }
+]

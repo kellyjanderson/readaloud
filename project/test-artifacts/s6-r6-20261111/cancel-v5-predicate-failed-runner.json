@@ -1,0 +1,27 @@
+{
+  "passed": false,
+  "mode": "packet-cancel",
+  "launchMethod": "LaunchServices open -W -n",
+  "deadlineSeconds": 300,
+  "normalQuit": true,
+  "forcedCleanup": false,
+  "captureIntroducedPlayGate": false,
+  "launchUtc": "2026-11-11T07:10:37.059746Z",
+  "launchMonotonicRawNanos": 2282961643078208,
+  "launcherPid": 67910,
+  "pid": 67912,
+  "capturePid": 67914,
+  "nativeReceipt": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s6-r6-cancel-v5-programmatic-20261110/receipt.json",
+  "nativePassed": false,
+  "launchToNativePositionMs": null,
+  "nativePositionWithinTwoSeconds": null,
+  "captureExitStatus": 0,
+  "ownedPidsAfterNormalQuit": [],
+  "remainingOwnedPids": [],
+  "appExitVerified": true,
+  "launcherExitStatus": 0,
+  "appExitStatus": null,
+  "errors": [
+    "Native playback failed: Bad state: First native packet was not paused before scene completion"
+  ]
+}

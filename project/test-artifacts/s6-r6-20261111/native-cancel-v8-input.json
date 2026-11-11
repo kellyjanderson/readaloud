@@ -1,0 +1,8 @@
+{
+  "schema": "readaloud-native-input-observation-v1",
+  "source": "CUA native accessibility control click",
+  "target": "Cancel pending Play",
+  "clickBeforeUnixMicros": 1794383278649000,
+  "clickReturnedUnixMicros": 1794383278684000,
+  "observedResult": "The same control became Play; model initialization remained active. No startup failure was visible."
+}

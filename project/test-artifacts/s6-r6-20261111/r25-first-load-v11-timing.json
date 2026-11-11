@@ -1,0 +1,29 @@
+{
+  "schema": "readaloud-ungated-startup-audio-v3",
+  "timingPolicy": "startup-r25",
+  "loadClass": "first-load",
+  "goalMs": 2000,
+  "hardLimitMs": 10000,
+  "goalMet": false,
+  "hardLimitMet": true,
+  "passed": true,
+  "errors": [],
+  "clockDomain": "CLOCK_MONOTONIC_RAW",
+  "hardLimitOrigin": "documentLoadRequestedMonotonicRawNanos",
+  "goalOrigin": "launchMonotonicRawNanos",
+  "boundariesMonotonicRawNanos": {
+    "launch": 2290385303393166,
+    "appStartupComplete": 2290395256500250,
+    "documentLoadRequested": 2290395256637041,
+    "playRequested": 2290395296836041,
+    "firstSignal": 2290400608474333
+  },
+  "appStartupDurationMs": 9953.107084,
+  "launchToSpeechReceiptUpperBoundMs": 15305.081167,
+  "documentLoadToSpeechReceiptUpperBoundMs": 5351.837292,
+  "playToSpeechReceiptUpperBoundMs": 5311.638292,
+  "firstSignalExpectedSpeechAlignmentMs": 0.015624999999630518,
+  "launchToNativePositionMs": 15154.148,
+  "waveformComparison": "/Users/k/.codex/worktrees/radoc-dynamic-audio/readaloud/tmp/s6/r25-first-load-v11-acoustic.json",
+  "limits": "CLOCK_MONOTONIC_RAW independently records launch, ordinary app startup completion, post-startup document request and the first signal-bearing app-only packet aligned with the exact expected waveform. Hard limits include all work triggered by the measured document request; launch-to-speech retains the two-second goal. These are upper bounds on app-emitted speech, not physical speaker latency or human listening. Absence of off-clock target preparation, candidate completeness and fresh-profile provenance must be verified separately. Historical launch-only receipts cannot qualify under startup-r25."
+}
