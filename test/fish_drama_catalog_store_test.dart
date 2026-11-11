@@ -215,7 +215,7 @@ void main() {
   );
 
   test(
-    'deadline cancels stalled transport and permits a clean retry',
+    'deadline cancels stalled transport without publication',
     () async {
       final owner = store(
         timeout: const Duration(milliseconds: 30),

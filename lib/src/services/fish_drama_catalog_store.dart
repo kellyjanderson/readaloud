@@ -169,11 +169,13 @@ final class FishDramaCatalogStore {
         final file = File('${stage.path}/catalog.json');
         await file.writeAsString(candidate._envelope, flush: true);
         _checkAttempt(cancelled);
+        // Atomic rename is the commit boundary. Once issued it cannot be
+        // cancelled; close drains it and the result describes committed disk
+        // state even if the session retires while the syscall completes.
         await file.rename(_persisted.path);
       } finally {
         await stage.delete(recursive: true);
       }
-      _checkAttempt(cancelled);
       _current = candidate;
       _loading = Future.value(candidate);
       return FishDramaCatalogRefreshResult(candidate, null);
