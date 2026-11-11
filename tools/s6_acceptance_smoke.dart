@@ -9,7 +9,9 @@ import 'packaged_runtime_smoke.dart' as runtime;
 import 'radoc_first_load_smoke.dart' as first_load;
 
 Future<void> main(List<String> args) async {
-  if (args.isNotEmpty && args.first == 'first-load') {
+  if (args.isNotEmpty && args.first == 'packet-cancel') {
+    await first_load.main(args.skip(1).toList(), packetCancellation: true);
+  } else if (args.isNotEmpty && args.first == 'first-load') {
     await first_load.main(args.skip(1).toList());
   } else if (args.isNotEmpty && args.first == 'runtime-cancel') {
     await runtime.main(args.skip(1).toList());

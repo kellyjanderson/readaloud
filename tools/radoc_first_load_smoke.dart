@@ -56,7 +56,7 @@ class _Controller extends ReaderController {
   Future<bool> restoreLastOpenedDocument() async => false;
 }
 
-Future<void> main(List<String> args) async {
+Future<void> main(List<String> args, {bool packetCancellation = false}) async {
   final entered = DateTime.now().microsecondsSinceEpoch;
   final clock = Stopwatch()..start();
   WidgetsFlutterBinding.ensureInitialized();
@@ -93,7 +93,9 @@ Future<void> main(List<String> args) async {
   final metrics = File('${output.path}.metrics.jsonl').openWrite();
   final positions = File('${output.path}.positions.jsonl').openWrite();
   final receipt = <String, Object?>{
-    'schema': 'readaloud-native-first-load-v1',
+    'schema': packetCancellation
+        ? 'readaloud-native-packet-cancellation-v1'
+        : 'readaloud-native-first-load-v1',
     'passed': false,
     'engine': args[0],
     'input': args[1],
@@ -123,7 +125,30 @@ Future<void> main(List<String> args) async {
     }
     lastTick = now;
   });
+  var completedExports = 0;
+  var completedOrdinaryScenes = 0;
+  List<Map<String, Object?>> spokenScenes() => [
+    for (final chunk in c.spokenChunkRecords)
+      {
+        'chunkId': chunk.chunkId,
+        'startWord': chunk.startWordIndex,
+        'endWord': chunk.endWordIndex,
+        'audioDurationMicros': chunk.audioDuration.inMicroseconds,
+        'completed': chunk.completed,
+      },
+  ];
+  bool hasUnknownActiveScene() => c.spokenChunkRecords.any(
+    (chunk) =>
+        !chunk.completed &&
+        chunk.audioDuration == Duration.zero &&
+        chunk.startWordIndex <= c.currentWordIndex &&
+        c.currentWordIndex < chunk.endWordIndex,
+  );
+  int? completedExportsAtFirstPosition;
+  Map<String, Object?>? firstPacketState;
   PlaybackInstrumentationService.instance.observer = (event) {
+    if (event.metric == 'exportChunkReady') completedExports++;
+    if (event.metric == 'chunkRegenerated') completedOrdinaryScenes++;
     metrics.writeln(jsonEncode({'phase': phase, ...event.toMap()}));
   };
   // Bounded evidence collector. One serial isolate job at a time; paths are
@@ -144,9 +169,7 @@ Future<void> main(List<String> args) async {
       final index = checks.length;
       final destination = '${root.path}/queued-$index.wav';
       final check = copying
-          .then(
-            (_) => copyQueuedAudioEvidence(path, destination),
-          )
+          .then((_) => copyQueuedAudioEvidence(path, destination))
           .then(
             (value) => <String, Object?>{
               'queueIndex': index,
@@ -163,11 +186,47 @@ Future<void> main(List<String> args) async {
       copying = check.then<void>((_) {});
     }
   });
+  final playerStates = <Map<String, Object?>>[];
+  var playerStateOverflow = false;
+  final playerStateSubscription = player.playerStateStream.listen((state) {
+    if (!packetCancellation) return;
+    if (playerStates.length >= 256) {
+      playerStateOverflow = true;
+      return;
+    }
+    playerStates.add({
+      'elapsedMs': clock.elapsedMilliseconds,
+      'unixMicros': DateTime.now().microsecondsSinceEpoch,
+      'phase': phase,
+      'playing': state.playing,
+      'processingState': state.processingState.name,
+      'positionMs': player.position.inMilliseconds,
+      'index': player.currentIndex,
+    });
+  });
   final nativePosition = NativePlaybackPositionProbe(player);
   final position = player.positionStream.listen((p) {
     nativePosition.sample(p);
     if (player.playing && p > Duration.zero) {
-      firstPosition ??= DateTime.now().microsecondsSinceEpoch;
+      if (firstPosition == null) {
+        firstPosition = DateTime.now().microsecondsSinceEpoch;
+        completedExportsAtFirstPosition = completedExports;
+        firstPacketState = {
+          'elapsedMs': clock.elapsedMilliseconds,
+          'unixMicros': firstPosition,
+          'nativePositionMs': p.inMilliseconds,
+          'nativeIndex': player.currentIndex,
+          'queuedSources': player.sequence.length,
+          'source': player.audioSource?.toString(),
+          'completedExports': completedExports,
+          'completedOrdinaryScenes': completedOrdinaryScenes,
+          'unknownActiveScene': hasUnknownActiveScene(),
+          'spokenScenes': spokenScenes(),
+          'pendingPlaybackPreparationTasks':
+              engine.pendingPlaybackPreparationTasks,
+          'playbackPins': engine.debugPlaybackPinCount,
+        };
+      }
     }
     maxPosition = math.max(maxPosition, p.inMilliseconds);
     positions.writeln(
@@ -229,6 +288,234 @@ Future<void> main(List<String> args) async {
     stdout.writeln('RADOC_FIRST_LOAD_RESOURCE ${jsonEncode(event)}');
   });
   try {
+    if (packetCancellation) {
+      receipt['cancellationScope'] =
+          'Controller commands through normal app/player; native flags and '
+          'positions do not establish emitted silence or keyboard/mouse input.';
+      final events = <Map<String, Object?>>[];
+      receipt['cancellationEvents'] = events;
+      Map<String, Object?> snapshot(String event) => {
+        'event': event,
+        'elapsedMs': clock.elapsedMilliseconds,
+        'unixMicros': DateTime.now().microsecondsSinceEpoch,
+        'stage': c.speechResourceProgress?.stage,
+        'initializing': c.isInitializing,
+        'pendingIntent': c.hasPendingPlaybackIntent,
+        'controllerState': c.playbackState.name,
+        'playerPlaying': player.playing,
+        'playerProcessingState': player.processingState.name,
+        'nativePositionMs': player.position.inMilliseconds,
+        'nativeIndex': player.currentIndex,
+        'queuedSources': player.sequence.length,
+        'completedExports': completedExports,
+        'completedOrdinaryScenes': completedOrdinaryScenes,
+        'unknownActiveScene': hasUnknownActiveScene(),
+        'spokenScenes': spokenScenes(),
+        'pendingPlaybackPreparationTasks':
+            engine.pendingPlaybackPreparationTasks,
+        'playbackPins': engine.debugPlaybackPinCount,
+      };
+      Future<void> observeStopped(String label) async {
+        // Poll alongside the player-state stream (below), catching transient
+        // resume as well as sustained playback. This is native-state evidence.
+        final end = clock.elapsedMilliseconds + 1000;
+        while (clock.elapsedMilliseconds < end) {
+          if (player.playing || c.isPlaying || c.hasPendingPlaybackIntent) {
+            throw StateError('$label: stale playback resumed');
+          }
+          await Future<void>.delayed(const Duration(milliseconds: 10));
+        }
+      }
+
+      await until(() => c.preparedWordCount > 0, 'First prepared content');
+      phase = 'cold-pending-play';
+      play = c.startPlayback().catchError((Object error) {
+        playError = error;
+      });
+      await until(
+        () => c.speechResourceProgress?.stage == 'modelLoad',
+        'Cold modelLoad stage (required, no warm substitution)',
+      );
+      if (!c.hasPendingPlaybackIntent ||
+          player.playing ||
+          firstPosition != null) {
+        throw StateError('Cold modelLoad did not contain pending Play');
+      }
+      events.add(snapshot('cold-cancel-request'));
+      final cancelledAt = clock.elapsedMilliseconds;
+      final nativeInput =
+          Platform.environment['READALOUD_CANCEL_INPUT_MODE'] == 'native';
+      receipt['coldInputMode'] = nativeInput
+          ? 'external-native-input'
+          : 'controller-command';
+      Future<void> coldPause;
+      if (nativeInput) {
+        // No test-owned pause or model hold: the running app's normal input
+        // handler must cancel pending intent inside this naturally occurring
+        // modelLoad window. Root owns the actual click/keyboard evidence.
+        stdout.writeln(
+          'WAITING_NATIVE_CANCEL ${jsonEncode(snapshot('waiting-native-cancel'))}',
+        );
+        final inputDeadline = clock.elapsedMilliseconds + 15000;
+        while (c.hasPendingPlaybackIntent) {
+          if (c.speechResourceProgress?.stage != 'modelLoad' ||
+              player.playing ||
+              clock.elapsedMilliseconds >= inputDeadline) {
+            throw StateError(
+              'Native cancellation missed bounded cold modelLoad window',
+            );
+          }
+          checkFailure();
+          await Future<void>.delayed(const Duration(milliseconds: 10));
+        }
+        events.add(snapshot('native-cancel-intent-observed'));
+        receipt['nativeCancelObservedStage'] = c.speechResourceProgress?.stage;
+        receipt['nativeInputWaitMs'] = clock.elapsedMilliseconds - cancelledAt;
+        receipt['nativeInputEvidence'] =
+            'External input and timestamp must be supplied by root';
+        if (c.speechResourceProgress?.stage != 'modelLoad') {
+          throw StateError('Native cancellation was observed after modelLoad');
+        }
+        coldPause = Future<void>.value();
+      } else {
+        coldPause = c.pausePlayback();
+        // Deliberately sample before awaiting the native drain.
+        events.add(snapshot('cold-cancel-immediate-intent'));
+        receipt['coldIntentCancellationMs'] =
+            clock.elapsedMilliseconds - cancelledAt;
+      }
+      if (c.hasPendingPlaybackIntent ||
+          c.isPlaying ||
+          c.playbackState != ReaderPlaybackPrimaryState.paused) {
+        throw StateError('Pending Play intent was not cancelled synchronously');
+      }
+      var staleResume = false;
+      final coldStates = player.playerStateStream.listen((state) {
+        if (state.playing) staleResume = true;
+      });
+      try {
+        await coldPause.timeout(const Duration(seconds: 45));
+        events.add(snapshot('cold-pause-returned'));
+        await until(() => !c.isInitializing, 'Cold preparation drain');
+        await play.timeout(const Duration(seconds: 5));
+        await observeStopped('Cold cancellation');
+        events.add(snapshot('cold-preparation-drained'));
+        receipt['coldCancelDrainMs'] = clock.elapsedMilliseconds - cancelledAt;
+        receipt['coldCancellationActivity'] =
+            await NativeSpeechWorkActivity.snapshot();
+        if (staleResume ||
+            playerStates.any((event) => event['playing'] == true) ||
+            firstPosition != null ||
+            playError != null) {
+          throw StateError(
+            'Cold cancellation produced stale playback/error: $playError',
+          );
+        }
+      } finally {
+        await coldStates.cancel();
+      }
+
+      phase = 'fresh-play-retry';
+      events.add(snapshot('retry-play-request'));
+      playError = null;
+      play = c.startPlayback().catchError((Object error) {
+        playError = error;
+      });
+      await until(
+        () => firstPosition != null || playError != null,
+        'Retry first real native packet',
+      );
+      if (playError != null) throw StateError('Retry Play failed: $playError');
+      receipt['firstNativePacket'] = firstPacketState;
+      receipt['firstNativePositionUnixMicros'] = firstPosition;
+      receipt['sceneIncompleteAtFirstPacket'] =
+          firstPacketState?['unknownActiveScene'] == true &&
+          completedExportsAtFirstPosition == 0 &&
+          firstPacketState?['completedOrdinaryScenes'] == 0;
+      // Require positive ordinary-pipeline evidence: a real source anchor with
+      // unknown final duration, plus native position. Zero export metrics alone
+      // would be vacuous for ordinary playback. Ordinary finalization records
+      // chunkRegenerated; export finalization records exportChunkReady.
+      if (receipt['sceneIncompleteAtFirstPacket'] != true ||
+          !hasUnknownActiveScene() ||
+          completedOrdinaryScenes != 0 ||
+          completedExports != 0) {
+        final knownComplete =
+            completedOrdinaryScenes != 0 ||
+            completedExports != 0 ||
+            c.spokenChunkRecords.any(
+              (chunk) => chunk.audioDuration > Duration.zero,
+            );
+        receipt['packetPauseCoverage'] = knownComplete
+            ? 'producer already completed; not qualified'
+            : 'incomplete-scene source evidence absent; not qualified';
+        throw StateError(
+          'First native packet was not paused before scene completion',
+        );
+      }
+      events.add(snapshot('packet-pause-request'));
+      phase = 'packet-pause';
+      final pauseAt = clock.elapsedMilliseconds;
+      final packetPause = c.pausePlayback();
+      events.add(snapshot('packet-pause-immediate-intent'));
+      receipt['packetIntentCancellationMs'] =
+          clock.elapsedMilliseconds - pauseAt;
+      if (c.hasPendingPlaybackIntent ||
+          c.isPlaying ||
+          c.playbackState != ReaderPlaybackPrimaryState.paused) {
+        throw StateError(
+          'Packet Pause did not clear controller intent immediately',
+        );
+      }
+      await packetPause.timeout(const Duration(seconds: 45));
+      events.add(snapshot('packet-pause-returned'));
+      receipt['packetPauseDrainMs'] = clock.elapsedMilliseconds - pauseAt;
+      var lateResume = false;
+      final pausedStates = player.playerStateStream.listen((state) {
+        if (state.playing) lateResume = true;
+      });
+      try {
+        await play.timeout(const Duration(seconds: 5));
+        await until(
+          () => engine.pendingPlaybackPreparationTasks == 0,
+          'Packet playback preparation drain',
+        );
+        await observeStopped('Packet Pause');
+        final pauseStates = playerStates
+            .where((event) => (event['elapsedMs']! as int) >= pauseAt)
+            .toList();
+        final stopped = pauseStates.indexWhere(
+          (event) => event['playing'] == false,
+        );
+        if (lateResume ||
+            player.playing ||
+            stopped < 0 ||
+            playerStateOverflow ||
+            pauseStates
+                .skip(stopped + 1)
+                .any((event) => event['playing'] == true)) {
+          throw StateError(
+            'Native player did not stop or late producer resumed it',
+          );
+        }
+        receipt['nativePlayerStoppedEventIndex'] = playerStates.indexOf(
+          pauseStates[stopped],
+        );
+        receipt['nativePlayerStoppedMs'] = pauseStates[stopped]['elapsedMs'];
+        receipt['nativePlayerStopLatencyMs'] =
+            (pauseStates[stopped]['elapsedMs']! as int) - pauseAt;
+        events.add(snapshot('packet-pause-observation-ended'));
+        receipt['packetPauseActivity'] =
+            await NativeSpeechWorkActivity.snapshot();
+        receipt['packetPauseCoverage'] =
+            'native packet before complete scene; paused';
+        receipt['functionalPassed'] = true;
+        receipt['passed'] = true;
+      } finally {
+        await pausedStates.cancel();
+      }
+      return; // The shared finally drains all owners and writes the receipt.
+    }
     // Screen owns normal initialize/import/completeInitialIntake. Never await
     // model readiness or whole preparation before registering the Play intent.
     await until(() => c.preparedWordCount > 0, 'First prepared content');
@@ -381,9 +668,36 @@ Future<void> main(List<String> args) async {
     } catch (error) {
       cleanup.add('$error');
     }
+    await playerStateSubscription.cancel();
     await sequence.cancel();
     await position.cancel();
     await copying;
+    if (packetCancellation) {
+      receipt['queuedAudio'] = await Future.wait(checks.values);
+      receipt['playerStateEvents'] = playerStates;
+      receipt['playerStateOverflow'] = playerStateOverflow;
+      receipt['finalNativeResources'] = {
+        'playerPlaying': player.playing,
+        'pendingPlaybackPreparationTasks':
+            engine.pendingPlaybackPreparationTasks,
+        'playbackPins': engine.debugPlaybackPinCount,
+        'resourcesReady': engine.resourcesReady,
+      };
+      final stoppedIndex = receipt['nativePlayerStoppedEventIndex'] as int?;
+      final latePlaying =
+          stoppedIndex != null &&
+          playerStates
+              .skip(stoppedIndex + 1)
+              .any((event) => event['playing'] == true);
+      if (latePlaying ||
+          playerStateOverflow ||
+          player.playing ||
+          engine.pendingPlaybackPreparationTasks != 0 ||
+          engine.debugPlaybackPinCount != 0 ||
+          engine.resourcesReady) {
+        cleanup.add('Native player/work/pins/resources not drained');
+      }
+    }
     final activity = await NativeSpeechWorkActivity.snapshot();
     receipt['speechWorkActivity'] = activity;
     receipt['speechWorkActivitySuppressed'] =
