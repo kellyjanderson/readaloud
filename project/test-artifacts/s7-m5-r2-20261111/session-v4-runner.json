@@ -1,0 +1,100 @@
+{
+  "passed": false,
+  "nativePassed": false,
+  "normalQuit": true,
+  "appExitVerified": true,
+  "forcedCleanup": false,
+  "remainingOwnedPids": [],
+  "modelSource": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/character-fish-standalone",
+  "expectedOwnedAlias": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/Library/Application Support/com.kellyjanderson.readAloud.mlxPlaybackTest/read_aloud/mlx-tts/fish_drama3",
+  "frameworkSha256": "ba6032a79945074ac6c7c0719a4da27878f55e1b26464ab98ed6d62aaf5b1e17",
+  "executableSha256": "a640af4044e09d4f4c6bad16878d100cfef5d45f0ea4fbeb5669eed92d08d5c2",
+  "maxMlxChildren": 1,
+  "observedMlxSamples": 448,
+  "processEvents": [
+    {
+      "unixMicros": 1794409134376163,
+      "pids": []
+    },
+    {
+      "unixMicros": 1794409136584003,
+      "pids": [
+        30999
+      ]
+    },
+    {
+      "unixMicros": 1794409156424919,
+      "pids": []
+    },
+    {
+      "unixMicros": 1794409158334175,
+      "pids": [
+        31380
+      ]
+    },
+    {
+      "unixMicros": 1794409158827295,
+      "pids": []
+    },
+    {
+      "unixMicros": 1794409159936623,
+      "pids": [
+        31439
+      ]
+    },
+    {
+      "unixMicros": 1794409168959454,
+      "pids": []
+    },
+    {
+      "unixMicros": 1794409171778372,
+      "pids": [
+        31607
+      ]
+    },
+    {
+      "unixMicros": 1794409181712313,
+      "pids": []
+    },
+    {
+      "unixMicros": 1794409184664868,
+      "pids": [
+        31792
+      ]
+    },
+    {
+      "unixMicros": 1794409194954633,
+      "pids": []
+    },
+    {
+      "unixMicros": 1794409198048921,
+      "pids": [
+        31980
+      ]
+    },
+    {
+      "unixMicros": 1794409207746152,
+      "pids": []
+    },
+    {
+      "unixMicros": 1794409210848167,
+      "pids": [
+        32153
+      ]
+    },
+    {
+      "unixMicros": 1794409221916551,
+      "pids": []
+    }
+  ],
+  "errors": [
+    "Native failure: "
+  ],
+  "limits": "100ms process observations; source ownership checks are separate. Offline bf16 fixture, no quantized-model/M3 claim.",
+  "pid": 30972,
+  "capturePid": 30973,
+  "applicationActivationRequested": true,
+  "captureExitStatus": 0,
+  "appExitStatus": 0,
+  "ownedAliasAbsent": true
+}

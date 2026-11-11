@@ -1,0 +1,14 @@
+{
+  "passed": true,
+  "prefixCorrelation": 0.9999750528733431,
+  "prefixDurationMs": 40,
+  "postPauseGuardMs": 250,
+  "postPausePeak": 0.0,
+  "postPauseObservedMs": 58560.270833333336,
+  "maxObservedMlxChildren": 1,
+  "observedMlxSamples": 390,
+  "nativeMainMaxMs": 37,
+  "maxUiHeartbeatDelayMs": 5,
+  "retainedAnchor": 29,
+  "scope": "40ms app-emitted positive prefix and post-Pause switch silence; 100ms sampled child count. Not complete-turn, universal overlap, quantized-model, memory-envelope, physical-speaker or M3 acceptance."
+}

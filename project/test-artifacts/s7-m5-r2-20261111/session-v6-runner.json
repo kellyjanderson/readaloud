@@ -1,0 +1,30 @@
+{
+  "passed": false,
+  "nativePassed": false,
+  "normalQuit": true,
+  "appExitVerified": true,
+  "forcedCleanup": false,
+  "remainingOwnedPids": [],
+  "modelSource": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/character-fish-standalone",
+  "expectedOwnedAlias": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/Library/Application Support/com.kellyjanderson.readAloud.mlxPlaybackTest/read_aloud/mlx-tts/fish_drama3",
+  "frameworkSha256": "2593e2ddcc51b9a6199c1b8e09819789307fc3b0c019fbb0ce1612631b6ee579",
+  "executableSha256": "38280058048bc718143c446e6340c4b5e0c28b85b42ab69aa72e667557bd46a3",
+  "maxMlxChildren": 0,
+  "observedMlxSamples": 0,
+  "processEvents": [
+    {
+      "unixMicros": 1794410089536399,
+      "pids": []
+    }
+  ],
+  "errors": [
+    "Native failure: Bad state: Speech startup failed: Bad state: Complete process-tree memory is unavailable."
+  ],
+  "limits": "100ms process observations; source ownership checks are separate. Offline bf16 fixture, no quantized-model/M3 claim.",
+  "pid": 41355,
+  "capturePid": 41356,
+  "applicationActivationRequested": true,
+  "captureExitStatus": 0,
+  "appExitStatus": 0,
+  "ownedAliasAbsent": true
+}
