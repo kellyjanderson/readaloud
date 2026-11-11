@@ -430,13 +430,16 @@ def _owned_hf_file(path: Path, snapshot: Path, entry: dict) -> bool:
 
 def _owned_hf_blob(blob: Path, cache_dir: Path) -> bool:
     from huggingface_hub.utils._shared_blobs import (is_shared_blobs_dir,
-                                                    shared_blob_target, shared_blobs_dir)
+                                                    _shared_blob_target, shared_blobs_dir)
     if not _owned_cache_path(blob, cache_dir, allow_leaf_symlink=True):
         return False
     if blob.is_symlink():
-        shared = shared_blob_target(blob, cache_dir)
+        # The public shared_blob_target additionally requires a present regular
+        # payload. Ownership must survive a missing payload so Hub can resume.
+        shared = _shared_blob_target(blob, cache_dir, raise_on_io_error=True)
         return (is_shared_blobs_dir(shared_blobs_dir(cache_dir)) and shared is not None and
-                _owned_cache_path(shared, cache_dir))
+                _owned_cache_path(shared, cache_dir) and
+                (not shared.exists() or shared.is_file()))
     return not blob.exists() or blob.is_file()
 
 

@@ -688,7 +688,7 @@ class ModelDownloadReuseTest(unittest.TestCase):
         from huggingface_hub import file_download, _snapshot_download
         from huggingface_hub.utils import XetFileData
         from huggingface_hub.utils._shared_blobs import publish_blob_to_shared_store, shared_blob_target
-        for layout in ['shared', 'regular', 'regular-good-blob']:
+        for layout in ['shared', 'shared-missing', 'regular', 'regular-good-blob', 'regular-copy-fallback']:
             with self.subTest(layout=layout), self.fixture() as (cache, snapshot, manifest, content):
                 bad = snapshot / 'model.safetensors'
                 entry = manifest['files'][bad.name]
@@ -696,20 +696,23 @@ class ModelDownloadReuseTest(unittest.TestCase):
                 blob = blobs / entry['digest']
                 xet_hash = 'b' * 64
                 blob.write_bytes(content[bad.name])
-                if layout == 'shared':
+                if layout.startswith('shared'):
                     self.assertTrue(publish_blob_to_shared_store(blob_path=str(blob), xet_hash=xet_hash,
                         cache_dir=cache, expected_size=entry['size']))
                     bad.unlink(); file_download._create_symlink(str(blob), str(bad), new_blob=False)
                     shared = shared_blob_target(blob, cache)
                     self.assertIsNotNone(shared)
-                    shared.chmod(0o600); shared.write_bytes(b'x' * entry['size'])
+                    if layout == 'shared-missing':
+                        shared.unlink()
+                    else:
+                        shared.chmod(0o600); shared.write_bytes(b'x' * entry['size'])
                     self.assertTrue(blob.is_symlink())
                     self.assertTrue(worker._owned_hf_file(bad, snapshot, entry))
                 else:
                     bad.write_bytes(b'x' * entry['size'])
-                    if layout == 'regular':
+                    if layout in ('regular', 'regular-copy-fallback'):
                         blob.write_bytes(b'y' * entry['size'])
-                blob_before = blob.stat()
+                blob_before = blob.stat() if blob.exists() else None
                 good = {name: (snapshot / name).stat() for name in content if name != bad.name}
                 other = cache / 'other-variant'; other.write_bytes(b'preserve other variant')
                 partial = blobs / 'unrelated.incomplete'; partial.write_bytes(b'preserve partial')
@@ -717,27 +720,30 @@ class ModelDownloadReuseTest(unittest.TestCase):
                 # metadata endpoint and byte transport are substituted below.
                 tree = {name: _snapshot_download.TreeCacheEntry(size=len(data), blob_id='0' * 40,
                             lfs_sha256=manifest['files'][name]['digest'], lfs_size=len(data),
-                            xet_hash=xet_hash if name == bad.name and layout == 'shared' else None)
+                            xet_hash=xet_hash if name == bad.name and layout.startswith('shared') else None)
                         for name, data in content.items()}
                 _snapshot_download.write_tree_cache(str(snapshot.parent.parent), manifest['revision'], tree)
                 def metadata(**kwargs):
                     self.assertEqual((kwargs['repo_id'], kwargs['revision'], kwargs['filename']),
                                      (manifest['repo'], manifest['revision'], bad.name))
                     return ('https://fixture.invalid/model', entry['digest'], manifest['revision'], entry['size'],
-                            XetFileData(xet_hash, 'https://fixture.invalid/refresh') if layout == 'shared' else None, None)
+                            XetFileData(xet_hash, 'https://fixture.invalid/refresh') if layout.startswith('shared') else None, None)
                 def http_bytes(url, stream, **kwargs):
                     stream.write(content[bad.name])
                 def xet_bytes(**kwargs):
                     kwargs['incomplete_path'].write_bytes(content[bad.name])
                 with patch.object(file_download, '_get_metadata_or_catch_error', side_effect=metadata), \
                         patch.object(file_download, 'http_get', side_effect=http_bytes) as http, \
-                        patch.object(file_download, 'xet_get', side_effect=xet_bytes) as xet:
+                        patch.object(file_download, 'xet_get', side_effect=xet_bytes) as xet, \
+                        (patch.object(file_download, 'are_symlinks_supported', return_value=False)
+                         if layout == 'regular-copy-fallback' else contextlib.nullcontext()):
                     self.assertEqual(worker._download_model('fish_drama3', str(cache)).resolve(), snapshot.resolve())
-                expected_transfers = {'shared': (0, 1), 'regular': (1, 0), 'regular-good-blob': (0, 0)}
+                expected_transfers = {'shared': (0, 1), 'shared-missing': (0, 1), 'regular': (1, 0),
+                                     'regular-good-blob': (0, 0), 'regular-copy-fallback': (1, 0)}
                 self.assertEqual((http.call_count, xet.call_count), expected_transfers[layout])
                 self.assertEqual(bad.read_bytes(), content[bad.name])
-                self.assertTrue(bad.is_symlink())
-                if layout == 'shared':
+                self.assertEqual(bad.is_symlink(), layout != 'regular-copy-fallback')
+                if layout.startswith('shared'):
                     self.assertTrue(blob.is_symlink())
                     self.assertIsNotNone(shared_blob_target(blob, cache))
                 if layout == 'regular-good-blob':
