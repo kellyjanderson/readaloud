@@ -66,6 +66,22 @@ per-WAV queue playback against one joined file containing identical PCM,
 with the same UI and capture conditions. It is diagnostic, not an engine
 replacement or a production acceptance claim.
 
+The prerecorded v30/v31 controls both stayed within250ms without inference.
+Joined v31 matched the unchanged waveform/quiet criteria; packet v30 failed
+only its final-source witness after168 complete matches, so it is not a paired
+passing comparison. A separate current-source snapshot at Pause corrects the
+observation boundary; it does not relax the matching threshold.
+
+Two explicitly diagnostic taskpolicy trials reduce the inference child's
+scheduled priority while retaining its PID/protocol/cancellation ownership.
+Background+utility v32 and utility-only v33 passed the native counters at
+179/190ms and matched172/166 audible references in both capture paths.
+No missing reference occurred in those runs. These single passing observations
+do not establish a cause or a production remedy. The maintained macOS manual
+describes I/O/scheduling policies, not a GPU-priority guarantee. Model loading
+was slower, and affected R25 clocks were not measured. The default launch policy
+remains unchanged pending repeated native/audio and load qualification.
+
 ## Maintained platform and library boundaries
 
 The pinned Flutter run-loop implementation rearms a CF timer for positive-delay

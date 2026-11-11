@@ -1,0 +1,12 @@
+{
+  "appPid" : 58662,
+  "armedMonotonicRawNanos" : 2339231074466625,
+  "armedUnixMicros" : 1794437306823541,
+  "bufferCapacityFrames" : 4096,
+  "limit" : "Tap, aggregate and IOProc are installed; AudioDeviceStart has not returned. No callback, audio, permission or interval coverage is asserted.",
+  "mechanism" : "CoreAudioProcessTap",
+  "processAudioObjectID" : 153,
+  "sampleRate" : 48000,
+  "schema" : "readaloud-process-capture-armed-v1",
+  "sessionID" : "158659A2-3EC4-4C65-83B7-2E9C0A7C777E"
+}

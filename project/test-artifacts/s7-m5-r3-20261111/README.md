@@ -120,6 +120,28 @@ before waiting for capture frames; Play still waits for actual capture readiness
 That correction is source-analyzed/built, not a successful native rerun. Native
 checks wait for the user to unlock; independent source work can continue.
 
+After unlock, prerecorded packet v30 and joined v31 both completed at native
+232/235ms and UI2ms, with normal Quit/no-orphan cleanup. Joined waveform and
+runtime criteria met:168 full references/53.3659s, max join residual0.003968ms,
+1.212s quiet tail at peak0. Packet v30 matched168 full references but FAILED its
+final interrupted-source witness check; that control is not a paired pass.
+The harness now records the actual current source immediately before Pause,
+without weakening acoustic thresholds. This correction is not yet natively rerun.
+
+QA-only macOS child scheduling trials retain the existing process/protocol/
+memory owner and use the maintained taskpolicy facility. Background+utility v32
+completed at native179ms/UI6ms and matched172 full audible references/55.0782s
+in both captures. Utility-only v33 completed at native190ms/UI3ms and matched166
+audible references in both captures. Neither observed missing references. Both
+normally quit with one MLX child and no orphans. They remain diagnostic-only;
+one pass per policy does not establish a fix. Most v33 samples were inactive,
+whereas all751 v32 samples were active.
+
+Model-load stages took9.904s (background+utility) and6.515s (utility-only), with
+first-packet stages1.351/1.281s. These are source stages, not R25 launch/load
+clock measurements. Startup impact and repeated full-precision/quantized/switch
+checks are required before any adoption. Production policy stays unchanged.
+
 The QA-only lazy-preparation comparison v23 still failed at690ms native delay.
 It is not the production default or a completed fix. Both independent captures
 have identical PCM over their acoustic overlap, including a199.3125ms exact-zero
