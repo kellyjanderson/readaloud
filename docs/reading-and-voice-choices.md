@@ -67,6 +67,9 @@ or retry. Reduced motion removes the fade. Use **Copy** to copy the full status
 and details even when some text is outside the visible area. The controls can
 also be reached with the keyboard.
 
+Some errors offer **Clear error**. This dismisses the summary while keeping the
+diagnostic in Activity. Retrying Save also replaces its previous failure status.
+
 **Cancel document** stops document preparation. Model preparation has its own
 Cancel and Retry controls in Settings. Cancelling a model keeps reusable
 downloaded files, and Retry begins a fresh attempt; speech still waits for Play.
