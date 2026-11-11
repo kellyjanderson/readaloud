@@ -240,8 +240,10 @@ class MlxSpeechWorkerChunkProcessor
     this.onStatus,
     this.onResourceProgress,
     this.runtimeMemorySampler,
+    FishDramaCatalogStore? catalogStore,
     AudioArtifactStore? artifactStore,
-  }) : _store = artifactStore {
+  }) : _store = artifactStore,
+       _catalogStore = catalogStore {
     _activeInstance = this;
     if (!_lifecycleInstalled) {
       _lifecycleInstalled = true;
@@ -497,6 +499,7 @@ class MlxSpeechWorkerChunkProcessor
         expectedVerifiedModelIdentity: requireVerifiedAssets
             ? variant.pinnedIdentity
             : null,
+        sizingEstimateBytes: variant?.estimatedPeakBytes,
         modelCacheDirectories: variant == null
             ? const []
             : [
@@ -612,7 +615,6 @@ class MlxSpeechWorkerChunkProcessor
   @override
   Future<void> releaseResources() async {
     _bindings.clear();
-    await _catalogStore?.close();
     _referencePaths.clear();
   }
 
@@ -947,6 +949,7 @@ class MlxSpeechWorkerChunkProcessor
     _closed = true;
     if (!_closedSignal.isCompleted) _closedSignal.complete();
     _bindings.clear();
+    await _catalogStore?.close();
     await _runtimeLease?.cancelAndDrain();
     await _process?.shutdown();
     _retainedPeakRuntimeBytes = peakRuntimeBytes;
@@ -1011,6 +1014,7 @@ class MlxTtsPythonProcess {
     required void Function(Map<String, Object?>) onProgress,
     bool requireVerifiedModelAssets = false,
     String? expectedVerifiedModelIdentity,
+    int? sizingEstimateBytes,
     List<String> modelCacheDirectories = const [],
   }) async {
     if (requireVerifiedModelAssets &&
@@ -1024,6 +1028,8 @@ class MlxTtsPythonProcess {
       'modelPath': modelPath,
       'quantizationBits': quantizationBits,
       'privateCachePath': privateCachePath,
+      if (sizingEstimateBytes != null)
+        'sizingEstimateBytes': sizingEstimateBytes,
       if (modelCacheDirectories.isNotEmpty)
         'modelCacheDirectories': List<String>.unmodifiable(
           modelCacheDirectories,
@@ -1418,18 +1424,14 @@ class MlxTtsPythonProcess {
     final modelId = load['modelId'] as String;
     RuntimeMemoryDecision decision;
     if (isDramaEngine(modelId)) {
-      final catalog =
-          jsonDecode(
-                await rootBundle.loadString('assets/fish_drama_models.json'),
-              )
-              as Map;
-      final estimate = (catalog[modelId] as Map)['estimatedPeakBytes'];
+      final estimate = load['sizingEstimateBytes'];
       // This path executes an explicit selected model. No bundled Fish envelope
       // is measured yet; never call it a qualified default or change the choice.
       decision = _memoryPolicy.admit(
         sample: snapshot,
         now: DateTime.now(),
-        runtimeIdentity: modelId,
+        runtimeIdentity:
+            '$modelId:${load['expectedVerifiedModelIdentity'] ?? 'unverified'}',
         deviceIdentity: '',
         explicitQualification: true,
         sizingEstimateBytes: estimate is int ? estimate : null,

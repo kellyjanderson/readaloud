@@ -108,8 +108,8 @@ def runtime_gates(native, runner, timing):
     require(native.get('schema') == 'readaloud-native-variant-v1'
             and runner.get('schema') == 'readaloud-native-variant-runner-v1', 'Unknown receipt schema')
     require(native.get('mode') == runner.get('mode')
-            and native.get('mode') in ('cached-8bit', 'cached-4bit'),
-            'Sustained acceptance requires cached-8bit or cached-4bit mode')
+            and native.get('mode') in ('cached-bf16', 'cached-8bit', 'cached-4bit'),
+            'Sustained acceptance requires an offline single-variant mode')
     for field in ('passed', 'functionalPassed', 'resourceShutdownComplete'):
         require(native.get(field) is True, f'Native gate failed: {field}')
     for field in ('passed', 'nativePassed', 'normalQuit', 'appExitVerified'):

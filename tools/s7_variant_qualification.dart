@@ -73,6 +73,7 @@ Future<List<Map<String, Object?>>> _provenance(String root) =>
 Future<void> main(List<String> args) async {
   WidgetsFlutterBinding.ensureInitialized();
   const modes = [
+    'cached-bf16',
     'cached-8bit',
     'cached-4bit',
     'cached-aba',
@@ -96,9 +97,11 @@ Future<void> main(List<String> args) async {
   final output = File(args[1]).absolute;
   if (await output.exists()) throw StateError('Preserve existing receipt.');
   final root = await output.parent.createTemp('s7-variants-');
-  final initial = mode == 'cached-4bit'
-      ? 'fish_drama3_4bit'
-      : 'fish_drama3_8bit';
+  final initial = switch (mode) {
+    'cached-bf16' => 'fish_drama3',
+    'cached-4bit' => 'fish_drama3_4bit',
+    _ => 'fish_drama3_8bit',
+  };
   // In-memory preferences and isolated content only; existing QA model cache is
   // read through normal application discovery. No aliases/modelPath override.
   // ignore: invalid_use_of_visible_for_testing_member
@@ -454,7 +457,9 @@ Future<void> main(List<String> args) async {
       c.selectedVoice?.id == 'library_fishadrian',
       'Narrator unavailable',
     );
-    if (mode == 'cached-8bit' || mode == 'cached-4bit') {
+    if (mode == 'cached-bf16' ||
+        mode == 'cached-8bit' ||
+        mode == 'cached-4bit') {
       await playFor(60, 'sustained-$initial');
     } else {
       await playFor(3, 'initial-A8');

@@ -7,7 +7,7 @@ require 'fileutils'
 require 'timeout'
 require 'rbconfig'
 
-MODES = %w[cached-8bit cached-4bit cached-aba online-cancel-retry].freeze
+MODES = %w[cached-bf16 cached-8bit cached-4bit cached-aba online-cancel-retry].freeze
 abort 'Usage: run_s7_variant_qualification.rb APP MODE NEW_OUTPUT CAPTURE' unless ARGV.size == 4
 bundle, mode, output, capture = ARGV
 bundle, output, capture = [bundle, output, capture].map { |p| File.expand_path(p) }

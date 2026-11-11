@@ -104,6 +104,24 @@ class AppDelegate: FlutterAppDelegate {
         result(FlutterMethodNotImplemented)
         return
       }
+      if call.method == "runtimeDeviceIdentity" {
+        DispatchQueue.global(qos: .utility).async {
+          var length = 0
+          let sized = sysctlbyname("machdep.cpu.brand_string", nil, &length, nil, 0)
+          var value = [CChar](repeating: 0, count: max(1, min(length, 1024)))
+          let read = sized == 0 && length > 0 && length <= 1024
+            ? sysctlbyname("machdep.cpu.brand_string", &value, &length, nil, 0) : -1
+          let chip = read == 0 ? String(cString: value).trimmingCharacters(in: .whitespacesAndNewlines) : ""
+          DispatchQueue.main.async {
+            if chip.isEmpty {
+              result(FlutterError(code: "device_identity_unavailable", message: "Could not identify this Mac for model qualification.", details: nil))
+            } else {
+              result("\(chip)/\(ProcessInfo.processInfo.physicalMemory)")
+            }
+          }
+        }
+        return
+      }
       if call.method == "timingClockSnapshot" {
         var raw = timespec()
         guard clock_gettime(CLOCK_MONOTONIC_RAW, &raw) == 0 else {

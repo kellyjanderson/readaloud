@@ -8,6 +8,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:read_aloud/src/models/speech_engine_catalog.dart';
 import 'package:read_aloud/src/services/mlx_speech_worker_processor.dart';
 import 'package:read_aloud/src/services/runtime_memory_policy.dart';
+import 'package:read_aloud/src/services/fish_drama_catalog_store.dart';
 
 // Real child processes with a tiny protocol stub: no MLX weights or network.
 RuntimeMemorySnapshot memorySnapshot({
@@ -124,12 +125,13 @@ end
         .setMockMethodCallHandler(activityChannel, null);
     await root.delete(recursive: true);
   });
-  Future<void> load() async {
+  Future<void> load({int sizingEstimateBytes = 80000000000}) async {
     await worker.loadModel(
       modelId: 'fish_drama3',
       modelPath: '',
       quantizationBits: 0,
       privateCachePath: root.path,
+      sizingEstimateBytes: sizingEstimateBytes,
       onProgress: (_) {},
     );
   }
@@ -303,6 +305,7 @@ end
         final request = jsonDecode(await trace.readAsString()) as Map;
         expect(request['modelPath'], isEmpty);
         expect(request['requireVerifiedModelAssets'], isTrue);
+        expect(request['sizingEstimateBytes'], variant.estimatedPeakBytes);
         expect(request['modelCacheDirectories'], contains(cache.path));
         expect(
           processor.supportsNativeScenes,
@@ -570,6 +573,67 @@ end
       runtimeMemorySampler: sampler,
     );
   }
+
+  test(
+    'admission uses the captured descriptor sizing rather than bundled data',
+    () async {
+      await useNativeSampler(() async => memorySnapshot());
+      await expectLater(
+        load(sizingEstimateBytes: 100000000000),
+        throwsStateError,
+      );
+      expect(await File('${root.path}/cache/load.pid').exists(), false);
+      await load(sizingEstimateBytes: 40000000000);
+      expect(await File('${root.path}/cache/load.pid').exists(), true);
+    },
+  );
+
+  test(
+    'catalog belongs to terminal session, not released document resources',
+    () async {
+      final reached = Completer<void>();
+      final held = Completer<List<int>>();
+      final catalog = FishDramaCatalogStore(
+        root: Directory('${root.path}/catalog-owner'),
+        bundledModelsJson: await File(
+          'assets/fish_drama_models.json',
+        ).readAsString(),
+        bundledChecksumsJson: await File(
+          'assets/fish_drama_model_checksums.json',
+        ).readAsString(),
+        transport: (_) {
+          reached.complete();
+          return held.future;
+        },
+      );
+      await catalog.load();
+      var settled = false;
+      final refresh = catalog.refresh().whenComplete(() {
+        settled = true;
+      });
+      await reached.future;
+      final processor = MlxSpeechWorkerChunkProcessor(
+        engineId: 'fish_drama3',
+        modelPath: '',
+        pythonPath: '${root.path}/python',
+        catalogStore: catalog,
+      );
+      try {
+        await processor.releaseResources();
+        await Future<void>.delayed(Duration.zero);
+        expect(settled, false);
+        // Document replacement retains a still-open session catalog.
+        expect(await catalog.load(), isNotNull);
+        await processor.dispose().timeout(const Duration(seconds: 2));
+        expect((await refresh).succeeded, false);
+        held.complete(utf8.encode('{}'));
+      } finally {
+        if (!held.isCompleted) held.complete(utf8.encode('{}'));
+        await processor.dispose();
+        await catalog.close();
+      }
+    },
+  );
 
   test(
     'insufficient whole-tree headroom rejects before spawning a model',

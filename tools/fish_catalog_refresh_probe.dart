@@ -5,8 +5,9 @@ import 'dart:io';
 import 'package:read_aloud/src/services/fish_drama_catalog_store.dart';
 
 Future<void> main(List<String> args) async {
-  if (args.length != 2)
+  if (args.length != 2) {
     throw ArgumentError('Expected SOURCE_COMMIT NEW_OUTPUT');
+  }
   final output = Directory(args[1]).absolute;
   if (await output.exists()) throw StateError('Preserve existing evidence');
   await output.create(recursive: true);
