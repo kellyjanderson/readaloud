@@ -44,9 +44,15 @@ last_children = nil
 native = nil
 profiles = []
 profile_stalls = ENV['READALOUD_S7_PROFILE_STALLS'] == '1'
-if profile_stalls
+profile_continuously = ENV['READALOUD_S7_PROFILE_STALLS'] == 'continuous'
+profile_instruments = ENV['READALOUD_S7_PROFILE_STALLS'] == 'timeprofiler'
+if profile_stalls || profile_continuously || profile_instruments
   result[:diagnosticProfiling] = true
   result[:errors] << 'Diagnostic native sampling enabled; timing is instrumented'
+end
+if ENV['READALOUD_S7_LAZY_NATIVE_PREPARATION'] == '1'
+  result[:lazyNativePreparationExperiment] = true
+  result[:errors] << 'QA-only native preparation comparison; production default unchanged'
 end
 # Read only bounded uncompressed PCM or float WAV. This checks app-emitted signal
 # separately from player intent, never labels energy as an exact speech match.
@@ -131,6 +137,24 @@ begin
   until File.exist?(receipt)
     raise 'Native app exited before receipt' if Process.waitpid(pid, Process::WNOHANG)
     raise 'Variant probe 270s deadline' if Process.clock_gettime(Process::CLOCK_MONOTONIC) > deadline
+    if (profile_continuously || profile_instruments) && profiles.empty? &&
+        File.read(log_path).include?('S7_VARIANT_NATIVE_STARTED')
+      result[:nativeSamplingStartedUnixMicros] = (Time.now.to_r * 1_000_000).to_i
+      command = if profile_instruments
+        options = JSON.parse(IO.popen(['/usr/bin/xcrun', 'xctrace', 'record',
+          '--template', 'Time Profiler', '--show-recording-options'], &:read))
+        options.fetch('Time Profiler')['recordWaitingThreads'] = true
+        options_path = File.join(output, 'native-recording-options.json')
+        File.write(options_path, JSON.pretty_generate(options) + "\n")
+        result[:nativeRecordingOptions] = options
+        ['/usr/bin/xcrun', 'xctrace', 'record', '--template', 'Time Profiler',
+         '--attach', pid.to_s, '--time-limit', '70s', '--recording-options', options_path,
+         '--output', File.join(output, 'native-time.trace')]
+      else
+        ['/usr/bin/sample', pid.to_s, '70', '10', '-file', File.join(output, 'native-continuous.sample.txt')]
+      end
+      profiles << Process.spawn(*command, out: log, err: log)
+    end
     if profile_stalls && profiles.length < 4 &&
         File.read(log_path).scan('NATIVE_MAIN_PROBE_PENDING').length > profiles.length
       path = File.join(output, "native-stall-#{profiles.length + 1}.sample.txt")
@@ -175,7 +199,9 @@ rescue StandardError => e
 ensure
   profiles.each do |profile|
     begin
-      Timeout.timeout(5) { Process.waitpid(profile) }
+      _, profiler_status = Timeout.timeout(12) { Process.wait2(profile) }
+      (result[:nativeProfilerExitStatuses] ||= []) << profiler_status.exitstatus
+      result[:errors] << 'Native profiler failed' unless profiler_status.success?
     rescue Timeout::Error
       Process.kill('TERM', profile) rescue Errno::ESRCH
       Process.waitpid(profile) rescue Errno::ECHILD

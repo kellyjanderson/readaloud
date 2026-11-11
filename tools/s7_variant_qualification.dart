@@ -143,7 +143,10 @@ Future<void> main(List<String> args) async {
   KokoroTtsEngine factory(String id, int bits) {
     if (engines.length >= 8) throw StateError('Engine creation bound');
     final number = engines.length;
-    final player = AudioPlayer(useLazyPreparation: false);
+    final player = AudioPlayer(
+      useLazyPreparation:
+          Platform.environment['READALOUD_S7_LAZY_NATIVE_PREPARATION'] == '1',
+    );
     final engine = KokoroTtsEngine(
       player: player,
       engineId: id,
@@ -238,6 +241,8 @@ Future<void> main(List<String> args) async {
   final receipt = <String, Object?>{
     'schema': 'readaloud-native-variant-v1',
     'mode': mode,
+    'lazyNativePreparationExperiment':
+        Platform.environment['READALOUD_S7_LAZY_NATIVE_PREPARATION'] == '1',
     'passed': false,
     'offline': !online,
     'managedModelPathOverride': false,
