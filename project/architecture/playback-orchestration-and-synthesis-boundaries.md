@@ -55,6 +55,12 @@ old index when that current item itself was removed. Comparing removals against
 a repeatedly decremented index skipped a remaining item when several predecessors
 were pruned together. The native recording-queue regression covers batch removal,
 advancement during mutation, removed-current, shuffle, seek, load and loop paths.
+Append and removal explicitly request preservation of surviving playback. Their
+fast path derives both its head and future-prefix comparison from one native
+queue snapshot, then appends only the missing suffix. Natural advancement can
+remove a prefix of that snapshot without forcing a rebuild. Separate live reads
+previously raced and fell through to destructive queue reconstruction. Explicit
+seek, load, loop and incompatible reorder paths retain their existing behavior.
 This test does not prove actual emitted endings or continuity; current signed-app
 captures remain required. iOS shares the source but is not qualified here.
 
