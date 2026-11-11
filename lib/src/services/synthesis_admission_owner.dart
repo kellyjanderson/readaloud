@@ -292,17 +292,22 @@ class _Lease
             }
             emit(event);
           }
+
           final processor = owner.processor;
-          if (request.enableAudioPackets && onAudioPacket != null &&
+          if (request.enableAudioPackets &&
+              onAudioPacket != null &&
               processor is StreamingSpeechWorkerChunkProcessor) {
             await (processor as StreamingSpeechWorkerChunkProcessor)
                 .processWithAudioPackets(request, receive, (packet) async {
-              if (!current() || completionObserved ||
-                  packet.sessionId != request.sessionId ||
-                  packet.generationId != request.generationId ||
-                  packet.chunkId != request.chunkId) return;
-              await onAudioPacket(packet);
-            });
+                  if (!current() ||
+                      completionObserved ||
+                      packet.sessionId != request.sessionId ||
+                      packet.generationId != request.generationId ||
+                      packet.chunkId != request.chunkId) {
+                    return;
+                  }
+                  await onAudioPacket(packet);
+                });
           } else {
             await processor.process(request, receive);
           }

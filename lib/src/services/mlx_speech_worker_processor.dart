@@ -1,3 +1,5 @@
+import 'native_speech_work_activity.dart';
+import 'speech_audio_packet.dart';
 import '../models/speech_engine_catalog.dart';
 import 'dart:async';
 import 'dart:convert';
@@ -75,6 +77,7 @@ Future<AudioArtifact> _publishArtifact(
   String attemptPath,
   int expectedSampleRate,
   Map<String, dynamic> metadata,
+  List<String> packetPaths,
 ) => Isolate.run(() {
   // Keep complete PCM reads and publication inside the worker. The immutable
   // attempt stays owned until this future drains, including on cancellation.
@@ -82,10 +85,91 @@ Future<AudioArtifact> _publishArtifact(
   if (AudioArtifactStore.validateWav(wav).sampleRate != expectedSampleRate) {
     throw StateError('Model response and emitted WAV sample rates differ.');
   }
-  return AudioArtifactStore(
+  if (packetPaths.isNotEmpty) {
+    var offset = 44;
+    for (final path in packetPaths) {
+      final packet = File(path).readAsBytesSync();
+      if (AudioArtifactStore.validateWav(packet).sampleRate !=
+          expectedSampleRate) {
+        throw const FormatException(
+          'Packet sample rate changed before publication.',
+        );
+      }
+      if (offset + packet.length - 44 > wav.length) {
+        throw const FormatException('Packet PCM exceeds finalized scene.');
+      }
+      for (var index = 44; index < packet.length; index++) {
+        if (packet[index] != wav[offset++]) {
+          throw const FormatException(
+            'Packet PCM differs from finalized scene.',
+          );
+        }
+      }
+    }
+    if (offset != wav.length) {
+      throw const FormatException('Finalized scene has undelivered PCM.');
+    }
+  }
+  final artifact = AudioArtifactStore(
     Directory(root),
   ).publish(identity: identity, wav: wav, metadata: metadata);
+  if (packetPaths.isNotEmpty &&
+      sha256.convert(wav) !=
+          sha256.convert(File(artifact.audioPath).readAsBytesSync())) {
+    throw StateError(
+      'A concurrent cache publication differs from streamed PCM.',
+    );
+  }
+  return artifact;
 });
+
+/// Invoked in an isolate: identity and cheap size checks precede PCM reads.
+SpeechAudioPacket validateMlxAudioPacket(Map<String, Object?> input) {
+  final response = Map<String, Object?>.from(input['response'] as Map);
+  for (final key in [
+    'sessionId',
+    'generationId',
+    'chunkId',
+    'synthesisIdentity',
+    'bindingFingerprint',
+    'bindingRevision',
+  ]) {
+    if (response[key] != input[key]) {
+      throw FormatException('Wrong audio packet $key.');
+    }
+  }
+  final packet = SpeechAudioPacket.fromMap(response);
+  if (packet.packetIndex != input['packetIndex'] ||
+      packet.frameStart != input['frameStart'] ||
+      (input['sampleRate'] != null &&
+          packet.sampleRate != input['sampleRate'])) {
+    throw const FormatException('Non-contiguous audio packet sequence/format.');
+  }
+  final root = Directory(
+    input['attemptPath'] as String,
+  ).resolveSymbolicLinksSync();
+  final expected =
+      '$root/packet-${packet.packetIndex.toString().padLeft(4, '0')}.wav';
+  final file = File(packet.audioPath);
+  if (packet.audioPath != expected ||
+      FileSystemEntity.typeSync(expected, followLinks: false) !=
+          FileSystemEntityType.file ||
+      file.resolveSymbolicLinksSync() != expected ||
+      file.lengthSync() != 44 + packet.frameCount * 2) {
+    throw const FormatException('Audio packet is not an owned canonical WAV.');
+  }
+  final format = AudioArtifactStore.validateWav(file.readAsBytesSync());
+  if (format.sampleRate != packet.sampleRate ||
+      format.frames != packet.frameCount) {
+    throw const FormatException(
+      'Audio packet WAV format differs from envelope.',
+    );
+  }
+  return packet;
+}
+
+Future<SpeechAudioPacket> _validatePacket(Map<String, Object?> input) =>
+    Isolate.run(() => validateMlxAudioPacket(input));
 
 Future<bool> _sameRenderedAudio(String attempt, String published) =>
     Isolate.run(() {
@@ -99,7 +183,10 @@ Future<bool> _sameRenderedAudio(String attempt, String published) =>
 
 /// Durable, incomplete request output, separate from complete cache entries.
 /// Failed/cancelled attempts keep rendered WAVs; only empty attempts or copies
-/// already published to the immutable artifact store are removed.
+/// already published to the immutable artifact store are removed. Streamed
+/// packet spools (including onset derivatives) remain retained even on success:
+/// native queue pins can outlive producer completion. This owner never evicts
+/// retained output or delegates deletion to a playback callback.
 class MlxSynthesisAttempt {
   MlxSynthesisAttempt._(this.directory);
   final Directory directory;
@@ -140,7 +227,8 @@ class MlxSynthesisAttempt {
 class MlxSpeechWorkerChunkProcessor
     implements
         SpeechWorkerResourceOwner,
-        CancellableSpeechWorkerChunkProcessor {
+        CancellableSpeechWorkerChunkProcessor,
+        StreamingSpeechWorkerChunkProcessor {
   MlxSpeechWorkerChunkProcessor({
     required this.engineId,
     required this.modelPath,
@@ -468,6 +556,19 @@ class MlxSpeechWorkerChunkProcessor
   Future<void> process(
     SpeechWorkerChunkRequest request,
     void Function(SpeechWorkerEvent event) emit,
+  ) => _processRequest(request, emit, null);
+
+  @override
+  Future<void> processWithAudioPackets(
+    SpeechWorkerChunkRequest request,
+    void Function(SpeechWorkerEvent event) emit,
+    Future<void> Function(SpeechAudioPacket packet) onAudioPacket,
+  ) => _processRequest(request, emit, onAudioPacket);
+
+  Future<void> _processRequest(
+    SpeechWorkerChunkRequest request,
+    void Function(SpeechWorkerEvent event) emit,
+    Future<void> Function(SpeechAudioPacket packet)? onAudioPacket,
   ) async {
     bool isCancelled() =>
         _closed || _cancelledGenerations.contains(request.generationId);
@@ -478,6 +579,8 @@ class MlxSpeechWorkerChunkProcessor
       Duration? duration,
       String? message,
       int? elapsedMillis,
+      int streamedPacketCount = 0,
+      int streamedFrameCount = 0,
     }) {
       emit(
         SpeechWorkerEvent(
@@ -491,6 +594,8 @@ class MlxSpeechWorkerChunkProcessor
           duration: duration,
           message: message,
           elapsedMillis: elapsedMillis,
+          streamedPacketCount: streamedPacketCount,
+          streamedFrameCount: streamedFrameCount,
         ),
       );
     }
@@ -631,6 +736,10 @@ class MlxSpeechWorkerChunkProcessor
         ),
       );
       final stopwatch = Stopwatch()..start();
+      final packetPaths = <String>[];
+      var streamedFrames = 0;
+      int? packetRate;
+      final streaming = request.enableAudioPackets && onAudioPacket != null;
       try {
         event(SpeechWorkerEventType.inferencing, stage: 'inferencing');
         final response = await worker.synthesize(
@@ -654,6 +763,30 @@ class MlxSpeechWorkerChunkProcessor
               : null,
           language: _nativeLanguage(request.languageTag),
           outputPath: temporaryAudio.path,
+          enableAudioPackets: streaming,
+          onAudioPacket: streaming
+              ? (response) async {
+                  if (isCancelled()) return;
+                  final packet = await _validatePacket({
+                    'response': response,
+                    'attemptPath': attempt.directory.path,
+                    'sessionId': request.sessionId,
+                    'generationId': request.generationId,
+                    'chunkId': request.chunkId,
+                    'synthesisIdentity': request.synthesisIdentity,
+                    'bindingFingerprint': binding.fingerprint,
+                    'bindingRevision': binding.bindingRevision,
+                    'packetIndex': packetPaths.length,
+                    'frameStart': streamedFrames,
+                    'sampleRate': packetRate,
+                  });
+                  if (isCancelled()) return;
+                  packetPaths.add(packet.audioPath);
+                  streamedFrames = packet.frameEnd;
+                  packetRate = packet.sampleRate;
+                  await onAudioPacket(packet);
+                }
+              : null,
           onProgress: (progress) {
             if (isCancelled()) return;
             event(
@@ -676,6 +809,11 @@ class MlxSpeechWorkerChunkProcessor
             response['chunkId'] != request.chunkId ||
             response['bindingFingerprint'] != binding.fingerprint ||
             response['bindingRevision'] != binding.bindingRevision ||
+            (streaming &&
+                (response['streamedPacketCount'] != packetPaths.length ||
+                    response['streamedFrameCount'] != streamedFrames ||
+                    packetPaths.isEmpty ||
+                    response['sampleRate'] != packetRate)) ||
             !await temporaryAudio.exists()) {
           throw StateError('MLX response identity or WAV validation failed.');
         }
@@ -692,6 +830,7 @@ class MlxSpeechWorkerChunkProcessor
           temporaryAudio.path,
           response['sampleRate'] as int,
           metadata,
+          packetPaths,
         );
         publishedAudioPath = artifact.audioPath;
         if (isCancelled()) return;
@@ -702,6 +841,8 @@ class MlxSpeechWorkerChunkProcessor
           audioPath: artifact.audioPath,
           duration: artifact.duration,
           elapsedMillis: stopwatch.elapsedMilliseconds,
+          streamedPacketCount: packetPaths.length,
+          streamedFrameCount: streamedFrames,
         );
       } on MlxTtsRequestCancelled {
         await worker.reapCancelledProcess();
@@ -770,6 +911,7 @@ class MlxTtsPythonProcess {
   Completer<Map<String, Object?>>? _pendingResponse;
   String? _pendingId;
   void Function(Map<String, Object?>)? _pendingProgress;
+  Future<void> Function(Map<String, Object?>)? _pendingAudioPacket;
   Map<String, Object?>? _loadSpec;
   String? _modelIdentity;
   String _stderrTail = '';
@@ -825,6 +967,8 @@ class MlxTtsPythonProcess {
     List<Map<String, Object?>>? sceneTurns,
     required String language,
     required String outputPath,
+    bool enableAudioPackets = false,
+    Future<void> Function(Map<String, Object?>)? onAudioPacket,
     void Function(Map<String, Object?>)? onProgress,
   }) => _request(
     <String, Object?>{
@@ -844,15 +988,18 @@ class MlxTtsPythonProcess {
       'sceneTurns': ?sceneTurns,
       'language': language,
       'outputPath': outputPath,
+      'enableAudioPackets': enableAudioPackets,
     },
     timeout: const Duration(minutes: 5),
     progress: onProgress,
+    audioPacket: onAudioPacket,
   );
 
   Future<Map<String, Object?>> _request(
     Map<String, Object?> body, {
     required Duration? timeout,
     void Function(Map<String, Object?>)? progress,
+    Future<void> Function(Map<String, Object?>)? audioPacket,
   }) async {
     if (_disposed) throw StateError('MLX Python worker is closed.');
     if (_busy) {
@@ -860,7 +1007,9 @@ class MlxTtsPythonProcess {
     }
     _busy = true; // Reserve before the first await, including process start.
     final epoch = _cancelEpoch;
+    NativeSpeechWorkActivity? activity;
     try {
+      activity = await NativeSpeechWorkActivity.begin();
       await _retiring;
       final needsLoad = _child == null && body['command'] == 'synthesize';
       await (_starting ??= _start().whenComplete(() => _starting = null));
@@ -883,12 +1032,16 @@ class MlxTtsPythonProcess {
       if (_disposed || epoch != _cancelEpoch) {
         throw const MlxTtsRequestCancelled();
       }
-      return await _exchange(child, body, timeout, progress);
+      return await _exchange(child, body, timeout, progress, audioPacket);
     } catch (_) {
       await _retire(); // Errors, malformed replies and timeouts poison the child.
       rethrow;
     } finally {
-      _busy = false;
+      try {
+        await activity?.release();
+      } finally {
+        _busy = false;
+      }
     }
   }
 
@@ -896,13 +1049,15 @@ class MlxTtsPythonProcess {
     Process child,
     Map<String, Object?> body,
     Duration? timeout,
-    void Function(Map<String, Object?>)? progress,
-  ) async {
+    void Function(Map<String, Object?>)? progress, [
+    Future<void> Function(Map<String, Object?>)? audioPacket,
+  ]) async {
     final completion = Completer<Map<String, Object?>>();
     final id = 'mlx-${++_sequence}';
     _pendingId = id;
     _pendingResponse = completion;
     _pendingProgress = progress;
+    _pendingAudioPacket = audioPacket;
     // Attach the error handler before touching stdin (exit may race flush).
     final responseFuture = timeout == null
         ? completion.future
@@ -923,6 +1078,7 @@ class MlxTtsPythonProcess {
         _pendingId = null;
         _pendingResponse = null;
         _pendingProgress = null;
+        _pendingAudioPacket = null;
       }
     }
   }
@@ -973,6 +1129,29 @@ class MlxTtsPythonProcess {
               if (pending == null || pending.isCompleted) return;
               if (response['id'] != _pendingId) {
                 throw const FormatException('Wrong request identity');
+              }
+              if (response['type'] == 'audioPacket') {
+                final deliver = _pendingAudioPacket;
+                if (deliver == null) {
+                  throw const FormatException('Unrequested audio packet');
+                }
+                final subscription = _stdoutSubscription!;
+                subscription.pause();
+                Future<void> handoff() async {
+                  try {
+                    await deliver(response);
+                  } catch (error) {
+                    if (current() && identical(_pendingResponse, pending)) {
+                      _fail(error);
+                      unawaited(_retire());
+                    }
+                  } finally {
+                    subscription.resume();
+                  }
+                }
+
+                unawaited(handoff());
+                return;
               }
               if (response['type'] == 'progress') {
                 _pendingProgress?.call(response);

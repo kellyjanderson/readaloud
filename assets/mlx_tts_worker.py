@@ -503,7 +503,7 @@ def _synthesize(request: dict[str, Any]) -> dict[str, Any]:
     elif _model_id in DRAMA_MODELS:
         text, reference, transcript = _drama_reference_inputs(request, text)
         results = _model.generate(text=text, ref_audio=reference, ref_text=transcript,
-                                  stream=True, first_chunk_frames=4)
+                                  stream=True, streaming_interval=(0.5 if request.get('enableAudioPackets') is True else 2.0))
     else:
         reference, transcript = _reference_inputs(request)
         results = (
@@ -516,9 +516,19 @@ def _synthesize(request: dict[str, Any]) -> dict[str, Any]:
     partial = None
     raw = None
     wav = None
+    packet_count = 0
+    frame_count = 0
+    enable_packets = request.get('enableAudioPackets') is True
+    if enable_packets:
+        for key in ('sessionId', 'generationId', 'chunkId', 'synthesisIdentity',
+                    'bindingFingerprint'):
+            if not isinstance(request.get(key), str) or not request[key]:
+                raise ValueError(f'Missing audio packet identity: {key}')
+        if type(request.get('bindingRevision')) is not int:
+            raise ValueError('Missing audio packet binding revision')
 
     def preserve_piece(audio, rate):
-        nonlocal partial, raw, wav
+        nonlocal partial, raw, wav, packet_count, frame_count
         import numpy as np
         if wav is None:
             raw = tempfile.NamedTemporaryFile(
@@ -534,8 +544,34 @@ def _synthesize(request: dict[str, Any]) -> dict[str, Any]:
         # the WAV header; flush it so child failure/cancellation retains a
         # readable prefix, without claiming the passage is complete.
         pcm = (np.clip(audio, -1.0, 1.0) * 32767).astype('<i2')
-        wav.writeframes(pcm.tobytes())
+        pcm_bytes = pcm.tobytes()
+        if enable_packets and (packet_count >= 2048 or rate > 192000 or
+                               frame_count + len(pcm) > rate * 600 or
+                               frame_count * 2 + len(pcm_bytes) > 192000 * 600 * 2):
+            raise ValueError('Audio packet spool exceeded scene bounds')
+        wav.writeframes(pcm_bytes)
         raw.flush()
+        if enable_packets:
+            # Exclusive create, close before publication; never mutate a packet
+            # after the protocol consumer may have admitted it to playback.
+            packet_path = destination.parent / f'packet-{packet_count:04d}.wav'
+            with packet_path.open('xb') as packet_file:
+                with wave.open(packet_file, 'wb') as packet_wav:
+                    packet_wav.setnchannels(1)
+                    packet_wav.setsampwidth(2)
+                    packet_wav.setframerate(rate)
+                    packet_wav.writeframes(pcm_bytes)
+            _reply(_active_request_id, **{
+                'type': 'audioPacket', 'audioPath': str(packet_path),
+                'packetIndex': packet_count, 'frameStart': frame_count,
+                'frameCount': len(pcm), 'sampleRate': rate,
+                'channels': 1, 'bitsPerSample': 16,
+                **{key: request[key] for key in (
+                    'sessionId', 'generationId', 'chunkId',
+                    'synthesisIdentity', 'bindingFingerprint', 'bindingRevision')},
+            })
+            packet_count += 1
+        frame_count += len(pcm)
         if wav.getnframes() == len(pcm):
             _progress('First native audio packet rendered', stage='firstAudioPacket',
                       completed=len(pcm), unit='frames')
@@ -564,6 +600,8 @@ def _synthesize(request: dict[str, Any]) -> dict[str, Any]:
         "audioPath": str(destination),
         "nativeSampleRate": sample_rate,
         "generatedPieces": piece_count,
+        "streamedPacketCount": packet_count,
+        "streamedFrameCount": frame_count if enable_packets else 0,
         "sampleRate": sample_rate,
         "synthesisIdentity": request.get("synthesisIdentity"),
         "sessionId": request.get("sessionId"),

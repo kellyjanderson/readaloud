@@ -82,12 +82,15 @@ class SynthesisBoundaryPolicy {
       boundaryClass: boundaryClass,
       currentLeading: leading,
       previousTrailing: (isInitialChunk || isResumedChunk)
-          ? Duration.zero : previousTrailingSilence ?? Duration.zero,
+          ? Duration.zero
+          : previousTrailingSilence ?? Duration.zero,
       isInitialChunk: isInitialChunk,
       isResumedChunk: isResumedChunk,
     );
-    return _durationToSamples(leading - target, sampleRate)
-        .clamp(0, leadingSilentFrames);
+    return _durationToSamples(
+      leading - target,
+      sampleRate,
+    ).clamp(0, leadingSilentFrames);
   }
 
   static bool isSilentSample(int sample) =>

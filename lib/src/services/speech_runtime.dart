@@ -162,7 +162,8 @@ class SpeechRuntimeSessionDescriptor {
       'normalizationVersion': normalizationVersion,
       'enableAudioPackets': enableAudioPackets,
       'predecessorRawArtifactIdentity': predecessorRawArtifactIdentity,
-      'predecessorTrailingSilenceMs': predecessorTrailingSilence?.inMilliseconds,
+      'predecessorTrailingSilenceMs':
+          predecessorTrailingSilence?.inMilliseconds,
       'isReplay': isReplay,
       'isResumedPlayback': isResumedPlayback,
       'narrationState': narrationState,
@@ -179,8 +180,11 @@ class SpeechRuntimeSessionDescriptor {
       startSegmentId: map['startSegmentId']! as String,
       normalizationVersion: map['normalizationVersion']! as String,
       enableAudioPackets: map['enableAudioPackets'] as bool? ?? false,
-      predecessorRawArtifactIdentity: map['predecessorRawArtifactIdentity'] as String?,
-      predecessorTrailingSilence: map['predecessorTrailingSilenceMs'] == null ? null : Duration(milliseconds: map['predecessorTrailingSilenceMs'] as int),
+      predecessorRawArtifactIdentity:
+          map['predecessorRawArtifactIdentity'] as String?,
+      predecessorTrailingSilence: map['predecessorTrailingSilenceMs'] == null
+          ? null
+          : Duration(milliseconds: map['predecessorTrailingSilenceMs'] as int),
       isReplay: map['isReplay'] as bool? ?? false,
       isResumedPlayback: map['isResumedPlayback'] as bool? ?? false,
       narrationState:
@@ -623,7 +627,11 @@ class SpeechRuntimeEvent {
       generationId: payload['generationId'] as String?,
       chunkId: payload['chunkId'] as String?,
       audioPath: payload['audioPath'] as String?,
-      audioPacket: payload['audioPacket'] == null ? null : SpeechAudioPacket.fromMap(Map<String, Object?>.from(payload['audioPacket'] as Map)),
+      audioPacket: payload['audioPacket'] == null
+          ? null
+          : SpeechAudioPacket.fromMap(
+              Map<String, Object?>.from(payload['audioPacket'] as Map),
+            ),
       duration: durationMillis == null
           ? null
           : Duration(milliseconds: durationMillis),
@@ -1252,28 +1260,40 @@ class SpeechRuntime {
 
   Future<void> _onWorkerAudioPacket(SpeechAudioPacket packet) async {
     final item = _pendingChunksById[packet.chunkId];
-    if (!_enableAudioPackets || item == null ||
+    if (!_enableAudioPackets ||
+        item == null ||
         _activeSessionId != packet.sessionId ||
         _activeGenerationId != packet.generationId ||
         item.sessionId != packet.sessionId ||
-        item.generationId != packet.generationId) return;
-    _emit(_runtimeEvent(
-      type: SpeechRuntimeEventType.chunkPacketReady,
-      sessionId: packet.sessionId,
-      generationId: packet.generationId,
-      chunkId: packet.chunkId,
-      voiceId: item.chunk.voiceId,
-      routeId: item.chunk.routeId,
-      castId: item.chunk.castId,
-      dialogueSpanId: item.chunk.dialogueSpanId,
-      audioPacket: packet,
-      boundaryClass: item.chunk.boundaryClass,
-      isInitialChunk: item.chunk.isInitialChunk && _predecessorRawArtifactIdentity == null,
-      isResumedChunk: item.chunk.isResumedChunk && _predecessorRawArtifactIdentity == null,
-      renderProvenance: {
-        'previousTrailingSilenceMs': (_lastTrailingSilenceByGenerationId[packet.generationId] ?? _predecessorTrailingSilence)?.inMilliseconds,
-      },
-    ));
+        item.generationId != packet.generationId) {
+      return;
+    }
+    _emit(
+      _runtimeEvent(
+        type: SpeechRuntimeEventType.chunkPacketReady,
+        sessionId: packet.sessionId,
+        generationId: packet.generationId,
+        chunkId: packet.chunkId,
+        voiceId: item.chunk.voiceId,
+        routeId: item.chunk.routeId,
+        castId: item.chunk.castId,
+        dialogueSpanId: item.chunk.dialogueSpanId,
+        audioPacket: packet,
+        boundaryClass: item.chunk.boundaryClass,
+        isInitialChunk:
+            item.chunk.isInitialChunk &&
+            _predecessorRawArtifactIdentity == null,
+        isResumedChunk:
+            item.chunk.isResumedChunk &&
+            _predecessorRawArtifactIdentity == null,
+        renderProvenance: {
+          'previousTrailingSilenceMs':
+              (_lastTrailingSilenceByGenerationId[packet.generationId] ??
+                      _predecessorTrailingSilence)
+                  ?.inMilliseconds,
+        },
+      ),
+    );
   }
 
   Future<void> _onWorkerCompleted(SpeechWorkerEvent event) async {
@@ -1312,8 +1332,12 @@ class SpeechRuntime {
       ),
     );
 
-    final isInitialChunk = workItem.chunk.isInitialChunk && _predecessorRawArtifactIdentity == null;
-    final isResumedChunk = workItem.chunk.isResumedChunk && _predecessorRawArtifactIdentity == null;
+    final isInitialChunk =
+        workItem.chunk.isInitialChunk &&
+        _predecessorRawArtifactIdentity == null;
+    final isResumedChunk =
+        workItem.chunk.isResumedChunk &&
+        _predecessorRawArtifactIdentity == null;
     try {
       final correction = await _boundaryCorrectionExecutor(<String, Object?>{
         'chunkId': workItem.chunk.chunkId,
@@ -1324,11 +1348,13 @@ class SpeechRuntime {
         'previousArtifactIdentity':
             _lastArtifactByGenerationId[workItem.generationId],
         'predecessorRawArtifactIdentity':
-            _lastRawArtifactByGenerationId[workItem.generationId] ?? _predecessorRawArtifactIdentity,
-        'previousTrailingSilenceMs':
-            (isInitialChunk || isResumedChunk) ? null :
-            (_lastTrailingSilenceByGenerationId[workItem.generationId] ??
-                _predecessorTrailingSilence)?.inMilliseconds,
+            _lastRawArtifactByGenerationId[workItem.generationId] ??
+            _predecessorRawArtifactIdentity,
+        'previousTrailingSilenceMs': (isInitialChunk || isResumedChunk)
+            ? null
+            : (_lastTrailingSilenceByGenerationId[workItem.generationId] ??
+                      _predecessorTrailingSilence)
+                  ?.inMilliseconds,
       });
 
       if (_activeSessionId != workItem.sessionId ||
@@ -1641,16 +1667,18 @@ Map<String, Object?> runSpeechRuntimeBoundaryCorrection(
         ? null
         : Duration(milliseconds: previousTrailingSilenceMs),
   );
-  final rawFormat = AudioArtifactStore.validateWav(File(input['wavFilePath']! as String).readAsBytesSync());
-  final finalFormat = AudioArtifactStore.validateWav(File(outcome.audioPath!).readAsBytesSync());
+  final rawBytes = File(input['wavFilePath']! as String).readAsBytesSync();
+  final rawFormat = AudioArtifactStore.validateWav(rawBytes);
+  final finalFormat = AudioArtifactStore.validateWav(
+    File(outcome.audioPath!).readAsBytesSync(),
+  );
   return <String, Object?>{
     'rawSampleRate': rawFormat.sampleRate,
     'onsetTrimFrames': rawFormat.frames - finalFormat.frames,
     'audioPath': outcome.audioPath,
     // This computation is already isolated. A content identity survives copying
     // the raw scene and never treats a local cache pathname as provenance.
-    'rawArtifactIdentity':
-        'wav-sha256:${sha256.convert(File(input['wavFilePath']! as String).readAsBytesSync())}',
+    'rawArtifactIdentity': 'wav-sha256:${sha256.convert(rawBytes)}',
     'predecessorRawArtifactIdentity': input['predecessorRawArtifactIdentity'],
     'boundaryPolicyVersion': SynthesisBoundaryPolicy.version,
     'applied': outcome.applied,

@@ -66,6 +66,36 @@ void main() {
     },
   );
 
+  test(
+    'successful streamed spool survives publication and derivative pins',
+    () async {
+      final root = await Directory.systemTemp.createTemp(
+        'mlx-stream-retention-',
+      );
+      addTearDown(() => root.delete(recursive: true));
+      final attempt = await MlxSynthesisAttempt.create(root, {});
+      await attempt.audio.writeAsBytes(_wav());
+      final packet = File('${attempt.directory.path}/packet-0000.wav');
+      final derivative = File('${packet.path}.onset-1.wav');
+      await packet.writeAsBytes(_wav());
+      await derivative.writeAsBytes(_wav());
+      final published = AudioArtifactStore(root).publish(
+        identity: artifactIdentity('streamed'),
+        wav: _wav(),
+        metadata: {},
+      );
+      final pin = AudioArtifactPins.shared.pin(derivative.path);
+      try {
+        await attempt.finish(publishedAudioPath: published.audioPath);
+        expect(await packet.exists(), true);
+        expect(await derivative.exists(), true);
+        expect(await attempt.audio.exists(), true);
+      } finally {
+        pin.release();
+      }
+    },
+  );
+
   test('an attempt with no rendered audio can be cleaned up', () async {
     final root = await Directory.systemTemp.createTemp('mlx-empty-attempt-');
     addTearDown(() => root.delete(recursive: true));

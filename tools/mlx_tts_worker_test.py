@@ -4,6 +4,8 @@ import hashlib
 from pathlib import Path
 import tempfile
 import io
+import json
+import wave
 import os
 import subprocess
 import sys
@@ -22,6 +24,80 @@ spec.loader.exec_module(worker)
 
 
 class GeneratorAdapterTest(unittest.TestCase):
+    def test_opt_in_packets_are_closed_exact_pcm_before_final_publication(self):
+        events = []
+        class Model:
+            def generate(self, **kwargs):
+                self.kwargs = kwargs
+                yield SimpleNamespace(sample_rate=24000, audio=mx.array([.2, -.2, .1]))
+                # The first immutable packet exists before requesting more PCM.
+                self.assert_packet()
+                yield SimpleNamespace(sample_rate=24000, audio=mx.array([.3, -.3]))
+        model = Model()
+        with tempfile.TemporaryDirectory() as root, patch.object(worker, '_model', model), patch.object(worker, '_model_id', 'qwen3_tts_1_7b'):
+            destination = Path(root) / 'scene.wav'
+            def packet_published():
+                self.assertFalse(destination.exists())
+                self.assertEqual(len(events), 1)
+                with wave.open(events[0]['audioPath']) as packet:
+                    self.assertEqual(packet.getnframes(), 3)
+            model.assert_packet = packet_published
+            identity = dict(sessionId='s', generationId='g', chunkId='c', synthesisIdentity='synth', bindingFingerprint='b', bindingRevision=3)
+            with patch.object(worker, '_reply', side_effect=lambda request_id, **event: events.append(event)), patch.object(worker, '_progress'):
+                result = worker._synthesize(dict(modelId='qwen3_tts_1_7b', voice='Ryan', text='Hello', outputPath=str(destination), enableAudioPackets=True, **identity))
+            self.assertEqual([(e['packetIndex'], e['frameStart'], e['frameCount']) for e in events], [(0, 0, 3), (1, 3, 2)])
+            self.assertEqual(result['streamedPacketCount'], 2)
+            self.assertEqual(result['streamedFrameCount'], 5)
+            for event in events:
+                self.assertEqual({key: event[key] for key in identity}, identity)
+                self.assertEqual((event['channels'], event['bitsPerSample']), (1, 16))
+            with wave.open(str(destination)) as full:
+                actual = full.readframes(full.getnframes())
+            expected = b''
+            for event in events:
+                with wave.open(event['audioPath']) as packet:
+                    expected += packet.readframes(packet.getnframes())
+            self.assertEqual(actual, expected)
+
+    def test_packet_opt_in_requires_full_identity_and_no_packets_by_default(self):
+        class Model:
+            def generate(self, **kwargs):
+                yield SimpleNamespace(sample_rate=24000, audio=mx.array([.2, -.2]))
+        with tempfile.TemporaryDirectory() as root, patch.object(worker, '_model', Model()), patch.object(worker, '_model_id', 'qwen3_tts_1_7b'), patch.object(worker, '_reply') as reply, patch.object(worker, '_progress'):
+            request = dict(modelId='qwen3_tts_1_7b', voice='Ryan', text='Hello', outputPath=str(Path(root) / 'scene.wav'))
+            with self.assertRaisesRegex(ValueError, 'packet identity'):
+                worker._synthesize(dict(request, enableAudioPackets=True))
+            result = worker._synthesize(request)
+            reply.assert_not_called()
+            self.assertEqual(result['streamedPacketCount'], 0)
+            self.assertEqual(list(Path(root).glob('packet-*.wav')), [])
+
+    def test_streamed_late_failure_retains_packets_without_publishing_scene(self):
+        class Model:
+            def generate(self, **kwargs):
+                yield SimpleNamespace(sample_rate=24000, audio=mx.array([.2, -.2]))
+                raise RuntimeError('late producer failure')
+        with tempfile.TemporaryDirectory() as root, patch.object(worker, '_model', Model()), patch.object(worker, '_model_id', 'qwen3_tts_1_7b'), patch.object(worker, '_reply') as reply, patch.object(worker, '_progress'):
+            destination = Path(root) / 'scene.wav'
+            with self.assertRaisesRegex(RuntimeError, 'late producer failure'):
+                worker._synthesize(dict(modelId='qwen3_tts_1_7b', voice='Ryan', text='Hello', outputPath=str(destination), enableAudioPackets=True, sessionId='s', generationId='g', chunkId='c', synthesisIdentity='synth', bindingFingerprint='b', bindingRevision=1))
+            reply.assert_called_once()
+            self.assertFalse(destination.exists())
+            with wave.open(str(Path(root) / 'packet-0000.wav')) as packet:
+                self.assertEqual(packet.getnframes(), 2)
+
+    def test_packet_limit_retains_prefix_without_complete_publication(self):
+        class Model:
+            def generate(self, **kwargs):
+                for _ in range(2049):
+                    yield SimpleNamespace(sample_rate=24000, audio=mx.array([.2]))
+        with tempfile.TemporaryDirectory() as root, patch.object(worker, '_model', Model()), patch.object(worker, '_model_id', 'qwen3_tts_1_7b'), patch.object(worker, '_reply'), patch.object(worker, '_progress'):
+            destination = Path(root) / 'scene.wav'
+            with self.assertRaisesRegex(RuntimeError, 'spool exceeded'):
+                worker._synthesize(dict(modelId='qwen3_tts_1_7b', voice='Ryan', text='Hello', outputPath=str(destination), enableAudioPackets=True, sessionId='s', generationId='g', chunkId='c', synthesisIdentity='synth', bindingFingerprint='b', bindingRevision=1))
+            self.assertFalse(destination.exists())
+            self.assertEqual(len(list(Path(root).glob('packet-*.wav'))), 2048)
+
     def test_model_qualification_is_content_based_and_cached_by_exact_file_state(self):
         with tempfile.TemporaryDirectory() as root:
             directory=Path(root)/'model'; directory.mkdir()

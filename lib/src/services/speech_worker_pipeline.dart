@@ -472,17 +472,22 @@ class SpeechWorkerPipeline {
               if (event.isTerminal) terminalPublished = true;
             }
           }
+
           final processor = _processor;
           if (chunk.enableAudioPackets &&
               processor is StreamingSpeechWorkerChunkProcessor) {
             await (processor as StreamingSpeechWorkerChunkProcessor)
                 .processWithAudioPackets(chunk, receive, (packet) async {
-              if (_isShutdown || _isCancelled(chunk.generationId) ||
-                  terminalObserved || packet.sessionId != chunk.sessionId ||
-                  packet.generationId != chunk.generationId ||
-                  packet.chunkId != chunk.chunkId) return;
-              await onAudioPacket?.call(packet);
-            });
+                  if (_isShutdown ||
+                      _isCancelled(chunk.generationId) ||
+                      terminalObserved ||
+                      packet.sessionId != chunk.sessionId ||
+                      packet.generationId != chunk.generationId ||
+                      packet.chunkId != chunk.chunkId) {
+                    return;
+                  }
+                  await onAudioPacket?.call(packet);
+                });
           } else {
             await processor.process(chunk, receive);
           }
