@@ -241,7 +241,7 @@ Future<void> main(List<String> args) async {
       receipt['inspectionRequested'] = true;
       stdout.writeln('WAITING_S7_INSPECTION');
       final gate = File('${output.parent.path}/inspection.done');
-      final end = watch.elapsedMilliseconds + 90000;
+      final end = watch.elapsedMilliseconds + 180000;
       while (!await gate.exists()) {
         if (watch.elapsedMilliseconds > end) {
           throw TimeoutException('UI inspection');

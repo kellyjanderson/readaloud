@@ -658,9 +658,9 @@ class ModelDownloadReuseTest(unittest.TestCase):
             with patch.dict(os.environ, {'HF_HUB_CACHE': str(env_cache)}), \
                     patch('huggingface_hub.snapshot_download', side_effect=download), \
                     patch('huggingface_hub.hf_hub_download', side_effect=repair) as repair_call:
-                self.assertEqual(worker._download_model('fish_drama3', str(private), [str(extra)]), snapshot)
+                self.assertEqual(worker._download_model('fish_drama3', str(private), [str(extra)]).resolve(), snapshot.resolve())
                 repair_call.assert_called_once()
-            self.assertEqual(len(writes), 2)
+            self.assertEqual(len(writes), 0, 'A repaired complete snapshot needs no metadata request')
             self.assertFalse(private.exists())
             self.assertEqual((snapshot / 'codec.safetensors').stat(), good)
 
@@ -847,7 +847,7 @@ class ModelDownloadReuseTest(unittest.TestCase):
                 return str(bad)
             with patch('huggingface_hub.snapshot_download', side_effect=snapshot_download), \
                     patch('huggingface_hub.hf_hub_download', side_effect=repair) as transfer:
-                self.assertEqual(worker._download_model('fish_drama3', str(cache)), snapshot)
+                self.assertEqual(worker._download_model('fish_drama3', str(cache)).resolve(), snapshot.resolve())
                 transfer.assert_called_once()
             self.assertEqual(other.read_bytes(), b'unrelated')
             self.assertEqual(partial.read_bytes(), b'partial')
@@ -919,6 +919,43 @@ class ModelDownloadReuseTest(unittest.TestCase):
                     worker._download_model('fish_drama3', str(cache))
                 transfer.assert_not_called()
             self.assertEqual(external.read_bytes(), b'x' * len(content['model.safetensors']))
+
+    def test_offline_missing_file_is_actionable_without_metadata_or_transfer(self):
+        import huggingface_hub
+        from huggingface_hub import constants
+        with self.fixture() as (cache, snapshot, manifest, content):
+            (snapshot / 'model.safetensors').unlink()
+            real_download = huggingface_hub.snapshot_download
+            def offline_only(**kwargs):
+                self.assertTrue(kwargs.get('local_files_only'), 'Offline model attempted metadata')
+                return real_download(**kwargs)
+            with patch.object(constants, 'HF_HUB_OFFLINE', True), \
+                    patch('huggingface_hub.snapshot_download', side_effect=offline_only), \
+                    patch('huggingface_hub.hf_hub_download', side_effect=AssertionError('Offline transfer')):
+                with self.assertRaisesRegex(FileNotFoundError, 'Connect to download or repair'):
+                    worker._download_model('fish_drama3', str(cache))
+            self.assertFalse((snapshot / 'model.safetensors').exists())
+
+    def test_offline_good_blob_repairs_copy_without_metadata(self):
+        import huggingface_hub
+        from huggingface_hub import constants
+        with self.fixture() as (cache, snapshot, manifest, content):
+            bad = snapshot / 'model.safetensors'
+            blob = snapshot.parent.parent / 'blobs' / manifest['files'][bad.name]['digest']
+            blob.parent.mkdir()
+            blob.write_bytes(content[bad.name])
+            before = blob.stat()
+            bad.write_bytes(b'x' * len(content[bad.name]))
+            real_download = huggingface_hub.snapshot_download
+            def offline_only(**kwargs):
+                self.assertTrue(kwargs.get('local_files_only'), 'Repair attempted metadata')
+                return real_download(**kwargs)
+            with patch.object(constants, 'HF_HUB_OFFLINE', True), \
+                    patch('huggingface_hub.snapshot_download', side_effect=offline_only), \
+                    patch('huggingface_hub.hf_hub_download', side_effect=AssertionError('Offline transfer')):
+                self.assertEqual(worker._download_model('fish_drama3', str(cache)).resolve(), snapshot.resolve())
+            self.assertEqual(bad.read_bytes(), content[bad.name])
+            self.assertEqual(blob.stat(), before)
 
     def test_checks_secondary_cache_before_any_network(self):
         with tempfile.TemporaryDirectory() as tmp:

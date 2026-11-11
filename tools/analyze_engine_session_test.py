@@ -43,7 +43,8 @@ class EngineSessionEvidenceTest(unittest.TestCase):
                          lastWorking='fish_drama3', sessionPhase='failed'),
                     dict(event='complete', selected='fish_drama3', active='fish_drama3',
                          lastWorking='fish_drama3', sessionPhase='active',
-                         startupError=None, pendingPlay=False, playing=False, word=9)])
+                         startupError=None, pendingPlay=False, playing=False, word=9,
+                         unixMicros=3900000)])
         self.runner = dict(passed=True, nativePassed=True, normalQuit=True,
                            appExitVerified=True, ownedAliasAbsent=True,
                            forcedCleanup=False, remainingOwnedPids=[], errors=[],

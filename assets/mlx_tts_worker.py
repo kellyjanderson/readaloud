@@ -331,10 +331,22 @@ def _download_model(model_id: str, private_cache_path: str,
                 _progress(f'Repairing corrupt speech model file: {name}', stage='modelRepair')
                 if _repair_snapshot_pointer(path, cached, manifest['files'][name], require_verified_blob=False):
                     continue  # A good existing blob repairs a corrupt copy offline.
+                if hf_constants.HF_HUB_OFFLINE:
+                    raise FileNotFoundError(
+                        'The selected model is not installed completely. Connect to download or repair it, '
+                        'or choose an installed model.')
                 hf_hub_download(repo_id=repo_id, filename=name, revision=revision,
                                 cache_dir=str(private_cache), force_download=True,
                                 tqdm_class=_download_progress_class(manifest['files'][name]['size'], 0))
                 _repair_snapshot_pointer(path, cached, manifest['files'][name])
+        if _verify_scene_model(cached, manifest, receipt_root):
+            _configure_hf_cache(private_cache, hf_constants)
+            _progress('Using verified speech model files', stage='modelCached')
+            return cached
+    if hf_constants.HF_HUB_OFFLINE:
+        raise FileNotFoundError(
+            'The selected model is not installed completely. Connect to download or repair it, '
+            'or choose an installed model.')
     private_cache.mkdir(parents=True, exist_ok=True)
     _progress('Checking saved files and remaining download size…', stage='modelCache')
     plan = snapshot_download(repo_id=repo_id, revision=revision,

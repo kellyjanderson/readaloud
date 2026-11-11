@@ -60,6 +60,8 @@ def analyze(receipt, runner, timing, capture_path):
             rate in (44100, 48000) and len(capture) <= rate * 360,
             'Capture extent/rate mismatch')
     origin = timing['firstPacketReceivedUnixMicros']
+    require(final['unixMicros'] <= origin + len(capture) / rate * 1e6 + 250000,
+            'Capture ended before the final switch observation')
     pause_request = receipt['positivePauseRequestedUnixMicros']
     pause_return = receipt['positivePauseReturnedUnixMicros']
     require(origin < timing['firstSignalReceivedUnixMicros'] < pause_request <= pause_return,

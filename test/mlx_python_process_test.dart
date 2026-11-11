@@ -66,6 +66,10 @@ STDIN.each_line do |line|
       puts JSON.generate(id:r['id'],type:'progress',stage:'afterPacket')
     elsif r['text']=='unsolicited-packet'
       puts JSON.generate(id:r['id'],type:'audioPacket',packetIndex:0)
+    elsif r['text']=='friendly-error'
+      STDERR.puts 'PRIVATE_WORKER_TRACEBACK_FIXTURE'
+      puts JSON.generate(id:r['id'],ok:false,error:'Selected model is unavailable. Retry after downloading it.')
+      next
     elsif r['text']=='malformed'
       puts 'not json'
       next
@@ -198,6 +202,20 @@ end
     voice: 'library_ava',
     language: 'English',
     outputPath: '${root.path}/$text',
+  );
+
+  test(
+    'worker diagnostics remain outside the actionable error message',
+    () async {
+      await load();
+      try {
+        await synth('friendly-error');
+        fail('Expected a worker failure');
+      } catch (error) {
+        expect('$error', contains('Selected model is unavailable'));
+        expect('$error', isNot(contains('PRIVATE_WORKER_TRACEBACK_FIXTURE')));
+      }
+    },
   );
 
   test(

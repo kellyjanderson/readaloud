@@ -942,7 +942,6 @@ class MlxTtsPythonProcess {
   Future<void> Function(Map<String, Object?>)? _pendingAudioPacket;
   Map<String, Object?>? _loadSpec;
   String? _modelIdentity;
-  String _stderrTail = '';
   bool _busy = false;
   bool _disposed = false;
   int _sequence = 0;
@@ -1114,7 +1113,7 @@ class MlxTtsPythonProcess {
       await child.stdin.flush();
       final response = await responseFuture;
       if (response['ok'] != true) {
-        throw StateError('${response['error']}. $_stderrTail');
+        throw StateError('${response['error']}');
       }
       if (body['command'] == 'load' &&
           body['requireVerifiedModelAssets'] == true &&
@@ -1158,7 +1157,6 @@ class MlxTtsPythonProcess {
     _childFootprint = null;
     _lastChildFootprint = null;
     _childStartedAt = DateTime.now();
-    _stderrTail = '';
     bool current() => identical(_child, child);
     _stdoutSubscription = child.stdout
         .transform(utf8.decoder)
@@ -1224,7 +1222,9 @@ class MlxTtsPythonProcess {
           onDone: () {
             if (current()) {
               _fail(
-                StateError('MLX helper response stream closed. $_stderrTail'),
+                StateError(
+                  'Speech worker stopped responding. Retry speech startup.',
+                ),
               );
             }
           },
@@ -1234,10 +1234,9 @@ class MlxTtsPythonProcess {
         .listen(
           (chunk) {
             if (!current()) return;
-            _stderrTail += chunk;
-            if (_stderrTail.length > 8192) {
-              _stderrTail = _stderrTail.substring(_stderrTail.length - 8192);
-            }
+            // Preserve diagnostics in the local application log, rather than
+            // concatenating a Python traceback into user-facing startup text.
+            stderr.write(chunk);
           },
           onError: (Object error) {
             if (current()) _fail(error);
@@ -1246,7 +1245,12 @@ class MlxTtsPythonProcess {
     unawaited(
       child.exitCode.then((code) {
         if (current()) {
-          _fail(StateError('MLX helper exited with code $code. $_stderrTail'));
+          stderr.writeln('MLX helper exit: $code');
+          _fail(
+            StateError(
+              'Speech worker stopped unexpectedly. Retry speech startup.',
+            ),
+          );
           unawaited(_retire());
         }
       }),

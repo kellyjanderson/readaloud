@@ -39,7 +39,7 @@ begin
                       app, model, receipt, out: log, err: log, pgroup: true)
   result[:pid] = pid
   capture_log = File.open(File.join(output, 'capture.log'), 'w')
-  cap = Process.spawn(capture, pid.to_s, File.join(output, 'capture.wav'), '350', stop,
+  cap = Process.spawn(capture, pid.to_s, File.join(output, 'capture.wav'), '300', stop,
                       out: capture_log, err: capture_log)
   result[:capturePid] = cap
   deadline = Process.clock_gettime(Process::CLOCK_MONOTONIC) + 360
