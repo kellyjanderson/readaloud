@@ -209,13 +209,56 @@ def _complete_snapshot(directory: Path, model_id: str) -> bool:
         return False
 
 
+def _model_manifest(model_id: str) -> dict:
+    """Select trusted bundled data without changing legacy bf16 receipt identity."""
+    try:
+        bundled = json.loads(Path(__file__).with_name('fish_drama_model_checksums.json').read_text())
+        if not isinstance(bundled, dict):
+            raise ValueError('Model integrity manifest must be an object')
+        if bundled.get('schemaVersion') == 2:
+            manifest = bundled['variants'][model_id]
+        elif 'schemaVersion' not in bundled and model_id == 'fish_drama3':
+            manifest = bundled
+        else:
+            raise ValueError('Unsupported model integrity manifest schema')
+        if not isinstance(manifest, dict):
+            raise ValueError('Selected model integrity manifest must be an object')
+        spec = DRAMA_MODELS[model_id]
+        if manifest['repo'] != spec['repo'] or manifest['revision'] != spec['revision']:
+            raise ValueError('Pinned repository/revision does not match the selected model')
+        entries = manifest['files']
+        if not isinstance(entries, dict) or not entries or not set(spec['requiredFiles']).issubset(entries):
+            raise ValueError('Required model files are missing from the integrity manifest')
+        for name, entry in entries.items():
+            path = Path(name)
+            if not path.parts or path.is_absolute() or '..' in path.parts or '\\' in name or path.as_posix() != name:
+                raise ValueError('Unsafe model integrity filename')
+            algorithm = entry['algorithm']
+            length = {'sha256': 64, 'git-sha1': 40}.get(algorithm)
+            digest = entry['digest']
+            if (type(entry['size']) is not int or entry['size'] <= 0 or
+                    length is None or not isinstance(digest, str) or
+                    len(digest) != length or any(c not in '0123456789abcdef' for c in digest)):
+                raise ValueError('Invalid model integrity entry')
+        return manifest
+    except (OSError, ValueError, KeyError, TypeError) as error:
+        raise ValueError(f'Cannot verify {model_id}: bundled integrity manifest is missing or invalid. '
+                         'Update the application before loading this model.') from error
+
+
 def _download_model(model_id: str, private_cache_path: str) -> Path:
-    from huggingface_hub import snapshot_download
+    # The protocol thread owns this one acquisition. HF provides file locking,
+    # bounded transfer workers and resume; cancelling retires the child, leaving
+    # completed blobs/partials in the same cache for the next request.
+    from huggingface_hub import snapshot_download, hf_hub_download
     from huggingface_hub import constants as hf_constants
 
     spec = DRAMA_MODELS.get(model_id)
     repo_id = spec['repo'] if spec else MODEL_REPOSITORIES[model_id]
     revision = spec['revision'] if spec else None
+    manifest = _model_manifest(model_id) if spec else None
+    receipt_root = Path(private_cache_path).expanduser().parent / 'model-qualification'
+    required = list(manifest['files']) if manifest else None
     private_cache = Path(private_cache_path).expanduser()
     configured_cache = Path(os.environ.get('HF_HUB_CACHE') or
                             os.environ.get('HUGGINGFACE_HUB_CACHE') or
@@ -223,24 +266,46 @@ def _download_model(model_id: str, private_cache_path: str) -> Path:
     candidates = list(dict.fromkeys([private_cache, configured_cache]))
     # Check every accessible cache before any network request. No build number,
     # executable path or debug/release mode is part of this persistent identity.
+    repair = None
     for cache_dir in candidates:
         try:
             cached = Path(snapshot_download(repo_id=repo_id, revision=revision,
                           cache_dir=str(cache_dir), local_files_only=True))
-            if _complete_snapshot(cached, model_id):
+            if manifest and not _is_managed_snapshot(cached, cache_dir, repo_id, revision):
+                raise ValueError('Hugging Face returned a different pinned snapshot')
+            invalid = []
+            complete = (_verify_scene_model(cached, manifest, receipt_root, invalid_files=invalid)
+                        if manifest else _complete_snapshot(cached, model_id))
+            if complete:
                 _configure_hf_cache(cache_dir, hf_constants)
                 _progress('Using downloaded speech model files', stage='modelCached')
                 return cached
+            if manifest and repair is None:
+                repair = (cache_dir, cached, invalid)
         except (OSError, ValueError):
             pass
 
     # One destination per attempt: retries resume the same blobs. A network
     # failure must never start a second copy in a different cache.
+    if repair:
+        private_cache, cached, invalid = repair
+        # HF owns transfer locking, resumable partials and atomic blob writes.
+        # Force only corrupt present files; ordinary snapshot acquisition below
+        # resumes missing files. Never unlink blobs or arbitrary explicit paths.
+        for name in invalid:
+            path = cached / name
+            if path.exists():
+                if not _owned_hf_file(path, cached, manifest['files'][name]):
+                    raise ValueError(f'Cannot repair model file outside the managed Hugging Face cache: {path}')
+                _progress(f'Repairing corrupt speech model file: {name}', stage='modelRepair')
+                hf_hub_download(repo_id=repo_id, filename=name, revision=revision,
+                                cache_dir=str(private_cache), force_download=True,
+                                tqdm_class=_download_progress_class(manifest['files'][name]['size'], 0))
     private_cache.mkdir(parents=True, exist_ok=True)
     _progress('Checking saved files and remaining download size…', stage='modelCache')
     plan = snapshot_download(repo_id=repo_id, revision=revision,
                              cache_dir=str(private_cache), dry_run=True,
-                             allow_patterns=spec['requiredFiles'] if spec else None)
+                             allow_patterns=required)
     total = (sum(item.file_size for item in plan)
              if all(item.file_size is not None for item in plan) else None)
     cached_bytes = sum(item.file_size or 0 for item in plan if not item.will_download)
@@ -250,14 +315,32 @@ def _download_model(model_id: str, private_cache_path: str) -> Path:
     resolved_revision = revision or (plan[0].commit_hash if plan else None)
     snapshot = snapshot_download(
         repo_id=repo_id, revision=resolved_revision, cache_dir=str(private_cache),
-        allow_patterns=spec['requiredFiles'] if spec else None,
+        allow_patterns=required,
         tqdm_class=_download_progress_class(total, cached_bytes),
     )
     resolved = Path(snapshot)
-    if not _complete_snapshot(resolved, model_id):
+    if manifest:
+        if (not _is_managed_snapshot(resolved, private_cache, repo_id, revision) or
+                not _verify_scene_model(resolved, manifest, receipt_root)):
+            raise ValueError(f'Model download failed pinned integrity verification: {resolved}. Retry the model download.')
+    elif not _complete_snapshot(resolved, model_id):
         raise FileNotFoundError(f'Model download is incomplete: {resolved}')
     _configure_hf_cache(private_cache, hf_constants)
     return resolved
+
+
+def _is_managed_snapshot(directory: Path, cache_dir: Path, repo: str, revision: str) -> bool:
+    expected = cache_dir / ('models--' + repo.replace('/', '--')) / 'snapshots' / revision
+    # HF normalizes macOS /var -> /private/var and user cache symlinks.
+    return directory.resolve() == expected.resolve()
+
+
+def _owned_hf_file(path: Path, snapshot: Path, entry: dict) -> bool:
+    if path.is_symlink():
+        blobs = snapshot.parent.parent / 'blobs'
+        target = blobs / entry['digest']
+        return not blobs.is_symlink() and not target.is_symlink() and path.resolve() == target.resolve()
+    return path.resolve().is_relative_to(snapshot.resolve())
 
 
 def _configure_hf_cache(cache_dir: Path, hf_constants: Any) -> None:
@@ -267,7 +350,8 @@ def _configure_hf_cache(cache_dir: Path, hf_constants: Any) -> None:
     hf_constants.HF_HUB_CACHE = cache
 
 
-def _verify_scene_model(directory: Path, manifest: dict, receipt_root: Path) -> bool:
+def _verify_scene_model(directory: Path, manifest: dict, receipt_root: Path,
+                        *, invalid_files: list[str] | None = None) -> bool:
     """Offline capability qualification, independent of the selected engine name.
 
     Hub's verify_repo_checksums requires a network tree query and rehashes every
@@ -277,52 +361,73 @@ def _verify_scene_model(directory: Path, manifest: dict, receipt_root: Path) -> 
     from huggingface_hub.utils._verification import compute_file_hash
     entries = manifest['files']
     expected_weights = {name for name in entries if name.endswith('.safetensors')}
-    if {p.name for p in directory.glob('*.safetensors')} != expected_weights:
+    if {p.name for p in directory.glob('*.safetensors')} - expected_weights:
         return False
     def snapshot():
         result = {}
         for name, expected in entries.items():
             p = directory / name
-            if not p.is_file() or p.stat().st_size != expected['size']:
-                return None
-            st = p.stat()
+            try:
+                st = p.stat()
+                if not p.is_file() or st.st_size != expected['size']:
+                    raise OSError('Missing or wrong-sized model file')
+            except OSError:
+                if invalid_files is not None and name not in invalid_files:
+                    invalid_files.append(name)
+                result[name] = None
+                continue
             result[name] = [st.st_dev, st.st_ino, st.st_size, st.st_mtime_ns, st.st_ctime_ns]
         return result
     before = snapshot()
-    if before is None:
-        return False
     identity = hashlib.sha256(json.dumps([str(directory), manifest, before], sort_keys=True).encode()).hexdigest()
     receipt = receipt_root / f'{identity}.json'
     try:
-        if json.loads(receipt.read_text()).get('verifiedIdentity') == identity:
-            return True
-    except (OSError, ValueError):
+        if (None not in before.values() and
+                json.loads(receipt.read_text()).get('verifiedIdentity') == identity):
+            return snapshot() == before
+    except (OSError, ValueError, AttributeError):
         pass
     total = sum(e['size'] for e in entries.values())
     completed = 0
+    valid = True
     for name, expected in entries.items():
         _progress('Verifying pinned speech model files…', stage='modelVerification', completed=completed, total=total)
-        if compute_file_hash(directory / name, expected['algorithm']) != expected['digest']:
-            return False
+        try:
+            matches = before[name] is not None and compute_file_hash(directory / name, expected['algorithm']) == expected['digest']
+        except OSError:
+            matches = False
+        if not matches:
+            valid = False
+            if invalid_files is not None and name not in invalid_files:
+                invalid_files.append(name)
         completed += expected['size']
-    if snapshot() != before:
+    if not valid or snapshot() != before:
         return False
     receipt_root.mkdir(parents=True, exist_ok=True)
-    with tempfile.NamedTemporaryFile(mode='w', dir=receipt_root, delete=False) as stream:
-        json.dump({'verifiedIdentity': identity, 'revision': manifest['revision'], 'files': before}, stream)
-        temporary = Path(stream.name)
+    temporary = None
     try:
+        with tempfile.NamedTemporaryFile(mode='w', dir=receipt_root, delete=False) as stream:
+            temporary = Path(stream.name)
+            json.dump({'verifiedIdentity': identity, 'revision': manifest['revision'], 'files': before}, stream)
+            stream.flush()
+            os.fsync(stream.fileno())
         temporary.replace(receipt)
     finally:
-        temporary.unlink(missing_ok=True)
+        if temporary is not None:
+            temporary.unlink(missing_ok=True)
+    if snapshot() != before:
+        return False
     _progress('Pinned speech model verified', stage='modelVerification', completed=total, total=total)
     return True
 
 
-def _load(model_id: str, model_path: str, private_cache_path: str, quantization_bits: int = 0) -> dict[str, Any]:
+def _load(model_id: str, model_path: str, private_cache_path: str, quantization_bits: int = 0,
+          require_verified_model_assets: bool = False) -> dict[str, Any]:
     global _model, _model_id, _model_path, _model_bits, _model_native_scenes
     global _model_load_stream, _model_pending_parameters
     load_started = time.monotonic()
+    if type(require_verified_model_assets) is not bool:
+        raise ValueError('requireVerifiedModelAssets must be a boolean')
     if quantization_bits not in (0, 4):
         raise ValueError('Supported inference precision: full or 4-bit')
     if model_id not in MODEL_IDS:
@@ -336,8 +441,22 @@ def _load(model_id: str, model_path: str, private_cache_path: str, quantization_
     directory = Path(model_path).expanduser().resolve() if model_path else _download_model(model_id, private_cache_path).resolve()
     if not (directory / "config.json").is_file():
         raise FileNotFoundError(f"Model config is missing: {directory / 'config.json'}")
+    verified = False
+    verified_identity = None
+    if require_verified_model_assets:
+        manifest = _model_manifest(model_id)
+        verified = _verify_scene_model(directory, manifest,
+                    Path(private_cache_path).expanduser().parent / 'model-qualification')
+        if not verified:
+            raise ValueError(f'{model_id} assets failed pinned integrity verification at {directory}. '
+                             'Retry the managed model download or choose the exact pinned model folder; no weights were loaded.')
+        verified_identity = manifest['repo'] + '@' + manifest['revision']
+    def result():
+        return {"modelId": model_id, "loaded": True, "nativeScenesQualified": _model_native_scenes,
+                "modelIdentity": _model_identity(directory, model_id, quantization_bits),
+                "modelAssetsVerified": verified, "verifiedModelIdentity": verified_identity}
     if _model is not None and _model_id == model_id and _model_path == str(directory) and _model_bits == quantization_bits:
-        return {"modelId": model_id, "loaded": True, "nativeScenesQualified": _model_native_scenes, "modelIdentity": _model_identity(directory, model_id, quantization_bits)}
+        return result()
 
     _unload()
     import mlx.core as mx
@@ -375,7 +494,7 @@ def _load(model_id: str, model_path: str, private_cache_path: str, quantization_
         if overlap_weights:
             verification_started = time.monotonic()
             _progress('Checking speech model qualification…', stage='modelQualification')
-            manifest = json.loads(Path(__file__).with_name('fish_drama_model_checksums.json').read_text())
+            manifest = _model_manifest(model_id)
             _model_native_scenes = _verify_scene_model(directory, manifest,
                 Path(private_cache_path).parent / 'model-qualification')
             _timing('modelVerification', verification_started)
@@ -393,7 +512,7 @@ def _load(model_id: str, model_path: str, private_cache_path: str, quantization_
     _model_id = model_id
     _model_path = str(directory)
     _timing('modelLoadTotal', load_started)
-    return {"modelId": model_id, "loaded": True, "nativeScenesQualified": _model_native_scenes, "modelIdentity": _model_identity(directory, model_id, quantization_bits)}
+    return result()
 
 
 def _qwen_language(language: str) -> str:
@@ -735,6 +854,7 @@ def main() -> int:
                         str(request.get("modelPath", "")),
                         str(request.get("privateCachePath", "")),
                         int(request.get('quantizationBits', 0)),
+                        request.get('requireVerifiedModelAssets', False),
                     )
                 elif command == "synthesize":
                     response = _synthesize(request)
