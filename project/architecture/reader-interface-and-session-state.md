@@ -3,6 +3,22 @@
 Reconciled: October 26, 2026; RC2 implementation through feature head 2734b47
 Status: Current source architecture; bounded reader accessibility runtime check
 
+## macOS task runners
+
+The macOS runner sets `FLTEnableMergedPlatformUIThread=false` for the pinned
+Flutter engine. Flutter widget state remains owned by its main Dart isolate on
+the engine UI task runner. AppKit and native plugin callbacks remain on the
+platform main thread. Existing platform-channel replies return to the owning
+Dart isolate, and native utility work retains its explicit main-thread handoff.
+The setting prevents native accessibility or panel work from sharing Flutter's
+UI event loop.
+
+Native probes record both Dart heartbeat delay and a bounded single-flight
+platform-channel round trip. The latter uses the existing native footprint
+handler, including its utility query and main-thread reply. Their timing and
+actual menu/control interactions have separate evidence. Global heartbeat
+failures retain interval phases, including startup and operator waits.
+
 ## Implemented structure and limitations
 
 The Flutter screen exposes the Reader, transport, voice selection, character voice management, import/export and secondary options. Widgets consume controller state; theme tokens and bundled fonts define presentation. Existing UI guides retain design intent and are not proof of runtime behavior.
