@@ -1,16 +1,41 @@
 (() => {
   const scenarios = window.HUMAN_ACCEPTANCE_SCENARIOS;
   const passages = new Map(window.HUMAN_ACCEPTANCE_PASSAGES.map((passage) => [passage.id, passage]));
-  const key = 'readaloud-human-acceptance-v2';
-  const appPath = '/tmp/readaloud-rc2-final-9ed4532/build/macos/Build/Products/Release/read_aloud.app';
-  const sourceRevision = '9ed45329215b8858959eef15509fc2eaf9f1b69f';
+  const $ = (id) => document.getElementById(id);
+  const candidate = window.HUMAN_ACCEPTANCE_CANDIDATE;
+  const fixtures = candidate?.fixtures ?? {};
+  const hash = (value, length) => typeof value === 'string' &&
+    value.length === length && /^[a-f0-9]+$/.test(value);
+  const ready = typeof candidate?.appPath === 'string' &&
+    candidate.appPath.startsWith('/') &&
+    hash(candidate.sourceRevision, 40) && hash(candidate.packageSha256, 64) &&
+    scenarios.every((test) => test.fixtureId
+      ? typeof fixtures[test.fixtureId]?.instructions === 'string' &&
+        fixtures[test.fixtureId].instructions.trim() &&
+        hash(fixtures[test.fixtureId].sha256, 64)
+      : passages.has(test.passageId));
+  if (!ready) {
+    $('progress-count').textContent = `0 / ${scenarios.length}`;
+    $('save-status').textContent = 'Waiting for the release candidate';
+    return;
+  }
+  const { appPath, sourceRevision, packageSha256 } = candidate;
+  const legacyKey = 'readaloud-human-acceptance-v2';
+  const key = `readaloud-human-acceptance-v3-${sourceRevision}-${packageSha256}`;
   const defaults = { tester: '', results: {}, active: scenarios[0]?.id };
   let state;
+  let legacyResults = {};
   let storageAvailable = true;
   try { state = { ...defaults, ...JSON.parse(localStorage.getItem(key) || '{}') }; }
   catch { state = defaults; storageAvailable = false; }
+  try {
+    legacyResults = JSON.parse(localStorage.getItem(legacyKey) || '{}')?.results ?? {};
+  } catch { /* An unreadable older session does not block this one. */ }
+  if (!legacyResults || typeof legacyResults !== 'object' || Array.isArray(legacyResults)) legacyResults = {};
   if (!state.results || typeof state.results !== 'object' || Array.isArray(state.results)) state.results = {};
-  if (!scenarios.some((test) => test.id === state.active)) state.active = defaults.active;
+  if (!scenarios.some((test) => test.id === state.runningCaseId)) state.runningCaseId = null;
+  if (state.runningCaseId) state.active = state.runningCaseId;
+  else if (!scenarios.some((test) => test.id === state.active)) state.active = defaults.active;
 
   const byId = new Map(scenarios.map((test) => [test.id, test]));
   const earlierTitles = {
@@ -22,7 +47,6 @@
     'choose-voices': 'Choose character voices',
     'reading-along': 'Read along while listening'
   };
-  const $ = (id) => document.getElementById(id);
   const safeText = (value) => String(value ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
   const resultFor = (id) => state.results[id] || { outcome: '', notes: '', appClosed: false, startedAt: '', closedAt: '' };
   const finished = (test) => {
@@ -60,11 +84,12 @@
     if (!test) return;
     const passage = passages.get(test.passageId);
     const result = resultFor(test.id);
+    const fixture = fixtures[test.fixtureId];
     $('case-content').innerHTML = `
       <div class="case-title-row"><div><p class="case-kicker">TEST ${scenarios.findIndex((item) => item.id === test.id) + 1} OF ${scenarios.length}</p><h2 id="case-title" tabindex="-1">${safeText(test.title)}</h2><p class="case-description">${safeText(test.question)}</p></div></div>
       <div class="start-row"><p>${state.runningCaseId === test.id ? 'This test is underway. Quit Read Aloud when you are finished.' : 'Start this test, then open Read Aloud and follow the steps below.'}</p><button class="button secondary" id="start-test" ${state.runningCaseId ? 'disabled' : ''}>${state.runningCaseId === test.id ? 'Test in progress' : 'Start this test'}</button></div>
       <h3>What to do</h3><ol class="steps">${test.steps.map((step) => `<li>${safeText(step)}</li>`).join('')}</ol>
-      <section class="passage-card" aria-labelledby="passage-heading"><div class="passage-heading"><div><p class="eyebrow">PASSAGE PROVIDED</p><h3 id="passage-heading">${safeText(passage.label)}</h3><p>Copy this passage, then paste it into Read Aloud with File → Paste Text.</p></div><button class="button secondary" id="copy-passage" type="button">Copy passage</button></div><label class="sr-only" for="passage-text">Passage text</label><textarea id="passage-text" readonly spellcheck="false">${safeText(passage.text)}</textarea></section>
+      ${passage ? `<section class="passage-card" aria-labelledby="passage-heading"><div class="passage-heading"><div><p class="eyebrow">PASSAGE PROVIDED</p><h3 id="passage-heading">${safeText(passage.label)}</h3><p>Copy this passage, then paste it into Read Aloud with File → Paste Text.</p></div><button class="button secondary" id="copy-passage" type="button">Copy passage</button></div><label class="sr-only" for="passage-text">Passage text</label><textarea id="passage-text" readonly spellcheck="false">${safeText(passage.text)}</textarea></section>` : `<section class="passage-card" aria-labelledby="passage-heading"><h3 id="passage-heading">Audio book provided</h3><p>${safeText(fixture.instructions)}</p></section>`}
       <div class="expect"><h3>What to look for</h3><p>${safeText(test.expected)}</p></div>
       <section class="result-area" aria-labelledby="record-heading"><h3 id="record-heading">Your judgment</h3>
         <fieldset class="judgment-options"><legend class="sr-only">How did it go?</legend>${[['worked','It worked for me'],['problem','I noticed a problem'],['skip','Skip this test']].map(([value,label]) => `<label class="result-option"><input type="radio" name="outcome" value="${value}" ${result.outcome === value ? 'checked' : ''}><span>${label}</span></label>`).join('')}</fieldset>
@@ -76,10 +101,10 @@
     $('start-test').addEventListener('click', () => {
       if (state.runningCaseId) return;
       state.runningCaseId = test.id;
-      state.results[test.id] = { ...resultFor(test.id), appClosed: false, startedAt: new Date().toISOString() };
-      save(); renderCase(); $('start-test').focus();
+      state.results[test.id] = { outcome: '', notes: '', appClosed: false, closedAt: '', startedAt: new Date().toISOString() };
+      save(); renderCase(); $('case-title').focus();
     });
-    $('copy-passage').addEventListener('click', async () => {
+    $('copy-passage')?.addEventListener('click', async () => {
       const passageBox = $('passage-text');
       try {
         await navigator.clipboard.writeText(passage.text);
@@ -114,22 +139,21 @@
   }
 
   function downloadResults() {
-    const earlierSession = Object.entries(state.results)
-      .filter(([id]) => !byId.has(id))
+    const earlierSession = Object.entries(legacyResults)
       .map(([id, result]) => ({
         id,
-        title: earlierTitles[id] || id,
+        title: byId.get(id)?.title || earlierTitles[id] || id,
         result: result.outcome && result.appClosed ? result.outcome : 'incomplete',
         notes: result.notes || '',
         appClosed: Boolean(result.appClosed)
       }));
     const report = {
-      schema: 2,
+      schema: 3,
       exportedAt: new Date().toISOString(),
       tester: state.tester,
-      app: { path: appPath, sourceRevision },
-      earlierSession,
-      results: scenarios.map((test) => ({ id: test.id, title: test.title, passage: passages.get(test.passageId).label, result: finished(test) ? resultFor(test.id).outcome : 'incomplete', notes: resultFor(test.id).notes, appClosed: resultFor(test.id).appClosed }))
+      app: { path: appPath, sourceRevision, packageSha256 },
+      earlierSession: { sourceRevision: '9ed45329215b8858959eef15509fc2eaf9f1b69f', results: earlierSession },
+      results: scenarios.map((test) => ({ id: test.id, title: test.title, issue: test.issue, passage: passages.get(test.passageId)?.label, fixture: test.fixtureId ? { id: test.fixtureId, sha256: fixtures[test.fixtureId].sha256 } : undefined, result: finished(test) ? resultFor(test.id).outcome : 'incomplete', notes: resultFor(test.id).notes, appClosed: resultFor(test.id).appClosed }))
     };
     const url = URL.createObjectURL(new Blob([JSON.stringify(report, null, 2)], { type: 'application/json' }));
     const link = document.createElement('a');
@@ -138,13 +162,15 @@
   }
 
   $('build-path').value = appPath;
+  $('start-instruction').textContent = 'In Finder, press ⌘⇧G, paste the app path, then open Read Aloud. Each case gives you a passage or an audio book. Quit Read Aloud (⌘Q) after each test.';
+  for (const id of ['export-session', 'reset-session', 'copy-build-path', 'tester']) $(id).disabled = false;
   $('tester').value = state.tester || '';
   $('tester').addEventListener('input', (event) => { state.tester = event.target.value; save(); });
   $('copy-build-path').addEventListener('click', async () => {
     try { await navigator.clipboard.writeText(appPath); $('copy-build-path').textContent = 'Copied'; }
     catch { $('build-path').focus(); $('build-path').select(); $('copy-build-path').textContent = 'Path selected'; }
   });
-  const earlierCaseCount = Object.keys(state.results).filter((id) => !byId.has(id)).length;
+  const earlierCaseCount = Object.keys(legacyResults).length;
   if (earlierCaseCount) $('prior-session-note').hidden = false;
   $('export-session').addEventListener('click', downloadResults);
   $('reset-session').addEventListener('click', () => {
