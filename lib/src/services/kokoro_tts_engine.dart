@@ -2423,6 +2423,7 @@ class KokoroTtsEngine
   void _handleCurrentIndex(int? index) {
     if (_pruningHistory) return;
     if (_activePlaybackToken == null ||
+        _activePlaybackToken != _requestToken ||
         index == null ||
         _waitingForUnderrunRecovery) {
       return;
@@ -2432,6 +2433,32 @@ class KokoroTtsEngine
         absoluteIndex >= _activeChunks.length ||
         absoluteIndex == _currentChunkIndex) {
       return;
+    }
+    final previous = _activeChunks[_currentChunkIndex];
+    final following = _activeChunks[absoluteIndex];
+    final completion = previous.packetScene?.completion;
+    final verifiedSceneEnd =
+        previous.packetScene == null ||
+        (completion != null &&
+            previous.packetIndex == completion.packetCount - 1);
+    // Native source transitions need not deliver a final position tick. Finish
+    // only the adjacent, completely published parent scene. Packet switches and
+    // index jumps carry no such evidence. Engine-owned recovery seeks already
+    // update _currentChunkIndex before seeking, so their notification is ignored.
+    if (absoluteIndex == _currentChunkIndex + 1 &&
+        previous.sourceSceneId != following.sourceSceneId &&
+        previous.generationId == following.generationId &&
+        previous.endWordIndex == following.startWordIndex &&
+        previous.wordBoundaries.isNotEmpty &&
+        verifiedSceneEnd) {
+      final token = _activePlaybackToken;
+      final request = _requestToken;
+      _emitProgressForChunkWord(
+        _currentChunkIndex,
+        previous.wordBoundaries.length - 1,
+        elapsedInChunk: previous.duration,
+      );
+      if (token != _activePlaybackToken || request != _requestToken) return;
     }
     _currentChunkIndex = absoluteIndex;
     _signalBuffer();

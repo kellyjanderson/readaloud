@@ -401,6 +401,96 @@ void main() {
     },
   );
 
+  for (final indexJump in [false, true]) {
+    test(
+      'native ${indexJump ? 'index jump skips' : 'scene transition emits'} verified scene end without final position tick',
+      () async {
+        final temp = Directory.systemTemp.createTempSync(
+          'packet-scene-transition-',
+        );
+        addTearDown(() => temp.deleteSync(recursive: true));
+        final player = _FakePlayer();
+        final engine = _NoModelEngine(player);
+        addTearDown(() => _close(engine));
+        final done = Completer<TtsRenderedSceneCompletion>();
+        final progress = <TtsProgressUpdate>[];
+        engine.onProgress = progress.add;
+        final nextScene = TtsRenderedAudioRequest(
+          documentId: 'book',
+          manifestIdentity: 'manifest',
+          intentRevision: 1,
+          sceneId: 'next-scene',
+          text: 'five six',
+          startWordIndex: 4,
+          endWordIndex: 6,
+          sourceEndWordIndex: 6,
+          startOffset: 19,
+          sceneTurns: const [],
+          audioPath: '/validated-test/next-scene.wav',
+          format: const TtsRenderedAudioFormat(
+            sampleRate: 1000,
+            channels: 1,
+            bitsPerSample: 16,
+          ),
+          duration: const Duration(seconds: 1),
+          rangeSequence: 2,
+        );
+        final second = _packetScene(
+          temp,
+          done.future,
+          index: 1,
+          start: 500,
+          sourceEnd: 6,
+          text: 'one two three four',
+          continuation: TtsRenderedAudioContinuation(
+            next: (_, _) async => nextScene,
+          ),
+        );
+        await engine.playRendered(
+          _packetScene(
+            temp,
+            done.future,
+            sourceEnd: 6,
+            text: 'one two three four',
+            continuation: TtsRenderedAudioContinuation(
+              next: (_, _) async => second,
+            ),
+          ),
+        );
+        await _until(() => player.sources.length == 2);
+        done.complete(
+          const TtsRenderedSceneCompletion(
+            sceneId: 'scene',
+            frameCount: 1000,
+            packetCount: 2,
+            duration: Duration(seconds: 1),
+            onsetTrimFrames: 0,
+          ),
+        );
+        await _until(() => player.sources.length == 3);
+        if (!indexJump) player.moveTo(1);
+        // A same-scene packet transition reports its cumulative position and
+        // cannot finalize the remaining word, even after publication succeeds.
+        expect(
+          progress.map((p) => p.wordStartIndex).toList(),
+          indexJump ? [0] : [0, 2],
+        );
+        // No final position update is emitted for packet 1.
+        player.moveTo(2);
+        expect(
+          progress.map((p) => (p.chunkId, p.wordStartIndex)).toList(),
+          indexJump
+              ? [('scene', 0), ('next-scene', 4)]
+              : [('scene', 0), ('scene', 2), ('scene', 3), ('next-scene', 4)],
+        );
+        if (!indexJump) {
+          expect(progress[2].wordEndIndex, 4);
+          expect(progress[2].chunkAudioDuration, const Duration(seconds: 1));
+        }
+      },
+    );
+  }
+
   for (final allSilent in [false, true]) {
     test(
       'leading silent packets ${allSilent ? 'finish silently' : 'retain exact onset PCM'}',
@@ -543,6 +633,8 @@ TtsRenderedAudioRequest _packetScene(
   Future<TtsRenderedSceneCompletion> completion, {
   int index = 0,
   int start = 0,
+  int sourceEnd = 2,
+  String text = 'one two',
   bool silent = false,
   TtsRenderedAudioContinuation? continuation,
 }) {
@@ -576,10 +668,10 @@ TtsRenderedAudioRequest _packetScene(
     manifestIdentity: 'manifest',
     intentRevision: 1,
     sceneId: 'scene',
-    text: 'one two',
+    text: text,
     startWordIndex: 0,
-    endWordIndex: 2,
-    sourceEndWordIndex: 2,
+    endWordIndex: text.split(' ').length,
+    sourceEndWordIndex: sourceEnd,
     startOffset: 0,
     sceneTurns: const [],
     audioPath: path,
