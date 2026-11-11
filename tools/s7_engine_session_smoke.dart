@@ -288,9 +288,19 @@ Future<void> main(List<String> args) async {
       () => synthesisCalls > beforePreview || previewSettled,
       'Preview synthesis boundary',
     );
+    receipt['previewPreparationObservation'] = {
+      'beforeSynthesisCalls': beforePreview,
+      'synthesisCalls': synthesisCalls,
+      'requestSettled': previewSettled,
+      'requestedPlaying': players.last.playing,
+      'processingState': players.last.processingState.name,
+      'positionMs': players.last.position.inMilliseconds,
+    };
+    // just_audio's playing flag expresses intent even while it is buffering.
+    // Actual emitted silence is checked independently over the captured wave.
     require(
-      synthesisCalls > beforePreview && !players.last.playing,
-      'Preview did not enter cancellable preparation before audio',
+      synthesisCalls > beforePreview && players.last.position == Duration.zero,
+      'Preview missed its pre-position cancellation window',
     );
     final previewB = c.setTtsEngineId('fish_drama3_8bit');
     await until(() => c.isSwitchingEngine, 'Preview replacement');

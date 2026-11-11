@@ -8,6 +8,12 @@ selection does the same at launch. Settings shows progress and offers retry on
 failure. Switching away cancels preparation, drains the old inference process,
 and prepares the latest selection without restarting or rebuilding the app.
 The document and reading position remain available; resume playback explicitly.
+Settings shows the selected engine separately from a validated active engine
+and the last working choice. A last working choice may need to reload. Changing
+engines cancels pending playback, preview and audio export; retry or resume is an
+explicit action. Narrator choices are retained per engine. An unavailable saved
+voice remains unresolved until you choose a compatible voice; returning to its
+engine restores the saved choice.
 
 Drama bf16 has running-app playback evidence at native 44.1 kHz, including
 short fiction turns and explicit Character choices. Full qualification remains

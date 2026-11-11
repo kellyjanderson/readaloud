@@ -611,7 +611,7 @@ class _ReadAloudScreenState extends State<ReadAloudScreen> {
                           'fish_drama3' ||
                           'fish_drama3_8bit' ||
                           'fish_drama3_4bit' =>
-                            'Fish Official reference voices plus the existing voice bank. bf16 needs a 96 GB or larger Mac; choose 8-bit or 4-bit for smaller Macs. Downloads when selected.',
+                            'Fish Official reference voices plus the existing voice bank. Memory needs vary; smaller variants may still exceed available memory. Downloads when selected.',
                           'qwen3_tts_base_1_7b' || 'moss_tts_8b' =>
                             '43 reference voices, including 13 Fish voices. Choose and preview them in Voice Management; the same library is available for character assignments.',
                           'qwen3_tts_1_7b' =>

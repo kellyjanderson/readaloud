@@ -47,6 +47,42 @@ The default reader status region shows one current summary and measured progress
 
 `MeasuredProgress` is shared by reader, Settings and voice-download feedback. It renders a bar only for a finite measured fraction below one. Unknown totals show text/counts; a fully counted but nonterminal operation says Finishing rather than presenting premature 100% or an indeterminate animation. Source preparation pauses all source stages at a full reading window; planning cancellation/failure publishes a terminal state through the existing revision gate. Startup completion/failure clears resource progress so failed startup cannot leave a live download indicator. [Feedback and download reuse](https://github.com/kellyjanderson/readaloud/issues/119) owns source/native evidence and remaining limitations.
 
+## Validated engine sessions
+
+The main-isolate controller publishes an immutable
+[`EngineSession`](../../lib/src/models/engine_session.dart): selected identity,
+validated active identity, last-working reload identity, transition epoch and
+phase. The existing single replacement future retains one latest desired
+selection. Its phases are stopping, unloading, acquiring, loading, validating,
+active, cancelled and failed. Active is cleared before retirement and published
+only after model and voice validation; last-working does not imply residency.
+Settings distinguishes these identities and offers retry after failure. A failed
+same-choice request can retry without pretending its released model stayed loaded.
+
+Every replacement invalidates captured callbacks before the first retirement
+await. Preview captures its engine/epoch and checks each asynchronous continuation;
+an obsolete preview cannot speak through the replacement or restore old voice
+state. Export and voice-library installation/refresh success and failure have
+the same ownership fence. Existing resource shutdown remains the out-of-band
+model/export cancellation owner and drains before constructing the next engine.
+No second switch queue or scheduler is introduced.
+
+Preferences retain narrator intent by engine identity alongside the readable
+legacy selected-voice field. An incompatible saved narrator remains unresolved
+instead of being silently replaced and persisted; returning to its engine restores
+that choice. Fish precision remains in its saved variant ID; the scalar runtime
+quantization option belongs to Voxtral. Document, reading anchor and Character
+intent survive replacement. Public settings replacement cancels pending Play;
+only an existing audio book's checked session/revision/intent may preserve its
+original Play through its private published-engine handoff.
+
+Barrier-controlled controller, preference, widget and book tests cover stale
+success/failure, retirement callbacks, preview/export, retry, narrator intent and
+book cancellation. These are source evidence, not native audio/overlap, memory
+or M3 certification. M3 hardware is currently unavailable. Worker diagnostics
+remain in the local app log; ordinary worker startup failures expose the actionable
+message, without appending the Python traceback to the reader's status text.
+
 ## Bounded integrated P4 observations
 
 The [assignment295 prefix audit](https://github.com/kellyjanderson/readaloud/issues/53#issuecomment-6395976458) observed pending Heart/effective Bella without changing current audio, Apply from word 8 and latest-only startup. The run later failed its listening timeout; cleanup reached zero resources, but the whole run is not a pass. Modal open overlapped one owned producer, Close transitioned to zero, and scroll/Recenter ran with zero. All actual actions had export inactive; menu dismissal remains unproved. Debug frame timing includes stalls and cannot establish input latency or CPU-planning acceptance.
