@@ -329,6 +329,30 @@ all work triggered by the later target-load request remains timed. The reporters
 retain launch-to-speech and its two-second goal separately. Missing post-startup
 boundaries cannot be reconstructed from historical launch-only receipts.
 
+The [R25 v11 receipts](../test-artifacts/s6-r6-20261111/README.md), source
+`f5f3c8a`, measured first document loading to captured speech at 5351.837 ms
+and reusable loading at 283.542 ms. Ordinary startup was 9953.107 ms and
+288.717 ms respectively. Both load hard limits passed; first-load launch to
+speech still missed the two-second goal. These use fresh private target raw
+stores or model-forbidden complete books, with installed assets and OS caches
+disclosed. All four complete waveform matches passed in both cases.
+The complete initial/change/reuse/uncached-repair sequence also passed all
+four waveform checks but failed its overall native gate on a 263 ms response
+during final Save. That failed control remains recorded. The bounded main-channel
+probe now retains native-entry/return timestamps and active-app state for diagnosis;
+its monotonic 250 ms gate is unchanged. Neither these fixtures nor a passing
+source suite establish arbitrary-book, physical-speaker or human listening acceptance.
+
+The subsequent foreground v12 sequence, native code `f2d96a2`, passed all four
+functional and strict complete-waveform checks, with maximum joins of 0.01 ms.
+Immediate native-main response peaked at 230 ms across 3359 samples; 3267
+observed the application active. UI heartbeat peaked at 9 ms. Ten activities
+started and ended, none remained, and normal Quit left no owned processes.
+This qualifies that bounded foreground run without identifying the cause of
+the earlier 263 ms failure. First-load/reusable timing uses the separate ungated
+v11 receipts; the controlled full-sequence Play gates cannot establish load timing.
+Human listening/usability remains collected for S11 under the release decision.
+
 The build-owned relocated staging tree omits a CPython bytecode cache only when
 its corresponding `.py` source is present. Sourceless modules, source packages,
 native code/signatures and licenses remain. This explicit embed-script option

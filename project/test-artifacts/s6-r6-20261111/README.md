@@ -79,3 +79,20 @@ final Save exceeded the unchanged 250 ms gate; UI maximum was 13 ms, activities
 10 started/10 ended/0 active, normal Quit/zero owned children. Source and logs
 exclude bookmark creation from that interval; the staging allocator already runs
 on a utility queue. No speculative bookmark change was made.
+
+## Foreground v12 complete-sequence receipt
+
+Native code `f2d96a2` passed the full initial/change/reuse/uncached-repair sequence.
+All four complete waveforms matched at correlation >= .98, with joins <= 0.01 ms.
+Native-main roundtrip maximum was 230 ms across 3359 samples, including final
+Save; 3267 samples observed the app active. UI maximum was 9 ms. Activities were
+10 started / 10 ended / 0 active. Normal Quit left no owned processes. Native
+handler entry/return diagnostics remain separate from the monotonic 250 ms gate.
+The runner explicitly activated its directly spawned app before initial playback.
+This qualifies the bounded foreground run; it does not identify the cause of the
+earlier 263 ms failure. The controlled Play gates qualify continuity only. Load
+latency remains established independently by the ungated v11 timing receipts.
+
+`r25-native-qualification.json` ties together exact receipts and hashed local
+check logs. Human listening/usability remains in S11; release integration and
+publication are separate from these recorded native observations.

@@ -3,8 +3,8 @@
   "files": [
     {
       "file": "README.md",
-      "sha256": "eb027425a9ae61182453576987fc4cbd482887a56d8f73b6719df0137303754a",
-      "bytes": 5202
+      "sha256": "7ccae004fccbf455211daec25d2ff711778e3c42dbeb9be8c5a793b811173480",
+      "bytes": 6277
     },
     {
       "file": "cancel-v5-predicate-failed-receipt.json",
@@ -202,6 +202,66 @@
       "bytes": 520
     },
     {
+      "file": "r25-full-v12-changed-acoustic.json",
+      "sha256": "96721f4221cb3230c495a44faa73e36d898e2c856b388986033735810fd143a1",
+      "bytes": 1531
+    },
+    {
+      "file": "r25-full-v12-changed-capture-timing.json",
+      "sha256": "a1d9bd9be29641cb5cb3d3504794b649569caaa85e72dd56981102a1e0cd4f67",
+      "bytes": 521
+    },
+    {
+      "file": "r25-full-v12-cleanup.json",
+      "sha256": "d1bc7668cca9bd11e6bc25a6a5dc4717061c0e7660ac1c3f88de9120a896fe7e",
+      "bytes": 953
+    },
+    {
+      "file": "r25-full-v12-initial-acoustic.json",
+      "sha256": "7ae90426a396d8bda044dca9fe50661fcce35c64ca10dbd4e533accbadcb2d40",
+      "bytes": 1510
+    },
+    {
+      "file": "r25-full-v12-initial-capture-timing.json",
+      "sha256": "0e566005908e1ef3f126f6fd8a0b09422a8259d7191c38f1d3a383484271a36a",
+      "bytes": 521
+    },
+    {
+      "file": "r25-full-v12-missing-acoustic.json",
+      "sha256": "fa573155c346ee4ef1f0b1d87e9c5fbe18c4508668599c2f84fc972e79ff751a",
+      "bytes": 1525
+    },
+    {
+      "file": "r25-full-v12-missing-capture-timing.json",
+      "sha256": "d415308bac84d559e8b68f33c86966a1c3e193c57c8b41dde777e341d6205051",
+      "bytes": 520
+    },
+    {
+      "file": "r25-full-v12-receipt.json",
+      "sha256": "903b4d3e6a71d04be5c5601e293e4616f557b75ff6c2d74c072329406137073e",
+      "bytes": 57919
+    },
+    {
+      "file": "r25-full-v12-receipt.json.phases.jsonl",
+      "sha256": "9fc0031b2a864ec77e24168c8d81c0358dd9cd57e70228a1b81c28c511401596",
+      "bytes": 849
+    },
+    {
+      "file": "r25-full-v12-reused-acoustic.json",
+      "sha256": "9faf1cf94c374379fb265cc10402362a0c66adfed5b385e6f2228e2a9e6162ff",
+      "bytes": 1538
+    },
+    {
+      "file": "r25-full-v12-reused-capture-timing.json",
+      "sha256": "e35a4f84d806329b8cf6a4d686a4ce3a42d85abefc2359a90da184def33f7586",
+      "bytes": 520
+    },
+    {
+      "file": "r25-native-qualification.json",
+      "sha256": "8f3283b4fd9da8ad152aae72718c856f888ff09945a3522b2e0d3110420831da",
+      "bytes": 6376
+    },
+    {
       "file": "r25-packet-cancel-v11-acoustic.json",
       "sha256": "4103d5670709d3ee60e5091e796faf090613b55c165ea82b653985e9b46237a1",
       "bytes": 1520
@@ -260,6 +320,11 @@
       "file": "r25-v11-candidate.json",
       "sha256": "aaa0e93e4fdcf824fdae16fef37005f5f769773ea25e07f88c89bd945b1562b7",
       "bytes": 738
+    },
+    {
+      "file": "r25-v12-candidate.json",
+      "sha256": "bdd9a3e8b2716d0e7e1fc9c3381bcc02e200cedbb46dc71aac8664e231a36a7c",
+      "bytes": 775
     },
     {
       "file": "r6-full-v9-changed-comparison.json",
