@@ -1,0 +1,61 @@
+{
+  "schema": "readaloud-native-variant-runner-v1",
+  "mode": "cached-4bit",
+  "passed": false,
+  "nativePassed": true,
+  "normalQuit": true,
+  "appExitVerified": true,
+  "forcedCleanup": false,
+  "remainingOwnedPids": [],
+  "frameworkSha256": "1f0dbee99aeda9b22bc18fc5aab9a409819e0c4ed8ade7df434f06d942e231a6",
+  "executableSha256": "2c3ddcc2c517816a60f4e6fea8c0887f9306155a3359c542e65e0b00cd9d4a47",
+  "maxMlxChildren": 1,
+  "observedMlxSamples": 505,
+  "processEvents": [
+    {
+      "unixMicros": 1794419769539903,
+      "pids": []
+    },
+    {
+      "unixMicros": 1794419771916799,
+      "pids": [
+        14407
+      ]
+    },
+    {
+      "unixMicros": 1794419837049831,
+      "pids": []
+    }
+  ],
+  "errors": [
+    "Diagnostic native sampling enabled; timing is instrumented"
+  ],
+  "limits": "100ms child/process observations and emitted signal per playback interval. Exact waveform matching, glitch/voice quality, total memory envelope, physical-speaker and M3 acceptance remain separate. Capture 300s; work deadline 270s.",
+  "diagnosticProfiling": true,
+  "pid": 14375,
+  "capturePid": 14376,
+  "secondaryCapture": {
+    "mechanism": "CoreAudio process tap",
+    "pid": 14377,
+    "executableSha256": "5c0d8167bc06529bac15e2df9d07abfb9f63d6e7e3296c90210dc5ac224ce909",
+    "scope": "Independent diagnostic recording; primary acceptance gates remain unchanged",
+    "exitStatus": 0
+  },
+  "nativeSamplingStartedUnixMicros": 1794419769767848,
+  "captureReadyObservedUnixMicros": 1794419770134317,
+  "applicationActivationRequested": true,
+  "captureExitStatus": 0,
+  "appExitStatus": 0,
+  "emittedSignal": [
+    {
+      "label": "sustained-fish_drama3_4bit",
+      "durationSeconds": 60.00095833333334,
+      "activeWindowSeconds": 51.800000000000004,
+      "longestSilentWindowSeconds": 0.7000000000000001,
+      "peak": 0.7552217245101929,
+      "passed": true,
+      "scope": "100ms app-only signal windows; not waveform identity or acoustic continuity acceptance"
+    }
+  ],
+  "strictAcousticAcceptance": "NOT_RUN: compare copied queued WAVs with capture; listening remains separate"
+}

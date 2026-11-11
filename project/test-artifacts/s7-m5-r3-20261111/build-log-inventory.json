@@ -1,0 +1,44 @@
+[
+  {
+    "privateLog": "/Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/tmp/s7/final-r4-build.log",
+    "bytes": 126047,
+    "sha256": "de762f519dff64503fd73d9674849b220870f3c5a8bf101e99e43b56e5c83924",
+    "buildSucceeded": true
+  },
+  {
+    "privateLog": "/Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/tmp/s7/final-r5-build.log",
+    "bytes": 125395,
+    "sha256": "e4bddef7e2d2f6bb99b7a1f86bd83cfb748da73c9252f5ea62e6a8e27705a5f4",
+    "buildSucceeded": true
+  },
+  {
+    "privateLog": "/Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/tmp/s7/final-r6-build.log",
+    "bytes": 125395,
+    "sha256": "1cb9dbf5e80992f5cf962eaac568966069fcc8ee4fe0148266eb21ec43ca829b",
+    "buildSucceeded": true
+  },
+  {
+    "privateLog": "/Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/tmp/s7/final-r7-build.log",
+    "bytes": 125395,
+    "sha256": "dac1005bae9157d98748ba47b2c7344de0f9b2348f6624b6b53629d631b7160d",
+    "buildSucceeded": true
+  },
+  {
+    "privateLog": "/Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/tmp/s7/final-r8-framework-build.log",
+    "bytes": 51389,
+    "sha256": "e4bb31755c8646a7423a050911a272eef1ac3bf093acd0a56490f88586424d3b",
+    "buildSucceeded": true
+  },
+  {
+    "privateLog": "/Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/tmp/s7/final-r9-framework-build.log",
+    "bytes": 47839,
+    "sha256": "780bf59440e30e54d4d36985dd7d2e9f7fc732e669d91a6e316da25eccabd414",
+    "buildSucceeded": true
+  },
+  {
+    "privateLog": "/Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/tmp/s7/extended-build.log",
+    "bytes": 47839,
+    "sha256": "a0de389213e9a91fe2c762406ed06752ff4c7e9661a83d0a5dac1c647f3f392b",
+    "buildSucceeded": true
+  }
+]

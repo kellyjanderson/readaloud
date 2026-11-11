@@ -1,0 +1,12 @@
+{
+  "blob": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/Library/Application Support/com.kellyjanderson.readAloud.mlxPlaybackTest/read_aloud/mlx-tts/models/blobs/c8/c8ca4f5d6f2617ba91d7863f96acfb7b9871087812d8b2b28edd63af787b399f",
+  "heldOriginal": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/Library/Application Support/com.kellyjanderson.readAloud.mlxPlaybackTest/read_aloud/mlx-tts/models/blobs/c8/c8ca4f5d6f2617ba91d7863f96acfb7b9871087812d8b2b28edd63af787b399f.s7-ui-download-hold",
+  "expected": {
+    "size": 1572080341,
+    "algorithm": "sha256",
+    "digest": "6ff9d6f07920b2155e3a48ada21956004b96df9114d255ed9f0788484ba73040"
+  },
+  "restored": true,
+  "runnerSucceeded": false,
+  "otherSnapshotIdentitiesUnchanged": true
+}

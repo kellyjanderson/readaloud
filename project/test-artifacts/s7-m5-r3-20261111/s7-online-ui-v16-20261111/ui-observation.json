@@ -1,0 +1,13 @@
+{
+  "beforeCancelUnixMicros": 1794419216495182,
+  "newCompletedBlobExists": false,
+  "observedStates": [
+    "4-bit loading/verifying after measured transfer",
+    "Settings Cancel:4-bit cancelled/no active/last-working8-bit",
+    "Settings Retry:loading",
+    "4-bit selected and active after Retry"
+  ],
+  "actionSource": "cua_repl native Settings buttons",
+  "limit": "Cancel click observed during verification; v15 separately proves actual incomplete-transfer cancellation and validated Retry",
+  "retryActiveObservedUnixMicros": 1794419262750537
+}

@@ -70,14 +70,24 @@ before publishing a normal managed model, including automatic reload after
 cancellation. Missing or mismatched verification poisons and reaps that child.
 The existing request/child identities still reject stale progress and results.
 
+Hub 2.4 rejects incomplete local snapshots before returning their path. The
+application therefore inventories only safely owned exact pins after that
+exception, verifies their required files, and selects the candidate with the
+most stable verified bytes. A failed attempt retains that one destination.
+Hub still owns transfer, locks, resumable partials and atomic publication; a
+missing file cannot redirect Retry into a second full model download.
+
 Focused [catalog fixtures](../../test/speech_engine_catalog_test.dart),
 [real-child protocol tests](../../test/mlx_python_process_test.dart) and
 [tiny real-hash acquisition fixtures](../../tools/mlx_tts_worker_test.py)
 cover declaration, offline reuse, selective repair, interrupted retry, receipt
-ownership and rejected/reloaded child paths. They do not establish complete-model
-transfer performance, native quantized scenes, live-session switching, measured
-memory envelopes or M3 qualification. Those gates and selected/active UI
-reconciliation remain S7 work; listening/usability is collected for S11.
+ownership and rejected/reloaded child paths. They do not alone establish
+complete-model transfer performance, emitted speech, live-session switching or
+memory qualification. Bounded native observations and failed controls are
+recorded in [M5 resource evidence](../test-artifacts/s7-m5-r2-20261111/README.md)
+and [subsequent native evidence](../test-artifacts/s7-m5-r3-20261111/README.md).
+Physical M3 qualification remains open; listening/usability is collected for
+S11. Software captures do not establish physical-speaker or human acceptance.
 
 ## Source and tests
 

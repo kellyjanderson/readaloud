@@ -1,0 +1,40 @@
+{
+  "schema": "readaloud-native-variant-runner-v1",
+  "mode": "cached-8bit",
+  "passed": null,
+  "nativePassed": true,
+  "normalQuit": true,
+  "appExitVerified": true,
+  "forcedCleanup": false,
+  "remainingOwnedPids": [],
+  "frameworkSha256": "372e9877eed5f15a8b834e9b8e1eba65514b53119c4cecce20b7bf13d47e4e42",
+  "executableSha256": "57227b3e4e1d6cf45b3523672d2c1fcefb5a16c8c595507b5c7aaeef3479fab4",
+  "maxMlxChildren": 1,
+  "observedMlxSamples": 511,
+  "processEvents": [
+    {
+      "unixMicros": 1794413886873993,
+      "pids": []
+    },
+    {
+      "unixMicros": 1794413889491316,
+      "pids": [
+        69311
+      ]
+    },
+    {
+      "unixMicros": 1794413955894418,
+      "pids": []
+    }
+  ],
+  "errors": [
+    "Emitted audio: Capture does not cover playback interval"
+  ],
+  "limits": "100ms child/process observations and emitted signal per playback interval. Exact waveform matching, glitch/voice quality, total memory envelope, physical-speaker and M3 acceptance remain separate. Capture 300s; work deadline 270s.",
+  "pid": 69301,
+  "capturePid": 69302,
+  "applicationActivationRequested": true,
+  "captureExitStatus": 0,
+  "appExitStatus": 0,
+  "strictAcousticAcceptance": "NOT_RUN: compare copied queued WAVs with capture; listening remains separate"
+}

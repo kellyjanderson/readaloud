@@ -1,0 +1,62 @@
+{
+  "schema": "readaloud-native-variant-runner-v1",
+  "mode": "online-cancel-retry",
+  "passed": false,
+  "nativePassed": false,
+  "normalQuit": true,
+  "appExitVerified": true,
+  "forcedCleanup": false,
+  "remainingOwnedPids": [],
+  "frameworkSha256": "4457edee5dc5132dd90af75eb2660da2f10b068a72a510c0a81ffbe76a148580",
+  "executableSha256": "afe0b804d4cdc93d5b0fe8a84c5b96bda95e22655d4df021d72bed1e937f318b",
+  "maxMlxChildren": 1,
+  "observedMlxSamples": 723,
+  "processEvents": [
+    {
+      "unixMicros": 1794418482189807,
+      "pids": []
+    },
+    {
+      "unixMicros": 1794418484019311,
+      "pids": [
+        3798
+      ]
+    },
+    {
+      "unixMicros": 1794418493092816,
+      "pids": []
+    },
+    {
+      "unixMicros": 1794418506696068,
+      "pids": [
+        4104
+      ]
+    },
+    {
+      "unixMicros": 1794418589584294,
+      "pids": []
+    }
+  ],
+  "errors": [
+    "Native failure: TimeoutException: Settings Cancel"
+  ],
+  "limits": "100ms child/process observations and emitted signal per playback interval. Exact waveform matching, glitch/voice quality, total memory envelope, physical-speaker and M3 acceptance remain separate. Capture 300s; work deadline 270s.",
+  "pid": 3774,
+  "capturePid": 3775,
+  "captureReadyObservedUnixMicros": 1794418482888410,
+  "applicationActivationRequested": true,
+  "captureExitStatus": 0,
+  "appExitStatus": 0,
+  "emittedSignal": [
+    {
+      "label": "initial-A8",
+      "durationSeconds": 3.00075,
+      "activeWindowSeconds": 2.7,
+      "longestSilentWindowSeconds": 0.0,
+      "peak": 0.9190384149551392,
+      "passed": true,
+      "scope": "100ms app-only signal windows; not waveform identity or acoustic continuity acceptance"
+    }
+  ],
+  "strictAcousticAcceptance": "NOT_RUN: compare copied queued WAVs with capture; listening remains separate"
+}

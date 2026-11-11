@@ -1,0 +1,1190 @@
+Resolving dependencies...
+Downloading packages...
+  archive 4.0.9 (4.6.0 available)
+  async 2.13.0 (2.13.1 available)
+  audio_session 0.2.3 (0.2.4 available)
+  clock 1.1.2 (1.1.3 available)
+  code_assets 1.0.0 (2.2.0 available)
+  cross_file 0.3.5+2 (0.4.0 available)
+  crypto 3.0.7 (3.0.8 available)
+  cupertino_icons 1.0.8 (2.0.0 available)
+  dbus 0.7.12 (0.8.0 available)
+  desktop_drop 0.7.0 (0.9.2 available)
+  file_picker 10.3.10 (13.3.3 available)
+! flutter_onnxruntime 1.6.3 from path third_party/flutter_onnxruntime (overridden)
+  flutter_plugin_android_lifecycle 2.0.33 (2.0.35 available)
+  glob 2.1.3 (2.2.0 available)
+  hooks 1.0.2 (2.2.0 available)
+  html 0.15.6 (0.15.7 available)
+  image 4.8.0 (4.12.0 available)
+! just_audio 0.10.5 from path third_party/just_audio (overridden)
+  matcher 0.12.19 (0.12.20 available)
+  material_color_utilities 0.13.0 (0.13.1 available)
+  meta 1.17.0 (1.19.0 available)
+  native_toolchain_c 0.17.6 (0.19.6 available)
+  objective_c 9.3.0 (9.6.3 available)
+  path_provider 2.1.5 (2.1.6 available)
+  path_provider_android 2.2.23 (2.3.1 available)
+  path_provider_linux 2.2.1 (2.2.2 available)
+  path_provider_platform_interface 2.1.2 (2.1.3 available)
+  pdfium_dart 0.1.3 (0.4.1 available)
+  pdfium_flutter 0.1.9 (0.4.1 available)
+  pdfrx 2.2.24 (2.12.0 available)
+  pdfrx_engine 0.3.9 (0.9.1 available)
+  petitparser 7.0.2 (7.1.0 available)
+  platform 3.1.6 (3.2.0 available)
+  posix 6.5.0 (6.5.4 available)
+  pub_semver 2.2.0 (2.2.1 available)
+  share_intent_package 1.0.29 (1.0.32 available)
+  shared_preferences 2.5.5 (2.5.6 available)
+  shared_preferences_android 2.4.23 (2.5.5 available)
+  shared_preferences_foundation 2.5.6 (2.6.1 available)
+  stack_trace 1.12.1 (1.12.2 available)
+  synchronized 3.4.0 (3.6.1+1 available)
+  test_api 0.7.10 (0.7.15 available)
+  url_launcher 6.3.2 (6.3.3 available)
+  url_launcher_android 6.3.29 (6.3.33 available)
+  url_launcher_ios 6.4.1 (6.4.2 available)
+  url_launcher_linux 3.2.2 (3.2.3 available)
+  url_launcher_macos 3.2.5 (3.2.6 available)
+  url_launcher_web 2.4.2 (2.4.3 available)
+  url_launcher_windows 3.1.5 (3.1.6 available)
+  uuid 4.5.3 (4.6.0 available)
+  vector_math 2.2.0 (2.4.4 available)
+  vm_service 15.0.2 (15.4.0 available)
+  web 1.1.1 (1.1.2 available)
+  win32 5.15.0 (6.4.0 available)
+  xml 6.6.1 (7.1.0 available)
+  yaml 3.1.3 (3.1.4 available)
+Got dependencies!
+54 packages have newer versions incompatible with dependency constraints.
+Try `flutter pub outdated` for more information.
+00:00 +0: loading /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/rc2_prose_corpus_test.dart
+00:00 +0: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/rc2_prose_corpus_test.dart: natural prose normal import: lantern exact identities and span owners
+00:00 +1: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/rc2_prose_corpus_test.dart: natural prose normal import: lantern exact identities and span owners
+00:00 +2: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/rc2_prose_corpus_test.dart: natural prose normal import: lantern exact identities and span owners
+00:00 +3: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/rc2_prose_corpus_test.dart: natural prose normal import: lantern exact identities and span owners
+00:00 +4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/rc2_prose_corpus_test.dart: natural prose normal import: lantern exact identities and span owners
+00:00 +5: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/rc2_prose_corpus_test.dart: natural prose normal import: lantern exact identities and span owners
+00:00 +6: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/rc2_prose_corpus_test.dart: natural prose normal import: lantern exact identities and span owners
+00:00 +7: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/rc2_prose_corpus_test.dart: natural prose normal import: lantern exact identities and span owners
+00:00 +8: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/rc2_prose_corpus_test.dart: natural prose normal import: lantern exact identities and span owners
+00:00 +9: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/document_ingestion_smoke_test.dart: Document ingestion smoke preserves source tokens for Love.txt
+00:00 +10: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/document_ingestion_smoke_test.dart: Document ingestion smoke preserves source tokens for Love.txt
+00:00 +11: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/document_ingestion_smoke_test.dart: Document ingestion smoke preserves source tokens for Love.txt
+00:00 +12: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/document_ingestion_smoke_test.dart: Document ingestion smoke preserves source tokens for Love.txt
+00:00 +13: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/document_ingestion_smoke_test.dart: Document ingestion smoke preserves source tokens for Love.txt
+00:00 +14: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/document_ingestion_smoke_test.dart: Document ingestion smoke preserves source tokens for Love.txt
+00:00 +15: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/document_ingestion_smoke_test.dart: Document ingestion smoke preserves source tokens for Love.txt
+00:00 +16: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/document_ingestion_smoke_test.dart: Document ingestion smoke preserves source tokens for Love.txt
+00:00 +17: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/document_ingestion_smoke_test.dart: Document ingestion smoke preserves source tokens for Love.txt
+00:00 +18: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/document_ingestion_smoke_test.dart: Document ingestion smoke preserves source tokens for Love.txt
+00:00 +19: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/native_main_responsiveness_probe_test.dart: main probe admits one request and joins it on close
+00:00 +19: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/document_ingestion_smoke_test.dart: Document ingestion smoke preserves source tokens for Rosalina.pdf
+  Skip: PDF source-token smoke coverage needs an integration-style pdfrx harness.
+00:00 +19 ~1: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/native_main_responsiveness_probe_test.dart: main probe admits one request and joins it on close
+00:00 +20 ~1: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/native_main_responsiveness_probe_test.dart: main probe admits one request and joins it on close
+00:00 +21 ~1: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/native_main_responsiveness_probe_test.dart: main probe admits one request and joins it on close
+00:00 +22 ~1: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/native_main_responsiveness_probe_test.dart: main probe admits one request and joins it on close
+00:00 +22 ~1: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/modernbooknlp_local_inference_test.dart: real offline CPU provider crosses Dart process and source-coordinate boundary
+  Skip: Set READALOUD_MODERNBOOKNLP_ROOT for optional real-model qualification
+00:00 +22 ~2: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/native_main_responsiveness_probe_test.dart: main probe admits one request and joins it on close
+00:00 +23 ~2: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/native_main_responsiveness_probe_test.dart: main probe admits one request and joins it on close
+00:00 +24 ~2: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/native_main_responsiveness_probe_test.dart: main probe admits one request and joins it on close
+00:00 +25 ~2: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/native_main_responsiveness_probe_test.dart: main probe admits one request and joins it on close
+00:00 +26 ~2: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/native_main_responsiveness_probe_test.dart: main probe admits one request and joins it on close
+00:00 +27 ~2: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/native_main_responsiveness_probe_test.dart: main probe admits one request and joins it on close
+00:00 +28 ~2: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/native_main_responsiveness_probe_test.dart: main probe admits one request and joins it on close
+00:00 +29 ~2: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/native_main_responsiveness_probe_test.dart: main probe admits one request and joins it on close
+00:00 +30 ~2: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/native_main_responsiveness_probe_test.dart: main probe admits one request and joins it on close
+00:00 +31 ~2: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/native_main_responsiveness_probe_test.dart: main probe admits one request and joins it on close
+00:00 +32 ~2: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/native_main_responsiveness_probe_test.dart: main probe admits one request and joins it on close
+00:01 +33 ~2: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/preparation_status_test.dart: mouse selection and Command-C work before and after resize (variant: TargetPlatform.macOS)
+00:01 +34 ~2: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/preparation_status_test.dart: mouse selection and Command-C work before and after resize (variant: TargetPlatform.macOS)
+00:01 +35 ~2: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/preparation_status_test.dart: mouse selection and Command-C work before and after resize (variant: TargetPlatform.macOS)
+00:01 +36 ~2: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/preparation_status_test.dart: mouse selection and Command-C work before and after resize (variant: TargetPlatform.macOS)
+00:01 +37 ~2: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/preparation_status_test.dart: mouse selection and Command-C work before and after resize (variant: TargetPlatform.macOS)
+00:01 +38 ~2: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/preparation_status_test.dart: mouse selection and Command-C work before and after resize (variant: TargetPlatform.macOS)
+00:01 +39 ~2: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/preparation_status_test.dart: mouse selection and Command-C work before and after resize (variant: TargetPlatform.macOS)
+00:01 +40 ~2: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/preparation_status_test.dart: mouse selection and Command-C work before and after resize (variant: TargetPlatform.macOS)
+00:01 +41 ~2: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/preparation_status_test.dart: mouse selection and Command-C work before and after resize (variant: TargetPlatform.macOS)
+00:01 +42 ~2: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/preparation_status_test.dart: mouse selection and Command-C work before and after resize (variant: TargetPlatform.macOS)
+00:01 +43 ~2: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/preparation_status_test.dart: mouse selection and Command-C work before and after resize (variant: TargetPlatform.macOS)
+00:01 +44 ~2: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/preparation_status_test.dart: mouse selection and Command-C work before and after resize (variant: TargetPlatform.macOS)
+00:01 +45 ~2: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/preparation_status_test.dart: mouse selection and Command-C work before and after resize (variant: TargetPlatform.macOS)
+00:01 +46 ~2: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/preparation_status_test.dart: mouse selection and Command-C work before and after resize (variant: TargetPlatform.macOS)
+00:01 +47 ~2: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/preparation_status_test.dart: mouse selection and Command-C work before and after resize (variant: TargetPlatform.macOS)
+00:01 +48 ~2: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/preparation_status_test.dart: mouse selection and Command-C work before and after resize (variant: TargetPlatform.macOS)
+00:01 +49 ~2: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/preparation_status_test.dart: mouse selection and Command-C work before and after resize (variant: TargetPlatform.macOS)
+00:01 +50 ~2: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/preparation_status_test.dart: mouse selection and Command-C work before and after resize (variant: TargetPlatform.macOS)
+00:01 +51 ~2: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/preparation_status_test.dart: mouse selection and Command-C work before and after resize (variant: TargetPlatform.macOS)
+00:01 +52 ~2: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/preparation_status_test.dart: mouse selection and Command-C work before and after resize (variant: TargetPlatform.macOS)
+00:01 +53 ~2: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/rc2_incremental_preparation_test.dart: viewport demand before producer credit installation cannot deadlock
+00:01 +54 ~2: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/rc2_incremental_preparation_test.dart: viewport demand before producer credit installation cannot deadlock
+00:01 +55 ~2: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/rc2_incremental_preparation_test.dart: viewport demand before producer credit installation cannot deadlock
+00:01 +56 ~2: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/rc2_incremental_preparation_test.dart: viewport demand before producer credit installation cannot deadlock
+00:01 +57 ~2: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/rc2_incremental_preparation_test.dart: viewport demand before producer credit installation cannot deadlock
+00:01 +58 ~2: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/rc2_incremental_preparation_test.dart: viewport demand before producer credit installation cannot deadlock
+00:01 +59 ~2: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/rc2_incremental_preparation_test.dart: viewport demand before producer credit installation cannot deadlock
+00:01 +60 ~2: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/rc2_incremental_preparation_test.dart: viewport demand before producer credit installation cannot deadlock
+00:01 +61 ~2: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/rc2_incremental_preparation_test.dart: viewport demand before producer credit installation cannot deadlock
+00:01 +62 ~2: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/rc2_incremental_preparation_test.dart: viewport demand before producer credit installation cannot deadlock
+00:01 +63 ~2: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/rc2_incremental_preparation_test.dart: viewport demand before producer credit installation cannot deadlock
+00:01 +64 ~2: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/rc2_incremental_preparation_test.dart: viewport demand before producer credit installation cannot deadlock
+00:01 +65 ~2: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/rc2_incremental_preparation_test.dart: viewport demand before producer credit installation cannot deadlock
+00:01 +66 ~2: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/rc2_incremental_preparation_test.dart: viewport demand before producer credit installation cannot deadlock
+00:01 +67 ~2: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/rc2_incremental_preparation_test.dart: viewport demand before producer credit installation cannot deadlock
+00:01 +68 ~2: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/rc2_incremental_preparation_test.dart: viewport demand before producer credit installation cannot deadlock
+00:01 +69 ~2: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/rc2_incremental_preparation_test.dart: viewport demand before producer credit installation cannot deadlock
+00:01 +70 ~2: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/rc2_incremental_preparation_test.dart: viewport demand before producer credit installation cannot deadlock
+00:01 +71 ~2: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/rc2_incremental_preparation_test.dart: viewport demand before producer credit installation cannot deadlock
+00:01 +72 ~2: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/rc2_incremental_preparation_test.dart: viewport demand before producer credit installation cannot deadlock
+00:01 +73 ~2: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/rc2_incremental_preparation_test.dart: viewport demand before producer credit installation cannot deadlock
+00:01 +74 ~2: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/rc2_incremental_preparation_test.dart: viewport demand before producer credit installation cannot deadlock
+00:01 +75 ~2: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/rc2_incremental_preparation_test.dart: viewport demand before producer credit installation cannot deadlock
+00:01 +76 ~2: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/rc2_incremental_preparation_test.dart: viewport demand before producer credit installation cannot deadlock
+00:01 +77 ~2: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/rc2_incremental_preparation_test.dart: viewport demand before producer credit installation cannot deadlock
+00:01 +78 ~2: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/rc2_incremental_preparation_test.dart: viewport demand before producer credit installation cannot deadlock
+00:01 +79 ~2: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/rc2_incremental_preparation_test.dart: viewport demand before producer credit installation cannot deadlock
+00:01 +80 ~2: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/rc2_incremental_preparation_test.dart: viewport demand before producer credit installation cannot deadlock
+00:01 +81 ~2: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/rc2_incremental_preparation_test.dart: viewport demand before producer credit installation cannot deadlock
+00:01 +82 ~2: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/rc2_incremental_preparation_test.dart: viewport demand before producer credit installation cannot deadlock
+00:01 +83 ~2: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/rc2_incremental_preparation_test.dart: viewport demand before producer credit installation cannot deadlock
+00:01 +84 ~2: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/rc2_incremental_preparation_test.dart: viewport demand before producer credit installation cannot deadlock
+00:01 +85 ~2: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/rc2_incremental_preparation_test.dart: viewport demand before producer credit installation cannot deadlock
+00:01 +86 ~2: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/rc2_incremental_preparation_test.dart: viewport demand before producer credit installation cannot deadlock
+00:01 +87 ~2: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/rc2_incremental_preparation_test.dart: viewport demand before producer credit installation cannot deadlock
+00:01 +88 ~2: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/rc2_incremental_preparation_test.dart: viewport demand before producer credit installation cannot deadlock
+00:01 +89 ~2: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/rc2_incremental_preparation_test.dart: viewport demand before producer credit installation cannot deadlock
+00:01 +90 ~2: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/rc2_incremental_preparation_test.dart: viewport demand before producer credit installation cannot deadlock
+00:01 +91 ~2: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/rc2_incremental_preparation_test.dart: viewport demand before producer credit installation cannot deadlock
+00:01 +92 ~2: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/rc2_incremental_preparation_test.dart: viewport demand before producer credit installation cannot deadlock
+00:01 +93 ~2: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/rc2_incremental_preparation_test.dart: viewport demand before producer credit installation cannot deadlock
+00:01 +94 ~2: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/rc2_incremental_preparation_test.dart: viewport demand before producer credit installation cannot deadlock
+00:01 +95 ~2: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/rc2_incremental_preparation_test.dart: viewport demand before producer credit installation cannot deadlock
+00:01 +96 ~2: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/rc2_incremental_preparation_test.dart: viewport demand before producer credit installation cannot deadlock
+00:01 +97 ~2: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/rc2_incremental_preparation_test.dart: viewport demand before producer credit installation cannot deadlock
+00:01 +98 ~2: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/rc2_incremental_preparation_test.dart: viewport demand before producer credit installation cannot deadlock
+00:01 +99 ~2: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/rc2_incremental_preparation_test.dart: viewport demand before producer credit installation cannot deadlock
+00:01 +100 ~2: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/rc2_incremental_preparation_test.dart: viewport demand before producer credit installation cannot deadlock
+00:01 +101 ~2: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/rc2_incremental_preparation_test.dart: viewport demand before producer credit installation cannot deadlock
+00:01 +102 ~2: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/rc2_incremental_preparation_test.dart: viewport demand before producer credit installation cannot deadlock
+00:01 +103 ~2: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/rc2_incremental_preparation_test.dart: viewport demand before producer credit installation cannot deadlock
+00:02 +104 ~2: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/rc2_incremental_preparation_test.dart: viewport demand before producer credit installation cannot deadlock
+00:02 +105 ~2: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/rc2_incremental_preparation_test.dart: viewport demand before producer credit installation cannot deadlock
+00:02 +106 ~2: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/rc2_incremental_preparation_test.dart: viewport demand before producer credit installation cannot deadlock
+00:02 +107 ~2: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/modernbooknlp_window_test.dart: VS40 window binding never enumerates whole-book annotation or outcome collections
+00:02 +108 ~2: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/modernbooknlp_window_test.dart: VS40 window binding never enumerates whole-book annotation or outcome collections
+00:02 +109 ~2: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/modernbooknlp_window_test.dart: VS40 window binding never enumerates whole-book annotation or outcome collections
+00:02 +110 ~2: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/modernbooknlp_window_test.dart: VS40 window binding never enumerates whole-book annotation or outcome collections
+00:02 +111 ~2: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/modernbooknlp_window_test.dart: VS40 window binding never enumerates whole-book annotation or outcome collections
+00:02 +112 ~2: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/modernbooknlp_window_test.dart: VS40 window binding never enumerates whole-book annotation or outcome collections
+00:02 +113 ~2: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/modernbooknlp_window_test.dart: VS40 window binding never enumerates whole-book annotation or outcome collections
+00:02 +114 ~2: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/modernbooknlp_window_test.dart: VS40 window binding never enumerates whole-book annotation or outcome collections
+00:02 +115 ~2: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/modernbooknlp_window_test.dart: VS40 window binding never enumerates whole-book annotation or outcome collections
+00:02 +116 ~2: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/modernbooknlp_window_test.dart: VS40 window binding never enumerates whole-book annotation or outcome collections
+00:02 +117 ~2: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/modernbooknlp_window_test.dart: VS40 window binding never enumerates whole-book annotation or outcome collections
+00:02 +118 ~2: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/modernbooknlp_window_test.dart: VS40 window binding never enumerates whole-book annotation or outcome collections
+00:02 +119 ~2: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/modernbooknlp_window_test.dart: VS40 window binding never enumerates whole-book annotation or outcome collections
+00:02 +120 ~2: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/modernbooknlp_window_test.dart: VS40 window binding never enumerates whole-book annotation or outcome collections
+00:02 +121 ~2: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/modernbooknlp_window_test.dart: VS40 window binding never enumerates whole-book annotation or outcome collections
+00:02 +122 ~2: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/rc2_incremental_preparation_test.dart: document processing resumes across full windows without speech
+00:02 +123 ~2: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/rc2_incremental_preparation_test.dart: document processing resumes across full windows without speech
+00:02 +124 ~2: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/rc2_incremental_preparation_test.dart: document processing resumes across full windows without speech
+00:02 +125 ~2: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/rc2_incremental_preparation_test.dart: document processing resumes across full windows without speech
+00:02 +126 ~2: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/rc2_incremental_preparation_test.dart: document processing resumes across full windows without speech
+00:02 +127 ~2: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/rc2_incremental_preparation_test.dart: document processing resumes across full windows without speech
+00:02 +128 ~2: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/rc2_incremental_preparation_test.dart: document processing resumes across full windows without speech
+00:02 +129 ~2: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/rc2_incremental_preparation_test.dart: document processing resumes across full windows without speech
+00:02 +130 ~2: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/rc2_incremental_preparation_test.dart: document processing resumes across full windows without speech
+00:02 +131 ~2: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/rc2_incremental_preparation_test.dart: document processing resumes across full windows without speech
+00:02 +132 ~2: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/rc2_incremental_preparation_test.dart: document processing resumes across full windows without speech
+00:02 +133 ~2: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/rc2_incremental_preparation_test.dart: document processing resumes across full windows without speech
+00:02 +134 ~2: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/rc2_incremental_preparation_test.dart: document processing resumes across full windows without speech
+00:02 +135 ~2: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/rc2_incremental_preparation_test.dart: document processing resumes across full windows without speech
+00:02 +136 ~2: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/rc2_incremental_preparation_test.dart: document processing resumes across full windows without speech
+00:02 +137 ~2: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/rc2_incremental_preparation_test.dart: document processing resumes across full windows without speech
+00:02 +138 ~2: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/rc2_incremental_preparation_test.dart: document processing resumes across full windows without speech
+00:02 +139 ~2: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/rc2_incremental_preparation_test.dart: document processing resumes across full windows without speech
+00:02 +140 ~2: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/rc2_incremental_preparation_test.dart: document processing resumes across full windows without speech
+00:02 +141 ~2: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/rc2_incremental_preparation_test.dart: document processing resumes across full windows without speech
+00:02 +142 ~2: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/rc2_incremental_preparation_test.dart: document processing resumes across full windows without speech
+00:02 +143 ~2: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/rc2_incremental_preparation_test.dart: document processing resumes across full windows without speech
+00:02 +144 ~2: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/rc2_incremental_preparation_test.dart: document processing resumes across full windows without speech
+00:02 +145 ~2: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/rc2_incremental_preparation_test.dart: document processing resumes across full windows without speech
+00:02 +146 ~2: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/rc2_incremental_preparation_test.dart: document processing resumes across full windows without speech
+00:02 +147 ~2: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/rc2_incremental_preparation_test.dart: document processing resumes across full windows without speech
+00:02 +148 ~2: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/rc2_incremental_preparation_test.dart: document processing resumes across full windows without speech
+00:02 +149 ~2: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/rc2_incremental_preparation_test.dart: document processing resumes across full windows without speech
+00:02 +150 ~2: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/rc2_incremental_preparation_test.dart: document processing resumes across full windows without speech
+00:02 +151 ~2: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/rc2_incremental_preparation_test.dart: document processing resumes across full windows without speech
+00:02 +152 ~2: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/rc2_incremental_preparation_test.dart: document processing resumes across full windows without speech
+00:02 +153 ~2: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/rc2_incremental_preparation_test.dart: document processing resumes across full windows without speech
+00:02 +154 ~2: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/rc2_incremental_preparation_test.dart: document processing resumes across full windows without speech
+00:02 +155 ~2: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/rc2_incremental_preparation_test.dart: document processing resumes across full windows without speech
+00:02 +156 ~2: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/rc2_incremental_preparation_test.dart: document processing resumes across full windows without speech
+00:02 +157 ~2: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/rc2_incremental_preparation_test.dart: document processing resumes across full windows without speech
+00:02 +158 ~2: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/rc2_incremental_preparation_test.dart: document processing resumes across full windows without speech
+00:02 +159 ~2: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/rc2_incremental_preparation_test.dart: document processing resumes across full windows without speech
+00:02 +160 ~2: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/rc2_incremental_preparation_test.dart: document processing resumes across full windows without speech
+00:02 +161 ~2: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/rc2_incremental_preparation_test.dart: document processing resumes across full windows without speech
+00:03 +162 ~2: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/kokoro_resident_worker_test.dart: timeout quarantines admission, suppresses late success and drains before shutdown
+00:03 +163 ~2: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/modernbooknlp_window_test.dart: VS35 bounded positional windows and portable A/B/A reuse never start a provider
+00:03 +164 ~2: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/modernbooknlp_window_test.dart: VS35 bounded positional windows and portable A/B/A reuse never start a provider
+00:03 +165 ~2: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/modernbooknlp_window_test.dart: VS35 bounded positional windows and portable A/B/A reuse never start a provider
+00:03 +166 ~2: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/modernbooknlp_window_test.dart: VS35 bounded positional windows and portable A/B/A reuse never start a provider
+00:03 +167 ~2: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/modernbooknlp_window_test.dart: VS35 bounded positional windows and portable A/B/A reuse never start a provider
+00:03 +168 ~2: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/modernbooknlp_window_test.dart: VS35 bounded positional windows and portable A/B/A reuse never start a provider
+00:03 +169 ~2: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/modernbooknlp_window_test.dart: VS35 bounded positional windows and portable A/B/A reuse never start a provider
+00:03 +170 ~2: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/modernbooknlp_window_test.dart: VS35 bounded positional windows and portable A/B/A reuse never start a provider
+00:03 +171 ~2: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/modernbooknlp_window_test.dart: VS35 bounded positional windows and portable A/B/A reuse never start a provider
+00:03 +172 ~2: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/modernbooknlp_window_test.dart: VS35 bounded positional windows and portable A/B/A reuse never start a provider
+00:03 +173 ~2: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/modernbooknlp_window_test.dart: VS35 bounded positional windows and portable A/B/A reuse never start a provider
+00:03 +174 ~2: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/modernbooknlp_window_test.dart: VS35 bounded positional windows and portable A/B/A reuse never start a provider
+00:03 +175 ~2: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/modernbooknlp_window_test.dart: VS35 bounded positional windows and portable A/B/A reuse never start a provider
+00:03 +176 ~2: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/modernbooknlp_window_test.dart: VS35 bounded positional windows and portable A/B/A reuse never start a provider
+00:03 +177 ~2: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/modernbooknlp_window_test.dart: VS35 bounded positional windows and portable A/B/A reuse never start a provider
+00:03 +178 ~2: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/modernbooknlp_window_test.dart: VS35 bounded positional windows and portable A/B/A reuse never start a provider
+00:03 +179 ~2: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/modernbooknlp_window_test.dart: VS35 bounded positional windows and portable A/B/A reuse never start a provider
+00:03 +180 ~2: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/modernbooknlp_window_test.dart: VS35 bounded positional windows and portable A/B/A reuse never start a provider
+00:03 +181 ~2: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/modernbooknlp_window_test.dart: VS35 bounded positional windows and portable A/B/A reuse never start a provider
+00:03 +182 ~2: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/modernbooknlp_window_test.dart: VS35 bounded positional windows and portable A/B/A reuse never start a provider
+00:03 +183 ~2: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/modernbooknlp_window_test.dart: VS35 bounded positional windows and portable A/B/A reuse never start a provider
+00:03 +184 ~2: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/rc2_incremental_preparation_test.dart: cancel at a full window drains and replacement rejects stale work
+00:03 +185 ~2: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/kokoro_resident_worker_test.dart: startup timeout retains late ready channel for awaited shutdown
+00:03 +185 ~3: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/kokoro_resident_worker_test.dart: startup timeout retains late ready channel for awaited shutdown
+00:03 +186 ~3: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/love_document_pipeline_test.dart: Love test document preserves the shouted quote through chunk planning
+00:03 +187 ~3: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/love_document_pipeline_test.dart: Love test document preserves the shouted quote through chunk planning
+00:03 +188 ~3: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/love_document_pipeline_test.dart: Love test document preserves the shouted quote through chunk planning
+00:03 +189 ~3: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/speech_planning_supervisor_test.dart: scene repacking never admits directions beyond realized horizon
+00:03 +190 ~3: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/speech_planning_supervisor_test.dart: scene repacking never admits directions beyond realized horizon
+00:03 +191 ~3: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/speech_planning_supervisor_test.dart: scene repacking never admits directions beyond realized horizon
+00:03 +192 ~3: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/speech_planning_supervisor_test.dart: scene repacking never admits directions beyond realized horizon
+00:03 +193 ~3: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/rc2_incremental_preparation_test.dart: EOF at the eighth range does not wait for a ninth consumer credit
+00:03 +194 ~3: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/rc2_incremental_preparation_test.dart: EOF at the eighth range does not wait for a ninth consumer credit
+00:03 +195 ~3: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/rc2_incremental_preparation_test.dart: EOF at the eighth range does not wait for a ninth consumer credit
+00:03 +196 ~3: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/rc2_incremental_preparation_test.dart: EOF at the eighth range does not wait for a ninth consumer credit
+00:03 +197 ~3: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/rc2_incremental_preparation_test.dart: EOF at the eighth range does not wait for a ninth consumer credit
+00:03 +198 ~3: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/rc2_incremental_preparation_test.dart: EOF at the eighth range does not wait for a ninth consumer credit
+00:03 +199 ~3: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/rc2_incremental_preparation_test.dart: EOF at the eighth range does not wait for a ninth consumer credit
+00:03 +200 ~3: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/rc2_incremental_preparation_test.dart: EOF at the eighth range does not wait for a ninth consumer credit
+00:03 +201 ~3: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/rc2_incremental_preparation_test.dart: EOF at the eighth range does not wait for a ninth consumer credit
+00:03 +202 ~3: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/rc2_incremental_preparation_test.dart: EOF at the eighth range does not wait for a ninth consumer credit
+00:03 +203 ~3: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/rc2_incremental_preparation_test.dart: EOF at the eighth range does not wait for a ninth consumer credit
+00:03 +204 ~3: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/rc2_incremental_preparation_test.dart: EOF at the eighth range does not wait for a ninth consumer credit
+00:03 +205 ~3: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/rc2_incremental_preparation_test.dart: EOF at the eighth range does not wait for a ninth consumer credit
+00:03 +206 ~3: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/rc2_incremental_preparation_test.dart: EOF at the eighth range does not wait for a ninth consumer credit
+00:03 +207 ~3: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/rc2_incremental_preparation_test.dart: EOF at the eighth range does not wait for a ninth consumer credit
+00:03 +208 ~3: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/rc2_incremental_preparation_test.dart: EOF at the eighth range does not wait for a ninth consumer credit
+00:03 +209 ~3: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/rc2_incremental_preparation_test.dart: EOF at the eighth range does not wait for a ninth consumer credit
+00:03 +210 ~3: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/rc2_incremental_preparation_test.dart: EOF at the eighth range does not wait for a ninth consumer credit
+00:03 +211 ~3: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/rc2_incremental_preparation_test.dart: EOF at the eighth range does not wait for a ninth consumer credit
+00:03 +212 ~3: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/rc2_incremental_preparation_test.dart: EOF at the eighth range does not wait for a ninth consumer credit
+00:03 +213 ~3: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/rc2_incremental_preparation_test.dart: EOF at the eighth range does not wait for a ninth consumer credit
+00:03 +214 ~3: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/rc2_incremental_preparation_test.dart: EOF at the eighth range does not wait for a ninth consumer credit
+00:03 +215 ~3: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/rc2_incremental_preparation_test.dart: EOF at the eighth range does not wait for a ninth consumer credit
+00:03 +216 ~3: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/rc2_incremental_preparation_test.dart: EOF at the eighth range does not wait for a ninth consumer credit
+00:03 +217 ~3: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/rc2_incremental_preparation_test.dart: EOF at the eighth range does not wait for a ninth consumer credit
+00:03 +218 ~3: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/rc2_incremental_preparation_test.dart: EOF at the eighth range does not wait for a ninth consumer credit
+00:04 +219 ~3: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/rc2_incremental_preparation_test.dart: EOF at the eighth range does not wait for a ninth consumer credit
+00:04 +220 ~3: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/rc2_incremental_preparation_test.dart: EOF at the eighth range does not wait for a ninth consumer credit
+00:04 +221 ~3: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/rc2_incremental_preparation_test.dart: EOF at the eighth range does not wait for a ninth consumer credit
+00:04 +222 ~3: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/rc2_incremental_preparation_test.dart: EOF at the eighth range does not wait for a ninth consumer credit
+00:04 +223 ~3: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/rc2_incremental_preparation_test.dart: EOF at the eighth range does not wait for a ninth consumer credit
+00:04 +224 ~3: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/rc2_incremental_preparation_test.dart: EOF at the eighth range does not wait for a ninth consumer credit
+00:04 +225 ~3: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/rc2_incremental_preparation_test.dart: EOF at the eighth range does not wait for a ninth consumer credit
+00:04 +226 ~3: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/rc2_incremental_preparation_test.dart: EOF at the eighth range does not wait for a ninth consumer credit
+00:04 +227 ~3: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/rc2_incremental_preparation_test.dart: EOF at the eighth range does not wait for a ninth consumer credit
+00:04 +228 ~3: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/rc2_incremental_preparation_test.dart: EOF at the eighth range does not wait for a ninth consumer credit
+00:04 +229 ~3: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/rc2_incremental_preparation_test.dart: EOF at the eighth range does not wait for a ninth consumer credit
+00:04 +230 ~3: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/rc2_incremental_preparation_test.dart: EOF at the eighth range does not wait for a ninth consumer credit
+00:04 +231 ~3: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/rc2_incremental_preparation_test.dart: EOF at the eighth range does not wait for a ninth consumer credit
+00:04 +232 ~3: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/rc2_incremental_preparation_test.dart: EOF at the eighth range does not wait for a ninth consumer credit
+00:04 +233 ~3: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/rc2_incremental_preparation_test.dart: EOF at the eighth range does not wait for a ninth consumer credit
+00:04 +234 ~3: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/rc2_incremental_preparation_test.dart: EOF at the eighth range does not wait for a ninth consumer credit
+00:04 +235 ~3: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/rc2_incremental_preparation_test.dart: EOF at the eighth range does not wait for a ninth consumer credit
+00:04 +236 ~3: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/rc2_incremental_preparation_test.dart: EOF at the eighth range does not wait for a ninth consumer credit
+00:04 +237 ~3: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/rc2_incremental_preparation_test.dart: EOF at the eighth range does not wait for a ninth consumer credit
+00:04 +238 ~3: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/kokoro_hung_inference_acceptance_test.dart: fake hung inference: owned timeout, quarantine, late success suppression and gated teardown
+00:04 +239 ~3: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/kokoro_hung_inference_acceptance_test.dart: fake hung inference: owned timeout, quarantine, late success suppression and gated teardown
+00:04 +240 ~3: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/kokoro_hung_inference_acceptance_test.dart: fake hung inference: owned timeout, quarantine, late success suppression and gated teardown
+00:04 +241 ~3: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/kokoro_hung_inference_acceptance_test.dart: fake hung inference: owned timeout, quarantine, late success suppression and gated teardown
+00:04 +242 ~3: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/kokoro_hung_inference_acceptance_test.dart: fake hung inference: owned timeout, quarantine, late success suppression and gated teardown
+00:04 +243 ~3: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/rc2_incremental_preparation_test.dart: a short multi-range document reaches EOF without requiring playback
+00:04 +244 ~3: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/rc2_incremental_preparation_test.dart: a short multi-range document reaches EOF without requiring playback
+00:04 +245 ~3: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/kokoro_hung_inference_acceptance_test.dart: fake hung inference: owned timeout, quarantine, late failure suppression and gated teardown
+00:04 +246 ~3: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/kokoro_hung_inference_acceptance_test.dart: fake hung inference: owned timeout, quarantine, late failure suppression and gated teardown
+00:04 +247 ~3: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/kokoro_hung_inference_acceptance_test.dart: fake hung inference: owned timeout, quarantine, late failure suppression and gated teardown
+00:04 +248 ~3: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/kokoro_hung_inference_acceptance_test.dart: fake hung inference: owned timeout, quarantine, late failure suppression and gated teardown
+00:04 +249 ~3: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/kokoro_hung_inference_acceptance_test.dart: fake hung inference: owned timeout, quarantine, late failure suppression and gated teardown
+00:04 +250 ~3: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/kokoro_hung_inference_acceptance_test.dart: fake hung inference: owned timeout, quarantine, late failure suppression and gated teardown
+00:04 +251 ~3: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/rc2_incremental_preparation_test.dart: bounded importer halos resolve opening pronoun and following tag with stable source IDs
+00:04 +252 ~3: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/rc2_incremental_preparation_test.dart: bounded importer halos resolve opening pronoun and following tag with stable source IDs
+00:04 +253 ~3: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/rc2_incremental_preparation_test.dart: bounded importer halos resolve opening pronoun and following tag with stable source IDs
+00:04 +254 ~3: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/rc2_incremental_preparation_test.dart: bounded importer halos resolve opening pronoun and following tag with stable source IDs
+00:04 +255 ~3: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/rc2_incremental_preparation_test.dart: bounded importer halos resolve opening pronoun and following tag with stable source IDs
+00:04 +256 ~3: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/rc2_incremental_preparation_test.dart: bounded importer halos resolve opening pronoun and following tag with stable source IDs
+00:04 +257 ~3: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/rc2_incremental_preparation_test.dart: bounded importer halos resolve opening pronoun and following tag with stable source IDs
+00:04 +258 ~3: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/rc2_incremental_preparation_test.dart: bounded importer halos resolve opening pronoun and following tag with stable source IDs
+00:04 +259 ~3: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/reader_preferences_service_test.dart: (tearDownAll)
+00:04 +259 ~3: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/rc2_incremental_preparation_test.dart: stage tickets reject stale success and failure; canonical identity migration is explicit
+00:04 +260 ~3: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/rc2_incremental_preparation_test.dart: stage tickets reject stale success and failure; canonical identity migration is explicit
+00:04 +261 ~3: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/speech_annotation_test.dart: Speech annotation envelope rejects zero-width non-boundary annotations
+00:04 +262 ~3: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/rc2_incremental_preparation_test.dart: first range precedes EOF, credit pauses work, replacement rejects stale completion
+00:04 +263 ~3: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/rc2_incremental_preparation_test.dart: first range precedes EOF, credit pauses work, replacement rejects stale completion
+00:04 +264 ~3: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/rc2_incremental_preparation_test.dart: first range precedes EOF, credit pauses work, replacement rejects stale completion
+00:04 +265 ~3: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/rc2_incremental_preparation_test.dart: first range precedes EOF, credit pauses work, replacement rejects stale completion
+00:04 +266 ~3: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/rc2_incremental_preparation_test.dart: first range precedes EOF, credit pauses work, replacement rejects stale completion
+00:04 +267 ~3: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/rc2_incremental_preparation_test.dart: first range precedes EOF, credit pauses work, replacement rejects stale completion
+00:04 +268 ~3: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/rc2_incremental_preparation_test.dart: first range precedes EOF, credit pauses work, replacement rejects stale completion
+00:04 +269 ~3: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/rc2_incremental_preparation_test.dart: first range precedes EOF, credit pauses work, replacement rejects stale completion
+00:04 +270 ~3: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/rc2_incremental_preparation_test.dart: first range precedes EOF, credit pauses work, replacement rejects stale completion
+00:04 +271 ~3: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/rc2_incremental_preparation_test.dart: first range precedes EOF, credit pauses work, replacement rejects stale completion
+00:04 +272 ~3: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/rc2_incremental_preparation_test.dart: first range precedes EOF, credit pauses work, replacement rejects stale completion
+00:04 +273 ~3: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/rc2_incremental_preparation_test.dart: first range precedes EOF, credit pauses work, replacement rejects stale completion
+00:04 +274 ~3: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/rc2_incremental_preparation_test.dart: first range precedes EOF, credit pauses work, replacement rejects stale completion
+00:04 +275 ~3: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/rc2_incremental_preparation_test.dart: first range precedes EOF, credit pauses work, replacement rejects stale completion
+00:04 +276 ~3: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/rc2_incremental_preparation_test.dart: first range precedes EOF, credit pauses work, replacement rejects stale completion
+00:05 +277 ~3: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/rc2_incremental_preparation_test.dart: first range precedes EOF, credit pauses work, replacement rejects stale completion
+00:05 +278 ~3: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/rc2_incremental_preparation_test.dart: first range precedes EOF, credit pauses work, replacement rejects stale completion
+00:05 +279 ~3: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/rc2_incremental_preparation_test.dart: first range precedes EOF, credit pauses work, replacement rejects stale completion
+00:05 +280 ~3: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/rc2_incremental_preparation_test.dart: first range precedes EOF, credit pauses work, replacement rejects stale completion
+00:05 +281 ~3: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/rc2_incremental_preparation_test.dart: first range precedes EOF, credit pauses work, replacement rejects stale completion
+00:05 +282 ~3: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/rc2_incremental_preparation_test.dart: first range precedes EOF, credit pauses work, replacement rejects stale completion
+00:05 +283 ~3: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/rc2_incremental_preparation_test.dart: first range precedes EOF, credit pauses work, replacement rejects stale completion
+00:05 +284 ~3: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/rc2_incremental_preparation_test.dart: first range precedes EOF, credit pauses work, replacement rejects stale completion
+00:05 +285 ~3: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/rc2_incremental_preparation_test.dart: first range precedes EOF, credit pauses work, replacement rejects stale completion
+00:05 +286 ~3: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/rc2_incremental_preparation_test.dart: first range precedes EOF, credit pauses work, replacement rejects stale completion
+00:05 +287 ~3: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/rc2_incremental_preparation_test.dart: first range precedes EOF, credit pauses work, replacement rejects stale completion
+00:05 +288 ~3: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/rc2_incremental_preparation_test.dart: first range precedes EOF, credit pauses work, replacement rejects stale completion
+00:05 +289 ~3: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/rc2_incremental_preparation_test.dart: first range precedes EOF, credit pauses work, replacement rejects stale completion
+00:05 +290 ~3: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/rc2_incremental_preparation_test.dart: first range precedes EOF, credit pauses work, replacement rejects stale completion
+00:05 +291 ~3: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/rc2_incremental_preparation_test.dart: first range precedes EOF, credit pauses work, replacement rejects stale completion
+00:05 +292 ~3: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/rc2_incremental_preparation_test.dart: first range precedes EOF, credit pauses work, replacement rejects stale completion
+00:05 +293 ~3: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/rc2_incremental_preparation_test.dart: first range precedes EOF, credit pauses work, replacement rejects stale completion
+00:05 +294 ~3: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/rc2_incremental_preparation_test.dart: first range precedes EOF, credit pauses work, replacement rejects stale completion
+00:05 +295 ~3: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/rc2_incremental_preparation_test.dart: first range precedes EOF, credit pauses work, replacement rejects stale completion
+00:05 +296 ~3: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/rc2_incremental_preparation_test.dart: first range precedes EOF, credit pauses work, replacement rejects stale completion
+00:05 +297 ~3: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/rc2_incremental_preparation_test.dart: first range precedes EOF, credit pauses work, replacement rejects stale completion
+00:05 +298 ~3: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/rc2_incremental_preparation_test.dart: first range precedes EOF, credit pauses work, replacement rejects stale completion
+00:05 +299 ~3: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/rc2_incremental_preparation_test.dart: first range precedes EOF, credit pauses work, replacement rejects stale completion
+00:05 +300 ~3: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/rc2_incremental_preparation_test.dart: first range precedes EOF, credit pauses work, replacement rejects stale completion
+00:05 +301 ~3: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/rc2_incremental_preparation_test.dart: first range precedes EOF, credit pauses work, replacement rejects stale completion
+00:05 +302 ~3: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/rc2_incremental_preparation_test.dart: first range precedes EOF, credit pauses work, replacement rejects stale completion
+00:05 +303 ~3: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/rc2_incremental_preparation_test.dart: first range precedes EOF, credit pauses work, replacement rejects stale completion
+00:05 +304 ~3: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/rc2_incremental_preparation_test.dart: first range precedes EOF, credit pauses work, replacement rejects stale completion
+00:05 +305 ~3: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/rc2_incremental_preparation_test.dart: first range precedes EOF, credit pauses work, replacement rejects stale completion
+00:05 +306 ~3: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/rc2_incremental_preparation_test.dart: first range precedes EOF, credit pauses work, replacement rejects stale completion
+00:05 +307 ~3: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/rc2_incremental_preparation_test.dart: first range precedes EOF, credit pauses work, replacement rejects stale completion
+00:05 +308 ~3: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/rc2_incremental_preparation_test.dart: first range precedes EOF, credit pauses work, replacement rejects stale completion
+00:05 +309 ~3: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/rc2_incremental_preparation_test.dart: first range precedes EOF, credit pauses work, replacement rejects stale completion
+00:05 +310 ~3: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/rc2_incremental_preparation_test.dart: first range precedes EOF, credit pauses work, replacement rejects stale completion
+00:05 +311 ~3: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/rc2_incremental_preparation_test.dart: first range precedes EOF, credit pauses work, replacement rejects stale completion
+00:05 +312 ~3: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/rc2_incremental_preparation_test.dart: first range precedes EOF, credit pauses work, replacement rejects stale completion
+00:05 +313 ~3: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/rc2_incremental_preparation_test.dart: first range precedes EOF, credit pauses work, replacement rejects stale completion
+00:05 +314 ~3: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/rc2_incremental_preparation_test.dart: first range precedes EOF, credit pauses work, replacement rejects stale completion
+00:05 +315 ~3: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/rc2_incremental_preparation_test.dart: first range precedes EOF, credit pauses work, replacement rejects stale completion
+00:05 +316 ~3: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/rc2_incremental_preparation_test.dart: first range precedes EOF, credit pauses work, replacement rejects stale completion
+00:05 +317 ~3: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/rc2_incremental_preparation_test.dart: first range precedes EOF, credit pauses work, replacement rejects stale completion
+00:05 +318 ~3: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/rc2_incremental_preparation_test.dart: first range precedes EOF, credit pauses work, replacement rejects stale completion
+00:05 +319 ~3: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/rc2_incremental_preparation_test.dart: first range precedes EOF, credit pauses work, replacement rejects stale completion
+00:05 +320 ~3: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/rc2_incremental_preparation_test.dart: first range precedes EOF, credit pauses work, replacement rejects stale completion
+00:05 +321 ~3: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/rc2_incremental_preparation_test.dart: first range precedes EOF, credit pauses work, replacement rejects stale completion
+00:05 +322 ~3: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/rc2_incremental_preparation_test.dart: first range precedes EOF, credit pauses work, replacement rejects stale completion
+00:05 +323 ~3: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/rc2_incremental_preparation_test.dart: first range precedes EOF, credit pauses work, replacement rejects stale completion
+00:05 +324 ~3: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/rc2_incremental_preparation_test.dart: first range precedes EOF, credit pauses work, replacement rejects stale completion
+00:05 +325 ~3: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/rc2_incremental_preparation_test.dart: first range precedes EOF, credit pauses work, replacement rejects stale completion
+00:05 +326 ~3: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/rc2_incremental_preparation_test.dart: first range precedes EOF, credit pauses work, replacement rejects stale completion
+00:05 +327 ~3: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/rc2_incremental_preparation_test.dart: first range precedes EOF, credit pauses work, replacement rejects stale completion
+00:05 +328 ~3: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/rc2_incremental_preparation_test.dart: first range precedes EOF, credit pauses work, replacement rejects stale completion
+00:05 +329 ~3: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/rc2_incremental_preparation_test.dart: first range precedes EOF, credit pauses work, replacement rejects stale completion
+00:05 +330 ~3: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/rc2_incremental_preparation_test.dart: first range precedes EOF, credit pauses work, replacement rejects stale completion
+00:05 +331 ~3: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/rc2_incremental_preparation_test.dart: first range precedes EOF, credit pauses work, replacement rejects stale completion
+00:05 +332 ~3: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/rc2_incremental_preparation_test.dart: first range precedes EOF, credit pauses work, replacement rejects stale completion
+00:05 +333 ~3: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/rc2_incremental_preparation_test.dart: first range precedes EOF, credit pauses work, replacement rejects stale completion
+00:05 +334 ~3: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/rc2_incremental_preparation_test.dart: first range precedes EOF, credit pauses work, replacement rejects stale completion
+00:05 +335 ~3: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/widget_test.dart: Settings exposes Cancel while loading and Retry after cancellation
+00:05 +336 ~3: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/widget_test.dart: Settings exposes Cancel while loading and Retry after cancellation
+00:05 +337 ~3: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/widget_test.dart: Settings exposes Cancel while loading and Retry after cancellation
+00:05 +338 ~3: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/widget_test.dart: Settings exposes Cancel while loading and Retry after cancellation
+00:05 +339 ~3: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/widget_test.dart: Settings exposes Cancel while loading and Retry after cancellation
+00:05 +340 ~3: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/widget_test.dart: Settings exposes Cancel while loading and Retry after cancellation
+00:05 +341 ~3: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/widget_test.dart: Settings exposes Cancel while loading and Retry after cancellation
+00:05 +342 ~3: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/widget_test.dart: Settings exposes Cancel while loading and Retry after cancellation
+00:05 +343 ~3: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/widget_test.dart: Settings exposes Cancel while loading and Retry after cancellation
+00:05 +344 ~3: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/widget_test.dart: Settings exposes Cancel while loading and Retry after cancellation
+00:05 +345 ~3: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/widget_test.dart: Settings exposes Cancel while loading and Retry after cancellation
+00:05 +346 ~3: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/widget_test.dart: Settings exposes Cancel while loading and Retry after cancellation
+00:05 +347 ~3: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/widget_test.dart: Settings exposes Cancel while loading and Retry after cancellation
+00:06 +348 ~3: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/widget_test.dart: Settings exposes Cancel while loading and Retry after cancellation
+00:06 +349 ~3: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/widget_test.dart: Settings exposes Cancel while loading and Retry after cancellation
+00:06 +350 ~3: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/widget_test.dart: Settings exposes Cancel while loading and Retry after cancellation
+00:06 +351 ~3: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/widget_test.dart: Settings exposes Cancel while loading and Retry after cancellation
+00:06 +352 ~3: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/widget_test.dart: Settings exposes Cancel while loading and Retry after cancellation
+00:06 +353 ~3: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/widget_test.dart: Settings exposes Cancel while loading and Retry after cancellation
+00:06 +354 ~3: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/widget_test.dart: Settings exposes Cancel while loading and Retry after cancellation
+00:06 +355 ~3: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/widget_test.dart: Settings exposes Cancel while loading and Retry after cancellation
+00:06 +356 ~3: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/widget_test.dart: Settings exposes Cancel while loading and Retry after cancellation
+00:06 +357 ~3: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/widget_test.dart: Settings exposes Cancel while loading and Retry after cancellation
+00:06 +358 ~3: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/widget_test.dart: Settings exposes Cancel while loading and Retry after cancellation
+00:06 +359 ~3: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/widget_test.dart: Settings exposes Cancel while loading and Retry after cancellation
+00:06 +360 ~3: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/widget_test.dart: Settings exposes Cancel while loading and Retry after cancellation
+00:06 +361 ~3: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/widget_test.dart: Settings exposes Cancel while loading and Retry after cancellation
+00:06 +362 ~3: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/widget_test.dart: Settings exposes Cancel while loading and Retry after cancellation
+00:06 +363 ~3: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/widget_test.dart: Settings exposes Cancel while loading and Retry after cancellation
+00:06 +364 ~3: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/widget_test.dart: Settings exposes Cancel while loading and Retry after cancellation
+00:06 +365 ~3: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/widget_test.dart: Settings exposes Cancel while loading and Retry after cancellation
+00:06 +366 ~3: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/widget_test.dart: Settings exposes Cancel while loading and Retry after cancellation
+00:06 +367 ~3: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/widget_test.dart: Settings exposes Cancel while loading and Retry after cancellation
+00:06 +368 ~3: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/widget_test.dart: Settings exposes Cancel while loading and Retry after cancellation
+00:06 +369 ~3: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/widget_test.dart: Settings exposes Cancel while loading and Retry after cancellation
+00:06 +370 ~3: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/widget_test.dart: Settings exposes Cancel while loading and Retry after cancellation
+00:06 +371 ~3: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/widget_test.dart: Settings exposes Cancel while loading and Retry after cancellation
+00:06 +372 ~3: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/widget_test.dart: Settings exposes Cancel while loading and Retry after cancellation
+00:06 +373 ~3: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/widget_test.dart: Settings exposes Cancel while loading and Retry after cancellation
+00:06 +374 ~3: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/widget_test.dart: Settings exposes Cancel while loading and Retry after cancellation
+00:06 +375 ~3: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/widget_test.dart: Settings exposes Cancel while loading and Retry after cancellation
+00:06 +376 ~3: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/widget_test.dart: Settings exposes Cancel while loading and Retry after cancellation
+00:06 +377 ~3: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/widget_test.dart: Settings exposes Cancel while loading and Retry after cancellation
+00:06 +378 ~3: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/widget_test.dart: Settings exposes Cancel while loading and Retry after cancellation
+00:06 +379 ~3: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/widget_test.dart: Settings exposes Cancel while loading and Retry after cancellation
+00:06 +380 ~3: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/widget_test.dart: Settings exposes Cancel while loading and Retry after cancellation
+00:06 +381 ~3: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/widget_test.dart: Settings exposes Cancel while loading and Retry after cancellation
+00:06 +382 ~3: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/widget_test.dart: Settings exposes Cancel while loading and Retry after cancellation
+00:06 +383 ~3: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/radoc_audio_package_test.dart: stale native-stage publication preserves output and removes stage
+00:06 +384 ~3: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/radoc_audio_package_test.dart: stale native-stage publication preserves output and removes stage
+00:06 +385 ~3: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/widget_test.dart: transport exposes actions and state through semantics
+00:06 +386 ~3: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/widget_test.dart: transport exposes actions and state through semantics
+00:06 +387 ~3: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/widget_test.dart: transport exposes actions and state through semantics
+00:06 +388 ~3: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/widget_test.dart: transport exposes actions and state through semantics
+00:06 +389 ~3: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/widget_test.dart: transport exposes actions and state through semantics
+00:06 +390 ~3: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/widget_test.dart: transport exposes actions and state through semantics
+00:06 +391 ~3: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/widget_test.dart: transport exposes actions and state through semantics
+00:06 +392 ~3: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/widget_test.dart: transport exposes actions and state through semantics
+00:06 +393 ~3: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/widget_test.dart: transport exposes actions and state through semantics
+00:06 +394 ~3: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/widget_test.dart: transport exposes actions and state through semantics
+00:06 +395 ~3: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/widget_test.dart: transport exposes actions and state through semantics
+00:06 +396 ~3: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/widget_test.dart: transport exposes actions and state through semantics
+00:06 +397 ~3: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/widget_test.dart: transport exposes actions and state through semantics
+00:06 +398 ~3: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/widget_test.dart: transport exposes actions and state through semantics
+00:06 +399 ~3: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/widget_test.dart: transport exposes actions and state through semantics
+00:06 +400 ~3: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/widget_test.dart: transport exposes actions and state through semantics
+00:06 +401 ~3: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/widget_test.dart: transport exposes actions and state through semantics
+00:06 +402 ~3: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/widget_test.dart: transport exposes actions and state through semantics
+00:06 +403 ~3: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/widget_test.dart: transport exposes actions and state through semantics
+00:06 +404 ~3: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/widget_test.dart: transport exposes actions and state through semantics
+00:06 +405 ~3: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/widget_test.dart: transport exposes actions and state through semantics
+00:06 +406 ~3: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/widget_test.dart: transport exposes actions and state through semantics
+00:06 +407 ~3: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/widget_test.dart: transport exposes actions and state through semantics
+00:06 +408 ~3: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/widget_test.dart: transport exposes actions and state through semantics
+00:06 +409 ~3: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/widget_test.dart: transport exposes actions and state through semantics
+00:06 +410 ~3: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/widget_test.dart: transport exposes actions and state through semantics
+00:06 +411 ~3: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/widget_test.dart: transport exposes actions and state through semantics
+00:06 +412 ~3: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/widget_test.dart: transport exposes actions and state through semantics
+00:06 +413 ~3: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/widget_test.dart: transport exposes actions and state through semantics
+00:07 +414 ~3: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/widget_test.dart: transport exposes actions and state through semantics
+00:07 +415 ~3: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/widget_test.dart: transport exposes actions and state through semantics
+00:07 +416 ~3: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/widget_test.dart: transport exposes actions and state through semantics
+00:07 +417 ~3: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/widget_test.dart: transport exposes actions and state through semantics
+00:07 +418 ~3: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/widget_test.dart: transport exposes actions and state through semantics
+00:07 +419 ~3: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/widget_test.dart: transport exposes actions and state through semantics
+00:07 +420 ~3: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/widget_test.dart: transport exposes actions and state through semantics
+00:07 +421 ~3: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/widget_test.dart: transport exposes actions and state through semantics
+00:07 +422 ~3: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/widget_test.dart: transport exposes actions and state through semantics
+00:07 +422 ~3: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/modernbooknlp_literary_qualification_test.dart: frozen literary labels through normal import and actual neural adapter
+  Skip: Requires frozen private labels and installed offline CPU runtime
+00:07 +422 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/widget_test.dart: transport exposes actions and state through semantics
+00:07 +423 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/widget_test.dart: transport exposes actions and state through semantics
+00:07 +424 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/widget_test.dart: transport exposes actions and state through semantics
+00:07 +425 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/widget_test.dart: transport exposes actions and state through semantics
+00:07 +426 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/widget_test.dart: transport exposes actions and state through semantics
+00:07 +427 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/widget_test.dart: transport exposes actions and state through semantics
+00:07 +428 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/widget_test.dart: transport exposes actions and state through semantics
+00:07 +429 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/widget_test.dart: transport exposes actions and state through semantics
+00:07 +430 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/widget_test.dart: transport exposes actions and state through semantics
+00:07 +431 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/widget_test.dart: transport exposes actions and state through semantics
+00:07 +432 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/widget_test.dart: transport exposes actions and state through semantics
+00:07 +433 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/widget_test.dart: transport exposes actions and state through semantics
+00:07 +434 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/widget_test.dart: transport exposes actions and state through semantics
+00:07 +435 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/widget_test.dart: transport exposes actions and state through semantics
+00:07 +436 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/widget_test.dart: transport exposes actions and state through semantics
+00:07 +437 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/widget_test.dart: transport exposes actions and state through semantics
+00:07 +438 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/widget_test.dart: transport exposes actions and state through semantics
+00:07 +439 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/widget_test.dart: transport exposes actions and state through semantics
+00:07 +440 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/widget_test.dart: transport exposes actions and state through semantics
+00:07 +441 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/kokoro_tokenizer_override_test.dart: Kokoro tokenizer lexicon overrides honors app lexicon entries for stubborn pronunciations
+00:07 +442 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/kokoro_tokenizer_override_test.dart: Kokoro tokenizer lexicon overrides honors app lexicon entries for stubborn pronunciations
+00:07 +443 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/kokoro_tokenizer_override_test.dart: Kokoro tokenizer lexicon overrides honors app lexicon entries for stubborn pronunciations
+00:07 +444 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/kokoro_tokenizer_override_test.dart: Kokoro tokenizer lexicon overrides honors app lexicon entries for stubborn pronunciations
+00:07 +445 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/kokoro_tokenizer_override_test.dart: Kokoro tokenizer lexicon overrides honors app lexicon entries for stubborn pronunciations
+00:07 +446 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/kokoro_tokenizer_override_test.dart: Kokoro tokenizer lexicon overrides honors app lexicon entries for stubborn pronunciations
+00:07 +447 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/kokoro_tokenizer_override_test.dart: Kokoro tokenizer lexicon overrides honors app lexicon entries for stubborn pronunciations
+00:07 +448 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/kokoro_tokenizer_override_test.dart: Kokoro tokenizer lexicon overrides honors app lexicon entries for stubborn pronunciations
+00:07 +449 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/kokoro_tokenizer_override_test.dart: Kokoro tokenizer lexicon overrides honors app lexicon entries for stubborn pronunciations
+00:07 +450 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/kokoro_tokenizer_override_test.dart: Kokoro tokenizer lexicon overrides honors app lexicon entries for stubborn pronunciations
+00:07 +451 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/kokoro_tokenizer_override_test.dart: Kokoro tokenizer lexicon overrides honors app lexicon entries for stubborn pronunciations
+00:07 +452 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/kokoro_tokenizer_override_test.dart: Kokoro tokenizer lexicon overrides honors app lexicon entries for stubborn pronunciations
+00:07 +453 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/reader_document_repository_test.dart: export covers every committed range and retains directions and evidence
+00:07 +454 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/reader_document_repository_test.dart: export covers every committed range and retains directions and evidence
+00:07 +455 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/reader_document_repository_test.dart: export covers every committed range and retains directions and evidence
+00:07 +456 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/reader_document_repository_test.dart: export covers every committed range and retains directions and evidence
+00:07 +457 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/reader_document_repository_test.dart: export covers every committed range and retains directions and evidence
+00:07 +458 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/reader_document_repository_test.dart: export covers every committed range and retains directions and evidence
+00:07 +459 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/reader_document_repository_test.dart: export covers every committed range and retains directions and evidence
+00:07 +460 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/reader_document_repository_test.dart: export covers every committed range and retains directions and evidence
+00:07 +461 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/reader_document_repository_test.dart: export covers every committed range and retains directions and evidence
+00:07 +462 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/reader_document_repository_test.dart: export covers every committed range and retains directions and evidence
+00:07 +463 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/reader_document_repository_test.dart: export covers every committed range and retains directions and evidence
+00:07 +464 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/reader_document_repository_test.dart: export covers every committed range and retains directions and evidence
+00:07 +465 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/reader_document_repository_test.dart: export covers every committed range and retains directions and evidence
+00:08 +466 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/reader_document_repository_test.dart: export covers every committed range and retains directions and evidence
+00:08 +467 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/reader_document_repository_test.dart: export covers every committed range and retains directions and evidence
+00:08 +468 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/reader_document_repository_test.dart: export covers every committed range and retains directions and evidence
+00:08 +469 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/reader_document_repository_test.dart: export covers every committed range and retains directions and evidence
+00:08 +470 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/reader_document_repository_test.dart: export covers every committed range and retains directions and evidence
+00:08 +471 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/reader_document_repository_test.dart: export covers every committed range and retains directions and evidence
+00:08 +472 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/reader_document_repository_test.dart: export covers every committed range and retains directions and evidence
+00:08 +473 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/reader_document_repository_test.dart: export covers every committed range and retains directions and evidence
+00:08 +474 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/reader_document_repository_test.dart: export covers every committed range and retains directions and evidence
+00:08 +475 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/reader_document_repository_test.dart: export covers every committed range and retains directions and evidence
+00:08 +476 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/reader_document_repository_test.dart: export covers every committed range and retains directions and evidence
+00:08 +477 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/reader_document_repository_test.dart: export covers every committed range and retains directions and evidence
+00:08 +478 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/reader_document_repository_test.dart: export covers every committed range and retains directions and evidence
+00:08 +479 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/reader_document_repository_test.dart: export covers every committed range and retains directions and evidence
+00:08 +480 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/reader_document_repository_test.dart: export covers every committed range and retains directions and evidence
+00:08 +481 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/reader_document_repository_test.dart: export covers every committed range and retains directions and evidence
+00:08 +482 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/reader_document_repository_test.dart: export covers every committed range and retains directions and evidence
+00:08 +483 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/reader_document_repository_test.dart: export covers every committed range and retains directions and evidence
+00:08 +484 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/reader_document_repository_test.dart: export covers every committed range and retains directions and evidence
+00:08 +485 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/reader_document_repository_test.dart: export covers every committed range and retains directions and evidence
+00:08 +486 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/reader_document_repository_test.dart: export covers every committed range and retains directions and evidence
+00:08 +487 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/reader_document_repository_test.dart: export covers every committed range and retains directions and evidence
+00:08 +488 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/reader_document_repository_test.dart: export covers every committed range and retains directions and evidence
+00:08 +489 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/reader_document_repository_test.dart: export covers every committed range and retains directions and evidence
+00:08 +490 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/reader_document_repository_test.dart: export covers every committed range and retains directions and evidence
+00:08 +491 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/reader_document_repository_test.dart: export covers every committed range and retains directions and evidence
+00:08 +492 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/reader_document_repository_test.dart: export covers every committed range and retains directions and evidence
+00:08 +493 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/reader_document_repository_test.dart: export covers every committed range and retains directions and evidence
+00:08 +494 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/reader_document_repository_test.dart: export covers every committed range and retains directions and evidence
+00:08 +495 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/reader_document_repository_test.dart: export covers every committed range and retains directions and evidence
+00:08 +496 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/reader_document_repository_test.dart: export covers every committed range and retains directions and evidence
+00:08 +497 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/reader_document_repository_test.dart: export covers every committed range and retains directions and evidence
+00:08 +498 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/reader_document_repository_test.dart: export covers every committed range and retains directions and evidence
+00:08 +499 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/reader_document_repository_test.dart: export covers every committed range and retains directions and evidence
+00:08 +500 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/reader_document_repository_test.dart: export covers every committed range and retains directions and evidence
+00:08 +501 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/reader_document_repository_test.dart: export covers every committed range and retains directions and evidence
+00:08 +502 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/reader_document_repository_test.dart: export covers every committed range and retains directions and evidence
+00:08 +503 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/reader_document_repository_test.dart: export covers every committed range and retains directions and evidence
+00:08 +504 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/reader_document_repository_test.dart: export covers every committed range and retains directions and evidence
+00:08 +505 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/reader_document_repository_test.dart: export covers every committed range and retains directions and evidence
+00:08 +506 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/reader_document_repository_test.dart: export covers every committed range and retains directions and evidence
+00:08 +507 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/reader_document_repository_test.dart: export covers every committed range and retains directions and evidence
+00:08 +508 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/reader_document_repository_test.dart: export covers every committed range and retains directions and evidence
+00:08 +509 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/reader_document_repository_test.dart: export covers every committed range and retains directions and evidence
+00:08 +510 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/reader_document_repository_test.dart: export covers every committed range and retains directions and evidence
+00:08 +511 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/reader_document_repository_test.dart: export covers every committed range and retains directions and evidence
+00:08 +512 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/reader_document_repository_test.dart: export covers every committed range and retains directions and evidence
+00:08 +513 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/reader_document_repository_test.dart: export covers every committed range and retains directions and evidence
+00:08 +514 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/reader_document_repository_test.dart: export covers every committed range and retains directions and evidence
+00:08 +515 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/reader_document_repository_test.dart: export covers every committed range and retains directions and evidence
+00:08 +516 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/reader_document_repository_test.dart: export covers every committed range and retains directions and evidence
+00:08 +517 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/reader_document_repository_test.dart: export covers every committed range and retains directions and evidence
+00:08 +518 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/reader_document_repository_test.dart: export covers every committed range and retains directions and evidence
+00:08 +519 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/reader_document_repository_test.dart: export covers every committed range and retains directions and evidence
+00:08 +520 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/reader_document_repository_test.dart: export covers every committed range and retains directions and evidence
+00:08 +521 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/reader_document_repository_test.dart: export covers every committed range and retains directions and evidence
+00:08 +522 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/reader_document_repository_test.dart: export covers every committed range and retains directions and evidence
+00:08 +523 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/reader_document_repository_test.dart: export covers every committed range and retains directions and evidence
+00:08 +524 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/reader_document_repository_test.dart: export covers every committed range and retains directions and evidence
+00:08 +525 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/reader_document_repository_test.dart: export covers every committed range and retains directions and evidence
+00:08 +526 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/reader_document_repository_test.dart: export covers every committed range and retains directions and evidence
+00:08 +527 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/reader_document_repository_test.dart: export covers every committed range and retains directions and evidence
+00:08 +528 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/reader_document_repository_test.dart: export covers every committed range and retains directions and evidence
+00:08 +529 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/reader_document_repository_test.dart: export covers every committed range and retains directions and evidence
+00:08 +530 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/reader_document_repository_test.dart: export covers every committed range and retains directions and evidence
+00:08 +531 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/reader_document_repository_test.dart: export covers every committed range and retains directions and evidence
+00:08 +532 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/reader_document_repository_test.dart: export covers every committed range and retains directions and evidence
+00:08 +533 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/reader_document_repository_test.dart: export covers every committed range and retains directions and evidence
+00:08 +534 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/reader_document_repository_test.dart: export covers every committed range and retains directions and evidence
+00:08 +535 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/reader_document_repository_test.dart: export covers every committed range and retains directions and evidence
+00:08 +536 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/reader_document_repository_test.dart: export covers every committed range and retains directions and evidence
+00:08 +537 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/reader_document_repository_test.dart: export covers every committed range and retains directions and evidence
+00:08 +538 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/reader_document_repository_test.dart: export covers every committed range and retains directions and evidence
+00:08 +539 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/reader_document_repository_test.dart: export covers every committed range and retains directions and evidence
+00:08 +540 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/reader_document_repository_test.dart: export covers every committed range and retains directions and evidence
+00:08 +541 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/reader_document_repository_test.dart: export covers every committed range and retains directions and evidence
+00:08 +542 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/reader_document_repository_test.dart: export covers every committed range and retains directions and evidence
+00:08 +543 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/reader_document_repository_test.dart: export covers every committed range and retains directions and evidence
+00:08 +544 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/reader_document_repository_test.dart: export covers every committed range and retains directions and evidence
+00:08 +545 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/reader_document_repository_test.dart: export covers every committed range and retains directions and evidence
+00:08 +546 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/reader_document_repository_test.dart: export covers every committed range and retains directions and evidence
+00:08 +547 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/reader_document_repository_test.dart: export covers every committed range and retains directions and evidence
+00:08 +548 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/reader_document_repository_test.dart: export covers every committed range and retains directions and evidence
+00:08 +549 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/reader_document_repository_test.dart: export covers every committed range and retains directions and evidence
+00:08 +550 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/reader_document_repository_test.dart: export covers every committed range and retains directions and evidence
+00:08 +551 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/reader_document_repository_test.dart: export covers every committed range and retains directions and evidence
+00:08 +552 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/reader_document_repository_test.dart: export covers every committed range and retains directions and evidence
+00:08 +553 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/reader_document_repository_test.dart: export covers every committed range and retains directions and evidence
+00:08 +554 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/reader_document_repository_test.dart: export covers every committed range and retains directions and evidence
+00:08 +555 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/reader_document_repository_test.dart: export covers every committed range and retains directions and evidence
+00:08 +556 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/reader_document_repository_test.dart: export covers every committed range and retains directions and evidence
+00:08 +557 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/reader_document_repository_test.dart: export covers every committed range and retains directions and evidence
+00:08 +558 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/reader_document_repository_test.dart: export covers every committed range and retains directions and evidence
+00:08 +559 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/reader_document_repository_test.dart: export covers every committed range and retains directions and evidence
+00:08 +560 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/reader_document_repository_test.dart: export covers every committed range and retains directions and evidence
+00:08 +561 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/reader_document_repository_test.dart: export covers every committed range and retains directions and evidence
+00:08 +562 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/reader_document_repository_test.dart: export covers every committed range and retains directions and evidence
+00:08 +563 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/reader_document_repository_test.dart: export covers every committed range and retains directions and evidence
+00:08 +564 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/reader_document_repository_test.dart: export covers every committed range and retains directions and evidence
+00:08 +565 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/reader_document_repository_test.dart: export covers every committed range and retains directions and evidence
+00:08 +566 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/reader_document_repository_test.dart: export covers every committed range and retains directions and evidence
+00:08 +567 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/reader_document_repository_test.dart: export covers every committed range and retains directions and evidence
+00:08 +568 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/reader_document_repository_test.dart: export covers every committed range and retains directions and evidence
+00:08 +569 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/reader_document_repository_test.dart: export covers every committed range and retains directions and evidence
+00:09 +570 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/reader_document_repository_test.dart: export covers every committed range and retains directions and evidence
+00:09 +571 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/reader_document_repository_test.dart: export covers every committed range and retains directions and evidence
+00:09 +572 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/reader_document_repository_test.dart: export covers every committed range and retains directions and evidence
+00:09 +573 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/reader_document_repository_test.dart: export covers every committed range and retains directions and evidence
+00:09 +574 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/reader_document_repository_test.dart: export covers every committed range and retains directions and evidence
+00:09 +575 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/reader_document_repository_test.dart: export covers every committed range and retains directions and evidence
+00:09 +576 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/reader_document_repository_test.dart: export covers every committed range and retains directions and evidence
+00:09 +577 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/reader_document_repository_test.dart: export covers every committed range and retains directions and evidence
+00:09 +578 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/reader_document_repository_test.dart: export covers every committed range and retains directions and evidence
+00:09 +579 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/reader_document_repository_test.dart: export covers every committed range and retains directions and evidence
+00:09 +580 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/reader_document_repository_test.dart: export covers every committed range and retains directions and evidence
+00:09 +581 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/reader_document_repository_test.dart: export covers every committed range and retains directions and evidence
+00:09 +582 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/reader_document_repository_test.dart: export covers every committed range and retains directions and evidence
+00:09 +583 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/reader_document_repository_test.dart: export covers every committed range and retains directions and evidence
+00:09 +584 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/reader_document_repository_test.dart: export covers every committed range and retains directions and evidence
+00:09 +585 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/reader_document_repository_test.dart: export covers every committed range and retains directions and evidence
+00:09 +586 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/reader_document_repository_test.dart: export covers every committed range and retains directions and evidence
+00:09 +587 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/reader_document_repository_test.dart: export covers every committed range and retains directions and evidence
+00:09 +588 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/reader_document_repository_test.dart: export covers every committed range and retains directions and evidence
+00:09 +589 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/reader_document_repository_test.dart: export covers every committed range and retains directions and evidence
+00:09 +590 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/reader_document_repository_test.dart: export covers every committed range and retains directions and evidence
+00:09 +591 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/reader_document_repository_test.dart: export covers every committed range and retains directions and evidence
+00:09 +592 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/reader_document_repository_test.dart: export covers every committed range and retains directions and evidence
+00:09 +593 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/reader_document_repository_test.dart: export covers every committed range and retains directions and evidence
+00:09 +594 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/reader_document_repository_test.dart: export covers every committed range and retains directions and evidence
+00:09 +595 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/reader_document_repository_test.dart: export covers every committed range and retains directions and evidence
+00:09 +596 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/reader_document_repository_test.dart: export covers every committed range and retains directions and evidence
+00:09 +597 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/reader_document_repository_test.dart: export covers every committed range and retains directions and evidence
+00:09 +598 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/reader_document_repository_test.dart: export covers every committed range and retains directions and evidence
+00:09 +599 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/reader_document_repository_test.dart: export covers every committed range and retains directions and evidence
+00:09 +600 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/reader_document_repository_test.dart: export covers every committed range and retains directions and evidence
+00:09 +601 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/reader_document_repository_test.dart: export covers every committed range and retains directions and evidence
+00:09 +602 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/reader_document_repository_test.dart: export covers every committed range and retains directions and evidence
+00:09 +603 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/reader_document_repository_test.dart: export covers every committed range and retains directions and evidence
+00:09 +604 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/reader_document_repository_test.dart: export covers every committed range and retains directions and evidence
+00:09 +605 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/reader_document_repository_test.dart: export covers every committed range and retains directions and evidence
+00:09 +606 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/reader_document_repository_test.dart: export covers every committed range and retains directions and evidence
+00:09 +607 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/reader_document_repository_test.dart: export covers every committed range and retains directions and evidence
+00:09 +608 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/reader_document_repository_test.dart: export covers every committed range and retains directions and evidence
+00:09 +609 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/reader_document_repository_test.dart: export covers every committed range and retains directions and evidence
+00:09 +610 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/reader_document_repository_test.dart: export covers every committed range and retains directions and evidence
+00:09 +611 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/reader_document_repository_test.dart: export covers every committed range and retains directions and evidence
+00:09 +612 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/reader_document_repository_test.dart: export covers every committed range and retains directions and evidence
+00:09 +613 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/reader_document_repository_test.dart: export covers every committed range and retains directions and evidence
+00:09 +614 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/reader_document_repository_test.dart: export covers every committed range and retains directions and evidence
+00:09 +615 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/reader_document_repository_test.dart: export covers every committed range and retains directions and evidence
+00:09 +616 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/reader_document_repository_test.dart: export covers every committed range and retains directions and evidence
+00:09 +617 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/reader_document_repository_test.dart: export covers every committed range and retains directions and evidence
+00:09 +618 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/reader_document_repository_test.dart: export covers every committed range and retains directions and evidence
+00:09 +619 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/reader_document_repository_test.dart: export covers every committed range and retains directions and evidence
+00:09 +620 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/reader_document_repository_test.dart: export covers every committed range and retains directions and evidence
+00:09 +621 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/reader_document_repository_test.dart: export covers every committed range and retains directions and evidence
+00:09 +622 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/reader_document_repository_test.dart: export covers every committed range and retains directions and evidence
+00:09 +623 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/reader_document_repository_test.dart: export covers every committed range and retains directions and evidence
+00:09 +624 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/reader_document_repository_test.dart: export covers every committed range and retains directions and evidence
+00:09 +625 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/reader_document_repository_test.dart: export covers every committed range and retains directions and evidence
+00:09 +626 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/reader_document_repository_test.dart: export covers every committed range and retains directions and evidence
+00:09 +627 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/reader_document_repository_test.dart: export covers every committed range and retains directions and evidence
+00:09 +628 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/reader_document_repository_test.dart: export covers every committed range and retains directions and evidence
+00:09 +629 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/reader_document_repository_test.dart: export covers every committed range and retains directions and evidence
+00:09 +630 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/reader_document_repository_test.dart: export covers every committed range and retains directions and evidence
+00:10 +631 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/reader_document_repository_test.dart: export covers every committed range and retains directions and evidence
+00:10 +632 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/reader_document_repository_test.dart: export covers every committed range and retains directions and evidence
+00:10 +633 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/reader_document_repository_test.dart: export covers every committed range and retains directions and evidence
+00:10 +634 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/reader_document_repository_test.dart: export covers every committed range and retains directions and evidence
+00:10 +635 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/reader_document_repository_test.dart: export covers every committed range and retains directions and evidence
+00:10 +636 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/reader_document_repository_test.dart: export covers every committed range and retains directions and evidence
+00:10 +637 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/reader_document_repository_test.dart: export covers every committed range and retains directions and evidence
+00:10 +638 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/reader_document_repository_test.dart: export covers every committed range and retains directions and evidence
+00:10 +639 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/reader_document_repository_test.dart: export covers every committed range and retains directions and evidence
+00:10 +640 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/reader_document_repository_test.dart: export covers every committed range and retains directions and evidence
+00:10 +641 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/reader_document_repository_test.dart: export covers every committed range and retains directions and evidence
+00:10 +642 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/reader_document_repository_test.dart: export covers every committed range and retains directions and evidence
+00:10 +643 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/reader_document_repository_test.dart: export covers every committed range and retains directions and evidence
+00:10 +644 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/reader_document_repository_test.dart: export covers every committed range and retains directions and evidence
+00:10 +645 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/reader_document_repository_test.dart: export covers every committed range and retains directions and evidence
+00:10 +646 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/reader_document_repository_test.dart: export covers every committed range and retains directions and evidence
+00:10 +647 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/reader_document_repository_test.dart: export covers every committed range and retains directions and evidence
+00:10 +648 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/reader_document_repository_test.dart: export covers every committed range and retains directions and evidence
+00:10 +649 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/reader_document_repository_test.dart: export covers every committed range and retains directions and evidence
+00:10 +650 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/reader_document_repository_test.dart: export covers every committed range and retains directions and evidence
+00:10 +651 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/reader_document_repository_test.dart: export covers every committed range and retains directions and evidence
+00:10 +652 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/reader_document_repository_test.dart: export covers every committed range and retains directions and evidence
+00:10 +653 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/reader_document_repository_test.dart: export covers every committed range and retains directions and evidence
+00:10 +654 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/packaged_python_runtime_test.dart: cancellation drains admitted native peers before a fresh acquisition
+00:10 +655 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/packaged_python_runtime_test.dart: cancellation drains admitted native peers before a fresh acquisition
+00:10 +656 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/packaged_python_runtime_test.dart: cancellation drains admitted native peers before a fresh acquisition
+00:10 +657 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/packaged_python_runtime_test.dart: cancellation drains admitted native peers before a fresh acquisition
+00:10 +658 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/packaged_python_runtime_test.dart: cancellation drains admitted native peers before a fresh acquisition
+00:10 +659 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/packaged_python_runtime_test.dart: cancellation drains admitted native peers before a fresh acquisition
+00:10 +660 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/packaged_python_runtime_test.dart: cancellation drains admitted native peers before a fresh acquisition
+00:10 +661 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/packaged_python_runtime_test.dart: cancellation drains admitted native peers before a fresh acquisition
+00:10 +662 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/packaged_python_runtime_test.dart: cancellation drains admitted native peers before a fresh acquisition
+00:11 +663 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/packaged_python_runtime_test.dart: cancellation drains admitted native peers before a fresh acquisition
+00:11 +664 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/packaged_python_runtime_test.dart: cancellation drains admitted native peers before a fresh acquisition
+00:11 +665 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/packaged_python_runtime_test.dart: cancellation drains admitted native peers before a fresh acquisition
+00:11 +666 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/packaged_python_runtime_test.dart: cancellation drains admitted native peers before a fresh acquisition
+00:11 +667 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/packaged_python_runtime_test.dart: cancellation drains admitted native peers before a fresh acquisition
+00:11 +668 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/packaged_python_runtime_test.dart: cancellation drains admitted native peers before a fresh acquisition
+00:11 +669 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/packaged_python_runtime_test.dart: cancellation drains admitted native peers before a fresh acquisition
+00:11 +670 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/packaged_python_runtime_test.dart: cancellation drains admitted native peers before a fresh acquisition
+00:11 +671 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/packaged_python_runtime_test.dart: cancellation drains admitted native peers before a fresh acquisition
+00:11 +672 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/packaged_python_runtime_test.dart: cancellation drains admitted native peers before a fresh acquisition
+00:11 +673 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/packaged_python_runtime_test.dart: cancellation drains admitted native peers before a fresh acquisition
+00:11 +674 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/packaged_python_runtime_test.dart: cancellation drains admitted native peers before a fresh acquisition
+00:11 +675 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/packaged_python_runtime_test.dart: cancellation drains admitted native peers before a fresh acquisition
+00:11 +676 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/packaged_python_runtime_test.dart: cancellation drains admitted native peers before a fresh acquisition
+00:11 +677 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/packaged_python_runtime_test.dart: cancellation drains admitted native peers before a fresh acquisition
+00:11 +678 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/packaged_python_runtime_test.dart: cancellation drains admitted native peers before a fresh acquisition
+00:11 +679 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/range_document_surface_test.dart: reader displays the last range of a novel and revisits the first
+00:11 +680 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/range_document_surface_test.dart: reader displays the last range of a novel and revisits the first
+00:11 +681 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/range_document_surface_test.dart: reader displays the last range of a novel and revisits the first
+00:11 +682 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/range_document_surface_test.dart: reader displays the last range of a novel and revisits the first
+00:11 +683 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/range_document_surface_test.dart: reader displays the last range of a novel and revisits the first
+00:11 +684 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/range_document_surface_test.dart: reader displays the last range of a novel and revisits the first
+00:11 +685 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/range_document_surface_test.dart: reader displays the last range of a novel and revisits the first
+00:11 +686 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/range_document_surface_test.dart: reader displays the last range of a novel and revisits the first
+00:11 +687 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/range_document_surface_test.dart: reader displays the last range of a novel and revisits the first
+00:11 +688 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/range_document_surface_test.dart: reader displays the last range of a novel and revisits the first
+00:11 +689 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/range_document_surface_test.dart: reader displays the last range of a novel and revisits the first
+00:11 +690 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/range_document_surface_test.dart: reader displays the last range of a novel and revisits the first
+00:11 +691 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/range_document_surface_test.dart: reader displays the last range of a novel and revisits the first
+00:11 +692 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/range_document_surface_test.dart: reader displays the last range of a novel and revisits the first
+00:11 +693 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/range_document_surface_test.dart: reader displays the last range of a novel and revisits the first
+00:12 +694 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/range_document_surface_test.dart: reader displays the last range of a novel and revisits the first
+00:12 +695 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/range_document_surface_test.dart: reader displays the last range of a novel and revisits the first
+00:12 +696 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/range_document_surface_test.dart: reader displays the last range of a novel and revisits the first
+00:12 +697 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/range_document_surface_test.dart: reader displays the last range of a novel and revisits the first
+00:12 +698 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/range_document_surface_test.dart: reader displays the last range of a novel and revisits the first
+00:12 +699 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/range_document_surface_test.dart: reader displays the last range of a novel and revisits the first
+00:12 +700 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/range_document_surface_test.dart: reader displays the last range of a novel and revisits the first
+00:12 +701 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/range_document_surface_test.dart: reader displays the last range of a novel and revisits the first
+00:12 +702 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/range_document_surface_test.dart: reader displays the last range of a novel and revisits the first
+00:12 +703 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/range_document_surface_test.dart: reader displays the last range of a novel and revisits the first
+00:12 +704 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/range_document_surface_test.dart: reader displays the last range of a novel and revisits the first
+00:12 +705 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/range_document_surface_test.dart: reader displays the last range of a novel and revisits the first
+00:12 +706 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/range_document_surface_test.dart: reader displays the last range of a novel and revisits the first
+00:12 +707 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/range_document_surface_test.dart: reader displays the last range of a novel and revisits the first
+00:12 +708 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/range_document_surface_test.dart: reader displays the last range of a novel and revisits the first
+00:12 +709 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/range_document_surface_test.dart: reader displays the last range of a novel and revisits the first
+00:12 +710 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/range_document_surface_test.dart: reader displays the last range of a novel and revisits the first
+00:12 +711 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/range_document_surface_test.dart: reader displays the last range of a novel and revisits the first
+00:12 +712 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/range_document_surface_test.dart: reader displays the last range of a novel and revisits the first
+00:12 +713 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/range_document_surface_test.dart: reader displays the last range of a novel and revisits the first
+00:12 +714 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/range_document_surface_test.dart: reader displays the last range of a novel and revisits the first
+00:12 +715 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/range_document_surface_test.dart: reader displays the last range of a novel and revisits the first
+00:12 +716 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/range_document_surface_test.dart: reader displays the last range of a novel and revisits the first
+00:12 +717 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/range_document_surface_test.dart: reader displays the last range of a novel and revisits the first
+00:12 +718 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/range_document_surface_test.dart: reader displays the last range of a novel and revisits the first
+00:12 +719 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/range_document_surface_test.dart: reader displays the last range of a novel and revisits the first
+00:12 +720 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/range_document_surface_test.dart: reader displays the last range of a novel and revisits the first
+00:12 +721 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/range_document_surface_test.dart: reader displays the last range of a novel and revisits the first
+00:12 +722 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/range_document_surface_test.dart: reader displays the last range of a novel and revisits the first
+00:12 +723 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/range_document_surface_test.dart: reader displays the last range of a novel and revisits the first
+00:12 +724 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/range_document_surface_test.dart: reader displays the last range of a novel and revisits the first
+00:12 +725 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/range_document_surface_test.dart: reader displays the last range of a novel and revisits the first
+00:12 +726 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/range_document_surface_test.dart: reader displays the last range of a novel and revisits the first
+00:12 +727 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/range_document_surface_test.dart: reader displays the last range of a novel and revisits the first
+00:12 +728 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/range_document_surface_test.dart: reader displays the last range of a novel and revisits the first
+00:12 +729 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/range_document_surface_test.dart: reader displays the last range of a novel and revisits the first
+00:12 +730 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/range_document_surface_test.dart: reader displays the last range of a novel and revisits the first
+00:12 +731 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/range_document_surface_test.dart: reader displays the last range of a novel and revisits the first
+00:12 +732 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/range_document_surface_test.dart: reader displays the last range of a novel and revisits the first
+00:12 +733 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/range_document_surface_test.dart: reader displays the last range of a novel and revisits the first
+00:12 +734 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/range_document_surface_test.dart: reader displays the last range of a novel and revisits the first
+00:12 +735 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/range_document_surface_test.dart: reader displays the last range of a novel and revisits the first
+00:12 +736 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/range_document_surface_test.dart: reader displays the last range of a novel and revisits the first
+00:12 +737 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/range_document_surface_test.dart: reader displays the last range of a novel and revisits the first
+00:12 +738 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/range_document_surface_test.dart: reader displays the last range of a novel and revisits the first
+00:12 +739 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/range_document_surface_test.dart: reader displays the last range of a novel and revisits the first
+00:12 +740 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/range_document_surface_test.dart: reader displays the last range of a novel and revisits the first
+00:12 +741 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/range_document_surface_test.dart: reader displays the last range of a novel and revisits the first
+00:12 +742 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/range_document_surface_test.dart: reader displays the last range of a novel and revisits the first
+00:12 +743 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/range_document_surface_test.dart: reader displays the last range of a novel and revisits the first
+00:12 +744 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/range_document_surface_test.dart: reader displays the last range of a novel and revisits the first
+00:12 +745 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/range_document_surface_test.dart: reader displays the last range of a novel and revisits the first
+00:12 +746 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/range_document_surface_test.dart: reader displays the last range of a novel and revisits the first
+00:12 +747 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/range_document_surface_test.dart: reader displays the last range of a novel and revisits the first
+00:12 +748 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/range_document_surface_test.dart: reader displays the last range of a novel and revisits the first
+00:12 +749 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/range_document_surface_test.dart: reader displays the last range of a novel and revisits the first
+00:12 +750 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/range_document_surface_test.dart: reader displays the last range of a novel and revisits the first
+00:13 +751 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/range_document_surface_test.dart: reader displays the last range of a novel and revisits the first
+00:13 +752 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/range_document_surface_test.dart: reader displays the last range of a novel and revisits the first
+00:13 +753 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/range_document_surface_test.dart: reader displays the last range of a novel and revisits the first
+00:13 +754 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/range_document_surface_test.dart: reader displays the last range of a novel and revisits the first
+00:13 +755 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/range_document_surface_test.dart: reader displays the last range of a novel and revisits the first
+00:13 +756 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/range_document_surface_test.dart: reader displays the last range of a novel and revisits the first
+00:13 +757 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/range_document_surface_test.dart: reader displays the last range of a novel and revisits the first
+00:13 +758 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/range_document_surface_test.dart: reader displays the last range of a novel and revisits the first
+00:13 +759 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/range_document_surface_test.dart: reader displays the last range of a novel and revisits the first
+00:13 +760 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/range_document_surface_test.dart: reader displays the last range of a novel and revisits the first
+00:13 +761 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/range_document_surface_test.dart: reader displays the last range of a novel and revisits the first
+00:13 +762 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/range_document_surface_test.dart: reader displays the last range of a novel and revisits the first
+00:13 +763 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/range_document_surface_test.dart: reader displays the last range of a novel and revisits the first
+00:13 +764 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/range_document_surface_test.dart: reader displays the last range of a novel and revisits the first
+00:13 +765 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/range_document_surface_test.dart: reader displays the last range of a novel and revisits the first
+00:13 +766 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/range_document_surface_test.dart: reader displays the last range of a novel and revisits the first
+00:13 +767 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/range_document_surface_test.dart: reader displays the last range of a novel and revisits the first
+00:13 +768 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/range_document_surface_test.dart: reader displays the last range of a novel and revisits the first
+00:13 +769 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/range_document_surface_test.dart: reader displays the last range of a novel and revisits the first
+00:13 +770 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/range_document_surface_test.dart: reader displays the last range of a novel and revisits the first
+00:13 +771 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/range_document_surface_test.dart: reader displays the last range of a novel and revisits the first
+00:13 +772 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/range_document_surface_test.dart: reader displays the last range of a novel and revisits the first
+00:13 +773 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/range_document_surface_test.dart: reader displays the last range of a novel and revisits the first
+00:13 +774 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/range_document_surface_test.dart: reader displays the last range of a novel and revisits the first
+00:13 +775 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/range_document_surface_test.dart: reader displays the last range of a novel and revisits the first
+00:13 +776 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/range_document_surface_test.dart: reader displays the last range of a novel and revisits the first
+00:13 +777 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/range_document_surface_test.dart: reader displays the last range of a novel and revisits the first
+00:13 +778 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/range_document_surface_test.dart: reader displays the last range of a novel and revisits the first
+00:13 +779 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/range_document_surface_test.dart: reader displays the last range of a novel and revisits the first
+00:13 +780 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/range_document_surface_test.dart: reader displays the last range of a novel and revisits the first
+00:13 +781 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/range_document_surface_test.dart: reader displays the last range of a novel and revisits the first
+00:13 +782 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/range_document_surface_test.dart: reader displays the last range of a novel and revisits the first
+00:13 +783 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/range_document_surface_test.dart: reader displays the last range of a novel and revisits the first
+00:13 +784 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/range_document_surface_test.dart: reader displays the last range of a novel and revisits the first
+00:13 +785 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/range_document_surface_test.dart: reader displays the last range of a novel and revisits the first
+00:13 +786 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/range_document_surface_test.dart: reader displays the last range of a novel and revisits the first
+00:14 +787 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/range_document_surface_test.dart: reader displays the last range of a novel and revisits the first
+00:14 +788 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/range_document_surface_test.dart: reader displays the last range of a novel and revisits the first
+00:14 +789 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/range_document_surface_test.dart: reader displays the last range of a novel and revisits the first
+00:14 +790 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/range_document_surface_test.dart: reader displays the last range of a novel and revisits the first
+00:14 +791 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/range_document_surface_test.dart: reader displays the last range of a novel and revisits the first
+00:14 +792 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/range_document_surface_test.dart: reader displays the last range of a novel and revisits the first
+00:14 +793 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/range_document_surface_test.dart: reader displays the last range of a novel and revisits the first
+00:14 +794 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/range_document_surface_test.dart: reader displays the last range of a novel and revisits the first
+00:14 +795 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/range_document_surface_test.dart: reader displays the last range of a novel and revisits the first
+00:14 +796 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/range_document_surface_test.dart: reader displays the last range of a novel and revisits the first
+00:14 +797 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/range_document_surface_test.dart: reader displays the last range of a novel and revisits the first
+00:14 +798 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/range_document_surface_test.dart: reader displays the last range of a novel and revisits the first
+00:14 +799 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/range_document_surface_test.dart: reader displays the last range of a novel and revisits the first
+00:14 +800 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/range_document_surface_test.dart: reader displays the last range of a novel and revisits the first
+00:14 +801 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/range_document_surface_test.dart: reader displays the last range of a novel and revisits the first
+00:14 +802 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/range_document_surface_test.dart: reader displays the last range of a novel and revisits the first
+00:14 +803 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/range_document_surface_test.dart: reader displays the last range of a novel and revisits the first
+00:14 +804 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/range_document_surface_test.dart: reader displays the last range of a novel and revisits the first
+00:14 +805 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/range_document_surface_test.dart: reader displays the last range of a novel and revisits the first
+00:14 +806 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/range_document_surface_test.dart: reader displays the last range of a novel and revisits the first
+00:14 +807 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/range_document_surface_test.dart: reader displays the last range of a novel and revisits the first
+00:14 +808 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/range_document_surface_test.dart: reader displays the last range of a novel and revisits the first
+00:14 +809 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/range_document_surface_test.dart: reader displays the last range of a novel and revisits the first
+00:14 +810 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/range_document_surface_test.dart: reader displays the last range of a novel and revisits the first
+00:14 +811 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/range_document_surface_test.dart: reader displays the last range of a novel and revisits the first
+00:14 +812 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/range_document_surface_test.dart: reader displays the last range of a novel and revisits the first
+00:14 +813 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/range_document_surface_test.dart: reader displays the last range of a novel and revisits the first
+00:14 +814 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/range_document_surface_test.dart: reader displays the last range of a novel and revisits the first
+00:14 +815 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/range_document_surface_test.dart: reader displays the last range of a novel and revisits the first
+00:14 +816 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/range_document_surface_test.dart: reader displays the last range of a novel and revisits the first
+00:14 +817 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/range_document_surface_test.dart: reader displays the last range of a novel and revisits the first
+00:14 +818 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/range_document_surface_test.dart: reader displays the last range of a novel and revisits the first
+00:14 +819 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/range_document_surface_test.dart: reader displays the last range of a novel and revisits the first
+00:14 +820 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/range_document_surface_test.dart: reader displays the last range of a novel and revisits the first
+00:14 +821 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/range_document_surface_test.dart: reader displays the last range of a novel and revisits the first
+00:14 +822 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/range_document_surface_test.dart: reader displays the last range of a novel and revisits the first
+00:14 +823 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/range_document_surface_test.dart: reader displays the last range of a novel and revisits the first
+00:14 +824 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/range_document_surface_test.dart: reader displays the last range of a novel and revisits the first
+00:14 +825 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/range_document_surface_test.dart: reader displays the last range of a novel and revisits the first
+00:14 +826 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/range_document_surface_test.dart: reader displays the last range of a novel and revisits the first
+00:14 +827 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/range_document_surface_test.dart: reader displays the last range of a novel and revisits the first
+00:15 +828 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/range_document_surface_test.dart: reader displays the last range of a novel and revisits the first
+00:15 +829 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/range_document_surface_test.dart: reader displays the last range of a novel and revisits the first
+00:15 +830 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/range_document_surface_test.dart: reader displays the last range of a novel and revisits the first
+00:15 +831 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/range_document_surface_test.dart: reader displays the last range of a novel and revisits the first
+00:15 +832 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/range_document_surface_test.dart: reader displays the last range of a novel and revisits the first
+00:15 +833 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/range_document_surface_test.dart: reader displays the last range of a novel and revisits the first
+00:15 +834 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/range_document_surface_test.dart: reader displays the last range of a novel and revisits the first
+00:15 +835 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/range_document_surface_test.dart: reader displays the last range of a novel and revisits the first
+00:15 +836 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/range_document_surface_test.dart: reader displays the last range of a novel and revisits the first
+00:15 +837 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/range_document_surface_test.dart: reader displays the last range of a novel and revisits the first
+00:15 +838 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/range_document_surface_test.dart: reader displays the last range of a novel and revisits the first
+00:15 +839 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/range_document_surface_test.dart: reader displays the last range of a novel and revisits the first
+00:15 +840 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/range_document_surface_test.dart: reader displays the last range of a novel and revisits the first
+00:15 +841 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/range_document_surface_test.dart: reader displays the last range of a novel and revisits the first
+00:15 +842 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/range_document_surface_test.dart: reader displays the last range of a novel and revisits the first
+00:15 +843 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/range_document_surface_test.dart: reader displays the last range of a novel and revisits the first
+00:15 +844 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/range_document_surface_test.dart: reader displays the last range of a novel and revisits the first
+00:15 +845 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/range_document_surface_test.dart: reader displays the last range of a novel and revisits the first
+00:15 +846 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/range_document_surface_test.dart: reader displays the last range of a novel and revisits the first
+00:15 +847 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/range_document_surface_test.dart: reader displays the last range of a novel and revisits the first
+00:15 +848 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/range_document_surface_test.dart: reader displays the last range of a novel and revisits the first
+00:15 +849 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/range_document_surface_test.dart: reader displays the last range of a novel and revisits the first
+00:15 +850 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/range_document_surface_test.dart: reader displays the last range of a novel and revisits the first
+00:15 +851 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/range_document_surface_test.dart: reader displays the last range of a novel and revisits the first
+00:15 +852 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/range_document_surface_test.dart: reader displays the last range of a novel and revisits the first
+Shell: MLX helper exit: -15
+00:15 +853 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/range_document_surface_test.dart: reader displays the last range of a novel and revisits the first
+00:15 +854 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/range_document_surface_test.dart: reader displays the last range of a novel and revisits the first
+00:15 +855 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/range_document_surface_test.dart: reader displays the last range of a novel and revisits the first
+00:15 +856 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/range_document_surface_test.dart: reader displays the last range of a novel and revisits the first
+00:15 +857 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/range_document_surface_test.dart: reader displays the last range of a novel and revisits the first
+00:15 +858 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/range_document_surface_test.dart: reader displays the last range of a novel and revisits the first
+00:15 +859 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/range_document_surface_test.dart: reader displays the last range of a novel and revisits the first
+00:15 +860 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/range_document_surface_test.dart: reader displays the last range of a novel and revisits the first
+00:15 +861 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/range_document_surface_test.dart: reader displays the last range of a novel and revisits the first
+00:15 +862 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/range_document_surface_test.dart: reader displays the last range of a novel and revisits the first
+00:15 +863 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/range_document_surface_test.dart: reader displays the last range of a novel and revisits the first
+00:15 +864 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/range_document_surface_test.dart: reader displays the last range of a novel and revisits the first
+00:15 +865 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/range_document_surface_test.dart: reader displays the last range of a novel and revisits the first
+00:15 +866 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/range_document_surface_test.dart: reader displays the last range of a novel and revisits the first
+00:15 +867 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/range_document_surface_test.dart: reader displays the last range of a novel and revisits the first
+00:15 +868 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/range_document_surface_test.dart: reader displays the last range of a novel and revisits the first
+00:15 +869 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/range_document_surface_test.dart: reader displays the last range of a novel and revisits the first
+00:15 +870 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/range_document_surface_test.dart: reader displays the last range of a novel and revisits the first
+00:15 +871 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/range_document_surface_test.dart: reader displays the last range of a novel and revisits the first
+00:15 +872 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/range_document_surface_test.dart: reader displays the last range of a novel and revisits the first
+00:15 +873 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/range_document_surface_test.dart: reader displays the last range of a novel and revisits the first
+00:15 +874 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/range_document_surface_test.dart: reader displays the last range of a novel and revisits the first
+00:15 +875 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/range_document_surface_test.dart: reader displays the last range of a novel and revisits the first
+00:15 +876 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/range_document_surface_test.dart: reader displays the last range of a novel and revisits the first
+00:15 +877 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/range_document_surface_test.dart: reader displays the last range of a novel and revisits the first
+00:15 +878 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/range_document_surface_test.dart: reader displays the last range of a novel and revisits the first
+00:15 +879 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/range_document_surface_test.dart: reader displays the last range of a novel and revisits the first
+00:15 +880 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/range_document_surface_test.dart: reader displays the last range of a novel and revisits the first
+00:15 +881 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/range_document_surface_test.dart: reader displays the last range of a novel and revisits the first
+00:15 +882 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/range_document_surface_test.dart: reader displays the last range of a novel and revisits the first
+00:15 +883 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/range_document_surface_test.dart: reader displays the last range of a novel and revisits the first
+00:15 +884 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/range_document_surface_test.dart: reader displays the last range of a novel and revisits the first
+00:15 +885 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/range_document_surface_test.dart: reader displays the last range of a novel and revisits the first
+00:15 +886 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/range_document_surface_test.dart: reader displays the last range of a novel and revisits the first
+00:15 +887 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/range_document_surface_test.dart: reader displays the last range of a novel and revisits the first
+00:15 +888 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/range_document_surface_test.dart: reader displays the last range of a novel and revisits the first
+00:15 +889 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/range_document_surface_test.dart: reader displays the last range of a novel and revisits the first
+00:15 +890 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/range_document_surface_test.dart: reader displays the last range of a novel and revisits the first
+00:15 +891 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/range_document_surface_test.dart: reader displays the last range of a novel and revisits the first
+00:15 +892 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/range_document_surface_test.dart: reader displays the last range of a novel and revisits the first
+00:15 +893 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/range_document_surface_test.dart: reader displays the last range of a novel and revisits the first
+00:15 +894 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/range_document_surface_test.dart: reader displays the last range of a novel and revisits the first
+00:15 +895 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/range_document_surface_test.dart: reader displays the last range of a novel and revisits the first
+00:15 +896 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/range_document_surface_test.dart: reader displays the last range of a novel and revisits the first
+00:15 +897 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/range_document_surface_test.dart: reader displays the last range of a novel and revisits the first
+Shell: MLX helper exit: -15
+00:15 +898 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/range_document_surface_test.dart: reader displays the last range of a novel and revisits the first
+00:15 +899 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/range_document_surface_test.dart: reader displays the last range of a novel and revisits the first
+00:15 +900 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/range_document_surface_test.dart: reader displays the last range of a novel and revisits the first
+00:15 +901 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/range_document_surface_test.dart: reader displays the last range of a novel and revisits the first
+00:15 +902 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/range_document_surface_test.dart: reader displays the last range of a novel and revisits the first
+Shell: MLX helper exit: -15
+00:15 +903 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/range_document_surface_test.dart: reader displays the last range of a novel and revisits the first
+00:15 +904 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/range_document_surface_test.dart: reader displays the last range of a novel and revisits the first
+Shell: MLX helper exit: -15
+Shell: MLX helper exit: -15
+00:15 +905 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/range_document_surface_test.dart: reader displays the last range of a novel and revisits the first
+00:15 +906 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/range_document_surface_test.dart: reader displays the last range of a novel and revisits the first
+00:15 +907 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/range_document_surface_test.dart: reader displays the last range of a novel and revisits the first
+00:15 +908 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/range_document_surface_test.dart: reader displays the last range of a novel and revisits the first
+Shell: PRIVATE_WORKER_TRACEBACK_FIXTURE
+Shell: MLX helper exit: -15
+00:15 +909 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/range_document_surface_test.dart: reader displays the last range of a novel and revisits the first
+00:15 +910 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/range_document_surface_test.dart: reader displays the last range of a novel and revisits the first
+Shell: MLX helper exit: -15
+00:16 +911 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/range_document_surface_test.dart: reader displays the last range of a novel and revisits the first
+Shell: MLX helper exit: -15
+00:16 +912 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/range_document_surface_test.dart: reader displays the last range of a novel and revisits the first
+00:16 +913 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/range_document_surface_test.dart: reader displays the last range of a novel and revisits the first
+00:16 +914 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/range_document_surface_test.dart: reader displays the last range of a novel and revisits the first
+00:16 +915 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/range_document_surface_test.dart: reader displays the last range of a novel and revisits the first
+00:16 +916 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/range_document_surface_test.dart: reader displays the last range of a novel and revisits the first
+00:16 +917 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/range_document_surface_test.dart: reader displays the last range of a novel and revisits the first
+00:16 +918 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/range_document_surface_test.dart: reader displays the last range of a novel and revisits the first
+Shell: MLX helper exit: -15
+00:16 +919 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/range_document_surface_test.dart: reader displays the last range of a novel and revisits the first
+00:16 +920 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/range_document_surface_test.dart: reader displays the last range of a novel and revisits the first
+Shell: MLX helper exit: -15
+00:16 +921 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/range_document_surface_test.dart: reader displays the last range of a novel and revisits the first
+00:16 +922 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/range_document_surface_test.dart: reader displays the last range of a novel and revisits the first
+00:16 +923 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/range_document_surface_test.dart: reader displays the last range of a novel and revisits the first
+Shell: MLX helper exit: -15
+00:16 +924 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/range_document_surface_test.dart: reader displays the last range of a novel and revisits the first
+00:16 +925 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/range_document_surface_test.dart: reader displays the last range of a novel and revisits the first
+00:16 +926 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/range_document_surface_test.dart: reader displays the last range of a novel and revisits the first
+00:16 +927 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/range_document_surface_test.dart: reader displays the last range of a novel and revisits the first
+Shell: MLX helper exit: -15
+00:16 +928 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/range_document_surface_test.dart: reader displays the last range of a novel and revisits the first
+00:16 +929 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/range_document_surface_test.dart: reader displays the last range of a novel and revisits the first
+00:16 +930 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/range_document_surface_test.dart: reader displays the last range of a novel and revisits the first
+Shell: MLX helper exit: -15
+00:16 +931 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/range_document_surface_test.dart: reader displays the last range of a novel and revisits the first
+00:16 +932 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/range_document_surface_test.dart: reader displays the last range of a novel and revisits the first
+Shell: MLX helper exit: -15
+00:16 +933 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/range_document_surface_test.dart: reader displays the last range of a novel and revisits the first
+00:16 +934 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/range_document_surface_test.dart: reader displays the last range of a novel and revisits the first
+Shell: MLX helper exit: -15
+Shell: MLX helper exit: -15
+00:17 +935 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/range_document_surface_test.dart: reader displays the last range of a novel and revisits the first
+00:17 +936 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/range_document_surface_test.dart: reader displays the last range of a novel and revisits the first
+Shell: MLX helper exit: -15
+Shell: MLX helper exit: -15
+00:17 +937 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/range_document_surface_test.dart: reader displays the last range of a novel and revisits the first
+00:17 +938 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/range_document_surface_test.dart: reader displays the last range of a novel and revisits the first
+00:17 +939 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/range_document_surface_test.dart: reader displays the last range of a novel and revisits the first
+00:17 +940 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/range_document_surface_test.dart: reader displays the last range of a novel and revisits the first
+00:17 +941 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/range_document_surface_test.dart: reader displays the last range of a novel and revisits the first
+00:17 +942 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/range_document_surface_test.dart: reader displays the last range of a novel and revisits the first
+Shell: MLX helper exit: -15
+00:17 +943 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/range_document_surface_test.dart: reader displays the last range of a novel and revisits the first
+00:17 +944 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/range_document_surface_test.dart: reader displays the last range of a novel and revisits the first
+Shell: MLX helper exit: -15
+00:17 +945 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/range_document_surface_test.dart: reader displays the last range of a novel and revisits the first
+00:17 +946 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/range_document_surface_test.dart: reader displays the last range of a novel and revisits the first
+00:17 +947 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/range_document_surface_test.dart: reader displays the last range of a novel and revisits the first
+00:17 +948 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/range_document_surface_test.dart: reader displays the last range of a novel and revisits the first
+00:17 +949 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/range_document_surface_test.dart: reader displays the last range of a novel and revisits the first
+00:17 +950 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/range_document_surface_test.dart: reader displays the last range of a novel and revisits the first
+Shell: MLX helper exit: -15
+00:17 +951 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/range_document_surface_test.dart: reader displays the last range of a novel and revisits the first
+00:17 +952 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/range_document_surface_test.dart: reader displays the last range of a novel and revisits the first
+00:17 +953 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/range_document_surface_test.dart: reader displays the last range of a novel and revisits the first
+00:17 +954 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/range_document_surface_test.dart: reader displays the last range of a novel and revisits the first
+Shell: MLX helper exit: -15
+00:17 +955 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/range_document_surface_test.dart: reader displays the last range of a novel and revisits the first
+Shell: MLX helper exit: -15
+00:17 +956 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/range_document_surface_test.dart: reader displays the last range of a novel and revisits the first
+Shell: MLX helper exit: -15
+00:17 +957 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/range_document_surface_test.dart: reader displays the last range of a novel and revisits the first
+Shell: MLX helper exit: -15
+Shell: MLX helper exit: -15
+00:18 +958 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/range_document_surface_test.dart: reader displays the last range of a novel and revisits the first
+00:18 +959 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/range_document_surface_test.dart: reader displays the last range of a novel and revisits the first
+Shell: MLX helper exit: -15
+Shell: MLX helper exit: -15
+00:18 +960 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/range_document_surface_test.dart: reader displays the last range of a novel and revisits the first
+00:18 +961 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/range_document_surface_test.dart: reader displays the last range of a novel and revisits the first
+00:18 +962 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/range_document_surface_test.dart: reader displays the last range of a novel and revisits the first
+Shell: MLX helper exit: -15
+00:18 +963 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/range_document_surface_test.dart: reader displays the last range of a novel and revisits the first
+Shell: MLX helper exit: -15
+00:18 +964 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/range_document_surface_test.dart: reader displays the last range of a novel and revisits the first
+00:18 +965 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/range_document_surface_test.dart: reader displays the last range of a novel and revisits the first
+00:18 +966 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/range_document_surface_test.dart: reader displays the last range of a novel and revisits the first
+00:18 +967 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/range_document_surface_test.dart: reader displays the last range of a novel and revisits the first
+00:18 +968 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/range_document_surface_test.dart: reader displays the last range of a novel and revisits the first
+Shell: MLX helper exit: -15
+Shell: MLX helper exit: -15
+00:18 +969 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/range_document_surface_test.dart: reader displays the last range of a novel and revisits the first
+00:18 +970 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/range_document_surface_test.dart: reader displays the last range of a novel and revisits the first
+00:18 +971 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/range_document_surface_test.dart: reader displays the last range of a novel and revisits the first
+00:18 +972 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/range_document_surface_test.dart: reader displays the last range of a novel and revisits the first
+00:18 +973 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/range_document_surface_test.dart: reader displays the last range of a novel and revisits the first
+00:18 +974 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/range_document_surface_test.dart: reader displays the last range of a novel and revisits the first
+00:18 +975 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/range_document_surface_test.dart: reader displays the last range of a novel and revisits the first
+00:19 +976 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/range_document_surface_test.dart: reader displays the last range of a novel and revisits the first
+00:19 +977 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/range_document_surface_test.dart: reader displays the last range of a novel and revisits the first
+00:19 +978 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/range_document_surface_test.dart: reader displays the last range of a novel and revisits the first
+00:19 +979 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/range_document_surface_test.dart: reader displays the last range of a novel and revisits the first
+00:19 +980 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/range_document_surface_test.dart: reader displays the last range of a novel and revisits the first
+00:19 +981 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/range_document_surface_test.dart: reader displays the last range of a novel and revisits the first
+00:19 +982 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/range_document_surface_test.dart: reader displays the last range of a novel and revisits the first
+00:19 +983 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/range_document_surface_test.dart: reader displays the last range of a novel and revisits the first
+00:19 +984 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/range_document_surface_test.dart: reader displays the last range of a novel and revisits the first
+00:19 +985 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/range_document_surface_test.dart: reader displays the last range of a novel and revisits the first
+00:20 +986 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/range_document_surface_test.dart: reader displays the last range of a novel and revisits the first
+00:20 +987 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/range_document_surface_test.dart: reader displays the last range of a novel and revisits the first
+00:20 +988 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/range_document_surface_test.dart: reader displays the last range of a novel and revisits the first
+00:20 +989 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/range_document_surface_test.dart: reader displays the last range of a novel and revisits the first
+00:20 +990 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/range_document_surface_test.dart: reader displays the last range of a novel and revisits the first
+00:20 +991 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/range_document_surface_test.dart: reader displays the last range of a novel and revisits the first
+00:20 +992 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/range_document_surface_test.dart: reader displays the last range of a novel and revisits the first
+00:20 +993 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/range_document_surface_test.dart: reader displays the last range of a novel and revisits the first
+00:20 +994 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/range_document_surface_test.dart: reader displays the last range of a novel and revisits the first
+00:20 +995 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/range_document_surface_test.dart: reader displays the last range of a novel and revisits the first
+00:20 +996 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/range_document_surface_test.dart: reader displays the last range of a novel and revisits the first
+00:21 +997 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/range_document_surface_test.dart: reader displays the last range of a novel and revisits the first
+00:21 +998 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/range_document_surface_test.dart: reader displays the last range of a novel and revisits the first
+00:21 +999 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/range_document_surface_test.dart: reader displays the last range of a novel and revisits the first
+00:21 +1000 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/range_document_surface_test.dart: reader displays the last range of a novel and revisits the first
+00:21 +1001 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/range_document_surface_test.dart: reader displays the last range of a novel and revisits the first
+00:21 +1002 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/range_document_surface_test.dart: reader displays the last range of a novel and revisits the first
+00:21 +1003 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/range_document_surface_test.dart: reader displays the last range of a novel and revisits the first
+00:22 +1004 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/range_document_surface_test.dart: reader displays the last range of a novel and revisits the first
+00:22 +1005 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/range_document_surface_test.dart: reader displays the last range of a novel and revisits the first
+00:22 +1006 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/range_document_surface_test.dart: reader displays the last range of a novel and revisits the first
+00:22 +1007 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/range_document_surface_test.dart: reader displays the last range of a novel and revisits the first
+00:22 +1008 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/range_document_surface_test.dart: reader displays the last range of a novel and revisits the first
+00:22 +1009 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/range_document_surface_test.dart: reader displays the last range of a novel and revisits the first
+00:22 +1010 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/range_document_surface_test.dart: reader displays the last range of a novel and revisits the first
+00:22 +1011 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/range_document_surface_test.dart: reader displays the last range of a novel and revisits the first
+00:22 +1012 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/range_document_surface_test.dart: reader displays the last range of a novel and revisits the first
+00:22 +1013 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/range_document_surface_test.dart: reader displays the last range of a novel and revisits the first
+00:22 +1014 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/range_document_surface_test.dart: reader displays the last range of a novel and revisits the first
+00:22 +1015 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/range_document_surface_test.dart: reader displays the last range of a novel and revisits the first
+00:22 +1016 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/range_document_surface_test.dart: reader displays the last range of a novel and revisits the first
+00:22 +1017 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/range_document_surface_test.dart: reader displays the last range of a novel and revisits the first
+00:22 +1018 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/range_document_surface_test.dart: reader displays the last range of a novel and revisits the first
+00:22 +1019 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/range_document_surface_test.dart: reader displays the last range of a novel and revisits the first
+00:22 +1020 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/range_document_surface_test.dart: reader displays the last range of a novel and revisits the first
+00:22 +1021 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/range_document_surface_test.dart: reader displays the last range of a novel and revisits the first
+00:22 +1022 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/range_document_surface_test.dart: reader displays the last range of a novel and revisits the first
+00:22 +1023 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/range_document_surface_test.dart: reader displays the last range of a novel and revisits the first
+00:22 +1024 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/range_document_surface_test.dart: reader displays the last range of a novel and revisits the first
+00:22 +1025 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/range_document_surface_test.dart: reader displays the last range of a novel and revisits the first
+00:22 +1026 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/range_document_surface_test.dart: reader displays the last range of a novel and revisits the first
+00:23 +1027 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/range_document_surface_test.dart: reader displays the last range of a novel and revisits the first
+00:23 +1028 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/range_document_surface_test.dart: reader displays the last range of a novel and revisits the first
+00:23 +1029 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/range_document_surface_test.dart: reader displays the last range of a novel and revisits the first
+00:23 +1030 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/range_document_surface_test.dart: reader displays the last range of a novel and revisits the first
+00:23 +1031 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/reader_intake_widget_test.dart: normal pasted source reopens its automatic radoc checkpoint and retained cast choices without analysis
+00:23 +1032 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/reader_controller_playback_test.dart: ReaderController playback two watched edits then replacement reject stale success during playback
+00:23 +1033 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/reader_intake_widget_test.dart: normal paste and real voice dialog expose exact tide cast
+00:23 +1034 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/reader_controller_playback_test.dart: ReaderController playback two watched edits then replacement reject stale failure during playback
+00:24 +1035 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/reader_intake_widget_test.dart: normal paste and real voice dialog expose exact lantern cast
+00:24 +1036 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/reader_controller_playback_test.dart: ReaderController playback two watched edits then live cancellation reject stale success during playback
+00:24 +1037 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/reader_intake_widget_test.dart: normal paste and real voice dialog expose exact orchard cast
+00:25 +1038 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/reader_intake_widget_test.dart: normal paste and real voice dialog expose exact orchard cast
+00:25 +1039 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/reader_intake_widget_test.dart: normal paste and real voice dialog expose exact orchard cast
+00:25 +1040 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/reader_controller_playback_test.dart: ReaderController playback superseded import failure cannot clear latest state
+00:25 +1041 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/reader_intake_widget_test.dart: normal paste and real voice dialog expose exact platform cast
+00:25 +1042 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/reader_intake_widget_test.dart: normal paste and real voice dialog expose exact platform cast
+00:25 +1043 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/reader_intake_widget_test.dart: normal paste and real voice dialog expose exact platform cast
+00:25 +1044 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/reader_intake_widget_test.dart: normal paste and real voice dialog expose exact platform cast
+00:25 +1045 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/reader_intake_widget_test.dart: normal paste and real voice dialog expose exact platform cast
+00:25 +1046 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/reader_intake_widget_test.dart: normal paste and real voice dialog expose exact platform cast
+00:25 +1047 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/reader_intake_widget_test.dart: normal paste and real voice dialog expose exact platform cast
+00:25 +1048 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/reader_intake_widget_test.dart: normal paste and real voice dialog expose exact platform cast
+00:25 +1049 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/reader_intake_widget_test.dart: normal paste and real voice dialog expose exact platform cast
+00:25 +1050 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/reader_intake_widget_test.dart: normal paste and real voice dialog expose exact platform cast
+00:25 +1051 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/reader_controller_playback_test.dart: ReaderController playback reopens the remembered document through persisted directory access when available
+00:25 +1052 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/reader_intake_widget_test.dart: normal paste and real voice dialog expose exact bridge cast
+00:26 +1053 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/reader_intake_widget_test.dart: normal paste and real voice dialog expose exact bridge cast
+00:26 +1054 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/reader_intake_widget_test.dart: normal paste and real voice dialog expose exact bridge cast
+00:26 +1055 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/reader_intake_widget_test.dart: normal paste and real voice dialog expose exact bridge cast
+00:26 +1056 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/reader_intake_widget_test.dart: normal paste and real voice dialog expose exact bridge cast
+00:26 +1057 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/reader_intake_widget_test.dart: normal paste and real voice dialog expose exact bridge cast
+00:26 +1058 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/reader_intake_widget_test.dart: normal paste and real voice dialog expose exact bridge cast
+00:26 +1059 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/reader_intake_widget_test.dart: normal paste and real voice dialog expose exact bridge cast
+00:26 +1060 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/reader_intake_widget_test.dart: normal paste and real voice dialog expose exact bridge cast
+00:26 +1061 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/reader_intake_widget_test.dart: normal paste and real voice dialog expose exact bridge cast
+00:26 +1062 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/reader_intake_widget_test.dart: normal paste and real voice dialog expose exact bridge cast
+00:26 +1063 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/reader_intake_widget_test.dart: normal paste and real voice dialog expose exact bridge cast
+00:26 +1064 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/reader_intake_widget_test.dart: normal paste and real voice dialog expose exact bridge cast
+00:26 +1065 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/reader_controller_playback_test.dart: ReaderController playback live read mode reloads the watched file in place
+00:26 +1066 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/reader_intake_widget_test.dart: normal paste and real voice dialog expose exact rain cast
+00:27 +1067 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/reader_intake_widget_test.dart: normal paste and real voice dialog expose exact rain cast
+00:27 +1068 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/reader_controller_playback_test.dart: ReaderController playback live read refresh stays paused after an explicit user pause
+00:27 +1069 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/reader_intake_widget_test.dart: normal file intake publishes real ranges before delayed speech startup and pending Play cancels
+00:27 +1070 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/reader_intake_widget_test.dart: normal file intake publishes real ranges before delayed speech startup and pending Play cancels
+00:27 +1071 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/reader_intake_widget_test.dart: normal file intake publishes real ranges before delayed speech startup and pending Play cancels
+00:27 +1072 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/reader_intake_widget_test.dart: normal file intake publishes real ranges before delayed speech startup and pending Play cancels
+00:27 +1073 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/reader_intake_widget_test.dart: normal file intake publishes real ranges before delayed speech startup and pending Play cancels
+00:27 +1074 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/reader_intake_widget_test.dart: normal file intake publishes real ranges before delayed speech startup and pending Play cancels
+00:27 +1075 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/reader_intake_widget_test.dart: normal file intake publishes real ranges before delayed speech startup and pending Play cancels
+00:27 +1076 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/reader_intake_widget_test.dart: normal file intake publishes real ranges before delayed speech startup and pending Play cancels
+00:27 +1077 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/reader_intake_widget_test.dart: normal file intake publishes real ranges before delayed speech startup and pending Play cancels
+00:27 +1078 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/reader_intake_widget_test.dart: normal file intake publishes real ranges before delayed speech startup and pending Play cancels
+00:28 +1079 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/reader_intake_widget_test.dart: cancel and retry preserve a published document and restore usable intake
+00:29 +1080 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/reader_intake_widget_test.dart: startup failure has a visible retry without blocking paste or cast inspection
+00:29 +1081 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/reader_intake_widget_test.dart: explicit paste wins over delayed startup restore
+00:30 +1082 ~4: /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/test/reader_intake_widget_test.dart: (tearDownAll)
+00:30 +1082 ~4: All tests passed!

@@ -1,0 +1,41 @@
+{
+  "schema": "readaloud-native-variant-runner-v1",
+  "mode": "cached-8bit",
+  "passed": null,
+  "nativePassed": true,
+  "normalQuit": true,
+  "appExitVerified": true,
+  "forcedCleanup": false,
+  "remainingOwnedPids": [],
+  "frameworkSha256": "0348ded75065eda462ab20987886c46ab4ff2a3ebe407113cb732bcf540fcdd1",
+  "executableSha256": "f3e675f245912c0478c4beb41ed7a4bf2157eb0542b73a4638273451d3fa326d",
+  "maxMlxChildren": 1,
+  "observedMlxSamples": 506,
+  "processEvents": [
+    {
+      "unixMicros": 1794415349754506,
+      "pids": []
+    },
+    {
+      "unixMicros": 1794415351445507,
+      "pids": [
+        82045
+      ]
+    },
+    {
+      "unixMicros": 1794415417700136,
+      "pids": []
+    }
+  ],
+  "errors": [
+    "Emitted audio: Insufficient app-emitted signal during playback"
+  ],
+  "limits": "100ms child/process observations and emitted signal per playback interval. Exact waveform matching, glitch/voice quality, total memory envelope, physical-speaker and M3 acceptance remain separate. Capture 300s; work deadline 270s.",
+  "pid": 82022,
+  "capturePid": 82023,
+  "captureReadyObservedUnixMicros": 1794415350297486,
+  "applicationActivationRequested": true,
+  "captureExitStatus": 0,
+  "appExitStatus": 0,
+  "strictAcousticAcceptance": "NOT_RUN: compare copied queued WAVs with capture; listening remains separate"
+}

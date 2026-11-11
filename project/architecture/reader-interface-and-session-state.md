@@ -127,3 +127,14 @@ cancelled target. A cancelled owner is disposed once at replacement or final
 controller disposal. No old success, error or progress can restore it, and Retry
 does not request speech. Barrier and Settings tests cover these boundaries;
 current running-app evidence and its limits are indexed by issue #112.
+
+The open Settings dialog observes the controller's current selection, so its
+model label, capacity descriptor and session status remain aligned when startup
+or another selection path changes the engine. Native menu objects remain stable
+through ordinary speech/download notifications. Only platform, export state,
+complete-document availability, audio-export eligibility or live-input state
+changes rebuild the native menu representation; actions and shortcuts retain
+their existing semantics. This avoids repeatedly rebuilding AppKit menus during
+background progress. It is not evidence that every native-main delay is fixed;
+[the timing research](../research/s7-native-response-timing.md) separates that
+measurement from Dart UI heartbeat and emitted audio.
