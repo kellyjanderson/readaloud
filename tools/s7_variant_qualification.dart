@@ -364,6 +364,12 @@ Future<void> main(List<String> args) async {
   }
 
   Future<void> playFor(int seconds, String label) async {
+    final measuredSeconds =
+        seconds == 60 &&
+            Platform.environment['READALOUD_S7_EXTENDED_NATIVE_DIAGNOSTIC'] ==
+                '1'
+        ? 180
+        : seconds;
     phase = label;
     final engine = engines.last;
     final player = players.last;
@@ -376,6 +382,7 @@ Future<void> main(List<String> args) async {
       'playRequestedUnixMicros': DateTime.now().microsecondsSinceEpoch,
       'startWord': c.currentWordIndex,
       'requiredWallPlaybackMs': seconds * 1000,
+      'requestedWallPlaybackMs': measuredSeconds * 1000,
     };
     segments.add(row);
     Object? terminal;
@@ -387,11 +394,11 @@ Future<void> main(List<String> args) async {
       '$label real player movement',
     );
     row['firstPositionUnixMicros'] = DateTime.now().microsecondsSinceEpoch;
-    final end = watch.elapsedMilliseconds + seconds * 1000;
+    final end = watch.elapsedMilliseconds + measuredSeconds * 1000;
     await until(
       () => watch.elapsedMilliseconds >= end,
       '$label sustained interval',
-      seconds: seconds + 2,
+      seconds: measuredSeconds + 2,
     );
     if (seconds == 60) {
       // A silent source has no acoustic identity. Finish this warm probe on an
@@ -438,7 +445,8 @@ Future<void> main(List<String> args) async {
     row['peakRuntimeBytesObserved'] = engine.debugPeakMlxRuntimeBytes;
     require(
       terminal == null &&
-          position.sampledPositionTotalMs - startPosition >= seconds * 850,
+          position.sampledPositionTotalMs - startPosition >=
+              measuredSeconds * 850,
       '$label insufficient actual player progress or playback failure',
     );
     require(

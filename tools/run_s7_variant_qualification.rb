@@ -54,6 +54,10 @@ if ENV['READALOUD_S7_LAZY_NATIVE_PREPARATION'] == '1'
   result[:lazyNativePreparationExperiment] = true
   result[:errors] << 'QA-only native preparation comparison; production default unchanged'
 end
+if ENV['READALOUD_S7_EXTENDED_NATIVE_DIAGNOSTIC'] == '1'
+  result[:extendedNativeDiagnostic] = true
+  result[:errors] << 'Extended native diagnosis; standard qualification remains separate'
+end
 # Read only bounded uncompressed PCM or float WAV. This checks app-emitted signal
 # separately from player intent, never labels energy as an exact speech match.
 def emitted_signal(path, timing_path, segments)
