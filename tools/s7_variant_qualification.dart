@@ -17,6 +17,7 @@ import 'package:read_aloud/src/models/engine_capability.dart';
 import 'package:read_aloud/src/models/speech_engine_catalog.dart';
 import 'package:read_aloud/src/services/audio_artifact_store.dart';
 import 'package:read_aloud/src/services/kokoro_tts_engine.dart';
+import 'package:read_aloud/src/services/mlx_speech_worker_processor.dart';
 import 'package:read_aloud/src/services/native_speech_work_activity.dart';
 import 'package:read_aloud/src/services/reader_preferences_service.dart';
 import 'package:read_aloud/src/services/rendered_scene_repository.dart';
@@ -517,6 +518,9 @@ Future<void> main(List<String> args) async {
     phase = 'shutdown';
     c.removeListener(observe);
     heartbeat.cancel();
+    receipt['lastRuntimeMemorySnapshot'] = MlxSpeechWorkerChunkProcessor
+        .debugNativeMemorySnapshot
+        ?.toMap();
     receipt['nativeMainResponsiveness'] = await native.close();
     receipt['maxUiHeartbeatDelayMs'] = maxUi;
     // Capture before shutdown because some owners intentionally release their

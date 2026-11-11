@@ -12,6 +12,7 @@ import 'package:read_aloud/src/app.dart';
 import 'package:read_aloud/src/controllers/reader_controller.dart';
 import 'package:read_aloud/src/services/audio_artifact_store.dart';
 import 'package:read_aloud/src/services/kokoro_tts_engine.dart';
+import 'package:read_aloud/src/services/mlx_speech_worker_processor.dart';
 import 'package:read_aloud/src/services/native_speech_work_activity.dart';
 import 'package:read_aloud/src/services/reader_preferences_service.dart';
 import 'package:read_aloud/src/services/rendered_scene_repository.dart';
@@ -164,6 +165,9 @@ Future<void> main(List<String> args) async {
   Future<void> until(bool Function() ready, String label) async {
     final deadline = watch.elapsedMilliseconds + 180000;
     while (!ready()) {
+      if (c.startupError != null && phase != 'offline-unavailable') {
+        throw StateError(c.startupError!);
+      }
       if (watch.elapsedMilliseconds > deadline) throw TimeoutException(label);
       await Future<void>.delayed(const Duration(milliseconds: 10));
     }
@@ -384,6 +388,9 @@ Future<void> main(List<String> args) async {
     c.removeListener(observe);
     heartbeat.cancel();
     receipt['functionalPassed'] = receipt['passed'];
+    receipt['lastRuntimeMemorySnapshot'] = MlxSpeechWorkerChunkProcessor
+        .debugNativeMemorySnapshot
+        ?.toMap();
     receipt['nativeMainResponsiveness'] = await native.close();
     receipt['maxUiHeartbeatDelayMs'] = maxUi;
     if (maxUi > 250 ||
