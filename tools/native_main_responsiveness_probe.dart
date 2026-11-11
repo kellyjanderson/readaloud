@@ -20,10 +20,14 @@ class NativeMainResponsivenessProbe {
       final started = _clock.elapsedMilliseconds;
       final stage = phase();
       _pending = _channel
-          .invokeMethod<void>('runtimeFootprint')
+          .invokeMethod<int>('speechWorkActivityCount')
           .then<void>(
-            (_) {
+            (owners) {
               if (_closed) return;
+              if (owners == null || owners < 0 || owners > 8) {
+                _error = 'Native main-thread probe returned invalid ownership.';
+                return;
+              }
               final elapsed = _clock.elapsedMilliseconds - started;
               _samples++;
               if (elapsed > _maximumMs) _maximumMs = elapsed;
@@ -50,8 +54,9 @@ class NativeMainResponsivenessProbe {
   Future<Map<String, Object?>> close() async {
     _timer?.cancel();
     // One outstanding native request may finish while the UI isolate drains.
-    // This observes the real route through the platform thread and utility
-    // footprint sampling. No Flutter/UI state is touched by the native worker.
+    // The native handler reads its bounded owner count and returns immediately.
+    // A utility-queue footprint query would mix background scheduling/I/O into
+    // this measurement and could not isolate the main-thread channel route.
     try {
       await _pending?.timeout(const Duration(seconds: 2));
     } on TimeoutException {
@@ -66,7 +71,7 @@ class NativeMainResponsivenessProbe {
       'error': _error,
       'passed': _samples > 0 && _error == null && _maximumMs <= 250,
       'scope':
-          'UI-isolate request through the native main-thread channel and utility footprint query back to UI; no keyboard or mouse delivery claim.',
+          'UI-isolate request through the native main-thread channel and immediate bounded owner-count response; no utility query or keyboard/mouse delivery claim. Historical footprint roundtrips are a different measurement.',
     };
   }
 }
