@@ -29,6 +29,7 @@ final class FishDramaVariantDescriptor {
     required this.estimatedPeakBytes,
     required List<String> requiredFiles,
     required this.integrityManifest,
+    required this.profile,
   }) : requiredFiles = List.unmodifiable(requiredFiles);
 
   final String engineId;
@@ -46,6 +47,20 @@ final class FishDramaVariantDescriptor {
   /// May be absent when reading a legacy single-checkpoint checksum manifest.
   /// Presence declares expected integrity; it does not verify any local file.
   final FishDramaIntegrityManifest? integrityManifest;
+  final FishDramaProfile? profile;
+
+  int? get expectedDiskBytes => integrityManifest == null
+      ? null
+      : requiredFiles.fold<int>(
+          0,
+          (total, name) => total + integrityManifest!.files[name]!.sizeBytes,
+        );
+  FishDramaFileIntegrity? get licenseIntegrity =>
+      integrityManifest?.files['LICENSE'];
+  FishDramaFileIntegrity? get noticeIntegrity =>
+      integrityManifest?.files['NOTICE'];
+  FishDramaFileIntegrity? get configIntegrity =>
+      integrityManifest?.files['config.json'];
 
   String get pinnedIdentity => '$repository@$revision';
 }
@@ -117,14 +132,19 @@ final class FishDramaCatalog {
         throw FormatException('Unknown Fish engine ID: $id');
       }
       final spec = _object(entry.value, id);
-      _fields(spec, const {
-        'label',
-        'repo',
-        'revision',
-        'bits',
-        'estimatedPeakBytes',
-        'requiredFiles',
-      }, id);
+      _fields(
+        spec,
+        const {
+          'label',
+          'repo',
+          'revision',
+          'bits',
+          'estimatedPeakBytes',
+          'requiredFiles',
+        },
+        id,
+        optional: const {'profile'},
+      );
       final label = _nonempty(spec['label'], '$id.label');
       final repository = _repository(spec['repo']);
       final revision = _revision(spec['revision']);
@@ -190,6 +210,9 @@ final class FishDramaCatalog {
         estimatedPeakBytes: peakBytes,
         requiredFiles: files,
         integrityManifest: integrity,
+        profile: spec.containsKey('profile')
+            ? FishDramaProfile._parse(spec['profile'], repository, revision)
+            : null,
       );
     }
     if (!variants.keys.toSet().containsAll(
@@ -255,8 +278,14 @@ Map<String, dynamic> _object(Object? value, String context) {
   return value;
 }
 
-void _fields(Map<String, dynamic> value, Set<String> expected, String context) {
-  if (value.length != expected.length || !expected.containsAll(value.keys)) {
+void _fields(
+  Map<String, dynamic> value,
+  Set<String> expected,
+  String context, {
+  Set<String> optional = const {},
+}) {
+  if (!value.keys.toSet().containsAll(expected) ||
+      !{...expected, ...optional}.containsAll(value.keys)) {
     throw FormatException('Unsupported or missing fields for $context');
   }
 }
@@ -301,4 +330,189 @@ String _fileName(Object? value) {
     throw const FormatException('Expected a safe snapshot file name');
   }
   return name;
+}
+
+/// Data-only checkpoint metadata. These declarations never enable executable
+/// capabilities: the installed runtime validates the loaded model independently.
+final class FishDramaProfile {
+  FishDramaProfile._(
+    this.configSource,
+    this.configDtype,
+    this.defaultBits,
+    this.groupSize,
+    this.overrides,
+    this.nativeScenes,
+    this.qualificationState,
+    this.evidence,
+    this.sourceLineage,
+  );
+  final String configSource, configDtype, nativeScenes, qualificationState;
+  final String? evidence;
+  final String sourceLineage;
+  final int? defaultBits, groupSize;
+  final List<FishDramaQuantizationGroup> overrides;
+  String get runtimeId => 'mlx-audio-0.6.3-mlx-0.32.4-complete-v3';
+  String get architecture => 'fish_drama3';
+  String get platform => 'macos-arm64';
+  int get sampleRate => 44100;
+  int get channels => 1;
+  String get pcm => 'float32';
+  String get codecPrecision => 'not-declared';
+
+  static FishDramaProfile _parse(
+    Object? raw,
+    String repository,
+    String revision,
+  ) {
+    final value = _object(raw, 'Fish profile');
+    _fields(value, const {
+      'engineFamily',
+      'configSource',
+      'quantizationLayout',
+      'runtime',
+      'nativeFormat',
+      'capabilities',
+      'qualification',
+      'sourceLineage',
+    }, 'Fish profile');
+    final source =
+        'https://huggingface.co/$repository/resolve/$revision/config.json';
+    if (value['engineFamily'] != 'fish_drama3' ||
+        value['configSource'] != source) {
+      throw const FormatException('Profile configuration identity mismatch');
+    }
+    final layout = _object(value['quantizationLayout'], 'quantization layout');
+    _fields(layout, const {
+      'configDtype',
+      'defaultBits',
+      'groupSize',
+      'overrides',
+      'unlistedModules',
+      'codecPrecision',
+    }, 'quantization layout');
+    if (layout['configDtype'] != 'bfloat16' ||
+        layout['unlistedModules'] != 'not-asserted' ||
+        layout['codecPrecision'] != 'not-declared' ||
+        !const [null, 4, 8].contains(layout['defaultBits']) ||
+        (layout['defaultBits'] != null && layout['defaultBits'] is! int) ||
+        !const [null, 64].contains(layout['groupSize']) ||
+        (layout['groupSize'] != null && layout['groupSize'] is! int) ||
+        (layout['defaultBits'] == null) != (layout['groupSize'] == null)) {
+      throw const FormatException('Unsupported quantization layout');
+    }
+    final rawGroups = layout['overrides'];
+    if (rawGroups is! List || rawGroups.length > 16) {
+      throw const FormatException('Invalid quantization groups');
+    }
+    final groups = <FishDramaQuantizationGroup>[];
+    final seen = <String>{};
+    for (final raw in rawGroups) {
+      final group = _object(raw, 'quantization group');
+      _fields(group, const {
+        'scope',
+        'bits',
+        'groupSize',
+        'moduleCount',
+      }, 'quantization group');
+      if (!const {'experts', 'dense', 'tower'}.contains(group['scope']) ||
+          !const {4, 8}.contains(group['bits']) ||
+          group['bits'] is! int ||
+          group['groupSize'] != 64 ||
+          !seen.add('${group['scope']}:${group['bits']}')) {
+        throw const FormatException('Unsupported quantization group');
+      }
+      groups.add(
+        FishDramaQuantizationGroup._(
+          group['scope'] as String,
+          group['bits'] as int,
+          64,
+          _positiveInt(group['moduleCount'], 'moduleCount'),
+        ),
+      );
+    }
+    final runtime = _object(value['runtime'], 'runtime');
+    _fields(runtime, const {'id', 'architecture', 'platform'}, 'runtime');
+    if (runtime['id'] != 'mlx-audio-0.6.3-mlx-0.32.4-complete-v3' ||
+        runtime['architecture'] != 'fish_drama3' ||
+        runtime['platform'] != 'macos-arm64') {
+      throw const FormatException('Profile requires an unsupported runtime');
+    }
+    final format = _object(value['nativeFormat'], 'native format');
+    _fields(format, const {
+      'codec',
+      'sampleRate',
+      'channels',
+      'pcm',
+    }, 'native format');
+    if (format['codec'] != 'checkpoint codec.safetensors' ||
+        format['sampleRate'] != 44100 ||
+        format['sampleRate'] is! int ||
+        format['channels'] != 1 ||
+        format['pcm'] != 'float32') {
+      throw const FormatException('Unsupported native speech format');
+    }
+    final caps = _object(value['capabilities'], 'capabilities');
+    _fields(caps, const {
+      'referenceVoices',
+      'nativeScenes',
+      'streaming',
+      'speed',
+    }, 'capabilities');
+    // Only the original exact bf16 pin has bounded native-scene evidence. Even
+    // this metadata cannot bypass the runtime's own qualification response.
+    final original =
+        repository == 'mlx-community/fish-audio-drama-3-bf16' &&
+        revision == '8c5496f9af370bb9342ab98130b27b5389d1b1cb';
+    if (caps['referenceVoices'] != 'supported' ||
+        caps['streaming'] != 'runtime-validated' ||
+        caps['speed'] != 'post-processing' ||
+        !(caps['nativeScenes'] == 'unqualified' ||
+            (original && caps['nativeScenes'] == 'bounded-qualified'))) {
+      throw const FormatException(
+        'Profile exceeds installed capability ceiling',
+      );
+    }
+    final qualification = _object(value['qualification'], 'qualification');
+    _fields(qualification, const {
+      'state',
+      'evidence',
+      'memory',
+    }, 'qualification');
+    final state = qualification['state'];
+    final evidence = qualification['evidence'];
+    if (qualification['memory'] !=
+            'requires-measured-runtime-device-envelope' ||
+        !(state == 'requires-qualification' ||
+            (original && state == 'bounded-native-evidence')) ||
+        (state == 'bounded-native-evidence' && evidence == null) ||
+        (evidence != null &&
+            (evidence is! String ||
+                !evidence.startsWith(
+                  'https://github.com/kellyjanderson/readaloud/',
+                )))) {
+      throw const FormatException('Invalid qualification declaration');
+    }
+    return FishDramaProfile._(
+      source,
+      layout['configDtype'] as String,
+      layout['defaultBits'] as int?,
+      layout['groupSize'] as int?,
+      List.unmodifiable(groups),
+      caps['nativeScenes'] as String,
+      state as String,
+      evidence as String?,
+      _nonempty(value['sourceLineage'], 'source lineage'),
+    );
+  }
+}
+
+final class FishDramaQuantizationGroup {
+  const FishDramaQuantizationGroup._(
+    this.scope,
+    this.bits,
+    this.groupSize,
+    this.moduleCount,
+  );
+  final String scope;
+  final int bits, groupSize, moduleCount;
 }

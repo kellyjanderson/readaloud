@@ -78,6 +78,8 @@ void main() {
   void reviseCheckpoint() {
     final updatedModels = jsonDecode(models) as Map<String, dynamic>;
     updatedModels['fish_drama3_4bit']['revision'] = 'a' * 40;
+    updatedModels['fish_drama3_4bit']['profile']['configSource'] =
+        'https://huggingface.co/${updatedModels['fish_drama3_4bit']['repo']}/resolve/${'a' * 40}/config.json';
     final updatedChecksums = jsonDecode(checksums) as Map<String, dynamic>;
     final entry = updatedChecksums['variants']['fish_drama3_4bit'] as Map;
     entry['revision'] = 'a' * 40;
@@ -214,23 +216,20 @@ void main() {
     },
   );
 
-  test(
-    'deadline cancels stalled transport without publication',
-    () async {
-      final owner = store(
-        timeout: const Duration(milliseconds: 30),
-        transport: (_) => Completer<List<int>>().future,
-      );
-      await owner.load();
-      final result = await owner.refresh();
-      expect(result.error, isNotNull);
-      expect(result.snapshot.catalogVersion, 0);
-      expect(
-        await File('${root.path}/catalog/last-valid.json').exists(),
-        isFalse,
-      );
-    },
-  );
+  test('deadline cancels stalled transport without publication', () async {
+    final owner = store(
+      timeout: const Duration(milliseconds: 30),
+      transport: (_) => Completer<List<int>>().future,
+    );
+    await owner.load();
+    final result = await owner.refresh();
+    expect(result.error, isNotNull);
+    expect(result.snapshot.catalogVersion, 0);
+    expect(
+      await File('${root.path}/catalog/last-valid.json').exists(),
+      isFalse,
+    );
+  });
 
   test('network failure retains a persisted valid catalog unchanged', () async {
     final initial = store();

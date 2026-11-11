@@ -87,6 +87,44 @@ void main() {
     expect(find.text('Voice Management'), findsOneWidget);
   });
 
+  testWidgets(
+    'unknown saved engine stays visible and unavailable in Settings',
+    (tester) async {
+      SharedPreferences.setMockInitialValues({
+        'reader.ttsEngineId': 'future_engine_variant',
+      });
+      final controller = ReaderController(
+        preferencesService: _MemoryReaderPreferencesService(
+          engineId: 'future_engine_variant',
+        ),
+        ttsEngine: _AccessibleTtsEngine(),
+        enablePlatformIntakeChannels: false,
+      );
+      addTearDown(controller.dispose);
+      await tester.pumpWidget(ReadAloudApp(controller: controller));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('reader-overflow-menu')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Settings').last);
+      await tester.pumpAndSettle();
+      expect(find.text('future_engine_variant (unavailable)'), findsOneWidget);
+      expect(
+        find.byWidgetPredicate(
+          (w) =>
+              w is SelectableText &&
+              (w.data?.contains(
+                    'Saved engine future_engine_variant is unavailable',
+                  ) ??
+                  false),
+        ),
+        findsOneWidget,
+      );
+      expect(controller.selectedTtsEngineId, 'future_engine_variant');
+      expect(controller.engineSession.active, isNull);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
   testWidgets('Voxtral precision choice is saved and applies without restart', (
     tester,
   ) async {
@@ -805,14 +843,17 @@ class _TestAppearanceShell extends StatelessWidget {
 }
 
 class _MemoryReaderPreferencesService extends ReaderPreferencesService {
-  ReaderPreferences _preferences = const ReaderPreferences(
-    fontFamily: ReaderPreferences.defaultFontFamily,
-    fontScale: ReaderPreferences.defaultFontScale,
-    appearanceMode: ReaderAppearanceMode.system,
-    multiVoiceEnabled: ReaderPreferences.defaultMultiVoiceEnabled,
-    voiceSpeeds: <String, double>{},
-    storedDocumentCastVoiceAssignments: <String, Map<String, String>>{},
-  );
+  _MemoryReaderPreferencesService({String engineId = ''})
+    : _preferences = ReaderPreferences(
+        ttsEngineId: engineId,
+        fontFamily: ReaderPreferences.defaultFontFamily,
+        fontScale: ReaderPreferences.defaultFontScale,
+        appearanceMode: ReaderAppearanceMode.system,
+        multiVoiceEnabled: ReaderPreferences.defaultMultiVoiceEnabled,
+        voiceSpeeds: <String, double>{},
+        storedDocumentCastVoiceAssignments: <String, Map<String, String>>{},
+      );
+  ReaderPreferences _preferences;
 
   @override
   Future<ReaderPreferences> load() async => _preferences;
