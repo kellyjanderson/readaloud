@@ -3,7 +3,8 @@
 Observed November 11, 2026 on Apple M5 Max / 128 GiB, macOS 27.0.1.
 Owning design: [S7 #112](https://github.com/kellyjanderson/readaloud/issues/112).
 Native responsiveness investigation: [#144](https://github.com/kellyjanderson/readaloud/issues/144).
-The observations below use production source `ffd6d64`; they are not a general
+The observations below use production source `ffd6d64`, with the extended QA
+entry point at `2c622b9` for v27/v28; they are not a general
 platform benchmark or a claim of M3 qualification.
 
 ## What the measurements establish
@@ -18,8 +19,9 @@ intermittent failure.
 Instruments v20 records an actual main-thread Hang from trace-relative
 10.173002916 to 11.013622708 seconds, duration 840.619792 ms. The corresponding
 request-to-entry window maps nominally to 10.177493–11.018868 seconds, overlapping
-836.129708 ms of that Hang. The native handler returned 77 microseconds after
-entry. The displayed trace start has millisecond resolution; no finer same-instant
+836.129708 ms of that Hang. Native entry to Dart reply took 77 microseconds;
+there is no separate native-exit stamp, so this is not a measured handler
+execution duration. The displayed trace start has millisecond resolution; no finer same-instant
 wall/Mach clock bridge was exported. Treat the alignment conservatively as
 approximately ±1 ms, independently of any unassessed wall-clock adjustment.
 
@@ -35,6 +37,34 @@ The earlier 200 ms pending marker plus runner polling and sampler attachment
 started v17 samples after the delayed handlers had already entered. Idle stacks
 from those samples cannot explain the preceding delay. Profiled runs remain
 diagnostic; they do not replace unprofiled 250 ms acceptance checks.
+
+The v27 live-triggered one-second samples overlap a 351 ms delayed request.
+They contain actual Core Animation message-send waits, rooted in MediaToolbox
+and ordinary Flutter frame commits. Their flattened stack counts cannot place
+each wait within that request. A frame-commit stack does not establish window
+resizing or Flutter's separate resize-wait loop.
+
+The 190-second v28 trace records microhangs corresponding to the 286, 281 and
+363 ms requests. Timestamped main stacks show AppKit menu/window work followed
+by Core Animation IPC, MediaToolbox main-dispatch transaction deferrals, and
+AppKit UpdateCycle transaction/deferral mutex waits. No completed run-loop
+`waiting_for_events` interval overlaps those request windows. Exported sample
+labels say `Running`, but the stacks include actual wait/trap functions;
+labels alone do not prove that waiting-thread capture failed. Clipped
+statistical weights attribute 280.167 ms and 361.476 ms to those CA paths in the
+latter two nominal request windows. These are sampling attributions, not exact
+scheduler blocked occupancy or identification of the remote IPC peer/mutex
+owner. The clock bridge uses the rounded TOC wall start and remains nominal.
+
+V28 also failed functional playback and emitted-signal checks: only 34.744
+seconds of native source-position advance during the requested 180 seconds.
+Most samples observed the app inactive. None of these facts waives a failed
+gate; the waveform diagnostic could not satisfy its playback precondition.
+The profiler exited successfully, and normal Quit/no-orphan cleanup passed.
+The next bounded differential removes MLX work and compares incremental
+per-WAV queue playback against one joined file containing identical PCM,
+with the same UI and capture conditions. It is diagnostic, not an engine
+replacement or a production acceptance claim.
 
 ## Maintained platform and library boundaries
 
