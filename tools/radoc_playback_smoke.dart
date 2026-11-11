@@ -38,6 +38,29 @@ class SmokeController extends ReaderController {
         deferInitialSynthesis: true,
       );
   Future<void>? _initialization;
+  void Function(String path, bool started)? onBookSave;
+  bool _recordingBookSave = false;
+
+  @override
+  Future<File?> exportDocumentToPath(
+    String outputPath, {
+    bool audioBook = false,
+  }) async {
+    final record = audioBook && !_recordingBookSave;
+    if (record) {
+      _recordingBookSave = true;
+      onBookSave?.call(outputPath, true);
+    }
+    try {
+      return await super.exportDocumentToPath(outputPath, audioBook: audioBook);
+    } finally {
+      if (record) {
+        _recordingBookSave = false;
+        onBookSave?.call(outputPath, false);
+      }
+    }
+  }
+
   @override
   Future<void> initialize() => _initialization ??= super.initialize();
   @override
@@ -115,9 +138,39 @@ Future<void> main(List<String> args) async {
   var lastUiTick = 0;
   var maxUiDelayMs = 0;
   var heartbeatCount = 0;
+  // The interactive File → Save Audio Book path requests audioBook=true
+  // after the native panel returns. Keep its export delay separate from
+  // startup, waiting for the operator, and programmatic reopen checks.
+  final bookSaves = <Map<String, Object?>>[];
+  int? saveStarted;
+  int maxSaveDelayMs = 0;
+  controller.onBookSave = (path, started) {
+    final now = watch.elapsedMilliseconds;
+    final start = saveStarted;
+    if (started) {
+      saveStarted = now;
+      maxSaveDelayMs = 0;
+    } else if (start != null) {
+      final lastGap = math.max(0, now - math.max(lastUiTick, start) - 50);
+      if (bookSaves.length == 16) bookSaves.removeAt(0);
+      bookSaves.add({
+        'path': path,
+        'elapsedMs': now - start,
+        'maxUiHeartbeatDelayMs': math.max(maxSaveDelayMs, lastGap),
+      });
+      saveStarted = null;
+    }
+  };
   final heartbeat = Timer.periodic(const Duration(milliseconds: 50), (_) {
     final now = watch.elapsedMilliseconds;
     maxUiDelayMs = math.max(maxUiDelayMs, now - lastUiTick - 50);
+    final start = saveStarted;
+    if (start != null) {
+      maxSaveDelayMs = math.max(
+        maxSaveDelayMs,
+        (now - math.max(lastUiTick, start) - 50).toInt(),
+      );
+    }
     lastUiTick = now;
     heartbeatCount++;
   });
@@ -351,6 +404,7 @@ Future<void> main(List<String> args) async {
       ),
       'maxNativePositionMs': maxPositionMs,
       'maxUiHeartbeatDelayMs': maxUiDelayMs,
+      'bookSaves': bookSaves,
       'uiHeartbeatCount': heartbeatCount,
       'elapsedMs': watch.elapsedMilliseconds,
       'normalQuit': 'runner must request and verify',
