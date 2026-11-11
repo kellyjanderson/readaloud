@@ -72,13 +72,20 @@ Future<AudioArtifact?> _lookupArtifact(String root, String identity) =>
 Future<AudioArtifact> _publishArtifact(
   String root,
   String identity,
-  Uint8List wav,
+  String attemptPath,
+  int expectedSampleRate,
   Map<String, dynamic> metadata,
-) => Isolate.run(
-  () => AudioArtifactStore(
+) => Isolate.run(() {
+  // Keep complete PCM reads and publication inside the worker. The immutable
+  // attempt stays owned until this future drains, including on cancellation.
+  final wav = File(attemptPath).readAsBytesSync();
+  if (AudioArtifactStore.validateWav(wav).sampleRate != expectedSampleRate) {
+    throw StateError('Model response and emitted WAV sample rates differ.');
+  }
+  return AudioArtifactStore(
     Directory(root),
-  ).publish(identity: identity, wav: wav, metadata: metadata),
-);
+  ).publish(identity: identity, wav: wav, metadata: metadata);
+});
 
 Future<bool> _sameRenderedAudio(String attempt, String published) =>
     Isolate.run(() {
@@ -673,13 +680,6 @@ class MlxSpeechWorkerChunkProcessor
           throw StateError('MLX response identity or WAV validation failed.');
         }
         event(SpeechWorkerEventType.serializing, stage: 'serializing');
-        final wav = await temporaryAudio.readAsBytes();
-        if (AudioArtifactStore.validateWav(wav).sampleRate !=
-            response['sampleRate']) {
-          throw StateError(
-            'Model response and emitted WAV sample rates differ.',
-          );
-        }
         final metadata = <String, dynamic>{
           'engineId': engineId,
           'modelIdentity': _modelIdentity,
@@ -689,7 +689,8 @@ class MlxSpeechWorkerChunkProcessor
         final artifact = await _publishArtifact(
           storePath,
           identity,
-          wav,
+          temporaryAudio.path,
+          response['sampleRate'] as int,
           metadata,
         );
         publishedAudioPath = artifact.audioPath;
