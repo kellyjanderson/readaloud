@@ -206,8 +206,9 @@ Future<void> main(List<String> args) async {
     final stage = progress?.stage ?? '';
     if (stage.isEmpty ||
         stage == previousResourceStage ||
-        resourceStages.length >= 128)
+        resourceStages.length >= 128) {
       return;
+    }
     previousResourceStage = stage;
     final event = <String, Object?>{
       'elapsedMs': clock.elapsedMilliseconds,
