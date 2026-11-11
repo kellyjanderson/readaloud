@@ -366,31 +366,33 @@ Future<void> main(List<String> args, {bool packetCancellation = false}) async {
       Future<void> coldPause;
       if (nativeInput) {
         // No test-owned pause or model hold: the running app's normal input
-        // handler must cancel pending intent inside this naturally occurring
-        // modelLoad window. Root owns the actual click/keyboard evidence.
+        // handler must cancel pending intent during naturally occurring speech
+        // initialization. Model stage transitions are not the end of that work.
+        // Root owns the actual click/keyboard evidence.
         stdout.writeln(
           'WAITING_NATIVE_CANCEL ${jsonEncode(snapshot('waiting-native-cancel'))}',
         );
         final inputDeadline = clock.elapsedMilliseconds + 15000;
+        var lastPendingInitialization = snapshot('native-input-pending');
         while (c.hasPendingPlaybackIntent) {
-          if (c.speechResourceProgress?.stage != 'modelLoad' ||
+          if (!c.isInitializing ||
               player.playing ||
               clock.elapsedMilliseconds >= inputDeadline) {
             throw StateError(
-              'Native cancellation missed bounded cold modelLoad window',
+              'Native cancellation missed bounded initialization window',
             );
           }
+          lastPendingInitialization = snapshot('native-input-pending');
           checkFailure();
           await Future<void>.delayed(const Duration(milliseconds: 10));
         }
         events.add(snapshot('native-cancel-intent-observed'));
         receipt['nativeCancelObservedStage'] = c.speechResourceProgress?.stage;
+        receipt['nativeInputLastPendingInitialization'] =
+            lastPendingInitialization;
         receipt['nativeInputWaitMs'] = clock.elapsedMilliseconds - cancelledAt;
         receipt['nativeInputEvidence'] =
             'External input and timestamp must be supplied by root';
-        if (c.speechResourceProgress?.stage != 'modelLoad') {
-          throw StateError('Native cancellation was observed after modelLoad');
-        }
         coldPause = Future<void>.value();
       } else {
         coldPause = c.pausePlayback();
