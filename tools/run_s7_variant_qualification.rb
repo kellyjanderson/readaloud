@@ -11,6 +11,9 @@ MODES = %w[default-policy cached-bf16 cached-8bit cached-4bit cached-aba online-
 abort 'Usage: run_s7_variant_qualification.rb APP MODE NEW_OUTPUT CAPTURE' unless ARGV.size == 4
 bundle, mode, output, capture = ARGV
 bundle, output, capture = [bundle, output, capture].map { |p| File.expand_path(p) }
+secondary_capture = ENV['READALOUD_S7_SECONDARY_CAPTURE']
+secondary_capture = File.expand_path(secondary_capture) if secondary_capture
+abort 'Missing secondary capture executable' if secondary_capture && !File.executable?(secondary_capture)
 abort 'Invalid mode' unless MODES.include?(mode)
 if mode == 'online-cancel-retry' && ENV['READALOUD_S7_ALLOW_DOWNLOAD'] != '1'
   abort 'Online mode requires READALOUD_S7_ALLOW_DOWNLOAD=1 (may download managed model files)'
@@ -34,7 +37,7 @@ result = {schema: 'readaloud-native-variant-runner-v1', mode: mode,
           limits: '100ms child/process observations and emitted signal per playback interval. ' \
                   'Exact waveform matching, glitch/voice quality, total memory envelope, ' \
                   'physical-speaker and M3 acceptance remain separate. Capture 300s; work deadline 270s.'}
-pid = cap = log = capture_log = nil
+pid = cap = log = capture_log = secondary_cap = secondary_log = nil
 status = nil
 owned = []
 last_children = nil
@@ -108,6 +111,14 @@ begin
   cap = Process.spawn(capture, pid.to_s, File.join(output, 'capture.wav'), '300', stop,
                       out: capture_log, err: capture_log)
   result[:capturePid] = cap
+  if secondary_capture
+    secondary_log = File.open(File.join(output, 'coreaudio.log'), 'w')
+    secondary_cap = Process.spawn(secondary_capture, pid.to_s,
+      File.join(output, 'coreaudio.wav'), '300', stop, out: secondary_log, err: secondary_log)
+    result[:secondaryCapture] = {mechanism: 'CoreAudio process tap', pid: secondary_cap,
+      executableSha256: Digest::SHA256.file(secondary_capture).hexdigest,
+      scope: 'Independent diagnostic recording; primary acceptance gates remain unchanged'}
+  end
   deadline = Process.clock_gettime(Process::CLOCK_MONOTONIC) + 270
   activated = false
   capture_ready = false
@@ -115,7 +126,8 @@ begin
     raise 'Native app exited before receipt' if Process.waitpid(pid, Process::WNOHANG)
     raise 'Variant probe 270s deadline' if Process.clock_gettime(Process::CLOCK_MONOTONIC) > deadline
     wave = File.join(output, 'capture.wav')
-    if !capture_ready && File.file?(wave) && File.size(wave) > 4096
+    secondary_armed = !secondary_capture || File.file?(File.join(output, 'coreaudio.wav.armed.json'))
+    if !capture_ready && File.file?(wave) && File.size(wave) > 4096 && secondary_armed
       File.write(File.join(output, 'capture.ready'), 'Audio frames observed')
       capture_ready = true
       result[:captureReadyObservedUnixMicros] = (Time.now.to_r * 1_000_000).to_i
@@ -147,6 +159,19 @@ begin
 rescue StandardError => e
   result[:errors] << e.message
 ensure
+  FileUtils.touch(stop) if cap || secondary_cap
+  if secondary_cap
+    begin
+      _, captured = Timeout.timeout(12) { Process.wait2(secondary_cap) }
+      result[:secondaryCapture][:exitStatus] = captured.exitstatus
+    rescue Timeout::Error
+      Process.kill('TERM', secondary_cap) rescue Errno::ESRCH
+      Process.waitpid(secondary_cap) rescue Errno::ECHILD
+      result[:secondaryCapture][:error] = 'Secondary capture did not stop'
+    ensure
+      secondary_log&.close
+    end
+  end
   if cap
     FileUtils.touch(stop)
     begin
