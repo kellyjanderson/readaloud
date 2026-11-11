@@ -100,12 +100,12 @@ class S7VariantAcceptanceTest(unittest.TestCase):
         self.timing = copy.deepcopy(self.__class__.timing)
         self.capture = self.__class__.capture.copy()
 
-    def run_analysis(self):
+    def run_analysis(self, diagnostic_only=False):
         for name, obj in [('receipt.json', self.native), ('runner.json', self.runner),
                           ('capture.wav.timing.json', self.timing)]:
             (self.root / name).write_text(json.dumps(obj))
         wavfile.write(self.root / 'capture.wav', self.rate, self.capture.astype(np.float32))
-        return analyze(self.root)
+        return analyze(self.root, diagnostic_only=diagnostic_only)
 
     def reference(self, name, pcm, rate=8000):
         path = self.root / name
@@ -289,6 +289,49 @@ class S7VariantAcceptanceTest(unittest.TestCase):
         self.setUp()
         self.native['nativeMainResponsiveness']['maxRoundTripMs'] = 251
         self.assert_refused(self.run_analysis(), '250ms responsiveness')
+
+    def test_diagnostic_runtime_failure_retains_failed_verdict_and_raw_acoustics(self):
+        self.native['passed'] = False
+        self.native['nativeMainResponsiveness']['passed'] = False
+        self.native['nativeMainResponsiveness']['maxRoundTripMs'] = 340
+        self.runner['passed'] = False
+        self.runner['nativePassed'] = False
+        self.runner['errors'] = ['Emitted audio: Insufficient app-emitted signal during playback']
+        self.runner['emittedSignal'] = None
+        result = self.run_analysis(diagnostic_only=True)
+        self.assertFalse(result['passed'])
+        self.assertTrue(result['diagnosticOnly'])
+        self.assertTrue(result['acousticCriteriaPassed'])
+        self.assertIn('250ms responsiveness gate failed', result['runtimeFailures'])
+        self.assertIn('Captured signal gate failed', result['runtimeFailures'])
+        self.assertEqual(len(result['segments'][0]['matches']), 5)
+        # The same unchanged receipt still refuses before matching by default.
+        normal = self.run_analysis()
+        self.assertFalse(normal['passed'])
+        self.assertEqual(normal['segments'], [])
+
+    def test_diagnostic_only_never_returns_accepted_even_for_valid_run(self):
+        result = self.run_analysis(diagnostic_only=True)
+        self.assertFalse(result['passed'])
+        self.assertTrue(result['acousticCriteriaPassed'])
+        self.assertEqual(result['runtimeFailures'], [])
+
+    def test_diagnostic_continues_missing_audio_without_qualifying_it(self):
+        # Audio disappears for one complete audible source while native time
+        # advances; later captured speech resumes on the original timeline.
+        start = 12000 + 11 * self.rate
+        self.capture[start:start + 11 * self.rate] = 0
+        result = self.run_analysis(diagnostic_only=True)
+        self.assertFalse(result['passed'])
+        self.assertFalse(result['acousticCriteriaPassed'])
+        report = result['segments'][0]
+        self.assertEqual([r['queueIndex'] for r in report['failedWaveforms']], [1])
+        self.assertEqual([r['queueIndex'] for r in report['matches']], [0, 2, 3, 4])
+        resumed = report['matches'][1]
+        self.assertIsNone(resumed['externalGapBeforeMs'])
+        self.assertEqual(resumed['failedReferenceSecondsBefore'], 11)
+        self.assertLess(abs(resumed['aggregateTimingResidualAfterFailedReferencesMs']), .1)
+        self.assert_refused(result, 'No complete ordered waveform #2')
 
     def test_only_one_final_pause_interruption_can_be_excluded(self):
         self.capture[12000 + 44 * self.rate:] = 0

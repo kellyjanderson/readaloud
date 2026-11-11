@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Strict sustained S7 emitted-waveform acceptance (managed MLX Python).
 
-Usage: analyze_s7_variants.py RUN_DIRECTORY NEW_OUTPUT.json
+Usage: analyze_s7_variants.py RUN_DIRECTORY NEW_OUTPUT.json [--diagnostic-only]
 Reads receipt.json, runner.json, capture.wav and capture.wav.timing.json. Queue
 order and copied-file SHA/size are authoritative; names never establish order.
 Every accepted reference uses its complete active waveform at correlation .98.
@@ -105,7 +105,12 @@ def source_path(uri):
     return unquote(parsed.path)
 
 
-def runtime_gates(native, runner, timing):
+def runtime_gates(native, runner, timing, failures=None):
+    def require(condition, message):
+        if not condition:
+            if failures is None:
+                raise ValueError(message)
+            failures.append(message)
     require(native.get('schema') == 'readaloud-native-variant-v1'
             and runner.get('schema') == 'readaloud-native-variant-runner-v1', 'Unknown receipt schema')
     require(native.get('mode') == runner.get('mode')
@@ -138,17 +143,23 @@ def runtime_gates(native, runner, timing):
             and timing.get('appPid') == runner.get('pid'), 'Capture app identity mismatch')
     require(finite(timing.get('firstSignalReceivedUnixMicros'), 'capture signal time') > 0,
             'Missing captured signal')
-    signal = runner.get('emittedSignal', [])
+    signal = runner.get('emittedSignal') or []
     require(len(signal) == len(native.get('segments', [])) and signal
             and all(s.get('passed') is True for s in signal), 'Captured signal gate failed')
 
 
-def analyze(directory):
+def analyze(directory, diagnostic_only=False):
     directory = Path(directory)
     native = load_json(directory / 'receipt.json')
     runner = load_json(directory / 'runner.json')
     timing = load_json(directory / 'capture.wav.timing.json')
     result = {'schema': 'readaloud-s7-strict-acoustic-v1', 'passed': False,
+              'diagnosticOnly': diagnostic_only, 'acousticCriteriaPassed': False,
+              'runtimeFailures': [],
+              'runtimeEvidence': {'nativePassed': native.get('passed'),
+                                  'runnerPassed': runner.get('passed'),
+                                  'runnerErrors': runner.get('errors'),
+                                  'nativeMainResponsiveness': native.get('nativeMainResponsiveness')},
               'mode': native.get('mode'), 'errors': [], 'segments': [],
               'policy': {'fullActiveCorrelationMinimum': THRESHOLD,
                          'maximumAbsoluteExternalJoinMs': MAX_GAP_MS,
@@ -159,7 +170,10 @@ def analyze(directory):
                         'individual silent boundaries have no acoustic identity. '
                         'No transcript, perceived quality/voice, human listening, startup, memory or M3 acceptance.'}
     try:
-        runtime_gates(native, runner, timing)
+        runtime_gates(native, runner, timing,
+                      result['runtimeFailures'] if diagnostic_only else None)
+        if diagnostic_only:
+            result['errors'].extend(result['runtimeFailures'])
         rate, captured, _, _ = read_audio(directory / 'capture.wav', MAX_CAPTURE_BYTES, 300)
         require(rate in (44100, 48000) and timing.get('sampleRate') == rate
                 and timing.get('frames') == len(captured), 'Capture timing/PCM mismatch')
@@ -256,8 +270,10 @@ def analyze(directory):
                 for i, q in enumerate(queued) if i > final_index]
             previous_end = None
             pending_silent_seconds = 0.
+            pending_unmatched_seconds = 0.
             pending_silent_packets = []
             report['encodedSilentPackets'] = []
+            report['failedWaveforms'] = []
             for number, (row, (source_rate, pcm)) in enumerate(zip(queued[:final_index + 1], references)):
                 source = resample(pcm, source_rate, comparison_rate)
                 duration = len(pcm) / source_rate
@@ -277,7 +293,8 @@ def analyze(directory):
                 start, end = int(active[0]), int(active[-1]) + 1
                 seen = observations_by_path.get(row['sourcePath'], [])
                 estimates = [(s['unixMicros'] - origin) / 1e6 - s['positionMs'] / 1000 for s in seen]
-                ordered_end = None if previous_end is None else previous_end + pending_silent_seconds
+                ordered_end = (None if previous_end is None else previous_end
+                               + pending_silent_seconds + pending_unmatched_seconds)
                 expected = float(np.median(estimates)) if estimates else ordered_end
                 require(expected is not None, 'Initial source has no native playback observation')
                 # Restrict FFT to the source's observed onset neighborhood. Permit
@@ -303,24 +320,43 @@ def analyze(directory):
                                    and ((seen and row['sourcePath'] == final_path)
                                         or (not seen and ordered_end is not None
                                             and 0 <= stop - ordered_end <= .25)))
-                    require(interrupted, f'No complete ordered waveform #{number + 1}; best={score:.6f}')
+                    if not interrupted:
+                        message = f'No complete ordered waveform #{number + 1}; best={score:.6f}'
+                        require(diagnostic_only, message)
+                        report['errors'].append(message)
+                        report['failedWaveforms'].append({
+                            'queueIndex': number, 'sourcePath': row['sourcePath'],
+                            'reference': row['reference'], 'sourceDurationSeconds': duration,
+                            'expectedStartSeconds': expected, 'bestFullActiveCorrelation': score,
+                            'searchWindowStartSeconds': base / rate,
+                            'searchWindowEndSeconds': finish / rate,
+                            'scope': 'FAILED complete-waveform match; diagnostic continuation, never accepted'})
+                        pending_unmatched_seconds += duration
+                        continue
                     report['excludedFinalWaveform'] = {
                         'queueIndex': number, 'sourcePath': row['sourcePath'],
                         'reference': row['reference'], 'durationSeconds': duration,
                         'observedByPlayer': bool(seen), 'expectedStartSeconds': expected,
                         'reason': 'Final queued WAV interrupted by Pause; no partial waveform acceptance'}
                     continue
-                gap = None if ordered_end is None else (actual - ordered_end) * 1000
+                residual = None if ordered_end is None else (actual - ordered_end) * 1000
+                gap = residual if pending_unmatched_seconds == 0 else None
                 record = {'queueIndex': number, 'sourcePath': row['sourcePath'],
                           'reference': row['reference'], 'captureStartSeconds': actual,
                           'captureEndSeconds': actual + duration, 'fullActiveCorrelation': score,
                           'activeComparisonFrames': end - start, 'sourceDurationSeconds': duration,
                           'externalGapBeforeMs': gap, 'encodedSilentSecondsBefore': pending_silent_seconds,
+                          'failedReferenceSecondsBefore': pending_unmatched_seconds,
+                          'aggregateTimingResidualAfterFailedReferencesMs':
+                              residual if pending_unmatched_seconds else None,
                           'searchWindowSeconds': (finish - base) / rate}
                 report['matches'].append(record)
                 silent_start = (previous_end if previous_end is not None
                                 else actual - pending_silent_seconds)
                 for silent in pending_silent_packets:
+                    if pending_unmatched_seconds:
+                        silent['signalCheckNotRun'] = 'Failed preceding waveform placement; diagnostic only'
+                        continue
                     silent_end = silent_start + silent['durationSeconds']
                     # Edge guards cover the existing 10ms timing policy and
                     # resampling boundaries, not arbitrary missing source time.
@@ -339,22 +375,26 @@ def analyze(directory):
                 report['completeReferenceSeconds'] += duration
                 previous_end = actual + duration
                 pending_silent_seconds = 0.
+                pending_unmatched_seconds = 0.
                 pending_silent_packets = []
             require(pending_silent_seconds == 0.,
                     'Unanchored silent tail cannot prove complete end/continuity')
-            require(report['completeReferenceSeconds'] >= MIN_COMPLETE_SECONDS,
+            if report['completeReferenceSeconds'] < MIN_COMPLETE_SECONDS:
+                report['errors'].append(
                     f'Insufficient full-waveform coverage: {report["completeReferenceSeconds"]:.3f}s < 50s')
             require(len(report['matches']) >= 2, 'No measured waveform join')
             require(report['excludedFinalWaveform'] is not None
                     or 0 <= stop - previous_end <= .25,
                     'Final complete waveform does not reach the Pause interval')
             report['maximumAbsoluteExternalJoinMs'] = max(
-                abs(m['externalGapBeforeMs']) for m in report['matches'][1:])
+                (abs(m['externalGapBeforeMs']) for m in report['matches']
+                 if m['externalGapBeforeMs'] is not None), default=None)
             report['minimumFullActiveCorrelation'] = min(
                 m['fullActiveCorrelation'] for m in report['matches'])
             report['passed'] = not report['errors']
             result['errors'].extend(f'{report["label"]}: {error}' for error in report['errors'])
-        result['passed'] = all(s.get('passed') is True for s in result['segments'])
+        result['acousticCriteriaPassed'] = all(s.get('passed') is True for s in result['segments'])
+        result['passed'] = result['acousticCriteriaPassed'] and not diagnostic_only
     except (ValueError, KeyError, TypeError, OSError) as error:
         result['errors'].append(str(error))
     return result
@@ -364,9 +404,11 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('directory', type=Path)
     parser.add_argument('output', type=Path)
+    parser.add_argument('--diagnostic-only', action='store_true',
+                        help='Compute acoustic metrics despite runtime failures; always return failed verdict/exit 1')
     args = parser.parse_args()
     try:
-        result = analyze(args.directory)
+        result = analyze(args.directory, diagnostic_only=args.diagnostic_only)
     except (ValueError, KeyError, TypeError, OSError) as error:
         result = {'schema': 'readaloud-s7-strict-acoustic-v1', 'passed': False, 'errors': [str(error)]}
     with args.output.open('x') as output:
