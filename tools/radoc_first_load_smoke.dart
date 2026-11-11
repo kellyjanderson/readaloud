@@ -36,6 +36,23 @@ Future<Map<String, Object?>> copyQueuedAudioEvidence(
   return _inspectWav(destination);
 });
 
+/// The last spoken record owns the active scene. Its end is the exclusive
+/// heard-coverage boundary, not the complete parent scene's end; the current
+/// word may equal that boundary before final scene duration is published.
+bool hasUnknownActiveSpokenScene(
+  Iterable<SpokenChunkRecord> records, {
+  required String documentId,
+  required int currentWordIndex,
+}) {
+  if (records.isEmpty) return false;
+  final active = records.last;
+  return active.documentId == documentId &&
+      !active.completed &&
+      active.audioDuration == Duration.zero &&
+      active.startWordIndex <= currentWordIndex &&
+      currentWordIndex <= active.endWordIndex;
+}
+
 // Isolation seams only. Initialization remains the production controller owner;
 // the screen and this observer share that one future instead of racing it.
 class _Controller extends ReaderController {
@@ -137,12 +154,10 @@ Future<void> main(List<String> args, {bool packetCancellation = false}) async {
         'completed': chunk.completed,
       },
   ];
-  bool hasUnknownActiveScene() => c.spokenChunkRecords.any(
-    (chunk) =>
-        !chunk.completed &&
-        chunk.audioDuration == Duration.zero &&
-        chunk.startWordIndex <= c.currentWordIndex &&
-        c.currentWordIndex < chunk.endWordIndex,
+  bool hasUnknownActiveScene() => hasUnknownActiveSpokenScene(
+    c.spokenChunkRecords,
+    documentId: c.document.displayDocument.documentId,
+    currentWordIndex: c.currentWordIndex,
   );
   int? completedExportsAtFirstPosition;
   Map<String, Object?>? firstPacketState;
