@@ -318,25 +318,46 @@ def _download_model(model_id: str, private_cache_path: str,
     # Check every accessible cache before any network request. No build number,
     # executable path or debug/release mode is part of this persistent identity.
     repair = None
+    repair_bytes = -1
     for cache_dir in candidates:
         if not _owned_hf_cache_layout(cache_dir, repo_id, revision):
             continue
         try:
             cached = Path(snapshot_download(repo_id=repo_id, revision=revision,
                           cache_dir=str(cache_dir), local_files_only=True))
-            if manifest and not _is_managed_snapshot(cached, cache_dir, repo_id, revision):
-                raise ValueError('Hugging Face returned a different pinned snapshot')
-            invalid = []
+        except (OSError, ValueError):
+            if not manifest:
+                continue
+            # Hub 2.4 rejects an incomplete cached tree before returning its
+            # path. Inspect only our exact trusted pin, never an exception's
+            # suggested path or a mutable ref, so Retry retains saved weights.
+            cached = cache_dir / ('models--' + repo_id.replace('/', '--')) / 'snapshots' / revision
+        if manifest:
+            if not cached.is_dir() or not _is_managed_snapshot(cached, cache_dir, repo_id, revision):
+                continue
+            for name, entry in manifest['files'].items():
+                path = cached / name
+                if ((path.exists() or path.is_symlink()) and
+                        not _owned_hf_file(path, cached, entry)):
+                    raise ValueError(f'Cannot repair model file outside the managed Hugging Face cache: {path}')
+        invalid = []
+        try:
             complete = (_verify_scene_model(cached, manifest, receipt_root, invalid_files=invalid)
                         if manifest else _complete_snapshot(cached, model_id))
-            if complete:
-                _configure_hf_cache(cache_dir, hf_constants)
-                _progress('Using downloaded speech model files', stage='modelCached')
-                return cached
-            if manifest and repair is None:
-                repair = (cache_dir, cached, invalid)
         except (OSError, ValueError):
-            pass
+            continue
+        if complete:
+            _configure_hf_cache(cache_dir, hf_constants)
+            _progress('Using downloaded speech model files', stage='modelCached')
+            return cached
+        if manifest:
+            # Count only stable, hash-verified required files. A cached tree or
+            # an existing partial alone does not make the first cache best.
+            verified_bytes = (sum(entry['size'] for name, entry in manifest['files'].items()
+                                  if name not in invalid) if invalid else 0)
+            if verified_bytes > repair_bytes:
+                repair_bytes = verified_bytes
+                repair = (cache_dir, cached, invalid)
 
     # One destination per attempt: retries resume the same blobs. A network
     # failure must never start a second copy in a different cache.
@@ -557,12 +578,19 @@ def _verify_scene_model(directory: Path, manifest: dict, receipt_root: Path,
             result[name] = [st.st_dev, st.st_ino, st.st_size, st.st_mtime_ns, st.st_ctime_ns]
         return result
     before = snapshot()
+    def unchanged():
+        after = snapshot()
+        if invalid_files is not None:
+            for name in entries:
+                if after[name] != before[name] and name not in invalid_files:
+                    invalid_files.append(name)
+        return after == before
     identity = hashlib.sha256(json.dumps([str(directory), manifest, before], sort_keys=True).encode()).hexdigest()
     receipt = receipt_root / f'{identity}.json'
     try:
         if (None not in before.values() and
                 json.loads(receipt.read_text()).get('verifiedIdentity') == identity):
-            return snapshot() == before
+            return unchanged()
     except (OSError, ValueError, AttributeError):
         pass
     total = sum(e['size'] for e in entries.values())
@@ -579,7 +607,8 @@ def _verify_scene_model(directory: Path, manifest: dict, receipt_root: Path,
             if invalid_files is not None and name not in invalid_files:
                 invalid_files.append(name)
         completed += expected['size']
-    if not valid or snapshot() != before:
+    stable = unchanged()
+    if not valid or not stable:
         return False
     receipt_root.mkdir(parents=True, exist_ok=True)
     temporary = None
@@ -593,7 +622,7 @@ def _verify_scene_model(directory: Path, manifest: dict, receipt_root: Path,
     finally:
         if temporary is not None:
             temporary.unlink(missing_ok=True)
-    if snapshot() != before:
+    if not unchanged():
         return False
     _progress('Pinned speech model verified', stage='modelVerification', completed=total, total=total)
     return True

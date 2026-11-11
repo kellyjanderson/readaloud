@@ -8,6 +8,7 @@ import io
 import json
 import wave
 import os
+import shutil
 import subprocess
 import sys
 from types import SimpleNamespace
@@ -604,6 +605,14 @@ worker._synthesize({'modelId': 'qwen3_tts_1_7b', 'voice': 'Ryan',
 
 
 class ModelDownloadReuseTest(unittest.TestCase):
+    @staticmethod
+    def cache_tree(snapshot, manifest, content):
+        from huggingface_hub import _snapshot_download
+        tree = {name: _snapshot_download.TreeCacheEntry(size=len(data), blob_id='0' * 40,
+                    lfs_sha256=manifest['files'][name]['digest'], lfs_size=len(data))
+                for name, data in content.items()}
+        _snapshot_download.write_tree_cache(str(snapshot.parent.parent), manifest['revision'], tree)
+
     @contextlib.contextmanager
     def fixture(self, model_id='fish_drama3'):
         # Tiny pinned fixtures exercise real HF offline resolution and hashing.
@@ -640,6 +649,113 @@ class ModelDownloadReuseTest(unittest.TestCase):
             receipts = list((cache.parent / 'model-qualification').glob('*.json'))
             self.assertEqual(len(receipts), 1)
             self.assertEqual(json.loads(receipts[0].read_text())['revision'], manifest['revision'])
+
+    def test_real_hub_incomplete_tree_uses_best_verified_cache_and_only_missing_transfer(self):
+        import huggingface_hub
+        from huggingface_hub import file_download
+        from huggingface_hub.errors import IncompleteSnapshotError
+        for first_defect in ['missing', 'corrupt']:
+            with self.subTest(first_defect=first_defect), self.fixture() as (extra, snapshot, manifest, content):
+                private = extra.parent / 'runtime-cache' / 'hub'
+                private_snapshot = private / snapshot.relative_to(extra)
+                shutil.copytree(snapshot, private_snapshot)
+                (private_snapshot / 'codec.safetensors').unlink()
+                if first_defect == 'missing':
+                    (private_snapshot / 'model.safetensors').unlink()
+                else:
+                    (private_snapshot / 'model.safetensors').write_bytes(b'x' * len(content['model.safetensors']))
+                missing = snapshot / 'codec.safetensors'; missing.unlink()
+                self.cache_tree(snapshot, manifest, content)
+                self.cache_tree(private_snapshot, manifest, content)
+                good = {name: (snapshot / name).stat() for name in content if name != missing.name}
+                private_before = {p: p.stat() for p in private_snapshot.iterdir()}
+                with self.assertRaises(IncompleteSnapshotError):
+                    huggingface_hub.snapshot_download(repo_id=manifest['repo'], revision=manifest['revision'],
+                        cache_dir=str(extra), local_files_only=True)
+                real_snapshot = huggingface_hub.snapshot_download
+                destinations = []
+                def snapshot_download(**kwargs):
+                    if not kwargs.get('local_files_only'):
+                        destinations.append(kwargs['cache_dir'])
+                    return real_snapshot(**kwargs)
+                def metadata(**kwargs):
+                    self.assertEqual(kwargs['filename'], missing.name, 'A complete file requested metadata')
+                    self.assertEqual(Path(kwargs['storage_folder']).resolve(), snapshot.parent.parent.resolve())
+                    entry = manifest['files'][missing.name]
+                    return ('https://fixture.invalid/missing', entry['digest'], manifest['revision'], entry['size'], None, None)
+                def http_bytes(url, stream, **kwargs):
+                    stream.write(content[missing.name])
+                with patch('huggingface_hub.snapshot_download', side_effect=snapshot_download), \
+                        patch.object(file_download, '_get_metadata_or_catch_error', side_effect=metadata), \
+                        patch.object(file_download, 'http_get', side_effect=http_bytes) as transfer, \
+                        patch('huggingface_hub.hf_hub_download', side_effect=AssertionError('A missing file must resume, not force repair')), \
+                        patch.object(worker, '_progress') as progress:
+                    self.assertEqual(worker._download_model('fish_drama3', str(private), [str(extra)]).resolve(), snapshot.resolve())
+                transfer.assert_called_once()
+                self.assertEqual(destinations, [str(extra), str(extra)])
+                for name, before in good.items():
+                    self.assertEqual((snapshot / name).stat(), before)
+                self.assertEqual({p: p.stat() for p in private_snapshot.iterdir()}, private_before)
+                self.assertEqual(missing.read_bytes(), content[missing.name])
+                initial = [call.kwargs for call in progress.call_args_list
+                           if call.kwargs.get('stage') == 'modelDownload'][0]
+                self.assertEqual(initial['completed'], sum(len(content[name]) for name in good))
+                self.assertEqual(initial['total'], sum(map(len, content.values())))
+
+    def test_real_hub_incomplete_tree_failure_keeps_one_destination_and_retries(self):
+        import huggingface_hub
+        from huggingface_hub import file_download
+        with self.fixture() as (extra, snapshot, manifest, content):
+            private = extra.parent / 'runtime-cache' / 'hub'
+            missing = snapshot / 'codec.safetensors'; missing.unlink()
+            self.cache_tree(snapshot, manifest, content)
+            good = (snapshot / 'model.safetensors').stat()
+            real_snapshot = huggingface_hub.snapshot_download
+            destinations = []
+            def snapshot_download(**kwargs):
+                if not kwargs.get('local_files_only'):
+                    destinations.append(kwargs['cache_dir'])
+                return real_snapshot(**kwargs)
+            def metadata(**kwargs):
+                self.assertEqual(kwargs['filename'], missing.name)
+                entry = manifest['files'][missing.name]
+                return ('https://fixture.invalid/missing', entry['digest'], manifest['revision'], entry['size'], None, None)
+            def interrupted(url, stream, **kwargs):
+                stream.write(content[missing.name][:3])
+                raise ConnectionError('fixture interrupted')
+            with patch('huggingface_hub.snapshot_download', side_effect=snapshot_download), \
+                    patch.object(file_download, '_get_metadata_or_catch_error', side_effect=metadata), \
+                    patch.object(file_download, 'http_get', side_effect=interrupted) as transfer:
+                for _ in range(2):
+                    with self.assertRaisesRegex(ConnectionError, 'fixture interrupted'):
+                        worker._download_model('fish_drama3', str(private), [str(extra)])
+            self.assertEqual(transfer.call_count, 2)
+            self.assertEqual(destinations, [str(extra)] * 4)
+            self.assertFalse(private.exists())
+            self.assertEqual((snapshot / 'model.safetensors').stat(), good)
+            self.assertFalse(missing.exists())
+
+    def test_incomplete_tree_cannot_redirect_fallback_or_read_external_file(self):
+        from huggingface_hub.errors import IncompleteSnapshotError
+        for redirect in ['snapshot', 'file']:
+            with self.subTest(redirect=redirect), self.fixture() as (cache, snapshot, manifest, content):
+                missing = snapshot / 'codec.safetensors'; missing.unlink()
+                self.cache_tree(snapshot, manifest, content)
+                outside = cache.parent / 'external'; outside.mkdir()
+                (outside / 'model.safetensors').write_bytes(content['model.safetensors'])
+                if redirect == 'snapshot':
+                    shutil.rmtree(snapshot); snapshot.symlink_to(outside, target_is_directory=True)
+                else:
+                    weight = snapshot / 'model.safetensors'; weight.unlink(); weight.symlink_to(outside / weight.name)
+                before = (outside / 'model.safetensors').stat()
+                # Exception metadata is untrusted; the exact catalog pin and
+                # ownership validators must independently establish the path.
+                with patch('huggingface_hub.snapshot_download', side_effect=IncompleteSnapshotError('partial', snapshot_path=str(outside))), \
+                        patch('huggingface_hub.hf_hub_download', side_effect=AssertionError('unsafe transfer')), \
+                        patch('huggingface_hub.utils._verification.compute_file_hash', side_effect=AssertionError('unsafe hash')):
+                    with self.assertRaisesRegex(ValueError, 'redirected|outside the managed'):
+                        worker._download_model('fish_drama3', str(cache))
+                self.assertEqual((outside / 'model.safetensors').stat(), before)
 
     def test_extra_app_cache_reuses_offline_across_two_build_paths_and_deduplicates(self):
         import huggingface_hub
@@ -1030,6 +1146,14 @@ class ModelDownloadReuseTest(unittest.TestCase):
             self.assertEqual(report.call_args.kwargs['completed'], 50)
             self.assertEqual(report.call_args.kwargs['total'], 100)
 
+    def test_transfer_bar_does_not_double_count_cached_or_reconstructed_bytes(self):
+        with patch.object(worker, '_progress') as report:
+            cls = worker._download_progress_class(100, 30)
+            with cls(desc='Downloading bytes', initial=70, total=70, file=io.StringIO()) as bar:
+                bar._last_report = 0
+                bar._emit_progress()
+            report.assert_not_called()
+
 
 class ModelAssetVerificationTest(unittest.TestCase):
     fixture = ModelDownloadReuseTest.fixture
@@ -1107,8 +1231,10 @@ class ModelAssetVerificationTest(unittest.TestCase):
                 target = ('huggingface_hub.utils._verification.compute_file_hash'
                           if phase == 'hash' else 'pathlib.Path.replace')
                 effect = hash_and_change if phase == 'hash' else publish_and_change
+                invalid = []
                 with patch(target, side_effect=effect, autospec=(phase == 'publish')):
-                    self.assertFalse(worker._verify_scene_model(snapshot, manifest, receipts))
+                    self.assertFalse(worker._verify_scene_model(snapshot, manifest, receipts, invalid_files=invalid))
+                self.assertIn('model.safetensors', invalid, 'Changing bytes must not count toward cache selection')
                 self.assertFalse(worker._verify_scene_model(snapshot, manifest, receipts))
 
     def test_verified_quantized_load_is_direct_and_rechecks_resident_assets(self):
