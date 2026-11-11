@@ -1,0 +1,64 @@
+import 'package:flutter/services.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:read_aloud/src/services/native_speech_work_activity.dart';
+
+void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
+  const channel = MethodChannel('read_aloud/mlx_tts_lifecycle');
+  final calls = <MethodCall>[];
+  setUp(() {
+    calls.clear();
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(channel, (call) async {
+          calls.add(call);
+          return null;
+        });
+  });
+  tearDown(() {
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(channel, null);
+  });
+
+  test('overlapping work releases only its own native activity', () async {
+    final a = await NativeSpeechWorkActivity.begin();
+    final b = await NativeSpeechWorkActivity.begin();
+    final owners = calls.map((c) => (c.arguments as Map)['owner']).toList();
+    expect(owners.toSet(), hasLength(2));
+    await b.release();
+    await a.release();
+    expect(calls.map((c) => c.method), [
+      'beginSpeechWork',
+      'beginSpeechWork',
+      'endSpeechWork',
+      'endSpeechWork',
+    ]);
+    expect((calls[2].arguments as Map)['owner'], owners[1]);
+    expect((calls[3].arguments as Map)['owner'], owners[0]);
+  });
+
+  test('repeated and concurrent release is idempotent', () async {
+    final activity = await NativeSpeechWorkActivity.begin();
+    await Future.wait([activity.release(), activity.release()]);
+    await activity.release();
+    expect(calls.where((c) => c.method == 'endSpeechWork'), hasLength(1));
+  });
+
+  test('request failure can drain its activity in finally', () async {
+    final activity = await NativeSpeechWorkActivity.begin();
+    try {
+      throw StateError('cancelled or failed work');
+    } catch (_) {
+      // Caller still owns the matching activity until its operation drains.
+    } finally {
+      await activity.release();
+    }
+    expect(calls.last.method, 'endSpeechWork');
+  });
+
+  test('platform-free hosts have a no-op activity', () async {
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(channel, null);
+    final activity = await NativeSpeechWorkActivity.begin();
+    await activity.release();
+  });
+}

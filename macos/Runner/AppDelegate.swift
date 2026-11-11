@@ -10,6 +10,11 @@ class AppDelegate: FlutterAppDelegate {
   private var documentAccessChannel: FlutterMethodChannel?
   private var mlxLifecycleChannel: FlutterMethodChannel?
   private var bookNlpLifecycleChannel: FlutterMethodChannel?
+  // Main-thread owned; a request may end only its own activity.
+  private var speechWorkActivities: [String: NSObjectProtocol] = [:]
+  private var speechWorkStarted = 0
+  private var speechWorkEnded = 0
+  private var speechWorkPeak = 0
   private var terminationCleanupStarted = false
   private var terminationReplySent = false
 
@@ -36,6 +41,11 @@ class AppDelegate: FlutterAppDelegate {
     let finishTermination = { [weak self] in
       DispatchQueue.main.async {
         guard let self, !self.terminationReplySent else { return }
+        for activity in self.speechWorkActivities.values {
+          ProcessInfo.processInfo.endActivity(activity)
+          self.speechWorkEnded += 1
+        }
+        self.speechWorkActivities.removeAll()
         self.terminationReplySent = true
         sender.reply(toApplicationShouldTerminate: true)
       }
@@ -87,7 +97,54 @@ class AppDelegate: FlutterAppDelegate {
     )
     // Each process samples itself: sandbox policy denies cross-process libproc
     // queries. Dart combines this value with its current child's telemetry.
-    mlxLifecycleChannel?.setMethodCallHandler { call, result in
+    mlxLifecycleChannel?.setMethodCallHandler { [weak self] call, result in
+      guard let self else {
+        result(FlutterMethodNotImplemented)
+        return
+      }
+      if call.method == "speechWorkActivityCount" {
+        result(self.speechWorkActivities.count)
+        return
+      }
+      if call.method == "speechWorkActivitySnapshot" {
+        result([
+          "active": self.speechWorkActivities.count,
+          "started": self.speechWorkStarted,
+          "ended": self.speechWorkEnded,
+          "peak": self.speechWorkPeak
+        ])
+        return
+      }
+      if call.method == "beginSpeechWork" || call.method == "endSpeechWork" {
+        guard let arguments = call.arguments as? [String: Any],
+              let owner = arguments["owner"] as? String,
+              !owner.isEmpty, owner.utf8.count <= 128 else {
+          result(FlutterError(code: "invalid_speech_activity",
+            message: "Speech activity requires a bounded owner.", details: nil))
+          return
+        }
+        if call.method == "endSpeechWork" {
+          if let activity = self.speechWorkActivities.removeValue(forKey: owner) {
+            ProcessInfo.processInfo.endActivity(activity)
+            self.speechWorkEnded += 1
+          }
+        } else if self.speechWorkActivities[owner] == nil {
+          guard !self.terminationCleanupStarted,
+                self.speechWorkActivities.count < 8 else {
+            result(FlutterError(code: "speech_activity_unavailable",
+              message: "Speech activity owner is closing or full.", details: nil))
+            return
+          }
+          self.speechWorkActivities[owner] = ProcessInfo.processInfo.beginActivity(
+            options: [.userInitiatedAllowingIdleSystemSleep, .latencyCritical],
+            reason: "Preparing requested speech"
+          )
+          self.speechWorkStarted += 1
+          self.speechWorkPeak = max(self.speechWorkPeak, self.speechWorkActivities.count)
+        }
+        result(nil)
+        return
+      }
       guard call.method == "runtimeFootprint" else {
         result(FlutterMethodNotImplemented)
         return
