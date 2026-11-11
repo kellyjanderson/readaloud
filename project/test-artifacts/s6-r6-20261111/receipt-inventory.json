@@ -1,0 +1,96 @@
+{
+  "schema": "readaloud-native-evidence-inventory-v1",
+  "scope": "Immutable native receipts, including failed controls; per-report passed is not startup or human acceptance. See acoustic/timing results and owning issues.",
+  "runs": [
+    {
+      "name": "reusable-v3",
+      "sourceRoot": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s6-r6-reusable-v3-20261110",
+      "records": [
+        {
+          "source": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s6-r6-reusable-v3-20261110/receipt.json",
+          "target": "project/test-artifacts/s6-r6-20261111/reusable-v3-receipt.json",
+          "sha256": "f5f549f0413ebe13968bd4c893e08262efd4c3803c2c04b6c2df8af74649c007",
+          "bytes": 9044
+        },
+        {
+          "source": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s6-r6-reusable-v3-20261110/runner.json",
+          "target": "project/test-artifacts/s6-r6-20261111/reusable-v3-runner.json",
+          "sha256": "e01500cd8bd56e913549e9eed409936518a376b784c28f87977f176d30e50c84",
+          "bytes": 763
+        }
+      ]
+    },
+    {
+      "name": "first-load-v5-aligned",
+      "sourceRoot": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s6-r6-first-load-v5-aligned-20261110",
+      "records": [
+        {
+          "source": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s6-r6-first-load-v5-aligned-20261110/receipt.json",
+          "target": "project/test-artifacts/s6-r6-20261111/first-load-v5-aligned-receipt.json",
+          "sha256": "347ae9e60df664c501882919c989c1d4ba4cc5d6d62a7d68310d531629a86a3c",
+          "bytes": 173283
+        },
+        {
+          "source": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s6-r6-first-load-v5-aligned-20261110/runner.json",
+          "target": "project/test-artifacts/s6-r6-20261111/first-load-v5-aligned-runner.json",
+          "sha256": "94f89c61c40305b78ab989e183d68467e574cd77dba50fedb967d4bcece8f607",
+          "bytes": 799
+        }
+      ]
+    },
+    {
+      "name": "regeneration-v3-failed",
+      "sourceRoot": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s6-r6-full-v3-20261110",
+      "records": [
+        {
+          "source": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s6-r6-full-v3-20261110/receipt.json",
+          "target": "project/test-artifacts/s6-r6-20261111/regeneration-v3-failed-receipt.json",
+          "sha256": "66210b0581caf43b783d1a5ab578dea99366f6b5036fb9fcfb7efac100e6150c",
+          "bytes": 56975
+        },
+        {
+          "source": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s6-r6-full-v3-20261110/cleanup.json",
+          "target": "project/test-artifacts/s6-r6-20261111/regeneration-v3-failed-cleanup.json",
+          "sha256": "7bc8585fbc7efd4784d8bbee4d6248b87b27d281220fdf653118093957387db1",
+          "bytes": 903
+        }
+      ]
+    },
+    {
+      "name": "cancel-v5-predicate-failed",
+      "sourceRoot": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s6-r6-cancel-v5-programmatic-20261110",
+      "records": [
+        {
+          "source": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s6-r6-cancel-v5-programmatic-20261110/receipt.json",
+          "target": "project/test-artifacts/s6-r6-20261111/cancel-v5-predicate-failed-receipt.json",
+          "sha256": "34229114e51c5e59fc2035ec0d773cf95fb4df4384cd6fcd9213a0844a6c04e5",
+          "bytes": 11927
+        },
+        {
+          "source": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s6-r6-cancel-v5-programmatic-20261110/runner.json",
+          "target": "project/test-artifacts/s6-r6-20261111/cancel-v5-predicate-failed-runner.json",
+          "sha256": "44ee53f1106f2a1d9090938a2ec4e3b41bd87bd1a0b3a69da61624410f0024fe",
+          "bytes": 903
+        }
+      ]
+    },
+    {
+      "name": "first-load-prefault",
+      "sourceRoot": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s6-r6-first-load-prefault-20261110",
+      "records": [
+        {
+          "source": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s6-r6-first-load-prefault-20261110/receipt.json",
+          "target": "project/test-artifacts/s6-r6-20261111/first-load-prefault-receipt.json",
+          "sha256": "7817e7ea53ef2be42fb5038611cf723d85dcdbf093d0be3b49d2de21c263e95f",
+          "bytes": 169184
+        },
+        {
+          "source": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s6-r6-first-load-prefault-20261110/runner.json",
+          "target": "project/test-artifacts/s6-r6-20261111/first-load-prefault-runner.json",
+          "sha256": "6e0329bae0e7bd1e1b81653689eed3094a91aa11cb6d0d69bb02c597ffc96a5c",
+          "bytes": 797
+        }
+      ]
+    }
+  ]
+}

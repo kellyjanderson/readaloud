@@ -190,6 +190,93 @@ void main() {
     },
   );
   test(
+    'platform digest covers empty, padding and stream boundaries across batches',
+    () async {
+      final sizes = [0, 1, 55, 56, 63, 64, 65, 65535, 65536, 65537, 196625];
+      await Directory(p.join(source.path, 'digest')).create();
+      final expected = <String, String>{};
+      for (var index = 0; index < 35; index++) {
+        final bytes = List.generate(
+          sizes[index % sizes.length],
+          (byte) => (byte * 37 + index * 19) & 255,
+        );
+        final name = 'digest/${index.toString().padLeft(2, '0')}';
+        await File(p.join(source.path, name)).writeAsBytes(bytes);
+        expected[name] = sha256.convert(bytes).toString();
+      }
+      await package();
+      final entries = (manifest()['entries'] as List)
+          .cast<Map<String, dynamic>>();
+      for (final entry in entries.where(
+        (e) => expected.containsKey(e['path']),
+      )) {
+        expect(entry['sha256'], expected[entry['path']]);
+      }
+      final first = acquire();
+      final runtime = await first.runtime;
+      await first.cancelAndDrain();
+      final second = acquire();
+      expect((await second.runtime).pythonHome, runtime.pythonHome);
+      await second.cancelAndDrain();
+
+      // Keep length and mode intact: only a complete byte digest detects this
+      // corruption in a member beyond the first finite verification batch.
+      final corrupt = File(p.join(runtime.pythonHome, 'digest/31'));
+      final original = await corrupt.readAsBytes();
+      final changed = List<int>.of(original)..[65536] ^= 1;
+      await corrupt.writeAsBytes(changed);
+      final rejected = acquire();
+      await expectLater(rejected.runtime, throwsStateError);
+      await rejected.cancelAndDrain();
+      await corrupt.writeAsBytes(original);
+      final retry = acquire();
+      expect((await retry.runtime).pythonHome, runtime.pythonHome);
+      await retry.cancelAndDrain();
+      await noStaging();
+    },
+  );
+  test(
+    'cancellation drains admitted native peers before a fresh acquisition',
+    () async {
+      final executable = File(p.join(source.path, 'bin/python'));
+      for (var index = 0; index < 34; index++) {
+        await executable.copy(p.join(source.path, 'bin/native-$index'));
+      }
+      await package();
+      late PackagedRuntimeLease lease;
+      Future<void>? drain;
+      final progress = <Map<String, dynamic>>[];
+      lease = acquire(
+        onProgress: (event) {
+          progress.add(event);
+          if (event['stage'] == 'runtimeNative') {
+            drain ??= lease.cancelAndDrain();
+          }
+        },
+      );
+      await expectLater(
+        lease.runtime,
+        throwsA(isA<PackagedRuntimeCancelled>()),
+      );
+      await drain;
+      await noStaging();
+      final eventsAfterDrain = progress.length;
+      final verified = <int>[];
+      final retry = acquire(
+        onProgress: (event) {
+          if (event['stage'] == 'runtimeNative') {
+            verified.add(event['completed'] as int);
+          }
+        },
+      );
+      await retry.runtime;
+      await retry.cancelAndDrain();
+      expect(verified, List.generate(35, (index) => index + 1));
+      expect(progress.length, eventsAfterDrain);
+      await noStaging();
+    },
+  );
+  test(
     'independent publishers atomically reuse one immutable winner',
     () async {
       final other = PackagedPythonRuntimeOwner();

@@ -1,8 +1,9 @@
 // Actual app/player probe for a copied, fully rendered .radoc audio book.
-// Build target: tools/radoc_playback_smoke.dart. Arguments: BOOK RECEIPT.
+// Build target: tools/radoc_playback_smoke.dart. Arguments: BOOK RECEIPT STARTUP_BOOK.
 // The runner owns normal Quit. This entrypoint never exits the process.
 import 'dart:async';
 import 'native_main_responsiveness_probe.dart';
+import 'native_timing_clock.dart';
 import 'dart:convert';
 import 'dart:io';
 import 'dart:isolate';
@@ -111,8 +112,8 @@ Future<void> main(List<String> args) async {
   // Isolate this probe from saved reader preferences and resume state.
   // ignore: invalid_use_of_visible_for_testing_member
   SharedPreferences.setMockInitialValues({});
-  if (args.length != 2) {
-    stderr.writeln('Usage: radoc_playback_smoke BOOK RECEIPT');
+  if (args.length != 3) {
+    stderr.writeln('Usage: radoc_playback_smoke BOOK RECEIPT STARTUP_BOOK');
     runApp(const SizedBox.shrink());
     return;
   }
@@ -121,6 +122,14 @@ Future<void> main(List<String> args) async {
     'passed': false,
     'book': args[0],
     'dartEntryUnixMicros': enteredAt,
+    'timingMode': 'load-after-startup',
+    'startupBook': args[2],
+    'documentLoadClockScope':
+        'Explicit import of measured copy after normal complete-book startup; '
+        'full package read, validation and materialization remain on clock',
+    'cacheCondition':
+        'Fresh controller/repository; same complete book loaded from a separate '
+        'startup fixture, so host filesystem cache may be warm; model forbidden',
     'emittedAudioCapture': 'external evidence required',
     'humanListening': 'external evidence required',
   };
@@ -262,7 +271,7 @@ Future<void> main(List<String> args) async {
   runApp(
     ReadAloudApp(
       controller: controller,
-      launchOptions: AppLaunchOptions(inputPaths: [args[0]]),
+      launchOptions: AppLaunchOptions(inputPaths: [args[2]]),
     ),
   );
   try {
@@ -275,6 +284,35 @@ Future<void> main(List<String> args) async {
     );
     await controller.completeInitialIntake();
     if (!controller.hasPublishedAudio) throw StateError('No published audio');
+    if (File(args[0]).absolute.path == File(args[2]).absolute.path) {
+      throw StateError(
+        'Startup and measured inputs must be separate owned copies',
+      );
+    }
+    if (audioChecks.isNotEmpty ||
+        player.sequence.isNotEmpty ||
+        firstNativePositionAt != null ||
+        player.playing) {
+      throw StateError('Startup admitted native audio before measured load');
+    }
+    receipt['startupNativeSources'] = player.sequence.length;
+    receipt['startupForbiddenModelCallCount'] = engine.forbiddenCalls.values
+        .fold<int>(0, (a, b) => a + b);
+    (await NativeTimingClockSnapshot.capture()).record(
+      receipt,
+      'appStartupComplete',
+    );
+    probePhase = 'measured-document-load';
+    (await NativeTimingClockSnapshot.capture()).record(
+      receipt,
+      'documentLoadRequested',
+    );
+    receipt['importRequestedMs'] = watch.elapsedMilliseconds;
+    await controller.importFilePaths([args[0]]);
+    checkFailure();
+    if (!controller.hasPublishedAudio) {
+      throw StateError('Measured copy lost audio');
+    }
     receipt['importCompleteMs'] = watch.elapsedMilliseconds;
     receipt['playRequestedMs'] = watch.elapsedMilliseconds;
     probePhase = 'play-request';
@@ -289,6 +327,10 @@ Future<void> main(List<String> args) async {
       );
     }
     probePhase = 'initial-playback';
+    (await NativeTimingClockSnapshot.capture()).record(
+      receipt,
+      'playRequested',
+    );
     unawaited(controller.startPlayback());
     await until(() => firstNativePositionAt != null, 'First native position');
     receipt['firstNativePositionUnixMicros'] = firstNativePositionAt;

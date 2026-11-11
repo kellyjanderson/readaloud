@@ -1,0 +1,19 @@
+{
+  "sourceCommit": "f2d96a2",
+  "evidenceCommit": "f250cc8",
+  "architecture": "arm64",
+  "flutterTarget": "tools/s6_acceptance_smoke.dart",
+  "foregroundActivation": "requested by controlled regeneration runner before initial Play",
+  "files": [
+    {
+      "path": "/Users/k/.codex/worktrees/radoc-dynamic-audio/readaloud/tmp/ReadAloudS6ColdRawSeparate.app/Contents/MacOS/read_aloud",
+      "sha256": "1f67305b4e342dcec1e0d3cecc94a80366207abec01d9e695e6136d9941235fd",
+      "bytes": 29577136
+    },
+    {
+      "path": "/Users/k/.codex/worktrees/radoc-dynamic-audio/readaloud/tmp/ReadAloudS6ColdRawSeparate.app/Contents/Frameworks/App.framework/App",
+      "sha256": "5f1e5da5a495b00a14406f5610f04e8594da80751205909cec782cc25a03dec1",
+      "bytes": 11165600
+    }
+  ]
+}

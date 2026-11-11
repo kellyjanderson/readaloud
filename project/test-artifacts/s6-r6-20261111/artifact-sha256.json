@@ -1,0 +1,390 @@
+{
+  "schema": "readaloud-evidence-files-v1",
+  "files": [
+    {
+      "file": "README.md",
+      "sha256": "7ccae004fccbf455211daec25d2ff711778e3c42dbeb9be8c5a793b811173480",
+      "bytes": 6277
+    },
+    {
+      "file": "cancel-v5-predicate-failed-receipt.json",
+      "sha256": "34229114e51c5e59fc2035ec0d773cf95fb4df4384cd6fcd9213a0844a6c04e5",
+      "bytes": 11927
+    },
+    {
+      "file": "cancel-v5-predicate-failed-runner.json",
+      "sha256": "44ee53f1106f2a1d9090938a2ec4e3b41bd87bd1a0b3a69da61624410f0024fe",
+      "bytes": 903
+    },
+    {
+      "file": "first-load-prefault-receipt.json",
+      "sha256": "7817e7ea53ef2be42fb5038611cf723d85dcdbf093d0be3b49d2de21c263e95f",
+      "bytes": 169184
+    },
+    {
+      "file": "first-load-prefault-runner.json",
+      "sha256": "6e0329bae0e7bd1e1b81653689eed3094a91aa11cb6d0d69bb02c597ffc96a5c",
+      "bytes": 797
+    },
+    {
+      "file": "first-load-v5-aligned-acoustic.json",
+      "sha256": "0db8569ad9af90ff0a14a6da72852fa3dcba28f7afded6e38ec83a95089c6018",
+      "bytes": 1514
+    },
+    {
+      "file": "first-load-v5-aligned-receipt.json",
+      "sha256": "347ae9e60df664c501882919c989c1d4ba4cc5d6d62a7d68310d531629a86a3c",
+      "bytes": 173283
+    },
+    {
+      "file": "first-load-v5-aligned-runner.json",
+      "sha256": "94f89c61c40305b78ab989e183d68467e574cd77dba50fedb967d4bcece8f607",
+      "bytes": 799
+    },
+    {
+      "file": "first-load-v5-aligned-timing.json",
+      "sha256": "fffa2e30d3514e8de70a3e373d97033861e8f714ae61fe97c37df58e54b54aa7",
+      "bytes": 931
+    },
+    {
+      "file": "live-advance-v5-failed-packets.json",
+      "sha256": "5834a140114582cfc3b03da0bf7dc6539406f1b0c329eb2f1d3c19bbd5c6c357",
+      "bytes": 2339
+    },
+    {
+      "file": "native-cancel-v8-acoustic.json",
+      "sha256": "fb6d2882c00fad7239187030df935e081e27cfb4231f222c3502c8d34a8ea1b1",
+      "bytes": 2120
+    },
+    {
+      "file": "native-cancel-v8-capture.wav.timing.json",
+      "sha256": "1b8c9879013b29b5efefddd1d87d94b5730d89661b4976373023763f57154544",
+      "bytes": 520
+    },
+    {
+      "file": "native-cancel-v8-fixture.json",
+      "sha256": "3ebecc5d630d794169d078de22c4a9a330dd801f0737bfd5b3edba30b9cfa351",
+      "bytes": 645
+    },
+    {
+      "file": "native-cancel-v8-input.json",
+      "sha256": "ffc1de42a49f3399138bd541e6df4d7d1294075bf469e4ec7a63a3a72843b65b",
+      "bytes": 359
+    },
+    {
+      "file": "native-cancel-v8-receipt.json",
+      "sha256": "51591100ee1d82b1ef5fc0428829106df40727dbfcdebd6ab4d0a492b3662c76",
+      "bytes": 16909
+    },
+    {
+      "file": "native-cancel-v8-runner.json",
+      "sha256": "394733224964ccfb3975c5f7dd4b248580d25e2fd1d2c645bd2bcb1393c1ed2a",
+      "bytes": 792
+    },
+    {
+      "file": "pruning-v3-failed-packets.json",
+      "sha256": "b1d59b3ad125c08db4dfc77a628639dff3eca6bd1f9f6d88dcf32484c8170608",
+      "bytes": 1885
+    },
+    {
+      "file": "r25-first-load-v10-acoustic.json",
+      "sha256": "87bb99be4f2494fa98fbf926403cac4b5ba9c2a1d1037fa92cb26fd27b6b3f32",
+      "bytes": 1523
+    },
+    {
+      "file": "r25-first-load-v10-capture.wav.timing.json",
+      "sha256": "eda6e3729c765c117dcb30d9ac7ffa2590142865bc065b7d05f4fc1637aa43ca",
+      "bytes": 521
+    },
+    {
+      "file": "r25-first-load-v10-fixture.json",
+      "sha256": "98cc837df7810903a3f4b0260857341f4228794b7e7890629b718745e6c2bbc3",
+      "bytes": 644
+    },
+    {
+      "file": "r25-first-load-v10-receipt.json",
+      "sha256": "affd4c659aad9d340a5e8c2496ad359e65f1656887492b971137b732d9e2686d",
+      "bytes": 167822
+    },
+    {
+      "file": "r25-first-load-v10-runner.json",
+      "sha256": "6561ec841cf40913218f60d83e35728027a4d06f348fd5956f91957ed388a623",
+      "bytes": 1211
+    },
+    {
+      "file": "r25-first-load-v10-timing.json",
+      "sha256": "2539f432980060fcdb5d1ddb3f7dae7d0550ce49ab5d3699b10408e7e2dd3e79",
+      "bytes": 1710
+    },
+    {
+      "file": "r25-first-load-v11-acoustic.json",
+      "sha256": "3b72ce4e75fb71402a64833c503fcdc8f00ad844f22223cd503342a01f7283ee",
+      "bytes": 1505
+    },
+    {
+      "file": "r25-first-load-v11-capture.wav.timing.json",
+      "sha256": "382189c9fa8b8d87406dcfb67c36e893612c13b202339e3dd22684d20d0816e3",
+      "bytes": 521
+    },
+    {
+      "file": "r25-first-load-v11-fixture.json",
+      "sha256": "c40a470b97d7b091d2b3331d78017c9afa4dd2e45279ca4bf378ce7086cd38fd",
+      "bytes": 644
+    },
+    {
+      "file": "r25-first-load-v11-receipt.json",
+      "sha256": "cc6c76bfa2a8cc5168be61d7d57338b51bc7e63bd8b9c696d5a8e786f4753f32",
+      "bytes": 168309
+    },
+    {
+      "file": "r25-first-load-v11-runner.json",
+      "sha256": "846a4cef0e6553c16e7b4841d86ec1d7a4a1fc92280968ebfa7c7cf83bdb5c53",
+      "bytes": 1176
+    },
+    {
+      "file": "r25-first-load-v11-timing.json",
+      "sha256": "2836a08caa171c3372bc6701cb205469eb7d28079512123aa3f219fc09643feb",
+      "bytes": 1664
+    },
+    {
+      "file": "r25-full-v11-changed-acoustic.json",
+      "sha256": "6b974f3420ed6a3327f28657afc9d0af64249bc714309aae7fe2ef24e6303284",
+      "bytes": 1515
+    },
+    {
+      "file": "r25-full-v11-changed-capture-timing.json",
+      "sha256": "57627736e46239781cb67dac4781e4312be8c62b82a828fbd64abf5f69c7fa3b",
+      "bytes": 521
+    },
+    {
+      "file": "r25-full-v11-cleanup.json",
+      "sha256": "1ddd3e4b65739b57eca3b8d479112cea8b93dc3b1a9aa6f573a4d7ccc3733c7a",
+      "bytes": 911
+    },
+    {
+      "file": "r25-full-v11-initial-acoustic.json",
+      "sha256": "e3bbba9a1acd4241c7a1468f35c9ad29534a07222a053f99e7b3b531c3a574c6",
+      "bytes": 1539
+    },
+    {
+      "file": "r25-full-v11-initial-capture-timing.json",
+      "sha256": "6b70217454df7ddcf41961d15f8ecb331c2f7228319477e23f45818f89cc5737",
+      "bytes": 521
+    },
+    {
+      "file": "r25-full-v11-missing-acoustic.json",
+      "sha256": "4bba6089f22e093e7bcc6b258deba64df577c5982edf02ae18a5b8da616a8769",
+      "bytes": 1508
+    },
+    {
+      "file": "r25-full-v11-missing-capture-timing.json",
+      "sha256": "23b4bc9138b106179f6274a6c24ef0b0bba60927055ae2e51258c71c9257d5c5",
+      "bytes": 520
+    },
+    {
+      "file": "r25-full-v11-receipt.json",
+      "sha256": "d2bd5012db8369159a87a37b9bf0cb5c269ca469c6400723aded50d7111e1aff",
+      "bytes": 56518
+    },
+    {
+      "file": "r25-full-v11-receipt.json.phases.jsonl",
+      "sha256": "eac6f74ed98e3259cde27a04b357005d38346a5994ad098769b7706c769d8d4f",
+      "bytes": 849
+    },
+    {
+      "file": "r25-full-v11-reused-acoustic.json",
+      "sha256": "aaa474f854a61047fe3a6591fffadc90d6708442046735ac8d10d248c176d5ea",
+      "bytes": 1493
+    },
+    {
+      "file": "r25-full-v11-reused-capture-timing.json",
+      "sha256": "2c4819afe613a9a4152e8ea6b30673ba9b4decdd0c021fe19fc9a4199d3580aa",
+      "bytes": 520
+    },
+    {
+      "file": "r25-full-v12-changed-acoustic.json",
+      "sha256": "96721f4221cb3230c495a44faa73e36d898e2c856b388986033735810fd143a1",
+      "bytes": 1531
+    },
+    {
+      "file": "r25-full-v12-changed-capture-timing.json",
+      "sha256": "a1d9bd9be29641cb5cb3d3504794b649569caaa85e72dd56981102a1e0cd4f67",
+      "bytes": 521
+    },
+    {
+      "file": "r25-full-v12-cleanup.json",
+      "sha256": "d1bc7668cca9bd11e6bc25a6a5dc4717061c0e7660ac1c3f88de9120a896fe7e",
+      "bytes": 953
+    },
+    {
+      "file": "r25-full-v12-initial-acoustic.json",
+      "sha256": "7ae90426a396d8bda044dca9fe50661fcce35c64ca10dbd4e533accbadcb2d40",
+      "bytes": 1510
+    },
+    {
+      "file": "r25-full-v12-initial-capture-timing.json",
+      "sha256": "0e566005908e1ef3f126f6fd8a0b09422a8259d7191c38f1d3a383484271a36a",
+      "bytes": 521
+    },
+    {
+      "file": "r25-full-v12-missing-acoustic.json",
+      "sha256": "fa573155c346ee4ef1f0b1d87e9c5fbe18c4508668599c2f84fc972e79ff751a",
+      "bytes": 1525
+    },
+    {
+      "file": "r25-full-v12-missing-capture-timing.json",
+      "sha256": "d415308bac84d559e8b68f33c86966a1c3e193c57c8b41dde777e341d6205051",
+      "bytes": 520
+    },
+    {
+      "file": "r25-full-v12-receipt.json",
+      "sha256": "903b4d3e6a71d04be5c5601e293e4616f557b75ff6c2d74c072329406137073e",
+      "bytes": 57919
+    },
+    {
+      "file": "r25-full-v12-receipt.json.phases.jsonl",
+      "sha256": "9fc0031b2a864ec77e24168c8d81c0358dd9cd57e70228a1b81c28c511401596",
+      "bytes": 849
+    },
+    {
+      "file": "r25-full-v12-reused-acoustic.json",
+      "sha256": "9faf1cf94c374379fb265cc10402362a0c66adfed5b385e6f2228e2a9e6162ff",
+      "bytes": 1538
+    },
+    {
+      "file": "r25-full-v12-reused-capture-timing.json",
+      "sha256": "e35a4f84d806329b8cf6a4d686a4ce3a42d85abefc2359a90da184def33f7586",
+      "bytes": 520
+    },
+    {
+      "file": "r25-native-qualification.json",
+      "sha256": "8f3283b4fd9da8ad152aae72718c856f888ff09945a3522b2e0d3110420831da",
+      "bytes": 6376
+    },
+    {
+      "file": "r25-packet-cancel-v11-acoustic.json",
+      "sha256": "4103d5670709d3ee60e5091e796faf090613b55c165ea82b653985e9b46237a1",
+      "bytes": 1520
+    },
+    {
+      "file": "r25-packet-cancel-v11-capture.wav.timing.json",
+      "sha256": "c90fb5284f079ff588e8821bf8b5268215cb92464a7a1197b5ccab2644e9eb05",
+      "bytes": 520
+    },
+    {
+      "file": "r25-packet-cancel-v11-fixture.json",
+      "sha256": "ae3cb409919d9d4841ee08eae58180c984a1a1bc71aefbbe0ff6540238e92597",
+      "bytes": 647
+    },
+    {
+      "file": "r25-packet-cancel-v11-receipt.json",
+      "sha256": "6f223d60be6dbb6f621c32a80cf4a1c4a21d64c7a175328036b7216ab393f703",
+      "bytes": 16821
+    },
+    {
+      "file": "r25-packet-cancel-v11-runner.json",
+      "sha256": "650126cd3f101c5e8e2318df935897456db9837c2f166856a2ea358c34df31ea",
+      "bytes": 794
+    },
+    {
+      "file": "r25-reusable-v11-acoustic.json",
+      "sha256": "e1c3fa9f3883754ad0fc58ccc8b4a0919f2c5000d6c863bb77239a2440765201",
+      "bytes": 1517
+    },
+    {
+      "file": "r25-reusable-v11-capture.wav.timing.json",
+      "sha256": "eeb48a1e208ad0020e5af48fdadd0ed8c8a05f3cf023342d068f25baffb9d1a3",
+      "bytes": 519
+    },
+    {
+      "file": "r25-reusable-v11-fixture.json",
+      "sha256": "63e4d612000736679795239e51f3d8a129d1fffa49926ff40118d1cf3da3021d",
+      "bytes": 850
+    },
+    {
+      "file": "r25-reusable-v11-receipt.json",
+      "sha256": "afa8d8626a56e9db4b17b1fbf972077478207a8a41909101523c060bc8e04e8c",
+      "bytes": 9898
+    },
+    {
+      "file": "r25-reusable-v11-runner.json",
+      "sha256": "23145efb13344273d5b31831640086071501ac950fa1759952f8a23fcf39e671",
+      "bytes": 1140
+    },
+    {
+      "file": "r25-reusable-v11-timing.json",
+      "sha256": "058a9020ff2048972f9ac9f08260e00838943108a165b1611a233cafd25b3081",
+      "bytes": 1647
+    },
+    {
+      "file": "r25-v11-candidate.json",
+      "sha256": "aaa0e93e4fdcf824fdae16fef37005f5f769773ea25e07f88c89bd945b1562b7",
+      "bytes": 738
+    },
+    {
+      "file": "r25-v12-candidate.json",
+      "sha256": "bdd9a3e8b2716d0e7e1fc9c3381bcc02e200cedbb46dc71aac8664e231a36a7c",
+      "bytes": 775
+    },
+    {
+      "file": "r6-full-v9-changed-comparison.json",
+      "sha256": "f479bc4eff57813b0e2c953a0801240150511c80b29138713d68194f599c9364",
+      "bytes": 1515
+    },
+    {
+      "file": "r6-full-v9-missing-comparison.json",
+      "sha256": "131297c54a575935d6320c38cdd8e054f6ca13d96f9b0d739a92b197ca585bf5",
+      "bytes": 1502
+    },
+    {
+      "file": "r6-full-v9-reused-comparison.json",
+      "sha256": "ddad5e8eb772af466e457b869d7dbc59fce388fa1235946fa6ab9e754bd5a1dc",
+      "bytes": 1523
+    },
+    {
+      "file": "receipt-inventory.json",
+      "sha256": "4e817f83f5049c8ccfd811f5817dcfe7c83d3cb18692f2682c5fcbb0387a135d",
+      "bytes": 5021
+    },
+    {
+      "file": "regeneration-v3-changed-acoustic.json",
+      "sha256": "a1a0b7f8bcdca19cae020453e53da838d429289f59759c85d6b58c045221af98",
+      "bytes": 1523
+    },
+    {
+      "file": "regeneration-v3-failed-cleanup.json",
+      "sha256": "7bc8585fbc7efd4784d8bbee4d6248b87b27d281220fdf653118093957387db1",
+      "bytes": 903
+    },
+    {
+      "file": "regeneration-v3-failed-receipt.json",
+      "sha256": "66210b0581caf43b783d1a5ab578dea99366f6b5036fb9fcfb7efac100e6150c",
+      "bytes": 56975
+    },
+    {
+      "file": "regeneration-v3-missing-acoustic.json",
+      "sha256": "503e184657787f0cf3c2478ae46ebd1eb0f6d03842511910d6a56236cd3958dd",
+      "bytes": 1526
+    },
+    {
+      "file": "reusable-v3-acoustic.json",
+      "sha256": "fe6b89056b72a07449528618167a718650bdd052f2a3bd1d51bcf00e3451f232",
+      "bytes": 1513
+    },
+    {
+      "file": "reusable-v3-receipt.json",
+      "sha256": "f5f549f0413ebe13968bd4c893e08262efd4c3803c2c04b6c2df8af74649c007",
+      "bytes": 9044
+    },
+    {
+      "file": "reusable-v3-runner.json",
+      "sha256": "e01500cd8bd56e913549e9eed409936518a376b784c28f87977f176d30e50c84",
+      "bytes": 763
+    },
+    {
+      "file": "reusable-v3-timing.json",
+      "sha256": "b8fa681a472e64feb193c86e46231e2ac9150f3d7c60804bb87b17ee6efabd00",
+      "bytes": 841
+    }
+  ]
+}

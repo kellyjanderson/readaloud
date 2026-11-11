@@ -362,8 +362,17 @@ against the pinned revision before enabling native scenes and delivery controls,
 including when a local model folder is supplied. First verification shows real
 byte progress; unchanged file state reuses its local verification receipt. An
 unverified checkpoint keeps plain delivery and separate turns while preserving
-saved directions. This verification adds first-run preparation time and belongs inside the ten-second first-load hard limit. The startup goal remains two seconds. Qualification against the revised limits requires emitted-audio evidence.
-Word highlighting remains an estimate over scene duration. Perceptual continuity across scene boundaries,
+saved directions. Verification performed during normal app startup is reported with that startup. Verification triggered by a document load after startup belongs inside its ten-second first-load hard limit. The launch-to-speech goal remains two seconds. Qualification requires separate startup/load boundaries and emitted-audio evidence.
+Drama can begin playing validated audio packets while the rest of a native scene
+is still rendering. Saving reusable audio still waits for the complete scene;
+an interrupted prefix is never saved as a completed passage. Until the final
+duration is known, highlighting stays at the scene's source anchor. Completed
+scenes retain approximate word highlighting rather than word-level alignment.
+The two-second startup goal, five-second reusable-book limit and ten-second
+first-load limit exclude normal app startup and include preparation needed by
+the measured document load after startup. These are requirements;
+the current S6 qualification record in issue #137 tracks remaining failures.
+Perceptual continuity across scene boundaries,
 speech-rate handling and broader #111 acceptance remain open.
 
 Sources: [Drama bf16 model card](https://huggingface.co/mlx-community/fish-audio-drama-3-bf16),

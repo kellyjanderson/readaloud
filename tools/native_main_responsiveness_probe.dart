@@ -13,19 +13,36 @@ class NativeMainResponsivenessProbe {
   bool _closed = false;
   int _samples = 0, _maximumMs = 0;
   String? _error;
+  int _activeSamples = 0;
 
   void start(String Function() phase) {
     _timer ??= Timer.periodic(const Duration(milliseconds: 100), (_) {
       if (_closed || _pending != null) return;
       final started = _clock.elapsedMilliseconds;
+      final requestedUnixMicros = DateTime.now().microsecondsSinceEpoch;
       final stage = phase();
       _pending = _channel
-          .invokeMethod<void>('runtimeFootprint')
+          .invokeMapMethod<String, Object?>('speechWorkActivityProbe')
           .then<void>(
-            (_) {
+            (reply) {
               if (_closed) return;
+              final owners = reply?['owners'];
+              final entered = reply?['nativeEntryUnixMicros'];
+              final active = reply?['applicationActive'];
+              if (owners is! int ||
+                  owners < 0 ||
+                  owners > 8 ||
+                  entered is! int ||
+                  entered <= 0 ||
+                  active is! bool) {
+                _error =
+                    'Native main-thread probe returned invalid ownership/timing.';
+                return;
+              }
+              final returnedUnixMicros = DateTime.now().microsecondsSinceEpoch;
               final elapsed = _clock.elapsedMilliseconds - started;
               _samples++;
+              if (active) _activeSamples++;
               if (elapsed > _maximumMs) _maximumMs = elapsed;
               if (elapsed > 100) {
                 if (_delays.length == 16) _delays.removeAt(0);
@@ -34,6 +51,11 @@ class NativeMainResponsivenessProbe {
                   'elapsedMs': elapsed,
                   'phaseAtStart': stage,
                   'phaseAtEnd': phase(),
+                  'requestedUnixMicros': requestedUnixMicros,
+                  'nativeEntryUnixMicros': entered,
+                  'returnedUnixMicros': returnedUnixMicros,
+                  'applicationActive': active,
+                  'owners': owners,
                 });
               }
             },
@@ -50,8 +72,9 @@ class NativeMainResponsivenessProbe {
   Future<Map<String, Object?>> close() async {
     _timer?.cancel();
     // One outstanding native request may finish while the UI isolate drains.
-    // This observes the real route through the platform thread and utility
-    // footprint sampling. No Flutter/UI state is touched by the native worker.
+    // The native handler reads its bounded owner count and returns immediately.
+    // A utility-queue footprint query would mix background scheduling/I/O into
+    // this measurement and could not isolate the main-thread channel route.
     try {
       await _pending?.timeout(const Duration(seconds: 2));
     } on TimeoutException {
@@ -61,12 +84,13 @@ class NativeMainResponsivenessProbe {
     }
     return {
       'samples': _samples,
+      'applicationActiveSamples': _activeSamples,
       'maxRoundTripMs': _maximumMs,
       'delayedRequests': _delays,
       'error': _error,
       'passed': _samples > 0 && _error == null && _maximumMs <= 250,
       'scope':
-          'UI-isolate request through the native main-thread channel and utility footprint query back to UI; no keyboard or mouse delivery claim.',
+          'Monotonic UI-isolate roundtrip through the native main-thread channel; unchanged 250ms gate. Wall-clock request/native-entry/return stamps and active-app state diagnose delivery only and never replace the gate. No utility query or keyboard/mouse delivery claim.',
     };
   }
 }

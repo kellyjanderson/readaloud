@@ -1,0 +1,79 @@
+[
+  {
+    "packet": "packet-0019.wav",
+    "expectedSeconds": 31.523151077097506,
+    "captureStartSeconds": 31.523151041666665,
+    "shiftMs": -3.543084048374112e-05,
+    "fullActiveCorrelation": 0.9999944084682125
+  },
+  {
+    "packet": "packet-0020.wav",
+    "expectedSeconds": 31.84823044217687,
+    "captureStartSeconds": 31.84822916666667,
+    "shiftMs": -0.0012755102005712615,
+    "fullActiveCorrelation": 0.999941789863932
+  },
+  {
+    "packet": "packet-0021.wav",
+    "expectedSeconds": 32.17330980725624,
+    "captureStartSeconds": 32.25961458333333,
+    "shiftMs": 86.30477607709253,
+    "fullActiveCorrelation": 0.9346431412507008
+  },
+  {
+    "packet": "packet-0022.wav",
+    "expectedSeconds": 32.4983891723356,
+    "captureStartSeconds": 32.702921875,
+    "shiftMs": 204.5327026644017,
+    "fullActiveCorrelation": 0.9997148333165482
+  },
+  {
+    "packet": "packet-0023.wav",
+    "expectedSeconds": 32.82346853741497,
+    "captureStartSeconds": 33.02800520833333,
+    "shiftMs": 204.53667091836536,
+    "fullActiveCorrelation": 0.9995810133667611
+  },
+  {
+    "packet": "packet-0024.wav",
+    "expectedSeconds": 33.14854790249433,
+    "captureStartSeconds": 33.35308333333333,
+    "shiftMs": 204.53543083900172,
+    "fullActiveCorrelation": 0.9999961498383473
+  },
+  {
+    "packet": "packet-0025.wav",
+    "expectedSeconds": 33.4736272675737,
+    "captureStartSeconds": 33.67816145833333,
+    "shiftMs": 204.53419075963097,
+    "fullActiveCorrelation": 0.9999151499280965
+  },
+  {
+    "packet": "packet-0030.wav",
+    "expectedSeconds": 35.099024092970524,
+    "captureStartSeconds": 35.53576041666667,
+    "shiftMs": 436.73632369614523,
+    "fullActiveCorrelation": 0.9999915842146421
+  },
+  {
+    "packet": "packet-0040.wav",
+    "expectedSeconds": 38.34981774376418,
+    "captureStartSeconds": 39.05358333333333,
+    "shiftMs": 703.7655895691514,
+    "fullActiveCorrelation": 0.9999972553796069
+  },
+  {
+    "packet": "packet-0050.wav",
+    "expectedSeconds": 41.60061139455782,
+    "captureStartSeconds": 42.82682291666667,
+    "shiftMs": 1226.211522108848,
+    "fullActiveCorrelation": 0.9994829832391533
+  },
+  {
+    "packet": "packet-0052.wav",
+    "expectedSeconds": 42.25077012471655,
+    "captureStartSeconds": 43.574921875,
+    "shiftMs": 1324.1517502834483,
+    "fullActiveCorrelation": 0.7697818124723371
+  }
+]

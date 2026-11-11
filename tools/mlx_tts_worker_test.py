@@ -3,7 +3,10 @@ import importlib.util
 import hashlib
 from pathlib import Path
 import tempfile
+import contextlib
 import io
+import json
+import wave
 import os
 import subprocess
 import sys
@@ -22,6 +25,205 @@ spec.loader.exec_module(worker)
 
 
 class GeneratorAdapterTest(unittest.TestCase):
+    def test_owned_stream_joins_real_bounded_mlx_graph_without_model_weights(self):
+        worker._unload()
+        stream = mx.new_stream(mx.gpu)
+        with mx.stream(stream):
+            parameters = {'weight': mx.ones((2, 2)) + 2}
+        with patch.object(worker, '_model_load_stream', stream), \
+                patch.object(worker, '_model_pending_parameters', parameters):
+            mx.async_eval(parameters)
+            worker._join_model_weights()
+            self.assertIsNone(worker._model_pending_parameters)
+            self.assertEqual(parameters['weight'].sum().item(), 12)
+
+    def test_drama_load_joins_async_weights_after_existing_qualification(self):
+        worker._unload()
+        events = []
+        parameters = {'weight': mx.ones((2, 2))}
+        model = SimpleNamespace(parameters=lambda: parameters)
+        stream = object()
+        with tempfile.TemporaryDirectory() as root:
+            (Path(root) / 'config.json').write_text('{}')
+            def verify(*args):
+                self.assertIsNone(worker._model_id)
+                self.assertIs(worker._model_pending_parameters, parameters)
+                events.append('verify')
+                return True
+            with patch('subprocess.check_output', return_value=b'137438953472'), \
+                    patch('mlx_audio.tts.load', side_effect=lambda *a, **k: (events.append(('load', k)), model)[1]), \
+                    patch.object(mx, 'new_stream', return_value=stream), \
+                    patch.object(mx, 'stream', return_value=contextlib.nullcontext()), \
+                    patch.object(mx, 'async_eval', side_effect=lambda tree: events.append('async')), \
+                    patch.object(mx, 'eval', side_effect=lambda tree: events.append('join')), \
+                    patch.object(mx, 'synchronize', side_effect=lambda owned: events.append(('sync', owned))), \
+                    patch.object(worker, '_verify_scene_model', side_effect=verify), \
+                    patch.object(worker, '_timing'):
+                result = worker._load('fish_drama3', root, root)
+            self.assertEqual(events, [('load', {'lazy': True}), 'async', 'verify', 'join', ('sync', stream)])
+            self.assertTrue(result['loaded'])
+            self.assertTrue(result['nativeScenesQualified'])
+            self.assertIsNone(worker._model_pending_parameters)
+            self.assertEqual(worker._model_id, 'fish_drama3')
+        worker._unload()
+
+    def test_failed_qualification_still_joins_and_cannot_report_loaded(self):
+        worker._unload()
+        parameters = {}
+        model = SimpleNamespace(parameters=lambda: parameters)
+        with tempfile.TemporaryDirectory() as root:
+            (Path(root) / 'config.json').write_text('{}')
+            with patch('subprocess.check_output', return_value=b'137438953472'), \
+                    patch('mlx_audio.tts.load', return_value=model), \
+                    patch.object(mx, 'async_eval'), patch.object(mx, 'eval') as join, \
+                    patch.object(mx, 'synchronize') as synchronize, \
+                    patch.object(worker, '_verify_scene_model', side_effect=RuntimeError('qualification failed')), \
+                    patch.object(worker, '_timing'):
+                with self.assertRaisesRegex(RuntimeError, 'qualification failed'):
+                    worker._load('fish_drama3', root, root)
+                join.assert_called_once_with(parameters)
+                synchronize.assert_called_once_with(worker._model_load_stream)
+            self.assertIsNone(worker._model_id)
+            self.assertIsNone(worker._model_pending_parameters)
+        worker._unload()
+
+    def test_unload_joins_owned_pending_work_before_releasing_model(self):
+        worker._unload()
+        parameters, model, stream = {}, object(), object()
+        with patch.object(worker, '_model', model), \
+                patch.object(worker, '_model_pending_parameters', parameters), \
+                patch.object(worker, '_model_load_stream', stream), \
+                patch.object(mx, 'eval') as join, patch.object(mx, 'synchronize') as synchronize:
+            worker._unload()
+            join.assert_called_once_with(parameters)
+            synchronize.assert_called_once_with(stream)
+            self.assertIsNone(worker._model)
+            self.assertIsNone(worker._model_load_stream)
+            self.assertIsNone(worker._model_pending_parameters)
+
+    def test_drama_reference_timing_restores_instance_on_failure_and_close(self):
+        timings = []
+        class Model:
+            def _voice(self, ref):
+                return ref
+            def generate(self, **kwargs):
+                self._voice('reference')
+                yield 'first'
+                raise RuntimeError('late error')
+        model = Model()
+        for close in (False, True):
+            with self.subTest(close=close), patch.object(worker, '_timing', side_effect=lambda stage, start: timings.append(stage)):
+                results = worker._drama_results(model)
+                self.assertEqual(next(results), 'first')
+                self.assertIn('_voice', vars(model))
+                if close:
+                    results.close()
+                else:
+                    with self.assertRaisesRegex(RuntimeError, 'late error'):
+                        next(results)
+                self.assertNotIn('_voice', vars(model))
+        self.assertEqual(timings, ['referencePrepared'] * 2)
+
+    def test_failed_unload_retains_stream_and_tree_until_join_or_retirement(self):
+        worker._unload()
+        parameters, model, stream = {}, object(), object()
+        with patch.object(worker, '_model', model), \
+                patch.object(worker, '_model_pending_parameters', parameters), \
+                patch.object(worker, '_model_load_stream', stream), \
+                patch.object(mx, 'eval', side_effect=RuntimeError('join failed')):
+            with self.assertRaisesRegex(RuntimeError, 'join failed'):
+                worker._unload()
+            self.assertIs(worker._model, model)
+            self.assertIs(worker._model_load_stream, stream)
+            self.assertIs(worker._model_pending_parameters, parameters)
+
+    def test_stage_timing_is_request_scoped_diagnostic_without_fake_work(self):
+        with patch.object(worker, '_active_request_id', 'load-request'), \
+                patch.object(worker, '_reply') as reply, \
+                patch.object(worker.time, 'monotonic', return_value=1.25), \
+                contextlib.redirect_stderr(io.StringIO()):
+            worker._timing('modelBuildAndCodec', 1)
+        args, event = reply.call_args
+        self.assertEqual(args, ('load-request',))
+        self.assertEqual(event['stage'], 'modelBuildAndCodec')
+        self.assertEqual(event['elapsedMilliseconds'], 250)
+        self.assertIsNone(event['completed'])
+        self.assertIsNone(event['total'])
+
+    def test_opt_in_packets_are_closed_exact_pcm_before_final_publication(self):
+        events = []
+        class Model:
+            def generate(self, **kwargs):
+                self.kwargs = kwargs
+                yield SimpleNamespace(sample_rate=24000, audio=mx.array([.2, -.2, .1]))
+                # The first immutable packet exists before requesting more PCM.
+                self.assert_packet()
+                yield SimpleNamespace(sample_rate=24000, audio=mx.array([.3, -.3]))
+        model = Model()
+        with tempfile.TemporaryDirectory() as root, patch.object(worker, '_model', model), patch.object(worker, '_model_id', 'qwen3_tts_1_7b'):
+            destination = Path(root) / 'scene.wav'
+            def packet_published():
+                self.assertFalse(destination.exists())
+                self.assertEqual(len(events), 1)
+                with wave.open(events[0]['audioPath']) as packet:
+                    self.assertEqual(packet.getnframes(), 3)
+            model.assert_packet = packet_published
+            identity = dict(sessionId='s', generationId='g', chunkId='c', synthesisIdentity='synth', bindingFingerprint='b', bindingRevision=3)
+            with patch.object(worker, '_reply', side_effect=lambda request_id, **event: events.append(event)), patch.object(worker, '_progress'):
+                result = worker._synthesize(dict(modelId='qwen3_tts_1_7b', voice='Ryan', text='Hello', outputPath=str(destination), enableAudioPackets=True, **identity))
+            self.assertEqual([(e['packetIndex'], e['frameStart'], e['frameCount']) for e in events], [(0, 0, 3), (1, 3, 2)])
+            self.assertEqual(result['streamedPacketCount'], 2)
+            self.assertEqual(result['streamedFrameCount'], 5)
+            for event in events:
+                self.assertEqual({key: event[key] for key in identity}, identity)
+                self.assertEqual((event['channels'], event['bitsPerSample']), (1, 16))
+            with wave.open(str(destination)) as full:
+                actual = full.readframes(full.getnframes())
+            expected = b''
+            for event in events:
+                with wave.open(event['audioPath']) as packet:
+                    expected += packet.readframes(packet.getnframes())
+            self.assertEqual(actual, expected)
+
+    def test_packet_opt_in_requires_full_identity_and_no_packets_by_default(self):
+        class Model:
+            def generate(self, **kwargs):
+                yield SimpleNamespace(sample_rate=24000, audio=mx.array([.2, -.2]))
+        with tempfile.TemporaryDirectory() as root, patch.object(worker, '_model', Model()), patch.object(worker, '_model_id', 'qwen3_tts_1_7b'), patch.object(worker, '_reply') as reply, patch.object(worker, '_progress'):
+            request = dict(modelId='qwen3_tts_1_7b', voice='Ryan', text='Hello', outputPath=str(Path(root) / 'scene.wav'))
+            with self.assertRaisesRegex(ValueError, 'packet identity'):
+                worker._synthesize(dict(request, enableAudioPackets=True))
+            result = worker._synthesize(request)
+            reply.assert_not_called()
+            self.assertEqual(result['streamedPacketCount'], 0)
+            self.assertEqual(list(Path(root).glob('packet-*.wav')), [])
+
+    def test_streamed_late_failure_retains_packets_without_publishing_scene(self):
+        class Model:
+            def generate(self, **kwargs):
+                yield SimpleNamespace(sample_rate=24000, audio=mx.array([.2, -.2]))
+                raise RuntimeError('late producer failure')
+        with tempfile.TemporaryDirectory() as root, patch.object(worker, '_model', Model()), patch.object(worker, '_model_id', 'qwen3_tts_1_7b'), patch.object(worker, '_reply') as reply, patch.object(worker, '_progress'):
+            destination = Path(root) / 'scene.wav'
+            with self.assertRaisesRegex(RuntimeError, 'late producer failure'):
+                worker._synthesize(dict(modelId='qwen3_tts_1_7b', voice='Ryan', text='Hello', outputPath=str(destination), enableAudioPackets=True, sessionId='s', generationId='g', chunkId='c', synthesisIdentity='synth', bindingFingerprint='b', bindingRevision=1))
+            reply.assert_called_once()
+            self.assertFalse(destination.exists())
+            with wave.open(str(Path(root) / 'packet-0000.wav')) as packet:
+                self.assertEqual(packet.getnframes(), 2)
+
+    def test_packet_limit_retains_prefix_without_complete_publication(self):
+        class Model:
+            def generate(self, **kwargs):
+                for _ in range(2049):
+                    yield SimpleNamespace(sample_rate=24000, audio=mx.array([.2]))
+        with tempfile.TemporaryDirectory() as root, patch.object(worker, '_model', Model()), patch.object(worker, '_model_id', 'qwen3_tts_1_7b'), patch.object(worker, '_reply'), patch.object(worker, '_progress'):
+            destination = Path(root) / 'scene.wav'
+            with self.assertRaisesRegex(RuntimeError, 'spool exceeded'):
+                worker._synthesize(dict(modelId='qwen3_tts_1_7b', voice='Ryan', text='Hello', outputPath=str(destination), enableAudioPackets=True, sessionId='s', generationId='g', chunkId='c', synthesisIdentity='synth', bindingFingerprint='b', bindingRevision=1))
+            self.assertFalse(destination.exists())
+            self.assertEqual(len(list(Path(root).glob('packet-*.wav'))), 2048)
+
     def test_model_qualification_is_content_based_and_cached_by_exact_file_state(self):
         with tempfile.TemporaryDirectory() as root:
             directory=Path(root)/'model'; directory.mkdir()
@@ -111,6 +313,8 @@ class GeneratorAdapterTest(unittest.TestCase):
             self.assertEqual(calls[0]['ref_text'], [
                 '<|speaker:0|> Reference alice.', '<|speaker:1|> Reference beth.'])
             self.assertTrue(calls[0]['stream'])
+            self.assertEqual(calls[0]['streaming_interval'], 0.32)
+            self.assertEqual(calls[0]['first_chunk_frames'], 4)
 
     def test_installed_drama_generator_exact_boundary_writes_complete_wav(self):
         """Use the installed producer's real framing, with bounded codec input.

@@ -5,8 +5,10 @@
 # fixture_sha256 and trials. Each trial has id, valid (bool),
 # monotonic microsecond events, input_ack_us, max_main_stall_us and output_evidence
 # {path, sha256, route, basis: "recorded-output"}. Events are launch_us,
-# first_interactive_us, play_us, first_pcm_us, audible_us. For intake after launch,
-# also supply document_open_us. first_pcm_us/player callbacks are NOT audible_us.
+# first_interactive_us, play_us, first_pcm_us, audible_us. Every qualified trial
+# also needs app_startup_complete_us and document_open_us, in that order after
+# launch. Hard limits always start at document_open_us, including launch scenarios.
+# first_pcm_us/player callbacks are NOT audible_us.
 # All timestamps must share an explicitly identified clock_domain per trial.
 # The capture owner supplies actual output onset, including capture clock mapping.
 # Candidate requires commit, binary_sha256, host, architecture, build_mode,
@@ -16,7 +18,7 @@ require 'json'
 require_relative 'startup_timing_policy'
 
 module Rc2TimingReport
-  EVENTS = %w[launch_us first_interactive_us play_us first_pcm_us audible_us].freeze
+  EVENTS = %w[launch_us first_interactive_us app_startup_complete_us document_open_us play_us first_pcm_us audible_us].freeze
   UI_LIMIT_US = 100_000
   SHA256 = /\A[0-9a-f]{64}\z/
 
@@ -63,6 +65,8 @@ module Rc2TimingReport
       case_errors << 'duplicate trial IDs' unless trials.map { |t| t['id'] }.uniq.length == trials.length
       samples = []
       open_samples = []
+      startup_samples = []
+      play_samples = []
       trial_results = trials.map do |trial|
         problems = []
         problems << 'trial id missing' if trial['id'].to_s.empty?
@@ -80,19 +84,17 @@ module Rc2TimingReport
           # must still follow Play; prefetch is not permission to autoplay.
           ordered = trial.values_at('launch_us', 'first_interactive_us', 'play_us', 'audible_us')
           problems << 'events out of order' unless ordered.each_cons(2).all? { |a, b| a <= b } &&
-            trial['first_pcm_us'].between?(trial['launch_us'], trial['audible_us'])
+            trial['first_pcm_us'].between?(trial['document_open_us'], trial['audible_us'])
           latency = trial['audible_us'] - trial['launch_us']
           samples << latency
-          problems << "launch-to-audible exceeds #{hard_limit_ms} ms hard limit" if scenario == 'launch' && latency > hard_limit_us
-          problems << 'document-open trial is missing document_open_us' if scenario == 'document-open' && !trial.key?('document_open_us')
-          if trial.key?('document_open_us')
-            opened = trial['document_open_us']
-            if !opened.is_a?(Numeric) || !opened.finite? || opened < trial['launch_us'] || opened > trial['play_us']
-              problems << 'document_open_us invalid'
-            else
-              open_samples << trial['audible_us'] - opened
-              problems << "document-open-to-audible exceeds #{hard_limit_ms} ms hard limit" if open_samples.last > hard_limit_us
-            end
+          startup_order = trial.values_at('launch_us', 'app_startup_complete_us', 'document_open_us', 'play_us', 'audible_us')
+          if startup_order.each_cons(2).all? { |a, b| a <= b }
+            startup_samples << trial['app_startup_complete_us'] - trial['launch_us']
+            open_samples << trial['audible_us'] - trial['document_open_us']
+            play_samples << trial['audible_us'] - trial['play_us']
+            problems << "document-open-to-audible exceeds #{hard_limit_ms} ms hard limit" if open_samples.last > hard_limit_us
+          else
+            problems << 'post-startup document-open events out of order'
           end
         end
         %w[input_ack_us max_main_stall_us].each do |key|
@@ -109,18 +111,22 @@ module Rc2TimingReport
           %w[path route clock_mapping onset_method].all? { |key| !evidence[key].to_s.empty? }
         problems << 'environment/contention description missing' if trial['environment'].to_s.empty?
         {id: trial['id'], verdict: problems.empty? ? 'pass' : 'fail', errors: problems,
-         events_us: trial.select { |key, _| EVENTS.include?(key) || key == 'document_open_us' }}
+         events_us: trial.select { |key, _| EVENTS.include?(key) }}
       end
       case_errors << 'one or more trials failed or are incomplete' if trial_results.any? { |r| %w[fail incomplete].include?(r[:verdict]) }
       {id: record['id'], condition: record['condition'], scenario: scenario, fixture_sha256: record['fixture_sha256'],
        timing_policy: StartupTimingPolicy::REVISION, load_class: load_class,
        goal_ms: StartupTimingPolicy::GOAL_MS, hard_limit_ms: hard_limit_ms,
-       hard_limit_met: !(scenario == 'launch' ? samples : open_samples).empty? &&
-         (scenario == 'launch' ? samples : open_samples).all? { |n| n <= hard_limit_us },
+       hard_limit_origin: 'document_open_us',
+       hard_limit_met: !open_samples.empty? && open_samples.length == trials.count { |t| t['valid'] == true } &&
+         open_samples.all? { |n| n <= hard_limit_us },
+       goal_origin: scenario == 'launch' ? 'launch_us' : 'document_open_us',
        goal_met: !(scenario == 'launch' ? samples : open_samples).empty? &&
          (scenario == 'launch' ? samples : open_samples).all? { |n| n <= StartupTimingPolicy::GOAL_MS * 1000 },
+       launch_goal_met: !samples.empty? && samples.all? { |n| n <= StartupTimingPolicy::GOAL_MS * 1000 },
        verdict: case_errors.empty? ? 'pass' : 'fail', errors: case_errors,
        launch_to_audible: percentiles(samples), document_open_to_audible: percentiles(open_samples),
+       app_startup: percentiles(startup_samples), play_to_audible: percentiles(play_samples),
        trials: trial_results}
     end
     errors << 'one or more cases failed' if results.any? { |c| c[:verdict] != 'pass' }

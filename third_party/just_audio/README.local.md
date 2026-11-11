@@ -30,8 +30,8 @@ scheduling, decoding or lifecycle infrastructure.
 ## Exact change and ownership
 
 Only `AudioPlayer.m` changes upstream runtime behavior. At `enqueueFrom:` entry,
-a loop-off, non-loading, non-seeking call whose target is the current native
-item computes the desired queue using `_order` and the existing per-source
+a loop-off, non-loading, non-seeking call whose target is the native queue
+snapshot's head computes the desired queue using `_order` and the existing per-source
 `lazyLoading`/`TREADMILL_SIZE` rules. An existing queue must be a pointer-identical
 prefix of that desired queue. Only after this check does the fast path update
 the index/end state, append the missing suffix and update the end action. It
@@ -39,6 +39,32 @@ does not remove items, seek, change rate or update playback position. A prune
 of an already played prefix therefore performs no native queue mutation when
 AVQueuePlayer has already removed those items. Non-prefix edits, item
 replacement, loading, seeking and loop modes retain the original rebuild.
+
+Concatenating insert/remove calls explicitly request current-item preservation;
+other callers retain the requested target. Preservation derives its head and
+prefix check from one immutable native queue snapshot. Native advancement after
+the caller's current-item read or during prefix computation can only consume a
+prefix of that snapshot, so appending the missing tail remains safe and does
+not rebuild or replay the surviving queue. A removed current item or a changed
+future order still fails the prefix check and follows the existing fallback.
+
+Played-prefix removal also resolves the new source index from the actual native
+current-item identity after rebuilding the source tree. Its removed-current
+fallback compares removed old indices with one immutable old current index.
+Previously, removing two predecessors from old index 2 decremented the index to
+1 while inspecting old index 0, then mistook old index 1 for the current item;
+the resulting enqueue skipped the still-playing source. Resolving identity also
+accounts for native advancement during removal. Source/shuffle order and the
+existing removed-current successor policy remain intact.
+
+The application also retains one logical predecessor when pruning played
+history. Upstream `onComplete:` publishes the next logical index before the
+native current-item transition necessarily settles. Removing every logical
+predecessor can therefore intentionally remove the still-live native head and
+force the removed-current fallback. A following distinct item cannot complete
+without native playback advancing to it, so one retained predecessor fences
+that transition without a timed delay. Application pins remain held until
+native removal acknowledges, and lead/capacity accounting excludes history.
 
 In particular, dynamically inserted URI sources retain upstream's default
 non-lazy setting. The patch does not cap them to two items or change their
@@ -66,10 +92,18 @@ FLUTTER_FRAMEWORK_DIR=/absolute/path/containing/FlutterMacOS.framework \
 
 The script compiles all vendored Objective-C sources against the selected
 FlutterMacOS and system AVFoundation frameworks, then invokes the production
-`enqueueFrom:` method with a recording queue. Fourteen scenarios cover preserved
+`enqueueFrom:`, completion and concatenating insert/removal methods with a recording queue. Twenty-four scenarios cover preserved
 future items, complete/pruned no-ops, actual shuffle order, lazy/mixed lazy
 preparation, native treadmill replenishment, non-prefix reorder/removal,
-pending seek, loading, both loop modes and target replacement. The script
+pending seek, loading, both loop modes, target replacement, two-predecessor
+removal, native advancement during removal, removed-current successor fallback
+and shuffled removal. Additional cases advance the native head after the caller
+reads it, before/after the queue snapshot, and during append; intentional future
+insertion still uses the reorder fallback. The batch-removal regression rejects
+the uncorrected implementation, and the snapshot-race regression rejects the
+earlier identity-reindex-only fix. The completion scenario demonstrates the
+logical-ahead/physical-head state and safe one-predecessor retention using the
+production completion and removal methods. The script
 cleans up its temporary executable/module cache and starts no Flutter engine,
 application or audio playback. These are native compilation and queue-call
 checks, not emitted-audio evidence.

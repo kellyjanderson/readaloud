@@ -17,6 +17,14 @@ context. Previously rendered v1 artifacts remain on disk; no migration deletes
 or relabels them. Cache reuse proves the same rendered voice survives a replay,
 not that independently generated turns have perceptually identical voices.
 
+MLX publication passes the immutable synthesis-attempt path and expected sample
+rate to the existing publication isolate. That worker reads the complete WAV,
+checks its format/rate and publishes the artifact. Complete PCM is not read into
+the UI isolate for this step. The attempt owner waits for publication before
+cleanup, and cancellation still suppresses returned completion; a completed
+immutable artifact may remain reusable after its consumer becomes obsolete.
+This ownership change alone does not establish native responsiveness.
+
 `ModelContentSnapshot` copies the mutable source to a private staging directory, hashes that copy, then publishes its digest-addressed directory. Native initialization opens the snapshot path whose bytes were hashed. A replacement of the source path cannot silently pair the old digest with newly opened model bytes. Voice vectors continue to be parsed and digested from the same byte buffer; the existing NumPy shape/type/finite validation remains in place. Snapshots are retained, and no automatic eviction is implemented.
 
 `AudioArtifactStore` writes a private generation containing canonical mono PCM16 WAV, metadata and a complete schema manifest, flushes all files, and atomically renames the directory into its identity bucket. A hit validates schema/completeness, WAV and PCM SHA256, metadata SHA256, canonical RIFF/data sizes, format, frames and duration. Incomplete or corrupt generations are misses. A replacement gets a distinct generation path; published or queued paths are never overwritten. Publication is atomic within the local filesystem, not a claim of survival across sudden power loss. Failed writers remove only their own staging directories.
@@ -51,3 +59,30 @@ raw/boundary evidence fails actionably. Package replay verifies content hashes;
 matching IDs alone are not acoustic identity proof. No new eviction policy is
 introduced. [S6 #137](https://github.com/kellyjanderson/readaloud/issues/137) owns current
 native/offline/regeneration acceptance.
+
+## Incremental playable packets
+
+An opted-in MLX attempt publishes immutable mono PCM16 packet WAVs alongside its
+incomplete scene WAV. `SpeechAudioPacket` carries session, generation, chunk,
+binding and synthesis identities plus sequence, raw frame offset and format.
+The processing isolate validates these before an awaited, nonterminal
+`chunkPacketReady` event. Packet count is capped at 2048 and scene duration at
+600 seconds; format and contiguous frame order cannot change mid-scene.
+`chunkReady` remains the sole complete-scene event. Complete publication verifies
+that the finalized raw WAV contains the same packet frames; it is not queued a
+second time after streaming playback.
+
+The existing engine owns packet admission for both ordinary playback and book
+repair. Queue/pin identities distinguish packet files while progress, resume and
+edit ownership retain the parent scene identity. Onset correction preserves raw
+frame accounting; final scene metadata retains actual predecessor/boundary
+context. Unknown trailing silence remains unknown until final evidence exists.
+The versioned `boundary-native-rate-v3` policy clamps frame rounding to avoid
+trimming audible frames. Older derivatives keep their historical identities.
+
+Cancellation suppresses stale packets and terminal results, then drains producer
+and native queue ownership. Streamed attempt spools remain private and retained
+after drain because native consumers can still reference packet paths. Pins do
+not delete files. There is no spool eviction yet; the per-scene bound is not a
+total disk-retention bound. Packet/source tests alone do not establish emitted
+continuity, startup ceilings or human listening acceptance; see #137/#141.

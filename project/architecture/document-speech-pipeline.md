@@ -206,8 +206,10 @@ Analysis records remain separately loadable through the existing analysis owner.
 Normal app startup defers synthesis until launch/open/restore intake is known.
 Complete rendered books enter the existing player's rendered-audio capability
 without model initialization, voice loading, binding preparation or inference.
-A missing or invalid scene demands the existing bounded export/synthesis path,
-commits its output, and returns to saved-scene resolution. Valid following scenes
+A missing or invalid scene demands the existing bounded export/synthesis path.
+Validated incremental audio packets can enter playback before that scene's final
+publication; the controller awaits completion before returning to saved-scene
+resolution. Valid following scenes
 are reused. Historical boundaries incompatible with prepared segments are refused
 rather than expanded silently. Basic source spans remain approximate highlighting,
 not advanced alignment. The S6 acceptance/evidence authority is [#137](https://github.com/kellyjanderson/readaloud/issues/137);
@@ -239,3 +241,14 @@ If a saved scene descriptor is absent, regeneration ends at the next saved
 scene's start within that prepared range. It does not extend to the whole range
 and overlap valid following audio. An existing invalid scene retains its own
 source bounds. This preserves the next scene for ordinary saved-scene resolution.
+
+The controller owns one render stream per demanded scene, using Dart's existing
+stream/iterator primitives rather than another scheduler. Packet callbacks await
+consumer admission; document/session replacement cancels and drains the render
+owner before releasing its files. Every packet retains its complete parent scene
+source span. Unknown duration reports the scene anchor; it does not invent word
+timestamps. Final duration and completion permit the source ending to advance.
+Only a finalized scene enters the reusable scene repository or portable package.
+Late success/failure from a retired session cannot start speech or complete a new
+session. The original Play timestamp survives resource preparation, so readiness
+does not restart startup accounting.

@@ -230,7 +230,7 @@
     } else {
         _index = 0;
     }
-    [self enqueueFrom:_index];
+    [self enqueueFrom:_index preservingCurrentItem:YES];
     // Notify each new IndexedAudioSource that it's been attached to the player.
     for (int i = 0; i < [_indexedAudioSources count]; i++) {
         if (!_indexedAudioSources[i].isAttached) {
@@ -254,6 +254,8 @@
     }
     // Re-index the remaining audio sources.
     NSArray<IndexedAudioSource *> *oldIndexedAudioSources = _indexedAudioSources;
+    const int oldIndex = _index;
+    int removedBeforeCurrent = 0;
     _indexedAudioSources = [[NSMutableArray alloc] init];
     [_audioSource buildSequence:_indexedAudioSources treeIndex:0];
     for (int i = 0, j = 0; i < _indexedAudioSources.count; i++, j++) {
@@ -263,18 +265,20 @@
             if (oldIndexedAudioSources[j].playerItem2) {
                 [self removeItemObservers:oldIndexedAudioSources[j].playerItem2];
             }
-            if (j < _index) {
-                _index--;
-            } else if (j == _index) {
-                // The currently playing item was removed.
-            }
+            if (j < oldIndex) removedBeforeCurrent++;
             j++;
         }
     }
+    // Pruning several predecessors must compare their old indices against one
+    // immutable index. More importantly, AVQueuePlayer may advance while the
+    // source tree is rebuilt: retain its actual current item whenever it remains
+    // in the new sequence instead of replacing it with a guessed neighbour.
+    int currentIndex = [self indexForItem:(IndexedPlayerItem *)_player.currentItem];
+    _index = currentIndex >= 0 ? currentIndex : oldIndex - removedBeforeCurrent;
     [self updateOrder];
     if (_index >= _indexedAudioSources.count) _index = (int)_indexedAudioSources.count - 1;
     if (_index < 0) _index = 0;
-    [self enqueueFrom:_index];
+    [self enqueueFrom:_index preservingCurrentItem:YES];
     [self broadcastPlaybackEvent];
 }
 
@@ -499,15 +503,29 @@
 }
 
 - (void)enqueueFrom:(int)index {
+    [self enqueueFrom:index preservingCurrentItem:NO];
+}
+
+- (void)enqueueFrom:(int)index preservingCurrentItem:(BOOL)preserveCurrentItem {
     //NSLog(@"### enqueueFrom:%d", index);
     // A sequential extension must not discard already buffered future items.
     // Only preserve a queue that is an identical prefix of the queue the
     // original loop-off path would build. Seeks, loads and mismatches fall
     // through to the original rebuild below.
+    // AVQueuePlayer can advance after the caller resolves its current index or
+    // while this method computes the desired queue. Use one native queue
+    // snapshot for both the head and prefix check. An advance can only remove a
+    // prefix of that snapshot, so appending its missing suffix remains safe.
+    NSArray<AVPlayerItem *> *existingItems = _player.items;
+    if (preserveCurrentItem && _loopMode == lmLoopOff &&
+            _processingState != psLoading && CMTIME_IS_INVALID(_seekPos) && existingItems.count > 0) {
+        int currentIndex = [self indexForItem:(IndexedPlayerItem *)existingItems.firstObject];
+        if (currentIndex >= 0) index = currentIndex;
+    }
     IndexedPlayerItem *targetItem = index >= 0 && index < _indexedAudioSources.count
         ? _indexedAudioSources[index].playerItem : nil;
     if (_loopMode == lmLoopOff && _processingState != psLoading &&
-            CMTIME_IS_INVALID(_seekPos) && targetItem && _player.currentItem == targetItem) {
+            CMTIME_IS_INVALID(_seekPos) && targetItem && existingItems.firstObject == targetItem) {
         NSMutableArray<IndexedPlayerItem *> *desiredItems = [NSMutableArray arrayWithObject:targetItem];
         BOOL include = NO;
         BOOL enqueuedAll = YES;
@@ -522,7 +540,6 @@
                 [desiredItems addObject:_indexedAudioSources[si].playerItem];
             }
         }
-        NSArray<AVPlayerItem *> *existingItems = _player.items;
         BOOL isPrefix = include && existingItems.count > 0 && existingItems.count <= desiredItems.count;
         for (NSUInteger i = 0; isPrefix && i < existingItems.count; i++) {
             isPrefix = existingItems[i] == desiredItems[i];
@@ -533,6 +550,8 @@
             for (NSUInteger i = existingItems.count; i < desiredItems.count; i++) {
                 [_player insertItem:desiredItems[i] afterItem:nil];
             }
+            int currentIndex = [self indexForItem:(IndexedPlayerItem *)_player.currentItem];
+            if (currentIndex >= 0) _index = currentIndex;
             [self updateEndAction];
             return;
         }

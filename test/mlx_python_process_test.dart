@@ -1,13 +1,29 @@
+import 'dart:async';
 import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:flutter/services.dart';
+import 'package:flutter/foundation.dart';
 import 'package:read_aloud/src/services/mlx_speech_worker_processor.dart';
 
 // Real child processes with a tiny protocol stub: no MLX weights or network.
 void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
+  const activityChannel = MethodChannel('read_aloud/mlx_tts_lifecycle');
+  final activityCalls = <MethodCall>[];
   late Directory root;
   late MlxTtsPythonProcess worker;
   var sampledBytes = 0;
   setUp(() async {
+    // These tests assert the macOS activity's lifecycle; the helper correctly
+    // disables it on Flutter's default Android test target.
+    debugDefaultTargetPlatformOverride = TargetPlatform.macOS;
+    addTearDown(() => debugDefaultTargetPlatformOverride = null);
+    activityCalls.clear();
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(activityChannel, (call) async {
+          activityCalls.add(call);
+          return null;
+        });
     sampledBytes = 0;
     root = await Directory.systemTemp.createTemp('mlx-process-test-');
     final helper = File('${root.path}/worker.rb');
@@ -29,6 +45,14 @@ STDIN.each_line do |line|
     elsif r['text']=='memory-limit'
       puts JSON.generate(id:'',type:'memory',footprintBytes:1000)
       sleep 30
+    elsif r['text']=='held-replacement'
+      File.write(r['outputPath'],'started')
+      sleep 0.002 until File.exist?(r['outputPath']+'.release')
+    elsif r['text']=='packets'
+      puts JSON.generate(id:r['id'],type:'audioPacket',packetIndex:0)
+      puts JSON.generate(id:r['id'],type:'progress',stage:'afterPacket')
+    elsif r['text']=='unsolicited-packet'
+      puts JSON.generate(id:r['id'],type:'audioPacket',packetIndex:0)
     elsif r['text']=='malformed'
       puts 'not json'
       next
@@ -52,6 +76,22 @@ end
   });
   tearDown(() async {
     await worker.shutdown();
+    final began = activityCalls
+        .where((c) => c.method == 'beginSpeechWork')
+        .map((c) => (c.arguments as Map)['owner'])
+        .toList();
+    final ended = activityCalls
+        .where((c) => c.method == 'endSpeechWork')
+        .map((c) => (c.arguments as Map)['owner'])
+        .toList();
+    expect(
+      ended,
+      unorderedEquals(began),
+      reason: 'Every owned request drains its native activity',
+    );
+    expect(ended.toSet(), hasLength(ended.length));
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(activityChannel, null);
     await root.delete(recursive: true);
   });
   Future<void> load() async {
@@ -77,6 +117,187 @@ end
     language: 'English',
     outputPath: '${root.path}/$text',
   );
+  Future<Map<String, Object?>> synthPackets(
+    Future<void> Function(Map<String, Object?>) callback, {
+    void Function(Map<String, Object?>)? progress,
+  }) => worker.synthesize(
+    requestId: 'packets',
+    modelId: 'fish_drama3',
+    sessionId: 's',
+    generationId: 'g',
+    chunkId: 'packets',
+    bindingFingerprint: 'b',
+    bindingRevision: 1,
+    text: 'packets',
+    voice: 'library_ava',
+    language: 'English',
+    outputPath: '${root.path}/packets',
+    enableAudioPackets: true,
+    onAudioPacket: callback,
+    onProgress: progress,
+  );
+
+  test(
+    'stdout waits only for bounded packet validation/handoff before terminal',
+    () async {
+      await load();
+      final started = Completer<void>();
+      final release = Completer<void>();
+      var afterPacket = false;
+      var completed = false;
+      final result =
+          synthPackets((packet) async {
+            expect(packet['packetIndex'], 0);
+            started.complete();
+            await release.future;
+          }, progress: (_) => afterPacket = true).then((value) {
+            completed = true;
+            return value;
+          });
+      await started.future;
+      await Future<void>.delayed(const Duration(milliseconds: 20));
+      expect(completed, false);
+      expect(afterPacket, false);
+      release.complete();
+      expect((await result)['ok'], true);
+      expect(afterPacket, true);
+    },
+  );
+
+  test(
+    'packet handoff failure poisons child and drains before reuse',
+    () async {
+      await load();
+      await expectLater(
+        synthPackets(
+          (_) async => throw const FormatException('invalid packet'),
+        ),
+        throwsFormatException,
+      );
+      expect((await synth('recovered'))['ok'], true);
+    },
+  );
+
+  test(
+    'unsolicited packet cannot become successful terminal response',
+    () async {
+      await load();
+      await expectLater(synth('unsolicited-packet'), throwsStateError);
+      expect((await synth('recovered'))['ok'], true);
+    },
+  );
+
+  test(
+    'cancel while handoff drains cannot settle replacement request',
+    () async {
+      await load();
+      final started = Completer<void>();
+      final release = Completer<void>();
+      final request = synthPackets((_) async {
+        started.complete();
+        await release.future;
+      });
+      final cancelled = expectLater(
+        request,
+        throwsA(isA<MlxTtsRequestCancelled>()),
+      );
+      try {
+        await started.future;
+        expect(
+          activityCalls.where((c) => c.method == 'beginSpeechWork').length,
+          activityCalls.where((c) => c.method == 'endSpeechWork').length + 1,
+        );
+        worker.cancelActiveRequest();
+        release.complete();
+        await cancelled;
+        expect((await synth('recovered'))['ok'], true);
+      } finally {
+        // An assertion failure must not strand the callback or hide the actual
+        // failure behind the test runner's pending-Future timeout.
+        worker.cancelActiveRequest();
+        if (!release.isCompleted) release.complete();
+        await cancelled;
+      }
+    },
+  );
+
+  for (final lateFailure in [false, true]) {
+    test(
+      'cancelled handoff late ${lateFailure ? 'failure' : 'success'} cannot settle an active replacement',
+      () async {
+        await load();
+        final started = Completer<void>();
+        final release = Completer<void>();
+        final drained = Completer<void>();
+        final old = synthPackets((_) async {
+          started.complete();
+          try {
+            await release.future;
+            if (lateFailure) throw const FormatException('obsolete packet');
+          } finally {
+            drained.complete();
+          }
+        });
+        final cancelled = expectLater(
+          old,
+          throwsA(isA<MlxTtsRequestCancelled>()),
+        );
+        Future<Map<String, Object?>>? replacement;
+        var replacementSettled = false;
+        try {
+          await started.future;
+          worker.cancelActiveRequest();
+          await cancelled;
+          // Keep the obsolete consumer suspended through retirement and new
+          // request admission, then complete it against an active new child.
+          replacement = synth('held-replacement');
+          final watchedReplacement = replacement.then(
+            (value) {
+              replacementSettled = true;
+              return value;
+            },
+            onError: (Object error, StackTrace stack) {
+              replacementSettled = true;
+              Error.throwWithStackTrace(error, stack);
+            },
+          );
+          replacement = watchedReplacement;
+          final startedFile = File('${root.path}/held-replacement');
+          Future<void> waitForReplacement() async {
+            while (!await startedFile.exists()) {
+              await Future<void>.delayed(const Duration(milliseconds: 2));
+            }
+          }
+
+          await waitForReplacement().timeout(const Duration(seconds: 5));
+          expect(drained.isCompleted, false);
+          release.complete();
+          await drained.future;
+          await Future<void>.delayed(Duration.zero);
+          expect(
+            replacementSettled,
+            false,
+            reason:
+                'An obsolete packet callback cannot complete or fail the new request',
+          );
+          await File('${startedFile.path}.release').writeAsString('complete');
+          expect((await replacement)['ok'], true);
+        } finally {
+          if (!release.isCompleted) release.complete();
+          worker.cancelActiveRequest();
+          await cancelled;
+          if (replacement != null) {
+            try {
+              await replacement;
+            } on MlxTtsRequestCancelled {
+              // A failed assertion still owns and drains its active replacement.
+            }
+          }
+        }
+      },
+    );
+  }
+
   test(
     'cancel reaps child and reloads exact model for next generation',
     () async {

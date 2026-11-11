@@ -1,0 +1,16 @@
+{
+  "schema": "readaloud-ungated-startup-audio-v2",
+  "timingPolicy": "startup-r24",
+  "loadClass": "radoc",
+  "goalMs": 2000,
+  "hardLimitMs": 5000,
+  "goalMet": true,
+  "hardLimitMet": true,
+  "passed": true,
+  "errors": [],
+  "launchToSpeechReceiptUpperBoundMs": 597.08525,
+  "firstSignalExpectedSpeechAlignmentMs": 0.005208333333311943,
+  "launchToNativePositionMs": 443.777,
+  "waveformComparison": "/Users/k/.codex/worktrees/radoc-dynamic-audio/readaloud/tmp/s6/r6-reusable-v3-comparison.json",
+  "limits": "CLOCK_MONOTONIC_RAW from immediately before process spawn to receipt of the first signal-bearing app-only packet, aligned with the exact expected waveform. An upper bound on app-emitted speech, not physical speaker latency or human listening. Candidate completeness and fresh-profile provenance must be verified separately."
+}

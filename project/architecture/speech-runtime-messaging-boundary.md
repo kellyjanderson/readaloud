@@ -21,7 +21,7 @@ uses a bounded termination fallback. Cancellation retires the active process
 so it cannot return a late result. The adapter does not yet translate canonical
 pronunciation artifacts to model-specific phonemes; it consumes planned text
 and preset voice IDs or selected audio references. The versioned synthetic bank supplies 30 identities to Qwen Base/MOSS; its manifest is loaded once and requested WAVs are verified/materialized by content hash. Reference content/transcript enter binding and raw cache identity. The child passes ref_audio/ref_text to the maintained model API; unknown voices/missing references fail without default substitution. Models without at least 30 usable identities remain below voice-library acceptance (CustomVoice 9, local Voxtral 20). No comparative acoustic or latency acceptance is claimed.
-MLX uses the same admission policy implementation and existing 64-chunk cap. Fish uses twenty-second low/thirty-second high playable lead; the other MLX adapters retain twelve-second low/twenty-second high lead. The long Fish probe demonstrated complete-WAV generation up to 16.5 seconds, so deliberately suspending inference until twelve seconds remained caused starvation despite faster-than-realtime synthesis overall. The Fish single-chunk startup shortcut likewise requires twenty seconds; two ready chunks can still satisfy startup warmth. These bounds do not guarantee continuity on every machine. Voxtral and Fish Drama use startup warmth; the other MLX adapters start with the first validated chunk. At the five-second MLX warmup deadline, validated audio is admitted even if the target lead is not reached. This bounded wait is included in launch-to-audio measurement and does not establish the startup goal or applicable hard limit in the product definition. Fish's previous bypass could play a tiny opening turn before the following complete WAV was ready. The Python adapter now reports first-native-packet timing separately from whole-chunk publication; packets still remain in the owned incomplete artifact until the complete WAV passes validation. No progressive native playback claim follows from that telemetry. Voxtral retains full precision by default, with optional saved model-specific in-memory 4-bit quantization; precision participates in model binding and audio-cache identity. Original checkpoint files are retained.
+MLX uses the same admission policy implementation and existing 64-chunk cap. Fish uses twenty-second low/thirty-second high steady-state playable lead; the other MLX adapters retain twelve-second low/twenty-second high lead. The long Fish probe demonstrated complete-WAV generation up to 16.5 seconds, so deliberately suspending inference until twelve seconds remained caused starvation despite faster-than-realtime synthesis overall. Complete-chunk Fish startup retains its twenty-second/two-chunk warmth policy. Incremental packet playback instead starts with 300 ms of validated playable audio, or the complete remaining short passage. This threshold is distinct from steady-state inference admission. At the five-second MLX warmup deadline, validated audio is admitted even if target warmth is not reached. All waiting remains inside launch-to-audio accounting; neither threshold proves continuity or startup acceptance. The opt-in packet route validates immutable WAV pieces before complete-scene publication through the existing ordered owner; see [artifact lifetime](audio-artifact-identity-and-lifetime.md). Voxtral retains full precision by default, with optional saved model-specific in-memory 4-bit quantization; precision participates in model binding and audio-cache identity. Original checkpoint files are retained.
 Model installation, launch selection and Voxtral's noncommercial license are documented in
 [MLX TTS engine setup](../../docs/mlx-tts-engines.md).
 
@@ -257,6 +257,24 @@ Existing publications are fully verified before reuse. Relocation creates a new
 view and never rewrites an old view's links. Old R4/v1 publications are not reused.
 Missing/changed bundle code fails acquisition with reinstall guidance.
 
+On macOS the installer hashes with the existing platform CommonCrypto SHA256
+implementation through FFI and an owned 64 KiB read buffer. File validation uses
+finite batches of at most sixteen tasks; cancellation/failure joins the current
+batch before installer reuse. Exact digest, mode, type, link, inventory, arm64 and
+signature checks remain mandatory on reuse. The faster hashing implementation
+does not turn an installed runtime receipt into permission to skip verification.
+
+macOS keeps Flutter UI and platform runners separate. Model preparation owns an
+activity across runtime acquisition, verification and model initialization; its
+owner releases it when preparation drains, including failure before Python starts.
+Each MLX process request additionally
+owns a native `ProcessInfo` activity requesting user-initiated, latency-critical
+execution while allowing idle system sleep. Native ownership is capped at eight
+unique tokens; release is idempotent and occurs on success, failure, retirement
+and shutdown. No machine preference is changed. Native counters expose starts,
+ends, peak and remaining owners for bounded acceptance. This is scheduling intent,
+not proof of a specific historical stall cause or a universal responsiveness fix.
+
 Acquisition returns `VerifiedPythonRuntime` with the bundled interpreter and
 immutable Python home. MLX and BookNLP pass that home as `PYTHONHOME` only to
 their own child process. Each keeps its independent runtime; global environment
@@ -301,6 +319,39 @@ were 2378.144ms for direct process launch and 2363.608ms through ordinary macOS
 LaunchServices. Both clocks start before opening, without a Play gate, and require
 expected-waveform alignment. This improves the earlier 4.77–4.91s native-position
 failure. The November 10 startup policy now uses a two-second goal, a five-second hard limit for reusable `.radoc` loads and a ten-second hard limit for first loads. These saved-book timing values fit the revised five-second ceiling and miss the goal. Original receipts retain their original verdicts. S6 still needs its other acceptance gates. The prior Save-run 511ms heartbeat, uncached continuity and final user listening remain recorded.
+
+[R25](https://github.com/kellyjanderson/readaloud/issues/110#issuecomment-6791030471)
+subsequently excludes normal app startup from the hard load deadlines. The native
+QA clock records startup completion, target document loading and Play through
+`CLOCK_MONOTONIC_RAW`, shared with capture and the external runner. Normal startup
+may prepare the selected model without synthesizing or processing the target;
+all work triggered by the later target-load request remains timed. The reporters
+retain launch-to-speech and its two-second goal separately. Missing post-startup
+boundaries cannot be reconstructed from historical launch-only receipts.
+
+The [R25 v11 receipts](../test-artifacts/s6-r6-20261111/README.md), source
+`f5f3c8a`, measured first document loading to captured speech at 5351.837 ms
+and reusable loading at 283.542 ms. Ordinary startup was 9953.107 ms and
+288.717 ms respectively. Both load hard limits passed; first-load launch to
+speech still missed the two-second goal. These use fresh private target raw
+stores or model-forbidden complete books, with installed assets and OS caches
+disclosed. All four complete waveform matches passed in both cases.
+The complete initial/change/reuse/uncached-repair sequence also passed all
+four waveform checks but failed its overall native gate on a 263 ms response
+during final Save. That failed control remains recorded. The bounded main-channel
+probe now retains native-entry/return timestamps and active-app state for diagnosis;
+its monotonic 250 ms gate is unchanged. Neither these fixtures nor a passing
+source suite establish arbitrary-book, physical-speaker or human listening acceptance.
+
+The subsequent foreground v12 sequence, native code `f2d96a2`, passed all four
+functional and strict complete-waveform checks, with maximum joins of 0.01 ms.
+Immediate native-main response peaked at 230 ms across 3359 samples; 3267
+observed the application active. UI heartbeat peaked at 9 ms. Ten activities
+started and ended, none remained, and normal Quit left no owned processes.
+This qualifies that bounded foreground run without identifying the cause of
+the earlier 263 ms failure. First-load/reusable timing uses the separate ungated
+v11 receipts; the controlled full-sequence Play gates cannot establish load timing.
+Human listening/usability remains collected for S11 under the release decision.
 
 The build-owned relocated staging tree omits a CPython bytecode cache only when
 its corresponding `.py` source is present. Sourceless modules, source packages,

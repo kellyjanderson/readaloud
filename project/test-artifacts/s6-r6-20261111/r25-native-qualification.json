@@ -1,0 +1,173 @@
+{
+  "schema": "readaloud-s6-r25-native-qualification-v1",
+  "nativeCodeCommit": "f2d96a2",
+  "loadEvidenceCommit": "f5f3c8a",
+  "timingPolicy": "startup-r25",
+  "boundedNativeChecksPassed": true,
+  "firstLoad": {
+    "documentLoadToSpeechMs": 5351.837292,
+    "startupMs": 9953.107084,
+    "goalMet": false,
+    "hardLimitMet": true,
+    "receipt": "r25-first-load-v11-timing.json"
+  },
+  "reusable": {
+    "documentLoadToSpeechMs": 283.542084,
+    "startupMs": 288.717167,
+    "goalMet": true,
+    "hardLimitMet": true,
+    "receipt": "r25-reusable-v11-timing.json"
+  },
+  "fullSequence": {
+    "functionalPassed": true,
+    "nativeMain": {
+      "samples": 3359,
+      "applicationActiveSamples": 3267,
+      "maxRoundTripMs": 230,
+      "delayedRequests": [
+        {
+          "startedMs": 93300,
+          "elapsedMs": 171,
+          "phaseAtStart": "initial-save",
+          "phaseAtEnd": "initial-save",
+          "requestedUnixMicros": 1794389691083464,
+          "nativeEntryUnixMicros": 1794389691253684,
+          "returnedUnixMicros": 1794389691253740,
+          "applicationActive": true,
+          "owners": 0
+        },
+        {
+          "startedMs": 175201,
+          "elapsedMs": 184,
+          "phaseAtStart": "changed-save",
+          "phaseAtEnd": "saved-reopen",
+          "requestedUnixMicros": 1794389772984832,
+          "nativeEntryUnixMicros": 1794389773168751,
+          "returnedUnixMicros": 1794389773168804,
+          "applicationActive": true,
+          "owners": 0
+        },
+        {
+          "startedMs": 175803,
+          "elapsedMs": 149,
+          "phaseAtStart": "reused",
+          "phaseAtEnd": "reused",
+          "requestedUnixMicros": 1794389773586801,
+          "nativeEntryUnixMicros": 1794389773733351,
+          "returnedUnixMicros": 1794389773735385,
+          "applicationActive": true,
+          "owners": 0
+        },
+        {
+          "startedMs": 255203,
+          "elapsedMs": 148,
+          "phaseAtStart": "reused",
+          "phaseAtEnd": "reused",
+          "requestedUnixMicros": 1794389852986736,
+          "nativeEntryUnixMicros": 1794389853134993,
+          "returnedUnixMicros": 1794389853135091,
+          "applicationActive": true,
+          "owners": 0
+        },
+        {
+          "startedMs": 336100,
+          "elapsedMs": 230,
+          "phaseAtStart": "missing-save",
+          "phaseAtEnd": "missing-save",
+          "requestedUnixMicros": 1794389933884815,
+          "nativeEntryUnixMicros": 1794389934114426,
+          "returnedUnixMicros": 1794389934114569,
+          "applicationActive": true,
+          "owners": 0
+        }
+      ],
+      "error": null,
+      "passed": true,
+      "scope": "Monotonic UI-isolate roundtrip through the native main-thread channel; unchanged 250ms gate. Wall-clock request/native-entry/return stamps and active-app state diagnose delivery only and never replace the gate. No utility query or keyboard/mouse delivery claim."
+    },
+    "maxUiHeartbeatDelayMs": 9,
+    "activities": {
+      "started": 10,
+      "peak": 2,
+      "ended": 10,
+      "active": 0
+    },
+    "normalQuit": true,
+    "remainingOwnedPids": [],
+    "waveforms": {
+      "initial": {
+        "passed": true,
+        "maxJoinGapMs": 0.0,
+        "minimumFullWaveformCorrelation": 0.9997826510727715
+      },
+      "changed": {
+        "passed": true,
+        "maxJoinGapMs": 0.01,
+        "minimumFullWaveformCorrelation": 0.9998104577583976
+      },
+      "reused": {
+        "passed": true,
+        "maxJoinGapMs": 0.01,
+        "minimumFullWaveformCorrelation": 0.9996840787544603
+      },
+      "missing": {
+        "passed": true,
+        "maxJoinGapMs": 0.01,
+        "minimumFullWaveformCorrelation": 0.9994752766775358
+      }
+    }
+  },
+  "sourceChecks": {
+    "sourceSuite": {
+      "result": "907 passed, 4 optional skips; source f5f3c8a",
+      "localLog": "/Users/k/.codex/worktrees/radoc-dynamic-audio/readaloud/tmp/s6/r25-final-suite.log",
+      "sha256": "722b2f624267156cd27bcda5b799a36d28440fcc5a4271b013fb5b35eb66a555",
+      "bytes": 165765
+    },
+    "helper": {
+      "result": "33 passed",
+      "localLog": "/Users/k/.codex/worktrees/radoc-dynamic-audio/readaloud/tmp/s6/r25-python-helper-tests.log",
+      "sha256": "f94802b4446d8adee34b672ba15621f88bdfb43dc95f672f657e1851c7fb3f49",
+      "bytes": 2591
+    },
+    "captureAnalyzers": {
+      "result": "9 passed",
+      "localLog": "/Users/k/.codex/worktrees/radoc-dynamic-audio/readaloud/tmp/s6/r25-packet-analyzer-tests.log",
+      "sha256": "0bbdda42dd98336ee13bb205017d83625382dfc19b1f7a12222fdde926df977f",
+      "bytes": 107
+    },
+    "rubyTiming": {
+      "result": "20 passed, 115 assertions",
+      "localLog": "/Users/k/.codex/worktrees/radoc-dynamic-audio/readaloud/tmp/s6/r25-final-ruby-tests.log",
+      "sha256": "3a9a8a39279c504650c47240a1504ffb9aa1602dc5e294b6b53e4175474d80c4",
+      "bytes": 337
+    },
+    "updatedProbe": {
+      "result": "2 passed; source f2d96a2",
+      "localLog": "/Users/k/.codex/worktrees/radoc-dynamic-audio/readaloud/tmp/s6/r25-probe-diagnostic-tests.log",
+      "sha256": "7cdabfc9592e96a39e34da59eea98e6a93aa87aa8e5ef027606b03f88fe7078a",
+      "bytes": 301
+    },
+    "scopedAnalysis": {
+      "result": "No issues",
+      "localLog": "/Users/k/.codex/worktrees/radoc-dynamic-audio/readaloud/tmp/s6/r25-probe-diagnostic-analyze.log",
+      "sha256": "1cedd1f3ac4804477beb407906d420c7f9007603b44f21ac06b78d0f1353c61d",
+      "bytes": 96
+    },
+    "docs": {
+      "result": "Passed",
+      "localLog": "/Users/k/.codex/worktrees/radoc-dynamic-audio/readaloud/tmp/s6/r25-final-docs-check.log",
+      "sha256": "2e550c2709b6c91f504095e5b9f49104d8fcc01971b5029db1b7667b3ab5003a",
+      "bytes": 99
+    }
+  },
+  "humanCases": "Collected for S11 by https://github.com/kellyjanderson/readaloud/issues/122#issuecomment-6784369903",
+  "limits": [
+    "197-word/four-scene fixture, not arbitrary-book or physical-speaker proof",
+    "Full precision and installed assets/OS caches retained; fresh private target raw stores",
+    "Controlled full-sequence capture gates do not establish startup/load timing",
+    "Earlier v10 286ms startup and v11 263ms Save failures remain intact; their causes are not established",
+    "Foreground v12 pass does not demonstrate a universal stall repair",
+    "No human listening, transcript or expressive-identity acceptance claim"
+  ]
+}

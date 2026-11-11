@@ -1,0 +1,40 @@
+{
+  "passed": true,
+  "scope": "40ms active first-queued-packet prefix only; not whole-turn, transcript, voice identity or physical speaker onset acceptance.",
+  "clockScope": "Capture firstPacketReceivedUnixMicros maps callback receipt clocks to frames; post-Pause +250ms is a clock/output guard.",
+  "captureSampleRate": 48000,
+  "captureFrames": 800640,
+  "signalCallbackBeforePauseMs": 25.225,
+  "prefix": {
+    "durationMs": 40,
+    "correlation": 0.9979384032266629,
+    "rms": 0.01752558155644754,
+    "referencePath": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s6-r25-packet-cancel-v11-20261111/s6-first-load-yCVdtL/queued-0.wav",
+    "referenceSha256": "ec1e852440b0ba87a905baf68e7a835e0e81dfa37a22e6d824e6aec0d168b7c3",
+    "referenceActiveStartSeconds": 0.06311458333333334,
+    "captureStartSeconds": 15.52146875
+  },
+  "silence": {
+    "peakThreshold": 0.001,
+    "preRetryPeak": 0.0,
+    "preRetryObservedMs": 10178.0,
+    "postPauseGuardMs": 250,
+    "postPauseTailPeak": 0.0,
+    "postPauseTailObservedMs": 849.3333333333334
+  },
+  "native": {
+    "sampledPositionTotalMsBeforePause": 185,
+    "pauseDrainMs": 2,
+    "stateEvents": 9,
+    "queuedPackets": 4,
+    "activitiesStarted": 3,
+    "activitiesEnded": 3,
+    "remainingOwnedProcessCount": 0
+  },
+  "coldCancellation": {
+    "inputMode": "controller-command",
+    "drainAfterIntentMs": 8306.6,
+    "rawColdCancelDrainMs": 8307,
+    "rawDrainScope": "Includes external input wait; not human input latency."
+  }
+}

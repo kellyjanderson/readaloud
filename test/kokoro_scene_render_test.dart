@@ -17,12 +17,55 @@ import 'package:read_aloud/src/services/kokoro_tokenization_worker.dart';
 import 'package:read_aloud/src/services/kokoro_tts_engine.dart';
 import 'package:read_aloud/src/services/speech_worker_pipeline.dart';
 import 'package:read_aloud/src/services/tts_engine.dart';
+import 'package:read_aloud/src/services/speech_audio_packet.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
   late _Fixture fixture;
   setUp(() async => fixture = await _Fixture.create());
   tearDown(() => fixture.close());
+
+  test(
+    'playable export packets precede held scene completion and durable publication',
+    () async {
+      fixture.processor.streamGate = Completer<void>();
+      final packetReady = Completer<TtsPlayableAudioPacket>();
+      final publishing = Completer<void>();
+      final published = Completer<void>();
+      final exporting = fixture.engine.exportAudio(
+        fixture.request(
+          packet: (value) async => packetReady.complete(value),
+          publish: (_) async {
+            publishing.complete();
+            await published.future;
+          },
+        ),
+      );
+      final packet = await packetReady.future;
+      var sceneCompleted = false;
+      packet.sceneCompletion.then((_) => sceneCompleted = true);
+      expect(packet.sceneId, 'scene_turn-one');
+      expect(packet.startWordIndex, 102);
+      expect(packet.endWordIndex, 106);
+      expect(packet.text, 'One two Three four');
+      expect(packet.sceneTurns, hasLength(2));
+      expect(packet.isInitialScene, isTrue);
+      expect(sceneCompleted, isFalse);
+      expect(fixture.pins.pinCount(packet.packet.audioPath), greaterThan(0));
+      fixture.processor.streamGate!.complete();
+      await publishing.future;
+      expect(sceneCompleted, isFalse);
+      published.complete();
+      final finalScene = await packet.sceneCompletion;
+      expect(finalScene.packetCount, 1);
+      expect(finalScene.frameCount, 24000);
+      expect(finalScene.onsetTrimFrames, 0);
+      expect(finalScene.duration, const Duration(seconds: 1));
+      await exporting;
+      expect(fixture.assembler.requests.single.chunks, hasLength(1));
+      expect(fixture.pins.pinCount(packet.packet.audioPath), 0);
+    },
+  );
 
   test(
     'one-scene export captures actual bindings, directions, raw provenance and global spans',
@@ -372,6 +415,7 @@ class _Fixture {
     Future<void> Function(TtsFinalizedAudioScene)? publish,
     Future<void>? cancelled,
     bool Function()? isCurrent,
+    Future<void> Function(TtsPlayableAudioPacket)? packet,
   }) => TtsExportRequest(
     text: 'Before now. One two Three four',
     outputPath: '${directory.path}/output.wav',
@@ -400,6 +444,7 @@ class _Fixture {
     cancelled: cancelled,
     isCurrent: isCurrent,
     onRenderedScene: publish,
+    onPlayablePacket: packet,
   );
 
   Future<void> close() async {
@@ -519,13 +564,53 @@ class _Tokenizer extends KokoroTokenizationWorker {
 class _Processor
     implements
         SpeechWorkerResourceOwner,
-        CancellableSpeechWorkerChunkProcessor {
+        CancellableSpeechWorkerChunkProcessor,
+        StreamingSpeechWorkerChunkProcessor {
   bool allowPreparation = false;
+  Completer<void>? streamGate;
 
   _Processor(this.rawPath);
   final String rawPath;
   final requests = <SpeechWorkerChunkRequest>[];
   final cancelledGenerations = <String>[];
+  @override
+  Future<void> processWithAudioPackets(
+    SpeechWorkerChunkRequest request,
+    void Function(SpeechWorkerEvent) emit,
+    Future<void> Function(SpeechAudioPacket) onAudioPacket,
+  ) async {
+    await onAudioPacket(
+      SpeechAudioPacket(
+        sessionId: request.sessionId,
+        generationId: request.generationId,
+        chunkId: request.chunkId,
+        audioPath: rawPath,
+        packetIndex: 0,
+        frameStart: 0,
+        frameCount: 24000,
+        sampleRate: 24000,
+      ),
+    );
+    await streamGate?.future;
+    await process(
+      request,
+      (event) => emit(
+        SpeechWorkerEvent(
+          type: event.type,
+          sessionId: event.sessionId,
+          generationId: event.generationId,
+          chunkId: event.chunkId,
+          emittedAt: event.emittedAt,
+          stage: event.stage,
+          audioPath: event.audioPath,
+          duration: event.duration,
+          streamedPacketCount: 1,
+          streamedFrameCount: 24000,
+        ),
+      ),
+    );
+  }
+
   @override
   Future<void> process(
     SpeechWorkerChunkRequest request,

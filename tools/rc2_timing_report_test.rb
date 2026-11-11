@@ -10,6 +10,7 @@ class Rc2TimingReportTest < Minitest::Test
     }, 'cases' => [{'id' => 'fixture', 'condition' => 'fresh', 'fixture_sha256' => 'b' * 64,
       'trials' => 10.times.map { |i| {'id' => i.to_s, 'valid' => true,
         'clock_domain' => 'fixture monotonic', 'launch_us' => 1000,
+        'app_startup_complete_us' => 20_000, 'document_open_us' => 50_000,
         'first_interactive_us' => 100_000, 'play_us' => 110_000,
         'first_pcm_us' => 500_000, 'audible_us' => 1_001_000,
         'input_ack_us' => 10_000, 'max_main_stall_us' => 20_000,
@@ -32,10 +33,10 @@ class Rc2TimingReportTest < Minitest::Test
 
   def test_one_slow_trial_cannot_hide_behind_mean_or_percentile
     input = receipt
-    trials(input).last['audible_us'] = 10_002_000
+    trials(input).last['audible_us'] = 10_050_001
     result = Rc2TimingReport.evaluate(input)
     assert_equal 'fail', result[:verdict]
-    assert_equal 10001.0, result[:cases].first[:launch_to_audible][:max_ms]
+    assert_equal 10000.001, result[:cases].first[:document_open_to_audible][:max_ms]
   end
 
   def test_two_second_goal_is_reported_without_failing_a_valid_load
@@ -50,7 +51,7 @@ class Rc2TimingReportTest < Minitest::Test
   def test_radoc_hard_limit_and_load_class_independent_of_process_state
     input = receipt
     input['cases'].first['load_class'] = 'radoc'
-    trials(input).last['audible_us'] = 5_001_000
+    trials(input).last['audible_us'] = 5_050_000
     result = Rc2TimingReport.evaluate(input)
     assert_equal 'pass', result[:verdict]
     assert_equal 5000, result[:cases].first[:hard_limit_ms]
@@ -98,11 +99,12 @@ class Rc2TimingReportTest < Minitest::Test
 
   def test_exact_limits_pass_and_document_intake_is_measured_separately
     input = receipt
-    trials(input).first.merge!('document_open_us' => 50_000, 'audible_us' => 10_001_000,
+    trials(input).first.merge!('audible_us' => 10_050_000,
                               'input_ack_us' => 100_000, 'max_main_stall_us' => 100_000)
     result = Rc2TimingReport.evaluate(input)
     assert_equal 'pass', result[:verdict]
-    assert_equal [9951.0], result[:cases].first[:document_open_to_audible][:samples_ms]
+    assert_equal 10000.0, result[:cases].first[:document_open_to_audible][:max_ms]
+    assert_equal [20.0 - 1.0] * 10, result[:cases].first[:app_startup][:samples_ms]
   end
 
   def test_empty_matrix_and_non_native_debug_build_fail
@@ -125,7 +127,47 @@ class Rc2TimingReportTest < Minitest::Test
     assert_equal 'pass', result[:verdict]
     assert_equal 1000.0, result[:cases].first[:document_open_to_audible][:max_ms]
     assert_equal 10_999.0, result[:cases].first[:launch_to_audible][:max_ms]
+    assert_equal 'document_open_us', result[:cases].first[:hard_limit_origin]
     trials(input).first.delete('document_open_us')
+    assert_equal 'fail', Rc2TimingReport.evaluate(input)[:verdict]
+  end
+
+  def test_long_app_startup_does_not_consume_the_document_hard_limit
+    input = receipt
+    trials(input).each do |trial|
+      trial.merge!('app_startup_complete_us' => 20_001_000, 'document_open_us' => 20_001_000,
+        'play_us' => 20_100_000, 'first_pcm_us' => 20_500_000, 'audible_us' => 21_001_000)
+    end
+    result = Rc2TimingReport.evaluate(input)
+    assert_equal 'pass', result[:verdict]
+    record = result[:cases].first
+    assert_equal 'startup-r25', record[:timing_policy]
+    assert record[:hard_limit_met]
+    refute record[:goal_met]
+    refute record[:launch_goal_met]
+    assert_equal 20000.0, record[:app_startup][:max_ms]
+    assert_equal 21000.0, record[:launch_to_audible][:max_ms]
+    assert_equal 1000.0, record[:document_open_to_audible][:max_ms]
+    assert_equal 901.0, record[:play_to_audible][:max_ms]
+  end
+
+  def test_launch_scenario_still_requires_post_startup_load_and_uses_its_hard_clock
+    %w[app_startup_complete_us document_open_us].each do |key|
+      input = receipt
+      trials(input).first.delete(key)
+      result = Rc2TimingReport.evaluate(input)
+      assert_equal 'fail', result[:verdict]
+      refute result[:cases].first[:hard_limit_met]
+    end
+    [500, 50_001].each do |startup|
+      input = receipt
+      trials(input).first['app_startup_complete_us'] = startup
+      result = Rc2TimingReport.evaluate(input)
+      assert_equal 'fail', result[:verdict]
+      refute result[:cases].first[:hard_limit_met]
+    end
+    input = receipt
+    trials(input).first['document_open_us'] = 1_001_001
     assert_equal 'fail', Rc2TimingReport.evaluate(input)[:verdict]
   end
 

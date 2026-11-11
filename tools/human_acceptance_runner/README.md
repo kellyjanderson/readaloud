@@ -1,6 +1,6 @@
 # Read Aloud final user test session
 
-The release coordinator collects the user judgments for S11 under [release #122](https://github.com/kellyjanderson/readaloud/issues/122). The current cases cover quick dialogue in S3 and listening to and editing saved audio books in S6. Add other residual listening or usability cases to `scenarios.js` as their slices identify them. Each case names its source issue so the coordinator can route the findings.
+The release coordinator collects the user judgments for S11 under [release #122](https://github.com/kellyjanderson/readaloud/issues/122). The current cases cover cancellation during initial speech preparation, quick dialogue in S3, and listening to and editing saved audio books in S6, including complete endings. Run the cancellation case first so other tests have not already warmed the speech model. Add other residual listening or usability cases to `scenarios.js` as their slices identify them. Each case names its source issue so the coordinator can route the findings.
 
 ## Prepare the session
 
