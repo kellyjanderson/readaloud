@@ -31,7 +31,8 @@ unchanged. Asset loading belongs to the caller; parsing has no I/O, scheduling o
 download side effects. The parser accepts the existing schema only, requires a
 pinned commit and the fixed `mlx-community` Hugging Face repository policy,
 validates safe required-file names and core model artifacts, and rejects unknown
-IDs, duplicate checkpoint identities and malformed/incomplete checksum data.
+IDs, checkpoint precision inconsistent with a saved ID, duplicate checkpoint
+identities and malformed/incomplete checksum data.
 
 The bundled [checksum manifest](../../assets/fish_drama_model_checksums.json)
 attaches only to an exactly matching repository/revision and must cover every

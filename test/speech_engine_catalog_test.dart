@@ -53,6 +53,17 @@ void main() {
     expect(isDramaEngine('unknown'), isFalse);
   });
 
+  for (final entry in const {
+    'fish_drama3': 8,
+    'fish_drama3_8bit': 4,
+    'fish_drama3_4bit': 8,
+  }.entries) {
+    test('rejects checkpoint precision inconsistent with ${entry.key}', () {
+      models[entry.key]['bits'] = entry.value;
+      expect(parse, throwsFormatException);
+    });
+  }
+
   test('checksums attach only to the exact matching pinned checkpoint', () {
     final catalog = parse();
     final bf16 = catalog.variants['fish_drama3']!;

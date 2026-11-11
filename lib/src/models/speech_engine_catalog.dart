@@ -107,7 +107,13 @@ final class FishDramaCatalog {
       final repository = _repository(spec['repo']);
       final revision = _revision(spec['revision']);
       final bits = spec['bits'];
-      if (bits is! int || !const {0, 4, 8}.contains(bits)) {
+      final expectedBits = switch (id) {
+        'fish_drama3' => 0,
+        'fish_drama3_8bit' => 8,
+        'fish_drama3_4bit' => 4,
+        _ => throw FormatException('Unknown Fish engine ID: $id'),
+      };
+      if (bits is! int || bits != expectedBits) {
         throw FormatException('Invalid checkpoint precision for $id');
       }
       final peakBytes = _positiveInt(
