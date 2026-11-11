@@ -1,0 +1,49 @@
+{
+  "source": "d4bb328",
+  "nativePassed": false,
+  "acousticAnalyzer": {
+    "exitStatus": 1,
+    "error": "Native session gates failed; no acoustic acceptance claimed"
+  },
+  "m3": "User has no physical M3 available; qualification open",
+  "remaining": [
+    "Native preview/export/pending-Play retirement probe completion",
+    "Actual 8-bit/4-bit native success and full-model transfer/recovery",
+    "Measured total-runtime admission/headroom and sustained hardware matrix",
+    "S11 human listening/usability"
+  ],
+  "privateArtifacts": {
+    "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-session-native-v1-20261111/app.log": {
+      "bytes": 197,
+      "sha256": "c0c92cbbf9829d4e96607209ccab2192ab9833d391ee3ea3678c5d123f8a1501"
+    },
+    "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-session-native-v1-20261111/capture.log": {
+      "bytes": 117,
+      "sha256": "499275aa1cc33e1a7d0445e0c8fa0d80a072c35d07ddc9ca652e376ded20e58a"
+    },
+    "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-session-native-v2-20261111/app.log": {
+      "bytes": 20296,
+      "sha256": "c928d2d250f720582bfbb77696aa391c6e937392d218518b376af5143ad7ef36"
+    },
+    "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-session-native-v2-20261111/capture.log": {
+      "bytes": 240,
+      "sha256": "f5f46cfd548438d1acebb4e1323573c5ae62c903782dab1c476f5162b7745e25"
+    },
+    "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-session-native-v2-20261111/capture.wav": {
+      "bytes": 54217216,
+      "sha256": "713ac63507761a89fc055c8f77db43e90ae09deb824903f71fb81c2c9da5e71f"
+    },
+    "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-session-native-v3-20261111/app.log": {
+      "bytes": 3020,
+      "sha256": "d7af595546a90fc588b6b35e829c21be49c5d91a05c43aec9011a2e719caa3a6"
+    },
+    "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-session-native-v3-20261111/capture.log": {
+      "bytes": 240,
+      "sha256": "5391a81ef2dc2ba9152cd39e98cbfb2771a0c43e863d2b2e1b48fd7af706dcd0"
+    },
+    "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-session-native-v3-20261111/capture.wav": {
+      "bytes": 14204416,
+      "sha256": "5407ac9905863d63d1955ad8a86f16319d697fc5e5d20ae6a31db128c00c0721"
+    }
+  }
+}

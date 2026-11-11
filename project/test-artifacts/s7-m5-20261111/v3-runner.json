@@ -1,0 +1,70 @@
+{
+  "passed": false,
+  "nativePassed": false,
+  "normalQuit": true,
+  "appExitVerified": true,
+  "forcedCleanup": false,
+  "remainingOwnedPids": [],
+  "modelSource": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/character-fish-standalone",
+  "expectedOwnedAlias": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/Library/Application Support/com.kellyjanderson.readAloud.mlxPlaybackTest/read_aloud/mlx-tts/fish_drama3",
+  "frameworkSha256": "b68f55aa87330cee96a23f0e4c959c87ec205786ccbadcb82fd08c095d13d1c4",
+  "executableSha256": "a5bc2aab8508c6f34bcbb293b42a4ab2b23f73495c7da2b93bf79d0a56a92d11",
+  "maxMlxChildren": 1,
+  "observedMlxSamples": 190,
+  "processEvents": [
+    {
+      "unixMicros": 1794407681831549,
+      "pids": []
+    },
+    {
+      "unixMicros": 1794407683706594,
+      "pids": [
+        25956
+      ]
+    },
+    {
+      "unixMicros": 1794407696602423,
+      "pids": []
+    },
+    {
+      "unixMicros": 1794407698394754,
+      "pids": [
+        26154
+      ]
+    },
+    {
+      "unixMicros": 1794407698781098,
+      "pids": []
+    },
+    {
+      "unixMicros": 1794407699926467,
+      "pids": [
+        26176
+      ]
+    },
+    {
+      "unixMicros": 1794407708116331,
+      "pids": []
+    },
+    {
+      "unixMicros": 1794407710411700,
+      "pids": [
+        26301
+      ]
+    },
+    {
+      "unixMicros": 1794407718469594,
+      "pids": []
+    }
+  ],
+  "errors": [
+    "Native failure: Bad state: Preview missed its pre-position cancellation window"
+  ],
+  "limits": "100ms process observations; source ownership checks are separate. Offline bf16 fixture, no quantized-model/M3 claim.",
+  "pid": 25933,
+  "capturePid": 25934,
+  "applicationActivationRequested": true,
+  "captureExitStatus": 0,
+  "appExitStatus": 0,
+  "ownedAliasAbsent": true
+}
