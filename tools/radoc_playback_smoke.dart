@@ -138,6 +138,9 @@ Future<void> main(List<String> args) async {
   var lastUiTick = 0;
   var maxUiDelayMs = 0;
   var heartbeatCount = 0;
+  var probePhase = 'startup';
+  var previousTickPhase = probePhase;
+  final delayedTicks = <Map<String, Object?>>[];
   // The interactive File → Save Audio Book path requests audioBook=true
   // after the native panel returns. Keep its export delay separate from
   // startup, waiting for the operator, and programmatic reopen checks.
@@ -163,7 +166,19 @@ Future<void> main(List<String> args) async {
   };
   final heartbeat = Timer.periodic(const Duration(milliseconds: 50), (_) {
     final now = watch.elapsedMilliseconds;
-    maxUiDelayMs = math.max(maxUiDelayMs, now - lastUiTick - 50);
+    final delay = now - lastUiTick - 50;
+    maxUiDelayMs = math.max(maxUiDelayMs, delay);
+    if (delay > 100) {
+      if (delayedTicks.length == 16) delayedTicks.removeAt(0);
+      delayedTicks.add({
+        'elapsedMs': now,
+        'delayMs': delay,
+        'previousTickPhase': previousTickPhase,
+        'currentPhase': probePhase,
+        'bookExportActive': saveStarted != null,
+      });
+    }
+    previousTickPhase = probePhase;
     final start = saveStarted;
     if (start != null) {
       maxSaveDelayMs = math.max(
@@ -260,15 +275,18 @@ Future<void> main(List<String> args) async {
     if (!controller.hasPublishedAudio) throw StateError('No published audio');
     receipt['importCompleteMs'] = watch.elapsedMilliseconds;
     receipt['playRequestedMs'] = watch.elapsedMilliseconds;
+    probePhase = 'play-request';
     final captureGate = Platform.environment['READALOUD_RADOC_CAPTURE_GATE'];
     receipt['controlledCaptureGate'] = captureGate != null;
     if (captureGate != null) {
+      probePhase = 'operator-capture-wait';
       stdout.writeln('RADOC_CAPTURE_WAITING');
       await until(
         () => File(captureGate).existsSync(),
         'External capture readiness',
       );
     }
+    probePhase = 'initial-playback';
     unawaited(controller.startPlayback());
     await until(() => firstNativePositionAt != null, 'First native position');
     receipt['firstNativePositionUnixMicros'] = firstNativePositionAt;
@@ -330,11 +348,13 @@ Future<void> main(List<String> args) async {
       throw StateError('Native audio did not advance or queued PCM is silent');
     }
     // Export via the same controller, then reopen a physically separate copy.
+    probePhase = 'programmatic-export';
     final exportedPath = '${args[1]}.export.radoc';
     final exported = await controller.exportDocumentToPath(exportedPath);
     if (exported == null) throw StateError('Audio book export returned null');
     final reopenedPath = '${args[1]}.reopened.radoc';
     await exported.copy(reopenedPath);
+    probePhase = 'programmatic-reopen';
     await controller.importFilePaths([reopenedPath]);
     await controller.completeInitialIntake();
     if (!controller.hasPublishedAudio) throw StateError('Reopen lost audio');
@@ -349,6 +369,7 @@ Future<void> main(List<String> args) async {
       'positionMs': player.position.inMilliseconds,
       'hasPublishedAudio': controller.hasPublishedAudio,
     };
+    probePhase = 'transport';
     final pauseAt = watch.elapsedMilliseconds;
     await controller.pausePlayback();
     receipt['pauseMs'] = watch.elapsedMilliseconds - pauseAt;
@@ -405,6 +426,7 @@ Future<void> main(List<String> args) async {
       'maxNativePositionMs': maxPositionMs,
       'maxUiHeartbeatDelayMs': maxUiDelayMs,
       'bookSaves': bookSaves,
+      'delayedTicks': delayedTicks,
       'uiHeartbeatCount': heartbeatCount,
       'elapsedMs': watch.elapsedMilliseconds,
       'normalQuit': 'runner must request and verify',

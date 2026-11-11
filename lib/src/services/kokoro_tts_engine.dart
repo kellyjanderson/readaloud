@@ -57,6 +57,7 @@ class KokoroTtsEngine
     String engineId = 'kokoro',
     String? mlxModelPath,
     String? mlxPythonPath,
+    AudioArtifactStore? mlxArtifactStore,
     int mlxQuantizationBits = 0,
   }) : _player = player ?? AudioPlayer(useLazyPreparation: false),
        _artifactPins = artifactPins ?? AudioArtifactPins.shared,
@@ -68,6 +69,7 @@ class KokoroTtsEngine
        _mlxQuantizationBits = mlxQuantizationBits,
        _mlxModelPath = mlxModelPath ?? '',
        _mlxPythonPath = mlxPythonPath ?? '',
+       _mlxArtifactStore = mlxArtifactStore,
        _selectedVoiceId = defaultVoiceIdFor(engineId);
 
   /// Supplies deterministic native/tokenization owners to exercise the real
@@ -130,6 +132,7 @@ class KokoroTtsEngine
     );
   }
 
+  final AudioArtifactStore? _mlxArtifactStore;
   final String _engineId;
   final String _engineVersion;
   @override
@@ -3780,6 +3783,7 @@ class KokoroTtsEngine
         modelPath: _mlxModelPath,
         pythonPath: _mlxPythonPath,
         quantizationBits: _mlxQuantizationBits,
+        artifactStore: _mlxArtifactStore,
         onStatus: (message) => _onStatus?.call(message),
         onResourceProgress: (progress) => _onResourceProgress?.call(progress),
       );

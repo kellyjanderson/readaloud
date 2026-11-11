@@ -17,6 +17,7 @@ import 'package:read_aloud/src/models/radoc_audio_manifest.dart';
 import 'package:read_aloud/src/models/reader_document.dart';
 import 'package:read_aloud/src/models/speech_annotation.dart';
 import 'package:read_aloud/src/models/spoken_chunk_record.dart';
+import 'package:read_aloud/src/services/audio_artifact_store.dart';
 import 'package:read_aloud/src/services/base_speech_annotation_inference_service.dart';
 import 'package:read_aloud/src/services/app_launch_options.dart';
 import 'package:read_aloud/src/services/kokoro_tts_engine.dart';
@@ -73,12 +74,14 @@ class _Engine extends KokoroTtsEngine {
   _Engine(
     AudioPlayer player,
     String id,
+    Directory rawAudioRoot,
     this.events,
     this.phase,
     Future<void> Function() onSynthesis,
   ) : super(
         player: player,
         engineId: id,
+        mlxArtifactStore: AudioArtifactStore(rawAudioRoot),
         mlxQuantizationBits: int.parse(
           Platform.environment['READALOUD_SMOKE_QUANTIZATION_BITS'] ?? '0',
         ),
@@ -180,6 +183,8 @@ Future<void> main(List<String> args) async {
     'passed': false,
     'engine': args[0],
     'runRoot': runRoot.path,
+    'rawAudioCache':
+        'Fresh private store per engine session; no user cache edits.',
     'firstLaunchTiming': 'not tested; model-backed controlled fixture',
     'emittedAudioCapture': 'external evidence required',
     'humanListening': 'external evidence required',
@@ -218,9 +223,16 @@ Future<void> main(List<String> args) async {
 
   _Session createSession(String name, {String? inputPath}) {
     final player = AudioPlayer(useLazyPreparation: false);
-    final engine = _Engine(player, args[0], exports, () => phase, () async {
-      synthesisCallbacks++;
-    });
+    final engine = _Engine(
+      player,
+      args[0],
+      Directory('${runRoot.path}/$name/raw-audio'),
+      exports,
+      () => phase,
+      () async {
+        synthesisCallbacks++;
+      },
+    );
     final session = _Session(
       player,
       engine,
@@ -582,6 +594,9 @@ Future<void> main(List<String> args) async {
         throw StateError('Expected one real export chunk in ${expected.key}');
       }
       final value = observed.single['value']! as Map;
+      if (expected.key == 'missing' && value['cacheHit'] != false) {
+        throw StateError('Missing-scene proof must use uncached synthesis');
+      }
       if (value['startWord'] != expected.value['startWord'] ||
           value['endWord'] != expected.value['endWord']) {
         throw StateError('Export chunk escaped affected source span');
