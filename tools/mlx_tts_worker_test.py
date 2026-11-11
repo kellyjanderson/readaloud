@@ -10,7 +10,6 @@ import wave
 import os
 import subprocess
 import sys
-import threading
 from types import SimpleNamespace
 from types import MethodType
 import unittest
@@ -23,112 +22,6 @@ spec = importlib.util.spec_from_file_location(
 )
 worker = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(worker)
-
-
-class ParallelModelWeightsTest(unittest.TestCase):
-    def _shards(self, directory, count=4):
-        files = []
-        for index in range(count):
-            file = directory / f'shard-{index}.safetensors'
-            mx.save_safetensors(str(file), {
-                f'weight_{index}': mx.arange(6, dtype=mx.int32).reshape(2, 3) + index,
-                'duplicate': mx.array([index], dtype=mx.float16),
-            })
-            files.append(str(file))
-        return files
-
-    def test_actual_runtime_shards_keep_exact_values_dtype_shape_and_file_order(self):
-        import numpy as np
-        from mlx_audio import utils as provider
-        with tempfile.TemporaryDirectory() as root:
-            directory = Path(root).resolve()
-            files = list(reversed(self._shards(directory)))
-            expected = {}
-            for file in files:
-                expected.update(mx.load(file))
-            original = provider.load_weights
-            with patch.object(worker.glob, 'glob', return_value=files), \
-                    worker._parallel_model_weights(directory):
-                actual = provider.load_weights(directory)
-            self.assertIs(provider.load_weights, original)
-            self.assertEqual(list(actual), list(expected))
-            for key, value in expected.items():
-                self.assertEqual(actual[key].dtype, value.dtype)
-                self.assertEqual(actual[key].shape, value.shape)
-                np.testing.assert_array_equal(np.asarray(actual[key]), np.asarray(value))
-            self.assertEqual(actual['duplicate'].item(), 0)
-
-    def test_at_most_four_thread_owned_materializations_and_no_pool_after_return(self):
-        with tempfile.TemporaryDirectory() as root:
-            files = self._shards(Path(root), 8)
-            original = mx.load
-            lock = threading.Lock()
-            barrier = threading.Barrier(4)
-            active = peak = 0
-            owners = set()
-            def read(*args, **kwargs):
-                nonlocal active, peak
-                with lock:
-                    active += 1
-                    peak = max(peak, active)
-                    owners.add(threading.get_ident())
-                try:
-                    # Each four-file batch must be admitted concurrently.
-                    barrier.wait(timeout=5)
-                    return original(*args, **kwargs)
-                finally:
-                    with lock:
-                        active -= 1
-            with patch.object(mx, 'load', side_effect=read):
-                weights = worker._materialize_model_shards(files)
-            self.assertEqual((peak, active, len(owners)), (4, 0, 4))
-            self.assertEqual(weights['duplicate'].item(), 7)
-            self.assertFalse(any(t.name.startswith('speech-shard')
-                                 for t in threading.enumerate()))
-
-    def test_failed_shard_joins_pool_and_restores_provider_before_error_returns(self):
-        from mlx_audio import utils as provider
-        with tempfile.TemporaryDirectory() as root:
-            directory = Path(root).resolve()
-            files = self._shards(directory)
-            original_load, original_reader = mx.load, provider.load_weights
-            barrier = threading.Barrier(4)
-            finished = []
-            def read(file, **kwargs):
-                try:
-                    barrier.wait(timeout=5)
-                    if file == files[0]:
-                        raise OSError('broken checkpoint shard')
-                    return original_load(file, **kwargs)
-                finally:
-                    finished.append(file)
-            with patch.object(worker.glob, 'glob', return_value=files), \
-                    patch.object(mx, 'load', side_effect=read):
-                with self.assertRaisesRegex(OSError, 'broken checkpoint shard'):
-                    with worker._parallel_model_weights(directory):
-                        provider.load_weights(directory)
-            self.assertIs(provider.load_weights, original_reader)
-            self.assertCountEqual(finished, files)
-            self.assertFalse(any(t.name.startswith('speech-shard')
-                                 for t in threading.enumerate()))
-
-    def test_nested_npz_single_shard_and_serial_control_keep_provider_fallback(self):
-        from mlx_audio import utils as provider
-        with tempfile.TemporaryDirectory() as root:
-            directory = Path(root).resolve()
-            nested = directory / 'codec'
-            nested.mkdir()
-            with patch.object(provider, 'load_weights', return_value={'original': True}) as original:
-                with worker._parallel_model_weights(directory):
-                    self.assertEqual(provider.load_weights(nested), {'original': True})
-                    # No safetensors: the original owns NPZ/missing-file rules.
-                    self.assertEqual(provider.load_weights(directory), {'original': True})
-                    self._shards(directory, 1)
-                    self.assertEqual(provider.load_weights(directory), {'original': True})
-                self.assertEqual(original.call_count, 3)
-                with patch.dict(os.environ, {'READALOUD_SERIAL_MODEL_LOAD': '1'}):
-                    with worker._parallel_model_weights(directory):
-                        self.assertIs(provider.load_weights, original)
 
 
 class GeneratorAdapterTest(unittest.TestCase):

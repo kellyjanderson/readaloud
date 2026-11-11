@@ -9,7 +9,6 @@ from __future__ import annotations
 import contextlib
 import ctypes
 import gc
-import glob
 import hashlib
 import json
 import os
@@ -20,7 +19,6 @@ import time
 import traceback
 import wave
 from pathlib import Path
-from concurrent.futures import ThreadPoolExecutor
 from typing import Any
 
 
@@ -132,7 +130,6 @@ def _timing(stage: str, started: float) -> None:
     }, separators=(',', ':')), file=sys.stderr, flush=True)
     message = {
         'modelBuildAndCodec': 'Speech model and codec constructed',
-        'modelShardMaterialization': 'Speech model checkpoint shards materialized',
         'modelVerification': 'Speech model qualification checked',
         'modelWeights': 'Remaining speech model weights ready',
         'modelWeightsAndVerification': 'Speech model weights and qualification ready',
@@ -322,90 +319,6 @@ def _verify_scene_model(directory: Path, manifest: dict, receipt_root: Path) -> 
     return True
 
 
-def _materialize_model_shards(files: list[str]) -> dict:
-    """Join at most four shard reads/evaluations, preserving provider file order.
-
-    The protocol thread owns this synchronous pool and merges its results. Each
-    task owns a thread-local CPU stream until evaluation and synchronization
-    finish. No more than four futures are submitted at once; failed batches
-    join before propagation, and hard cancellation retires the whole child.
-    """
-    import mlx.core as mx
-
-    started = time.monotonic()
-    total = sum(Path(file).stat().st_size for file in files)
-    completed = 0
-    weights = {}
-    _progress('Loading speech model checkpoint shards…', stage='modelWeightShards',
-              completed=completed, total=total)
-
-    def read_shard(file):
-        stream = mx.new_stream(mx.cpu)
-        try:
-            with mx.stream(stream):
-                shard = mx.load(file, stream=stream)
-                mx.eval(shard)
-            return shard
-        finally:
-            # Thread-affine streams never escape the task. Returned arrays are
-            # fully materialized before the protocol thread can use them.
-            try:
-                mx.synchronize(stream)
-            finally:
-                mx.clear_streams()
-
-    with ThreadPoolExecutor(max_workers=min(4, len(files)),
-                            thread_name_prefix='speech-shard') as pool:
-        for offset in range(0, len(files), 4):
-            batch = files[offset:offset + 4]
-            pending = [pool.submit(read_shard, file) for file in batch]
-            for file, future in zip(batch, pending):
-                # Completion order must not change the original loader's
-                # duplicate-key overwrite behavior or tensor ordering.
-                weights.update(future.result())
-                completed += Path(file).stat().st_size
-                _progress('Speech model checkpoint shard bytes loaded',
-                          stage='modelWeightShards', completed=completed, total=total)
-    _timing('modelShardMaterialization', started)
-    return weights
-
-
-@contextlib.contextmanager
-def _parallel_model_weights(directory: Path):
-    """Adapt one provider load, leaving its model/codec/strict checks intact.
-
-    The maintained public loader has no shard-reader injection point. Its
-    sequential lazy mx.load loop defers host I/O to one blocking evaluation;
-    this exact-directory adapter supplies already evaluated, unchanged tensors
-    using the standard bounded executor. The worker admits one load at a time.
-    No nested codec load or other directory is redirected, and the original
-    provider function is restored even on failure. The environment control is
-    retained for native A/B evidence, not an alternate model/quality route.
-    """
-    from mlx_audio import utils as provider
-
-    if os.environ.get('READALOUD_SERIAL_MODEL_LOAD') == '1':
-        yield
-        return
-    original = provider.load_weights
-
-    def load_weights(model_path):
-        if Path(model_path).resolve() != directory:
-            return original(model_path)
-        # Match the provider's unsorted glob exactly. Keep its NPZ and missing
-        # checkpoint errors, and avoid a pool for an unsharded checkpoint.
-        files = glob.glob(str(Path(model_path) / '*.safetensors'))
-        if len(files) < 2:
-            return original(model_path)
-        return _materialize_model_shards(files)
-
-    provider.load_weights = load_weights
-    try:
-        yield
-    finally:
-        provider.load_weights = original
-
-
 def _load(model_id: str, model_path: str, private_cache_path: str, quantization_bits: int = 0) -> dict[str, Any]:
     global _model, _model_id, _model_path, _model_bits, _model_native_scenes
     global _model_load_stream, _model_pending_parameters
@@ -438,12 +351,11 @@ def _load(model_id: str, model_path: str, private_cache_path: str, quantization_
     # The provider's supported lazy flag preserves its full construction and
     # post-load codec setup. For qualified Drama, overlap the remaining weight
     # evaluation with the existing CPU checksum/receipt work below. There is
-    # one pending tree per model; the scoped shard pool below is fully joined
-    # before construction returns and cannot enqueue another model job.
+    # one stream/tree per model, no executor or additional queued model job.
     overlap_weights = model_id == 'fish_drama3' and quantization_bits == 0
     if overlap_weights:
         _model_load_stream = mx.new_stream(mx.gpu)
-        with mx.stream(_model_load_stream), _parallel_model_weights(directory):
+        with mx.stream(_model_load_stream):
             _model = load(str(directory), lazy=True)
         _model_pending_parameters = _model.parameters()
         mx.async_eval(_model_pending_parameters)
