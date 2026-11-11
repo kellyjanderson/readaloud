@@ -243,8 +243,9 @@ Future<void> main(List<String> args) async {
       final gate = File('${output.parent.path}/inspection.done');
       final end = watch.elapsedMilliseconds + 90000;
       while (!await gate.exists()) {
-        if (watch.elapsedMilliseconds > end)
+        if (watch.elapsedMilliseconds > end) {
           throw TimeoutException('UI inspection');
+        }
         await Future<void>.delayed(const Duration(milliseconds: 50));
       }
       receipt['inspectionReleased'] = true;
