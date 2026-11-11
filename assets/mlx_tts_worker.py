@@ -357,7 +357,8 @@ def _refresh_mapped_budget() -> None:
     mx.set_memory_limit(remaining)
 
 
-def _mapped_checkpoint(file: str, *, allow_repack: bool = True) -> tuple[dict, list[Any], int, int] | None:
+def _mapped_checkpoint(file: str, *, allow_repack: bool = True,
+                       whole_file_buffer: bool = False) -> tuple[dict, list[Any], int, int] | None:
     """Exact-byte, private-COW views; GPU-repack misaligned tensor bytes.
 
     safe_open owns format/offset validation. Its tensor reader copies and lacks
@@ -399,7 +400,23 @@ def _mapped_checkpoint(file: str, *, allow_repack: bool = True) -> tuple[dict, l
 
     repack = any(offset % np.dtype(dtypes[dtype][0]).itemsize
                  for _, dtype, _, offset, _ in entries)
-    if repack and not allow_repack:
+    buffer_shape = None
+    if whole_file_buffer:
+        # One contiguous byte buffer per file. Factor large files rather than
+        # creating a >INT32_MAX dimension or using a noncontiguous extent view.
+        size = Path(file).stat().st_size
+        if size < 2**31:
+            buffer_shape = (size,)
+        else:
+            for divisor in range(2, 65537):
+                if size % divisor == 0 and size // divisor < 2**31:
+                    buffer_shape = (divisor, size // divisor)
+                    break
+        if buffer_shape is None or not any(
+                offset % np.dtype(dtypes[dtype][0]).itemsize == 0
+                for _, dtype, _, offset, _ in entries):
+            return None
+    elif repack and not allow_repack:
         return None  # Aligned-only A/B keeps the original unaligned reader.
 
     # Register before wrapping/copying so both the external input and any MLX
@@ -433,6 +450,36 @@ def _mapped_checkpoint(file: str, *, allow_repack: bool = True) -> tuple[dict, l
         return result
     weights, owners, inputs = {}, [], []
     mapped = copied = 0
+    if whole_file_buffer:
+        buffer_view = mapping.reshape(buffer_shape)
+        try:
+            buffer = import_view(buffer_view)
+        except (ValueError, BufferError):
+            return None
+        owners.extend((mapping, buffer_view, buffer))
+        original = None
+        for key, dtype, shape, offset, nbytes in entries:
+            itemsize = np.dtype(dtypes[dtype][0]).itemsize
+            if offset % itemsize:
+                # The provider still owns each unsupported tensor. Its other
+                # lazy arrays are discarded without evaluation or extra I/O.
+                if original is None:
+                    original = mx.load(file)
+                value = original[key]
+                copied += nbytes  # Provider fallback bytes in this mode.
+            else:
+                byte_shape = tuple(shape) + (itemsize,)
+                stride, strides = 1, []
+                for dimension in reversed(byte_shape):
+                    strides.insert(0, stride)
+                    stride *= dimension
+                raw = mx.as_strided(buffer, shape=byte_shape, strides=strides, offset=offset)
+                value = raw.view(dtypes[dtype][1]).reshape(shape)
+                owners.extend((raw, value))
+                mapped += nbytes
+            weights[key] = value
+        mx.eval(weights)
+        return weights, owners, mapped, copied
     for key, dtype, shape, offset, nbytes in entries:
         np_dtype, mx_dtype = dtypes[dtype]
         if repack:
@@ -503,6 +550,7 @@ def _mapped_model_weights(directory: Path):
     original = provider.load_weights
     mode = os.environ.get('READALOUD_MAPPED_MODEL_LOAD')
     allow_repack = mode not in ('aligned', 'mapped_prefault')
+    whole_file_buffer = mode == 'file_buffer'
     # One CPU producer, four admitted mappings at most. This context spans the
     # provider load AND remaining weight evaluation, allowing page reads to
     # overlap existing host I/O/codec construction. Every task owns a strong
@@ -521,7 +569,8 @@ def _mapped_model_weights(directory: Path):
         mapped = copied = fallback = 0
         for file in files:  # Preserve the original provider's merge order.
             _refresh_mapped_budget()
-            loaded = _mapped_checkpoint(file, allow_repack=allow_repack)
+            loaded = _mapped_checkpoint(file, allow_repack=allow_repack,
+                                        whole_file_buffer=whole_file_buffer)
             if loaded is None:
                 weights.update(mx.load(file))
                 fallback += Path(file).stat().st_size
@@ -530,7 +579,10 @@ def _mapped_model_weights(directory: Path):
                 weights.update(shard)
                 _mapped_model_owners.extend(owners)
                 mapped += shared_bytes
-                copied += copied_bytes
+                if whole_file_buffer:
+                    fallback += copied_bytes
+                else:
+                    copied += copied_bytes
                 if pool is not None and shared_bytes:
                     if len(pending) >= 4:
                         pending.pop(0).result()
@@ -593,7 +645,7 @@ def _load(model_id: str, model_path: str, private_cache_path: str, quantization_
     # evaluation with the existing CPU checksum/receipt work below. There is
     # one stream/tree per model, no executor or additional queued model job.
     overlap_weights = model_id == 'fish_drama3' and quantization_bits == 0
-    use_maps = overlap_weights and os.environ.get('READALOUD_MAPPED_MODEL_LOAD') in ('1', 'aligned', 'mapped_prefault')
+    use_maps = overlap_weights and os.environ.get('READALOUD_MAPPED_MODEL_LOAD') in ('1', 'aligned', 'mapped_prefault', 'file_buffer')
     if use_maps:
         manifest = json.loads(Path(__file__).with_name('fish_drama_model_checksums.json').read_text())
         use_maps = _verify_scene_model(directory, manifest,

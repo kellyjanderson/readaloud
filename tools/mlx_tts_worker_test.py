@@ -192,6 +192,64 @@ class MappedCheckpointTest(unittest.TestCase):
             self.assertEqual(progress.call_args.kwargs['total'], 4)
             self.assertEqual(progress.call_args.kwargs['unit'], 'pages')
 
+    def test_file_buffer_maps_once_and_falls_back_per_tensor_with_exact_pointers_and_bits(self):
+        import numpy as np
+        with tempfile.TemporaryDirectory() as root:
+            for alignment in range(8):
+                with self.subTest(alignment=alignment):
+                    path = Path(root) / f'buffer-{alignment}.safetensors'
+                    self._checkpoint(path, alignment)
+                    before = path.read_bytes()
+                    expected = mx.load(str(path))
+                    baseline = mx.get_active_memory()
+                    with patch.object(mx, 'from_dlpack', wraps=mx.from_dlpack) as imported, \
+                            patch.object(mx, 'load', wraps=mx.load) as fallback:
+                        loaded = worker._mapped_checkpoint(str(path), whole_file_buffer=True)
+                    if alignment % 2:
+                        self.assertIsNone(loaded)
+                        imported.assert_not_called()
+                        continue
+                    weights, owners, mapped, copied = loaded
+                    worker._mapped_model_owners.extend(owners)
+                    imported.assert_called_once()
+                    mapping, buffer_view, buffer = owners[:3]
+                    self.assertEqual(buffer_view.ctypes.data, mapping.ctypes.data)
+                    self.assertEqual(np.asarray(buffer).ctypes.data, mapping.ctypes.data)
+                    # Full-file registration plus only any unaligned F32
+                    # tensor: mapped views add no individual registrations.
+                    self.assertEqual(mx.get_active_memory() - baseline, path.stat().st_size + copied)
+                    self.assertEqual(copied, 16 if alignment % 4 else 0)
+                    self.assertEqual(fallback.call_count, 1 if copied else 0)
+                    header_size = int.from_bytes(before[:8], 'little')
+                    header = json.loads(before[8:8+header_size])
+                    for key, value in weights.items():
+                        np.testing.assert_array_equal(np.asarray(value.view(mx.uint16)), np.asarray(expected[key].view(mx.uint16)))
+                        offset = 8 + header_size + header[key]['data_offsets'][0]
+                        if offset % value.itemsize == 0:
+                            self.assertEqual(np.asarray(value.view(mx.uint16)).ctypes.data,
+                                             mapping.ctypes.data + offset)
+                        result = value * 2 + 1
+                        mx.eval(result)
+                        self.assertEqual(result.tolist(), (expected[key] * 2 + 1).tolist())
+                    self.assertEqual(path.read_bytes(), before)
+
+    def test_file_buffer_contiguous_2d_base_preserves_validated_tensor_views(self):
+        import numpy as np
+        with tempfile.TemporaryDirectory() as root:
+            path = Path(root) / 'bytes'
+            path.write_bytes(bytes(range(128)))
+            mapping = np.memmap(path, mode='c', dtype=np.uint8)
+            view = mapping.reshape(4, 32)
+            before = mx.get_active_memory()
+            buffer = mx.from_dlpack(view, copy=False)
+            self.assertEqual(mx.get_active_memory() - before, 128)
+            for offset in (0, 2, 4, 6):
+                value = mx.as_strided(buffer, shape=(8, 2), strides=(2, 1), offset=offset).view(mx.uint16).reshape(8)
+                mx.eval(value)
+                expected = np.ndarray((8,), dtype=np.uint16, buffer=mapping, offset=offset)
+                self.assertEqual(value.tolist(), expected.tolist())
+                self.assertEqual(np.asarray(value).ctypes.data, mapping.ctypes.data + offset)
+
     def test_prefault_joins_after_weight_evaluation_before_loaded_and_restores_hook(self):
         from mlx_audio import utils as provider
         started, evaluated, done = threading.Event(), threading.Event(), threading.Event()
