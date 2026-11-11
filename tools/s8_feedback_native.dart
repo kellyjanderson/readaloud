@@ -1,4 +1,4 @@
-// UI-only native probe. Build/sign/clone to the isolated mlxPlaybackTest bundle
+// UI-only native probe. Build/sign/clone to an isolated feedbackTest bundle
 // before using run_s8_feedback_native.rb. No inference, audio, network, or native
 // input is simulated. Gate acknowledgements only release this fixture producer;
 // the coordinator records the actual keyboard/layout/accessibility observations.

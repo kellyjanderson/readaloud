@@ -15,7 +15,8 @@ bundle = File.expand_path('../..', File.dirname(app))
 abort 'Missing executable' unless File.executable?(app)
 abort 'Output already exists' if File.exist?(output)
 identifier, status = Open3.capture2('/usr/libexec/PlistBuddy', '-c', 'Print CFBundleIdentifier', File.join(bundle, 'Contents/Info.plist'))
-abort 'Requires isolated mlxPlaybackTest bundle' unless status.success? && identifier.strip == 'com.kellyjanderson.readAloud.mlxPlaybackTest'
+isolated_ids = %w[com.kellyjanderson.readAloud.mlxPlaybackTest com.kellyjanderson.readAloud.feedbackTest]
+abort 'Requires an isolated feedbackTest or mlxPlaybackTest bundle' unless status.success? && isolated_ids.include?(identifier.strip)
 abort 'Signing/entitlement preflight failed' unless system(RbConfig.ruby, File.join(__dir__, 'verify_macos_release_entitlements.rb'), bundle)
 processes, = Open3.capture2('ps', '-axo', 'pid=,comm=')
 existing = processes.lines.filter_map do |line|
