@@ -53,8 +53,9 @@ _model_native_scenes = False
 _model_load_stream: Any = None
 _model_pending_parameters: Any = None
 _mapped_model_owners: list[Any] = []
-_mapped_model_mappings: list[tuple[Any, int]] = []
+_mapped_model_mappings: list[list[Any]] = []
 _mapped_model_bytes = 0
+_mapped_model_untracked_bytes = 0
 _MODEL_MEMORY_LIMIT = 85_000_000_000
 _protocol_stdout = sys.stdout
 _active_request_id = ""
@@ -335,13 +336,20 @@ def _verify_scene_model(directory: Path, manifest: dict, receipt_root: Path) -> 
 
 
 def _refresh_mapped_budget() -> None:
-    global _mapped_model_bytes
+    global _mapped_model_bytes, _mapped_model_untracked_bytes
     import mlx.core as mx
 
-    _mapped_model_mappings[:] = [(ref, size) for ref, size in _mapped_model_mappings
-                                if ref() is not None]
-    _mapped_model_bytes = sum(size for _, size in _mapped_model_mappings)
-    remaining = _MODEL_MEMORY_LIMIT - _mapped_model_bytes
+    _mapped_model_mappings[:] = [entry for entry in _mapped_model_mappings
+                                if entry[0]() is not None]
+    _mapped_model_bytes = sum(size for _, size, _ in _mapped_model_mappings)
+    # The pinned MLX allocator already counts DLPack-imported payload buffers
+    # in get_active_memory(). Only mapping bytes outside those registered
+    # buffers need an additional reservation; subtracting the entire mapping
+    # would count every shared weight twice. phys_footprint has different
+    # semantics and still receives the conservative full-mapping addition.
+    _mapped_model_untracked_bytes = sum(size - registered
+        for _, size, registered in _mapped_model_mappings)
+    remaining = _MODEL_MEMORY_LIMIT - _mapped_model_untracked_bytes
     if remaining <= 0 or mx.get_active_memory() > remaining:
         raise MemoryError('Mapped speech weights and MLX allocations exceed the memory ceiling.')
     mx.set_memory_limit(remaining)
@@ -391,11 +399,31 @@ def _mapped_checkpoint(file: str) -> tuple[dict, list[Any], int, int] | None:
     # copy are charged throughout preparation. Weak references retain the
     # charge until evaluated copy graphs have actually released their inputs.
     size = Path(file).stat().st_size
-    if _mapped_model_bytes + size + mx.get_active_memory() > _MODEL_MEMORY_LIMIT:
+    if _mapped_model_untracked_bytes + size + mx.get_active_memory() > _MODEL_MEMORY_LIMIT:
         raise MemoryError('Checkpoint mapping would exceed the speech memory ceiling.')
     mapping = np.memmap(file, dtype=np.uint8, mode='c')
-    _mapped_model_mappings.append((weakref.ref(mapping), size))
+    accounting = [weakref.ref(mapping), size, 0]
+    _mapped_model_mappings.append(accounting)
     _refresh_mapped_budget()
+
+    def import_view(view):
+        # Transfer this byte reservation to the allocator before importing.
+        # This protocol thread is the sole producer and has joined the prior
+        # shard; no other model job can consume the temporarily granted room.
+        reserved = view.nbytes
+        accounting[2] += reserved
+        _refresh_mapped_budget()
+        before = mx.get_active_memory()
+        try:
+            result = mx.from_dlpack(view, copy=False)
+        except Exception:
+            accounting[2] -= reserved
+            _refresh_mapped_budget()
+            raise
+        registered = min(reserved, max(0, mx.get_active_memory() - before))
+        accounting[2] -= reserved - registered
+        _refresh_mapped_budget()
+        return result
     repack = any(offset % np.dtype(dtypes[dtype][0]).itemsize
                  for _, dtype, _, offset, _ in entries)
     weights, owners, inputs = {}, [], []
@@ -408,7 +436,7 @@ def _mapped_checkpoint(file: str) -> tuple[dict, list[Any], int, int] | None:
             view = np.ndarray(tuple(shape) + (np.dtype(np_dtype).itemsize,),
                               dtype=np.uint8, buffer=mapping, offset=offset)
             try:
-                raw = mx.from_dlpack(view, copy=False)
+                raw = import_view(view)
             except (ValueError, BufferError):
                 return None
             inputs.extend((view, raw))
@@ -422,7 +450,7 @@ def _mapped_checkpoint(file: str) -> tuple[dict, list[Any], int, int] | None:
         else:
             view = np.ndarray(tuple(shape), dtype=np_dtype, buffer=mapping, offset=offset)
             try:
-                raw = mx.from_dlpack(view, copy=False)
+                raw = import_view(view)
             except (ValueError, BufferError):
                 return None
             value = raw.view(mx_dtype) if dtype == 'BF16' else raw

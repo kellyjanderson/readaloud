@@ -86,9 +86,31 @@ class MappedCheckpointTest(unittest.TestCase):
                 return weights['float'].sum().item()
             self.assertEqual(load(), -2)
             self.assertEqual(worker._mapped_model_bytes, path.stat().st_size)
+            self.assertEqual(worker._mapped_model_untracked_bytes, path.stat().st_size - 24)
+            with patch.object(mx, 'set_memory_limit', wraps=mx.set_memory_limit) as limit:
+                worker._refresh_mapped_budget()
+                limit.assert_called_once_with(worker._MODEL_MEMORY_LIMIT - (path.stat().st_size - 24))
             worker._unload()
             self.assertEqual(worker._mapped_model_bytes, 0)
+            self.assertEqual(worker._mapped_model_untracked_bytes, 0)
             self.assertFalse(worker._mapped_model_mappings)
+
+    def test_registered_payload_is_charged_once_at_a_tight_memory_ceiling(self):
+        with tempfile.TemporaryDirectory() as root:
+            first, second = Path(root) / 'first.safetensors', Path(root) / 'second.safetensors'
+            self._checkpoint(first, 0)
+            self._checkpoint(second, 0)
+            baseline = mx.get_active_memory()
+            # Enough for both complete mappings, but not for counting each
+            # mapping AND its registered payload a second time.
+            ceiling = baseline + first.stat().st_size + second.stat().st_size
+            with patch.object(worker, '_MODEL_MEMORY_LIMIT', ceiling):
+                for path in (first, second):
+                    weights, owners, _, _ = worker._mapped_checkpoint(str(path))
+                    worker._mapped_model_owners.extend(owners)
+                worker._refresh_mapped_budget()
+                self.assertEqual(mx.get_active_memory() + worker._mapped_model_untracked_bytes, ceiling)
+                self.assertEqual(weights['float'].sum().item(), -2)
 
     def test_memory_refusal_and_invalid_checkpoint_do_not_escape_ceiling(self):
         with tempfile.TemporaryDirectory() as root:
