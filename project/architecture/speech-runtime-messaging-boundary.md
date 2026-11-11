@@ -264,7 +264,10 @@ batch before installer reuse. Exact digest, mode, type, link, inventory, arm64 a
 signature checks remain mandatory on reuse. The faster hashing implementation
 does not turn an installed runtime receipt into permission to skip verification.
 
-macOS keeps Flutter UI and platform runners separate. Each MLX process request
+macOS keeps Flutter UI and platform runners separate. Model preparation owns an
+activity across runtime acquisition, verification and model initialization; its
+owner releases it when preparation drains, including failure before Python starts.
+Each MLX process request additionally
 owns a native `ProcessInfo` activity requesting user-initiated, latency-critical
 execution while allowing idle system sleep. Native ownership is capped at eight
 unique tokens; release is idempotent and occurs on success, failure, retirement

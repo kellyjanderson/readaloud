@@ -350,6 +350,18 @@ class MlxSpeechWorkerChunkProcessor
   Future<void> prepareModel() async {
     if (_closed) throw StateError('MLX inference owner is closed.');
     if (_modelIdentity != null) return;
+    // Runtime acquisition and verification precede the Python request. Keep
+    // their native scheduling activity owned until all preparation drains too.
+    final activity = await NativeSpeechWorkActivity.begin();
+    try {
+      await _prepareModel();
+    } finally {
+      await activity.release();
+    }
+  }
+
+  Future<void> _prepareModel() async {
+    if (_closed) throw StateError('MLX inference owner is closed.');
     if (usesReferenceVoiceLibrary(engineId)) await MlxVoiceLibrary.load();
     if (!isMlxEngine(engineId)) {
       throw StateError('Unknown MLX TTS engine: $engineId');

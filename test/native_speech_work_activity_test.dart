@@ -2,6 +2,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:read_aloud/src/services/native_speech_work_activity.dart';
+import 'package:read_aloud/src/services/mlx_speech_worker_processor.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -63,5 +64,16 @@ void main() {
         .setMockMethodCallHandler(channel, null);
     final activity = await NativeSpeechWorkActivity.begin();
     await activity.release();
+  });
+
+  test('model preparation failure before Python releases its activity', () async {
+    final processor = MlxSpeechWorkerChunkProcessor(
+      engineId: 'invalid-test-engine',
+      modelPath: '',
+      pythonPath: '',
+    );
+    await expectLater(processor.prepareModel(), throwsStateError);
+    expect(calls.map((c) => c.method), ['beginSpeechWork', 'endSpeechWork']);
+    expect(calls.first.arguments, calls.last.arguments);
   });
 }
