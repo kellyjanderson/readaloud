@@ -52,6 +52,7 @@ extension ReaderAudioBookSupport on ReaderController {
   /// The screen resolves launch/open/restore intake before synthesis startup.
   Future<void> completeInitialIntake() async {
     if (_disposed ||
+        _modelPreparationCancelled ||
         _audioBook != null ||
         _synthesisInitialized ||
         !deferInitialSynthesis) {

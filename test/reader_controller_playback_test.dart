@@ -68,59 +68,66 @@ void main() {
   );
 
   for (final holdDefault in [false, true]) {
-    test(
-      'early cancellation survives held ${holdDefault ? 'default selection' : 'preferences'} until explicit retry',
-      () async {
-        SharedPreferences.setMockInitialValues({
-          if (!holdDefault) 'reader.ttsEngineId': 'fish_drama3_8bit',
-          'reader.narratorVoiceIds.v1': jsonEncode({
-            'fish_drama3_8bit': 'af_bella',
-          }),
-          'reader.fontScale': 1.4,
-          'reader.lastOpenedDocumentPath': '/saved/book.radoc',
-        });
-        final preferences = _HeldPreferences();
-        final selector = _HeldDefaultSelection();
-        final created = <String>[];
-        final engine = _ModelPreparationEngine();
-        final controller = ReaderController(
-          preferencesService: preferences,
-          defaultEngineSelection: selector,
-          engineFactory: (id, _) {
-            created.add(id);
-            return engine;
-          },
-          enablePlatformIntakeChannels: false,
-        );
-        addTearDown(controller.dispose);
-        final initializing = controller.initialize();
-        if (holdDefault) {
-          preferences.ready.complete();
-          await selector.started.future;
-        }
-        await controller.cancelSpeechResourcePreparation();
-        await controller.cancelSpeechResourcePreparation();
-        if (holdDefault) {
-          selector.ready.complete();
-        } else {
-          preferences.ready.complete();
-        }
-        await initializing;
-        expect(controller.engineSession.phase, EngineSessionPhase.cancelled);
-        expect(controller.engineSession.selected.engineId, 'fish_drama3_8bit');
-        expect(controller.engineSession.active, isNull);
-        expect(controller.isInitializing, isFalse);
-        expect(controller.fontScale, 1.4);
-        expect(created, isEmpty);
-        expect(engine.preparations, 0);
-        await controller.retryInitialization();
-        expect(created, ['fish_drama3_8bit']);
-        expect(engine.preparations, 1);
-        expect(engine.lastSelectedVoiceId, 'af_bella');
-        expect(controller.engineSession.active!.engineId, 'fish_drama3_8bit');
-        expect(engine.speakCallCount, 0);
-      },
-    );
+    for (final deferred in [false, true]) {
+      test(
+        'early cancellation survives held ${holdDefault ? 'default selection' : 'preferences'} and deferred=$deferred intake until explicit retry',
+        () async {
+          SharedPreferences.setMockInitialValues({
+            if (!holdDefault) 'reader.ttsEngineId': 'fish_drama3_8bit',
+            'reader.narratorVoiceIds.v1': jsonEncode({
+              'fish_drama3_8bit': 'af_bella',
+            }),
+            'reader.fontScale': 1.4,
+            'reader.lastOpenedDocumentPath': '/saved/book.radoc',
+          });
+          final preferences = _HeldPreferences();
+          final selector = _HeldDefaultSelection();
+          final created = <String>[];
+          final engine = _ModelPreparationEngine();
+          final controller = ReaderController(
+            preferencesService: preferences,
+            defaultEngineSelection: selector,
+            deferInitialSynthesis: deferred,
+            engineFactory: (id, _) {
+              created.add(id);
+              return engine;
+            },
+            enablePlatformIntakeChannels: false,
+          );
+          addTearDown(controller.dispose);
+          final initializing = controller.initialize();
+          if (holdDefault) {
+            preferences.ready.complete();
+            await selector.started.future;
+          }
+          await controller.cancelSpeechResourcePreparation();
+          await controller.cancelSpeechResourcePreparation();
+          if (holdDefault) {
+            selector.ready.complete();
+          } else {
+            preferences.ready.complete();
+          }
+          await initializing;
+          await controller.completeInitialIntake();
+          expect(controller.engineSession.phase, EngineSessionPhase.cancelled);
+          expect(
+            controller.engineSession.selected.engineId,
+            'fish_drama3_8bit',
+          );
+          expect(controller.engineSession.active, isNull);
+          expect(controller.isInitializing, isFalse);
+          expect(controller.fontScale, 1.4);
+          expect(created, isEmpty);
+          expect(engine.preparations, 0);
+          await controller.retryInitialization();
+          expect(created, ['fish_drama3_8bit']);
+          expect(engine.preparations, 1);
+          expect(engine.lastSelectedVoiceId, 'af_bella');
+          expect(controller.engineSession.active!.engineId, 'fish_drama3_8bit');
+          expect(engine.speakCallCount, 0);
+        },
+      );
+    }
   }
 
   test(
