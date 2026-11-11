@@ -9,8 +9,10 @@ from __future__ import annotations
 import contextlib
 import ctypes
 import gc
+import glob
 import hashlib
 import json
+import math
 import os
 import sys
 import tempfile
@@ -18,6 +20,7 @@ import threading
 import time
 import traceback
 import wave
+import weakref
 from pathlib import Path
 from typing import Any
 
@@ -49,6 +52,10 @@ _model_bits = 0
 _model_native_scenes = False
 _model_load_stream: Any = None
 _model_pending_parameters: Any = None
+_mapped_model_owners: list[Any] = []
+_mapped_model_mappings: list[tuple[Any, int]] = []
+_mapped_model_bytes = 0
+_MODEL_MEMORY_LIMIT = 85_000_000_000
 _protocol_stdout = sys.stdout
 _active_request_id = ""
 _output_lock = threading.Lock()
@@ -74,7 +81,9 @@ def _physical_footprint() -> int:
     info = RusageInfoV2()
     if libproc.proc_pid_rusage(os.getpid(), 2, ctypes.byref(info)) != 0:
         raise OSError(ctypes.get_errno(), "Could not sample inference memory")
-    return int(info.counters[7])  # ri_phys_footprint
+    # External file-backed Metal buffers can be absent from phys_footprint.
+    # Count their complete mapping size conservatively, including cold pages.
+    return int(info.counters[7]) + _mapped_model_bytes  # ri_phys_footprint
 
 
 def _report_memory(stop: threading.Event) -> None:
@@ -93,15 +102,20 @@ def _unload() -> None:
     # If a join fails, retain its model/tree/stream ownership until retry or
     # process retirement. Never drop a stream that may still own queued work.
     _join_model_weights()
+    if _mapped_model_owners:
+        import mlx.core as mx
+        mx.synchronize(mx.gpu)
     _model = None
     _model_id = None
     _model_path = None
     _model_native_scenes = False
     _model_load_stream = None
+    _mapped_model_owners.clear()
     gc.collect()
     try:
         import mlx.core as mx
 
+        _refresh_mapped_budget()
         mx.clear_cache()
     except Exception:
         pass
@@ -130,6 +144,7 @@ def _timing(stage: str, started: float) -> None:
     }, separators=(',', ':')), file=sys.stderr, flush=True)
     message = {
         'modelBuildAndCodec': 'Speech model and codec constructed',
+        'modelMappedCheckpoint': 'Speech model checkpoint views prepared',
         'modelVerification': 'Speech model qualification checked',
         'modelWeights': 'Remaining speech model weights ready',
         'modelWeightsAndVerification': 'Speech model weights and qualification ready',
@@ -319,6 +334,153 @@ def _verify_scene_model(directory: Path, manifest: dict, receipt_root: Path) -> 
     return True
 
 
+def _refresh_mapped_budget() -> None:
+    global _mapped_model_bytes
+    import mlx.core as mx
+
+    _mapped_model_mappings[:] = [(ref, size) for ref, size in _mapped_model_mappings
+                                if ref() is not None]
+    _mapped_model_bytes = sum(size for _, size in _mapped_model_mappings)
+    remaining = _MODEL_MEMORY_LIMIT - _mapped_model_bytes
+    if remaining <= 0 or mx.get_active_memory() > remaining:
+        raise MemoryError('Mapped speech weights and MLX allocations exceed the memory ceiling.')
+    mx.set_memory_limit(remaining)
+
+
+def _mapped_checkpoint(file: str) -> tuple[dict, list[Any], int, int] | None:
+    """Exact-byte, private-COW views; GPU-repack misaligned tensor bytes.
+
+    safe_open owns format/offset validation. Its tensor reader copies and lacks
+    NumPy BF16 support, so NumPy/DLPack supplies the missing shared-buffer path.
+    No production operation writes a map. Retained MLX owners prevent donation;
+    private COW additionally prevents any accidental write reaching the file.
+    """
+    import mlx.core as mx
+    import numpy as np
+    from safetensors import safe_open
+
+    dtypes = {'BF16': (np.uint16, mx.bfloat16), 'F16': (np.float16, mx.float16),
+              'F32': (np.float32, mx.float32), 'I32': (np.int32, mx.int32),
+              'I64': (np.int64, mx.int64), 'U32': (np.uint32, mx.uint32),
+              'U64': (np.uint64, mx.uint64), 'I16': (np.int16, mx.int16),
+              'U16': (np.uint16, mx.uint16), 'I8': (np.int8, mx.int8),
+              'U8': (np.uint8, mx.uint8), 'BOOL': (np.bool_, mx.bool_)}
+    with safe_open(file, framework='numpy', backend='mmap') as validated:
+        with open(file, 'rb') as source:
+            header_size = int.from_bytes(source.read(8), 'little')
+            if not 0 < header_size < 100_000_000:
+                raise ValueError('Invalid checkpoint header size')
+            header = json.loads(source.read(header_size))
+        entries = []
+        for key in validated.keys():
+            metadata = validated.get_slice(key)
+            dtype, shape = metadata.get_dtype(), metadata.get_shape()
+            if dtype not in dtypes or not shape or any(not 0 < n < 2**31 for n in shape):
+                return None  # Original provider owns unsupported layouts.
+            spec = header[key]
+            if spec['dtype'] != dtype or spec['shape'] != shape:
+                raise ValueError('Checkpoint metadata disagrees with validated tensors')
+            start, end = spec['data_offsets']
+            itemsize = np.dtype(dtypes[dtype][0]).itemsize
+            if (start < 0 or end < start or end - start != itemsize * math.prod(shape)
+                    or 8 + header_size + end > Path(file).stat().st_size):
+                raise ValueError('Checkpoint tensor exceeds its declared byte bounds')
+            entries.append((key, dtype, shape, 8 + header_size + start, end - start))
+
+    # Register before wrapping/copying so both the external input and any MLX
+    # copy are charged throughout preparation. Weak references retain the
+    # charge until evaluated copy graphs have actually released their inputs.
+    size = Path(file).stat().st_size
+    if _mapped_model_bytes + size + mx.get_active_memory() > _MODEL_MEMORY_LIMIT:
+        raise MemoryError('Checkpoint mapping would exceed the speech memory ceiling.')
+    mapping = np.memmap(file, dtype=np.uint8, mode='c')
+    _mapped_model_mappings.append((weakref.ref(mapping), size))
+    _refresh_mapped_budget()
+    repack = any(offset % np.dtype(dtypes[dtype][0]).itemsize
+                 for _, dtype, _, offset, _ in entries)
+    weights, owners, inputs = {}, [], []
+    mapped = copied = 0
+    for key, dtype, shape, offset, nbytes in entries:
+        np_dtype, mx_dtype = dtypes[dtype]
+        if repack:
+            # uint8 has no alignment restriction. Copy before viewing the exact
+            # bytes as BF16/etc; directly viewing an odd address is incorrect.
+            view = np.ndarray(tuple(shape) + (np.dtype(np_dtype).itemsize,),
+                              dtype=np.uint8, buffer=mapping, offset=offset)
+            try:
+                raw = mx.from_dlpack(view, copy=False)
+            except (ValueError, BufferError):
+                return None
+            inputs.extend((view, raw))
+            # The pinned MLX API has no public copy primitive. Unsigned-byte
+            # addition of zero allocates aligned GPU storage without changing
+            # a single payload bit, including BF16 NaNs and signed zero.
+            aligned = mx.add(raw, mx.array(0, dtype=mx.uint8), stream=mx.gpu)
+            value = aligned.view(mx_dtype, stream=mx.gpu).reshape(shape)
+            owners.extend((aligned, value))
+            copied += nbytes
+        else:
+            view = np.ndarray(tuple(shape), dtype=np_dtype, buffer=mapping, offset=offset)
+            try:
+                raw = mx.from_dlpack(view, copy=False)
+            except (ValueError, BufferError):
+                return None
+            value = raw.view(mx_dtype) if dtype == 'BF16' else raw
+            owners.extend((mapping, view, raw, value))
+            mapped += nbytes
+        weights[key] = value
+    mx.eval(weights)
+    mx.synchronize(mx.gpu)
+    # For repacked shards no returned owner points at the source mapping.
+    # DLPack keeps any still-needed input alive independently of this scope.
+    return weights, owners, mapped, copied
+
+
+@contextlib.contextmanager
+def _mapped_model_weights(directory: Path):
+    """One exact-directory provider adapter, restored on every exit.
+
+    The public loader has no reader injection. Model construction, sanitize,
+    quantization, codec loading and strict checks remain the provider's own.
+    Qualification must have succeeded before this context is entered.
+    """
+    from mlx_audio import utils as provider
+    import mlx.core as mx
+
+    original = provider.load_weights
+    def load_weights(path):
+        if Path(path).resolve() != directory:
+            return original(path)
+        files = glob.glob(str(Path(path) / '*.safetensors'))
+        if not files:
+            return original(path)
+        started = time.monotonic()
+        weights = {}
+        mapped = copied = fallback = 0
+        for file in files:  # Preserve the original provider's merge order.
+            _refresh_mapped_budget()
+            loaded = _mapped_checkpoint(file)
+            if loaded is None:
+                weights.update(mx.load(file))
+                fallback += Path(file).stat().st_size
+            else:
+                shard, owners, shared_bytes, copied_bytes = loaded
+                weights.update(shard)
+                _mapped_model_owners.extend(owners)
+                mapped += shared_bytes
+                copied += copied_bytes
+        _refresh_mapped_budget()
+        _progress(f'Checkpoint bytes: mapped={mapped}, GPU copied={copied}, provider fallback={fallback}',
+                  stage='modelCheckpointStorage')
+        _timing('modelMappedCheckpoint', started)
+        return weights
+    provider.load_weights = load_weights
+    try:
+        yield
+    finally:
+        provider.load_weights = original
+
+
 def _load(model_id: str, model_path: str, private_cache_path: str, quantization_bits: int = 0) -> dict[str, Any]:
     global _model, _model_id, _model_path, _model_bits, _model_native_scenes
     global _model_load_stream, _model_pending_parameters
@@ -342,7 +504,7 @@ def _load(model_id: str, model_path: str, private_cache_path: str, quantization_
     _unload()
     import mlx.core as mx
     # Reserve headroom for Flutter, Python, codec and allocator overhead.
-    mx.set_memory_limit(85_000_000_000)
+    mx.set_memory_limit(_MODEL_MEMORY_LIMIT)
     mx.set_cache_limit(1_000_000_000)
     from mlx_audio.tts import load
 
@@ -353,9 +515,15 @@ def _load(model_id: str, model_path: str, private_cache_path: str, quantization_
     # evaluation with the existing CPU checksum/receipt work below. There is
     # one stream/tree per model, no executor or additional queued model job.
     overlap_weights = model_id == 'fish_drama3' and quantization_bits == 0
+    use_maps = overlap_weights and os.environ.get('READALOUD_MAPPED_MODEL_LOAD') == '1'
+    if use_maps:
+        manifest = json.loads(Path(__file__).with_name('fish_drama_model_checksums.json').read_text())
+        use_maps = _verify_scene_model(directory, manifest,
+            Path(private_cache_path).parent / 'model-qualification')
     if overlap_weights:
         _model_load_stream = mx.new_stream(mx.gpu)
-        with mx.stream(_model_load_stream):
+        adapter = _mapped_model_weights(directory) if use_maps else contextlib.nullcontext()
+        with mx.stream(_model_load_stream), adapter:
             _model = load(str(directory), lazy=True)
         _model_pending_parameters = _model.parameters()
         mx.async_eval(_model_pending_parameters)
@@ -378,6 +546,8 @@ def _load(model_id: str, model_path: str, private_cache_path: str, quantization_
             manifest = json.loads(Path(__file__).with_name('fish_drama_model_checksums.json').read_text())
             _model_native_scenes = _verify_scene_model(directory, manifest,
                 Path(private_cache_path).parent / 'model-qualification')
+            if use_maps and not _model_native_scenes:
+                raise ValueError('Mapped speech checkpoint changed during preparation')
             _timing('modelVerification', verification_started)
             if not _model_native_scenes:
                 _progress('Unverified model revision: native scenes and delivery cues are disabled', stage='modelContext')

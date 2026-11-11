@@ -24,6 +24,140 @@ worker = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(worker)
 
 
+class MappedCheckpointTest(unittest.TestCase):
+    def tearDown(self):
+        worker._unload()
+
+    def _checkpoint(self, path, alignment, shift=0):
+        mx.save_safetensors(str(path), {
+            'bf': (mx.array([1.25, -2.5, 3.75, 0.5], dtype=mx.bfloat16) + shift).reshape(2, 2),
+            'float': mx.array([1., -2., 3., -4.], dtype=mx.float32) + shift,
+        })
+        data = path.read_bytes()
+        size = int.from_bytes(data[:8], 'little')
+        padding = (alignment - (8 + size) % 8) % 8
+        path.write_bytes((size + padding).to_bytes(8, 'little') + data[8:8+size]
+                         + b' ' * padding + data[8+size:])
+
+    def test_real_runtime_all_byte_alignments_preserve_exact_bf16_and_gpu_values(self):
+        import numpy as np
+        with tempfile.TemporaryDirectory() as root:
+            for alignment in range(8):
+                with self.subTest(alignment=alignment):
+                    path = Path(root) / f'weights-{alignment}.safetensors'
+                    self._checkpoint(path, alignment)
+                    before = path.read_bytes()
+                    expected = mx.load(str(path))
+                    weights, owners, mapped, copied = worker._mapped_checkpoint(str(path))
+                    worker._mapped_model_owners.extend(owners)
+                    self.assertEqual(mapped + copied, 24)
+                    self.assertEqual(mapped > 0, alignment % 4 == 0)
+                    for key in expected:
+                        actual_bits = weights[key].view(mx.uint16)
+                        expected_bits = expected[key].view(mx.uint16)
+                        np.testing.assert_array_equal(np.asarray(actual_bits), np.asarray(expected_bits))
+                        with mx.stream(mx.gpu):
+                            result = weights[key] * 2 + 1
+                            mx.eval(result)
+                        self.assertEqual(result.tolist(), (expected[key] * 2 + 1).tolist())
+                    # Repeated same-size transforms must not donate a mapped
+                    # weight or alter any checkpoint byte.
+                    self.assertEqual(weights['bf'].tolist(), [[1.25, -2.5], [3.75, .5]])
+                    self.assertEqual(path.read_bytes(), before)
+
+    def test_repacked_temporary_mapping_is_released_after_evaluation(self):
+        with tempfile.TemporaryDirectory() as root:
+            path = Path(root) / 'odd.safetensors'
+            self._checkpoint(path, 1)
+            weights, owners, mapped, copied = worker._mapped_checkpoint(str(path))
+            worker._mapped_model_owners.extend(owners)
+            worker._refresh_mapped_budget()
+            self.assertEqual((mapped, copied), (0, 24))
+            self.assertEqual(worker._mapped_model_bytes, 0)
+            self.assertEqual(weights['bf'].tolist(), [[1.25, -2.5], [3.75, .5]])
+
+    def test_mapping_reduces_allocator_budget_and_unload_restores_it(self):
+        with tempfile.TemporaryDirectory() as root:
+            path = Path(root) / 'aligned.safetensors'
+            self._checkpoint(path, 0)
+            def load():
+                weights, owners, _, _ = worker._mapped_checkpoint(str(path))
+                worker._mapped_model_owners.extend(owners)
+                return weights['float'].sum().item()
+            self.assertEqual(load(), -2)
+            self.assertEqual(worker._mapped_model_bytes, path.stat().st_size)
+            worker._unload()
+            self.assertEqual(worker._mapped_model_bytes, 0)
+            self.assertFalse(worker._mapped_model_mappings)
+
+    def test_memory_refusal_and_invalid_checkpoint_do_not_escape_ceiling(self):
+        with tempfile.TemporaryDirectory() as root:
+            path = Path(root) / 'weights.safetensors'
+            self._checkpoint(path, 0)
+            with patch.object(worker, '_MODEL_MEMORY_LIMIT', 1):
+                with self.assertRaisesRegex(MemoryError, 'memory ceiling'):
+                    worker._mapped_checkpoint(str(path))
+            path.write_bytes(path.read_bytes()[:-1])
+            with self.assertRaises(Exception):
+                worker._mapped_checkpoint(str(path))
+
+    def test_adapter_preserves_merge_order_nested_fallback_and_restores_on_failure(self):
+        from mlx_audio import utils as provider
+        with tempfile.TemporaryDirectory() as root:
+            directory = Path(root).resolve()
+            first, second = directory / 'first.safetensors', directory / 'second.safetensors'
+            self._checkpoint(first, 0)
+            self._checkpoint(second, 1, shift=100)
+            original = provider.load_weights
+            with patch.object(worker.glob, 'glob', return_value=[str(second), str(first)]):
+                with worker._mapped_model_weights(directory):
+                    weights = provider.load_weights(directory)
+                    self.assertEqual(weights['bf'].tolist(), [[1.25, -2.5], [3.75, .5]])
+                self.assertIs(provider.load_weights, original)
+            with patch.object(worker, '_mapped_checkpoint', side_effect=RuntimeError('mapped load failed')):
+                with self.assertRaisesRegex(RuntimeError, 'mapped load failed'):
+                    with worker._mapped_model_weights(directory):
+                        provider.load_weights(directory)
+            self.assertIs(provider.load_weights, original)
+
+    def test_unsupported_layout_uses_provider_and_nested_load_is_untouched(self):
+        from mlx_audio import utils as provider
+        with tempfile.TemporaryDirectory() as root:
+            directory = Path(root).resolve()
+            scalar = directory / 'scalar.safetensors'
+            mx.save_safetensors(str(scalar), {'scalar': mx.array(7)})
+            self.assertIsNone(worker._mapped_checkpoint(str(scalar)))
+            with patch.object(provider, 'load_weights', return_value={'nested': 1}) as original:
+                with worker._mapped_model_weights(directory):
+                    self.assertEqual(provider.load_weights(directory / 'codec'), {'nested': 1})
+                    self.assertEqual(provider.load_weights(directory)['scalar'].item(), 7)
+                original.assert_called_once_with(directory / 'codec')
+
+    def test_mapped_load_is_opt_in_and_qualified_before_adapter_can_read(self):
+        worker._unload()
+        events = []
+        model = SimpleNamespace(parameters=lambda: {})
+        @contextlib.contextmanager
+        def adapter(directory):
+            self.assertEqual(events, ['qualified'])
+            events.append('adapter')
+            yield
+        def verify(*args):
+            events.append('qualified')
+            return True
+        with tempfile.TemporaryDirectory() as root:
+            (Path(root) / 'config.json').write_text('{}')
+            with patch.dict(os.environ, {'READALOUD_MAPPED_MODEL_LOAD': '1'}), \
+                    patch('subprocess.check_output', return_value=b'137438953472'), \
+                    patch('mlx_audio.tts.load', side_effect=lambda *a, **kw: (events.append('load'), model)[1]), \
+                    patch.object(worker, '_mapped_model_weights', side_effect=adapter), \
+                    patch.object(worker, '_verify_scene_model', side_effect=verify), \
+                    patch.object(worker, '_timing'):
+                response = worker._load('fish_drama3', root, root)
+            self.assertTrue(response['loaded'])
+            self.assertEqual(events, ['qualified', 'adapter', 'load', 'qualified'])
+
+
 class GeneratorAdapterTest(unittest.TestCase):
     def test_owned_stream_joins_real_bounded_mlx_graph_without_model_weights(self):
         worker._unload()
