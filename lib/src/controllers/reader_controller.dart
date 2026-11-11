@@ -2712,14 +2712,18 @@ class ReaderController extends ChangeNotifier {
 
   Future<void> installVoice(String voiceId) async {
     final voiceLibraryCapable = _voiceLibraryCapable;
+    final engine = _ttsEngine;
+    final epoch = _engineEpoch;
     if (voiceLibraryCapable == null) {
       return;
     }
 
     try {
       await voiceLibraryCapable.installVoice(voiceId);
+      if (!_ownsEngine(engine, epoch)) return;
       await _refreshVoiceLibraryState();
     } catch (error) {
+      if (!_ownsEngine(engine, epoch)) return;
       _statusMessage =
           'Could not install the selected voice right now. Try again.';
       notifyListeners();
@@ -3780,21 +3784,27 @@ class ReaderController extends ChangeNotifier {
     final engine = _ttsEngine;
     final epoch = _engineEpoch;
     final library = _voiceLibraryCapable;
-    final voices = await engine.loadVoices();
-    if (!_ownsEngine(engine, epoch)) return;
-    _voiceLibrary = library?.voiceLibrary ?? const [];
-    _voices = voices;
-    if (_selectedVoiceId == null && voices.isNotEmpty) {
-      _selectedVoiceId = voices.first.id;
-      _narratorVoiceIds[_narratorScope] = voices.first.id;
-      await engine.selectVoice(voices.first);
+    try {
+      final voices = await engine.loadVoices();
       if (!_ownsEngine(engine, epoch)) return;
-      await engine.setSpeechRate(currentSpeed);
+      _voiceLibrary = library?.voiceLibrary ?? const [];
+      _voices = voices;
+      if (_selectedVoiceId == null && voices.isNotEmpty) {
+        _selectedVoiceId = voices.first.id;
+        _narratorVoiceIds[_narratorScope] = voices.first.id;
+        await engine.selectVoice(voices.first);
+        if (!_ownsEngine(engine, epoch)) return;
+        await engine.setSpeechRate(currentSpeed);
+        if (!_ownsEngine(engine, epoch)) return;
+        await _persistPreferences();
+      }
       if (!_ownsEngine(engine, epoch)) return;
-      await _persistPreferences();
+      notifyListeners();
+    } catch (_) {
+      if (!_ownsEngine(engine, epoch)) return;
+      _statusMessage = 'Could not refresh speech voices. Try again.';
+      notifyListeners();
     }
-    if (!_ownsEngine(engine, epoch)) return;
-    notifyListeners();
   }
 
   void _handleProgress(TtsProgressUpdate update) {

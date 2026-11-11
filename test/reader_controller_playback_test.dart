@@ -328,6 +328,62 @@ void main() {
     },
   );
 
+  for (final install in [false, true]) {
+    for (final fail in [false, true]) {
+      test(
+        'voice library work rejects obsolete ${install ? 'install' : 'refresh'} ${fail ? 'error' : 'success'}',
+        () async {
+          final old = _HeldVoiceLibraryEngine()..fail = fail;
+          final controller = ReaderController(
+            ttsEngine: old,
+            engineFactory: (_, _) => _FakeTtsEngine(),
+            enablePlatformIntakeChannels: false,
+          );
+          addTearDown(controller.dispose);
+          await controller.initialize();
+          old.hold = true;
+          final installing = install
+              ? controller.installVoice('af_bella')
+              : null;
+          if (!install) old.changed?.call();
+          await old.started.future;
+          await controller.setTtsEngineId('fish_drama3');
+          final status = controller.statusMessage;
+          old.release.complete();
+          if (installing != null) await installing;
+          await old.done.future;
+          await Future<void>.delayed(Duration.zero);
+          expect(controller.statusMessage, status);
+          expect(controller.selectedVoice!.id, 'af_bella');
+        },
+      );
+    }
+  }
+
+  test(
+    'current voice library failure stays visible without an unhandled future',
+    () async {
+      final engine = _HeldVoiceLibraryEngine()..fail = true;
+      final controller = ReaderController(
+        ttsEngine: engine,
+        enablePlatformIntakeChannels: false,
+      );
+      addTearDown(controller.dispose);
+      await controller.initialize();
+      engine.hold = true;
+      engine.changed?.call();
+      await engine.started.future;
+      engine.release.complete();
+      await engine.done.future;
+      await Future<void>.delayed(Duration.zero);
+      expect(
+        controller.statusMessage,
+        'Could not refresh speech voices. Try again.',
+      );
+      expect(controller.selectedVoice!.id, 'af_bella');
+    },
+  );
+
   TestWidgetsFlutterBinding.ensureInitialized();
 
   setUp(() async {
@@ -4734,4 +4790,35 @@ class _HeldExportEngine extends _ExportTtsEngine {
     if (fail) throw StateError('held export failed');
     return super.exportAudio(request);
   }
+}
+
+class _HeldVoiceLibraryEngine extends _FakeTtsEngine
+    implements VoiceLibraryCapable {
+  bool hold = false, fail = false;
+  void Function()? changed;
+  final started = Completer<void>();
+  final release = Completer<void>();
+  final done = Completer<void>();
+  @override
+  List<VoiceLibraryEntry> get voiceLibrary => const [];
+  @override
+  set onVoiceLibraryChanged(void Function()? callback) => changed = callback;
+  Future<void> held() async {
+    started.complete();
+    try {
+      await release.future;
+      if (fail) throw StateError('obsolete library failure');
+    } finally {
+      done.complete();
+    }
+  }
+
+  @override
+  Future<List<VoiceProfile>> loadVoices() async {
+    if (hold) await held();
+    return super.loadVoices();
+  }
+
+  @override
+  Future<void> installVoice(String voiceId) => held();
 }
