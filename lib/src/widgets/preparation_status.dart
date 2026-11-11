@@ -52,6 +52,7 @@ class PreparationStatus extends StatefulWidget {
     this.onCancel,
     this.onRetry,
     this.onRetryStartup,
+    this.onClearFailure,
     this.operations,
     this.activityExpanded,
     this.onActivityExpandedChanged,
@@ -67,6 +68,7 @@ class PreparationStatus extends StatefulWidget {
   final VoidCallback? onCancel;
   final VoidCallback? onRetry;
   final VoidCallback? onRetryStartup;
+  final ValueChanged<ReaderOperation>? onClearFailure;
   final List<ReaderOperation>? operations;
   final bool? activityExpanded;
   final ValueChanged<bool>? onActivityExpandedChanged;
@@ -317,6 +319,16 @@ class _PreparationStatusState extends State<PreparationStatus> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
+                  if (problem != null &&
+                      problem.recoveryActions.contains(
+                        OperationRecoveryAction.clear,
+                      ) &&
+                      widget.onClearFailure != null)
+                    TextButton(
+                      key: const Key('clear-operation-failure'),
+                      onPressed: () => widget.onClearFailure!(problem),
+                      child: const Text('Clear error'),
+                    ),
                   if (widget.onCancel != null)
                     TextButton(
                       key: const Key('cancel-preparation'),

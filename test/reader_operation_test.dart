@@ -28,6 +28,32 @@ ReaderOperation operation(
 );
 
 void main() {
+  test(
+    'Clear preserves failure and terminal latch and rejects stale identity',
+    () {
+      final projection = ReaderOperationProjection();
+      final failed = operation('a', OperationState.failed).withState(
+        OperationState.failed,
+        recoveryActions: [OperationRecoveryAction.clear],
+      );
+      projection.begin(failed);
+      expect(projection.clearFailure(failed), isTrue);
+      expect(projection.operations.single.state, OperationState.failed);
+      expect(projection.operations.single.readerBlocking, isFalse);
+      expect(
+        projection.update(operation('a', OperationState.running)),
+        isFalse,
+      );
+      expect(projection.clearFailure(failed), isFalse);
+      final newer = operation('b', OperationState.failed, attempt: 1).withState(
+        OperationState.failed,
+        recoveryActions: [OperationRecoveryAction.clear],
+      );
+      projection.begin(newer);
+      expect(projection.clearFailure(failed), isFalse);
+      expect(projection.currentInLane(newer.lane)!.readerBlocking, isTrue);
+    },
+  );
   test('terminal delivery latches duplicates and same-id resurrection', () {
     for (final state in [
       OperationState.succeeded,

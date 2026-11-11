@@ -79,6 +79,8 @@ class ReaderOperation {
     OperationState value, {
     String? retryOf,
     bool? readerBlocking,
+    Iterable<OperationRecoveryAction>? recoveryActions,
+    DateTime? updatedAt,
   }) => ReaderOperation(
     operationId: operationId,
     ownerKind: ownerKind,
@@ -92,12 +94,12 @@ class ReaderOperation {
     attempt: attempt,
     discoveredUnits: discoveredUnits,
     unit: unit,
-    updatedAt: DateTime.now(),
+    updatedAt: updatedAt ?? DateTime.now(),
     message: message,
     error: error,
     retryOf: retryOf ?? this.retryOf,
     readerBlocking: readerBlocking ?? this.readerBlocking,
-    recoveryActions: recoveryActions,
+    recoveryActions: recoveryActions ?? this.recoveryActions,
   );
 }
 
@@ -171,6 +173,25 @@ class ReaderOperationProjection {
     }
     _latest[value.lane] = value;
     _history[value.key] = value;
+    _trim();
+    return true;
+  }
+
+  /// Dismiss presentation only. Keep the failed result and terminal latch so
+  /// late producer reports cannot revive it or dismiss a replacement attempt.
+  bool clearFailure(ReaderOperation expected) {
+    final current = _latest[expected.lane];
+    if (current == null ||
+        current.key != expected.key ||
+        current.ownerEpoch != expected.ownerEpoch ||
+        current.state != OperationState.failed ||
+        !current.readerBlocking ||
+        !current.recoveryActions.contains(OperationRecoveryAction.clear)) {
+      return false;
+    }
+    final cleared = current.withState(current.state, readerBlocking: false);
+    _latest[current.lane] = cleared;
+    _history[current.key] = cleared;
     _trim();
     return true;
   }

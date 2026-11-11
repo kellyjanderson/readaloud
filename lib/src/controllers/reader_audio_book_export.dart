@@ -150,6 +150,7 @@ extension ReaderAudioBookPersistence on ReaderController {
     String outputPath,
     int revision, {
     bool force = false,
+    void Function(ReadingStageTicket)? onOperation,
   }) async {
     final intent = _bookIntent();
     final assignment = voiceAssignmentState.requestedRevision;
@@ -368,7 +369,7 @@ extension ReaderAudioBookPersistence on ReaderController {
         await transport.dispose();
         await stage.delete(recursive: true);
       }
-    });
+    }, onOperation: onOperation);
   }
 }
 

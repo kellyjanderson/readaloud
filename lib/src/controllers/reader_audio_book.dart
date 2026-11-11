@@ -64,13 +64,15 @@ extension ReaderAudioBookSupport on ReaderController {
   Future<T> _trackBookOperation<T>(
     int revision,
     String scope,
-    Future<T> Function(void Function(RadocPackageProgress)) action,
-  ) async {
+    Future<T> Function(void Function(RadocPackageProgress)) action, {
+    void Function(ReadingStageTicket)? onOperation,
+  }) async {
     final ticket = beginReadingStage(
       PreparationStage.persistence,
       producerId: 'audio-book-package',
       scope: scope,
     );
+    onOperation?.call(ticket);
     var latest = const PreparationProgress(
       stage: PreparationStage.persistence,
       state: PreparationWorkState.working,

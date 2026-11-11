@@ -9,6 +9,48 @@ import 'package:read_aloud/src/services/tts_engine.dart';
 import 'package:read_aloud/src/widgets/preparation_status.dart';
 
 void main() {
+  testWidgets('Clear error is keyboard operable and carries exact identity', (
+    tester,
+  ) async {
+    final failure = ReaderOperation(
+      operationId: 'save-1',
+      ownerKind: OperationOwnerKind.readingStage,
+      ownerEpoch: 1,
+      stage: 'persistence',
+      scope: 'Save audio book',
+      state: OperationState.failed,
+      completedUnits: 0,
+      unit: 'members',
+      updatedAt: DateTime(2026),
+      error: 'Destination unavailable',
+      recoveryActions: [OperationRecoveryAction.clear],
+    );
+    ReaderOperation? cleared;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: PreparationStatus(
+            progress: const [],
+            operations: [failure],
+            isImporting: false,
+            isInitializing: false,
+            isComplete: true,
+            onClearFailure: (value) => cleared = value,
+          ),
+        ),
+      ),
+    );
+    for (var i = 0; i < 6 && cleared == null; i++) {
+      await tester.sendKeyEvent(LogicalKeyboardKey.tab);
+      final focused = FocusManager.instance.primaryFocus?.context;
+      if (focused?.findAncestorWidgetOfExactType<TextButton>()?.key ==
+          const Key('clear-operation-failure')) {
+        await tester.sendKeyEvent(LogicalKeyboardKey.space);
+      }
+    }
+    expect(cleared, same(failure));
+    expect(tester.takeException(), isNull);
+  });
   testWidgets('failure owns summary and never borrows unrelated resource bar', (
     tester,
   ) async {

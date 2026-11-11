@@ -903,20 +903,8 @@ DocumentPreparationPublication _publication(
               : wordStart + document.wordCount,
           unit: stage == PreparationStage.acquisition ? 'utf16' : 'words',
         ),
-      for (final stage in const [
-        PreparationStage.planning,
-        PreparationStage.resources,
-        PreparationStage.synthesis,
-        PreparationStage.persistence,
-      ])
-        PreparationProgress(
-          stage: stage,
-          state: PreparationWorkState.waiting,
-          operationState: OperationState.idleDemand,
-          completed: 0,
-          unit: 'ranges',
-          waitingReason: 'Owned by downstream consumer',
-        ),
+      // Downstream consumers publish their own tickets when work exists.
+      // Source intake cannot claim idle demand for producers it does not own.
     ],
   );
 }

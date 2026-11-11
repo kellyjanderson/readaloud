@@ -4,6 +4,7 @@ import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:archive/archive.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:read_aloud/src/controllers/reader_controller.dart';
 import 'package:read_aloud/src/models/document_preparation.dart';
@@ -14,6 +15,7 @@ import 'package:read_aloud/src/services/document_import_service.dart';
 import 'package:read_aloud/src/services/document_access_service.dart';
 import 'package:read_aloud/src/services/document_preparation_supervisor.dart';
 import 'package:read_aloud/src/services/tts_engine.dart';
+import 'package:read_aloud/src/widgets/preparation_status.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
@@ -22,6 +24,86 @@ void main() {
     180,
     (i) => 'Paragraph $i follows the road ahead.',
   ).join('\n\n');
+
+  testWidgets(
+    'short source EOF owns no future downstream work or idle demand',
+    (tester) async {
+      late ReaderController controller;
+      addTearDown(() async {
+        await tester.runAsync(controller.shutdownPreparation);
+        controller.dispose();
+      });
+      await tester.runAsync(() async {
+        SharedPreferences.setMockInitialValues({});
+        controller = ReaderController(
+          ttsEngine: _ExportProbe()..barrier.complete(),
+          enablePlatformIntakeChannels: false,
+        );
+        await controller.initialize();
+        await controller.importPastedText('A complete small source.');
+        await _waitUntil(() => controller.isPreparationComplete);
+      });
+      expect(
+        controller.feedbackOperations.where(
+          (p) =>
+              p.ownerKind == OperationOwnerKind.document &&
+              (!p.state.isTerminal ||
+                  const [
+                    'planning',
+                    'resources',
+                    'synthesis',
+                  ].contains(p.stage)),
+        ),
+        isEmpty,
+      );
+      expect(
+        controller.feedbackOperations.any(
+          (p) => p.readerBlocking && p.state == OperationState.idleDemand,
+        ),
+        isFalse,
+      );
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: PreparationStatus(
+              progress: controller.preparationProgress.values,
+              operations: controller.feedbackOperations,
+              isImporting: controller.isPreparingDocument,
+              isInitializing: controller.isInitializing,
+              isComplete: controller.isPreparationComplete,
+              activityExpanded: true,
+            ),
+          ),
+        ),
+      );
+      expect(find.text('Ready to read'), findsOneWidget);
+      expect(find.textContaining('more will be prepared'), findsNothing);
+      expect(find.textContaining('idleDemand'), findsNothing);
+      expect(find.byType(LinearProgressIndicator), findsNothing);
+      // Actual downstream work remains independent of source EOF.
+      final currentDeep = controller.beginReadingStage(
+        PreparationStage.analysis,
+        producerId: 'refinement',
+        scope: 'deep',
+      );
+      controller.publishReadingStage(
+        currentDeep,
+        const PreparationProgress(
+          stage: PreparationStage.analysis,
+          state: PreparationWorkState.working,
+          completed: 0,
+          unit: 'words',
+        ),
+      );
+      expect(
+        controller.feedbackOperations
+            .singleWhere((p) => p.readerBlocking && p.scope == 'deep')
+            .state,
+        OperationState.running,
+      );
+      await tester.pumpWidget(const SizedBox());
+    },
+  );
 
   test(
     'failure before the first range terminates its owned feedback',
@@ -759,11 +841,15 @@ void main() {
       expect(range.isResourceReady, isFalse);
       expect(range.progress.every((p) => p.total == null), isTrue);
       expect(
-        range.progress
-            .where((p) => p.stage == PreparationStage.persistence)
-            .single
-            .state,
-        PreparationWorkState.waiting,
+        range.progress.where(
+          (p) => const [
+            PreparationStage.planning,
+            PreparationStage.resources,
+            PreparationStage.synthesis,
+            PreparationStage.persistence,
+          ].contains(p.stage),
+        ),
+        isEmpty,
       );
       expect(
         () => range.fragment.speechDocument.segments.clear(),

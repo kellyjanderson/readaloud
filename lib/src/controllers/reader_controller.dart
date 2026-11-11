@@ -344,14 +344,27 @@ class ReaderController extends ChangeNotifier {
   final _preparationRetryLinks = <String, String>{};
   List<ReaderOperation> get feedbackOperations => _operations.operations;
 
+  void clearFeedbackFailure(ReaderOperation expected) {
+    if (expected.ownerKind != OperationOwnerKind.readingStage ||
+        !_operations.clearFailure(expected)) {
+      return;
+    }
+    if (_statusOperationKey == expected.key) _statusMessage = null;
+    notifyListeners();
+  }
+
   bool _recordOperation(ReaderOperation operation) {
     final previous = _operations.currentInLane(operation.lane);
-    if (previous?.state == OperationState.failed &&
-        previous?.key != operation.key &&
-        operation.retryOf == null) {
+    final retryOf = previous?.key == operation.key
+        ? previous?.retryOf
+        : previous?.state == OperationState.failed
+        ? previous?.operationId
+        : null;
+    if (retryOf != null && operation.retryOf == null) {
       operation = operation.withState(
         operation.state,
-        retryOf: previous!.operationId,
+        retryOf: retryOf,
+        updatedAt: operation.updatedAt,
       );
     }
     final known = _operationAttempts[operation.lane];
@@ -416,6 +429,16 @@ class ReaderController extends ChangeNotifier {
         retryOf: previous!.operationId,
       );
       operation = owned.toOperation(ownerKind: ownerKind);
+    }
+    if (ownerKind == OperationOwnerKind.readingStage &&
+        operation.state == OperationState.failed) {
+      // Stage owners do not share the document or model retry procedure. A
+      // user may clear their summary and invoke the original action again.
+      operation = operation.withState(
+        operation.state,
+        recoveryActions: const [OperationRecoveryAction.clear],
+        updatedAt: operation.updatedAt,
+      );
     }
     final accepted = _recordOperation(operation);
     if (!accepted) return false;
@@ -681,6 +704,9 @@ class ReaderController extends ChangeNotifier {
     scope: scope,
   );
 
+  String _readingStageOperationId(ReadingStageTicket ticket) =>
+      '${ticket.ownerId}:${ticket.documentRevision}:${ticket.producerId}:${ticket.generation}:${ticket.scope}';
+
   /// Main-isolate publication route for planning/resources and the downstream
   /// synthesis/persistence owners. Counts are supplied by completed work.
   void publishReadingStage(
@@ -713,8 +739,7 @@ class ReaderController extends ChangeNotifier {
         updatedAt: progress.updatedAt,
         retryOf: progress.retryOf,
       ),
-      operationId:
-          '${ticket.ownerId}:${ticket.documentRevision}:${ticket.producerId}:${ticket.generation}:${ticket.scope}',
+      operationId: _readingStageOperationId(ticket),
       epoch: ticket.documentRevision,
       ownerKind: OperationOwnerKind.readingStage,
       attempt: ticket.generation,
@@ -1458,7 +1483,22 @@ class ReaderController extends ChangeNotifier {
   ReaderPlaybackPrimaryState _playbackState = ReaderPlaybackPrimaryState.idle;
   TtsPlaybackActivity _playbackActivity = const TtsPlaybackActivity.idle();
 
-  String? _statusMessage;
+  String? _statusMessageValue;
+  String? _statusOperationKey;
+  String? get _statusMessage => _statusMessageValue;
+  set _statusMessage(String? value) {
+    _statusMessageValue = value;
+    _statusOperationKey = null;
+  }
+
+  bool get statusOwnedByInlineFailure =>
+      _statusMessage != null &&
+      feedbackOperations.any(
+        (operation) =>
+            operation.key == _statusOperationKey &&
+            operation.readerBlocking &&
+            operation.state == OperationState.failed,
+      );
   TtsResourceProgress? _speechResourceProgress;
   NarrationState _narrationState = NarrationState.initial();
   VoiceSessionRealization? _currentRealization;
@@ -3490,6 +3530,7 @@ class ReaderController extends ChangeNotifier {
     if (!hasCompleteDocumentSnapshot || _isExporting) return null;
     final revision = _documentRevision;
     final epoch = _engineEpoch;
+    ReadingStageTicket? packageOperation;
     final assignments = Map<String, String>.unmodifiable(
       _characters.selections(_voicePreferenceDocumentId),
     );
@@ -3515,6 +3556,7 @@ class ReaderController extends ChangeNotifier {
         outputPath,
         revision,
         force: forceAudioBook,
+        onOperation: (ticket) => packageOperation = ticket,
       );
       if (audioBook != null) return audioBook;
       final request = _activePreparationRequest;
@@ -3571,6 +3613,15 @@ class ReaderController extends ChangeNotifier {
         _statusMessage = _preparationFailed
             ? 'The prepared checkpoint is damaged. Retry document preparation before saving.'
             : 'Could not save the complete document.';
+        if (packageOperation case final ticket?) {
+          final operation = _operations.currentInLane(
+            '${OperationOwnerKind.readingStage.name}:${ticket.stage.name}:${ticket.scope}',
+          );
+          if (operation?.operationId == _readingStageOperationId(ticket) &&
+              operation?.state == OperationState.failed) {
+            _statusOperationKey = operation!.key;
+          }
+        }
       }
       return null;
     } finally {
