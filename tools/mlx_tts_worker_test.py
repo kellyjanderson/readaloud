@@ -155,6 +155,25 @@ class MappedCheckpointTest(unittest.TestCase):
                     self.assertEqual(provider.load_weights(directory)['scalar'].item(), 7)
                 original.assert_called_once_with(directory / 'codec')
 
+    def test_aligned_only_mode_keeps_unaligned_shards_on_original_mlx_reader(self):
+        from mlx_audio import utils as provider
+        with tempfile.TemporaryDirectory() as root:
+            directory = Path(root).resolve()
+            aligned, unaligned = directory / 'aligned.safetensors', directory / 'unaligned.safetensors'
+            self._checkpoint(aligned, 0)
+            self._checkpoint(unaligned, 1, shift=100)
+            with patch('numpy.memmap', side_effect=AssertionError('unaligned shard must use original reader')):
+                self.assertIsNone(worker._mapped_checkpoint(str(unaligned), allow_repack=False))
+            with patch.dict(os.environ, {'READALOUD_MAPPED_MODEL_LOAD': 'aligned'}), \
+                    patch.object(worker.glob, 'glob', return_value=[str(aligned), str(unaligned)]), \
+                    patch.object(mx, 'load', wraps=mx.load) as original_read, \
+                    worker._mapped_model_weights(directory):
+                weights = provider.load_weights(directory)
+                mx.eval(weights)
+                self.assertEqual(weights['float'].tolist(), [101, 98, 103, 96])
+                original_read.assert_called_once_with(str(unaligned))
+                self.assertEqual(len(worker._mapped_model_mappings), 1)
+
     def test_mapped_load_is_opt_in_and_qualified_before_adapter_can_read(self):
         worker._unload()
         events = []
