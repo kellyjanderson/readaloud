@@ -366,6 +366,25 @@ class MlxSpeechWorkerChunkProcessor
     if (!isMlxEngine(engineId)) {
       throw StateError('Unknown MLX TTS engine: $engineId');
     }
+    final variant = isDramaEngine(engineId)
+        ? FishDramaCatalog.fromJson(
+            modelsJson: await rootBundle.loadString(
+              'assets/fish_drama_models.json',
+            ),
+            checksumsJson: await rootBundle.loadString(
+              'assets/fish_drama_model_checksums.json',
+            ),
+          ).variants[engineId]!
+        : null;
+    // Explicit developer folders retain their unqualified provenance. Normal
+    // installed/cache discovery must establish the exact pinned bytes before
+    // the child can become the prepared model owner.
+    final requireVerifiedAssets = variant != null && modelPath.isEmpty;
+    if (requireVerifiedAssets && variant.integrityManifest == null) {
+      throw StateError(
+        'No pinned integrity manifest is available for $engineId.',
+      );
+    }
     final supportDirectory = await getApplicationSupportDirectory();
     final mlxRoot = Directory(
       '${supportDirectory.path}${Platform.pathSeparator}read_aloud${Platform.pathSeparator}mlx-tts',
@@ -374,7 +393,7 @@ class MlxSpeechWorkerChunkProcessor
     // Model startup needs no voice recordings. prepareResources materializes
     // only voices bound to the demanded scene, including cancellation.
     if (_closed) throw StateError('MLX inference owner is closed.');
-    final modelDirectory = await _findInstalledModelDirectory(mlxRoot);
+    final modelDirectory = await _findInstalledModelDirectory(mlxRoot, variant);
     final installedHelper = File(
       '${mlxRoot.path}${Platform.pathSeparator}mlx_tts_worker.py',
     );
@@ -432,6 +451,16 @@ class MlxSpeechWorkerChunkProcessor
         privateCachePath:
             '${mlxRoot.path}${Platform.pathSeparator}runtime-cache${Platform.pathSeparator}hub',
         onProgress: _handleModelLoadProgress,
+        requireVerifiedModelAssets: requireVerifiedAssets,
+        expectedVerifiedModelIdentity: requireVerifiedAssets
+            ? variant.pinnedIdentity
+            : null,
+        modelCacheDirectories: variant == null
+            ? const []
+            : [
+                '${mlxRoot.path}/models',
+                '${mlxRoot.parent.parent.parent.path}/read_aloud/mlx-tts/models',
+              ],
       );
       _modelIdentity = loaded['modelIdentity'] as String;
       supportsNativeScenes = loaded['nativeScenesQualified'] == true;
@@ -442,7 +471,10 @@ class MlxSpeechWorkerChunkProcessor
     }
   }
 
-  Future<Directory?> _findInstalledModelDirectory(Directory mlxRoot) async {
+  Future<Directory?> _findInstalledModelDirectory(
+    Directory mlxRoot,
+    FishDramaVariantDescriptor? variant,
+  ) async {
     if (modelPath.isNotEmpty) {
       final explicit = Directory(modelPath);
       if (!await File(
@@ -455,32 +487,9 @@ class MlxSpeechWorkerChunkProcessor
       return explicit;
     }
 
-    if (isDramaEngine(engineId)) {
-      final catalog =
-          jsonDecode(
-                await rootBundle.loadString('assets/fish_drama_models.json'),
-              )
-              as Map;
-      final spec = catalog[engineId] as Map;
-      final snapshot =
-          'models--${(spec['repo'] as String).replaceAll('/', '--')}/snapshots/${spec['revision']}';
-      for (final root in [
-        mlxRoot.path,
-        '${mlxRoot.parent.parent.parent.path}/read_aloud/mlx-tts',
-      ]) {
-        final cached = Directory('$root/models/$snapshot');
-        var complete = true;
-        for (final file in spec['requiredFiles'] as List) {
-          if (!await File('${cached.path}/$file').exists()) {
-            complete = false;
-            break;
-          }
-        }
-        if (complete) {
-          return cached;
-        }
-      }
-    }
+    // Managed Hub snapshots stay with the Python acquisition owner, including
+    // those in older app-support roots. Passing one as an explicit folder would
+    // bypass that owner's corrupt-file repair and retry path.
     final candidates = <Directory>[
       Directory('${mlxRoot.path}${Platform.pathSeparator}$engineId'),
       // path_provider appends the bundle ID; the runtime installer predates
@@ -501,7 +510,14 @@ class MlxSpeechWorkerChunkProcessor
       if (await File(
         '${candidate.path}${Platform.pathSeparator}config.json',
       ).exists()) {
-        return candidate;
+        var complete = true;
+        for (final file in variant?.requiredFiles ?? const <String>[]) {
+          if (!await File('${candidate.path}/$file').exists()) {
+            complete = false;
+            break;
+          }
+        }
+        if (complete) return candidate;
       }
     }
     return null;
@@ -944,13 +960,29 @@ class MlxTtsPythonProcess {
     required int quantizationBits,
     required String privateCachePath,
     required void Function(Map<String, Object?>) onProgress,
+    bool requireVerifiedModelAssets = false,
+    String? expectedVerifiedModelIdentity,
+    List<String> modelCacheDirectories = const [],
   }) async {
+    if (requireVerifiedModelAssets &&
+        (expectedVerifiedModelIdentity == null ||
+            expectedVerifiedModelIdentity.isEmpty)) {
+      throw ArgumentError('Verified model loading requires a pinned identity.');
+    }
     final spec = <String, Object?>{
       'command': 'load',
       'modelId': modelId,
       'modelPath': modelPath,
       'quantizationBits': quantizationBits,
       'privateCachePath': privateCachePath,
+      if (modelCacheDirectories.isNotEmpty)
+        'modelCacheDirectories': List<String>.unmodifiable(
+          modelCacheDirectories,
+        ),
+      if (requireVerifiedModelAssets) ...{
+        'requireVerifiedModelAssets': true,
+        'expectedVerifiedModelIdentity': expectedVerifiedModelIdentity,
+      },
     };
     final response = await _request(
       spec,
@@ -1083,6 +1115,17 @@ class MlxTtsPythonProcess {
       final response = await responseFuture;
       if (response['ok'] != true) {
         throw StateError('${response['error']}. $_stderrTail');
+      }
+      if (body['command'] == 'load' &&
+          body['requireVerifiedModelAssets'] == true &&
+          (response['modelAssetsVerified'] != true ||
+              response['verifiedModelIdentity'] !=
+                  body['expectedVerifiedModelIdentity'])) {
+        // _request retires and joins the rejected child before another request.
+        // This check also applies to an automatic reload after cancellation.
+        throw StateError(
+          'The worker did not verify the selected pinned model.',
+        );
       }
       return response;
     } finally {

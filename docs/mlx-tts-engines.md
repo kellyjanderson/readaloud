@@ -27,6 +27,15 @@ total, followed by a separate model-loading stage.
 There is no fixed elapsed-time cutoff for downloading a model. The Hub bounds
 individual network requests; changing the selected engine cancels preparation.
 
+Fish variants are pinned to specific checkpoint revisions. Normal installed and
+downloaded models must pass the bundled file-integrity checks before loading.
+Valid cached files work offline; retries resume missing files and repair corrupt
+files in the managed Hub cache without removing other variants. Older app-support
+Hub caches are checked before starting a new download. An invalid legacy unpacked
+folder fails with an integrity error rather than being rewritten automatically.
+File verification does not establish listening quality, memory fit or native
+8-bit/4-bit playback qualification; those remain separate checks.
+
 The recognized Hub checkpoints are:
 
 | Engine ID | Checkpoint | Approx. size | License |

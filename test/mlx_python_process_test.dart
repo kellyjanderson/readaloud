@@ -1,8 +1,11 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/foundation.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:read_aloud/src/models/speech_engine_catalog.dart';
 import 'package:read_aloud/src/services/mlx_speech_worker_processor.dart';
 
 // Real child processes with a tiny protocol stub: no MLX weights or network.
@@ -35,8 +38,18 @@ STDIN.each_line do |line|
   r=JSON.parse(line)
   if r['command']=='load'
     File.write(ARGV[0] || 'python-home',ENV.fetch('PYTHONHOME','unset'))
+    File.write('load.pid',Process.pid.to_s)
+    File.write('cache-directories.json',JSON.generate(r['modelCacheDirectories'] || []))
     loaded=true
-    puts JSON.generate(id:r['id'],ok:true,modelIdentity:'pinned-model')
+    response={id:r['id'],ok:true,modelIdentity:'pinned-model'}
+    if r['requireVerifiedModelAssets'] && r['modelPath']!='missing-verification'
+      response[:modelAssetsVerified]=true
+      response[:verifiedModelIdentity]='owner/checkpoint@'+'a'*40
+      if r['modelPath']=='wrong-verification' || File.exist?('reject-reload')
+        response[:verifiedModelIdentity]='owner/other@'+'b'*40
+      end
+    end
+    puts JSON.generate(response)
   else
     abort 'missing model' unless loaded
     if r['text']=='block'
@@ -104,6 +117,75 @@ end
     );
   }
 
+  const pinnedIdentity =
+      'owner/checkpoint@aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
+  Future<Map<String, Object?>> loadVerified(
+    String path, {
+    List<String> cacheDirectories = const [],
+  }) => worker.loadModel(
+    modelId: 'fish_drama3',
+    modelPath: path,
+    quantizationBits: 0,
+    privateCachePath: root.path,
+    requireVerifiedModelAssets: true,
+    expectedVerifiedModelIdentity: pinnedIdentity,
+    modelCacheDirectories: cacheDirectories,
+    onProgress: (_) {},
+  );
+
+  Future<void> expectLoadedChildReaped() async {
+    final pid = await File('${root.path}/cache/load.pid').readAsString();
+    final status = await Process.run('/bin/kill', ['-0', pid]);
+    expect(status.exitCode, isNot(0), reason: 'Rejected child must be reaped');
+  }
+
+  test(
+    'verified loading requires a pinned identity before starting a child',
+    () async {
+      await expectLater(
+        worker.loadModel(
+          modelId: 'fish_drama3',
+          modelPath: '',
+          quantizationBits: 0,
+          privateCachePath: root.path,
+          requireVerifiedModelAssets: true,
+          onProgress: (_) {},
+        ),
+        throwsArgumentError,
+      );
+      expect(await File('${root.path}/cache/load.pid').exists(), isFalse);
+    },
+  );
+
+  test(
+    'verified loading binds the exact identity returned by the child',
+    () async {
+      final directories = ['${root.path}/models', '${root.path}/legacy-models'];
+      final response = await loadVerified(
+        'verified',
+        cacheDirectories: directories,
+      );
+      expect(response['modelAssetsVerified'], isTrue);
+      expect(response['verifiedModelIdentity'], pinnedIdentity);
+      expect(
+        jsonDecode(
+          await File(
+            '${root.path}/cache/cache-directories.json',
+          ).readAsString(),
+        ),
+        directories,
+      );
+    },
+  );
+
+  for (final path in ['missing-verification', 'wrong-verification']) {
+    test('rejects and reaps $path before permitting retry', () async {
+      await expectLater(loadVerified(path), throwsStateError);
+      await expectLoadedChildReaped();
+      expect((await loadVerified('verified'))['modelAssetsVerified'], isTrue);
+    });
+  }
+
   Future<Map<String, Object?>> synth(String text) => worker.synthesize(
     requestId: text,
     modelId: 'fish_drama3',
@@ -117,6 +199,90 @@ end
     language: 'English',
     outputPath: '${root.path}/$text',
   );
+
+  test(
+    'automatic reload after cancellation revalidates pinned assets',
+    () async {
+      final directories = ['${root.path}/models'];
+      await loadVerified('verified', cacheDirectories: directories);
+      await worker.reapCancelledProcess();
+      await File(
+        '${root.path}/cache/reject-reload',
+      ).writeAsString('changed identity');
+      await expectLater(synth('after-reload'), throwsStateError);
+      await expectLoadedChildReaped();
+      expect(
+        jsonDecode(
+          await File(
+            '${root.path}/cache/cache-directories.json',
+          ).readAsString(),
+        ),
+        directories,
+      );
+    },
+  );
+  test(
+    'normal preparation delegates managed snapshots for verification and repair',
+    () async {
+      final catalog = FishDramaCatalog.fromJson(
+        modelsJson: await File('assets/fish_drama_models.json').readAsString(),
+        checksumsJson: await File(
+          'assets/fish_drama_model_checksums.json',
+        ).readAsString(),
+      );
+      final variant = catalog.variants['fish_drama3']!;
+      final support = await getApplicationSupportDirectory();
+      final cache = Directory('${support.path}/read_aloud/mlx-tts/models');
+      final snapshot = Directory(
+        '${cache.path}/models--${variant.repository.replaceAll('/', '--')}/snapshots/${variant.revision}',
+      );
+      await snapshot.create(recursive: true);
+      for (final name in variant.requiredFiles) {
+        await File(
+          '${snapshot.path}/$name',
+        ).writeAsString('tiny unverified fixture');
+      }
+      final trace = File('${root.path}/resource-load.json');
+      final executable = File('${root.path}/python');
+      await executable.writeAsString(
+        r'''#!/usr/bin/ruby
+require 'json'
+$stdout.sync=true
+STDIN.each_line do |line|
+  r=JSON.parse(line)
+  File.write(FIXTURE_TRACE,line)
+  valid=r['requireVerifiedModelAssets']==true &&
+    r['expectedVerifiedModelIdentity']==FIXTURE_PIN && r['modelPath']==''
+  puts JSON.generate(id:r['id'],ok:valid,error:'Managed snapshot bypassed acquisition',
+    modelIdentity:'resource-fixture',modelAssetsVerified:valid,
+    verifiedModelIdentity:FIXTURE_PIN,nativeScenesQualified:false)
+end
+'''
+            .replaceAll('FIXTURE_TRACE', jsonEncode(trace.path))
+            .replaceAll('FIXTURE_PIN', jsonEncode(variant.pinnedIdentity)),
+      );
+      final processor = MlxSpeechWorkerChunkProcessor(
+        engineId: 'fish_drama3',
+        modelPath: '',
+        pythonPath: executable.path,
+      );
+      try {
+        await processor.prepareModel();
+        final request = jsonDecode(await trace.readAsString()) as Map;
+        expect(request['modelPath'], isEmpty);
+        expect(request['requireVerifiedModelAssets'], isTrue);
+        expect(request['modelCacheDirectories'], contains(cache.path));
+        expect(
+          processor.supportsNativeScenes,
+          isFalse,
+          reason: 'Verified bytes alone do not qualify native scenes',
+        );
+      } finally {
+        await processor.dispose();
+      }
+    },
+  );
+
   Future<Map<String, Object?>> synthPackets(
     Future<void> Function(Map<String, Object?>) callback, {
     void Function(Map<String, Object?>)? progress,

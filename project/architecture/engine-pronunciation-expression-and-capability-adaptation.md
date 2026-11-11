@@ -28,29 +28,56 @@ provides an additive, immutable Dart view of the existing
 [Fish variant catalog](../../assets/fish_drama_models.json), which remains shared
 with the Python model owner. Saved engine IDs, labels and production defaults are
 unchanged. Asset loading belongs to the caller; parsing has no I/O, scheduling or
-download side effects. The parser accepts the existing schema only, requires a
+download side effects. The model catalog requires a
 pinned commit and the fixed `mlx-community` Hugging Face repository policy,
 validates safe required-file names and core model artifacts, and rejects unknown
 IDs, checkpoint precision inconsistent with a saved ID, duplicate checkpoint
 identities and malformed/incomplete checksum data.
 
-The bundled [checksum manifest](../../assets/fish_drama_model_checksums.json)
-attaches only to an exactly matching repository/revision and must cover every
-required artifact. It currently covers bf16 only; the 8-bit and 4-bit descriptors
-have no bundled integrity manifest. A descriptor declares expected file sizes and
-digests; parsing does not hash or qualify installed model bytes. Existing
+The bundled [checksum manifests](../../assets/fish_drama_model_checksums.json)
+use schema version 2, keyed by the three saved Fish engine IDs. Each attaches
+only to its exact repository/revision and covers every required artifact. The
+parser also accepts the prior single-manifest schema for compatibility. The
+nested bf16 manifest is unchanged, preserving existing stat-bound verification
+receipt identity. Quantized manifests come from their immutable upstream tree
+metadata; their differing source lineage is not a matched quality comparison.
+A descriptor declares expected file sizes and digests; parsing does not hash or
+qualify installed model bytes. Existing
 `estimatedPeakBytes` values remain estimates, not measured memory envelopes or
 admission evidence. Descriptors do not confer native-scene, expressive, runtime
 compatibility or acoustic qualification.
 
-This is the first bounded catalog boundary for
+This implements the catalog and managed-acquisition boundary for
 [ACD-M1 R1 / #112](https://github.com/kellyjanderson/readaloud/issues/112#acd-m1--verified-model-assets-and-live-engine-sessions).
-The factory, settings and installed-snapshot lookup still use their existing
-paths; the Python owner retains download/integrity behavior. Consumer migration,
-complete verified snapshots for all variants, live-session switching and
-actual-target qualification remain separate work. Focused
-[catalog fixtures](../../test/speech_engine_catalog_test.dart) establish declaration
-validation only, not offline reuse, interrupted recovery or running-app acceptance.
+The MLX resource owner uses the typed descriptor for installed-file requirements
+and the expected pinned identity. Managed Hub cache roots, including older
+app-support locations, go to the existing Python acquisition owner rather than
+being passed as explicit model folders: direct passthrough would bypass its
+corrupt-file repair on retry. The same Hugging Face downloader checks accessible
+caches offline first, verifies required bytes, repairs only corrupt owned files
+and resumes missing files in one chosen cache. It publishes atomic stat-bound
+verification receipts after complete validation. Other variants and partials
+are retained. Legacy unpacked folders are read-only candidates; invalid bytes
+fail verification rather than authorizing arbitrary-folder repair. Explicit
+developer overrides retain their existing provenance and qualification checks.
+
+The main-isolate processor owns its frozen catalog/load specification. One
+Python protocol request owns hashing and the maintained Hub transfer workers;
+no new acquisition scheduler or queue is introduced. Existing cancellation
+retires the helper out of band and joins it before reuse, retaining resumable
+files. The Dart exchange requires verified bytes and the exact pinned reply
+before publishing a normal managed model, including automatic reload after
+cancellation. Missing or mismatched verification poisons and reaps that child.
+The existing request/child identities still reject stale progress and results.
+
+Focused [catalog fixtures](../../test/speech_engine_catalog_test.dart),
+[real-child protocol tests](../../test/mlx_python_process_test.dart) and
+[tiny real-hash acquisition fixtures](../../tools/mlx_tts_worker_test.py)
+cover declaration, offline reuse, selective repair, interrupted retry, receipt
+ownership and rejected/reloaded child paths. They do not establish complete-model
+transfer performance, native quantized scenes, live-session switching, measured
+memory envelopes or M3 qualification. Those gates and selected/active UI
+reconciliation remain S7 work; listening/usability is collected for S11.
 
 ## Source and tests
 
