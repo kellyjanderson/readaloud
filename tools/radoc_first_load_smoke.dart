@@ -26,6 +26,16 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'native_main_responsiveness_probe.dart';
 import 'native_playback_position_probe.dart';
 
+// This separate scope deliberately captures only sendable paths. A closure
+// created inside main's stream callback can retain its unsendable owner context.
+Future<Map<String, Object?>> copyQueuedAudioEvidence(
+  String source,
+  String destination,
+) => Isolate.run(() async {
+  await File(source).copy(destination);
+  return _inspectWav(destination);
+});
+
 // Isolation seams only. Initialization remains the production controller owner;
 // the screen and this observer share that one future instead of racing it.
 class _Controller extends ReaderController {
@@ -135,10 +145,7 @@ Future<void> main(List<String> args) async {
       final destination = '${root.path}/queued-$index.wav';
       final check = copying
           .then(
-            (_) => Isolate.run(() async {
-              await File(path).copy(destination);
-              return _inspectWav(destination);
-            }),
+            (_) => copyQueuedAudioEvidence(path, destination),
           )
           .then(
             (value) => <String, Object?>{
