@@ -1,0 +1,116 @@
+{
+  "schema": "readaloud-s6-cold-start-evidence-v1",
+  "requirementMilliseconds": 2000,
+  "passed": false,
+  "runs": {
+    "s6TraceA": {
+      "passed": true,
+      "controlledCaptureGate": false,
+      "processLaunchUnixMicros": 1794071213270787,
+      "dartEntryUnixMicros": 1794071217981816,
+      "firstNativePositionUnixMicros": 1794071218168340,
+      "launchToNativePositionMs": 4897.553,
+      "dartEntryToNativePositionMs": 186.524,
+      "nativePositionWithinTwoSeconds": false,
+      "forbiddenModelCallCount": 0,
+      "resourceShutdownComplete": true,
+      "maxUiHeartbeatDelayMs": 5,
+      "cleanup": {
+        "passed": true,
+        "deadlineSeconds": 120,
+        "normalQuit": true,
+        "forcedCleanup": false,
+        "launchUtc": "2026-11-07T17:06:53.270787Z",
+        "pid": 1954,
+        "nativeReceipt": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.s6TraceA/Data/s6-launch-trace-a/receipt.json",
+        "nativePassed": true,
+        "launchToNativePositionMs": 4897.553,
+        "nativePositionWithinTwoSeconds": false,
+        "ownedPidsAfterNormalQuit": [],
+        "remainingOwnedPids": [],
+        "exitStatus": 0,
+        "appExitVerified": true,
+        "elapsedSeconds": 39.194743000203744,
+        "errors": []
+      }
+    },
+    "s6TraceB": {
+      "passed": true,
+      "controlledCaptureGate": false,
+      "processLaunchUnixMicros": 1794071360975265,
+      "dartEntryUnixMicros": 1794071365714357,
+      "firstNativePositionUnixMicros": 1794071365885360,
+      "launchToNativePositionMs": 4910.095,
+      "dartEntryToNativePositionMs": 171.003,
+      "nativePositionWithinTwoSeconds": false,
+      "forbiddenModelCallCount": 0,
+      "resourceShutdownComplete": true,
+      "maxUiHeartbeatDelayMs": 14,
+      "cleanup": {
+        "launchUnixMicros": 1794071360975265,
+        "normalQuit": true,
+        "remainingAppPids": [],
+        "elapsedSeconds": 39.143186,
+        "launcher": "LaunchServices open -n -W"
+      }
+    },
+    "s6NestedControl": {
+      "passed": true,
+      "controlledCaptureGate": false,
+      "processLaunchUnixMicros": 1794071995551774,
+      "dartEntryUnixMicros": 1794071999962310,
+      "firstNativePositionUnixMicros": 1794072000323117,
+      "launchToNativePositionMs": 4771.343,
+      "dartEntryToNativePositionMs": 360.807,
+      "nativePositionWithinTwoSeconds": false,
+      "forbiddenModelCallCount": 0,
+      "resourceShutdownComplete": true,
+      "maxUiHeartbeatDelayMs": 44,
+      "cleanup": {
+        "launchUnixMicros": 1794071995551774,
+        "normalQuit": true,
+        "remainingAppPids": [],
+        "elapsedSeconds": 39.365203,
+        "launcher": "LaunchServices open -n -W"
+      }
+    }
+  },
+  "diagnosis": {
+    "awakeDelayMilliseconds": 4577,
+    "flutterTtsRegistrationMilliseconds": 60,
+    "sampling": "Separate diagnostic launch: all main-thread samples at _dyld_start in first 3 seconds",
+    "platformLog": "Gatekeeper scan and 3-second network timeout before app startup",
+    "nestedRuntimeExperiment": "No improvement observed; disposable layout only, not integrated; ran concurrently with regeneration setup"
+  },
+  "limits": "Native-position timestamps alone are not audible-onset proof. The app had not entered window startup within two seconds, which is sufficient to fail the opening-to-audible requirement. No clock reset, prewarming, signing-policy bypass or security weakening.",
+  "runtimeRemovalControl": {
+    "native": {
+      "passed": true,
+      "launchToNativePositionMs": 866.206,
+      "dartEntryToNativePositionMs": 185.851,
+      "nativePositionWithinTwoSeconds": true,
+      "forbiddenModelCallCount": 0,
+      "maxUiHeartbeatDelayMs": 4
+    },
+    "cleanup": {
+      "passed": true,
+      "deadlineSeconds": 120,
+      "normalQuit": true,
+      "forcedCleanup": false,
+      "launchUtc": "2026-11-07T17:55:40.145309Z",
+      "pid": 14508,
+      "nativeReceipt": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.s6RuntimeControl/Data/s6-runtime-control-20261107/receipt.json",
+      "nativePassed": true,
+      "launchToNativePositionMs": 866.206,
+      "nativePositionWithinTwoSeconds": true,
+      "ownedPidsAfterNormalQuit": [],
+      "remainingOwnedPids": [],
+      "exitStatus": 0,
+      "appExitVerified": true,
+      "elapsedSeconds": 35.154552000109106,
+      "errors": []
+    },
+    "change": "Disposable signed copy with only bundled mlx-python and modernbooknlp-python removed; fresh bundle identity. Not integrated: MLX and BookNLP would be missing.",
+    "limit": "Diagnosis only. 866.206ms native position cannot establish feature-complete or emitted-onset acceptance."
+  }
+}

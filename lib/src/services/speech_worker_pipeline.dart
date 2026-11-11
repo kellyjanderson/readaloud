@@ -1,3 +1,4 @@
+import 'speech_audio_packet.dart';
 import '../models/native_speech_turn.dart';
 import 'dart:async';
 import 'dart:collection';
@@ -72,6 +73,7 @@ class SpeechWorkerChunkRequest {
     this.synthesisIdentity = 'legacy-unspecified',
     this.pronunciationArtifacts = const <Map<String, Object?>>[],
     this.missingFallbackWordCount = 0,
+    this.enableAudioPackets = false,
   });
 
   final String sessionId;
@@ -94,6 +96,7 @@ class SpeechWorkerChunkRequest {
   final String synthesisIdentity;
   final List<Map<String, Object?>> pronunciationArtifacts;
   final int missingFallbackWordCount;
+  final bool enableAudioPackets;
 
   SpeechWorkerChunkRequest snapshot() => SpeechWorkerChunkRequest.fromMap(
     jsonDecode(jsonEncode(toMap())) as Map<String, dynamic>,
@@ -121,11 +124,13 @@ class SpeechWorkerChunkRequest {
       'synthesisIdentity': synthesisIdentity,
       'pronunciationArtifacts': pronunciationArtifacts,
       'missingFallbackWordCount': missingFallbackWordCount,
+      'enableAudioPackets': enableAudioPackets,
     };
   }
 
   factory SpeechWorkerChunkRequest.fromMap(Map<String, dynamic> map) {
     return SpeechWorkerChunkRequest(
+      enableAudioPackets: map['enableAudioPackets'] as bool? ?? false,
       sessionId: map['sessionId'] as String,
       generationId: map['generationId'] as String,
       chunkId: map['chunkId'] as String,
@@ -185,6 +190,8 @@ class SpeechWorkerEvent {
     this.duration,
     this.message,
     this.elapsedMillis,
+    this.streamedPacketCount = 0,
+    this.streamedFrameCount = 0,
   });
 
   final SpeechWorkerEventType type;
@@ -197,6 +204,8 @@ class SpeechWorkerEvent {
   final Duration? duration;
   final String? message;
   final int? elapsedMillis;
+  final int streamedPacketCount;
+  final int streamedFrameCount;
 
   bool get isTerminal =>
       type == SpeechWorkerEventType.completed ||
@@ -215,6 +224,8 @@ class SpeechWorkerEvent {
       'durationMillis': duration?.inMilliseconds,
       'message': message,
       'elapsedMillis': elapsedMillis,
+      'streamedPacketCount': streamedPacketCount,
+      'streamedFrameCount': streamedFrameCount,
     };
   }
 
@@ -235,6 +246,8 @@ class SpeechWorkerEvent {
           : Duration(milliseconds: durationMillis as int),
       message: map['message'] as String?,
       elapsedMillis: map['elapsedMillis'] as int?,
+      streamedPacketCount: map['streamedPacketCount'] as int? ?? 0,
+      streamedFrameCount: map['streamedFrameCount'] as int? ?? 0,
     );
   }
 }
@@ -246,6 +259,16 @@ abstract interface class SpeechWorkerChunkProcessor {
   );
 
   Future<void> dispose();
+}
+
+/// Optional short awaited validation/handoff. This must never wait for player
+/// credit: stdout and its OS pipe provide producer backpressure, not a playlist.
+abstract interface class StreamingSpeechWorkerChunkProcessor {
+  Future<void> processWithAudioPackets(
+    SpeechWorkerChunkRequest request,
+    void Function(SpeechWorkerEvent event) emit,
+    Future<void> Function(SpeechAudioPacket packet) onAudioPacket,
+  );
 }
 
 abstract interface class SpeechWorkerResourceOwner
@@ -269,9 +292,11 @@ class SpeechWorkerPipeline {
     required SpeechWorkerChunkProcessor processor,
     this.maxPending = 8,
     this.onCompleted,
+    this.onAudioPacket,
   }) : _processor = processor;
   final int maxPending;
   Future<void> Function(SpeechWorkerEvent)? onCompleted;
+  Future<void> Function(SpeechAudioPacket)? onAudioPacket;
   int get pendingCount => _pending.length;
   Completer<void> _capacityChanged = Completer<void>();
   Future<void>? _pumpFuture;
@@ -429,7 +454,7 @@ class SpeechWorkerPipeline {
         var terminalObserved = false;
         var terminalPublished = false;
         try {
-          await _processor.process(chunk, (event) {
+          void receive(SpeechWorkerEvent event) {
             if (_isShutdown ||
                 _isCancelled(chunk.generationId) ||
                 event.sessionId != chunk.sessionId ||
@@ -446,7 +471,26 @@ class SpeechWorkerPipeline {
               _emit(event);
               if (event.isTerminal) terminalPublished = true;
             }
-          });
+          }
+
+          final processor = _processor;
+          if (chunk.enableAudioPackets &&
+              processor is StreamingSpeechWorkerChunkProcessor) {
+            await (processor as StreamingSpeechWorkerChunkProcessor)
+                .processWithAudioPackets(chunk, receive, (packet) async {
+                  if (_isShutdown ||
+                      _isCancelled(chunk.generationId) ||
+                      terminalObserved ||
+                      packet.sessionId != chunk.sessionId ||
+                      packet.generationId != chunk.generationId ||
+                      packet.chunkId != chunk.chunkId) {
+                    return;
+                  }
+                  await onAudioPacket?.call(packet);
+                });
+          } else {
+            await processor.process(chunk, receive);
+          }
           await completion;
           if (_isCancelled(chunk.generationId)) {
             _emit(_cancelledEventFor(chunk));

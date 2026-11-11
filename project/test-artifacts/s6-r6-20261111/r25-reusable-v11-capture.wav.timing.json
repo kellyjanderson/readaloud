@@ -1,0 +1,13 @@
+{
+  "appPid" : 91108,
+  "firstPacketReceivedUnixMicros" : 1794388583368329,
+  "firstSignalFrame" : 5028,
+  "firstSignalMonotonicRawNanos" : 2290508003084250,
+  "firstSignalReceivedUnixMicros" : 1794388583465451,
+  "frames" : 3896640,
+  "limit" : "Callback receipt upper bound; requires expected-waveform match. Not physical speaker onset. No Play gate is introduced.",
+  "maxPacketGapSeconds" : 4.1909515857696533e-08,
+  "sampleRate" : 48000,
+  "schema" : "readaloud-app-capture-timing-v1",
+  "signalThreshold" : 0.01
+}

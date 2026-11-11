@@ -10,6 +10,7 @@ import '../services/character_analysis_adapter.dart';
 import '../services/work_character_store.dart';
 import '../models/speech_engine_catalog.dart';
 import '../services/speech_planning_supervisor.dart';
+import '../services/speech_audio_packet.dart';
 import '../services/voice_assignment_coordinator.dart';
 import '../models/voice_assignment_state.dart';
 import 'dart:async';
@@ -64,6 +65,17 @@ import '../services/reader_document_codec.dart';
 import '../services/share_intake_service.dart';
 import '../services/spoken_selection_mapper_service.dart';
 import '../services/tts_engine.dart';
+import '../models/native_speech_turn.dart';
+import '../models/radoc_audio_manifest.dart';
+import '../services/radoc_audio_package.dart';
+import '../services/radoc_export_staging.dart';
+import '../services/audio_artifact_store.dart';
+import '../services/rendered_scene_repository.dart';
+import '../services/synthesis_boundary_policy.dart';
+import '../models/speech_annotation.dart';
+
+part 'reader_audio_book.dart';
+part 'reader_audio_book_export.dart';
 
 class ReaderController extends ChangeNotifier {
   static const int preparedRangeCapacity = 8;
@@ -92,9 +104,11 @@ class ReaderController extends ChangeNotifier {
     TtsEngine? ttsEngine,
     TtsEngine Function(String, int)? engineFactory,
     bool enablePlatformIntakeChannels = true,
+    this.deferInitialSynthesis = false,
+    RenderedSceneRepository? renderedSceneRepository,
   }) : characterAnalysis =
            characterAnalysis ??
-           ModernBookNlpAnalysis(createModernBookNlpProvider),
+           ModernBookNlpAnalysis.withRuntime(createModernBookNlpProvider),
        _preparation =
            preparationSupervisor ??
            DocumentPreparationSupervisor(
@@ -112,11 +126,20 @@ class ReaderController extends ChangeNotifier {
        _providedTtsEngine = ttsEngine,
        _ttsEngine = ttsEngine ?? createDefaultTtsEngine(),
        _enablePlatformIntakeChannels = enablePlatformIntakeChannels,
-       _document = ReaderDocument.sample() {
+       _document = ReaderDocument.sample(),
+       _renderedScenes = renderedSceneRepository {
     this.characterAnalysis.onResult = _acceptCharacterAnalysis;
   }
 
   final ModernBookNlpAnalysis characterAnalysis;
+  final bool deferInitialSynthesis;
+  bool _synthesisInitialized = false;
+  _ReaderAudioBook? _audioBook;
+  Future<void>? _audioBookRetirement;
+  int? _audioGapWord;
+  bool get hasPublishedAudio => _audioBook != null;
+  RenderedSceneRepository? _renderedScenes;
+  void _notifyAudioBookChanged() => notifyListeners();
   ModernBookNlpWindow? _offeredAnalysisWindow;
   ModernBookNlpRequest? _offeredAnalysisRequest;
   String? _analysisContentSource;
@@ -448,6 +471,8 @@ class ReaderController extends ChangeNotifier {
   ) async {
     final request = _activePreparationRequest;
     if (request == null) return null;
+    final book = _audioBook;
+    if (book != null) return _readAudioBookRange(book, sequence, revision);
     bool current() => !_disposed && revision == _documentRevision;
     while (current()) {
       // Capture before any await/credit grant, so a publication cannot be lost.
@@ -485,7 +510,8 @@ class ReaderController extends ChangeNotifier {
 
   bool get hasCompleteDocumentSnapshot =>
       _documentPrepared &&
-      (_hasCompleteDocumentSnapshot ||
+      (_audioBook?.book.manifest.preparationComplete == true ||
+          _hasCompleteDocumentSnapshot ||
           (_preparationComplete &&
               _activeSourceRevision != null &&
               _preparation.repository != null));
@@ -729,6 +755,7 @@ class ReaderController extends ChangeNotifier {
   }
 
   Future<void> _voiceChoicesEdited() async {
+    _audioBook?.cancelRender();
     final initial = _isInitialVoiceBuffering;
     final retrying =
         _resumeAfterPreparation &&
@@ -787,6 +814,20 @@ class ReaderController extends ChangeNotifier {
   }
 
   int _beginDocumentRequest() {
+    characterAnalysis.loadBookRecord = null;
+    final retiredBook = _audioBook;
+    _audioBook = null;
+    _audioGapWord = null;
+    if (retiredBook != null) {
+      retiredBook.current = false;
+      unawaited(retiredBook.package.cancelAndDrain());
+      _audioBookRetirement = (_audioBookRetirement ?? Future<void>.value())
+          .then((_) async {
+            await _ttsEngine.stop();
+            await _renderedScenes?.cancelAndDrain();
+            await retiredBook.dispose();
+          });
+    }
     characterAnalysis.invalidateWindow();
     _offeredAnalysisWindow = null;
     _offeredAnalysisRequest = null;
@@ -1446,7 +1487,10 @@ class ReaderController extends ChangeNotifier {
         preferences.lastOpenedDirectoryAccessToken;
     if (!_preferencesReady.isCompleted) _preferencesReady.complete();
 
-    final startup = retryInitialization();
+    final startup = deferInitialSynthesis
+        ? Future<void>.value()
+        : retryInitialization();
+    if (deferInitialSynthesis) _isInitializing = false;
     if (_enablePlatformIntakeChannels) {
       await _initializeIntakeChannels();
     }
@@ -1660,7 +1704,15 @@ class ReaderController extends ChangeNotifier {
       if (_voices.isEmpty) {
         throw StateError('No installed speech voices are available.');
       }
-      final initialVoice = _findVoiceById(_selectedVoiceId) ?? _voices.first;
+      final savedVoice = _findVoiceById(_selectedVoiceId);
+      if (_audioBook != null &&
+          _selectedVoiceId != null &&
+          savedVoice == null) {
+        throw StateError(
+          'Install the saved voice $_selectedVoiceId to render this passage.',
+        );
+      }
+      final initialVoice = savedVoice ?? _voices.first;
       _selectedVoiceId = initialVoice.id;
       _voiceSpeeds.putIfAbsent(_selectedVoiceId!, () => 1.0);
       await _ttsEngine.selectVoice(initialVoice);
@@ -1672,6 +1724,7 @@ class ReaderController extends ChangeNotifier {
       }
       if (!current()) return;
       _startupError = null;
+      _synthesisInitialized = true;
       _statusMessage = null;
       unawaited(_persistPreferences());
     } catch (error) {
@@ -2081,6 +2134,21 @@ class ReaderController extends ChangeNotifier {
 
   Future<void> startPlayback() async {
     if (_disposed) return;
+    _playbackRequestedAt ??= DateTime.now();
+    if (_audioBook != null && isDocumentPrepared) {
+      _audioBook?.cancelRender();
+      _resumeAfterPreparation = true;
+      ++_playbackIntent;
+      _playbackStartPending = true;
+      await _drivePlaybackStarts();
+      return;
+    }
+    if (!_synthesisInitialized && !_isInitializing && _startupError == null) {
+      _pendingPlayUntilReady = true;
+      _resumeAfterPreparation = true;
+      await retryInitialization();
+      return;
+    }
     if (!isDocumentPrepared || _isInitializing) {
       _pendingPlayUntilReady = true;
       _resumeAfterPreparation = true;
@@ -2148,6 +2216,10 @@ class ReaderController extends ChangeNotifier {
 
   Future<void> _startPlaybackOnce(int playbackIntent) async {
     if (_disposed || !isDocumentPrepared) return;
+    if (_audioBook case final book?) {
+      if (await _startAudioBookPlayback(book, playbackIntent)) return;
+      if (playbackIntent != _playbackIntent || !_resumeAfterPreparation) return;
+    }
     final documentRevision = _documentRevision;
     final assignmentRevision = voiceAssignmentState.requestedRevision;
     bool current() =>
@@ -2232,7 +2304,7 @@ class ReaderController extends ChangeNotifier {
     _utteranceStartOffset = _document.charOffsetForWord(_currentWordIndex);
     _utteranceStartedAt = DateTime.now();
     _playbackState = ReaderPlaybackPrimaryState.bufferingFirstChunk;
-    _playbackRequestedAt = DateTime.now();
+    _playbackRequestedAt ??= DateTime.now();
     _recordPositionMapConfidenceIfNeeded();
     _activePlaybackDocumentId = _document.displayDocument.documentId;
     _activeAssignmentRevision = assignmentRevision;
@@ -2270,6 +2342,7 @@ class ReaderController extends ChangeNotifier {
         rangeSequence: initialRange?.sequence ?? 0,
         sourceWordOffset: initialRange?.range.wordStart ?? 0,
         continuation: continuation,
+        onRenderedScene: _renderedSceneWriter(),
         isCurrent: current,
         onPlaybackReady: (ack) {
           if (!current() ||
@@ -2400,6 +2473,10 @@ class ReaderController extends ChangeNotifier {
             rangeSequence: range.sequence,
             sourceWordOffset: range.range.wordStart,
             continuation: continuation,
+            onRenderedScene: _renderedSceneWriter(
+              document: range.fragment,
+              sourceWordOffset: range.range.wordStart,
+            ),
             isCurrent: current,
             onRangeActive: () {
               if (!current() || identical(_activePreparedRange, range)) return;
@@ -2426,6 +2503,8 @@ class ReaderController extends ChangeNotifier {
   }
 
   Future<void> pausePlayback() async {
+    _audioBook?.cancelRender();
+    unawaited(_audioBook?.package.cancelAndDrain());
     _pendingPlayUntilReady = false;
     final engine = _ttsEngine;
     if (engine is VoiceAssignmentPlaybackCapable) {
@@ -2744,6 +2823,7 @@ class ReaderController extends ChangeNotifier {
   }
 
   Future<void> _replaceEngine() async {
+    _synthesisInitialized = false;
     ++_startupRevision;
     ++_playbackIntent;
     _pendingPlayUntilReady = false;
@@ -2974,9 +3054,12 @@ class ReaderController extends ChangeNotifier {
   /// Exports a regular v4 snapshot that the normal Open Document route reads.
   /// Only a complete in-memory graph or complete committed checkpoint qualifies.
   /// Replacement/cancellation suppresses the atomic rename of a staged export.
-  Future<File?> exportDocumentToPath(String outputPath) async {
+  Future<File?> exportDocumentToPath(
+    String outputPath, {
+    bool audioBook = false,
+  }) async {
     if (_documentExportWork != null) return null;
-    final work = _exportDocumentToPath(outputPath);
+    final work = _exportDocumentToPath(outputPath, forceAudioBook: audioBook);
     _documentExportWork = work;
     try {
       return await work;
@@ -2985,7 +3068,10 @@ class ReaderController extends ChangeNotifier {
     }
   }
 
-  Future<File?> _exportDocumentToPath(String outputPath) async {
+  Future<File?> _exportDocumentToPath(
+    String outputPath, {
+    bool forceAudioBook = false,
+  }) async {
     if (!hasCompleteDocumentSnapshot || _isExporting) return null;
     final revision = _documentRevision;
     final assignments = Map<String, String>.unmodifiable(
@@ -3004,6 +3090,12 @@ class ReaderController extends ChangeNotifier {
         sourcePath: _currentDocumentPath,
       );
       _requireRevision(revision);
+      final audioBook = await _exportAudioBookToPath(
+        outputPath,
+        revision,
+        force: forceAudioBook,
+      );
+      if (audioBook != null) return audioBook;
       final request = _activePreparationRequest;
       final repository = _preparation.repository;
       final recordMap = {
@@ -3053,6 +3145,7 @@ class ReaderController extends ChangeNotifier {
       );
     } catch (error) {
       if (current()) {
+        _logDiagnostic('Document publication failed', error: error);
         _recordCheckpointExportFailure(error);
         _statusMessage = _preparationFailed
             ? 'The prepared checkpoint is damaged. Retry document preparation before saving.'
@@ -3215,7 +3308,15 @@ class ReaderController extends ChangeNotifier {
     Future<Uint8List> Function()? acquireBytes,
     String? sourcePath,
   }) async {
+    await _audioBookRetirement;
+    _requireRevision(revision);
     if (p.extension(fileName).toLowerCase() == '.radoc') {
+      if (sourcePath != null &&
+          await RadocAudioPackage.isPackage(File(sourcePath))) {
+        _requireRevision(revision);
+        await _openAudioBook(sourcePath, revision);
+        return;
+      }
       final serializedBytes = bytes ?? await acquireBytes!();
       _requireRevision(revision);
       late final ({
@@ -3624,6 +3725,13 @@ class ReaderController extends ChangeNotifier {
     unawaited(_planning.shutdown());
     unawaited(_exportPlanner?.shutdown());
     _disposed = true;
+    final book = _audioBook;
+    _audioBook = null;
+    if (book != null) {
+      book.current = false;
+      unawaited(_ttsEngine.stop().then((_) => book.dispose()));
+    }
+    unawaited(_renderedScenes?.dispose());
     releasePreparedRange(_publicationSequence);
     ++_documentRevision;
     ++_watchSession;
@@ -4221,6 +4329,8 @@ class ReaderController extends ChangeNotifier {
     await characterAnalysis.shutdown();
     await _sourceRevisionWork;
     await _documentExportWork;
+    await _audioBookRetirement;
+    await _renderedScenes?.cancelAndDrain();
   }
 
   void _clearDocumentLoadStage() {
@@ -4711,7 +4821,6 @@ class ReaderController extends ChangeNotifier {
         documentId == null ||
         wordStartIndex == null ||
         wordEndIndex == null ||
-        chunkAudioDuration == null ||
         voiceId == null ||
         rate == null) {
       return;
@@ -4738,7 +4847,11 @@ class ReaderController extends ChangeNotifier {
           (math.max(existing?.endWordIndex ?? wordEndIndex, wordEndIndex) -
                   (existing?.startWordIndex ?? wordStartIndex))
               .clamp(1, _document.wordCount),
-      audioDuration: chunkAudioDuration,
+      // Early packets establish source ownership before a scene duration is
+      // known. Zero on an incomplete record is unknown, not measured silence;
+      // replace it with the real total once final publication supplies it.
+      audioDuration:
+          chunkAudioDuration ?? existing?.audioDuration ?? Duration.zero,
       playbackOffset: update.elapsedInChunk ?? Duration.zero,
       voiceId: voiceId,
       rate: rate,

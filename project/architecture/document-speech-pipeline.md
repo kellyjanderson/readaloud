@@ -181,3 +181,74 @@ portable media/audio manifests remain proposed in [R19](https://github.com/kelly
 and [R20](https://github.com/kellyjanderson/readaloud/issues/110#issuecomment-6671095679).
 The separate C++17/C ABI interval stub has Python/Dart bindings; Read Aloud does not
 yet link it. NLP offsets must never be treated as emitted-audio timestamps.
+
+## S6 portable audio books
+
+The normal intake route recognizes the `read-aloud-audio-book` ZIP envelope
+(`radoc-v5`) before reading legacy JSON. `RadocAudioPackage` validates a bounded
+manifest and archive directory on its worker. Opening a book verifies and
+materializes its first prepared range using that same index, before the
+controller installs the session. It then materializes later prepared ranges,
+analysis records and WAV members on demand. The opening request uses the
+package's existing single-operation lane, deadline and revision checks. The
+controller holds the private file through worker decoding and rejects obsolete
+results before publishing a range. Member hashes, sizes, names,
+coverage and PCM formats are checked; unknown versions and corrupt demanded
+members fail visibly. Legacy v1–v4 JSON remains readable.
+
+A book session retains its security-scoped input lease and private materialized
+files until player stop and package/boundary worker drain. The controller keeps
+at most eight prepared ranges. Later ranges merge their Character evidence into
+the existing WorkCharacterStore without replacing newer local selections; an
+explicit republish also merges unread ranges before serializing their registry.
+Analysis records remain separately loadable through the existing analysis owner.
+
+Normal app startup defers synthesis until launch/open/restore intake is known.
+Complete rendered books enter the existing player's rendered-audio capability
+without model initialization, voice loading, binding preparation or inference.
+A missing or invalid scene demands the existing bounded export/synthesis path.
+Validated incremental audio packets can enter playback before that scene's final
+publication; the controller awaits completion before returning to saved-scene
+resolution. Valid following scenes
+are reused. Historical boundaries incompatible with prepared segments are refused
+rather than expanded silently. Basic source spans remain approximate highlighting,
+not advanced alignment. The S6 acceptance/evidence authority is [#137](https://github.com/kellyjanderson/readaloud/issues/137);
+source implementation does not waive launch, emitted-audio or human gates.
+
+The macOS Save Audio Book path obtains only the chosen destination through the
+native Save panel. A utility-queue Foundation `itemReplacementDirectory` request
+allocates private staging on the destination volume; it does not require access
+to arbitrary siblings. Package cancellation/deadline ownership begins before that
+request, and stale returned directories are cleaned. The existing archive worker
+flushes output, obtains current-owner commit admission and renames atomically;
+it never falls back to cross-device copying. Native allocation and publication
+errors propagate to the controller's diagnostics and visible failure state.
+
+When saved audio is playing, a missing scene may prepare its model bindings and
+enter the existing native export owner. Rendered playback does not occupy the
+synthesis lane; treating it as ordinary synthesis previously prevented this work
+from starting. Ordinary synthesized playback still retains its existing resource
+and low-water admission policy. The export completion metric records the actual
+source span, cache-hit result and raw artifact identity for native qualification.
+
+Scene source validation uses the planner's whitespace-joined textual projection:
+prepared paragraph breaks and native segment-joining spaces are equivalent.
+Words, punctuation, span coverage and canonical speech directions are still
+checked independently. This prevents a successfully regenerated paragraph-spanning
+scene from being rejected when it returns to saved-scene resolution.
+
+If a saved scene descriptor is absent, regeneration ends at the next saved
+scene's start within that prepared range. It does not extend to the whole range
+and overlap valid following audio. An existing invalid scene retains its own
+source bounds. This preserves the next scene for ordinary saved-scene resolution.
+
+The controller owns one render stream per demanded scene, using Dart's existing
+stream/iterator primitives rather than another scheduler. Packet callbacks await
+consumer admission; document/session replacement cancels and drains the render
+owner before releasing its files. Every packet retains its complete parent scene
+source span. Unknown duration reports the scene anchor; it does not invent word
+timestamps. Final duration and completion permit the source ending to advance.
+Only a finalized scene enters the reusable scene repository or portable package.
+Late success/failure from a retired session cannot start speech or complete a new
+session. The original Play timestamp survives resource preparation, so readiness
+does not restart startup accounting.

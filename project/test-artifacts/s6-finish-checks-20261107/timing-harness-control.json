@@ -1,0 +1,73 @@
+{
+  "schema": "readaloud-s6-timing-harness-control-v1",
+  "candidateComplete": false,
+  "qualificationPassed": false,
+  "limit": "Diagnostic app has both Python runtimes removed. This verifies ungated acoustic timing instrumentation only, not the full-feature first-launch fix.",
+  "startup": {
+    "schema": "readaloud-ungated-startup-audio-v1",
+    "passed": true,
+    "errors": [],
+    "launchToSpeechReceiptUpperBoundMs": 1172.077875,
+    "firstSignalExpectedSpeechAlignmentMs": 0.07291666666664476,
+    "launchToNativePositionMs": 958.611,
+    "waveformComparison": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.s6TimedControl2/Data/s6-timed-control2-20261107/comparison.json",
+    "limits": "CLOCK_MONOTONIC_RAW from immediately before process spawn to receipt of the first signal-bearing app-only packet, aligned with the exact expected waveform. An upper bound on app-emitted speech, not physical speaker latency or human listening. Candidate completeness and fresh-profile provenance must be verified separately."
+  },
+  "comparison": {
+    "captureSampleRate": 48000,
+    "comparisonSampleRate": 192000,
+    "capturePeak": 0.9434123635292053,
+    "matchedTurns": [
+      {
+        "startWord": 0,
+        "endWord": 42,
+        "castId": "native_scene",
+        "voiceId": "scene_cast",
+        "captureStartSeconds": 0.22417708333333333,
+        "correlation": 0.9997206392822365,
+        "activeSpeechStartSeconds": 0.33680208333333334,
+        "gapBeforeMs": null
+      }
+    ],
+    "firstSpeechStartSeconds": 0.22417708333333333,
+    "lastSpeechEndSeconds": 19.589619791666667,
+    "maxJoinGapMs": 0,
+    "passed": true,
+    "limit": "Queued-waveform presence/order and joins only; human expression/identity/transcript review required."
+  },
+  "captureTiming": {
+    "appPid": 16552,
+    "firstPacketReceivedUnixMicros": 1794074920228322,
+    "firstSignalFrame": 16170,
+    "firstSignalMonotonicRawNanos": 1976846456104208,
+    "firstSignalReceivedUnixMicros": 1794074920540825,
+    "frames": 1056000,
+    "limit": "Callback receipt upper bound; requires expected-waveform match. Not physical speaker onset. No Play gate is introduced.",
+    "maxPacketGapSeconds": 2.3283064365386963e-10,
+    "sampleRate": 48000,
+    "schema": "readaloud-app-capture-timing-v1",
+    "signalThreshold": 0.01
+  },
+  "cleanup": {
+    "passed": true,
+    "deadlineSeconds": 120,
+    "normalQuit": true,
+    "forcedCleanup": false,
+    "launchUtc": "2026-11-07T18:08:39.368722Z",
+    "launchMonotonicRawNanos": 1976845284026333,
+    "pid": 16552,
+    "capturePid": 16553,
+    "captureIntroducedPlayGate": false,
+    "nativeReceipt": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.s6TimedControl2/Data/s6-timed-control2-20261107/receipt.json",
+    "nativePassed": true,
+    "launchToNativePositionMs": 958.611,
+    "nativePositionWithinTwoSeconds": true,
+    "captureExitStatus": 0,
+    "ownedPidsAfterNormalQuit": [],
+    "remainingOwnedPids": [],
+    "exitStatus": 0,
+    "appExitVerified": true,
+    "elapsedSeconds": 35.77022299985401,
+    "errors": []
+  }
+}

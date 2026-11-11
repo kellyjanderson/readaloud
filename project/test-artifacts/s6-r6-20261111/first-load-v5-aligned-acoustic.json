@@ -1,0 +1,52 @@
+{
+  "captureSampleRate": 48000,
+  "comparisonSampleRate": 192000,
+  "capturePeak": 0.8497281074523926,
+  "matchedTurns": [
+    {
+      "startWord": 0,
+      "endWord": 51,
+      "castId": "native_scene",
+      "voiceId": "native_scene",
+      "captureStartSeconds": 16.52253125,
+      "correlation": 0.9999199211179851,
+      "activeSpeechStartSeconds": 16.567625,
+      "gapBeforeMs": null
+    },
+    {
+      "startWord": 51,
+      "endWord": 94,
+      "castId": "native_scene",
+      "voiceId": "native_scene",
+      "captureStartSeconds": 37.327614583333336,
+      "correlation": 0.9998276728405585,
+      "activeSpeechStartSeconds": 37.347375,
+      "gapBeforeMs": 0.0
+    },
+    {
+      "startWord": 94,
+      "endWord": 137,
+      "castId": "native_scene",
+      "voiceId": "native_scene",
+      "captureStartSeconds": 54.805338541666664,
+      "correlation": 0.9997946935891507,
+      "activeSpeechStartSeconds": 54.825401041666666,
+      "gapBeforeMs": -0.01
+    },
+    {
+      "startWord": 137,
+      "endWord": 197,
+      "castId": "native_scene",
+      "voiceId": "native_scene",
+      "captureStartSeconds": 72.67313541666667,
+      "correlation": 0.9998222567868672,
+      "activeSpeechStartSeconds": 72.67313541666667,
+      "gapBeforeMs": -0.01
+    }
+  ],
+  "firstSpeechStartSeconds": 16.52253125,
+  "lastSpeechEndSeconds": 96.26994270833333,
+  "maxJoinGapMs": 0.0,
+  "passed": true,
+  "limit": "Queued-waveform presence/order and joins only; human expression/identity/transcript review required."
+}

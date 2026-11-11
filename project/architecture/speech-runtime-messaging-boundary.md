@@ -21,7 +21,7 @@ uses a bounded termination fallback. Cancellation retires the active process
 so it cannot return a late result. The adapter does not yet translate canonical
 pronunciation artifacts to model-specific phonemes; it consumes planned text
 and preset voice IDs or selected audio references. The versioned synthetic bank supplies 30 identities to Qwen Base/MOSS; its manifest is loaded once and requested WAVs are verified/materialized by content hash. Reference content/transcript enter binding and raw cache identity. The child passes ref_audio/ref_text to the maintained model API; unknown voices/missing references fail without default substitution. Models without at least 30 usable identities remain below voice-library acceptance (CustomVoice 9, local Voxtral 20). No comparative acoustic or latency acceptance is claimed.
-MLX uses the same admission policy implementation and existing 64-chunk cap. Fish uses twenty-second low/thirty-second high playable lead; the other MLX adapters retain twelve-second low/twenty-second high lead. The long Fish probe demonstrated complete-WAV generation up to 16.5 seconds, so deliberately suspending inference until twelve seconds remained caused starvation despite faster-than-realtime synthesis overall. The Fish single-chunk startup shortcut likewise requires twenty seconds; two ready chunks can still satisfy startup warmth. These bounds do not guarantee continuity on every machine. Voxtral and Fish Drama use startup warmth; the other MLX adapters start with the first validated chunk. At the five-second MLX warmup deadline, validated audio is admitted even if the target lead is not reached. This bounded wait is included in launch-to-audio measurement and does not establish the two-second requirement. Fish's previous bypass could play a tiny opening turn before the following complete WAV was ready. The Python adapter now reports first-native-packet timing separately from whole-chunk publication; packets still remain in the owned incomplete artifact until the complete WAV passes validation. No progressive native playback claim follows from that telemetry. Voxtral retains full precision by default, with optional saved model-specific in-memory 4-bit quantization; precision participates in model binding and audio-cache identity. Original checkpoint files are retained.
+MLX uses the same admission policy implementation and existing 64-chunk cap. Fish uses twenty-second low/thirty-second high steady-state playable lead; the other MLX adapters retain twelve-second low/twenty-second high lead. The long Fish probe demonstrated complete-WAV generation up to 16.5 seconds, so deliberately suspending inference until twelve seconds remained caused starvation despite faster-than-realtime synthesis overall. Complete-chunk Fish startup retains its twenty-second/two-chunk warmth policy. Incremental packet playback instead starts with 300 ms of validated playable audio, or the complete remaining short passage. This threshold is distinct from steady-state inference admission. At the five-second MLX warmup deadline, validated audio is admitted even if target warmth is not reached. All waiting remains inside launch-to-audio accounting; neither threshold proves continuity or startup acceptance. The opt-in packet route validates immutable WAV pieces before complete-scene publication through the existing ordered owner; see [artifact lifetime](audio-artifact-identity-and-lifetime.md). Voxtral retains full precision by default, with optional saved model-specific in-memory 4-bit quantization; precision participates in model binding and audio-cache identity. Original checkpoint files are retained.
 Model installation, launch selection and Voxtral's noncommercial license are documented in
 [MLX TTS engine setup](../../docs/mlx-tts-engines.md).
 
@@ -200,3 +200,168 @@ capability qualification, not portable publishing metadata or a security claim
 against hostile file replacement. Source checks cover altered/missing files,
 receipt reuse and per-request tokenization capability isolation. Runtime and
 startup acceptance remain separate gates in #111.
+
+## Lazy packaged Python runtimes
+
+[S6 R5](https://github.com/kellyjanderson/readaloud/issues/137#issuecomment-6711654830)
+replaces R4's extracted native code after macOS refused its execution. It retains
+R4's resource-owner lifecycle, without qualifying neural cold startup or
+relaxing the opening-to-audible requirement. `package_python_runtime.rb` receives
+the existing relocated standalone tree after signing, including the installed
+site packages, licenses and the qualified BookNLP OpenMP replacement. It reads
+the exact Python version header and package metadata without executing an
+inheritance-signed interpreter from the build shell. It creates a ZIP with
+macOS `ditto` and a schema-2 manifest under `Resources/python-runtimes/`.
+Content classification keeps every supported Mach-O (including extensionless
+executables and arm64 universal libraries), plus adjacent `.metallib` resources,
+in `Resources/python-runtimes/<runtimeId>-native/` with the original relative
+layout. Known interpreter/`.so`/`.dylib` members that are not valid Mach-O fail
+packaging. Build-owned copies of universal dependencies are thinned to their
+arm64 slice with system `lipo` before signing; inputs lacking arm64 are refused.
+Managed source runtimes remain untouched. Every Mach-O is signed and verified
+before packaging; the interpreter
+retains sandbox inheritance entitlements. Only Python/data members enter the ZIP.
+The complete signed inventory, modes, link targets, package/Python identities
+and policy determine its digest; source paths and version labels alone do not.
+Explicit `bundledNative` members bind each code/resource target's bundle path,
+mode, size and post-sign hash. Both archives/manifests and native roots are
+mandatory for full candidate admission. No native code is extracted, copied or
+re-signed in Application Support, and no quarantine/security policy is changed.
+
+`PackagedPythonRuntimeOwner` projects progress on the main isolate and admits
+at most one attempt per runtime ID (MLX and BookNLP), with no request queue.
+Same immutable resource consumers share an attempt through individual leases.
+Each message identifies runtime, signed-tree digest (once parsed), attempt and
+consumer revision. Manifest parsing, archive hashing and metadata inspection,
+extraction, inventory/tree hashing, filesystem publication and executable
+verification run in an explicit installer isolate. The existing maintained
+`archive` decoder inspects ZIP metadata; its error-swallowing extraction helpers
+are not used. macOS `ditto -x -k` owns extraction and preserves executable/link
+metadata. Application policy owns exact inventory, safe parents and contained
+relative links, file size/hash/mode checks and signed arm64 interpreter admission.
+
+Attempts stage privately on the destination volume under Application Support
+`python-runtimes/v2/<runtimeId>/`. Before acquisition the installer verifies the
+current bundled native inventory, file types, contained paths, modes and hashes.
+An attempt extracts only the exact declared data inventory, then creates only
+explicit manifest-owned links to verified native targets. Ordinary relative
+links may leave the view only through the exact declared native target.
+Verified output receives a flushed completion receipt and is published as
+`<signedTreeDigest>-<canonicalBundleLocationDigest>` through macOS `renamex_np` with
+`RENAME_EXCL`. This narrow platform call supplies atomic no-replace semantics
+that ordinary directory rename cannot provide for an existing empty corrupt
+directory. Another process's winning publication is fully verified and reused;
+only the losing attempt's staging is removed. Published trees are immutable and
+never evicted, repaired in place or replaced. Corrupt output fails visibly.
+Existing publications are fully verified before reuse. Relocation creates a new
+view and never rewrites an old view's links. Old R4/v1 publications are not reused.
+Missing/changed bundle code fails acquisition with reinstall guidance.
+
+On macOS the installer hashes with the existing platform CommonCrypto SHA256
+implementation through FFI and an owned 64 KiB read buffer. File validation uses
+finite batches of at most sixteen tasks; cancellation/failure joins the current
+batch before installer reuse. Exact digest, mode, type, link, inventory, arm64 and
+signature checks remain mandatory on reuse. The faster hashing implementation
+does not turn an installed runtime receipt into permission to skip verification.
+
+macOS keeps Flutter UI and platform runners separate. Model preparation owns an
+activity across runtime acquisition, verification and model initialization; its
+owner releases it when preparation drains, including failure before Python starts.
+Each MLX process request additionally
+owns a native `ProcessInfo` activity requesting user-initiated, latency-critical
+execution while allowing idle system sleep. Native ownership is capped at eight
+unique tokens; release is idempotent and occurs on success, failure, retirement
+and shutdown. No machine preference is changed. Native counters expose starts,
+ends, peak and remaining owners for bounded acceptance. This is scheduling intent,
+not proof of a specific historical stall cause or a universal responsiveness fix.
+
+Acquisition returns `VerifiedPythonRuntime` with the bundled interpreter and
+immutable Python home. MLX and BookNLP pass that home as `PYTHONHOME` only to
+their own child process. Each keeps its independent runtime; global environment
+state never changes. Explicit developer interpreter overrides and injected
+providers keep their provenance and receive no inferred packaged home.
+
+A lease cancels its consumer result immediately and suppresses later callbacks.
+Last-interest cancellation signals the installer, kills/reaps its owned child,
+drains cooperative hash/validation work and removes its staging. Stage commands
+have a three-minute bound; the overall attempt has a ten-minute bound. Closing
+MLX resources or stopping/replacing BookNLP setup cancels and drains the lease
+before obsolete Python can launch. BookNLP's production factory acquires this
+progress/cancel lifetime before awaiting installation; injected diagnostic
+factories retain the existing no-argument constructor. MLX's explicit developer
+interpreter override retains separate caller-authorized provenance. Completed
+portable-book playback bypasses these feature factories entirely.
+
+Progress counts actual verified archive bytes and tree file bytes, with actual
+verified entry counts in the tree message. Extraction and executable verification
+report stages with unknown totals; stage completion is not overall readiness.
+Focused source tests exercise real `ditto`, signed arm64 fixture preservation,
+corruption, native target/binding tampering, relocation, paths/links/modes,
+per-child homes, immutable reuse, concurrent publishers, revision
+replacement, cancellation and cleanup. These source checks alone do not establish native
+sandboxed Python launch, real MLX/BookNLP behavior, first-use responsiveness,
+fresh launch-to-emitted-audio timing or human listening; those remain separate
+running-app gates in #137.
+
+The [November 7 R5 native receipt](../test-artifacts/s6-finish-checks-20261107/r5-native-qualification.json)
+records the production resolver at `99fb512`, using signed sandbox test apps.
+Real Fish3 regenerated exactly the changed Character's 0:51 scene while preserving
+three neighboring WAV hashes; reopening the published book made zero new exports
+or synthesis callbacks. All four playback captures matched their queued waves,
+with maximum join gaps at most 0.02ms; UI heartbeat maximum was 123ms. Real
+ModernBookNLP analysis/persistence and both extraction-cancellation probes passed.
+All apps quit normally with no owned processes left. These are bounded fixtures,
+not full-book or human listening acceptance. The missing-middle run reused a raw
+audio cache entry and does not resolve the earlier 1021.68ms cold-uncached gap.
+
+Under the former 2000ms hard limit, fresh saved-book speech failed with captured onset upper bounds
+were 2378.144ms for direct process launch and 2363.608ms through ordinary macOS
+LaunchServices. Both clocks start before opening, without a Play gate, and require
+expected-waveform alignment. This improves the earlier 4.77–4.91s native-position
+failure. The November 10 startup policy now uses a two-second goal, a five-second hard limit for reusable `.radoc` loads and a ten-second hard limit for first loads. These saved-book timing values fit the revised five-second ceiling and miss the goal. Original receipts retain their original verdicts. S6 still needs its other acceptance gates. The prior Save-run 511ms heartbeat, uncached continuity and final user listening remain recorded.
+
+[R25](https://github.com/kellyjanderson/readaloud/issues/110#issuecomment-6791030471)
+subsequently excludes normal app startup from the hard load deadlines. The native
+QA clock records startup completion, target document loading and Play through
+`CLOCK_MONOTONIC_RAW`, shared with capture and the external runner. Normal startup
+may prepare the selected model without synthesizing or processing the target;
+all work triggered by the later target-load request remains timed. The reporters
+retain launch-to-speech and its two-second goal separately. Missing post-startup
+boundaries cannot be reconstructed from historical launch-only receipts.
+
+The [R25 v11 receipts](../test-artifacts/s6-r6-20261111/README.md), source
+`f5f3c8a`, measured first document loading to captured speech at 5351.837 ms
+and reusable loading at 283.542 ms. Ordinary startup was 9953.107 ms and
+288.717 ms respectively. Both load hard limits passed; first-load launch to
+speech still missed the two-second goal. These use fresh private target raw
+stores or model-forbidden complete books, with installed assets and OS caches
+disclosed. All four complete waveform matches passed in both cases.
+The complete initial/change/reuse/uncached-repair sequence also passed all
+four waveform checks but failed its overall native gate on a 263 ms response
+during final Save. That failed control remains recorded. The bounded main-channel
+probe now retains native-entry/return timestamps and active-app state for diagnosis;
+its monotonic 250 ms gate is unchanged. Neither these fixtures nor a passing
+source suite establish arbitrary-book, physical-speaker or human listening acceptance.
+
+The subsequent foreground v12 sequence, native code `f2d96a2`, passed all four
+functional and strict complete-waveform checks, with maximum joins of 0.01 ms.
+Immediate native-main response peaked at 230 ms across 3359 samples; 3267
+observed the application active. UI heartbeat peaked at 9 ms. Ten activities
+started and ended, none remained, and normal Quit left no owned processes.
+This qualifies that bounded foreground run without identifying the cause of
+the earlier 263 ms failure. First-load/reusable timing uses the separate ungated
+v11 receipts; the controlled full-sequence Play gates cannot establish load timing.
+Human listening/usability remains collected for S11 under the release decision.
+
+The build-owned relocated staging tree omits a CPython bytecode cache only when
+its corresponding `.py` source is present. Sourceless modules, source packages,
+native code/signatures and licenses remain. This explicit embed-script option
+reduces duplicate resource bytes before the signed-tree manifest is generated;
+the packaging input is otherwise read-only. The helper validates contained links
+before omission, and uses maintained ZIP compression at level nine.
+
+MLX model startup loads the voice catalog metadata without materializing every
+Fish recording. Existing binding preparation materializes only requested voices
+and reports their bounded preparation count. An unrelated reference download can
+no longer block model startup; selected reference validation and cancellation
+remain in the binding path. This does not itself establish cold-model continuity.

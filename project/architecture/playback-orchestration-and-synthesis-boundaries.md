@@ -23,6 +23,16 @@ The native slot rechecks current effective playback lead before each admitted pl
 
 Kokoro constructs its native player with eager source preparation because the application already bounds the playlist. A pinned-backend native trace exposed duplicate `AVPlayerItem` insertion from lazy queue rebuilding during prefix removal. Eager preparation removes that lazy treadmill path; acceptance still requires the current running-bundle queue and audio evidence recorded in P3. Injected players used by probes must use the same preparation setting.
 
+The vendored just_audio 0.10.5 Darwin adapter preserves pointer-identical buffered
+queue prefixes during sequential append and pruning. It computes the desired
+queue with upstream order and per-source lazy preparation rules, then appends only
+missing items. Loading, seeking, looping, replacement and non-prefix changes retain
+the upstream rebuild. This removes repeated successor removal that coincided with
+short pauses inside current speech. No new scheduling owner is introduced; native
+callbacks, cancellation and disposal remain upstream-owned. See the [patch rationale
+and native regression checks](../../third_party/just_audio/README.local.md); running-app
+acoustic and transport qualification remains recorded in S6 [#137](https://github.com/kellyjanderson/readaloud/issues/137).
+
 Lease cancellation removes queued native admission even when the export lead gate is closed; already active native calls drain before their cancelled terminal. Pause signals admission after generation state settles. Natural document completion defers release while an export lease is active, then releases only if its resource and playback epochs remain current; pause, a replacement document and replay cannot inherit that release debt. The controller normalizes Kokoro intent into the supported 0.7–1.4 range before planning, and direct incompatible prepared plans are rejected. Cache plan identity, export and inference therefore use the same effective rate; independent player speed affects only playable wall-time lead.
 
 When synthesis fails with an unplanned suffix, the engine terminates that session with an error rather than rebuilding only admitted chunks and silently truncating the document. Existing bounded fallback recovery remains available only after the entire suffix has been materialized. Policy constants and transport traces are not perceptual continuity guarantees; measured evidence and limitations are recorded in [P3](https://github.com/kellyjanderson/readaloud/issues/52).
@@ -30,6 +40,35 @@ When synthesis fails with an unplanned suffix, the engine terminates that sessio
 Ordinary no-edit Play rebuilds the saved-word tail: the controller captures the current word offset and calls `engine.speak`, which stops the prior generation. This differs from applying pending choices at the retained chunk-start anchor. Native supplemental evidence retained word 293 while replacing the source/resetting player position. The [baseline source comparison](https://github.com/kellyjanderson/readaloud/issues/53#issuecomment-6396190387) found the same word-tail/stop behavior at `694e1c3`; this is not sample-continuous resume proof or a new native baseline comparison.
 
 The [assignment295 prefix](https://github.com/kellyjanderson/readaloud/issues/53#issuecomment-6395976458) observed unchanged current source/hash after editing, first replacement playback at word 8 before acknowledgment, latest-only initial A/B/C success and pause-retained/stop-cleared pins. Its later listening timeout failed the overall run, with final resource cleanup recorded separately. The [e18c81d supplement](https://github.com/kellyjanderson/readaloud/issues/53#issuecomment-6396165816) passed paused pending Play at anchor 292, injected pre-ack failure retaining effective Heart and pending Bella followed by successful retry, and obsolete startup failure leaving latest C effective. Held-export cancellation drained before replacement playback; final sessions/tensors/sources/pins/tasks were zero. These bounded automated cases do not establish human listening, sample continuity or input during active export; the latter had zero actual UI actions.
+
+## Packet traversal and native pruning
+
+Incremental Drama playback gives each immutable packet a native queue identity
+while retaining its complete scene's source identity. Its 300 ms startup lead is
+separate from the complete-chunk policies above; steady-state admission remains
+time/count bounded. See [runtime messaging](speech-runtime-messaging-boundary.md)
+and [artifact ownership](audio-artifact-identity-and-lifetime.md).
+
+The pinned Darwin player reindexes prefix removal against the actual surviving
+`AVQueuePlayer.currentItem`. Its fallback counts removals against one immutable
+old index when that current item itself was removed. Comparing removals against
+a repeatedly decremented index skipped a remaining item when several predecessors
+were pruned together. The native recording-queue regression covers batch removal,
+advancement during mutation, removed-current, shuffle, seek, load and loop paths.
+Append and removal explicitly request preservation of surviving playback. Their
+fast path derives both its head and future-prefix comparison from one native
+queue snapshot, then appends only the missing suffix. Natural advancement can
+remove a prefix of that snapshot without forcing a rebuild. Separate live reads
+previously raced and fell through to destructive queue reconstruction. Explicit
+seek, load, loop and incompatible reorder paths retain their existing behavior.
+The application retains one completed predecessor until a following source
+completes: the backend can report the next logical index before the native queue
+head has advanced. Immediate removal could therefore remove the native head and
+interrupt its transition. This one-source ownership fence is separate from the
+future-audio admission cap and playable lead. Retained pins release only after
+native removal acknowledgment; stop/reset drains the remaining queue ownership.
+This test does not prove actual emitted endings or continuity; current signed-app
+captures remain required. iOS shares the source but is not qualified here.
 
 ## Source and tests
 

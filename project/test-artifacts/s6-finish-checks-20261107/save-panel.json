@@ -1,0 +1,37 @@
+{
+  "schema": "readaloud-s6-native-save-evidence-v1",
+  "source": "Native staging 15f36f2 with root controller/export integration later committed in 587de1a; built as offline native probe, not a release candidate.",
+  "binarySha256": "4d755d7acbe7408e6f513aae7d9d20a9bfac03470901a8d605f63156893a6d26",
+  "dartFrameworkSha256": "6a99b380ae647ff85866afeb0d2538b10466e425c59f4a6c0134e4feb06e18e9",
+  "ui": {
+    "route": "File > Save Audio Book > Documents > File > Open actual saved file",
+    "status": "Saved audio book to selected Documents destination",
+    "reopenedSourceWords": 42,
+    "passed": true
+  },
+  "file": {
+    "name": "Read Aloud S6 Verified Save 20261107.radoc",
+    "sha256": "c14f7adde57961774e5906e521105d8aab746cab991cbb3b9e790c79a6f5c7ab",
+    "memberCount": 2,
+    "memberHashFailures": [],
+    "sceneCount": 1
+  },
+  "native": {
+    "passed": false,
+    "observedSourceEndWord": 42,
+    "expectedSourceEndWord": 42,
+    "forbiddenModelCallCount": 0,
+    "pauseMs": 3,
+    "cancelledPlayStayedStopped": true,
+    "restartAfterCancellation": true,
+    "maxUiHeartbeatDelayMs": 511,
+    "error": "Bad state: UI heartbeat delayed 511 ms",
+    "resourceShutdownComplete": true
+  },
+  "cleanup": {
+    "normalQuitRequested": true,
+    "remainingAppPids": [],
+    "elapsedSeconds": 72.144782
+  },
+  "limits": "Interactive native harness heartbeat failed at 511 ms; capture gate excludes launch acceptance. This verifies external publication/reopen, not overall latency or acoustic acceptance."
+}

@@ -13,7 +13,7 @@ Drama bf16 has running-app playback evidence at native 44.1 kHz, including
 short fiction turns and explicit Character choices. Full qualification remains
 owned by [the Drama issue](https://github.com/kellyjanderson/readaloud/issues/111).
 Builds, source tests and playback position do not establish listening quality or
-the two-second launch-to-speech requirement.
+the startup goal and hard limits in the [product definition](../project/product-definition.md).
 
 ## Model downloads and cache
 
@@ -44,9 +44,22 @@ directory or the older sandbox container directory are reused. Checkpoints
 are not committed to Git or bundled into the application. The JSON-lines
 Python worker is bundled as a Flutter asset. Install the build's arm64 Python
 runtime and MLX packages once with `sh tools/install_mlx_tts_runtime.sh`.
-The Xcode embed phase copies this executable runtime into the app bundle and
-signs the interpreter for sandbox inheritance. Model weights remain in the
-cache. The sandbox cannot execute the external build-time interpreter directly.
+The Xcode embed phase assembles and signs the standalone interpreter/packages
+for sandbox inheritance outside the bundle, then packages its signed tree as
+`Resources/python-runtimes/mlx.zip` with an adjacent schema-2 content manifest.
+All Mach-O code and Metal libraries remain signed/bound in the app under
+`Resources/python-runtimes/mlx-native/`; the ZIP contains only Python/data.
+It does not archive the build venv. First MLX use verifies the bundled targets
+and extracts data into an immutable Application Support view under
+`python-runtimes/v2/mlx/<signed-tree-digest>-<bundle-location-digest>/`, containing
+only explicit verified links to the app's native code. The bundled interpreter
+receives this view as its own `PYTHONHOME`. Moving the app creates a new view;
+changed/missing bundle code fails visibly. No native code runs from extraction.
+Archive/tree verification reports measured progress; extraction reports an
+explicit stage. Closing the resource owner cancels and drains installation.
+Model weights remain in the cache. The sandbox cannot execute the external
+build-time interpreter directly. Completed portable-book playback does not
+extract or initialize this runtime.
 
 For development, `READALOUD_TTS_ENGINE` can still override the saved preference
 for the process that launches the macOS app:
@@ -57,10 +70,12 @@ READALOUD_TTS_ENGINE=voxtral_4b tools/flutter run -d macos
 READALOUD_TTS_ENGINE=moss_tts_8b tools/flutter run -d macos
 ```
 
-The default interpreter is installed at
-`<app-support>/read_aloud/mlx-tts/runtime/venv/bin/python`. It must be arm64
+The build input interpreter is installed at
+`<app-support>/read_aloud/mlx-tts/runtime/venv/bin/python`. The packaged app uses
+its verified extracted standalone interpreter. It must be arm64
 with `mlx==0.32.4` and `mlx-audio==0.6.3`. `READALOUD_MLX_PYTHON` can override
-that path when the override is accessible to the sandbox. An alternate local
+the packaged interpreter explicitly when the override is accessible to the sandbox.
+This override has developer provenance and does not qualify a bundled runtime. An alternate local
 checkpoint directory can be supplied with `READALOUD_MLX_TTS_MODEL_PATH`; it
 must be readable from the app sandbox. If no recognized `READALOUD_TTS_ENGINE`
 is present, the saved preference is used (Kokoro on a fresh installation).
@@ -238,7 +253,7 @@ shortcut requires twenty playable seconds, or a ready following chunk;
 Qwen and MOSS start with their first validated chunk. At the five-second MLX
 warmup deadline, already validated audio can start rather than failing solely
 because the target lead was not reached. Cancellation and stale-result checks
-continue to apply. This does not establish the two-second startup requirement.
+continue to apply. Startup acceptance uses the goal and hard limits in the [product definition](../project/product-definition.md).
 
 For a sustained native check, set `READALOUD_SMOKE_DOCUMENT_PATH` to a local text
 file, `READALOUD_SMOKE_PLAY_SECONDS=45`, and
@@ -347,9 +362,17 @@ against the pinned revision before enabling native scenes and delivery controls,
 including when a local model folder is supplied. First verification shows real
 byte progress; unchanged file state reuses its local verification receipt. An
 unverified checkpoint keeps plain delivery and separate turns while preserving
-saved directions. This verification adds first-run preparation time; the standing
-two-second opening-to-speech requirement remains unmet.
-Word highlighting remains an estimate over scene duration. Perceptual continuity across scene boundaries,
+saved directions. Verification performed during normal app startup is reported with that startup. Verification triggered by a document load after startup belongs inside its ten-second first-load hard limit. The launch-to-speech goal remains two seconds. Qualification requires separate startup/load boundaries and emitted-audio evidence.
+Drama can begin playing validated audio packets while the rest of a native scene
+is still rendering. Saving reusable audio still waits for the complete scene;
+an interrupted prefix is never saved as a completed passage. Until the final
+duration is known, highlighting stays at the scene's source anchor. Completed
+scenes retain approximate word highlighting rather than word-level alignment.
+The two-second startup goal, five-second reusable-book limit and ten-second
+first-load limit exclude normal app startup and include preparation needed by
+the measured document load after startup. These are requirements;
+the current S6 qualification record in issue #137 tracks remaining failures.
+Perceptual continuity across scene boundaries,
 speech-rate handling and broader #111 acceptance remain open.
 
 Sources: [Drama bf16 model card](https://huggingface.co/mlx-community/fish-audio-drama-3-bf16),

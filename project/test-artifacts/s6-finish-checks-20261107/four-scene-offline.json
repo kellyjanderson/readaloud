@@ -1,0 +1,260 @@
+{
+  "schema": "readaloud-s6-offline-evidence-v1",
+  "source": "aec2101 plus lockfile committed2da97ea",
+  "fixture": {
+    "sourcePath": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s6-real-regeneration-v6-20261107/s6-regeneration-sM6Kdn/changed.radoc",
+    "copiedPath": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s6-final-offline-20261107/copied-input.radoc",
+    "bytes": 14062334,
+    "sha256": "62cde18b2dfe414abc10635c21245f4339ea7c639b6ee4121debc346b5d64cd3",
+    "copiedSha256": "62cde18b2dfe414abc10635c21245f4339ea7c639b6ee4121debc346b5d64cd3",
+    "executable": "/Users/k/.codex/worktrees/radoc-dynamic-audio/readaloud/tmp/ReadAloudS6RegenerationV6.app/Contents/MacOS/read_aloud",
+    "executableSha256": "e631a6c94c063a23355f37fcd08585c33785e3f569ddd22cd3ceaac69c6ec1bb"
+  },
+  "native": {
+    "schema": "readaloud-radoc-native-smoke-v1",
+    "passed": true,
+    "book": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s6-final-offline-20261107/copied-input.radoc",
+    "dartEntryUnixMicros": 1794074240678792,
+    "emittedAudioCapture": "external evidence required",
+    "humanListening": "external evidence required",
+    "processLaunchUnixMicros": 1794074240338327,
+    "importRequestedMs": 2,
+    "importCompleteMs": 45,
+    "playRequestedMs": 45,
+    "controlledCaptureGate": false,
+    "firstNativePositionUnixMicros": 1794074240852213,
+    "dartEntryToNativePositionMs": 173.421,
+    "launchToNativePositionMs": 513.886,
+    "nativePositionWithinTwoSeconds": true,
+    "sourceEndMs": 79291,
+    "spokenChunks": [
+      {
+        "chunkId": "0:d52db1bb14d70b854f4b2b2f43785d9eb94ffd88e37c53f83587448bace4e2b3",
+        "startWord": 0,
+        "endWord": 51,
+        "completed": true,
+        "durationMs": 20851,
+        "sceneTurns": [
+          {
+            "voice": "library_fishhannah",
+            "text": "[whispers] \"Keep the little lantern burning until morning,\"",
+            "segmentIds": [
+              "r0_s_0"
+            ],
+            "startWord": 0,
+            "endWord": 7,
+            "bindingFingerprint": "4a5360fddce5f84c279a4c19de3a4b612b43b997e3a992971b3b3f51122e1718",
+            "bindingRevision": 0,
+            "castId": "cast_character_anna",
+            "routeId": "route_r0_s_0",
+            "dialogueSpanId": "dlg_r0_s_0",
+            "directions": [
+              {
+                "annotationId": "s6-explicit-whisper",
+                "segmentId": "r0_s_0",
+                "startWord": 0,
+                "endWord": 7,
+                "source": "userOverride",
+                "confidence": 1.0,
+                "delivery": "whispered",
+                "control": "[whispers]"
+              }
+            ]
+          },
+          {
+            "voice": "library_fishadrian",
+            "text": "Anna whispered. The old stone bridge stood above the river while the evening light faded slowly. Below the narrow arch the water carried fallen leaves towards the distant sea. A small brass bell hung beside the gate and moved gently in the cool wind.",
+            "segmentIds": [
+              "r0_s_1",
+              "r0_s_2",
+              "r0_s_3",
+              "r0_s_4"
+            ],
+            "startWord": 7,
+            "endWord": 51,
+            "bindingFingerprint": "451da1058114aed7e8610604a2ed448bdeac07293478c20b4c828d24a3d08663",
+            "bindingRevision": 0,
+            "castId": "cast_narrator",
+            "routeId": "route_r0_s_1",
+            "dialogueSpanId": null,
+            "directions": []
+          }
+        ]
+      },
+      {
+        "chunkId": "1:13ac16b8baffac5fac861710296cb685320621dcd5738b31e9c7d59345840478",
+        "startWord": 51,
+        "endWord": 94,
+        "completed": true,
+        "durationMs": 16764,
+        "sceneTurns": [
+          {
+            "voice": "library_fishadrian",
+            "text": "The path beyond the garden curved between tall trees and disappeared behind a hill. Across the valley the empty station waited beneath a pale and cloudless autumn sky. Its wooden benches held a thin layer of dust from the road outside the fence.",
+            "segmentIds": [
+              "r0_s_5",
+              "r0_s_6",
+              "r0_s_7"
+            ],
+            "startWord": 51,
+            "endWord": 94,
+            "bindingFingerprint": "451da1058114aed7e8610604a2ed448bdeac07293478c20b4c828d24a3d08663",
+            "bindingRevision": 3,
+            "castId": "cast_narrator",
+            "routeId": "route_r0_s_1",
+            "dialogueSpanId": null,
+            "directions": []
+          }
+        ]
+      },
+      {
+        "chunkId": "2:cd7a33e2e30e6bc88f19b85fa25b8a2e4ff3f5fad2f8045752432f1a87be4d32",
+        "startWord": 94,
+        "endWord": 137,
+        "completed": true,
+        "durationMs": 18243,
+        "sceneTurns": [
+          {
+            "voice": "library_fishadrian",
+            "text": "Beside the closed ticket window a clock continued counting every quiet minute of the night. The railway tracks shone softly where the moonlight reached them through the branches overhead. Nothing moved on the platform except a loose paper turning slowly near the doorway.",
+            "segmentIds": [
+              "r0_s_8",
+              "r0_s_9",
+              "r0_s_10"
+            ],
+            "startWord": 94,
+            "endWord": 137,
+            "bindingFingerprint": "451da1058114aed7e8610604a2ed448bdeac07293478c20b4c828d24a3d08663",
+            "bindingRevision": 3,
+            "castId": "cast_narrator",
+            "routeId": "route_r0_s_1",
+            "dialogueSpanId": null,
+            "directions": []
+          }
+        ]
+      },
+      {
+        "chunkId": "3:450a17cadc93d90711d9edf5840babdca59ae49a6c53c714aacec0f2797a7ae1",
+        "startWord": 137,
+        "endWord": 197,
+        "completed": true,
+        "durationMs": 23102,
+        "sceneTurns": [
+          {
+            "voice": "library_fishadrian",
+            "text": "At dawn the eastern clouds became pink and the fields emerged from the silver mist. The first light touched the roofs and windows of the houses along the winding road.",
+            "segmentIds": [
+              "r0_s_11",
+              "r0_s_12"
+            ],
+            "startWord": 137,
+            "endWord": 167,
+            "bindingFingerprint": "451da1058114aed7e8610604a2ed448bdeac07293478c20b4c828d24a3d08663",
+            "bindingRevision": 3,
+            "castId": "cast_narrator",
+            "routeId": "route_r0_s_1",
+            "dialogueSpanId": null,
+            "directions": []
+          },
+          {
+            "voice": "library_fishadrian",
+            "text": "Smoke rose above the village as the baker opened the door beside the market square. Far beyond the last house the river continued quietly towards the open and waiting sea.",
+            "segmentIds": [
+              "r0_s_13",
+              "r0_s_14"
+            ],
+            "startWord": 167,
+            "endWord": 197,
+            "bindingFingerprint": "451da1058114aed7e8610604a2ed448bdeac07293478c20b4c828d24a3d08663",
+            "bindingRevision": 3,
+            "castId": "cast_narrator",
+            "routeId": "route_r0_s_1",
+            "dialogueSpanId": null,
+            "directions": []
+          }
+        ]
+      }
+    ],
+    "expectedSourceEndWord": 197,
+    "observedSourceEndWord": 197,
+    "queuedAudio": [
+      {
+        "path": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/tmp/radoc-audio-92wfqt/369d01bccb1afdcc9de709638dd955faf4847c109fa91919de23d0fcaff629e6.wav",
+        "sha256": "369d01bccb1afdcc9de709638dd955faf4847c109fa91919de23d0fcaff629e6",
+        "bytes": 1839148,
+        "sampleRate": 44100,
+        "channels": 1,
+        "bitsPerSample": 16,
+        "pcmBytes": 1839104,
+        "peakPcm16": 18544
+      },
+      {
+        "path": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/tmp/radoc-audio-92wfqt/0e91df3313cd0b3d55a97c2cbf7b4cd7944b2e3c817f565ca1f28f473d4cd8c8.wav",
+        "sha256": "0e91df3313cd0b3d55a97c2cbf7b4cd7944b2e3c817f565ca1f28f473d4cd8c8",
+        "bytes": 1478700,
+        "sampleRate": 44100,
+        "channels": 1,
+        "bitsPerSample": 16,
+        "pcmBytes": 1478656,
+        "peakPcm16": 21465
+      },
+      {
+        "path": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/tmp/radoc-audio-92wfqt/c952e0256de525a7f15ea49aa7511ec3f9ff98e20276437ee05d8234d19f3700.wav",
+        "sha256": "c952e0256de525a7f15ea49aa7511ec3f9ff98e20276437ee05d8234d19f3700",
+        "bytes": 1609106,
+        "sampleRate": 44100,
+        "channels": 1,
+        "bitsPerSample": 16,
+        "pcmBytes": 1609062,
+        "peakPcm16": 22548
+      },
+      {
+        "path": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/tmp/radoc-audio-92wfqt/e35fe34fb484bbebde7a0a3a1474e22e8db56c6ff6ff1ebae70e92becf1fd34d.wav",
+        "sha256": "e35fe34fb484bbebde7a0a3a1474e22e8db56c6ff6ff1ebae70e92becf1fd34d",
+        "bytes": 2037686,
+        "sampleRate": 44100,
+        "channels": 1,
+        "bitsPerSample": 16,
+        "pcmBytes": 2037642,
+        "peakPcm16": 19357
+      }
+    ],
+    "peakPcm16": 22548,
+    "reopen": {
+      "exportPath": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s6-final-offline-20261107/receipt.json.export.radoc",
+      "copiedPath": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s6-final-offline-20261107/receipt.json.reopened.radoc",
+      "positionMs": 501,
+      "hasPublishedAudio": true
+    },
+    "pauseMs": 4,
+    "cancelledPlayStayedStopped": true,
+    "restartAfterCancellation": true,
+    "resourceShutdownComplete": true,
+    "forbiddenModelCalls": {},
+    "forbiddenModelCallCount": 0,
+    "maxNativePositionMs": 23102,
+    "maxUiHeartbeatDelayMs": 5,
+    "uiHeartbeatCount": 1635,
+    "elapsedMs": 81798,
+    "normalQuit": "runner must request and verify"
+  },
+  "cleanup": {
+    "passed": true,
+    "deadlineSeconds": 120,
+    "normalQuit": true,
+    "forcedCleanup": false,
+    "launchUtc": "2026-11-07T17:57:20.338327Z",
+    "pid": 14633,
+    "nativeReceipt": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s6-final-offline-20261107/receipt.json",
+    "nativePassed": true,
+    "launchToNativePositionMs": 513.886,
+    "nativePositionWithinTwoSeconds": true,
+    "ownedPidsAfterNormalQuit": [],
+    "remainingOwnedPids": [],
+    "exitStatus": 0,
+    "appExitVerified": true,
+    "elapsedSeconds": 94.84357299981639,
+    "errors": []
+  },
+  "limits": "Warm relaunch; native position is not emitted onset. Zero model calls plus transport proof, not first-launch qualification."
+}

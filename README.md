@@ -9,7 +9,7 @@ see [MLX TTS engine setup](docs/mlx-tts-engines.md).
 
 These are product requirements, not claims that the current build meets them:
 
-- **Sound within two seconds of opening the app:** when Play is requested promptly with a document available, smooth, uninterrupted speech must begin within two seconds, regardless of document size. Measure from opening, not from the end of preparation.
+- **Startup and loading:** with a document available and Play requested promptly, aim for smooth speech within two seconds of opening the app. App startup is reported separately and excluded from the brick-wall times: five seconds for a reusable `.radoc` load and ten seconds for a first load requiring preparation or synthesis, regardless of document size. Measure those hard limits from document loading after normal app startup; include all preparation and synthesis needed for that load.
 - **Always responsive:** controls and the reading surface remain responsive during every background operation. Pending playback remains cancellable; obsolete work must never start unexpected speech.
 - **Everything about reading is dynamic:** acquisition, parsing, normalization, display/position mapping, analysis, pronunciation and delivery planning, voice binding, synthesis, buffering and persistence advance incrementally as needed. Whole-document completion must not gate first speech. Character discovery is one example of this rule, not its scope.
 - **Truthful progress:** operations exceeding one or two seconds show dynamic progress based on actual completed work, with honest totals, stages and waiting/failure states. No fabricated percentages or 100% while the operation still blocks readiness.

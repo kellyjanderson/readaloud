@@ -1,0 +1,9 @@
+{
+  "sourcePath": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s6-r25-first-load-v11-20261111/s6-first-load-aGBAda/complete.radoc",
+  "copiedPath": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s6-r25-reusable-v11-20261111/copied-input.radoc",
+  "startupPath": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s6-r25-reusable-v11-20261111/startup-input.radoc",
+  "sha256": "9bdb4e906138487d37197bbaa966003cc9fbfc99fedfb7298dd63bf02d409c76",
+  "copiedSha256": "9bdb4e906138487d37197bbaa966003cc9fbfc99fedfb7298dd63bf02d409c76",
+  "executable": "/Users/k/.codex/worktrees/radoc-dynamic-audio/readaloud/tmp/ReadAloudS6ColdRawSeparate.app/Contents/MacOS/read_aloud",
+  "executableSha256": "f65c356721093be863fcabed6215667b373d002877789c263897b2001e70bb27"
+}

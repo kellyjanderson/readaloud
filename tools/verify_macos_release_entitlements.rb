@@ -12,7 +12,7 @@ abort "Cannot read release entitlements: #{error}" unless status.success? && xml
 json, error, status = Open3.capture3('plutil', '-convert', 'json', '-o', '-', '-', stdin_data: xml)
 abort "Cannot parse entitlements: #{error}" unless status.success?
 entitlements = JSON.parse(json)
-%w[com.apple.security.app-sandbox com.apple.security.files.user-selected.read-only com.apple.security.network.client].each do |key|
+%w[com.apple.security.app-sandbox com.apple.security.files.user-selected.read-write com.apple.security.network.client].each do |key|
   abort "Release is missing required entitlement: #{key}" unless entitlements[key] == true
 end
 helper = File.join(app, 'Contents/Resources/mlx-python/bin/python3.12')
@@ -26,4 +26,4 @@ if File.exist?(helper)
     abort "MLX helper is missing #{key}" unless helper_entitlements[key] == true
   end
 end
-puts 'PASS: valid signature, sandbox, file chooser read access and network client entitlements'
+puts 'PASS: valid signature, sandbox, file chooser read/write access and network client entitlements'

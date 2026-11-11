@@ -1,0 +1,15 @@
+{
+  "schema_version": 1,
+  "package_revision": "S6 R2",
+  "publication": "https://github.com/kellyjanderson/readaloud/issues/137#issuecomment-6705551521",
+  "implementation_baseline": "8dcae50",
+  "documents": [
+    {
+      "path": "publishing-access.md",
+      "revision": "S6 R2",
+      "source": "https://github.com/kellyjanderson/readaloud/blob/a3e24eaa90b19405d154ef65d1f48382ca6e016d/project/interim/s6-r2/publishing-access.md",
+      "source_section_sha256": "b2282db61ea55e510f75fb88e352bf7e75213d8cd4364f5fc161030f81c8b3fc",
+      "sha256": "b2282db61ea55e510f75fb88e352bf7e75213d8cd4364f5fc161030f81c8b3fc"
+    }
+  ]
+}

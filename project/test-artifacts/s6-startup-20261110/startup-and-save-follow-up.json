@@ -1,0 +1,105 @@
+{
+  "schema": "readaloud-s6-startup-and-save-follow-up-v1",
+  "startupSource": "388565a933962fb6a9b90d4e724d9ab55fc4e001",
+  "startup": [
+    {
+      "id": "profiled-fresh-full-bundle",
+      "native": {
+        "passed": true,
+        "launchToNativePositionMs": 2397.411,
+        "dartEntryToNativePositionMs": 306.787,
+        "maxUiHeartbeatDelayMs": 119
+      },
+      "emitted": {
+        "passed": false,
+        "launchToSpeechReceiptUpperBoundMs": 2942.847333,
+        "firstSignalExpectedSpeechAlignmentMs": 0.07812500000003997,
+        "errors": [
+          "Opening to captured speech exceeds two seconds"
+        ]
+      },
+      "cleanup": {
+        "normalQuit": true,
+        "appExitVerified": true,
+        "remainingOwnedPids": [],
+        "captureExitStatus": 0
+      },
+      "comparison": {
+        "passed": true,
+        "maxJoinGapMs": 0
+      }
+    },
+    {
+      "id": "fresh-ditto-compression-control",
+      "native": {
+        "passed": false,
+        "launchToNativePositionMs": 2148.466,
+        "dartEntryToNativePositionMs": 291.588,
+        "maxUiHeartbeatDelayMs": 461,
+        "error": "Bad state: UI heartbeat delayed 461 ms"
+      },
+      "emitted": {
+        "passed": false,
+        "launchToSpeechReceiptUpperBoundMs": 3392.278916,
+        "firstSignalExpectedSpeechAlignmentMs": 0.07812500000015099,
+        "errors": [
+          "Native functional/cleanup check failed",
+          "Opening to captured speech exceeds two seconds"
+        ]
+      },
+      "cleanup": {
+        "normalQuit": true,
+        "appExitVerified": true,
+        "remainingOwnedPids": [],
+        "captureExitStatus": 0
+      },
+      "comparison": {
+        "passed": true,
+        "maxJoinGapMs": 0
+      }
+    }
+  ],
+  "loaderDiagnostic": {
+    "mainThreadSamples": 1709,
+    "dyldStartSamples": 1244,
+    "processStartLocal": "2026-11-10T17:31:56.681-08:00",
+    "gatekeeperScanResultLocal": "2026-11-10T17:31:58.118-08:00",
+    "trustedCodeSigningIdentities": 0,
+    "limits": "Sampling can perturb dyld. The timestamp identifies the ad hoc admission path observed here. A trusted signed candidate was unavailable. The filesystem copy had the same 987 MiB allocated size and does not prove a compressed bundle effect."
+  },
+  "interactiveSave": {
+    "appSource": "c995f7cef23e5b69d9f67443dbfb13c683e5fde8",
+    "route": "File > Save Audio Book > Documents",
+    "executableSha256": "be591a4c2e66e00e29d0e0dbebb2d5c379fa4c65a0ddf68afaa6e4395d9efcba",
+    "dartFrameworkSha256": "3492c5ebdf6d5722bad5ef3b0453b55e6caf107dda3a55740830ea06d0b84818",
+    "inputSha256": "c14f7adde57961774e5906e521105d8aab746cab991cbb3b9e790c79a6f5c7ab",
+    "savedSha256": "053e7d6de7fea2879efe20356b221a60ecd8695f1b709bf518a48db15c99b6e3",
+    "memberHashesVerified": true,
+    "sceneWavByteIdentical": true,
+    "native": {
+      "passed": false,
+      "bookSaves": [
+        {
+          "path": "/Users/k/Documents/Read Aloud S6 Save Probe 20261110 1742.radoc",
+          "elapsedMs": 66,
+          "maxUiHeartbeatDelayMs": 0
+        }
+      ],
+      "maxUiHeartbeatDelayMs": 602,
+      "resourceShutdownComplete": true,
+      "error": "Bad state: UI heartbeat delayed 602 ms"
+    },
+    "cleanup": {
+      "normalQuit": true,
+      "remainingOwnedPids": []
+    },
+    "firstAttempt": {
+      "outcome": "Save button stayed disabled and no export ran",
+      "cleanup": {
+        "normalQuit": true,
+        "remainingOwnedPids": []
+      }
+    },
+    "limits": "One short saved fixture. The scoped heartbeat starts after the native chooser returns. The overall probe still failed its responsiveness criterion. The scripted Play gate excludes this run from startup acceptance."
+  }
+}
