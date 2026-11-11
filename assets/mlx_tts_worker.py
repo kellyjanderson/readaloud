@@ -53,6 +53,18 @@ _protocol_stdout = sys.stdout
 _active_request_id = ""
 _output_lock = threading.Lock()
 
+# Acoustic scene qualification is an implementation receipt, not a capability
+# that a remotely refreshed integrity manifest may grant to different weights.
+_QUALIFIED_SCENE_IDENTITIES = frozenset({
+    ('fish_drama3', 'mlx-community/fish-audio-drama-3-bf16',
+     '8c5496f9af370bb9342ab98130b27b5389d1b1cb'),
+})
+
+
+def _has_scene_qualification(model_id: str, bits: int) -> bool:
+    spec = DRAMA_MODELS.get(model_id, {})
+    return bits == 0 and (model_id, spec.get('repo'), spec.get('revision')) in _QUALIFIED_SCENE_IDENTITIES
+
 
 def _reply(request_id: str, **payload: Any) -> None:
     # Download progress and the memory sampler can publish from other threads.
@@ -643,8 +655,9 @@ def _load(model_id: str, model_path: str, private_cache_path: str, quantization_
             verification_started = time.monotonic()
             _progress('Checking speech model qualification…', stage='modelQualification')
             manifest = _model_manifest(model_id)
-            _model_native_scenes = _verify_scene_model(directory, manifest,
-                Path(private_cache_path).parent / 'model-qualification')
+            _model_native_scenes = (_has_scene_qualification(model_id, quantization_bits)
+                and _verify_scene_model(directory, manifest,
+                    Path(private_cache_path).parent / 'model-qualification'))
             _timing('modelVerification', verification_started)
             if not _model_native_scenes:
                 _progress('Unverified model revision: native scenes and delivery cues are disabled', stage='modelContext')

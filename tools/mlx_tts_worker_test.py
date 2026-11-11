@@ -25,6 +25,15 @@ spec.loader.exec_module(worker)
 
 
 class GeneratorAdapterTest(unittest.TestCase):
+    def test_catalog_refresh_cannot_grant_native_scene_qualification(self):
+        self.assertTrue(worker._has_scene_qualification('fish_drama3', 0))
+        changed = dict(worker.DRAMA_MODELS['fish_drama3'], revision='f' * 40)
+        with patch.dict(worker.DRAMA_MODELS, {'fish_drama3': changed}):
+            self.assertFalse(worker._has_scene_qualification('fish_drama3', 0))
+        self.assertFalse(worker._has_scene_qualification('fish_drama3_8bit', 0))
+        self.assertFalse(worker._has_scene_qualification('fish_drama3_4bit', 0))
+        self.assertFalse(worker._has_scene_qualification('fish_drama3', 4))
+
     def test_owned_stream_joins_real_bounded_mlx_graph_without_model_weights(self):
         worker._unload()
         stream = mx.new_stream(mx.gpu)
