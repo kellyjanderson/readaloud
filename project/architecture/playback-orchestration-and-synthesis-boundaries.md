@@ -61,6 +61,12 @@ queue snapshot, then appends only the missing suffix. Natural advancement can
 remove a prefix of that snapshot without forcing a rebuild. Separate live reads
 previously raced and fell through to destructive queue reconstruction. Explicit
 seek, load, loop and incompatible reorder paths retain their existing behavior.
+The application retains one completed predecessor until a following source
+completes: the backend can report the next logical index before the native queue
+head has advanced. Immediate removal could therefore remove the native head and
+interrupt its transition. This one-source ownership fence is separate from the
+future-audio admission cap and playable lead. Retained pins release only after
+native removal acknowledgment; stop/reset drains the remaining queue ownership.
 This test does not prove actual emitted endings or continuity; current signed-app
 captures remain required. iOS shares the source but is not qualified here.
 
