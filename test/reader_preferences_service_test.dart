@@ -14,6 +14,30 @@ void main() {
   });
 
   group('ReaderPreferencesService', () {
+    test('narrator engine scopes preserve unresolved and legacy IDs', () async {
+      final service = ReaderPreferencesService();
+      await service.save(
+        ttsEngineId: 'kokoro',
+        selectedVoiceId: 'legacy-unavailable',
+        narratorVoiceIds: {
+          'kokoro': 'legacy-unavailable',
+          'fish_drama3': 'fish-reference',
+        },
+        fontFamily: 'serif',
+        fontScale: 1,
+        appearanceMode: ReaderAppearanceMode.system,
+        multiVoiceEnabled: true,
+        voiceSpeeds: {},
+        storedDocumentCastVoiceAssignments: {},
+      );
+      final restored = await service.load();
+      expect(restored.selectedVoiceId, 'legacy-unavailable');
+      expect(restored.narratorVoiceIds, {
+        'kokoro': 'legacy-unavailable',
+        'fish_drama3': 'fish-reference',
+      });
+    });
+
     test(
       'VS17 migration writes one owner; Reset and aliases survive a preference reload',
       () async {

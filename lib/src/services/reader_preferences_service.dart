@@ -23,6 +23,7 @@ class ReaderPreferences {
     this.characterSnapshot,
     this.resumeState,
     this.selectedVoiceId,
+    this.narratorVoiceIds = const {},
     this.lastOpenedDocumentPath,
     this.lastOpenedDocumentAccessToken,
     this.lastOpenedDirectoryPath,
@@ -41,6 +42,7 @@ class ReaderPreferences {
   final ReaderAppearanceMode appearanceMode;
   final bool multiVoiceEnabled;
   final String? selectedVoiceId;
+  final Map<String, String> narratorVoiceIds;
   final Map<String, double> voiceSpeeds;
   final Map<String, Map<String, String>> storedDocumentCastVoiceAssignments;
 
@@ -99,6 +101,7 @@ class ReaderPreferencesService {
     }
   }
 
+  static const _narratorVoiceIdsKey = 'reader.narratorVoiceIds.v1';
   static const _voxtralBitsKey = 'reader.voxtralQuantizationBits';
   static const String _selectedVoiceIdKey = 'reader.selectedVoiceId';
   static const String _ttsEngineIdKey = 'reader.ttsEngineId';
@@ -134,6 +137,9 @@ class ReaderPreferencesService {
           preferences.getString(_ttsEngineIdKey) ??
           ReaderPreferences.defaultTtsEngineId,
       selectedVoiceId: preferences.getString(_selectedVoiceIdKey),
+      narratorVoiceIds: _decodeNarratorVoiceIds(
+        preferences.getString(_narratorVoiceIdsKey),
+      ),
       voiceSpeeds: _decodeVoiceSpeeds(preferences.getString(_voiceSpeedsKey)),
       fontFamily:
           preferences.getString(_fontFamilyKey) ??
@@ -178,6 +184,7 @@ class ReaderPreferencesService {
     CharacterStoreSnapshot? characterSnapshot,
     ReaderResumeState? resumeState,
     String? selectedVoiceId,
+    Map<String, String> narratorVoiceIds = const {},
     String? lastOpenedDocumentPath,
     String? lastOpenedDocumentAccessToken,
     String? lastOpenedDirectoryPath,
@@ -191,6 +198,10 @@ class ReaderPreferencesService {
     final preferences = await SharedPreferences.getInstance();
 
     await preferences.setInt(_voxtralBitsKey, voxtralQuantizationBits);
+    await preferences.setString(
+      _narratorVoiceIdsKey,
+      jsonEncode(narratorVoiceIds),
+    );
 
     if (selectedVoiceId == null || selectedVoiceId.isEmpty) {
       await preferences.remove(_selectedVoiceIdKey);
@@ -261,6 +272,22 @@ class ReaderPreferencesService {
         _lastOpenedDirectoryAccessTokenKey,
         lastOpenedDirectoryAccessToken,
       );
+    }
+  }
+
+  Map<String, String> _decodeNarratorVoiceIds(String? raw) {
+    try {
+      final value = jsonDecode(raw ?? '{}');
+      if (value is! Map<String, dynamic>) return {};
+      return {
+        for (final entry in value.entries)
+          if (entry.key.isNotEmpty &&
+              entry.value is String &&
+              (entry.value as String).isNotEmpty)
+            entry.key: entry.value as String,
+      };
+    } catch (_) {
+      return {};
     }
   }
 

@@ -1,3 +1,4 @@
+import 'package:read_aloud/src/models/engine_session.dart';
 import 'dart:async';
 import 'dart:convert';
 import 'dart:typed_data';
@@ -78,10 +79,21 @@ void main() {
       final document = controller.document;
       old.holdNext = true;
       final stale = old._onStatus;
+      final staleError = old._onError;
+      final staleActivity = old._onActivity;
       final first = controller.setTtsEngineId('fish_drama3');
       await Future<void>.delayed(Duration.zero);
       final second = controller.setTtsEngineId('fish_drama3_4bit');
       await Future<void>.delayed(Duration.zero);
+      final session = controller.engineSession;
+      stale?.call('stale failure during drain');
+      staleError?.call('stale error during drain');
+      staleActivity?.call(
+        const TtsPlaybackActivity(phase: TtsPlaybackPhase.playing),
+      );
+      expect(controller.engineSession, same(session));
+      expect(controller.isPlaying, isFalse);
+      expect(controller.statusMessage, isNot('stale failure during drain'));
       old.release.complete();
       await Future.wait([first, second]);
       stale?.call('stale failure');
@@ -90,6 +102,229 @@ void main() {
       expect(controller.ttsEngineRestartRequired, isFalse);
       expect(controller.document, same(document));
       expect(replacements, ['fish_drama3_4bit']);
+    },
+  );
+
+  for (final returnsToA in [false, true]) {
+    for (final staleFailure in [false, true]) {
+      test(
+        'loading latest wins ${returnsToA ? 'A-B-A' : 'A-B-C'} stale failure=$staleFailure',
+        () async {
+          final old = _FakeTtsEngine(voices: _multiVoiceTestVoices);
+          final held = _HeldSessionEngine()..fail = staleFailure;
+          final last = _FakeTtsEngine(voices: _multiVoiceTestVoices);
+          final controller = ReaderController(
+            ttsEngine: old,
+            engineFactory: (id, _) => id == 'fish_drama3' ? held : last,
+            enablePlatformIntakeChannels: false,
+          );
+          addTearDown(controller.dispose);
+          await controller.initialize();
+          await controller.selectVoiceById('am_michael');
+          await controller.setVoiceSpeed(1.25);
+          final first = controller.setTtsEngineId('fish_drama3');
+          await held.started.future;
+          expect(controller.engineSession.active, isNull);
+          expect(controller.engineSession.lastWorking!.engineId, 'kokoro');
+          final second = controller.setTtsEngineId(
+            returnsToA ? 'kokoro' : 'fish_drama3_4bit',
+          );
+          held.release.complete();
+          await Future.wait([first, second]);
+          expect(controller.engineSession.phase, EngineSessionPhase.active);
+          expect(
+            controller.engineSession.active!.engineId,
+            returnsToA ? 'kokoro' : 'fish_drama3_4bit',
+          );
+          expect(controller.startupError, isNull);
+          expect(last.speakCallCount, 0);
+          if (returnsToA) {
+            expect(controller.selectedVoice!.id, 'am_michael');
+            expect(controller.currentSpeed, 1.25);
+          }
+        },
+      );
+    }
+  }
+
+  test(
+    'failure preserves selected/last working, same selection retries honestly',
+    () async {
+      final failed = _HeldSessionEngine()..fail = true;
+      failed.release.complete();
+      var attempts = 0;
+      final recovered = _FakeTtsEngine();
+      final controller = ReaderController(
+        ttsEngine: _FakeTtsEngine(),
+        engineFactory: (_, _) => attempts++ == 0 ? failed : recovered,
+        enablePlatformIntakeChannels: false,
+      );
+      addTearDown(controller.dispose);
+      await controller.initialize();
+      await controller.setTtsEngineId('fish_drama3');
+      expect(controller.engineSession.selected.engineId, 'fish_drama3');
+      expect(controller.engineSession.active, isNull);
+      expect(controller.engineSession.lastWorking!.engineId, 'kokoro');
+      expect(controller.engineSession.phase, EngineSessionPhase.failed);
+      expect(controller.runningTtsEngineId, 'kokoro');
+      await controller.setTtsEngineId('fish_drama3');
+      expect(attempts, 2);
+      expect(controller.engineSession.active!.engineId, 'fish_drama3');
+      expect(recovered.speakCallCount, 0);
+    },
+  );
+
+  for (final finalTarget in ['kokoro', 'fish_drama3_4bit']) {
+    for (final fail in [false, true]) {
+      test(
+        'preview held in voice selection cannot speak or fail replacement ($fail,$finalTarget)',
+        () async {
+          final old = _HeldPreviewEngine();
+          final replacement = _FakeTtsEngine();
+          final controller = ReaderController(
+            ttsEngine: old,
+            engineFactory: (_, _) => replacement,
+            enablePlatformIntakeChannels: false,
+          );
+          addTearDown(controller.dispose);
+          await controller.initialize();
+          old.hold = true;
+          old.fail = fail;
+          final preview = controller.previewVoice('af_bella');
+          await old.started.future;
+          await controller.setTtsEngineId('fish_drama3');
+          await controller.setTtsEngineId(finalTarget);
+          final status = controller.statusMessage;
+          old.release.complete();
+          await preview;
+          expect(controller.statusMessage, status);
+          expect(old.speakCallCount, 0);
+          expect(replacement.speakCallCount, 0);
+          expect(
+            controller.previewStateForVoice('af_bella'),
+            VoicePreviewState.idle,
+          );
+        },
+      );
+    }
+  }
+  test(
+    'unavailable narrator intent survives reload instead of persisting fallback',
+    () async {
+      SharedPreferences.setMockInitialValues({
+        'reader.selectedVoiceId': 'saved-uninstalled',
+        'reader.ttsEngineId': 'kokoro',
+      });
+      final controller = ReaderController(
+        ttsEngine: _FakeTtsEngine(),
+        engineFactory: (_, _) => _FakeTtsEngine(),
+        enablePlatformIntakeChannels: false,
+      );
+      addTearDown(controller.dispose);
+      await controller.initialize();
+      expect(controller.selectedVoice, isNull);
+      expect(controller.statusMessage, contains('saved-uninstalled'));
+      await controller.setTtsEngineId('fish_drama3');
+      await controller.setTtsEngineId('kokoro');
+      expect(controller.selectedVoice, isNull);
+      final saved = await ReaderPreferencesService().load();
+      expect(saved.narratorVoiceIds['kokoro'], 'saved-uninstalled');
+      expect(saved.selectedVoiceId, 'saved-uninstalled');
+    },
+  );
+
+  for (final finalTarget in ['kokoro', 'fish_drama3_4bit']) {
+    for (final fail in [false, true]) {
+      test(
+        'engine replacement visibly cancels held export and rejects stale result ($fail,$finalTarget)',
+        () async {
+          final old = _HeldExportEngine()..fail = fail;
+          final controller = ReaderController(
+            ttsEngine: old,
+            engineFactory: (_, _) => _FakeTtsEngine(),
+            enablePlatformIntakeChannels: false,
+          );
+          addTearDown(controller.dispose);
+          await controller.initialize();
+          final exporting = controller.exportAudioToPath(
+            '/tmp/session-export.wav',
+          );
+          await old.started.future;
+          final messages = <String?>[];
+          controller.addListener(() => messages.add(controller.statusMessage));
+          await controller.setTtsEngineId('fish_drama3');
+          expect(
+            messages,
+            contains(
+              'Audio export cancelled because the speech engine changed.',
+            ),
+          );
+          await controller.setTtsEngineId(finalTarget);
+          final status = controller.statusMessage;
+          old.release.complete();
+          expect(await exporting, isNull);
+          expect(controller.statusMessage, status);
+        },
+      );
+    }
+  }
+
+  for (final replace in [false, true]) {
+    test(
+      'pending Play cancelled during load never auto-starts (replace=$replace)',
+      () async {
+        final held = _HeldSessionEngine();
+        final replacement = _FakeTtsEngine();
+        final controller = ReaderController(
+          ttsEngine: _FakeTtsEngine(),
+          engineFactory: (id, _) => id == 'fish_drama3' ? held : replacement,
+          enablePlatformIntakeChannels: false,
+        );
+        addTearDown(controller.dispose);
+        await controller.initialize();
+        final switching = controller.setTtsEngineId('fish_drama3');
+        await held.started.future;
+        await controller.startPlayback();
+        final cancellation = replace
+            ? controller.setTtsEngineId('fish_drama3_4bit')
+            : controller.pausePlayback();
+        held.release.complete();
+        await Future.wait([switching, cancellation]);
+        expect(held.speakCallCount, 0);
+        expect(replacement.speakCallCount, 0);
+        expect(controller.isPlaying, isFalse);
+      },
+    );
+  }
+
+  test(
+    'saved Voxtral precision does not become a Fish runtime quantization request',
+    () async {
+      final creations = <(String, int)>[];
+      final controller = ReaderController(
+        ttsEngine: _FakeTtsEngine(),
+        engineFactory: (id, bits) {
+          creations.add((id, bits));
+          return _FakeTtsEngine();
+        },
+        enablePlatformIntakeChannels: false,
+      );
+      addTearDown(controller.dispose);
+      await controller.initialize();
+      await controller.setTtsEngineId('voxtral_4b');
+      await controller.setVoxtralQuantizationBits(4);
+      await controller.setTtsEngineId('fish_drama3');
+      expect(creations, [
+        ('voxtral_4b', 0),
+        ('voxtral_4b', 4),
+        ('fish_drama3', 0),
+      ]);
+      expect(controller.engineSession.active!.quantizationBits, 0);
+      expect(controller.voxtralQuantizationBits, 4);
+      expect(
+        (await ReaderPreferencesService().load()).voxtralQuantizationBits,
+        4,
+      );
     },
   );
 
@@ -4457,5 +4692,46 @@ class _ModelPreparationEngine extends _FakeTtsEngine
   Future<void> shutdownResources() async {
     closed = true;
     if (!released.isCompleted) released.complete();
+  }
+}
+
+class _HeldSessionEngine extends _FakeTtsEngine {
+  final started = Completer<void>();
+  final release = Completer<void>();
+  bool fail = false;
+  @override
+  Future<List<VoiceProfile>> loadVoices() async {
+    started.complete();
+    await release.future;
+    if (fail) throw StateError('held stale loading failed');
+    return super.loadVoices();
+  }
+}
+
+class _HeldPreviewEngine extends _FakeTtsEngine {
+  bool hold = false, fail = false;
+  final started = Completer<void>();
+  final release = Completer<void>();
+  @override
+  Future<void> selectVoice(VoiceProfile voice) async {
+    if (hold) {
+      if (!started.isCompleted) started.complete();
+      await release.future;
+      if (fail) throw StateError('held preview failed');
+    }
+    await super.selectVoice(voice);
+  }
+}
+
+class _HeldExportEngine extends _ExportTtsEngine {
+  bool fail = false;
+  final started = Completer<void>();
+  final release = Completer<void>();
+  @override
+  Future<TtsExportResult> exportAudio(TtsExportRequest request) async {
+    started.complete();
+    await release.future;
+    if (fail) throw StateError('held export failed');
+    return super.exportAudio(request);
   }
 }

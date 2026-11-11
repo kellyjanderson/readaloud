@@ -150,6 +150,66 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets(
+    'settings distinguishes selected, failed and last working engine',
+    (tester) async {
+      final loading = _FailedSessionEngine();
+      final controller = ReaderController(
+        preferencesService: _MemoryReaderPreferencesService(),
+        ttsEngine: _AccessibleTtsEngine(),
+        engineFactory: (_, _) => loading,
+        enablePlatformIntakeChannels: false,
+      );
+      addTearDown(controller.dispose);
+      await tester.pumpWidget(ReadAloudApp(controller: controller));
+      await tester.pump(const Duration(milliseconds: 300));
+      await tester.tap(find.byKey(const Key('reader-overflow-menu')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Settings').last);
+      await tester.pumpAndSettle();
+      final switching = controller.setTtsEngineId('fish_drama3');
+      await tester.pump();
+      await tester.pump();
+      expect(controller.selectedTtsEngineId, 'fish_drama3');
+      expect(
+        find.byWidgetPredicate(
+          (w) =>
+              w is SelectableText &&
+              (w.data?.contains('Selected: Fish Audio Drama 3') ?? false),
+        ),
+        findsOneWidget,
+      );
+      expect(
+        find.byWidgetPredicate(
+          (w) =>
+              w is SelectableText &&
+              (w.data?.contains('No active engine') ?? false),
+        ),
+        findsOneWidget,
+      );
+      expect(
+        find.byWidgetPredicate(
+          (w) =>
+              w is SelectableText &&
+              (w.data?.contains('reload required') ?? false),
+        ),
+        findsOneWidget,
+      );
+      loading.release.complete();
+      await switching;
+      await tester.pump();
+      expect(
+        find.byWidgetPredicate(
+          (w) => w is SelectableText && (w.data?.contains('failed.') ?? false),
+        ),
+        findsOneWidget,
+      );
+      expect(find.text('Retry speech engine'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+      await tester.pumpWidget(const SizedBox.shrink());
+    },
+  );
+
   testWidgets('transport supports keyboard focus and activation', (
     tester,
   ) async {
@@ -772,6 +832,7 @@ class _MemoryReaderPreferencesService extends ReaderPreferencesService {
     CharacterStoreSnapshot? characterSnapshot,
     ReaderResumeState? resumeState,
     String? selectedVoiceId,
+    Map<String, String> narratorVoiceIds = const {},
     String? lastOpenedDocumentPath,
     String? lastOpenedDocumentAccessToken,
     String? lastOpenedDirectoryPath,
@@ -781,6 +842,7 @@ class _MemoryReaderPreferencesService extends ReaderPreferencesService {
       ttsEngineId: ttsEngineId,
       voxtralQuantizationBits: voxtralQuantizationBits,
       selectedVoiceId: selectedVoiceId,
+      narratorVoiceIds: Map.of(narratorVoiceIds),
       voiceSpeeds: Map<String, double>.from(voiceSpeeds),
       fontFamily: fontFamily,
       fontScale: fontScale,
@@ -965,5 +1027,14 @@ class _AssignmentUiController extends ReaderController {
   @override
   Future<void> retryVoiceAssignments() async {
     retryCalls++;
+  }
+}
+
+class _FailedSessionEngine extends _FakeTtsEngine {
+  final release = Completer<void>();
+  @override
+  Future<void> initialize() async {
+    await release.future;
+    throw StateError('offline model unavailable');
   }
 }

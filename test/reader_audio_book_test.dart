@@ -444,6 +444,50 @@ void main() {
       c.dispose();
     }
   });
+  for (final terminal in ['pause', 'document', 'selection']) {
+    test(
+      'published engine handoff rejects later $terminal before readiness',
+      () async {
+        final held = _HeldBookEngine()..renderAvailable = true;
+        final last = _OfflineEngine()..renderAvailable = true;
+        final c = ReaderController(
+          ttsEngine: _OfflineEngine(),
+          engineFactory: (id, _) => id == 'fish_drama3' ? held : last,
+          deferInitialSynthesis: true,
+          enablePlatformIntakeChannels: false,
+          renderedSceneRepository: RenderedSceneRepository(
+            Directory('${temp.path}/handoff-$terminal'),
+          ),
+        );
+        try {
+          await c.initialize();
+          await c.importFilePaths([
+            (await fixture(
+              staleDirections: true,
+              publishedEngine: 'fish_drama3',
+            )).path,
+          ]);
+          final play = c.startPlayback();
+          await held.started.future;
+          final cancellation = switch (terminal) {
+            'pause' => c.pausePlayback(),
+            'document' => c.importPastedText('Replacement document.'),
+            _ => c.setTtsEngineId('fish_drama3_4bit'),
+          };
+          held.release.complete();
+          await Future.wait([play, cancellation]);
+          expect(held.exports, isEmpty);
+          expect(held.requests, isEmpty);
+          expect(last.exports, isEmpty);
+          expect(last.requests, isEmpty);
+        } finally {
+          await c.shutdownPreparation();
+          c.dispose();
+        }
+      },
+    );
+  }
+
   test('Save Audio Book produces v5 before any scene is rendered', () async {
     await controller.importPastedText('A book awaiting its first reading.');
     if (!controller.hasCompleteDocumentSnapshot) {
@@ -826,4 +870,15 @@ Uint8List _wav() {
   tag(36, 'data');
   b.setUint32(40, 480, Endian.little);
   return b.buffer.asUint8List();
+}
+
+class _HeldBookEngine extends _OfflineEngine {
+  final started = Completer<void>();
+  final release = Completer<void>();
+  @override
+  Future<void> initialize() async {
+    started.complete();
+    await release.future;
+    await super.initialize();
+  }
 }

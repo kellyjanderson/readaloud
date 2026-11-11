@@ -671,11 +671,11 @@ class _ReadAloudScreenState extends State<ReadAloudScreen> {
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 SelectableText(
-                                  _controller.startupError ??
-                                      progress?.message ??
-                                      (_controller.isInitializing
-                                          ? 'Preparing ${_ttsEngineLabel(selectedEngineId)}…'
-                                          : 'Active engine: ${_ttsEngineLabel(_controller.runningTtsEngineId)}.'),
+                                  'Selected: ${_ttsEngineLabel(_controller.selectedTtsEngineId)}. '
+                                  '${_controller.engineSession.active == null ? 'No active engine' : 'Active: ${_ttsEngineLabel(_controller.engineSession.active!.engineId)}'}. '
+                                  '${_controller.engineSession.phase.name}. '
+                                  '${_controller.startupError ?? progress?.message ?? ''}'
+                                  '${_controller.engineSession.active == null && _controller.engineSession.lastWorking != null ? ' Last working: ${_ttsEngineLabel(_controller.engineSession.lastWorking!.engineId)} (reload required).' : ''}',
                                 ),
                                 if (progress != null &&
                                     _controller.startupError == null)
@@ -686,7 +686,7 @@ class _ReadAloudScreenState extends State<ReadAloudScreen> {
                                 if (_controller.startupError != null)
                                   TextButton(
                                     onPressed: _controller.retryInitialization,
-                                    child: const Text('Retry download'),
+                                    child: const Text('Retry speech engine'),
                                   ),
                               ],
                             ),

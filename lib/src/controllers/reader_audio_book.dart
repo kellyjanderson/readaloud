@@ -643,7 +643,7 @@ extension ReaderAudioBookSupport on ReaderController {
         // Engine replacement advances intent. Requeue exactly this user's Play
         // after its owned replacement; a later Pause/open/selection wins.
         final oldEngine = _ttsEngine;
-        await setTtsEngineId(publishedEngine);
+        await _setTtsEngineId(publishedEngine, preserveBookPlay: true);
         final expectedIntent =
             playbackIntent + (identical(oldEngine, _ttsEngine) ? 0 : 1);
         if (session.current &&

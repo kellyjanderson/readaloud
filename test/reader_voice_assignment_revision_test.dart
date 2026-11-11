@@ -430,6 +430,7 @@ class _SnapshotPreferences extends ReaderPreferencesService {
     CharacterStoreSnapshot? characterSnapshot,
     ReaderResumeState? resumeState,
     String? selectedVoiceId,
+    Map<String, String> narratorVoiceIds = const {},
     String? lastOpenedDocumentPath,
     String? lastOpenedDocumentAccessToken,
     String? lastOpenedDirectoryPath,
@@ -448,6 +449,7 @@ class _SnapshotPreferences extends ReaderPreferencesService {
         sourceVoiceDocumentIds: sourceVoiceDocumentIds,
         characterSnapshot: characterSnapshot,
         selectedVoiceId: selectedVoiceId,
+        narratorVoiceIds: Map.of(narratorVoiceIds),
       ),
     );
     final barrier = nextWrite;

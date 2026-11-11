@@ -47,8 +47,12 @@ extension ReaderAudioBookPersistence on ReaderController {
         _document.normalizedImportResult.sourceFingerprint;
     final intent = _bookIntent();
     final revision = _documentRevision;
+    final epoch = _engineEpoch;
     return (scene) async {
-      if (_disposed || revision != _documentRevision || !scene.isCurrent()) {
+      if (_disposed ||
+          epoch != _engineEpoch ||
+          revision != _documentRevision ||
+          !scene.isCurrent()) {
         return;
       }
       var repository = _renderedScenes;
@@ -56,6 +60,7 @@ extension ReaderAudioBookPersistence on ReaderController {
         try {
           final support = await getApplicationSupportDirectory();
           if (_disposed ||
+              epoch != _engineEpoch ||
               revision != _documentRevision ||
               !scene.isCurrent()) {
             return;
@@ -99,7 +104,10 @@ extension ReaderAudioBookPersistence on ReaderController {
             ),
           },
         );
-        if (_disposed || revision != _documentRevision || !scene.isCurrent()) {
+        if (_disposed ||
+            epoch != _engineEpoch ||
+            revision != _documentRevision ||
+            !scene.isCurrent()) {
           return;
         }
         publishReadingStage(
@@ -113,7 +121,10 @@ extension ReaderAudioBookPersistence on ReaderController {
           ),
         );
       } catch (error) {
-        if (_disposed || revision != _documentRevision || !scene.isCurrent()) {
+        if (_disposed ||
+            epoch != _engineEpoch ||
+            revision != _documentRevision ||
+            !scene.isCurrent()) {
           return;
         }
         publishReadingStage(
@@ -143,13 +154,17 @@ extension ReaderAudioBookPersistence on ReaderController {
     final intent = _bookIntent();
     final assignment = voiceAssignmentState.requestedRevision;
     final speed = currentSpeed;
-    final engine = _selectedTtsEngineId;
+    final epoch = _engineEpoch;
     bool current() =>
         !_disposed &&
         revision == _documentRevision &&
         assignment == voiceAssignmentState.requestedRevision &&
         speed == currentSpeed &&
-        engine == _selectedTtsEngineId;
+        epoch == _engineEpoch;
+    void requireCurrent() {
+      if (!current()) throw const PlanningCancelled();
+    }
+
     final source =
         _audioBook?.book.manifest.sourceId ??
         _activeSourceRevision ??
@@ -168,14 +183,16 @@ extension ReaderAudioBookPersistence on ReaderController {
         await reader.dispose();
       }
     }
-    _requireRevision(revision);
+    requireCurrent();
     if (!force && imported == null && stored.isEmpty) return null;
     final stage = await Directory.systemTemp.createTemp('radoc-publish-');
     final transport = RadocAudioPackage(
       createExportStage: Platform.isMacOS
           ? const RadocExportStaging().createStage
           : null,
-      onProgress: (p) => _bookProgress(p, revision),
+      onProgress: (p) {
+        if (current()) _bookProgress(p, revision);
+      },
     );
     RadocAudioBook? importedHandle;
     try {
@@ -195,11 +212,11 @@ extension ReaderAudioBookPersistence on ReaderController {
       final count = _publicationSequence == 0 ? 1 : _publicationSequence;
       var totalWords = 0;
       for (var i = 1; i <= count; i++) {
-        _requireRevision(revision);
+        requireCurrent();
         final range = _publicationSequence == 0
             ? null
             : await readPreparedRange(i);
-        _requireRevision(revision);
+        requireCurrent();
         final document = range?.fragment ?? _document;
         _characters.restoreDocument(
           _voicePreferenceDocumentId,
@@ -323,7 +340,7 @@ extension ReaderAudioBookPersistence on ReaderController {
           analysis.add(member);
         }
       }
-      _requireRevision(revision);
+      requireCurrent();
       await transport.export(
         destination: File(outputPath),
         manifest: RadocAudioManifest(
@@ -340,8 +357,9 @@ extension ReaderAudioBookPersistence on ReaderController {
         members: members,
         isCurrent: current,
       );
-      _requireRevision(revision);
+      requireCurrent();
       _preparationProgress.remove(PreparationStage.persistence);
+      if (!current()) throw const PlanningCancelled();
       _statusMessage = 'Saved audio book to $outputPath.';
       return File(outputPath);
     } finally {

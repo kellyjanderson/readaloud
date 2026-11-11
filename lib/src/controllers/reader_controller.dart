@@ -1,3 +1,4 @@
+import '../models/engine_session.dart';
 import '../models/character.dart';
 import '../services/modernbooknlp_character_adapter.dart';
 import '../services/modernbooknlp_window.dart';
@@ -1192,9 +1193,38 @@ class ReaderController extends ChangeNotifier {
   final TtsEngine Function(String, int)? _engineFactory;
   Future<void>? _engineSwitch;
   bool _runningEngineRetired = false;
+  int _engineEpoch = 0;
+  int _previewRevision = 0;
+  String _loadingEngineId = ReaderPreferences.defaultTtsEngineId;
+  int _loadingBits = 0;
+  EngineSession _engineSession = const EngineSession();
+  EngineSession get engineSession => _engineSession;
+  final Map<String, String> _narratorVoiceIds = {};
+  String get _narratorScope => _selectedTtsEngineId == 'voxtral_4b'
+      ? '$_selectedTtsEngineId:$_voxtralQuantizationBits'
+      : _selectedTtsEngineId;
+
+  void _publishEnginePhase(EngineSessionPhase phase) {
+    _engineSession = EngineSession(
+      epoch: _engineEpoch,
+      selected: EngineSessionIdentity(
+        _selectedTtsEngineId,
+        _voxtralQuantizationBits,
+      ),
+      active: phase == EngineSessionPhase.active ? _engineSession.active : null,
+      lastWorking: _engineSession.lastWorking,
+      phase: phase,
+    );
+  }
+
+  bool _ownsEngine(TtsEngine engine, int epoch) =>
+      !_disposed &&
+      epoch == _engineEpoch &&
+      !_runningEngineRetired &&
+      identical(engine, _ttsEngine);
   bool get isSwitchingEngine => _engineSwitch != null;
   TtsEngine _createEngine(String id, int bits) =>
-      _engineFactory?.call(id, bits) ??
+      _engineFactory?.call(id, id == 'voxtral_4b' ? bits : 0) ??
       createDefaultTtsEngine(engineId: id, voxtralQuantizationBits: bits);
   TtsEngine _ttsEngine;
   String _selectedTtsEngineId = ReaderPreferences.defaultTtsEngineId;
@@ -1460,9 +1490,20 @@ class ReaderController extends ChangeNotifier {
     _runningTtsEngineId = _ttsEngine is TtsEngineIdentityCapable
         ? (_ttsEngine as TtsEngineIdentityCapable).engineId
         : _selectedTtsEngineId;
+    _loadingEngineId = _runningTtsEngineId;
+    _loadingBits = _voxtralQuantizationBits;
+    _publishEnginePhase(EngineSessionPhase.loading);
     _bindEngineCallbacks();
 
-    _selectedVoiceId = preferences.selectedVoiceId;
+    _narratorVoiceIds.addAll(preferences.narratorVoiceIds);
+    // Migrate the saved legacy choice into its engine's scope once.
+    if (preferences.selectedVoiceId case final voice?) {
+      final legacyScope = preferences.ttsEngineId == 'voxtral_4b'
+          ? '${preferences.ttsEngineId}:${preferences.voxtralQuantizationBits}'
+          : preferences.ttsEngineId;
+      _narratorVoiceIds.putIfAbsent(legacyScope, () => voice);
+    }
+    _selectedVoiceId = _narratorVoiceIds[_narratorScope];
     _voiceSpeeds
       ..clear()
       ..addAll(preferences.voiceSpeeds);
@@ -1500,8 +1541,9 @@ class ReaderController extends ChangeNotifier {
 
   void _bindEngineCallbacks() {
     final engine = _ttsEngine;
+    final epoch = _engineEpoch;
     _ttsEngine.onStart = () {
-      if (_disposed || !identical(_ttsEngine, engine)) return;
+      if (!_ownsEngine(engine, epoch)) return;
       if (_activePreviewVoiceId != null) {
         _isVoicePreviewLoading = false;
         _isVoicePreviewPlaying = true;
@@ -1523,7 +1565,7 @@ class ReaderController extends ChangeNotifier {
       notifyListeners();
     };
     _ttsEngine.onStatus = (message) {
-      if (_disposed || !identical(_ttsEngine, engine)) return;
+      if (!_ownsEngine(engine, epoch)) return;
       if (_activePreviewVoiceId != null) {
         return;
       }
@@ -1533,14 +1575,23 @@ class ReaderController extends ChangeNotifier {
     if (_ttsEngine is TtsResourceProgressCapable) {
       (_ttsEngine as TtsResourceProgressCapable).onResourceProgress =
           (progress) {
-            if (_disposed || !identical(_ttsEngine, engine)) return;
+            if (!_ownsEngine(engine, epoch)) return;
             if (_disposed) return;
             _speechResourceProgress = progress;
+            if (_isInitializing && progress != null) {
+              _publishEnginePhase(
+                progress.stage.toLowerCase().contains('download') ||
+                        progress.stage == 'acquiring' ||
+                        progress.stage == 'modelCache'
+                    ? EngineSessionPhase.acquiring
+                    : EngineSessionPhase.loading,
+              );
+            }
             notifyListeners();
           };
     }
     _ttsEngine.onComplete = () {
-      if (_disposed || !identical(_ttsEngine, engine)) return;
+      if (!_ownsEngine(engine, epoch)) return;
       if (_activePreviewVoiceId != null) {
         _resetPreviewState();
         unawaited(_restoreSelectedVoiceEngineState());
@@ -1573,7 +1624,7 @@ class ReaderController extends ChangeNotifier {
       notifyListeners();
     };
     _ttsEngine.onError = (message) {
-      if (_disposed || !identical(_ttsEngine, engine)) return;
+      if (!_ownsEngine(engine, epoch)) return;
       if (_activePreviewVoiceId != null) {
         _resetPreviewState();
         unawaited(_restoreSelectedVoiceEngineState());
@@ -1614,12 +1665,12 @@ class ReaderController extends ChangeNotifier {
       notifyListeners();
     };
     _ttsEngine.onProgress = (progress) {
-      if (!_disposed && identical(_ttsEngine, engine)) {
+      if (_ownsEngine(engine, epoch)) {
         _handleProgress(progress);
       }
     };
     _ttsEngine.onActivity = (activity) {
-      if (_disposed || !identical(_ttsEngine, engine)) return;
+      if (!_ownsEngine(engine, epoch)) return;
       if (_activePreviewVoiceId != null) {
         switch (activity.phase) {
           case TtsPlaybackPhase.buffering:
@@ -1651,7 +1702,7 @@ class ReaderController extends ChangeNotifier {
       notifyListeners();
     };
     _ttsEngine.onDebugTrace = (trace) {
-      if (_disposed || !identical(_ttsEngine, engine)) return;
+      if (!_ownsEngine(engine, epoch)) return;
       _ttsDebugTraceLogPath = trace.logPath;
       _ttsDebugTraceStartedAt = trace.startedAt;
       _ttsDebugTraceVoiceId = trace.voiceId;
@@ -1661,7 +1712,9 @@ class ReaderController extends ChangeNotifier {
 
     if (_ttsEngine is VoiceLibraryCapable) {
       _voiceLibraryCapable = _ttsEngine as VoiceLibraryCapable
-        ..onVoiceLibraryChanged = _handleVoiceLibraryChanged;
+        ..onVoiceLibraryChanged = () {
+          if (_ownsEngine(engine, epoch)) _handleVoiceLibraryChanged();
+        };
       _voiceLibrary = _voiceLibraryCapable!.voiceLibrary;
     }
   }
@@ -1685,53 +1738,85 @@ class ReaderController extends ChangeNotifier {
 
   /// One startup attempt owns all callbacks and publication. Failed attempts
   /// expose their root cause independently of playback and can be retried.
-  Future<void> retryInitialization() => _engineStartup ??= _initializeEngine()
-      .whenComplete(() => _engineStartup = null);
+  Future<void> retryInitialization() {
+    if (_runningEngineRetired && _engineSwitch == null) return _switchEngine();
+    return _engineStartup ??= _initializeEngine().whenComplete(
+      () => _engineStartup = null,
+    );
+  }
 
   Future<void> _initializeEngine() async {
     final revision = ++_startupRevision;
-    bool current() => !_disposed && revision == _startupRevision;
+    final epoch = _engineEpoch;
+    final engine = _ttsEngine;
+    final identity = EngineSessionIdentity(_loadingEngineId, _loadingBits);
+    bool current() =>
+        _ownsEngine(engine, epoch) && revision == _startupRevision;
     _isInitializing = true;
     _startupError = null;
+    _synthesisInitialized = false;
+    _publishEnginePhase(EngineSessionPhase.loading);
     notifyListeners();
     try {
-      await _ttsEngine.initialize().timeout(const Duration(seconds: 30));
+      await engine.initialize().timeout(const Duration(seconds: 30));
       if (!current()) return;
-      final voices = await _ttsEngine.loadVoices();
+      final voices = await engine.loadVoices();
       if (!current()) return;
-      _voices = voices;
-      _voiceLibrary = _voiceLibraryCapable?.voiceLibrary ?? _voiceLibrary;
-      if (_voices.isEmpty) {
+      if (voices.isEmpty) {
         throw StateError('No installed speech voices are available.');
       }
-      final savedVoice = _findVoiceById(_selectedVoiceId);
-      if (_audioBook != null &&
-          _selectedVoiceId != null &&
-          savedVoice == null) {
+      final requestedVoice =
+          _selectedVoiceId ?? _narratorVoiceIds[_narratorScope];
+      final savedVoice = voices
+          .where((v) => v.id == requestedVoice)
+          .firstOrNull;
+      if (_audioBook != null && requestedVoice != null && savedVoice == null) {
         throw StateError(
-          'Install the saved voice $_selectedVoiceId to render this passage.',
+          'Install the saved voice $requestedVoice to render this passage.',
         );
       }
-      final initialVoice = savedVoice ?? _voices.first;
-      _selectedVoiceId = initialVoice.id;
-      _voiceSpeeds.putIfAbsent(_selectedVoiceId!, () => 1.0);
-      await _ttsEngine.selectVoice(initialVoice);
+      final initialVoice = savedVoice ?? voices.first;
+      await engine.selectVoice(initialVoice);
       if (!current()) return;
-      await _ttsEngine.setSpeechRate(currentSpeed);
+      await engine.setSpeechRate(_voiceSpeeds[initialVoice.id] ?? 1.0);
       if (!current()) return;
-      if (_ttsEngine is ModelPreparationCapable) {
-        await (_ttsEngine as ModelPreparationCapable).prepareSelectedModel();
+      if (engine is ModelPreparationCapable) {
+        await (engine as ModelPreparationCapable).prepareSelectedModel();
       }
       if (!current()) return;
+      _publishEnginePhase(EngineSessionPhase.validating);
+      notifyListeners();
+      // Publish validated identity/voices together. An unavailable explicit
+      // narrator remains unresolved; the temporary engine default is not intent.
+      _voices = voices;
+      _voiceLibrary = _voiceLibraryCapable?.voiceLibrary ?? _voiceLibrary;
+      _selectedVoiceId = requestedVoice ?? initialVoice.id;
+      _narratorVoiceIds.putIfAbsent(_narratorScope, () => initialVoice.id);
+      _voiceSpeeds.putIfAbsent(_selectedVoiceId!, () => 1.0);
+      _runningTtsEngineId = identity.engineId;
+      _runningVoxtralQuantizationBits = identity.quantizationBits;
+      _engineSession = EngineSession(
+        epoch: epoch,
+        selected: EngineSessionIdentity(
+          _selectedTtsEngineId,
+          _voxtralQuantizationBits,
+        ),
+        active: identity,
+        lastWorking: identity,
+        phase: EngineSessionPhase.active,
+      );
       _startupError = null;
       _synthesisInitialized = true;
-      _statusMessage = null;
+      _statusMessage = savedVoice == null && requestedVoice != null
+          ? 'Saved narrator $requestedVoice is unavailable. Choose a voice to continue.'
+          : null;
       unawaited(_persistPreferences());
     } catch (error) {
       if (!current()) return;
       _startupError = error is MissingPluginException
           ? 'Text to speech is unavailable on this platform.'
           : 'Speech startup failed: $error';
+      _publishEnginePhase(EngineSessionPhase.failed);
       _statusMessage = _startupError;
       _pendingPlayUntilReady = false;
     } finally {
@@ -2612,6 +2697,7 @@ class ReaderController extends ChangeNotifier {
       return;
     }
     _selectedVoiceId = voiceId;
+    _narratorVoiceIds[_narratorScope] = voiceId;
     _voiceSpeeds.putIfAbsent(voiceId, () => 1.0);
     await _voiceChoicesEdited();
   }
@@ -2650,55 +2736,56 @@ class ReaderController extends ChangeNotifier {
   }
 
   Future<void> previewVoice(String voiceId) async {
-    if (_isPlaying || _playbackActivity.isBuffering) {
-      await pausePlayback();
-    }
-
-    final voice = _voices
-        .where((candidate) => candidate.id == voiceId)
-        .firstOrNull;
-    if (voice == null) {
-      return;
-    }
-
+    final engine = _ttsEngine;
+    final epoch = _engineEpoch;
+    final preview = ++_previewRevision;
+    bool current() => _ownsEngine(engine, epoch) && preview == _previewRevision;
+    if (_isPlaying || _playbackActivity.isBuffering) await pausePlayback();
+    if (!current() || _isInitializing) return;
+    final voice = _voices.where((v) => v.id == voiceId).firstOrNull;
+    if (voice == null) return;
     if (_activePreviewVoiceId != null) {
-      await stopVoicePreview(notify: false);
+      await engine.stop();
+      if (!current()) return;
     }
-
     _activePreviewVoiceId = voiceId;
     _invalidateResourceBindings();
     _isVoicePreviewLoading = true;
     _isVoicePreviewPlaying = false;
     notifyListeners();
-
     try {
-      await _ttsEngine.selectVoice(voice);
-      await _ttsEngine.setSpeechRate(_voiceSpeeds[voiceId] ?? 1.0);
-      await _ttsEngine.setVolume(1.0);
-      await _ttsEngine.speak(
+      await engine.selectVoice(voice);
+      if (!current()) return;
+      await engine.setSpeechRate(_voiceSpeeds[voiceId] ?? 1.0);
+      if (!current()) return;
+      await engine.setVolume(1.0);
+      if (!current()) return;
+      await engine.speak(
         const TtsSpeakRequest(
           text: 'Hello. This is Read Aloud previewing this voice.',
           documentId: 'voice-preview',
         ),
       );
     } catch (_) {
+      if (!current()) return;
       _resetPreviewState();
       await _restoreSelectedVoiceEngineState();
+      if (!current()) return;
       _statusMessage = 'Voice preview failed.';
       notifyListeners();
     }
   }
 
   Future<void> stopVoicePreview({bool notify = true}) async {
-    if (_activePreviewVoiceId == null) {
-      return;
-    }
-    await _ttsEngine.stop();
+    ++_previewRevision;
+    final engine = _ttsEngine;
+    final epoch = _engineEpoch;
+    if (_activePreviewVoiceId == null) return;
     _resetPreviewState();
+    if (notify && !_disposed) notifyListeners();
+    await engine.stop();
+    if (!_ownsEngine(engine, epoch)) return;
     await _restoreSelectedVoiceEngineState();
-    if (notify) {
-      notifyListeners();
-    }
   }
 
   Future<void> setVoiceSpeed(double speed) async {
@@ -2769,50 +2856,83 @@ class ReaderController extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<void> setTtsEngineId(String engineId) async {
+  Future<void> setTtsEngineId(String engineId) => _setTtsEngineId(engineId);
+
+  Future<void> _setTtsEngineId(
+    String engineId, {
+    bool preserveBookPlay = false,
+  }) async {
     await _preferencesReady.future;
-    if (!_knownTtsEngineIds.contains(engineId) ||
-        _selectedTtsEngineId == engineId) {
+    if (!_knownTtsEngineIds.contains(engineId)) return;
+    if (_selectedTtsEngineId == engineId && _startupError == null) return;
+    _rememberNarratorIntent();
+    final publishedNarrator = preserveBookPlay ? _selectedVoiceId : null;
+    _selectedTtsEngineId = engineId;
+    if (publishedNarrator != null) {
+      _narratorVoiceIds[_narratorScope] = publishedNarrator;
+    }
+    if (_providedTtsEngine != null && _engineFactory == null) {
+      _publishEnginePhase(_engineSession.phase);
+      await _persistPreferences();
+      notifyListeners();
       return;
     }
-    _selectedTtsEngineId = engineId;
-    _interruptObsoleteModelPreparation();
+    _requestEngineReplacement(preserveBookPlay: preserveBookPlay);
+    final transition = _switchEngine();
     await _persistPreferences();
-    await _switchEngine();
-    notifyListeners();
+    await transition;
   }
 
   Future<void> setVoxtralQuantizationBits(int bits) async {
     await _preferencesReady.future;
     if (bits != 0 && bits != 4) return;
+    if (_voxtralQuantizationBits == bits && _startupError == null) return;
+    _rememberNarratorIntent();
     _voxtralQuantizationBits = bits;
-    _interruptObsoleteModelPreparation();
-    await _persistPreferences();
-    await _switchEngine();
-    notifyListeners();
-  }
-
-  void _interruptObsoleteModelPreparation() {
-    if (_engineSwitch == null || _ttsEngine is! ResourcePreparationCapable) {
+    if (_providedTtsEngine != null && _engineFactory == null) {
+      _publishEnginePhase(_engineSession.phase);
+      await _persistPreferences();
+      notifyListeners();
       return;
     }
+    _requestEngineReplacement();
+    final transition = _switchEngine();
+    await _persistPreferences();
+    await transition;
+  }
+
+  void _requestEngineReplacement({bool preserveBookPlay = false}) {
+    ++_engineEpoch;
     ++_startupRevision;
+    ++_previewRevision;
+    ++_playbackIntent;
+    _pendingPlayUntilReady = false;
+    if (!preserveBookPlay) _resumeAfterPreparation = false;
+    _playbackStartPending = false;
     _runningEngineRetired = true;
+    _synthesisInitialized = false;
+    _selectedVoiceId = _narratorVoiceIds[_narratorScope];
+    _planning.cancel();
+    _resetPreviewState();
+    _publishEnginePhase(EngineSessionPhase.stopping);
+    _startupError = null;
+    _statusMessage = _isExporting
+        ? 'Audio export cancelled because the speech engine changed.'
+        : 'Switching speech engine…';
+    notifyListeners();
+    // Interrupt an in-flight model acquisition through the existing out-of-band
+    // owner. The serialized replacement joins this same idempotent shutdown.
     final retiringEngine = _ttsEngine;
-    // Shutdown is idempotent and is joined by the single replacement loop.
-    unawaited(
-      (retiringEngine as ResourcePreparationCapable)
-          .shutdownResources()
-          .catchError((Object error) {
-            if (!_disposed && identical(_ttsEngine, retiringEngine)) {
-              _statusMessage = '$error';
-            }
-          }),
-    );
+    if (_engineSwitch != null && retiringEngine is ResourcePreparationCapable) {
+      unawaited(
+        (retiringEngine as ResourcePreparationCapable)
+            .shutdownResources()
+            .catchError((Object _) {}),
+      );
+    }
   }
 
   Future<void> _switchEngine() {
-    // A supplied test engine without a replacement factory retains its owner.
     if (_providedTtsEngine != null && _engineFactory == null) {
       return Future.value();
     }
@@ -2823,22 +2943,20 @@ class ReaderController extends ChangeNotifier {
   }
 
   Future<void> _replaceEngine() async {
-    _synthesisInitialized = false;
-    ++_startupRevision;
-    ++_playbackIntent;
-    _pendingPlayUntilReady = false;
-    _planning.cancel();
     _isInitializing = true;
     _invalidateResourceBindings();
     _currentRealization = null;
-    _statusMessage = 'Switching speech engine…';
     notifyListeners();
     try {
       while (!_disposed &&
           (ttsEngineRestartRequired || _runningEngineRetired)) {
         final old = _ttsEngine;
         _detachEngineCallbacks(old);
+        _publishEnginePhase(EngineSessionPhase.unloading);
+        notifyListeners();
         if (old is ResourcePreparationCapable) {
+          // This owner cancels export/generation out of band before joining
+          // native release. Never queue a separate stop ahead of shutdown.
           await (old as ResourcePreparationCapable).shutdownResources();
         } else {
           await old.stop();
@@ -2853,21 +2971,23 @@ class ReaderController extends ChangeNotifier {
         _playbackState = ReaderPlaybackPrimaryState.paused;
         _speechResourceProgress = null;
         _readingFocusState = _readingFocusState.copyWith(playbackActive: false);
-        // Read desired state after old resources have drained: rapid selections
-        // collapse into a single latest target, never parallel resident models.
-        final id = _selectedTtsEngineId;
-        final bits = _voxtralQuantizationBits;
-        _ttsEngine = _createEngine(id, bits);
+        final epoch = _engineEpoch;
+        _loadingEngineId = _selectedTtsEngineId;
+        _loadingBits = _voxtralQuantizationBits;
+        _ttsEngine = _createEngine(_loadingEngineId, _loadingBits);
         _runningEngineRetired = false;
-        _runningTtsEngineId = id;
-        _runningVoxtralQuantizationBits = bits;
         _voices = const [];
         _voiceLibrary = const [];
         _bindEngineCallbacks();
         await retryInitialization();
+        // A current failed target waits for explicit retry. An obsolete target
+        // drains and reloads the latest choice, including A → B → A.
+        if (epoch == _engineEpoch) break;
       }
     } catch (error) {
+      if (_disposed) return;
       _startupError = 'Speech engine switch failed: $error';
+      _publishEnginePhase(EngineSessionPhase.failed);
       _statusMessage = _startupError;
     } finally {
       if (!_disposed) {
@@ -2947,8 +3067,19 @@ class ReaderController extends ChangeNotifier {
     if (selected == null) {
       return;
     }
-    await _ttsEngine.selectVoice(selected);
-    await _ttsEngine.setSpeechRate(currentSpeed);
+    final engine = _ttsEngine;
+    final epoch = _engineEpoch;
+    final preview = _previewRevision;
+    try {
+      await engine.selectVoice(selected);
+      if (!_ownsEngine(engine, epoch) || preview != _previewRevision) return;
+      await engine.setSpeechRate(currentSpeed);
+    } catch (_) {
+      if (!_ownsEngine(engine, epoch) || preview != _previewRevision) return;
+      _statusMessage =
+          'Could not restore the narrator voice. Choose a voice to retry.';
+      notifyListeners();
+    }
   }
 
   Future<TtsExportResult?> exportAudioToPath(String outputPath) async {
@@ -2990,8 +3121,17 @@ class ReaderController extends ChangeNotifier {
       return null;
     }
 
+    final exportEpoch = _engineEpoch;
+    final exportEngine = _ttsEngine;
     final exportRevision = _documentRevision;
     final exportAssignmentRevision = voiceAssignmentState.requestedRevision;
+    bool current() =>
+        _ownsEngine(exportEngine, exportEpoch) &&
+        exportRevision == _documentRevision;
+    void requireCurrent() {
+      if (!current()) throw const PlanningCancelled();
+    }
+
     _isExporting = true;
     _statusMessage = 'Saving audio with ${voice.displayName}...';
     notifyListeners();
@@ -3001,9 +3141,9 @@ class ReaderController extends ChangeNotifier {
         normalizedPath,
         sourcePath: _currentDocumentPath,
       );
-      _requireRevision(exportRevision);
+      requireCurrent();
       final document = await _completeExportDocument(exportRevision);
-      _requireRevision(exportRevision);
+      requireCurrent();
       if (exportAssignmentRevision != voiceAssignmentState.requestedRevision) {
         throw const PlanningCancelled();
       }
@@ -3014,13 +3154,13 @@ class ReaderController extends ChangeNotifier {
           exportRevision,
           document: document,
           isCurrent: () =>
-              !_disposed &&
+              current() &&
               exportRevision == _documentRevision &&
               _voiceAssignments.isCurrent(exportAssignmentRevision),
         );
       }
 
-      _requireRevision(exportRevision);
+      requireCurrent();
       if (exportAssignmentRevision != voiceAssignmentState.requestedRevision) {
         throw StateError(
           'Voice choices changed before export preparation completed.',
@@ -3030,15 +3170,15 @@ class ReaderController extends ChangeNotifier {
         normalizedPath,
         document: document,
       );
-      _requireRevision(exportRevision);
+      requireCurrent();
       final result = await exporter.exportAudio(exportRequest);
-      _requireRevision(exportRevision);
-      if (exportRevision == _documentRevision) {
+      requireCurrent();
+      if (current()) {
         _statusMessage = 'Saved audio to ${result.outputPath}.';
       }
       return result;
     } catch (error) {
-      if (exportRevision == _documentRevision) {
+      if (current()) {
         _recordCheckpointExportFailure(error);
         _statusMessage = _preparationFailed
             ? 'The prepared checkpoint is damaged. Retry document preparation before saving.'
@@ -3047,7 +3187,7 @@ class ReaderController extends ChangeNotifier {
       return null;
     } finally {
       _isExporting = false;
-      notifyListeners();
+      if (!_disposed) notifyListeners();
     }
   }
 
@@ -3074,6 +3214,7 @@ class ReaderController extends ChangeNotifier {
   }) async {
     if (!hasCompleteDocumentSnapshot || _isExporting) return null;
     final revision = _documentRevision;
+    final epoch = _engineEpoch;
     final assignments = Map<String, String>.unmodifiable(
       _characters.selections(_voicePreferenceDocumentId),
     );
@@ -3082,14 +3223,19 @@ class ReaderController extends ChangeNotifier {
       documentId: sessionDocumentId,
     );
     _isExporting = true;
-    bool current() => !_disposed && revision == _documentRevision;
+    bool current() =>
+        !_disposed && revision == _documentRevision && epoch == _engineEpoch;
+    void requireCurrent() {
+      if (!current()) throw const PlanningCancelled();
+    }
+
     notifyListeners();
     try {
       await requirePreservedDocumentExportPath(
         outputPath,
         sourcePath: _currentDocumentPath,
       );
-      _requireRevision(revision);
+      requireCurrent();
       final audioBook = await _exportAudioBookToPath(
         outputPath,
         revision,
@@ -3109,7 +3255,7 @@ class ReaderController extends ChangeNotifier {
           recordMap[record.key] = record;
         }
       }
-      _requireRevision(revision);
+      requireCurrent();
       final analysisRecords = List<DocumentAnalysisRecord>.unmodifiable(
         recordMap.values,
       );
@@ -3120,7 +3266,7 @@ class ReaderController extends ChangeNotifier {
           sourceKey: request.effectiveSourceRevision,
           sourceRevision: request.effectiveSourceRevision,
         );
-        _requireRevision(revision);
+        requireCurrent();
         if (cache == null) {
           throw const FormatException('Prepared checkpoint unavailable');
         }
@@ -3631,26 +3777,23 @@ class ReaderController extends ChangeNotifier {
   }
 
   Future<void> _refreshVoiceLibraryState() async {
-    _voiceLibrary = _voiceLibraryCapable?.voiceLibrary ?? const [];
-    _voices = await _ttsEngine.loadVoices();
-
-    if (_voices.isEmpty) {
-      _selectedVoiceId = null;
-      notifyListeners();
-      return;
-    }
-
-    final resolvedVoice = _findVoiceById(_selectedVoiceId) ?? _voices.first;
-    final needsSelectionUpdate = _selectedVoiceId != resolvedVoice.id;
-    _selectedVoiceId = resolvedVoice.id;
-    _voiceSpeeds.putIfAbsent(resolvedVoice.id, () => 1.0);
-
-    if (needsSelectionUpdate) {
-      await _ttsEngine.selectVoice(resolvedVoice);
-      await _ttsEngine.setSpeechRate(currentSpeed);
+    final engine = _ttsEngine;
+    final epoch = _engineEpoch;
+    final library = _voiceLibraryCapable;
+    final voices = await engine.loadVoices();
+    if (!_ownsEngine(engine, epoch)) return;
+    _voiceLibrary = library?.voiceLibrary ?? const [];
+    _voices = voices;
+    if (_selectedVoiceId == null && voices.isNotEmpty) {
+      _selectedVoiceId = voices.first.id;
+      _narratorVoiceIds[_narratorScope] = voices.first.id;
+      await engine.selectVoice(voices.first);
+      if (!_ownsEngine(engine, epoch)) return;
+      await engine.setSpeechRate(currentSpeed);
+      if (!_ownsEngine(engine, epoch)) return;
       await _persistPreferences();
     }
-
+    if (!_ownsEngine(engine, epoch)) return;
     notifyListeners();
   }
 
@@ -3725,6 +3868,9 @@ class ReaderController extends ChangeNotifier {
     unawaited(_planning.shutdown());
     unawaited(_exportPlanner?.shutdown());
     _disposed = true;
+    ++_engineEpoch;
+    ++_previewRevision;
+    _publishEnginePhase(EngineSessionPhase.cancelled);
     final book = _audioBook;
     _audioBook = null;
     if (book != null) {
@@ -3757,25 +3903,21 @@ class ReaderController extends ChangeNotifier {
     super.dispose();
   }
 
-  VoiceProfile? _findVoiceById(String? voiceId) {
-    if (voiceId == null) {
-      return null;
+  void _rememberNarratorIntent() {
+    if (!_runningEngineRetired && _selectedVoiceId != null) {
+      _narratorVoiceIds[_narratorScope] = _selectedVoiceId!;
     }
-
-    for (final voice in _voices) {
-      if (voice.id == voiceId) {
-        return voice;
-      }
-    }
-
-    return null;
   }
 
   Future<void> _persistPreferences() async {
+    // Published book import may install narrator intent through the existing
+    // document owner, so include that choice in the same scoped snapshot.
+    _rememberNarratorIntent();
     _pendingPreferences = ReaderPreferences(
       voxtralQuantizationBits: _voxtralQuantizationBits,
       ttsEngineId: _selectedTtsEngineId,
       selectedVoiceId: _selectedVoiceId,
+      narratorVoiceIds: Map.unmodifiable(_narratorVoiceIds),
       voiceSpeeds: Map.unmodifiable(_voiceSpeeds),
       fontFamily: _fontFamily,
       fontScale: _fontScale,
@@ -3809,6 +3951,7 @@ class ReaderController extends ChangeNotifier {
           voxtralQuantizationBits: value.voxtralQuantizationBits,
           ttsEngineId: value.ttsEngineId,
           selectedVoiceId: value.selectedVoiceId,
+          narratorVoiceIds: value.narratorVoiceIds,
           voiceSpeeds: value.voiceSpeeds,
           fontFamily: value.fontFamily,
           fontScale: value.fontScale,
