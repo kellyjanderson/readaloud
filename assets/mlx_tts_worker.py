@@ -47,6 +47,8 @@ _model_id: str | None = None
 _model_path: str | None = None
 _model_bits = 0
 _model_native_scenes = False
+_model_load_stream: Any = None
+_model_pending_parameters: Any = None
 _protocol_stdout = sys.stdout
 _active_request_id = ""
 _output_lock = threading.Lock()
@@ -87,11 +89,15 @@ def _report_memory(stop: threading.Event) -> None:
 
 
 def _unload() -> None:
-    global _model, _model_id, _model_path, _model_native_scenes
+    global _model, _model_id, _model_path, _model_native_scenes, _model_load_stream
+    # If a join fails, retain its model/tree/stream ownership until retry or
+    # process retirement. Never drop a stream that may still own queued work.
+    _join_model_weights()
     _model = None
     _model_id = None
     _model_path = None
     _model_native_scenes = False
+    _model_load_stream = None
     gc.collect()
     try:
         import mlx.core as mx
@@ -101,12 +107,50 @@ def _unload() -> None:
         pass
 
 
+def _join_model_weights() -> None:
+    global _model_pending_parameters
+    if _model_pending_parameters is not None:
+        import mlx.core as mx
+
+        # The protocol thread owns the stream and the one pending tree. No
+        # loaded response, model replacement or clean shutdown may outrun it.
+        # Hard cancellation remains retirement of this worker process.
+        mx.eval(_model_pending_parameters)
+        mx.synchronize(_model_load_stream)
+        _model_pending_parameters = None
+
+
+def _timing(stage: str, started: float) -> None:
+    # Stage duration is diagnostic, never a fabricated work percentage. Include
+    # it in progress so successful app probes can retain it as well as stderr.
+    elapsed = round((time.monotonic() - started) * 1000, 3)
+    print('[readaloud-timing] ' + json.dumps({
+        'requestId': _active_request_id, 'stage': stage,
+        'elapsedMilliseconds': elapsed,
+    }, separators=(',', ':')), file=sys.stderr, flush=True)
+    message = {
+        'modelBuildAndCodec': 'Speech model and codec constructed',
+        'modelVerification': 'Speech model qualification checked',
+        'modelWeights': 'Remaining speech model weights ready',
+        'modelWeightsAndVerification': 'Speech model weights and qualification ready',
+        'modelLoadTotal': 'Speech model prepared',
+        'referencePrepared': 'Reference voice prepared',
+        'referencePreparationFailed': 'Reference voice preparation failed',
+        'synthesisFirstPacket': 'First native audio packet rendered',
+    }[stage]
+    _progress(f'{message} ({elapsed:g} ms)', stage=stage,
+              elapsed_milliseconds=elapsed)
+
+
 def _progress(message: str, *, stage: str, completed: int | None = None,
-              total: int | None = None, unit: str = "bytes") -> None:
+              total: int | None = None, unit: str = "bytes",
+              elapsed_milliseconds: float | None = None) -> None:
     if not _active_request_id:
         return
     _reply(_active_request_id, type="progress", stage=stage, message=message,
-           completed=completed, total=total, unit=unit)
+           completed=completed, total=total, unit=unit,
+           **({'elapsedMilliseconds': elapsed_milliseconds}
+              if elapsed_milliseconds is not None else {}))
 
 
 def _download_progress_class(total_bytes: int | None, cached_bytes: int):
@@ -277,6 +321,8 @@ def _verify_scene_model(directory: Path, manifest: dict, receipt_root: Path) -> 
 
 def _load(model_id: str, model_path: str, private_cache_path: str, quantization_bits: int = 0) -> dict[str, Any]:
     global _model, _model_id, _model_path, _model_bits, _model_native_scenes
+    global _model_load_stream, _model_pending_parameters
+    load_started = time.monotonic()
     if quantization_bits not in (0, 4):
         raise ValueError('Supported inference precision: full or 4-bit')
     if model_id not in MODEL_IDS:
@@ -301,7 +347,22 @@ def _load(model_id: str, model_path: str, private_cache_path: str, quantization_
     from mlx_audio.tts import load
 
     _progress("Loading speech model weights into memory…", stage="modelLoad")
-    _model = load(str(directory), lazy=False)
+    build_started = time.monotonic()
+    # The provider's supported lazy flag preserves its full construction and
+    # post-load codec setup. For qualified Drama, overlap the remaining weight
+    # evaluation with the existing CPU checksum/receipt work below. There is
+    # one stream/tree per model, no executor or additional queued model job.
+    overlap_weights = model_id == 'fish_drama3' and quantization_bits == 0
+    if overlap_weights:
+        _model_load_stream = mx.new_stream(mx.gpu)
+        with mx.stream(_model_load_stream):
+            _model = load(str(directory), lazy=True)
+        _model_pending_parameters = _model.parameters()
+        mx.async_eval(_model_pending_parameters)
+    else:
+        _model = load(str(directory), lazy=False)
+    _timing('modelBuildAndCodec', build_started)
+    weights_started = time.monotonic()
     if quantization_bits and model_id not in DRAMA_MODELS:
         _progress('Preparing faster 4-bit inference…', stage='modelQuantization')
         from mlx_audio.lm.convert import quantize_model
@@ -310,15 +371,28 @@ def _load(model_id: str, model_path: str, private_cache_path: str, quantization_
         _model, _ = quantize_model(_model, {}, 64, quantization_bits, quant_predicate=predicate)
         mx.eval(_model.parameters())
     _model_native_scenes = False
-    if model_id == 'fish_drama3' and quantization_bits == 0:
-        manifest = json.loads(Path(__file__).with_name('fish_drama_model_checksums.json').read_text())
-        _model_native_scenes = _verify_scene_model(directory, manifest,
-            Path(private_cache_path).parent / 'model-qualification')
-        if not _model_native_scenes:
-            _progress('Unverified model revision: native scenes and delivery cues are disabled', stage='modelContext')
+    try:
+        if overlap_weights:
+            verification_started = time.monotonic()
+            _progress('Checking speech model qualification…', stage='modelQualification')
+            manifest = json.loads(Path(__file__).with_name('fish_drama_model_checksums.json').read_text())
+            _model_native_scenes = _verify_scene_model(directory, manifest,
+                Path(private_cache_path).parent / 'model-qualification')
+            _timing('modelVerification', verification_started)
+            if not _model_native_scenes:
+                _progress('Unverified model revision: native scenes and delivery cues are disabled', stage='modelContext')
+    finally:
+        join_started = time.monotonic()
+        if overlap_weights:
+            _progress('Waiting for remaining speech model weights…', stage='modelWeights')
+        _join_model_weights()
+        if overlap_weights:
+            _timing('modelWeights', join_started)
+    _timing('modelWeightsAndVerification', weights_started)
     _model_bits = quantization_bits
     _model_id = model_id
     _model_path = str(directory)
+    _timing('modelLoadTotal', load_started)
     return {"modelId": model_id, "loaded": True, "nativeScenesQualified": _model_native_scenes, "modelIdentity": _model_identity(directory, model_id, quantization_bits)}
 
 
@@ -459,7 +533,36 @@ def _drama_reference_inputs(request: dict[str, Any], text: str):
     return f'<|speaker:{slot}|> {text}', audios, transcripts
 
 
+def _drama_results(model: Any, **kwargs):
+    # The protocol thread owns this temporary per-instance instrumentation.
+    # Always restore it on exhaustion, generator close or producer failure.
+    voice = getattr(model, '_voice', None)
+    missing = object()
+    previous = vars(model).get('_voice', missing)
+    if callable(voice):
+        def timed_voice(*args, **voice_kwargs):
+            started = time.monotonic()
+            _progress('Preparing reference voice…', stage='referencePreparing')
+            try:
+                result = voice(*args, **voice_kwargs)
+            except Exception:
+                _timing('referencePreparationFailed', started)
+                raise
+            _timing('referencePrepared', started)
+            return result
+        model._voice = timed_voice
+    try:
+        yield from model.generate(**kwargs)
+    finally:
+        if callable(voice):
+            if previous is missing:
+                delattr(model, '_voice')
+            else:
+                model._voice = previous
+
+
 def _synthesize(request: dict[str, Any]) -> dict[str, Any]:
+    synthesis_started = time.monotonic()
     if _model is None or _model_id is None:
         raise RuntimeError("No MLX TTS model is loaded.")
     if request.get("modelId") != _model_id:
@@ -502,8 +605,9 @@ def _synthesize(request: dict[str, Any]) -> dict[str, Any]:
         )
     elif _model_id in DRAMA_MODELS:
         text, reference, transcript = _drama_reference_inputs(request, text)
-        results = _model.generate(text=text, ref_audio=reference, ref_text=transcript,
-                                  stream=True, streaming_interval=(0.5 if request.get('enableAudioPackets') is True else 2.0))
+        results = _drama_results(_model, text=text, ref_audio=reference, ref_text=transcript,
+                                stream=True, streaming_interval=0.32,
+                                first_chunk_frames=4)
     else:
         reference, transcript = _reference_inputs(request)
         results = (
@@ -573,6 +677,7 @@ def _synthesize(request: dict[str, Any]) -> dict[str, Any]:
             packet_count += 1
         frame_count += len(pcm)
         if wav.getnframes() == len(pcm):
+            _timing('synthesisFirstPacket', synthesis_started)
             _progress('First native audio packet rendered', stage='firstAudioPacket',
                       completed=len(pcm), unit='frames')
 

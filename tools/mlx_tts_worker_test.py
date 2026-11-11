@@ -3,6 +3,7 @@ import importlib.util
 import hashlib
 from pathlib import Path
 import tempfile
+import contextlib
 import io
 import json
 import wave
@@ -24,6 +25,131 @@ spec.loader.exec_module(worker)
 
 
 class GeneratorAdapterTest(unittest.TestCase):
+    def test_owned_stream_joins_real_bounded_mlx_graph_without_model_weights(self):
+        worker._unload()
+        stream = mx.new_stream(mx.gpu)
+        with mx.stream(stream):
+            parameters = {'weight': mx.ones((2, 2)) + 2}
+        with patch.object(worker, '_model_load_stream', stream), \
+                patch.object(worker, '_model_pending_parameters', parameters):
+            mx.async_eval(parameters)
+            worker._join_model_weights()
+            self.assertIsNone(worker._model_pending_parameters)
+            self.assertEqual(parameters['weight'].sum().item(), 12)
+
+    def test_drama_load_joins_async_weights_after_existing_qualification(self):
+        worker._unload()
+        events = []
+        parameters = {'weight': mx.ones((2, 2))}
+        model = SimpleNamespace(parameters=lambda: parameters)
+        stream = object()
+        with tempfile.TemporaryDirectory() as root:
+            (Path(root) / 'config.json').write_text('{}')
+            def verify(*args):
+                self.assertIsNone(worker._model_id)
+                self.assertIs(worker._model_pending_parameters, parameters)
+                events.append('verify')
+                return True
+            with patch('subprocess.check_output', return_value=b'137438953472'), \
+                    patch('mlx_audio.tts.load', side_effect=lambda *a, **k: (events.append(('load', k)), model)[1]), \
+                    patch.object(mx, 'new_stream', return_value=stream), \
+                    patch.object(mx, 'stream', return_value=contextlib.nullcontext()), \
+                    patch.object(mx, 'async_eval', side_effect=lambda tree: events.append('async')), \
+                    patch.object(mx, 'eval', side_effect=lambda tree: events.append('join')), \
+                    patch.object(mx, 'synchronize', side_effect=lambda owned: events.append(('sync', owned))), \
+                    patch.object(worker, '_verify_scene_model', side_effect=verify), \
+                    patch.object(worker, '_timing'):
+                result = worker._load('fish_drama3', root, root)
+            self.assertEqual(events, [('load', {'lazy': True}), 'async', 'verify', 'join', ('sync', stream)])
+            self.assertTrue(result['loaded'])
+            self.assertTrue(result['nativeScenesQualified'])
+            self.assertIsNone(worker._model_pending_parameters)
+            self.assertEqual(worker._model_id, 'fish_drama3')
+        worker._unload()
+
+    def test_failed_qualification_still_joins_and_cannot_report_loaded(self):
+        worker._unload()
+        parameters = {}
+        model = SimpleNamespace(parameters=lambda: parameters)
+        with tempfile.TemporaryDirectory() as root:
+            (Path(root) / 'config.json').write_text('{}')
+            with patch('subprocess.check_output', return_value=b'137438953472'), \
+                    patch('mlx_audio.tts.load', return_value=model), \
+                    patch.object(mx, 'async_eval'), patch.object(mx, 'eval') as join, \
+                    patch.object(mx, 'synchronize') as synchronize, \
+                    patch.object(worker, '_verify_scene_model', side_effect=RuntimeError('qualification failed')), \
+                    patch.object(worker, '_timing'):
+                with self.assertRaisesRegex(RuntimeError, 'qualification failed'):
+                    worker._load('fish_drama3', root, root)
+                join.assert_called_once_with(parameters)
+                synchronize.assert_called_once_with(worker._model_load_stream)
+            self.assertIsNone(worker._model_id)
+            self.assertIsNone(worker._model_pending_parameters)
+        worker._unload()
+
+    def test_unload_joins_owned_pending_work_before_releasing_model(self):
+        worker._unload()
+        parameters, model, stream = {}, object(), object()
+        with patch.object(worker, '_model', model), \
+                patch.object(worker, '_model_pending_parameters', parameters), \
+                patch.object(worker, '_model_load_stream', stream), \
+                patch.object(mx, 'eval') as join, patch.object(mx, 'synchronize') as synchronize:
+            worker._unload()
+            join.assert_called_once_with(parameters)
+            synchronize.assert_called_once_with(stream)
+            self.assertIsNone(worker._model)
+            self.assertIsNone(worker._model_load_stream)
+            self.assertIsNone(worker._model_pending_parameters)
+
+    def test_drama_reference_timing_restores_instance_on_failure_and_close(self):
+        timings = []
+        class Model:
+            def _voice(self, ref):
+                return ref
+            def generate(self, **kwargs):
+                self._voice('reference')
+                yield 'first'
+                raise RuntimeError('late error')
+        model = Model()
+        for close in (False, True):
+            with self.subTest(close=close), patch.object(worker, '_timing', side_effect=lambda stage, start: timings.append(stage)):
+                results = worker._drama_results(model)
+                self.assertEqual(next(results), 'first')
+                self.assertIn('_voice', vars(model))
+                if close:
+                    results.close()
+                else:
+                    with self.assertRaisesRegex(RuntimeError, 'late error'):
+                        next(results)
+                self.assertNotIn('_voice', vars(model))
+        self.assertEqual(timings, ['referencePrepared'] * 2)
+
+    def test_failed_unload_retains_stream_and_tree_until_join_or_retirement(self):
+        worker._unload()
+        parameters, model, stream = {}, object(), object()
+        with patch.object(worker, '_model', model), \
+                patch.object(worker, '_model_pending_parameters', parameters), \
+                patch.object(worker, '_model_load_stream', stream), \
+                patch.object(mx, 'eval', side_effect=RuntimeError('join failed')):
+            with self.assertRaisesRegex(RuntimeError, 'join failed'):
+                worker._unload()
+            self.assertIs(worker._model, model)
+            self.assertIs(worker._model_load_stream, stream)
+            self.assertIs(worker._model_pending_parameters, parameters)
+
+    def test_stage_timing_is_request_scoped_diagnostic_without_fake_work(self):
+        with patch.object(worker, '_active_request_id', 'load-request'), \
+                patch.object(worker, '_reply') as reply, \
+                patch.object(worker.time, 'monotonic', return_value=1.25), \
+                contextlib.redirect_stderr(io.StringIO()):
+            worker._timing('modelBuildAndCodec', 1)
+        args, event = reply.call_args
+        self.assertEqual(args, ('load-request',))
+        self.assertEqual(event['stage'], 'modelBuildAndCodec')
+        self.assertEqual(event['elapsedMilliseconds'], 250)
+        self.assertIsNone(event['completed'])
+        self.assertIsNone(event['total'])
+
     def test_opt_in_packets_are_closed_exact_pcm_before_final_publication(self):
         events = []
         class Model:
@@ -187,6 +313,8 @@ class GeneratorAdapterTest(unittest.TestCase):
             self.assertEqual(calls[0]['ref_text'], [
                 '<|speaker:0|> Reference alice.', '<|speaker:1|> Reference beth.'])
             self.assertTrue(calls[0]['stream'])
+            self.assertEqual(calls[0]['streaming_interval'], 0.32)
+            self.assertEqual(calls[0]['first_chunk_frames'], 4)
 
     def test_installed_drama_generator_exact_boundary_writes_complete_wav(self):
         """Use the installed producer's real framing, with bounded codec input.
