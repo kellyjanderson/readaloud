@@ -459,14 +459,6 @@ Future<void> main(List<String> args) async {
       prepared['totalFrames'] as int,
       prepared['totalFrames'] as int,
     );
-    phase = 'capture-wait';
-    c.report(phase, null, null);
-    final captureGate = File('${output.parent.path}/capture.ready');
-    await until(
-      () => captureGate.existsSync(),
-      'Capture readiness',
-      seconds: 30,
-    );
     phase = 'queue-admission';
     c.report(phase, null, null);
     if (mode == 'packets') {
@@ -491,6 +483,17 @@ Future<void> main(List<String> args) async {
         'reference': joined,
       });
     }
+    // Initialize the real native player before asking capture to observe its
+    // process. Play still waits for actual capture frames; this is a warm
+    // diagnostic, never a launch/load clock measurement.
+    phase = 'capture-wait';
+    c.report(phase, null, null);
+    final captureGate = File('${output.parent.path}/capture.ready');
+    await until(
+      () => captureGate.existsSync(),
+      'Capture readiness',
+      seconds: 30,
+    );
     phase = 'replay';
     final segment = <String, Object?>{
       'label': 'queue-replay-$mode',
