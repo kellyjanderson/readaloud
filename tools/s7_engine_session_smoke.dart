@@ -211,7 +211,9 @@ Future<void> main(List<String> args) async {
       () => players.first.playing && players.first.position > Duration.zero,
       'Real first packet',
     );
-    await Future<void>.delayed(const Duration(milliseconds: 200));
+    // Allow a real positive prefix to traverse the native output/capture path
+    // before requesting Pause. Player position alone is not emitted audio.
+    await Future<void>.delayed(const Duration(milliseconds: 750));
     receipt['positivePauseRequestedUnixMicros'] =
         DateTime.now().microsecondsSinceEpoch;
     await c.pausePlayback();
