@@ -1,6 +1,8 @@
 #!/usr/bin/env ruby
 # Default measures target load after ordinary startup; no capture/Play gate.
 # Explicit first-load retains launch diagnostic; packet-cancel retains cold cancellation.
+# READALOUD_S7_INFERENCE_POLICY selects a QA-only differential (never a pass).
+# READALOUD_FIRST_LOAD_MANAGED_MODEL=1 opts into offline service model resolution.
 require 'json'
 require 'digest'
 require 'fileutils'
@@ -12,9 +14,18 @@ abort 'Usage: run_radoc_first_load_smoke.rb APP_BUNDLE FISH_ENGINE INPUT_DOCUMEN
 bundle, engine, book, output, capture, mode = ARGV
 mode ||= 'load-after-startup'
 abort 'Invalid probe mode' unless %w[load-after-startup first-load packet-cancel].include?(mode)
+inference_policy = ENV['READALOUD_S7_INFERENCE_POLICY']
+abort 'Invalid QA inference policy' unless inference_policy.nil? || %w[background-utility utility].include?(inference_policy)
 bundle, book, output, capture = [bundle, book, output, capture].map { |p| File.expand_path(p) }
 abort 'Expected Fish engine' unless engine.start_with?('fish_drama3')
-abort 'Missing existing model' unless File.directory?(ENV.fetch('READALOUD_MLX_TTS_MODEL_PATH', ''))
+managed_model = ENV['READALOUD_FIRST_LOAD_MANAGED_MODEL'] == '1'
+if managed_model
+  abort 'Managed model mode cannot use an explicit model path' if ENV.key?('READALOUD_MLX_TTS_MODEL_PATH')
+  # Let the existing service resolve and verify the pinned installed/cache
+  # model, including normal memory admission. Never acquire models in this probe.
+else
+  abort 'Missing existing model' unless File.directory?(ENV.fetch('READALOUD_MLX_TTS_MODEL_PATH', ''))
+end
 explicit_python = ENV['READALOUD_MLX_PYTHON']
 abort 'Invalid explicit Python override' if explicit_python && !explicit_python.empty? && !File.executable?(explicit_python)
 app = File.join(bundle, 'Contents/MacOS/read_aloud')
@@ -34,6 +45,11 @@ app_log = File.join(output, 'app.log')
 File.write(app_log, '')
 result = {passed: false, mode: mode, launchMethod: 'LaunchServices open -W -n', deadlineSeconds: 300, normalQuit: false, forcedCleanup: false, captureIntroducedPlayGate: false}
 errors = []
+if inference_policy
+  result[:inferencePolicyDiagnostic] = inference_policy
+  errors << 'QA-only child scheduling differential; production policy unchanged'
+end
+result[:managedModelResolution] = 'existing service; offline pinned assets only' if managed_model
 alive = lambda do |p|
   Process.kill(0, p)
   true
@@ -61,7 +77,7 @@ begin
   result[:launchUtc] = launched.utc.iso8601(6)
   micros = (launched.to_r * 1_000_000).to_i
   result[:launchMonotonicRawNanos] = Process.clock_gettime(Process::CLOCK_MONOTONIC_RAW, :nanosecond)
-  opener = Process.spawn('/usr/bin/open', '-W', '-n', '-a', bundle, '--stdout', app_log, '--stderr', app_log, '--env', "READALOUD_SMOKE_LAUNCH_UNIX_MICROS=#{micros}", '--env', "READALOUD_FIRST_LOAD_EXPECTED_WORDS=#{expected_words}", *%w[READALOUD_MLX_TTS_MODEL_PATH READALOUD_MLX_PYTHON READALOUD_SMOKE_QUANTIZATION_BITS READALOUD_DISABLE_SPEECH_ACTIVITY READALOUD_MAPPED_MODEL_LOAD READALOUD_SERIAL_MODEL_LOAD READALOUD_CANCEL_INPUT_MODE].filter_map { |key| ['--env', "#{key}=#{ENV[key]}"] if ENV[key] }.flatten, '--args', mode, engine, copied, receipt, pgroup: true)
+  opener = Process.spawn('/usr/bin/open', '-W', '-n', '-a', bundle, '--stdout', app_log, '--stderr', app_log, '--env', "READALOUD_SMOKE_LAUNCH_UNIX_MICROS=#{micros}", '--env', "READALOUD_FIRST_LOAD_EXPECTED_WORDS=#{expected_words}", *%w[READALOUD_MLX_TTS_MODEL_PATH READALOUD_MLX_PYTHON READALOUD_SMOKE_QUANTIZATION_BITS READALOUD_DISABLE_SPEECH_ACTIVITY READALOUD_MAPPED_MODEL_LOAD READALOUD_SERIAL_MODEL_LOAD READALOUD_CANCEL_INPUT_MODE READALOUD_S7_INFERENCE_POLICY].filter_map { |key| ['--env', "#{key}=#{ENV[key]}"] if ENV[key] }.flatten, *(managed_model ? ['--env', 'HF_HUB_OFFLINE=1', '--env', 'READALOUD_MLX_TTS_MODEL_PATH='] : []), '--args', mode, engine, copied, receipt, pgroup: true)
   result[:launcherPid] = opener
   discovery_end = clock.call + 15
   loop do
