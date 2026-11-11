@@ -704,8 +704,11 @@ class ReaderController extends ChangeNotifier {
     scope: scope,
   );
 
-  String _readingStageOperationId(ReadingStageTicket ticket) =>
-      '${ticket.ownerId}:${ticket.documentRevision}:${ticket.producerId}:${ticket.generation}:${ticket.scope}';
+  String _readingStageOperationId(
+    ReadingStageTicket ticket, {
+    int? generation,
+  }) =>
+      '${ticket.ownerId}:${ticket.documentRevision}:${ticket.producerId}:${generation ?? ticket.generation}:${ticket.scope}';
 
   /// Main-isolate publication route for planning/resources and the downstream
   /// synthesis/persistence owners. Counts are supplied by completed work.
@@ -3556,7 +3559,27 @@ class ReaderController extends ChangeNotifier {
         outputPath,
         revision,
         force: forceAudioBook,
-        onOperation: (ticket) => packageOperation = ticket,
+        onOperation: (ticket) {
+          packageOperation = ticket;
+          // This callback precedes publication of the new attempt, while the
+          // failed predecessor still owns its lane and any duplicate status.
+          final previous = _operations.currentInLane(
+            '${OperationOwnerKind.readingStage.name}:${ticket.stage.name}:${ticket.scope}',
+          );
+          if (current() &&
+              previous != null &&
+              previous.state == OperationState.failed &&
+              previous.ownerEpoch == ticket.documentRevision &&
+              previous.attempt < ticket.generation &&
+              previous.operationId ==
+                  _readingStageOperationId(
+                    ticket,
+                    generation: previous.attempt,
+                  ) &&
+              _statusOperationKey == previous.key) {
+            _statusMessage = null;
+          }
+        },
       );
       if (audioBook != null) return audioBook;
       final request = _activePreparationRequest;

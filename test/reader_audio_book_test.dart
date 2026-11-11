@@ -401,6 +401,109 @@ void main() {
       await tester.pumpWidget(const SizedBox());
     },
   );
+  for (final unrelatedStatus in [false, true]) {
+    testWidgets(
+      unrelatedStatus
+          ? 'retry Save begins without clearing unrelated identical status'
+          : 'retry Save without Clear retires its failure status before success',
+      (tester) async {
+        await tester.pumpWidget(ReadAloudApp(controller: controller));
+        await tester.pumpAndSettle();
+        await tester.runAsync(() async {
+          await controller.importFilePaths([(await fixture()).path]);
+          final blocker = await File(
+            '${temp.path}/not-a-directory',
+          ).writeAsString('blocked');
+          expect(
+            await controller.exportDocumentToPath('${blocker.path}/book.radoc'),
+            isNull,
+          );
+        });
+        final failure = controller.feedbackOperations.singleWhere(
+          (operation) => operation.scope == 'Save audio book',
+        );
+        final failedStatus = controller.statusMessage!;
+        expect(controller.statusOwnedByInlineFailure, isTrue);
+        if (unrelatedStatus) controller.showStatusMessage(failedStatus);
+        await tester.pump();
+
+        late Completer<void> started;
+        late Completer<void> release;
+        await tester.runAsync(() async {
+          started = Completer<void>();
+          release = Completer<void>();
+          TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+              .setMockMethodCallHandler(
+                const MethodChannel('read_aloud/document_access'),
+                (call) async {
+                  if (call.method != 'createRadocExportStage') {
+                    throw MissingPluginException();
+                  }
+                  started.complete();
+                  await release.future;
+                  return (await Directory(
+                    '${temp.path}/retry-stage',
+                  ).create()).path;
+                },
+              );
+        });
+        late Future<File?> retry;
+        try {
+          await tester.runAsync(() async {
+            retry = controller.exportDocumentToPath(
+              '${temp.path}/retried.radoc',
+            );
+            await started.future.timeout(const Duration(seconds: 3));
+          });
+          await tester.pump();
+          final active = controller.feedbackOperations.singleWhere(
+            (operation) =>
+                operation.scope == failure.scope && !operation.state.isTerminal,
+          );
+          expect(active.operationId, isNot(failure.operationId));
+          expect(active.retryOf, failure.operationId);
+          expect(
+            controller.statusMessage,
+            unrelatedStatus ? failedStatus : null,
+          );
+          expect(
+            find.byKey(const Key('status-toast')),
+            unrelatedStatus ? findsOneWidget : findsNothing,
+          );
+          if (unrelatedStatus) {
+            controller.showStatusMessage('A newer unrelated status.');
+            await tester.pump();
+            expect(controller.statusMessage, 'A newer unrelated status.');
+          }
+        } finally {
+          release.complete();
+          await tester.runAsync(() async {
+            expect(await retry, isNotNull, reason: controller.statusMessage);
+          });
+        }
+        await tester.pump();
+        expect(
+          controller.feedbackOperations
+              .singleWhere(
+                (operation) =>
+                    operation.scope == failure.scope &&
+                    operation.state == OperationState.succeeded,
+              )
+              .retryOf,
+          failure.operationId,
+        );
+        // Successful Save retains its existing success notification policy.
+        expect(
+          controller.statusMessage,
+          'Saved audio book to ${temp.path}/retried.radoc.',
+        );
+        expect(controller.statusMessage, isNot(failedStatus));
+        expect(find.byKey(const Key('status-toast')), findsOneWidget);
+        expect(engine.modelCalls, 0);
+        await tester.pumpWidget(const SizedBox());
+      },
+    );
+  }
   test('native scene joins preserve paragraph source equivalence', () async {
     await controller.importFilePaths([
       (await fixture(paragraphBreak: true)).path,
