@@ -25,12 +25,13 @@ class NativeMainResponsivenessProbe {
       final requestedUnixMicros = DateTime.now().microsecondsSinceEpoch;
       final stage = phase();
       if (Platform.environment['READALOUD_S7_PROFILE_STALLS'] == '1' &&
+          stage != 'initialization' &&
           _slowRequests < 4) {
         _slowRequest = Timer(const Duration(milliseconds: 200), () {
           if (_closed) return;
           _slowRequests++;
           stdout.writeln(
-            'NATIVE_MAIN_PROBE_PENDING ${requestedUnixMicros} $stage',
+            'NATIVE_MAIN_PROBE_PENDING $requestedUnixMicros $stage',
           );
         });
       }
