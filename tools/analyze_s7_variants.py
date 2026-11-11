@@ -5,7 +5,8 @@ Usage: analyze_s7_variants.py RUN_DIRECTORY NEW_OUTPUT.json
 Reads receipt.json, runner.json, capture.wav and capture.wav.timing.json. Queue
 order and copied-file SHA/size are authoritative; names never establish order.
 Every accepted reference uses its complete active waveform at correlation .98.
-Only the last queued WAV interrupted by Pause may be excluded, explicitly.
+Only the final playback-interval WAV interrupted by Pause may be excluded,
+explicitly. Prepared queue entries beyond the Pause witness remain unplayed.
 This does not establish transcript/voice quality, human listening, memory or M3.
 """
 import argparse
@@ -154,6 +155,8 @@ def analyze(directory):
                          'minimumCompleteReferenceSeconds': MIN_COMPLETE_SECONDS},
               'limits': 'Full queued-waveform identity/order and external joins for sustained native runs. '
                         'Final Pause-interrupted WAV is excluded explicitly, never prefix-qualified. '
+                        'Source-silent packets have signal and aggregate timing checks between audible anchors; '
+                        'individual silent boundaries have no acoustic identity. '
                         'No transcript, perceived quality/voice, human listening, startup, memory or M3 acceptance.'}
     try:
         runtime_gates(native, runner, timing)
@@ -226,26 +229,64 @@ def analyze(directory):
                 if not observed_order or observed_order[-1] != path:
                     observed_order.append(path)
             indices = [paths.index(p) for p in observed_order]
-            require(indices and all(a < b for a, b in zip(indices, indices[1:])),
-                    'Player observations contradict queued source order')
+            require(indices, 'No native source observations')
+            # sequence/currentIndex/position are read separately by the probe.
+            # A brief mixed snapshot is a search hint, never authority to change
+            # queue order or waive acoustic order. Preserve anomalies explicitly.
+            report['playerSnapshotOrderAnomalies'] = [
+                {'fromQueueIndex': a, 'toQueueIndex': b}
+                for a, b in zip(indices, indices[1:]) if a >= b]
+            # Rendering may queue well ahead of playback. Bound the measured
+            # interval using its final source witness, including the first
+            # paused sample if delivered during Pause's recorded completion.
+            returned = finite(segment.get('pauseReturnedUnixMicros', pause), 'Pause completion')
+            require(pause <= returned <= pause + 10_000_000, 'Invalid Pause completion interval')
+            after_pause = [s for s in samples if s.get('engineIndex') == engine
+                           and pause <= s['unixMicros'] <= min(returned, pause + 250_000)
+                           and s.get('source') is not None and s.get('positionMs', 0) > 0]
+            witness = after_pause[0] if after_pause else observations[-1]
+            require(abs(witness['unixMicros'] - pause) <= 250_000,
+                    'No source witness within 250ms of Pause')
+            final_path = source_path(witness['source'])
+            require(final_path in paths, 'Pause source absent from queued evidence')
+            final_index = paths.index(final_path)
+            report['pauseSourceWitness'] = {'queueIndex': final_index, 'sample': witness}
+            report['preparedTailOutsidePlaybackInterval'] = [
+                {'queueIndex': i, 'sourcePath': q['sourcePath'], 'reference': q['reference']}
+                for i, q in enumerate(queued) if i > final_index]
             previous_end = None
-            for number, (row, (source_rate, pcm)) in enumerate(zip(queued, references)):
+            pending_silent_seconds = 0.
+            pending_silent_packets = []
+            report['encodedSilentPackets'] = []
+            for number, (row, (source_rate, pcm)) in enumerate(zip(queued[:final_index + 1], references)):
                 source = resample(pcm, source_rate, comparison_rate)
-                duration = len(source) / comparison_rate
+                duration = len(pcm) / source_rate
                 active = np.flatnonzero(np.abs(source) > .01)
-                require(len(active) >= comparison_rate / 10, 'Near-silent queued waveform')
+                if not len(active):
+                    # A source-encoded silent packet has no acoustic identity.
+                    # Preserve its complete duration between audible anchors;
+                    # never count it toward 50s of waveform-matched evidence.
+                    silent_record = {
+                        'queueIndex': number, 'sourcePath': row['sourcePath'],
+                        'durationSeconds': duration, 'reference': row['reference'],
+                        'scope': 'Source-encoded silence; signal and aggregate timing between full acoustic anchors'}
+                    report['encodedSilentPackets'].append(silent_record)
+                    pending_silent_packets.append(silent_record)
+                    pending_silent_seconds += duration
+                    continue
                 start, end = int(active[0]), int(active[-1]) + 1
                 seen = observations_by_path.get(row['sourcePath'], [])
                 estimates = [(s['unixMicros'] - origin) / 1e6 - s['positionMs'] / 1000 for s in seen]
-                expected = float(np.median(estimates)) if estimates else previous_end
+                ordered_end = None if previous_end is None else previous_end + pending_silent_seconds
+                expected = float(np.median(estimates)) if estimates else ordered_end
                 require(expected is not None, 'Initial source has no native playback observation')
                 # Restrict FFT to the source's observed onset neighborhood. Permit
                 # up to 2s of join displacement to diagnose (and reject) stalls.
                 low = max(low_time, expected - 1.)
                 high = min(stop, expected + duration + 1.)
-                if previous_end is not None:
-                    low = max(low, previous_end - .05)
-                    high = min(high, previous_end + duration + 2.)
+                if ordered_end is not None:
+                    low = max(low, ordered_end - .05)
+                    high = min(high, ordered_end + duration + 2.)
                 base = max(0, math.floor(low * rate))
                 finish = min(len(captured), math.ceil(high * rate))
                 window = resample_poly(captured[base:finish], 4, 1)
@@ -256,12 +297,12 @@ def analyze(directory):
                     # The only permitted exclusion is the final source when the
                     # expected full end crosses Pause. Wrong/missing earlier or
                     # already-completable final audio always fails.
-                    final_start = previous_end if previous_end is not None else expected
-                    interrupted = (number == len(queued) - 1 and final_start < stop
+                    final_start = ordered_end if ordered_end is not None else expected
+                    interrupted = (number == final_index and final_start < stop
                                    and final_start + duration > stop + .001
-                                   and ((seen and row['sourcePath'] == observed_order[-1])
-                                        or (not seen and previous_end is not None
-                                            and 0 <= stop - previous_end <= .25)))
+                                   and ((seen and row['sourcePath'] == final_path)
+                                        or (not seen and ordered_end is not None
+                                            and 0 <= stop - ordered_end <= .25)))
                     require(interrupted, f'No complete ordered waveform #{number + 1}; best={score:.6f}')
                     report['excludedFinalWaveform'] = {
                         'queueIndex': number, 'sourcePath': row['sourcePath'],
@@ -269,20 +310,44 @@ def analyze(directory):
                         'observedByPlayer': bool(seen), 'expectedStartSeconds': expected,
                         'reason': 'Final queued WAV interrupted by Pause; no partial waveform acceptance'}
                     continue
-                gap = None if previous_end is None else (actual - previous_end) * 1000
+                gap = None if ordered_end is None else (actual - ordered_end) * 1000
                 record = {'queueIndex': number, 'sourcePath': row['sourcePath'],
                           'reference': row['reference'], 'captureStartSeconds': actual,
                           'captureEndSeconds': actual + duration, 'fullActiveCorrelation': score,
                           'activeComparisonFrames': end - start, 'sourceDurationSeconds': duration,
-                          'externalGapBeforeMs': gap, 'searchWindowSeconds': (finish - base) / rate}
+                          'externalGapBeforeMs': gap, 'encodedSilentSecondsBefore': pending_silent_seconds,
+                          'searchWindowSeconds': (finish - base) / rate}
                 report['matches'].append(record)
+                silent_start = (previous_end if previous_end is not None
+                                else actual - pending_silent_seconds)
+                for silent in pending_silent_packets:
+                    silent_end = silent_start + silent['durationSeconds']
+                    # Edge guards cover the existing 10ms timing policy and
+                    # resampling boundaries, not arbitrary missing source time.
+                    a = max(0, math.ceil((silent_start + .01) * rate))
+                    b = min(len(captured), math.floor((silent_end - .01) * rate))
+                    require(a < b and silent_start >= low_time - .01 and silent_end <= stop,
+                            'Silent packet lacks bounded captured interval')
+                    silent['captureStartSeconds'] = silent_start
+                    silent['captureEndSeconds'] = silent_end
+                    silent['interiorCapturedPeak'] = float(np.max(np.abs(captured[a:b])))
+                    require(silent['interiorCapturedPeak'] <= .01,
+                            'Unexpected captured signal in source-encoded silent packet')
+                    silent_start = silent_end
                 if gap is not None and abs(gap) > MAX_GAP_MS:
                     report['errors'].append(f'External join #{number}: {gap:.3f}ms exceeds 10ms')
                 report['completeReferenceSeconds'] += duration
                 previous_end = actual + duration
+                pending_silent_seconds = 0.
+                pending_silent_packets = []
+            require(pending_silent_seconds == 0.,
+                    'Unanchored silent tail cannot prove complete end/continuity')
             require(report['completeReferenceSeconds'] >= MIN_COMPLETE_SECONDS,
                     f'Insufficient full-waveform coverage: {report["completeReferenceSeconds"]:.3f}s < 50s')
             require(len(report['matches']) >= 2, 'No measured waveform join')
+            require(report['excludedFinalWaveform'] is not None
+                    or 0 <= stop - previous_end <= .25,
+                    'Final complete waveform does not reach the Pause interval')
             report['maximumAbsoluteExternalJoinMs'] = max(
                 abs(m['externalGapBeforeMs']) for m in report['matches'][1:])
             report['minimumFullActiveCorrelation'] = min(

@@ -107,6 +107,31 @@ class S7VariantAcceptanceTest(unittest.TestCase):
         wavfile.write(self.root / 'capture.wav', self.rate, self.capture.astype(np.float32))
         return analyze(self.root)
 
+    def reference(self, name, pcm, rate=8000):
+        path = self.root / name
+        wavfile.write(path, rate, pcm)
+        return {'path': str(path), 'sha256': hashlib.sha256(path.read_bytes()).hexdigest(),
+                'bytes': path.stat().st_size, 'sampleRate': rate,
+                'channels': 1, 'bitsPerSample': 16}
+
+    def split_first_source_at_encoded_pause(self):
+        _, pcm = wavfile.read(self.native['queuedAudio'][0]['reference']['path'])
+        spans = [pcm[:32000], pcm[32000:36800], pcm[36800:]]
+        original = self.native['queuedAudio'][0]
+        split = []
+        for number, span in enumerate(spans):
+            row = copy.deepcopy(original)
+            row['sourcePath'] = f'/production/split-{number}.wav'
+            row['reference'] = self.reference(f'split-{number}.wav', span)
+            split.append(row)
+        for sample in self.native['playerSamples']:
+            if sample['source'] == Path(original['sourcePath']).as_uri():
+                position = sample['positionMs']
+                part = 0 if position < 4000 else 1 if position < 4600 else 2
+                sample['source'] = Path(split[part]['sourcePath']).as_uri()
+                sample['positionMs'] -= [0, 4000, 4600][part]
+        self.native['queuedAudio'][:1] = split
+
     def assert_refused(self, result, text=None):
         self.assertFalse(result['passed'], result)
         if text:
@@ -136,7 +161,84 @@ class S7VariantAcceptanceTest(unittest.TestCase):
 
     def test_queue_order_cannot_be_replaced_by_names_or_sample_order(self):
         self.native['queuedAudio'][0:2] = self.native['queuedAudio'][1::-1]
-        self.assert_refused(self.run_analysis(), 'contradict queued source order')
+        self.assert_refused(self.run_analysis(), 'No complete ordered waveform')
+
+    def test_mixed_player_snapshots_do_not_override_complete_acoustic_order(self):
+        # Mirrors non-atomic sequence/index observations: briefly show a future
+        # queued source, then the still-current source. Actual audio is ordered.
+        sample = self.native['playerSamples'][120]
+        sample['source'] = Path(self.queued[2]['sourcePath']).as_uri()
+        result = self.run_analysis()
+        self.assertTrue(result['passed'], result)
+        self.assertTrue(result['segments'][0]['playerSnapshotOrderAnomalies'])
+
+    def test_prepared_tail_is_not_misreported_as_emitted_or_partial_audio(self):
+        for i in range(12):
+            row = copy.deepcopy(self.native['queuedAudio'][0])
+            row['sourcePath'] = f'/production/unplayed-{i}.wav'
+            self.native['queuedAudio'].append(row)
+        result = self.run_analysis()
+        self.assertTrue(result['passed'], result)
+        report = result['segments'][0]
+        self.assertEqual(len(report['preparedTailOutsidePlaybackInterval']), 12)
+        self.assertEqual(report['excludedFinalWaveform']['queueIndex'], 5)
+        self.native['queuedAudio'][-1]['reference']['sha256'] = '0' * 64
+        self.assert_refused(self.run_analysis(), 'SHA256 mismatch')
+
+    def test_post_pause_source_witness_includes_only_final_partial(self):
+        row = copy.deepcopy(self.native['queuedAudio'][0])
+        row['sourcePath'] = '/production/unplayed.wav'
+        self.native['queuedAudio'].append(row)
+        pause = self.native['segments'][0]['pauseRequestedUnixMicros']
+        self.native['segments'][0]['pauseReturnedUnixMicros'] = pause + 50000
+        self.native['playerSamples'].append({
+            'unixMicros': pause + 11000, 'engineIndex': 0, 'playing': False,
+            'source': Path(self.queued[5]['sourcePath']).as_uri(), 'positionMs': 5061})
+        result = self.run_analysis()
+        self.assertTrue(result['passed'], result)
+        self.assertEqual(result['segments'][0]['pauseSourceWitness']['queueIndex'], 5)
+
+    def test_silent_packets_use_anchored_duration_and_signal_not_waveform_credit(self):
+        self.split_first_source_at_encoded_pause()
+        result = self.run_analysis()
+        self.assertTrue(result['passed'], result)
+        self.assertAlmostEqual(result['segments'][0]['completeReferenceSeconds'], 54.4, places=3)
+        self.assertEqual(len(result['segments'][0]['encodedSilentPackets']), 1)
+        # Extra speech in a source-encoded pause must be rejected even when
+        # surrounding full waveforms and their timing still match exactly.
+        self.capture[round(4.4 * self.rate):round(4.5 * self.rate)] = .5
+        self.assert_refused(self.run_analysis(), 'Unexpected captured signal')
+
+    def test_external_gap_within_source_silent_packet_is_still_refused(self):
+        self.split_first_source_at_encoded_pause()
+        split = round(4.5 * self.rate)
+        self.capture = np.concatenate([self.capture[:split], np.zeros(960), self.capture[split:]])
+        self.timing['frames'] = len(self.capture)
+        self.assert_refused(self.run_analysis(), 'exceeds 10ms')
+
+    def test_short_complete_packets_are_compared_in_full(self):
+        # A full 40ms slice is valid identity evidence; a 100ms activity floor
+        # would incorrectly reject real native streaming packets of this size.
+        _, pcm = wavfile.read(self.native['queuedAudio'][0]['reference']['path'])
+        original = self.native['queuedAudio'][0]
+        split = []
+        for number, span in enumerate([pcm[:320], pcm[320:]]):
+            row = copy.deepcopy(original)
+            row['sourcePath'] = f'/production/short-{number}.wav'
+            row['reference'] = self.reference(f'short-{number}.wav', span)
+            split.append(row)
+        for sample in self.native['playerSamples']:
+            if sample['source'] == Path(original['sourcePath']).as_uri():
+                sample['source'] = Path(split[1]['sourcePath']).as_uri()
+                sample['positionMs'] -= 40
+        self.native['queuedAudio'][:1] = split
+        # Supply the initial short packet's recorded native source observation.
+        self.native['playerSamples'].insert(0, {
+            'unixMicros': self.origin + 270000, 'engineIndex': 0, 'playing': True,
+            'source': Path(split[0]['sourcePath']).as_uri(), 'positionMs': 20})
+        result = self.run_analysis()
+        self.assertTrue(result['passed'], result)
+        self.assertAlmostEqual(result['segments'][0]['matches'][0]['sourceDurationSeconds'], .04)
 
     def test_inserted_external_gap_fails_unchanged_ten_ms_gate(self):
         split = 12000 + 11 * self.rate
@@ -161,10 +263,9 @@ class S7VariantAcceptanceTest(unittest.TestCase):
         self.assert_refused(self.run_analysis(), 'No complete ordered waveform')
 
     def test_insufficient_complete_coverage_fails_even_with_interrupted_final(self):
-        self.native['queuedAudio'] = self.native['queuedAudio'][:2]
-        self.native['playerSamples'] = [s for s in self.native['playerSamples']
-                                        if s['source'] in {Path(q['sourcePath']).as_uri()
-                                                           for q in self.native['queuedAudio']}]
+        self.native['queuedAudio'][0]['reference'] = self.reference(
+            'silent-first.wav', np.zeros(11 * 8000, np.int16))
+        self.capture[12000:12000 + 11 * self.rate] = 0
         self.assert_refused(self.run_analysis(), 'Insufficient full-waveform coverage')
 
     def test_hash_and_size_are_authority(self):
