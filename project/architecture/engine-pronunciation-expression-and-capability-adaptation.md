@@ -21,9 +21,41 @@ The same registry domains cover delivery, inflection, emphasis and boundary adap
 
 Current adapter work is centered on Kokoro with generic fallback capability behavior. Adding another engine requires explicit adaptation and tests; it must not silently reinterpret canonical pronunciation intent.
 
+### Fish checkpoint declarations
+
+`FishDramaCatalog` in [speech_engine_catalog.dart](../../lib/src/models/speech_engine_catalog.dart)
+provides an additive, immutable Dart view of the existing
+[Fish variant catalog](../../assets/fish_drama_models.json), which remains shared
+with the Python model owner. Saved engine IDs, labels and production defaults are
+unchanged. Asset loading belongs to the caller; parsing has no I/O, scheduling or
+download side effects. The parser accepts the existing schema only, requires a
+pinned commit and the fixed `mlx-community` Hugging Face repository policy,
+validates safe required-file names and core model artifacts, and rejects unknown
+IDs, duplicate checkpoint identities and malformed/incomplete checksum data.
+
+The bundled [checksum manifest](../../assets/fish_drama_model_checksums.json)
+attaches only to an exactly matching repository/revision and must cover every
+required artifact. It currently covers bf16 only; the 8-bit and 4-bit descriptors
+have no bundled integrity manifest. A descriptor declares expected file sizes and
+digests; parsing does not hash or qualify installed model bytes. Existing
+`estimatedPeakBytes` values remain estimates, not measured memory envelopes or
+admission evidence. Descriptors do not confer native-scene, expressive, runtime
+compatibility or acoustic qualification.
+
+This is the first bounded catalog boundary for
+[ACD-M1 R1 / #112](https://github.com/kellyjanderson/readaloud/issues/112#acd-m1--verified-model-assets-and-live-engine-sessions).
+The factory, settings and installed-snapshot lookup still use their existing
+paths; the Python owner retains download/integrity behavior. Consumer migration,
+complete verified snapshots for all variants, live-session switching and
+actual-target qualification remain separate work. Focused
+[catalog fixtures](../../test/speech_engine_catalog_test.dart) establish declaration
+validation only, not offline reuse, interrupted recovery or running-app acceptance.
+
 ## Source and tests
 
 - [engine_capability.dart](../../lib/src/models/engine_capability.dart)
+- [speech_engine_catalog.dart](../../lib/src/models/speech_engine_catalog.dart)
+- [speech_engine_catalog_test.dart](../../test/speech_engine_catalog_test.dart)
 - [speech_adjustment_context.dart](../../lib/src/models/speech_adjustment_context.dart)
 - [speech_adjustment_registry.dart](../../lib/src/services/speech_adjustment_registry.dart)
 - [legacy_pronunciation_context.dart](../../lib/src/services/legacy_pronunciation_context.dart)
