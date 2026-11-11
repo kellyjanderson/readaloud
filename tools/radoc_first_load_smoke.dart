@@ -468,6 +468,56 @@ Future<void> main(List<String> args, {bool packetCancellation = false}) async {
           'First native packet was not paused before scene completion',
         );
       }
+      phase = 'packet-native-playback-observation';
+      final audibleWindowDeadline = clock.elapsedMilliseconds + 5000;
+      // Give the external capture a real native playback interval rather than
+      // pausing on a sub-millisecond first-position tick. Sampled native time
+      // still does not establish emitted speech; root checks the waveform.
+      while (nativePosition.sampledPositionTotalMs < 180 || !player.playing) {
+        checkFailure();
+        if (playError != null) {
+          throw StateError('Retry Play failed: $playError');
+        }
+        if (!hasUnknownActiveScene() ||
+            completedOrdinaryScenes != 0 ||
+            completedExports != 0) {
+          receipt['packetPauseCoverage'] =
+              'producer completed before native playback interval; not qualified';
+          throw StateError(
+            'Scene finalized before 180ms native playback interval',
+          );
+        }
+        if (clock.elapsedMilliseconds >= audibleWindowDeadline) {
+          throw TimeoutException(
+            'No playing 180ms sampled native interval within 5s',
+          );
+        }
+        await Future<void>.delayed(const Duration(milliseconds: 10));
+      }
+      receipt['nativePlaybackIntervalBeforePause'] = {
+        'elapsedMs': clock.elapsedMilliseconds,
+        'unixMicros': DateTime.now().microsecondsSinceEpoch,
+        'sampledPositionTotalMs': nativePosition.sampledPositionTotalMs,
+        'nativePositionMicros': player.position.inMicroseconds,
+        'nativePositionMs': player.position.inMilliseconds,
+        'playerPlaying': player.playing,
+        'unknownActiveScene': hasUnknownActiveScene(),
+        'completedOrdinaryScenes': completedOrdinaryScenes,
+        'completedExports': completedExports,
+      };
+      // Recheck fresh ownership/publication after the observation interval,
+      // including when its final position tick also published the scene.
+      if (!hasUnknownActiveScene() ||
+          completedOrdinaryScenes != 0 ||
+          completedExports != 0 ||
+          nativePosition.overflow ||
+          !player.playing) {
+        receipt['packetPauseCoverage'] =
+            'incomplete-scene playback interval absent; not qualified';
+        throw StateError(
+          'Scene was not unfinished and playing immediately before Pause',
+        );
+      }
       events.add(snapshot('packet-pause-request'));
       phase = 'packet-pause';
       final pauseAt = clock.elapsedMilliseconds;
