@@ -416,9 +416,9 @@ Future<void> main(List<String> args) async {
 
   runApp(ReadAloudApp(controller: c));
   try {
-    stdout.writeln('S7_VARIANT_NATIVE_STARTED');
     await c.initialize().timeout(budget(100));
     await WidgetsBinding.instance.endOfFrame;
+    stdout.writeln('S7_VARIANT_NATIVE_STARTED');
     // First installation can hash the full checkpoint before loading. This is
     // a bounded qualification setup budget, not a startup/document-load pass.
     await c.completeInitialIntake().timeout(budget(90));
@@ -478,6 +478,20 @@ Future<void> main(List<String> args) async {
       c.selectedVoice?.id == 'library_fishadrian',
       'Narrator unavailable',
     );
+    // This probe qualifies warm sustained reading, not a startup/load clock.
+    // Capture setup must have actually written frames before manual Play, or
+    // a delayed ScreenCaptureKit connection could miss the beginning entirely.
+    phase = 'capture-setup';
+    final captureGate = File('${output.parent.path}/capture.ready');
+    final captureDeadline = watch.elapsedMilliseconds + 30000;
+    while (!await captureGate.exists()) {
+      if (watch.elapsedMilliseconds > captureDeadline) {
+        throw TimeoutException('App-only capture setup');
+      }
+      await Future<void>.delayed(const Duration(milliseconds: 25));
+    }
+    receipt['captureReadyBeforePlayUnixMicros'] =
+        DateTime.now().microsecondsSinceEpoch;
     if (mode == 'default-policy' ||
         mode == 'cached-bf16' ||
         mode == 'cached-8bit' ||
@@ -508,6 +522,17 @@ Future<void> main(List<String> args) async {
         receipt['rapidLatestSelectionValidated'] = true;
       }
       if (online) {
+        if (Platform.environment['READALOUD_S7_UI_CANCEL'] == '1') {
+          stdout.writeln('WAITING_S7_UI_SETTINGS');
+          final settingsGate = File('${output.parent.path}/ui-settings.ready');
+          final deadline = watch.elapsedMilliseconds + 60000;
+          while (!await settingsGate.exists()) {
+            if (watch.elapsedMilliseconds > deadline) {
+              throw TimeoutException('Settings observation');
+            }
+            await Future<void>.delayed(const Duration(milliseconds: 25));
+          }
+        }
         phase = 'online-download-4bit';
         final pending = c.setTtsEngineId('fish_drama3_4bit');
         int? baseline;
@@ -528,6 +553,15 @@ Future<void> main(List<String> args) async {
         );
         receipt['downloadBaselineBytes'] = baseline;
         receipt['downloadInterruptedAt'] = snapshot('download-interruption');
+        final uiCancel = Platform.environment['READALOUD_S7_UI_CANCEL'] == '1';
+        if (uiCancel) {
+          stdout.writeln('WAITING_S7_UI_CANCEL');
+          await until(
+            () => c.engineSession.phase.name == 'cancelled',
+            'Settings Cancel',
+            seconds: 60,
+          );
+        }
         final cancelled = c.cancelSpeechResourcePreparation();
         final twice = c.cancelSpeechResourcePreparation();
         require(
@@ -547,12 +581,37 @@ Future<void> main(List<String> args) async {
           'Retired download published late state',
         );
         receipt['doubleCancelValidated'] = true;
+        receipt['cancelActionSource'] = uiCancel ? 'settings-ui' : 'controller';
         receipt['downloadRetiredWithoutLateActivation'] = true;
+        if (uiCancel) {
+          stdout.writeln('WAITING_S7_UI_RETRY');
+          await until(
+            () =>
+                c.engineSession.active?.engineId == 'fish_drama3_4bit' &&
+                c.startupError == null,
+            'Settings Retry',
+            seconds: 120,
+          );
+          receipt['retryActionSource'] = 'settings-ui';
+          stdout.writeln('WAITING_S7_UI_RETRY_OBSERVATION');
+          final retryGate = File(
+            '${output.parent.path}/ui-retry-observed.ready',
+          );
+          final deadline = watch.elapsedMilliseconds + 60000;
+          while (!await retryGate.exists()) {
+            if (watch.elapsedMilliseconds > deadline) {
+              throw TimeoutException('Retry observation');
+            }
+            await Future<void>.delayed(const Duration(milliseconds: 25));
+          }
+        }
         // Explicit retry uses retained cache/partials through the existing owner.
         // A large incomplete transfer may exceed this case's 240s work budget;
         // that is a failed/partial receipt, never an assumed resume success.
       }
-      if (online) await c.retryInitialization().timeout(budget(90));
+      if (online && receipt['retryActionSource'] != 'settings-ui') {
+        await c.retryInitialization().timeout(budget(90));
+      }
       await switchTo('fish_drama3_4bit', anchor, document, voice);
       receipt['retryValidated'] = online;
       await playFor(3, 'B4');

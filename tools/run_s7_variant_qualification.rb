@@ -110,9 +110,16 @@ begin
   result[:capturePid] = cap
   deadline = Process.clock_gettime(Process::CLOCK_MONOTONIC) + 270
   activated = false
+  capture_ready = false
   until File.exist?(receipt)
     raise 'Native app exited before receipt' if Process.waitpid(pid, Process::WNOHANG)
     raise 'Variant probe 270s deadline' if Process.clock_gettime(Process::CLOCK_MONOTONIC) > deadline
+    wave = File.join(output, 'capture.wav')
+    if !capture_ready && File.file?(wave) && File.size(wave) > 4096
+      File.write(File.join(output, 'capture.ready'), 'Audio frames observed')
+      capture_ready = true
+      result[:captureReadyObservedUnixMicros] = (Time.now.to_r * 1_000_000).to_i
+    end
     if !activated && File.read(log_path).include?('S7_VARIANT_NATIVE_STARTED')
       activated = system('/usr/bin/osascript', '-e', "tell application #{bundle.inspect} to activate")
       raise 'Could not activate test app' unless activated
