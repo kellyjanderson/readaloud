@@ -317,6 +317,15 @@ LaunchServices. Both clocks start before opening, without a Play gate, and requi
 expected-waveform alignment. This improves the earlier 4.77–4.91s native-position
 failure. The November 10 startup policy now uses a two-second goal, a five-second hard limit for reusable `.radoc` loads and a ten-second hard limit for first loads. These saved-book timing values fit the revised five-second ceiling and miss the goal. Original receipts retain their original verdicts. S6 still needs its other acceptance gates. The prior Save-run 511ms heartbeat, uncached continuity and final user listening remain recorded.
 
+[R25](https://github.com/kellyjanderson/readaloud/issues/110#issuecomment-6791030471)
+subsequently excludes normal app startup from the hard load deadlines. The native
+QA clock records startup completion, target document loading and Play through
+`CLOCK_MONOTONIC_RAW`, shared with capture and the external runner. Normal startup
+may prepare the selected model without synthesizing or processing the target;
+all work triggered by the later target-load request remains timed. The reporters
+retain launch-to-speech and its two-second goal separately. Missing post-startup
+boundaries cannot be reconstructed from historical launch-only receipts.
+
 The build-owned relocated staging tree omits a CPython bytecode cache only when
 its corresponding `.py` source is present. Sourceless modules, source packages,
 native code/signatures and licenses remain. This explicit embed-script option
