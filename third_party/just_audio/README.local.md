@@ -40,6 +40,15 @@ of an already played prefix therefore performs no native queue mutation when
 AVQueuePlayer has already removed those items. Non-prefix edits, item
 replacement, loading, seeking and loop modes retain the original rebuild.
 
+Played-prefix removal also resolves the new source index from the actual native
+current-item identity after rebuilding the source tree. Its removed-current
+fallback compares removed old indices with one immutable old current index.
+Previously, removing two predecessors from old index 2 decremented the index to
+1 while inspecting old index 0, then mistook old index 1 for the current item;
+the resulting enqueue skipped the still-playing source. Resolving identity also
+accounts for native advancement during removal. Source/shuffle order and the
+existing removed-current successor policy remain intact.
+
 In particular, dynamically inserted URI sources retain upstream's default
 non-lazy setting. The patch does not cap them to two items or change their
 preparation policy. Read Aloud remains responsible for bounding work ahead.
@@ -66,10 +75,13 @@ FLUTTER_FRAMEWORK_DIR=/absolute/path/containing/FlutterMacOS.framework \
 
 The script compiles all vendored Objective-C sources against the selected
 FlutterMacOS and system AVFoundation frameworks, then invokes the production
-`enqueueFrom:` method with a recording queue. Fourteen scenarios cover preserved
+`enqueueFrom:` and prefix-removal methods with a recording queue. Eighteen scenarios cover preserved
 future items, complete/pruned no-ops, actual shuffle order, lazy/mixed lazy
 preparation, native treadmill replenishment, non-prefix reorder/removal,
-pending seek, loading, both loop modes and target replacement. The script
+pending seek, loading, both loop modes, target replacement, two-predecessor
+removal, native advancement during removal, removed-current successor fallback
+and shuffled removal. The batch-removal regression rejects the uncorrected
+implementation. The script
 cleans up its temporary executable/module cache and starts no Flutter engine,
 application or audio playback. These are native compilation and queue-call
 checks, not emitted-audio evidence.

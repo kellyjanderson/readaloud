@@ -254,6 +254,8 @@
     }
     // Re-index the remaining audio sources.
     NSArray<IndexedAudioSource *> *oldIndexedAudioSources = _indexedAudioSources;
+    const int oldIndex = _index;
+    int removedBeforeCurrent = 0;
     _indexedAudioSources = [[NSMutableArray alloc] init];
     [_audioSource buildSequence:_indexedAudioSources treeIndex:0];
     for (int i = 0, j = 0; i < _indexedAudioSources.count; i++, j++) {
@@ -263,14 +265,16 @@
             if (oldIndexedAudioSources[j].playerItem2) {
                 [self removeItemObservers:oldIndexedAudioSources[j].playerItem2];
             }
-            if (j < _index) {
-                _index--;
-            } else if (j == _index) {
-                // The currently playing item was removed.
-            }
+            if (j < oldIndex) removedBeforeCurrent++;
             j++;
         }
     }
+    // Pruning several predecessors must compare their old indices against one
+    // immutable index. More importantly, AVQueuePlayer may advance while the
+    // source tree is rebuilt: retain its actual current item whenever it remains
+    // in the new sequence instead of replacing it with a guessed neighbour.
+    int currentIndex = [self indexForItem:(IndexedPlayerItem *)_player.currentItem];
+    _index = currentIndex >= 0 ? currentIndex : oldIndex - removedBeforeCurrent;
     [self updateOrder];
     if (_index >= _indexedAudioSources.count) _index = (int)_indexedAudioSources.count - 1;
     if (_index < 0) _index = 0;

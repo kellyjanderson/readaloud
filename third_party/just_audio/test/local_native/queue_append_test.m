@@ -1,11 +1,13 @@
 #import <Foundation/Foundation.h>
 #import "../../darwin/just_audio/Sources/just_audio/include/just_audio/AudioPlayer.h"
 #import "../../darwin/just_audio/Sources/just_audio/include/just_audio/IndexedAudioSource.h"
+#import "../../darwin/just_audio/Sources/just_audio/include/just_audio/ConcatenatingAudioSource.h"
 
 // Exercise the production enqueueFrom: with a recording queue. No Flutter
 // engine, AVPlayer playback, media assets or application are started.
 @interface AudioPlayer (QueueTest)
 - (void)enqueueFrom:(int)index;
+- (void)concatenatingRemoveRange:(NSString *)catId start:(int)start end:(int)end shuffleOrder:(NSArray<NSNumber *> *)shuffleOrder;
 @end
 
 @interface TestItem : NSObject
@@ -50,11 +52,13 @@
 - (IndexedPlayerItem *)playerItem { return _item; }
 - (IndexedPlayerItem *)playerItem2 { return _loopItem; }
 - (void)preparePlayerItem2 { _loopItem = [TestItem new]; }
+- (NSArray<NSNumber *> *)getShuffleIndices { return @[@0]; }
 @end
 
 @interface TestPlayer : AudioPlayer
 @property NSUInteger endUpdates;
 @property NSUInteger positionUpdates;
+@property (copy) void (^onRemoveObserver)(void);
 @end
 @implementation TestPlayer
 - (void)updateEndAction { _endUpdates++; }
@@ -62,6 +66,14 @@
 - (void)enterBuffering:(NSString *)reason {}
 - (void)leaveBuffering:(NSString *)reason {}
 - (void)addItemObservers:(id)item {}
+- (void)removeItemObservers:(id)item {
+    if (_onRemoveObserver) {
+        void (^action)(void) = _onRemoveObserver;
+        _onRemoveObserver = nil;
+        action();
+    }
+}
+- (void)broadcastPlaybackEvent {}
 @end
 
 static NSArray<TestSource *> *sources(NSUInteger count, BOOL lazy) {
@@ -96,6 +108,16 @@ static void expect(TestPlayer *player, NSArray *items, NSUInteger inserts, NSUIn
     NSCAssert(queue.rateChanges == 0, @"enqueue changed rate");
     NSCAssert([[player valueForKey:@"_enqueuedAll"] boolValue] == all, @"wrong end state");
     NSCAssert(player.endUpdates == 1, @"end action not updated");
+}
+
+static TestPlayer *removalPlayer(NSArray<TestSource *> *s, NSArray *order, NSArray *items, int index, BOOL shuffle) {
+    TestPlayer *p = player(s, order, items);
+    ConcatenatingAudioSource *tree = [[ConcatenatingAudioSource alloc]
+        initWithId:@"root" audioSources:[s mutableCopy] shuffleOrder:order lazyLoading:@NO];
+    [p setValue:tree forKey:@"_audioSource"];
+    [p setValue:@(index) forKey:@"_index"];
+    [p setValue:@(shuffle) forKey:@"_shuffleModeEnabled"];
+    return p;
 }
 
 int main(void) {
@@ -164,7 +186,36 @@ int main(void) {
         [p enqueueFrom:1];
         expect(p, remaining, 2, 1, YES);
 
-        NSLog(@"PASS: 14 native enqueue scenarios (recording queue; no app/audio)");
+        // Exercise the production removal method, not only enqueueFrom: after a
+        // pre-rebased fixture. Two removals before old index 2 must yield 0.
+        NSArray<TestSource *> *r = sources(5, NO);
+        p = removalPlayer(r, @[@0,@1,@2,@3,@4], @[r[2].item,r[3].item,r[4].item], 2, NO);
+        [p concatenatingRemoveRange:@"root" start:0 end:2 shuffleOrder:@[@0,@1,@2]];
+        expect(p, @[r[2].item,r[3].item,r[4].item], 0, 0, YES);
+        NSCAssert([[p valueForKey:@"_index"] intValue] == 0, @"batch prune skipped current item");
+
+        // Simulate native advancement during observer removal/tree mutation.
+        p = removalPlayer(r, @[@0,@1,@2,@3,@4], @[r[2].item,r[3].item,r[4].item], 2, NO);
+        TestQueue *advancingQueue = (id)p.player;
+        p.onRemoveObserver = ^{ [advancingQueue.storage removeObjectAtIndex:0]; };
+        [p concatenatingRemoveRange:@"root" start:0 end:2 shuffleOrder:@[@0,@1,@2]];
+        expect(p, @[r[3].item,r[4].item], 0, 0, YES);
+        NSCAssert([[p valueForKey:@"_index"] intValue] == 1, @"mutation ignored actual current item");
+
+        // Removed-current fallback still selects its surviving successor.
+        p = removalPlayer(r, @[@0,@1,@2,@3,@4], @[r[2].item,r[3].item,r[4].item], 2, NO);
+        [p concatenatingRemoveRange:@"root" start:1 end:3 shuffleOrder:@[@0,@1,@2]];
+        expect(p, @[r[3].item,r[4].item], 1, 2, YES);
+        NSCAssert([[p valueForKey:@"_index"] intValue] == 1, @"removed-current successor changed");
+
+        // Shuffled source indices still resolve current identity in the source
+        // sequence; native playback order remains the supplied shuffle order.
+        p = removalPlayer(r, @[@0,@1,@3,@2,@4], @[r[3].item,r[2].item,r[4].item], 3, YES);
+        [p concatenatingRemoveRange:@"root" start:0 end:2 shuffleOrder:@[@1,@0,@2]];
+        expect(p, @[r[3].item,r[2].item,r[4].item], 0, 0, YES);
+        NSCAssert([[p valueForKey:@"_index"] intValue] == 1, @"shuffle lost current source identity");
+
+        NSLog(@"PASS: 18 native queue scenarios (recording queue; no app/audio)");
     }
     } @catch (NSException *exception) {
         NSLog(@"FAIL: %@", exception.reason);
