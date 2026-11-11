@@ -16,6 +16,9 @@ abort 'Expected Fish engine' unless engine.start_with?('fish_drama3')
 abort 'Missing existing model/runtime' unless File.directory?(ENV.fetch('READALOUD_MLX_TTS_MODEL_PATH')) && File.executable?(ENV.fetch('READALOUD_MLX_PYTHON'))
 app = File.join(bundle, 'Contents/MacOS/read_aloud')
 abort 'Missing input or existing output' unless File.executable?(app) && File.file?(book) && File.executable?(capture) && !File.exist?(output)
+abort 'Use a plain-text fixture for independent source counting' unless File.extname(book).downcase == '.txt'
+expected_words = File.read(book, encoding: 'UTF-8').split.size
+abort 'Use at least 80 words for multiple packets' unless expected_words >= 80
 abort 'Invalid signature' unless system(RbConfig.ruby, File.join(__dir__, 'verify_macos_release_entitlements.rb'), bundle)
 matching = -> { IO.popen(['/usr/bin/pgrep', '-f', '^' + Regexp.escape(app) + '( |$)'], &:read).split.map(&:to_i) }
 abort 'Target app already running' unless matching.call.empty?
@@ -55,7 +58,7 @@ begin
   result[:launchUtc] = launched.utc.iso8601(6)
   micros = (launched.to_r * 1_000_000).to_i
   result[:launchMonotonicRawNanos] = Process.clock_gettime(Process::CLOCK_MONOTONIC_RAW, :nanosecond)
-  opener = Process.spawn('/usr/bin/open', '-W', '-n', '-a', bundle, '--stdout', app_log, '--stderr', app_log, '--env', "READALOUD_SMOKE_LAUNCH_UNIX_MICROS=#{micros}", *%w[READALOUD_MLX_TTS_MODEL_PATH READALOUD_MLX_PYTHON READALOUD_SMOKE_QUANTIZATION_BITS].filter_map { |key| ['--env', "#{key}=#{ENV[key]}"] if ENV[key] }.flatten, '--args', 'first-load', engine, copied, receipt, pgroup: true)
+  opener = Process.spawn('/usr/bin/open', '-W', '-n', '-a', bundle, '--stdout', app_log, '--stderr', app_log, '--env', "READALOUD_SMOKE_LAUNCH_UNIX_MICROS=#{micros}", '--env', "READALOUD_FIRST_LOAD_EXPECTED_WORDS=#{expected_words}", *%w[READALOUD_MLX_TTS_MODEL_PATH READALOUD_MLX_PYTHON READALOUD_SMOKE_QUANTIZATION_BITS].filter_map { |key| ['--env', "#{key}=#{ENV[key]}"] if ENV[key] }.flatten, '--args', 'first-load', engine, copied, receipt, pgroup: true)
   result[:launcherPid] = opener
   discovery_end = clock.call + 15
   loop do

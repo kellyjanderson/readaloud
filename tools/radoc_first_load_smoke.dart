@@ -235,7 +235,14 @@ Future<void> main(List<String> args) async {
       }
       end = chunk.endWordIndex;
     }
-    final expected = c.document.wordCount;
+    final independentlyCounted = int.tryParse(
+      Platform.environment['READALOUD_FIRST_LOAD_EXPECTED_WORDS'] ?? '',
+    );
+    final expected = independentlyCounted ?? c.document.wordCount;
+    receipt['expectedWordCountAuthority'] = independentlyCounted == null
+        ? 'complete document; independent runner count absent'
+        : 'runner original plaintext whitespace-token count';
+    receipt['completeDocumentWordCount'] = c.document.wordCount;
     receipt.addAll({
       'originalSourceExpectedWordCount': expected,
       'expectedSourceEndWord': expected,
@@ -254,6 +261,7 @@ Future<void> main(List<String> args) async {
     });
     if (chunks.isEmpty ||
         expected <= 0 ||
+        expected != c.document.wordCount ||
         end != expected ||
         !c.isPreparationComplete ||
         !c.hasCompleteDocumentSnapshot ||
