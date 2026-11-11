@@ -1,5 +1,9 @@
 # Local MLX TTS engines
 
+Fish model metadata can refresh as validated data for the installed runtime;
+see [catalog refresh and fallback](fish-drama-catalog.md). Current sessions retain
+their captured model revision and integrity manifest throughout loading.
+
 Read Aloud offers Fish Audio Drama 3 (bf16, 8-bit and 4-bit), Qwen3-TTS
 1.7B Base/CustomVoice, Voxtral TTS 4B and MOSS-TTS v1.5. Kokoro remains the
 default. On macOS choose **Read Aloud > Settings… > Text-to-speech engine**.

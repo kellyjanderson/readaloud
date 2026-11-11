@@ -125,6 +125,12 @@ final class FishDramaCatalogStore {
 
   Future<FishDramaCatalogRefreshResult> _refresh(String? source) async {
     final previous = await load();
+    if (_closed) {
+      return FishDramaCatalogRefreshResult(
+        previous,
+        StateError('Fish catalog store is closed'),
+      );
+    }
     final cancelled = Completer<void>();
     void cancel() {
       if (!cancelled.isCompleted) cancelled.complete();

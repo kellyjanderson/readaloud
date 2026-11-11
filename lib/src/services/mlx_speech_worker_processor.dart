@@ -17,6 +17,7 @@ import 'speech_worker_pipeline.dart';
 import 'tts_engine.dart';
 import 'mlx_voice_library.dart';
 import 'packaged_python_runtime.dart';
+import 'fish_drama_catalog_store.dart';
 
 const String mlxTtsModelVersion = 'mlx-audio-0.6.3-mlx-0.32.4-complete-v3';
 String mlxTtsVersionFor(
@@ -251,6 +252,7 @@ class MlxSpeechWorkerChunkProcessor
 
   static bool _lifecycleInstalled = false;
   static MlxSpeechWorkerChunkProcessor? _activeInstance;
+  static bool _catalogRefreshStarted = false;
 
   final String engineId;
   final String modelPath;
@@ -260,6 +262,7 @@ class MlxSpeechWorkerChunkProcessor
   final void Function(TtsResourceProgress? progress)? onResourceProgress;
   AudioArtifactStore? _store;
   MlxTtsPythonProcess? _process;
+  FishDramaCatalogStore? _catalogStore;
   int get peakRuntimeBytes => _process?.peakRuntimeBytes ?? 0;
   String? _modelRoot;
   String? _helperPath;
@@ -366,16 +369,42 @@ class MlxSpeechWorkerChunkProcessor
     if (!isMlxEngine(engineId)) {
       throw StateError('Unknown MLX TTS engine: $engineId');
     }
+    final supportDirectory = await getApplicationSupportDirectory();
+    final mlxRoot = Directory(
+      '${supportDirectory.path}${Platform.pathSeparator}read_aloud${Platform.pathSeparator}mlx-tts',
+    );
+    await mlxRoot.create(recursive: true);
+    if (_closed) throw const MlxTtsRequestCancelled();
+    final catalogStore = _catalogStore ??= FishDramaCatalogStore(
+      root: mlxRoot,
+      bundledModelsJson: await rootBundle.loadString(
+        'assets/fish_drama_models.json',
+      ),
+      bundledChecksumsJson: await rootBundle.loadString(
+        'assets/fish_drama_model_checksums.json',
+      ),
+    );
+    final snapshot = await catalogStore.load();
+    if (_closed) throw const MlxTtsRequestCancelled();
     final variant = isDramaEngine(engineId)
-        ? FishDramaCatalog.fromJson(
-            modelsJson: await rootBundle.loadString(
-              'assets/fish_drama_models.json',
-            ),
-            checksumsJson: await rootBundle.loadString(
-              'assets/fish_drama_model_checksums.json',
-            ),
-          ).variants[engineId]!
+        ? snapshot.catalog.variants[engineId]!
         : null;
+    if (!_catalogRefreshStarted &&
+        Platform.environment['HF_HUB_OFFLINE'] != '1' &&
+        Platform.environment['FLUTTER_TEST'] != 'true') {
+      _catalogRefreshStarted = true;
+      // Refresh is owned by this session and can only affect a later one.
+      // Neither network completion nor refreshed data gates the current load.
+      unawaited(
+        catalogStore.refresh().then((result) {
+          if (result.error != null && !_closed) {
+            stderr.writeln(
+              'Fish catalog retained previous valid data: ${result.error}',
+            );
+          }
+        }),
+      );
+    }
     // Explicit developer folders retain their unqualified provenance. Normal
     // installed/cache discovery must establish the exact pinned bytes before
     // the child can become the prepared model owner.
@@ -385,19 +414,22 @@ class MlxSpeechWorkerChunkProcessor
         'No pinned integrity manifest is available for $engineId.',
       );
     }
-    final supportDirectory = await getApplicationSupportDirectory();
-    final mlxRoot = Directory(
-      '${supportDirectory.path}${Platform.pathSeparator}read_aloud${Platform.pathSeparator}mlx-tts',
-    );
-    await mlxRoot.create(recursive: true);
     // Model startup needs no voice recordings. prepareResources materializes
     // only voices bound to the demanded scene, including cancellation.
     if (_closed) throw StateError('MLX inference owner is closed.');
     final modelDirectory = await _findInstalledModelDirectory(mlxRoot, variant);
-    final installedHelper = File(
-      '${mlxRoot.path}${Platform.pathSeparator}mlx_tts_worker.py',
-    );
     final helperBytes = await rootBundle.load('assets/mlx_tts_worker.py');
+    final bytes = helperBytes.buffer.asUint8List(
+      helperBytes.offsetInBytes,
+      helperBytes.lengthInBytes,
+    );
+    // A worker imports its captured JSON siblings. Refresh must never rewrite
+    // those files under a running child or change its expected RPC identity.
+    final helperRoot = Directory(
+      '${mlxRoot.path}/catalog-helpers/${snapshot.identity}-${sha256.convert(bytes)}',
+    );
+    await helperRoot.create(recursive: true);
+    final installedHelper = File('${helperRoot.path}/mlx_tts_worker.py');
     await installedHelper.writeAsBytes(
       helperBytes.buffer.asUint8List(
         helperBytes.offsetInBytes,
@@ -405,16 +437,12 @@ class MlxSpeechWorkerChunkProcessor
       ),
       flush: true,
     );
-    final modelCatalog = await rootBundle.loadString(
-      'assets/fish_drama_models.json',
-    );
     await File(
-      '${mlxRoot.path}/fish_drama_models.json',
-    ).writeAsString(modelCatalog, flush: true);
-    await File('${mlxRoot.path}/fish_drama_model_checksums.json').writeAsString(
-      await rootBundle.loadString('assets/fish_drama_model_checksums.json'),
-      flush: true,
-    );
+      '${helperRoot.path}/fish_drama_models.json',
+    ).writeAsString(snapshot.modelsJson, flush: true);
+    await File(
+      '${helperRoot.path}/fish_drama_model_checksums.json',
+    ).writeAsString(snapshot.checksumsJson, flush: true);
     _helperPath = installedHelper.path;
     _modelRoot = mlxRoot.path;
     _resolvedPythonPath = await _findPythonRuntime(mlxRoot);
@@ -570,6 +598,7 @@ class MlxSpeechWorkerChunkProcessor
   @override
   Future<void> releaseResources() async {
     _bindings.clear();
+    await _catalogStore?.close();
     _referencePaths.clear();
   }
 
