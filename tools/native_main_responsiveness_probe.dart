@@ -24,12 +24,14 @@ class NativeMainResponsivenessProbe {
       final started = _clock.elapsedMilliseconds;
       final requestedUnixMicros = DateTime.now().microsecondsSinceEpoch;
       final stage = phase();
+      var reportedSlowRequest = false;
       if (Platform.environment['READALOUD_S7_PROFILE_STALLS'] == '1' &&
           stage != 'initialization' &&
-          _slowRequests < 4) {
-        _slowRequest = Timer(const Duration(milliseconds: 200), () {
+          _slowRequests < 64) {
+        _slowRequest = Timer(const Duration(milliseconds: 50), () {
           if (_closed) return;
           _slowRequests++;
+          reportedSlowRequest = true;
           stdout.writeln(
             'NATIVE_MAIN_PROBE_PENDING $requestedUnixMicros $stage',
           );
@@ -78,6 +80,9 @@ class NativeMainResponsivenessProbe {
             },
           )
           .whenComplete(() {
+            if (reportedSlowRequest) {
+              stdout.writeln('NATIVE_MAIN_PROBE_RETURN $requestedUnixMicros');
+            }
             _slowRequest?.cancel();
             _slowRequest = null;
             _pending = null;

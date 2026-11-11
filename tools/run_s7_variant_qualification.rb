@@ -153,13 +153,23 @@ begin
       else
         ['/usr/bin/sample', pid.to_s, '70', '10', '-file', File.join(output, 'native-continuous.sample.txt')]
       end
-      profiles << Process.spawn(*command, out: log, err: log)
+      profiles << {pid: Process.spawn(*command, out: log, err: log), status: nil}
     end
-    if profile_stalls && profiles.length < 4 &&
-        File.read(log_path).scan('NATIVE_MAIN_PROBE_PENDING').length > profiles.length
-      path = File.join(output, "native-stall-#{profiles.length + 1}.sample.txt")
-      profiles << Process.spawn('/usr/bin/sample', pid.to_s, '1', '2', '-file', path,
-        out: log, err: log)
+    profiles.each do |profile|
+      next if profile[:status]
+      finished = Process.wait2(profile[:pid], Process::WNOHANG)
+      profile[:status] = finished.last if finished
+    end
+    if profile_stalls && profiles.length < 4 && profiles.none? { |p| p[:status].nil? }
+      text = File.read(log_path)
+      pending = text.scan(/^NATIVE_MAIN_PROBE_PENDING (\d+) ([^\n]+)$/).last
+      if pending && !text.include?("NATIVE_MAIN_PROBE_RETURN #{pending.first}") &&
+          profiles.none? { |p| p[:request] == pending.first }
+        path = File.join(output, "native-stall-#{profiles.length + 1}.sample.txt")
+        profiles << {pid: Process.spawn('/usr/bin/sample', pid.to_s, '1', '2', '-file', path,
+          out: log, err: log), status: nil, request: pending.first,
+          spawnedUnixMicros: (Time.now.to_r * 1_000_000).to_i}
+      end
     end
     wave = File.join(output, 'capture.wav')
     # Some processes register with CoreAudio only on first Play. A secondary
@@ -199,12 +209,13 @@ rescue StandardError => e
 ensure
   profiles.each do |profile|
     begin
-      _, profiler_status = Timeout.timeout(12) { Process.wait2(profile) }
+      profiler_status = profile[:status] || Timeout.timeout(30) { Process.wait2(profile[:pid]).last }
       (result[:nativeProfilerExitStatuses] ||= []) << profiler_status.exitstatus
+      (result[:nativeProfileRequests] ||= []) << profile.slice(:request, :spawnedUnixMicros)
       result[:errors] << 'Native profiler failed' unless profiler_status.success?
     rescue Timeout::Error
-      Process.kill('TERM', profile) rescue Errno::ESRCH
-      Process.waitpid(profile) rescue Errno::ECHILD
+      Process.kill('TERM', profile[:pid]) rescue Errno::ESRCH
+      Process.waitpid(profile[:pid]) rescue Errno::ECHILD
       result[:errors] << 'Native sampler did not stop'
     end
   end
