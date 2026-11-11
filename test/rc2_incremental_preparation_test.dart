@@ -7,6 +7,7 @@ import 'package:archive/archive.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:read_aloud/src/controllers/reader_controller.dart';
 import 'package:read_aloud/src/models/document_preparation.dart';
+import 'package:read_aloud/src/models/reader_operation.dart';
 import 'package:read_aloud/src/models/document_import_exception.dart';
 import 'package:read_aloud/src/models/voice_profile.dart';
 import 'package:read_aloud/src/services/document_import_service.dart';
@@ -21,6 +22,149 @@ void main() {
     180,
     (i) => 'Paragraph $i follows the road ahead.',
   ).join('\n\n');
+
+  test(
+    'failure before the first range terminates its owned feedback',
+    () async {
+      SharedPreferences.setMockInitialValues({});
+      final root = await Directory.systemTemp.createTemp(
+        'failed-source-feedback-',
+      );
+      addTearDown(() => root.delete(recursive: true));
+      final sourceFile = await File('${root.path}/empty.txt').writeAsString('');
+      final controller = ReaderController(
+        ttsEngine: _ExportProbe()..barrier.complete(),
+        enablePlatformIntakeChannels: false,
+      );
+      addTearDown(() async {
+        await controller.shutdownPreparation();
+        controller.dispose();
+      });
+      await controller.initialize();
+      await controller.importFilePaths([sourceFile.path]);
+      final source = controller.feedbackOperations
+          .where((p) => p.stage == 'preparation')
+          .single;
+      expect(source.state, OperationState.failed);
+      expect(source.error, isNotEmpty);
+      expect(
+        controller.feedbackOperations.any(
+          (p) =>
+              p.ownerKind == OperationOwnerKind.document && !p.state.isTerminal,
+        ),
+        isFalse,
+      );
+    },
+  );
+
+  test(
+    'resource retry rejects old errors, old clears and terminal resurrection',
+    () async {
+      SharedPreferences.setMockInitialValues({});
+      final engine = _ResourceProbe()..barrier.complete();
+      final controller = ReaderController(
+        ttsEngine: engine,
+        enablePlatformIntakeChannels: false,
+      );
+      addTearDown(() async {
+        await controller.shutdownPreparation();
+        controller.dispose();
+      });
+      await controller.initialize();
+      void report(String id, int epoch, OperationState state) =>
+          engine.onResourceProgress?.call(
+            TtsResourceProgress(
+              operationId: id,
+              ownerEpoch: epoch,
+              stage: 'modelDownload',
+              message: id,
+              state: state,
+              completed: 2,
+              total: 8,
+            ),
+          );
+      report('first', 1, OperationState.failed);
+      report('retry', 2, OperationState.running);
+      report('first', 1, OperationState.failed);
+      engine.onResourceProgress?.call(null);
+      expect(controller.speechResourceProgress!.operationId, 'retry');
+      report('retry', 2, OperationState.succeeded);
+      report('retry', 2, OperationState.running);
+      expect(controller.speechResourceProgress, isNull);
+      expect(
+        controller.feedbackOperations
+            .where((p) => p.operationId == 'retry')
+            .single
+            .state,
+        OperationState.succeeded,
+      );
+    },
+  );
+
+  test(
+    'stage terminals latch and independent fast/deep scopes survive retry',
+    () async {
+      SharedPreferences.setMockInitialValues({});
+      final controller = ReaderController(
+        ttsEngine: _ExportProbe()..barrier.complete(),
+        enablePlatformIntakeChannels: false,
+      );
+      addTearDown(() async {
+        await controller.shutdownPreparation();
+        controller.dispose();
+      });
+      await controller.initialize();
+      await controller.importPastedText('A complete small source.');
+      final fast = controller.beginReadingStage(
+        PreparationStage.analysis,
+        producerId: 'discovery',
+        scope: 'fast',
+      );
+      final deep = controller.beginReadingStage(
+        PreparationStage.analysis,
+        producerId: 'refinement',
+        scope: 'deep',
+      );
+      void report(ReadingStageTicket ticket, PreparationWorkState state) =>
+          controller.publishReadingStage(
+            ticket,
+            PreparationProgress(
+              stage: PreparationStage.analysis,
+              state: state,
+              completed: 3,
+              total: 3,
+              unit: 'words',
+            ),
+          );
+      report(deep, PreparationWorkState.working);
+      report(fast, PreparationWorkState.complete);
+      report(fast, PreparationWorkState.failed);
+      report(fast, PreparationWorkState.working);
+      final scoped = controller.feedbackOperations
+          .where((p) => p.scope.isNotEmpty)
+          .toList();
+      expect(
+        scoped.singleWhere((p) => p.scope == 'fast').state,
+        OperationState.succeeded,
+      );
+      expect(
+        scoped.singleWhere((p) => p.scope == 'deep').state,
+        OperationState.running,
+      );
+      final retry = controller.beginReadingStage(
+        PreparationStage.analysis,
+        producerId: 'refinement',
+        scope: 'deep',
+      );
+      report(retry, PreparationWorkState.working);
+      report(deep, PreparationWorkState.failed);
+      final attempts = controller.feedbackOperations
+          .where((p) => p.scope == 'deep')
+          .toList();
+      expect(attempts.where((p) => !p.state.isTerminal), hasLength(1));
+      expect(attempts.first.operationId, contains(':${retry.generation}:deep'));
+    },
+  );
 
   test(
     'viewport demand before producer credit installation cannot deadlock',
@@ -959,6 +1103,12 @@ class _ExportProbe extends _StartupEngine implements AudioExportCapable {
     exports++;
     throw StateError('A partial source must not reach the exporter.');
   }
+}
+
+class _ResourceProbe extends _StartupEngine
+    implements TtsResourceProgressCapable {
+  @override
+  void Function(TtsResourceProgress?)? onResourceProgress;
 }
 
 class _PageBarrier extends PdfrxPdfTextExtractor {

@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:io';
 import 'dart:typed_data';
 import 'package:read_aloud/src/models/character.dart';
+import 'package:read_aloud/src/models/reader_operation.dart';
 import 'package:read_aloud/src/models/character_cast_registry.dart';
 import 'package:read_aloud/src/models/voice_profile.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -234,6 +235,10 @@ void main() {
       final copied = await original.copy('${temp.path}/copied.radoc');
       await original.delete();
       await controller.importFilePaths([copied.path]);
+      final openingOperation = controller.feedbackOperations.singleWhere(
+        (p) => p.scope == 'Open audio book',
+      );
+      expect(openingOperation.state, OperationState.succeeded);
       expect(
         controller.hasPublishedAudio,
         true,
@@ -261,6 +266,19 @@ void main() {
       );
       final output = await controller.exportDocumentToPath(
         '${temp.path}/published.radoc',
+      );
+      expect(
+        controller.feedbackOperations
+            .where((p) => p.scope == 'Save audio book')
+            .single
+            .state,
+        OperationState.succeeded,
+      );
+      expect(
+        controller.feedbackOperations.where(
+          (p) => p.scope == 'Read audio book member',
+        ),
+        isNotEmpty,
       );
       expect(output, isNotNull, reason: controller.statusMessage);
       final check = RadocAudioPackage();

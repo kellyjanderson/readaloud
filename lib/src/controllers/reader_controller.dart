@@ -1,4 +1,5 @@
 import '../models/engine_session.dart';
+import '../models/reader_operation.dart';
 import '../models/character.dart';
 import '../services/modernbooknlp_character_adapter.dart';
 import '../services/modernbooknlp_window.dart';
@@ -337,7 +338,91 @@ class ReaderController extends ChangeNotifier {
   final Map<String, CastEntry> _discoveredCast = {};
   final Map<String, String> _castRedirects = {};
   final Map<PreparationStage, PreparationProgress> _preparationProgress = {};
-  final Map<PreparationStage, int> _stageGenerations = {};
+  final Map<String, int> _stageGenerations = {};
+  final _operations = ReaderOperationProjection();
+  final _operationAttempts = <String, String>{};
+  final _preparationRetryLinks = <String, String>{};
+  List<ReaderOperation> get feedbackOperations => _operations.operations;
+
+  bool _recordOperation(ReaderOperation operation) {
+    final previous = _operations.currentInLane(operation.lane);
+    if (previous?.state == OperationState.failed &&
+        previous?.key != operation.key &&
+        operation.retryOf == null) {
+      operation = operation.withState(
+        operation.state,
+        retryOf: previous!.operationId,
+      );
+    }
+    final known = _operationAttempts[operation.lane];
+    final accepted = known == operation.key
+        ? _operations.update(operation)
+        : _operations.begin(operation);
+    if (accepted) _operationAttempts[operation.lane] = operation.key;
+    return accepted;
+  }
+
+  void _recordPreparationOutcome(
+    DocumentPreparationRequest request,
+    OperationState state, {
+    String? error,
+  }) {
+    _recordOperation(
+      ReaderOperation(
+        operationId: request.operationId,
+        ownerKind: OperationOwnerKind.document,
+        ownerEpoch: request.revision,
+        stage: 'preparation',
+        state: state,
+        completedUnits: _publicationSequence,
+        unit: 'ranges',
+        updatedAt: DateTime.now(),
+        error: error,
+        retryOf: _preparationRetryLinks[request.operationId],
+        recoveryActions: state == OperationState.failed
+            ? [OperationRecoveryAction.retry]
+            : state.isTerminal
+            ? const []
+            : [OperationRecoveryAction.cancel],
+      ),
+    );
+  }
+
+  bool _recordPreparationProgress(
+    PreparationProgress progress, {
+    required String operationId,
+    required int epoch,
+    int attempt = 0,
+    OperationOwnerKind ownerKind = OperationOwnerKind.document,
+    String? scope,
+  }) {
+    var owned = progress.owned(
+      operationId: operationId,
+      ownerEpoch: epoch,
+      scope: scope,
+      retryOf: _preparationRetryLinks[operationId],
+      attempt: attempt,
+    );
+    var operation = owned.toOperation(ownerKind: ownerKind);
+    final previous = _operations.operations
+        .where((p) => p.lane == operation.lane)
+        .firstOrNull;
+    if (previous?.state == OperationState.failed &&
+        previous?.key != operation.key &&
+        operation.retryOf == null) {
+      owned = owned.owned(
+        operationId: operationId,
+        ownerEpoch: epoch,
+        retryOf: previous!.operationId,
+      );
+      operation = owned.toOperation(ownerKind: ownerKind);
+    }
+    final accepted = _recordOperation(operation);
+    if (!accepted) return false;
+    _preparationProgress[progress.stage] = owned;
+    return true;
+  }
+
   Completer<void>? _rangeCredit;
   bool _preparationComplete = true;
   bool _hasCompleteDocumentSnapshot = true;
@@ -382,6 +467,8 @@ class ReaderController extends ChangeNotifier {
     ++_playbackIntent;
     _preparation.cancel();
     _planning.cancel();
+    _operations.cancelOwner(OperationOwnerKind.document);
+    _operations.cancelOwner(OperationOwnerKind.readingStage);
     _preparationFailed = true;
     _preparationError = StateError('Document preparation cancelled.');
     _pendingPlayUntilReady = false;
@@ -587,7 +674,7 @@ class ReaderController extends ChangeNotifier {
     watchSession: _watchSession,
     stage: stage,
     generation: _stageGenerations.update(
-      stage,
+      '${stage.name}:$scope',
       (value) => value + 1,
       ifAbsent: () => 1,
     ),
@@ -606,21 +693,33 @@ class ReaderController extends ChangeNotifier {
         ticket.sourceRevision != '$_preparationOwner:$_documentRevision' ||
         ticket.watchSession != _watchSession ||
         ticket.stage != progress.stage ||
-        ticket.generation != _stageGenerations[ticket.stage]) {
+        ticket.generation !=
+            _stageGenerations['${ticket.stage.name}:${ticket.scope}']) {
       return;
     }
-    _preparationProgress[ticket.stage] = PreparationProgress(
-      stage: progress.stage,
-      state: progress.state,
-      completed: progress.completed,
-      total: progress.total,
-      unit: progress.unit,
-      discovered: progress.discovered,
-      waitingReason: progress.waitingReason,
-      error: progress.error,
-      workRevision: '${ticket.producerId}:${ticket.generation}',
-      scope: ticket.scope,
+    final accepted = _recordPreparationProgress(
+      PreparationProgress(
+        stage: progress.stage,
+        state: progress.state,
+        completed: progress.completed,
+        total: progress.total,
+        unit: progress.unit,
+        discovered: progress.discovered,
+        waitingReason: progress.waitingReason,
+        error: progress.error,
+        workRevision: '${ticket.producerId}:${ticket.generation}',
+        scope: ticket.scope,
+        operationState: progress.operationState,
+        updatedAt: progress.updatedAt,
+        retryOf: progress.retryOf,
+      ),
+      operationId:
+          '${ticket.ownerId}:${ticket.documentRevision}:${ticket.producerId}:${ticket.generation}:${ticket.scope}',
+      epoch: ticket.documentRevision,
+      ownerKind: OperationOwnerKind.readingStage,
+      attempt: ticket.generation,
     );
+    if (!accepted) return;
     notifyListeners();
   }
 
@@ -865,6 +964,17 @@ class ReaderController extends ChangeNotifier {
     _castRedirects.clear();
     _documentIdentityRedirects.clear();
     _preparationProgress.clear();
+    _operations.invalidateOwner(OperationOwnerKind.document, _documentRevision);
+    _operations.invalidateOwner(
+      OperationOwnerKind.readingStage,
+      _documentRevision,
+    );
+    _operationAttempts.removeWhere(
+      (lane, _) =>
+          lane.startsWith('${OperationOwnerKind.document.name}:') ||
+          lane.startsWith('${OperationOwnerKind.readingStage.name}:'),
+    );
+    _preparationRetryLinks.clear();
     _stageGenerations.clear();
     releasePreparedRange(0);
     return ++_documentRevision;
@@ -887,6 +997,8 @@ class ReaderController extends ChangeNotifier {
         : Uint8List.fromList(bytes).asUnmodifiableView();
     var byteAcquisition = acquireBytes;
     _retryPreparation = () => _runImportOperation((retryRevision) async {
+      _preparationRetryLinks['$_preparationOwner:$retryRevision'] =
+          '$_preparationOwner:$revision';
       final document = await _prepare(
         retryRevision,
         kind,
@@ -982,6 +1094,7 @@ class ReaderController extends ChangeNotifier {
       }
     }
     _requireRevision(revision);
+    _recordPreparationOutcome(request, OperationState.queued);
     final completion = _preparation.prepareRanges(
       request,
       cacheKey: sourceRevision,
@@ -1015,7 +1128,14 @@ class ReaderController extends ChangeNotifier {
       },
       onProgress: (progress) {
         if (!current()) return;
-        _preparationProgress[progress.stage] = progress;
+        _recordPreparationOutcome(request, OperationState.running);
+        if (!_recordPreparationProgress(
+          progress,
+          operationId: request.operationId,
+          epoch: revision,
+        )) {
+          return;
+        }
         _documentLoadStageLabel =
             '${progress.stage.name}: ${progress.completed} ${progress.unit}';
         _documentLoadStageProgress = progress.fraction;
@@ -1063,6 +1183,7 @@ class ReaderController extends ChangeNotifier {
           document: publication.fragment,
         );
         _publicationSequence = publication.sequence;
+        _recordPreparationOutcome(request, OperationState.running);
         _preparedWordCount = publication.range.wordEnd;
         _preparedRanges.add(publication);
         _offerCharacterAnalysis();
@@ -1071,7 +1192,11 @@ class ReaderController extends ChangeNotifier {
           if (publication.coverage.contains(progress.stage) ||
               progress.scope == 'cache' ||
               !_preparationProgress.containsKey(progress.stage)) {
-            _preparationProgress[progress.stage] = progress;
+            _recordPreparationProgress(
+              progress,
+              operationId: request.operationId,
+              epoch: revision,
+            );
           }
         }
         _documentLoadStageLabel =
@@ -1098,24 +1223,34 @@ class ReaderController extends ChangeNotifier {
           ]) {
             final progress = _preparationProgress[stage];
             if (progress != null &&
-                progress.state != PreparationWorkState.complete) {
+                !progress.isTerminal &&
+                progress.operationId == request.operationId) {
               paused.add(stage);
-              _preparationProgress[stage] = progress.withState(
-                PreparationWorkState.waiting,
-                waitingReason: reason,
+              _recordPreparationProgress(
+                progress.withState(
+                  PreparationWorkState.waiting,
+                  waitingReason: reason,
+                  operationState: OperationState.idleDemand,
+                ),
+                operationId: request.operationId,
+                epoch: revision,
               );
             }
           }
           final credit = _rangeCredit = Completer<void>();
+          _recordPreparationOutcome(request, OperationState.idleDemand);
           _signalRanges(); // Wake demand that arrived before credit existed.
           notifyListeners();
           await credit.future;
           if (!current()) return;
+          _recordPreparationOutcome(request, OperationState.running);
           for (final stage in paused) {
             final progress = _preparationProgress[stage];
             if (progress?.waitingReason == reason) {
-              _preparationProgress[stage] = progress!.withState(
-                PreparationWorkState.working,
+              _recordPreparationProgress(
+                progress!.withState(PreparationWorkState.working),
+                operationId: request.operationId,
+                epoch: revision,
               );
             }
           }
@@ -1148,16 +1283,17 @@ class ReaderController extends ChangeNotifier {
             PreparationStage.pronunciation,
           ]) {
             final prior = _preparationProgress[stage];
-            if (prior != null) {
-              _preparationProgress[stage] = PreparationProgress(
-                stage: stage,
-                state: PreparationWorkState.complete,
-                completed: prior.completed,
-                total: prior.completed,
-                unit: prior.unit,
+            if (prior != null &&
+                prior.operationId == request.operationId &&
+                prior.scope != 'deep') {
+              _recordPreparationProgress(
+                prior.withState(PreparationWorkState.complete),
+                operationId: request.operationId,
+                epoch: revision,
               );
             }
           }
+          _recordPreparationOutcome(request, OperationState.succeeded);
         } else {
           final error = result.outcome == DocumentPreparationOutcome.cancelled
               ? const _SupersededPreparation()
@@ -1167,19 +1303,35 @@ class ReaderController extends ChangeNotifier {
                     );
           _preparationError = error;
           _preparationFailed = true;
+          _operations.cancelOwner(
+            OperationOwnerKind.document,
+            exceptStage: 'preparation',
+          );
+          _recordPreparationOutcome(
+            request,
+            result.outcome == DocumentPreparationOutcome.cancelled
+                ? OperationState.cancelled
+                : OperationState.failed,
+            error: result.outcome == DocumentPreparationOutcome.cancelled
+                ? null
+                : '$error',
+          );
           _signalRanges();
           if (!first.isCompleted) {
             first.completeError(error);
           } else {
             _statusMessage = '$error';
-            _preparationProgress[PreparationStage.parsing] =
-                PreparationProgress(
-                  stage: PreparationStage.parsing,
-                  state: PreparationWorkState.failed,
-                  completed: _publicationSequence,
-                  unit: 'ranges',
-                  error: '$error',
-                );
+            _recordPreparationProgress(
+              PreparationProgress(
+                stage: PreparationStage.parsing,
+                state: PreparationWorkState.failed,
+                completed: _publicationSequence,
+                unit: 'ranges',
+                error: '$error',
+              ),
+              operationId: request.operationId,
+              epoch: revision,
+            );
           }
         }
         notifyListeners();
@@ -1213,6 +1365,11 @@ class ReaderController extends ChangeNotifier {
       : _selectedTtsEngineId;
 
   void _publishEnginePhase(EngineSessionPhase phase) {
+    if (phase == EngineSessionPhase.cancelled ||
+        phase == EngineSessionPhase.stopping ||
+        phase == EngineSessionPhase.unloading) {
+      _operations.retireOwner(OperationOwnerKind.model);
+    }
     _engineSession = EngineSession(
       epoch: _engineEpoch,
       selected: EngineSessionIdentity(
@@ -1259,6 +1416,15 @@ class ReaderController extends ChangeNotifier {
   final Map<String, double> _voiceSpeeds = <String, double>{};
   String _fontFamily = ReaderPreferences.defaultFontFamily;
   double _fontScale = ReaderPreferences.defaultFontScale;
+  bool _activityExpanded = false;
+  bool get activityExpanded => _activityExpanded;
+  Future<void> setActivityExpanded(bool value) async {
+    if (_activityExpanded == value) return;
+    _activityExpanded = value;
+    notifyListeners();
+    await _persistPreferences();
+  }
+
   ReaderAppearanceMode _appearanceMode = ReaderAppearanceMode.system;
   bool _isMultiVoiceEnabled = ReaderPreferences.defaultMultiVoiceEnabled;
   String? _lastOpenedDocumentPath;
@@ -1537,6 +1703,7 @@ class ReaderController extends ChangeNotifier {
       ..clear()
       ..addAll(preferences.voiceSpeeds);
     _fontFamily = preferences.fontFamily;
+    _activityExpanded = preferences.activityExpanded;
     _fontScale = preferences.fontScale;
     _appearanceMode = preferences.appearanceMode;
     _isMultiVoiceEnabled = preferences.multiVoiceEnabled;
@@ -1603,22 +1770,33 @@ class ReaderController extends ChangeNotifier {
       notifyListeners();
     };
     if (_ttsEngine is TtsResourceProgressCapable) {
-      (_ttsEngine as TtsResourceProgressCapable).onResourceProgress =
-          (progress) {
-            if (!_ownsEngine(engine, epoch)) return;
-            if (_disposed) return;
-            _speechResourceProgress = progress;
-            if (_isInitializing && progress != null) {
-              _publishEnginePhase(
-                progress.stage.toLowerCase().contains('download') ||
-                        progress.stage == 'acquiring' ||
-                        progress.stage == 'modelCache'
-                    ? EngineSessionPhase.acquiring
-                    : EngineSessionPhase.loading,
-              );
-            }
-            notifyListeners();
-          };
+      (_ttsEngine as TtsResourceProgressCapable)
+          .onResourceProgress = (progress) {
+        if (!_ownsEngine(engine, epoch)) return;
+        if (_disposed) return;
+        // A legacy clear is not a terminal receipt, and cannot clear a
+        // newer owned attempt. New producers always publish an outcome.
+        if (progress == null) return;
+        final operation = progress.toOperation(
+          epoch: (epoch << 32) + progress.ownerEpoch,
+        );
+        final accepted = _recordOperation(operation);
+        if (!accepted) return;
+        _speechResourceProgress =
+            progress.state.isTerminal && progress.state != OperationState.failed
+            ? null
+            : progress;
+        if (_isInitializing && !progress.state.isTerminal) {
+          _publishEnginePhase(
+            progress.stage.toLowerCase().contains('download') ||
+                    progress.stage == 'acquiring' ||
+                    progress.stage == 'modelCache'
+                ? EngineSessionPhase.acquiring
+                : EngineSessionPhase.loading,
+          );
+        }
+        notifyListeners();
+      };
     }
     _ttsEngine.onComplete = () {
       if (!_ownsEngine(engine, epoch)) return;
@@ -4023,6 +4201,7 @@ class ReaderController extends ChangeNotifier {
       narratorVoiceIds: Map.unmodifiable(_narratorVoiceIds),
       voiceSpeeds: Map.unmodifiable(_voiceSpeeds),
       fontFamily: _fontFamily,
+      activityExpanded: _activityExpanded,
       fontScale: _fontScale,
       appearanceMode: _appearanceMode,
       multiVoiceEnabled: _isMultiVoiceEnabled,
@@ -4057,6 +4236,7 @@ class ReaderController extends ChangeNotifier {
           narratorVoiceIds: value.narratorVoiceIds,
           voiceSpeeds: value.voiceSpeeds,
           fontFamily: value.fontFamily,
+          activityExpanded: value.activityExpanded,
           fontScale: value.fontScale,
           appearanceMode: value.appearanceMode,
           multiVoiceEnabled: value.multiVoiceEnabled,

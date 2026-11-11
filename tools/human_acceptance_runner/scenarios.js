@@ -10,6 +10,24 @@ window.HUMAN_ACCEPTANCE_SCENARIOS = [
     expected: 'The control responds promptly, no cancelled speech starts later, and a fresh Play still works.'
   },
   {
+    id: 'installed-model-switch',
+    issue: 112,
+    title: 'Switch between prepared speech models',
+    fixtureId: 'model-workflow',
+    question: 'Can you follow the selected and active model states, switch between the supplied installed models, and start a fresh reading without unexpected speech?',
+    steps: ['Open the supplied candidate using the isolated test profile described in the fixture. Use only the two already installed model choices named there.', 'Open Settings and switch to the other model. Watch the status, then close and reopen Settings to confirm the selected and active choice.', 'Return to the supplied short document and press Play. Listen briefly, stop, and switch back. If the fixture says a model is not installed or needs a download, skip and record that mismatch.'],
+    expected: 'Settings stays responsive and shows the actual selected and active choices. Switching starts no speech by itself. A fresh Play uses the chosen prepared model.'
+  },
+  {
+    id: 'preparation-recovery-keyboard',
+    issue: 119,
+    title: 'Recover preparation using the keyboard',
+    fixtureId: 'model-workflow',
+    question: 'Can you understand the preparation status, copy a problem, and reach Cancel, Retry and Activity using the keyboard in a narrow window?',
+    steps: ['Use the isolated profile and the qualified recovery document described in the fixture. Make the window narrow and use the larger text setting specified there.', 'Use Tab and Space to open Activity, cancel document preparation and retry it. Follow the fixture to reproduce its recoverable error, then copy the status and retry.', 'If reduced motion is enabled for this case, observe completed rows leaving Activity without a fade. Close and reopen the candidate and check that your Activity choice is remembered.'],
+    expected: 'The reader and controls stay reachable. The summary describes its own operation and progress, errors remain readable and copyable, cancellation does not later start speech, Retry starts a fresh attempt, and Activity remembers your choice.'
+  },
+  {
     id: 'fast-two-speaker-dialogue',
     issue: 111,
     title: 'Fast back-and-forth · two voices',

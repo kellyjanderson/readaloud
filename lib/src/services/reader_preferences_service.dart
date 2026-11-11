@@ -12,6 +12,7 @@ import 'work_character_store.dart';
 class ReaderPreferences {
   const ReaderPreferences({
     this.ttsEngineId = '',
+    this.activityExpanded = false,
     this.voxtralQuantizationBits = 0,
     required this.fontFamily,
     required this.fontScale,
@@ -36,6 +37,7 @@ class ReaderPreferences {
   static const String defaultTtsEngineId = 'kokoro';
 
   final String ttsEngineId;
+  final bool activityExpanded;
 
   /// Empty means no user selection; an automatic effective default is not intent.
   bool get hasExplicitTtsEngineChoice => ttsEngineId.isNotEmpty;
@@ -110,6 +112,7 @@ class ReaderPreferencesService {
   static const String _ttsEngineIdKey = 'reader.ttsEngineId';
   static const String _voiceSpeedsKey = 'reader.voiceSpeeds';
   static const String _fontFamilyKey = 'reader.fontFamily';
+  static const _activityExpandedKey = 'reader.activityExpanded';
   static const String _fontScaleKey = 'reader.fontScale';
   static const String _appearanceModeKey = 'reader.appearanceMode';
   static const String _multiVoiceEnabledKey = 'reader.multiVoiceEnabled';
@@ -135,6 +138,7 @@ class ReaderPreferencesService {
     final snapshot = workState.snapshot;
     final characters = snapshot.restore();
     return ReaderPreferences(
+      activityExpanded: preferences.getBool(_activityExpandedKey) ?? false,
       voxtralQuantizationBits: preferences.getInt(_voxtralBitsKey) == 4 ? 4 : 0,
       ttsEngineId: preferences.getString(_ttsEngineIdKey) ?? '',
       selectedVoiceId: preferences.getString(_selectedVoiceIdKey),
@@ -172,6 +176,7 @@ class ReaderPreferencesService {
   }
 
   Future<void> save({
+    bool activityExpanded = false,
     int voxtralQuantizationBits = 0,
     String ttsEngineId = '',
     required String fontFamily,
@@ -218,6 +223,7 @@ class ReaderPreferencesService {
 
     await preferences.setString(_fontFamilyKey, fontFamily);
     await preferences.setDouble(_fontScaleKey, fontScale);
+    await preferences.setBool(_activityExpandedKey, activityExpanded);
     await preferences.setString(
       _appearanceModeKey,
       appearanceMode.storageValue,

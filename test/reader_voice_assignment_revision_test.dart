@@ -417,6 +417,7 @@ class _SnapshotPreferences extends ReaderPreferencesService {
   _Barrier? nextWrite;
   @override
   Future<void> save({
+    bool activityExpanded = false,
     String ttsEngineId = ReaderPreferences.defaultTtsEngineId,
     int voxtralQuantizationBits = 0,
     required String fontFamily,
@@ -438,6 +439,7 @@ class _SnapshotPreferences extends ReaderPreferencesService {
   }) async {
     saved.add(
       ReaderPreferences(
+        activityExpanded: activityExpanded,
         ttsEngineId: ttsEngineId,
         voxtralQuantizationBits: voxtralQuantizationBits,
         fontFamily: fontFamily,

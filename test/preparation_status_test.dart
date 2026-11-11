@@ -4,10 +4,165 @@ import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:read_aloud/src/models/document_preparation.dart';
+import 'package:read_aloud/src/models/reader_operation.dart';
 import 'package:read_aloud/src/services/tts_engine.dart';
 import 'package:read_aloud/src/widgets/preparation_status.dart';
 
 void main() {
+  testWidgets('failure owns summary and never borrows unrelated resource bar', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: Scaffold(
+          body: PreparationStatus(
+            progress: [
+              PreparationProgress(
+                stage: PreparationStage.parsing,
+                state: PreparationWorkState.failed,
+                completed: 1,
+                unit: 'blocks',
+                error: 'Unreadable document',
+              ),
+            ],
+            isImporting: false,
+            isInitializing: true,
+            isComplete: false,
+            resourceProgress: TtsResourceProgress(
+              stage: 'download',
+              message: 'Downloading speech',
+              completed: 2,
+              total: 8,
+            ),
+          ),
+        ),
+      ),
+    );
+    expect(find.textContaining('Unreadable document'), findsOneWidget);
+    expect(find.byType(LinearProgressIndicator), findsNothing);
+  });
+
+  testWidgets('reduced motion removes completed row immediately at expiry', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: Scaffold(
+          body: MediaQuery(
+            data: MediaQueryData(disableAnimations: true),
+            child: PreparationStatus(
+              activityExpanded: true,
+              progress: [
+                PreparationProgress(
+                  stage: PreparationStage.parsing,
+                  state: PreparationWorkState.complete,
+                  completed: 8,
+                  total: 8,
+                  unit: 'words',
+                ),
+              ],
+              isImporting: false,
+              isInitializing: false,
+              isComplete: true,
+            ),
+          ),
+        ),
+      ),
+    );
+    expect(find.byKey(const ValueKey('activity-parsing')), findsOneWidget);
+    await tester.pump(const Duration(seconds: 6));
+    expect(find.byKey(const ValueKey('activity-parsing')), findsNothing);
+    // A reduced-motion row has no additional fade/removal timer to drain.
+    expect(tester.binding.transientCallbackCount, 0);
+    await tester.pumpWidget(const SizedBox());
+  });
+
+  testWidgets(
+    'scoped operations preserve fast completion and active deep work',
+    (tester) async {
+      ReaderOperation scoped(String pass, OperationState state) =>
+          ReaderOperation(
+            operationId: pass,
+            ownerKind: OperationOwnerKind.readingStage,
+            ownerEpoch: 1,
+            stage: 'analysis',
+            scope: pass,
+            state: state,
+            completedUnits: 2,
+            totalUnits: 4,
+            unit: 'words',
+            updatedAt: DateTime(2026),
+          );
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: PreparationStatus(
+              activityExpanded: true,
+              progress: const [],
+              operations: [
+                scoped('fast', OperationState.succeeded),
+                scoped('deep', OperationState.running),
+              ],
+              isImporting: false,
+              isInitializing: false,
+              isComplete: false,
+            ),
+          ),
+        ),
+      );
+      expect(
+        find.text('Finding characters · fast · succeeded'),
+        findsOneWidget,
+      );
+      expect(find.text('Finding characters · deep · running'), findsOneWidget);
+      expect(
+        tester.getTopLeft(find.text('Finding characters · deep · running')).dy,
+        lessThan(
+          tester
+              .getTopLeft(find.text('Finding characters · fast · succeeded'))
+              .dy,
+        ),
+      );
+      await tester.pumpWidget(const SizedBox());
+    },
+  );
+
+  testWidgets('narrow large-text Activity toggle remains keyboard operable', (
+    tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(300, 600));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    bool? preference;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: MediaQuery(
+            data: const MediaQueryData(textScaler: TextScaler.linear(2)),
+            child: PreparationStatus(
+              progress: const [],
+              isImporting: false,
+              isInitializing: false,
+              isComplete: true,
+              onActivityExpandedChanged: (value) => preference = value,
+            ),
+          ),
+        ),
+      ),
+    );
+    for (var i = 0; i < 6 && preference == null; i++) {
+      await tester.sendKeyEvent(LogicalKeyboardKey.tab);
+      final focused = FocusManager.instance.primaryFocus?.context;
+      if (focused != null &&
+          focused.findAncestorWidgetOfExactType<TextButton>()?.key ==
+              const Key('toggle-activity')) {
+        await tester.sendKeyEvent(LogicalKeyboardKey.space);
+      }
+    }
+    expect(preference, isTrue);
+    await tester.pump();
+    expect(find.text('Hide activity'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
   testWidgets(
     'mouse selection and Command-C work before and after resize',
     (tester) async {

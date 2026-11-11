@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../models/document_preparation.dart';
+import '../models/reader_operation.dart';
 import '../services/tts_engine.dart';
 
 /// A bar is evidence of measured work, never a substitute for missing telemetry.
@@ -51,6 +52,9 @@ class PreparationStatus extends StatefulWidget {
     this.onCancel,
     this.onRetry,
     this.onRetryStartup,
+    this.operations,
+    this.activityExpanded,
+    this.onActivityExpandedChanged,
   });
 
   final Iterable<PreparationProgress> progress;
@@ -63,6 +67,9 @@ class PreparationStatus extends StatefulWidget {
   final VoidCallback? onCancel;
   final VoidCallback? onRetry;
   final VoidCallback? onRetryStartup;
+  final List<ReaderOperation>? operations;
+  final bool? activityExpanded;
+  final ValueChanged<bool>? onActivityExpandedChanged;
 
   @override
   State<PreparationStatus> createState() => _PreparationStatusState();
@@ -70,24 +77,35 @@ class PreparationStatus extends StatefulWidget {
 
 class _PreparationStatusState extends State<PreparationStatus> {
   bool _details = false;
-  final _completed = <PreparationStage, String?>{};
-  final _timers = <PreparationStage, Timer>{};
-  final _fading = <PreparationStage>{};
-  final _hidden = <PreparationStage>{};
+  bool _reducedMotion = false;
+  final _completed = <String>{};
+  final _timers = <String, Timer>{};
+  final _fading = <String>{};
+  final _hidden = <String>{};
+
+  List<ReaderOperation> get _allOperations =>
+      widget.operations ??
+      [
+        for (final p in widget.progress) p.toOperation(),
+        if (widget.resourceProgress case final resource?)
+          resource.toOperation(),
+      ];
 
   @override
   void initState() {
     super.initState();
+    _details = widget.activityExpanded ?? false;
     _reconcile();
   }
 
   @override
   void didUpdateWidget(PreparationStatus oldWidget) {
     super.didUpdateWidget(oldWidget);
+    _details = widget.activityExpanded ?? _details;
     _reconcile();
   }
 
-  void _forget(PreparationStage stage) {
+  void _forget(String stage) {
     _timers.remove(stage)?.cancel();
     _completed.remove(stage);
     _fading.remove(stage);
@@ -95,29 +113,43 @@ class _PreparationStatusState extends State<PreparationStatus> {
   }
 
   void _reconcile() {
-    final stages = {for (final p in widget.progress) p.stage: p};
-    for (final stage in _completed.keys.toList()) {
+    final stages = {for (final p in _allOperations) p.key: p};
+    for (final stage in _completed.toList()) {
       final p = stages[stage];
-      if (p == null ||
-          p.state != PreparationWorkState.complete ||
-          p.workRevision != _completed[stage]) {
+      if (p == null || p.state != OperationState.succeeded) {
         _forget(stage);
       }
     }
     for (final p in stages.values) {
-      if (p.state != PreparationWorkState.complete ||
-          _completed.containsKey(p.stage)) {
+      if (p.state != OperationState.succeeded || _completed.contains(p.key)) {
         continue;
       }
-      _completed[p.stage] = p.workRevision;
-      _timers[p.stage] = Timer(const Duration(seconds: 6), () {
+      _completed.add(p.key);
+      _timers[p.key] = Timer(const Duration(seconds: 6), () {
         if (!mounted) return;
-        setState(() => _fading.add(p.stage));
-        _timers[p.stage] = Timer(const Duration(milliseconds: 600), () {
-          if (mounted) setState(() => _hidden.add(p.stage));
-          _timers.remove(p.stage);
+        if (_reducedMotion) {
+          setState(() => _hidden.add(p.key));
+          _timers.remove(p.key);
+          return;
+        }
+        setState(() => _fading.add(p.key));
+        _timers[p.key] = Timer(const Duration(milliseconds: 600), () {
+          if (mounted) setState(() => _hidden.add(p.key));
+          _timers.remove(p.key);
         });
       });
+    }
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _reducedMotion = MediaQuery.disableAnimationsOf(context);
+    if (_reducedMotion) {
+      for (final key in _fading) {
+        _timers.remove(key)?.cancel();
+        _hidden.add(key);
+      }
     }
   }
 
@@ -129,46 +161,61 @@ class _PreparationStatusState extends State<PreparationStatus> {
     super.dispose();
   }
 
-  int _priority(PreparationProgress p) => switch (p.state) {
-    PreparationWorkState.failed || PreparationWorkState.stalled => 0,
-    PreparationWorkState.working => 1,
-    PreparationWorkState.waiting => 2,
-    PreparationWorkState.cancelled => 3,
-    PreparationWorkState.complete => 4,
-  };
+  int _priority(ReaderOperation p) => p.state.isTerminal ? 1 : 0;
 
   @override
   Widget build(BuildContext context) {
-    final stages = widget.progress.toList()
+    final stages = _allOperations.toList()
       ..sort((a, b) {
         final order = _priority(a).compareTo(_priority(b));
-        return order != 0 ? order : a.stage.index.compareTo(b.stage.index);
+        return order != 0 ? order : b.updatedAt.compareTo(a.updatedAt);
       });
-    final active = stages
-        .where((p) => p.state == PreparationWorkState.working)
-        .firstOrNull;
-    final problem = stages
+    final currentByLane = <String, ReaderOperation>{};
+    for (final operation in stages.where((p) => p.readerBlocking)) {
+      final previous = currentByLane[operation.lane];
+      if (previous == null ||
+          operation.ownerEpoch > previous.ownerEpoch ||
+          (operation.ownerEpoch == previous.ownerEpoch &&
+              operation.updatedAt.isAfter(previous.updatedAt))) {
+        currentByLane[operation.lane] = operation;
+      }
+    }
+    final epochs = <OperationOwnerKind, int>{};
+    for (final p in currentByLane.values) {
+      final epoch = epochs[p.ownerKind];
+      if (epoch == null || epoch < p.ownerEpoch) {
+        epochs[p.ownerKind] = p.ownerEpoch;
+      }
+    }
+    final current = currentByLane.values
+        .where((p) => p.readerBlocking && epochs[p.ownerKind] == p.ownerEpoch)
+        .toList();
+    final active = current
         .where(
           (p) =>
-              p.state == PreparationWorkState.failed ||
-              p.state == PreparationWorkState.stalled,
+              p.visibleState == OperationState.running ||
+              p.visibleState == OperationState.finalizing ||
+              p.state == OperationState.queued,
         )
         .firstOrNull;
-    final paused = stages.any(
-      (p) =>
-          p.waitingReason?.startsWith('Prepared reading window is full') ??
-          false,
-    );
-    final resource = widget.startupError == null
-        ? widget.resourceProgress
-        : null;
+    final problem = current
+        .where((p) => p.state == OperationState.failed || p.error != null)
+        .firstOrNull;
+    final paused = current.any((p) => p.state == OperationState.idleDemand);
+    final resource = current
+        .where(
+          (p) => p.ownerKind == OperationOwnerKind.model && !p.state.isTerminal,
+        )
+        .firstOrNull;
+    final winner = problem ?? resource ?? active;
     final title =
         widget.startupError ??
         (problem == null
             ? null
-            : '${_stageName(problem.stage)}: ${problem.error ?? problem.waitingReason ?? 'Needs attention'}') ??
+            : '${_operationStageName(problem.stage)}: ${problem.error ?? problem.message ?? 'Needs attention'}') ??
         resource?.message ??
         widget.message ??
+        (active == null ? null : '${_operationStageName(active.stage)}…') ??
         (widget.isInitializing
             ? 'Preparing speech — you can open a document now.'
             : paused
@@ -198,31 +245,33 @@ class _PreparationStatusState extends State<PreparationStatus> {
                       ),
                     ),
                     const SizedBox(height: 6),
-                    if (resource != null)
-                      MeasuredProgress(
-                        fraction: resource.fraction,
-                        label: resourceProgressLabel(resource),
-                      )
-                    else if (widget.startupError == null &&
+                    if (widget.startupError == null &&
                         problem == null &&
-                        active != null &&
-                        !paused &&
+                        winner != null &&
                         !_details)
                       MeasuredProgress(
-                        fraction: active.fraction,
+                        fraction:
+                            winner.visibleState == OperationState.finalizing
+                            ? 1
+                            : winner.fraction,
                         label:
-                            '${_stageName(active.stage)} · ${_counter(active)}',
+                            '${_operationStageName(winner.stage)} · ${_operationCounter(winner)}',
                       ),
                     if (_details) ...[
                       const Divider(height: 20),
                       if (stages.isEmpty)
                         const Text('No document activity yet.'),
                       for (final p in stages.where(
-                        (p) => !_hidden.contains(p.stage),
+                        (p) => !_hidden.contains(p.key),
                       ))
                         AnimatedOpacity(
-                          key: ValueKey('activity-${p.stage.name}'),
-                          opacity: _fading.contains(p.stage) ? 0 : 1,
+                          key: ValueKey(
+                            p.operationId.startsWith('legacy:') &&
+                                    p.scope.isEmpty
+                                ? 'activity-${p.stage}'
+                                : 'activity-${p.key}',
+                          ),
+                          opacity: _fading.contains(p.key) ? 0 : 1,
                           duration: MediaQuery.disableAnimationsOf(context)
                               ? Duration.zero
                               : const Duration(milliseconds: 600),
@@ -232,22 +281,23 @@ class _PreparationStatusState extends State<PreparationStatus> {
                               crossAxisAlignment: CrossAxisAlignment.stretch,
                               children: [
                                 Text(
-                                  '${_stageName(p.stage)} · ${p.state.name}',
+                                  '${_operationStageName(p.stage)}${p.scope.isEmpty ? '' : ' · ${p.scope}'} · ${p.visibleState.name}',
                                   style: Theme.of(context).textTheme.labelLarge,
                                 ),
-                                if (p.state == PreparationWorkState.working)
+                                if (p.state == OperationState.running ||
+                                    p.state == OperationState.finalizing)
                                   MeasuredProgress(
                                     fraction: p.fraction,
-                                    label: _counter(p),
+                                    label: _operationCounter(p),
                                   )
                                 else
                                   Text(
-                                    _counter(p),
+                                    _operationCounter(p),
                                     style: Theme.of(
                                       context,
                                     ).textTheme.bodySmall,
                                   ),
-                                if (p.error ?? p.waitingReason
+                                if (p.error ?? p.message
                                     case final String detail)
                                   Text(detail),
                               ],
@@ -288,7 +338,10 @@ class _PreparationStatusState extends State<PreparationStatus> {
                     ),
                   TextButton(
                     key: const Key('toggle-activity'),
-                    onPressed: () => setState(() => _details = !_details),
+                    onPressed: () {
+                      setState(() => _details = !_details);
+                      widget.onActivityExpandedChanged?.call(_details);
+                    },
                     child: Text(_details ? 'Hide activity' : 'Activity'),
                   ),
 
@@ -298,11 +351,11 @@ class _PreparationStatusState extends State<PreparationStatus> {
                       ClipboardData(
                         text: [
                           title,
-                          if (resource != null) resourceProgressLabel(resource),
+                          if (resource != null) _operationCounter(resource),
                           for (final p in stages)
-                            '${_stageName(p.stage)} · ${p.state.name} · ${_counter(p)}'
+                            '${_operationStageName(p.stage)} · ${p.scope} · ${p.visibleState.name} · ${_operationCounter(p)}'
                                 '${p.error == null ? '' : '\n${p.error}'}'
-                                '${p.waitingReason == null ? '' : '\n${p.waitingReason}'}',
+                                '${p.message == null ? '' : '\n${p.message}'}',
                         ].join('\n\n'),
                       ),
                     ),
@@ -319,11 +372,13 @@ class _PreparationStatusState extends State<PreparationStatus> {
   }
 }
 
-String _counter(PreparationProgress p) {
-  final counter = p.total == null
-      ? '${p.completed} ${p.unit}; total unknown'
-      : '${p.completed} of ${p.total} ${p.unit}';
-  return '$counter${p.discovered == null ? '' : '; ${p.discovered} discovered so far; total may grow'}';
+String _operationCounter(ReaderOperation p) {
+  if (!p.completedKnown) return 'Completed-work count not yet available';
+  if (!p.hasValidCounter) return 'Waiting for valid completed-work accounting';
+  final counter = p.totalUnits == null
+      ? '${p.completedUnits} ${p.unit}; total unknown'
+      : '${p.completedUnits} of ${p.totalUnits} ${p.unit}';
+  return '$counter${p.discoveredUnits == null ? '' : '; ${p.discoveredUnits} discovered so far; total may grow'}';
 }
 
 String resourceProgressLabel(TtsResourceProgress p) {
@@ -337,18 +392,23 @@ String resourceProgressLabel(TtsResourceProgress p) {
         ? 'Progress total not yet available'
         : '${amount(p.completed!)} completed; total unknown';
   }
+  if (p.completed == null) {
+    return 'Completed-work count not yet available; total ${amount(p.total!)}';
+  }
   return '${amount(p.completed ?? 0)} of ${amount(p.total!)}';
 }
 
-String _stageName(PreparationStage stage) => switch (stage) {
-  PreparationStage.acquisition => 'Reading file',
-  PreparationStage.parsing => 'Reading text',
-  PreparationStage.normalization => 'Preparing text',
-  PreparationStage.mapping => 'Mapping reading position',
-  PreparationStage.analysis => 'Finding characters',
-  PreparationStage.pronunciation => 'Preparing pronunciation',
-  PreparationStage.planning => 'Preparing speech',
-  PreparationStage.resources => 'Preparing voices',
-  PreparationStage.synthesis => 'Generating audio',
-  PreparationStage.persistence => 'Saving prepared document',
+String _operationStageName(String stage) => switch (stage) {
+  'preparation' => 'Preparing document',
+  'acquisition' => 'Reading file',
+  'parsing' => 'Reading text',
+  'normalization' => 'Preparing text',
+  'mapping' => 'Mapping reading position',
+  'analysis' => 'Finding characters',
+  'pronunciation' => 'Preparing pronunciation',
+  'planning' => 'Preparing speech',
+  'resources' => 'Preparing voices',
+  'synthesis' => 'Generating audio',
+  'persistence' => 'Saving prepared document',
+  _ => stage,
 };

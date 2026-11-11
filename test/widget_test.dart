@@ -1088,6 +1088,7 @@ class _MemoryReaderPreferencesService extends ReaderPreferencesService {
 
   @override
   Future<void> save({
+    bool activityExpanded = false,
     String ttsEngineId = ReaderPreferences.defaultTtsEngineId,
     int voxtralQuantizationBits = 0,
     required String fontFamily,
@@ -1108,6 +1109,7 @@ class _MemoryReaderPreferencesService extends ReaderPreferencesService {
     String? lastOpenedDirectoryAccessToken,
   }) async {
     _preferences = ReaderPreferences(
+      activityExpanded: activityExpanded,
       ttsEngineId: ttsEngineId,
       voxtralQuantizationBits: voxtralQuantizationBits,
       selectedVoiceId: selectedVoiceId,

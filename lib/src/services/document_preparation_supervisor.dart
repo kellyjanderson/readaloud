@@ -7,6 +7,7 @@ import 'dart:typed_data';
 import 'package:crypto/crypto.dart';
 
 import '../models/document_preparation.dart';
+import '../models/reader_operation.dart';
 import '../models/document_import_exception.dart';
 import '../models/reader_document.dart';
 import 'document_import_service.dart';
@@ -216,7 +217,7 @@ class DocumentPreparationSupervisor {
       if (job.acquireSource != null) await job.acquireSource!();
       if (pathRevision) await validatePath();
       if (job.result.isCompleted) return;
-      job.onProgress?.call(
+      job.report(
         const PreparationProgress(
           stage: PreparationStage.acquisition,
           state: PreparationWorkState.working,
@@ -350,7 +351,7 @@ class DocumentPreparationSupervisor {
             if (checkpoint != null) {
               await checkpoint.commit(message);
               if (job.result.isCompleted) return;
-              job.onProgress?.call(
+              job.report(
                 PreparationProgress(
                   stage: PreparationStage.persistence,
                   state: PreparationWorkState.working,
@@ -411,12 +412,22 @@ class DocumentPreparationSupervisor {
           if (message.outcome == DocumentPreparationOutcome.ready &&
               checkpoint != null &&
               (acquisitionProof != null || pathRevision)) {
+            job.report(
+              PreparationProgress(
+                stage: PreparationStage.persistence,
+                state: PreparationWorkState.working,
+                completed: checkpoint.committedRangeCount,
+                total: checkpoint.committedRangeCount,
+                unit: 'ranges',
+                operationState: OperationState.finalizing,
+              ),
+            );
             await checkpoint.complete(
               receipt: acquisitionProof?.receipt,
               provisionalDocumentId: acquisitionProof?.provisionalDocumentId,
             );
             if (job.result.isCompleted) return;
-            job.onProgress?.call(
+            job.report(
               PreparationProgress(
                 stage: PreparationStage.persistence,
                 state: PreparationWorkState.complete,
@@ -427,7 +438,7 @@ class DocumentPreparationSupervisor {
             );
           } else if (checkpoint != null &&
               message.outcome == DocumentPreparationOutcome.ready) {
-            job.onProgress?.call(
+            job.report(
               PreparationProgress(
                 stage: PreparationStage.persistence,
                 state: PreparationWorkState.waiting,
@@ -535,6 +546,16 @@ class _PreparationJob {
   Isolate? isolate;
   ReceivePort? port;
   void Function()? abort;
+
+  void report(PreparationProgress progress) {
+    if (result.isCompleted) return;
+    onProgress?.call(
+      progress.owned(
+        operationId: request.operationId,
+        ownerEpoch: request.revision,
+      ),
+    );
+  }
 
   void finish(DocumentPreparationOutcome outcome, {String? error}) {
     if (!result.isCompleted) {
@@ -872,6 +893,8 @@ DocumentPreparationPublication _publication(
       for (final stage in coverage)
         PreparationProgress(
           stage: stage,
+          operationId: request.operationId,
+          ownerEpoch: request.revision,
           state: isLast
               ? PreparationWorkState.complete
               : PreparationWorkState.working,
@@ -889,6 +912,7 @@ DocumentPreparationPublication _publication(
         PreparationProgress(
           stage: stage,
           state: PreparationWorkState.waiting,
+          operationState: OperationState.idleDemand,
           completed: 0,
           unit: 'ranges',
           waitingReason: 'Owned by downstream consumer',

@@ -1,4 +1,5 @@
 import 'native_speech_work_activity.dart';
+import '../models/reader_operation.dart';
 import 'speech_audio_packet.dart';
 import 'runtime_memory_policy.dart';
 import 'runtime_memory_registry.dart';
@@ -297,6 +298,9 @@ class MlxSpeechWorkerChunkProcessor
   Future<void>? _closing;
   final _closedSignal = Completer<void>();
   bool _closed = false;
+  static int _resourceEpoch = 0;
+  String? _lastFailedResource;
+  final _failedVoiceResources = <String, String>{};
   final Set<String> _cancelledGenerations = <String>{};
   final Map<String, PreparedVoiceBinding> _bindings =
       <String, PreparedVoiceBinding>{};
@@ -320,8 +324,14 @@ class MlxSpeechWorkerChunkProcessor
         throw StateError('Unknown voice for $engineName: $voiceId');
       }
       if (usesReferenceVoiceLibrary(engineId)) {
+        final epoch = ++_resourceEpoch;
+        final operationId = '$engineId:voice:$epoch';
+        final retryOf = _failedVoiceResources[voiceId];
         onResourceProgress?.call(
           TtsResourceProgress(
+            operationId: operationId,
+            ownerEpoch: epoch,
+            retryOf: retryOf,
             stage: 'voiceDownload',
             message:
                 'Preparing selected voice ${result.length + 1} of ${requestedVoices.length}…',
@@ -338,8 +348,38 @@ class MlxSpeechWorkerChunkProcessor
           );
           if (_closed) throw StateError('MLX inference owner is closed.');
           _referencePaths[voiceId] = reference.path;
-        } finally {
-          onResourceProgress?.call(null);
+          onResourceProgress?.call(
+            TtsResourceProgress(
+              operationId: operationId,
+              ownerEpoch: epoch,
+              retryOf: retryOf,
+              stage: 'voiceDownload',
+              message: 'Selected voice ready',
+              completed: result.length + 1,
+              total: requestedVoices.length,
+              unit: 'voices',
+              state: OperationState.succeeded,
+            ),
+          );
+          _failedVoiceResources.remove(voiceId);
+        } catch (error) {
+          if (!_closed && error is! MlxTtsRequestCancelled) {
+            _failedVoiceResources[voiceId] = operationId;
+          }
+          onResourceProgress?.call(
+            TtsResourceProgress(
+              operationId: operationId,
+              ownerEpoch: epoch,
+              retryOf: retryOf,
+              stage: 'voiceDownload',
+              message: 'Voice preparation stopped',
+              error: '$error',
+              state: _closed || error is MlxTtsRequestCancelled
+                  ? OperationState.cancelled
+                  : OperationState.failed,
+            ),
+          );
+          rethrow;
         }
       }
       final binding = PreparedVoiceBinding(
@@ -372,14 +412,55 @@ class MlxSpeechWorkerChunkProcessor
     // Runtime acquisition and verification precede the Python request. Keep
     // their native scheduling activity owned until all preparation drains too.
     final activity = await NativeSpeechWorkActivity.begin();
+    final epoch = ++_resourceEpoch;
+    final operationId = '$engineId:model:$epoch';
+    final retryOf = _lastFailedResource;
+    onResourceProgress?.call(
+      TtsResourceProgress(
+        operationId: operationId,
+        ownerEpoch: epoch,
+        retryOf: retryOf,
+        stage: 'modelCache',
+        message: 'Checking speech model resources…',
+        state: OperationState.queued,
+      ),
+    );
     try {
-      await _prepareModel();
+      await _prepareModel(operationId, epoch);
+      onResourceProgress?.call(
+        TtsResourceProgress(
+          operationId: operationId,
+          ownerEpoch: epoch,
+          retryOf: retryOf,
+          stage: 'modelReady',
+          message: 'Speech model ready',
+          state: OperationState.succeeded,
+        ),
+      );
+      _lastFailedResource = null;
+    } catch (error) {
+      final cancelled = _closed || error is MlxTtsRequestCancelled;
+      if (!cancelled) _lastFailedResource = operationId;
+      onResourceProgress?.call(
+        TtsResourceProgress(
+          operationId: operationId,
+          ownerEpoch: epoch,
+          retryOf: retryOf,
+          stage: 'modelLoad',
+          message: cancelled
+              ? 'Model preparation cancelled'
+              : 'Model preparation failed',
+          state: cancelled ? OperationState.cancelled : OperationState.failed,
+          error: cancelled ? null : '$error',
+        ),
+      );
+      rethrow;
     } finally {
       await activity.release();
     }
   }
 
-  Future<void> _prepareModel() async {
+  Future<void> _prepareModel(String operationId, int epoch) async {
     if (_closed) throw StateError('MLX inference owner is closed.');
     if (usesReferenceVoiceLibrary(engineId)) await MlxVoiceLibrary.load();
     if (!isMlxEngine(engineId)) {
@@ -464,7 +545,7 @@ class MlxSpeechWorkerChunkProcessor
     ).writeAsString(snapshot.checksumsJson, flush: true);
     _helperPath = installedHelper.path;
     _modelRoot = mlxRoot.path;
-    _resolvedPythonPath = await _findPythonRuntime(mlxRoot);
+    _resolvedPythonPath = await _findPythonRuntime(mlxRoot, operationId, epoch);
 
     final support = await getApplicationSupportDirectory();
     _store ??= AudioArtifactStore(
@@ -486,6 +567,8 @@ class MlxSpeechWorkerChunkProcessor
     onStatus?.call('Preparing $engineName model…');
     onResourceProgress?.call(
       TtsResourceProgress(
+        operationId: operationId,
+        ownerEpoch: epoch,
         stage: 'modelCache',
         message:
             'Checking local files and the shared Hugging Face cache for $engineName…',
@@ -498,7 +581,8 @@ class MlxSpeechWorkerChunkProcessor
         quantizationBits: quantizationBits,
         privateCachePath:
             '${mlxRoot.path}${Platform.pathSeparator}runtime-cache${Platform.pathSeparator}hub',
-        onProgress: _handleModelLoadProgress,
+        onProgress: (event) =>
+            _handleModelLoadProgress(event, operationId, epoch),
         requireVerifiedModelAssets: requireVerifiedAssets,
         expectedVerifiedModelIdentity: requireVerifiedAssets
             ? variant.pinnedIdentity
@@ -515,7 +599,6 @@ class MlxSpeechWorkerChunkProcessor
       supportsNativeScenes = loaded['nativeScenesQualified'] == true;
       if (_closed) throw StateError('MLX inference owner is closed.');
     } finally {
-      onResourceProgress?.call(null);
       onStatus?.call(null);
     }
   }
@@ -572,7 +655,11 @@ class MlxSpeechWorkerChunkProcessor
     return null;
   }
 
-  Future<String> _findPythonRuntime(Directory mlxRoot) async {
+  Future<String> _findPythonRuntime(
+    Directory mlxRoot,
+    String operationId,
+    int epoch,
+  ) async {
     if (pythonPath.isNotEmpty) return pythonPath;
     final support = await getApplicationSupportDirectory();
     if (_closed) throw StateError('MLX inference owner is closed.');
@@ -584,7 +671,7 @@ class MlxSpeechWorkerChunkProcessor
       support: support,
       consumerRevision: '$engineId/${_activeGeneration ?? 'prepare'}',
       onProgress: (progress) {
-        if (!_closed) _handleModelLoadProgress(progress);
+        if (!_closed) _handleModelLoadProgress(progress, operationId, epoch);
       },
     );
     try {
@@ -598,7 +685,11 @@ class MlxSpeechWorkerChunkProcessor
     }
   }
 
-  void _handleModelLoadProgress(Map<String, Object?> event) {
+  void _handleModelLoadProgress(
+    Map<String, Object?> event,
+    String operationId,
+    int epoch,
+  ) {
     final stage = event['stage'] as String? ?? 'modelLoad';
     final message = event['message'] as String? ?? 'Preparing speech model…';
     final completed = (event['completed'] as num?)?.toInt();
@@ -607,11 +698,20 @@ class MlxSpeechWorkerChunkProcessor
     onStatus?.call(message);
     onResourceProgress?.call(
       TtsResourceProgress(
+        operationId: operationId,
+        ownerEpoch: epoch,
         stage: stage,
         message: message,
         completed: completed,
         total: total,
         unit: unit,
+        state:
+            completed != null &&
+                total != null &&
+                total > 0 &&
+                completed == total
+            ? OperationState.finalizing
+            : OperationState.running,
       ),
     );
   }

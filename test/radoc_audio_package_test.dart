@@ -63,6 +63,46 @@ void main() {
   }
 
   test(
+    'per-call progress remains owned when a package session is reused',
+    () async {
+      await service.dispose();
+      final fallback = <RadocPackageProgress>[];
+      final exported = <RadocPackageProgress>[];
+      final opened = <RadocPackageProgress>[];
+      final member = <RadocPackageProgress>[];
+      service = RadocAudioPackage(onProgress: fallback.add);
+      final output = File('${temp.path}/owned-progress.radoc');
+      await service.export(
+        destination: output,
+        manifest: manifest,
+        members: files,
+        onProgress: exported.add,
+      );
+      expect(exported, isNotEmpty);
+      final exportCount = exported.length;
+      final book = await service.open(output, onProgress: opened.add);
+      expect(opened, isNotEmpty);
+      final openCount = opened.length;
+      final audio = await service.materializeMember(
+        book,
+        'audio/0.wav',
+        onProgress: member.add,
+      );
+      expect(member, isNotEmpty);
+      expect(
+        await audio.readAsBytes(),
+        await files['audio/0.wav']!.readAsBytes(),
+      );
+      expect(exported.length, exportCount);
+      expect(opened.length, openCount);
+      expect(fallback, isEmpty);
+      await service.materializeMember(book, 'prepared/1.json');
+      expect(fallback, isNotEmpty);
+      expect(opened.length, openCount);
+    },
+  );
+
+  test(
     'platform stage exports and atomically replaces an existing book',
     () async {
       await service.dispose();
