@@ -533,6 +533,35 @@ void main() {
   });
 
   test(
+    'later prepared range streams with global source bounds and gated EOF',
+    () async {
+      engine.renderAvailable = true;
+      engine.packetGate = Completer<void>();
+      await controller.importFilePaths([
+        (await fixture(secondAudio: false)).path,
+      ]);
+      await controller.startPlayback();
+      final prefix = engine.requests.single;
+      final cancellation = Completer<void>();
+      final missing = await prefix.continuation!
+          .next(0, cancellation.future)
+          .timeout(const Duration(seconds: 3));
+      expect(missing!.audioPacket, isNotNull);
+      expect(missing.startWordIndex, 2);
+      expect(missing.endWordIndex, 4);
+      final end = missing.continuation!.next(
+        missing.rangeSequence,
+        cancellation.future,
+      );
+      var ended = false;
+      unawaited(end.then((_) => ended = true));
+      await Future<void>.delayed(Duration.zero);
+      expect(ended, false);
+      engine.packetGate!.complete();
+      expect(await end.timeout(const Duration(seconds: 3)), isNull);
+    },
+  );
+  test(
     'late render failure cannot become packet EOF or persisted success',
     () async {
       engine.renderAvailable = true;

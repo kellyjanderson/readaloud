@@ -523,6 +523,9 @@ extension ReaderAudioBookSupport on ReaderController {
     bool renderCurrent() => current() && !cancellation.isCompleted;
     final planner = SpeechPlanningSupervisor();
     unawaited(cancellation.future.then((_) => planner.cancel()));
+    final previousTrailing =
+        previous?.trailingMicros ??
+        previous?.scene.provenance['trailingSilenceMicros'] as int?;
     Future<void> produce() async {
       Directory? staging;
       _BookScene? finished;
@@ -558,15 +561,9 @@ extension ReaderAudioBookSupport on ReaderController {
             cancelled: cancellation.future,
             predecessorRawArtifactIdentity:
                 previous?.scene.provenance['rawArtifactIdentity'] as String?,
-            predecessorTrailingSilence: previous == null
+            predecessorTrailingSilence: previousTrailing == null
                 ? null
-                : Duration(
-                    microseconds:
-                        previous.trailingMicros ??
-                        previous.scene.provenance['trailingSilenceMicros']
-                            as int? ??
-                        0,
-                  ),
+                : Duration(microseconds: previousTrailing),
             onPlayablePacket: (packet) async {
               if (!renderCurrent()) throw const PlanningCancelled();
               stream.add(packet);

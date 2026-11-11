@@ -12,8 +12,9 @@ abort 'Usage: run_radoc_first_load_smoke.rb APP_BUNDLE FISH_ENGINE INPUT_DOCUMEN
 bundle, engine, book, output, capture = ARGV
 bundle, book, output, capture = [bundle, book, output, capture].map { |p| File.expand_path(p) }
 abort 'Expected Fish engine' unless engine.start_with?('fish_drama3')
-%w[READALOUD_MLX_TTS_MODEL_PATH READALOUD_MLX_PYTHON].each { |key| abort "Missing existing runtime setting: #{key}" if ENV[key].to_s.empty? }
-abort 'Missing existing model/runtime' unless File.directory?(ENV.fetch('READALOUD_MLX_TTS_MODEL_PATH')) && File.executable?(ENV.fetch('READALOUD_MLX_PYTHON'))
+abort 'Missing existing model' unless File.directory?(ENV.fetch('READALOUD_MLX_TTS_MODEL_PATH', ''))
+explicit_python = ENV['READALOUD_MLX_PYTHON']
+abort 'Invalid explicit Python override' if explicit_python && !explicit_python.empty? && !File.executable?(explicit_python)
 app = File.join(bundle, 'Contents/MacOS/read_aloud')
 abort 'Missing input or existing output' unless File.executable?(app) && File.file?(book) && File.executable?(capture) && !File.exist?(output)
 abort 'Use a plain-text fixture for independent source counting' unless File.extname(book).downcase == '.txt'
