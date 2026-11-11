@@ -195,10 +195,25 @@ Future<void> main(List<String> args) async {
     'phases': <Map<String, Object?>>[],
   };
   var lastTick = 0, maxUiDelayMs = 0;
+  var lastTickPhase = phase;
+  final delayedTicks = <Map<String, Object?>>[];
   final heartbeat = Timer.periodic(const Duration(milliseconds: 50), (_) {
     final now = watch.elapsedMilliseconds;
-    maxUiDelayMs = math.max(maxUiDelayMs, now - lastTick - 50);
+    final delay = now - lastTick - 50;
+    maxUiDelayMs = math.max(maxUiDelayMs, delay);
+    if (delay > 100) {
+      if (delayedTicks.length == 16) delayedTicks.removeAt(0);
+      final event = <String, Object?>{
+        'elapsedMs': now,
+        'delayMs': delay,
+        'previousPhase': lastTickPhase,
+        'phase': phase,
+      };
+      delayedTicks.add(event);
+      stdout.writeln('RADOC_REGEN_UI_DELAY ${jsonEncode(event)}');
+    }
     lastTick = now;
+    lastTickPhase = phase;
   });
   PlaybackInstrumentationService.instance.observer = (record) {
     final event = {'phase': phase, ...record.toMap()};
@@ -401,6 +416,58 @@ Future<void> main(List<String> args) async {
   try {
     if (!args[0].startsWith('fish_drama3')) {
       throw ArgumentError('Fish engine required');
+    }
+    final referenceBook =
+        Platform.environment['READALOUD_REGEN_REFERENCE_BOOK'];
+    if (referenceBook != null) {
+      // Reuse a previously verified complete book to isolate a cold missing
+      // scene without repeating initial/changed/saved-reuse playback.
+      final initial = await _inspectBook(referenceBook);
+      final scenes = (initial['scenes']! as List).cast<Map<String, Object?>>();
+      if (scenes.length < 3) throw StateError('Need a bounded middle scene');
+      final missingScene = scenes[1];
+      final path = '${runRoot.path}/missing-middle.radoc';
+      await _makeMissingSceneBook(
+        referenceBook,
+        path,
+        missingScene['sceneId']! as String,
+      );
+      receipt['fixture'] = {'words': initial['totalWords']};
+      receipt['referenceBook'] = initial;
+      final missing = createSession('missing-scenes', inputPath: path);
+      mark('missing-import');
+      await missing.controller.initialize().timeout(
+        const Duration(seconds: 30),
+      );
+      await until(
+        () =>
+            missing.controller.hasPublishedAudio &&
+            !missing.controller.isImporting,
+        'Standalone missing-scene intake',
+        missing.controller,
+        seconds: 120,
+      );
+      await playToEnd(missing, 'missing');
+      _requireOnlySceneExports(exports, missingScene);
+      final ready = metrics
+          .where((m) => m['metric'] == 'exportChunkReady')
+          .toList();
+      receipt['exportChunkReady'] = ready;
+      if (ready.length != 1 ||
+          (ready.single['value']! as Map)['cacheHit'] != false) {
+        throw StateError('Standalone proof must synthesize one uncached scene');
+      }
+      mark('missing-save');
+      final repaired = await save(missing, 'repaired-middle');
+      final repairedEvidence = await _inspectBook(repaired.path);
+      receipt['repairedBook'] = repairedEvidence;
+      _compareBooks(
+        initial,
+        repairedEvidence,
+        missingScene['sceneId']! as String,
+      );
+      receipt['passed'] = true;
+      return;
     }
     final session = createSession('selective-scenes');
     final c = session.controller;
@@ -626,6 +693,13 @@ Future<void> main(List<String> args) async {
   } finally {
     mark('shutdown');
     heartbeat.cancel();
+    receipt['functionalPassed'] = receipt['passed'];
+    receipt['uiResponsiveness'] = {
+      'maxHeartbeatDelayMs': maxUiDelayMs,
+      'delayedTicks': delayedTicks,
+      'passed': maxUiDelayMs <= 250,
+    };
+    if (maxUiDelayMs > 250) receipt['passed'] = false;
     final mainReceipt = await nativeMain.close();
     receipt['nativeMainResponsiveness'] = mainReceipt;
     if (mainReceipt['passed'] != true) receipt['passed'] = false;
