@@ -67,6 +67,32 @@ class SynthesisBoundaryPolicy {
   );
   static const double _silenceAmplitudeThreshold = 0.008;
 
+  /// Shared exact onset policy for incremental packets and final scene output.
+  /// The historical millisecond rounding is intentional and remains identical.
+  int onsetTrimFrames({
+    required int leadingSilentFrames,
+    required int sampleRate,
+    required BreakClass boundaryClass,
+    required bool isInitialChunk,
+    required bool isResumedChunk,
+    Duration? previousTrailingSilence,
+  }) {
+    final leading = _silenceDuration(leadingSilentFrames, sampleRate);
+    final target = _targetLeadingSilence(
+      boundaryClass: boundaryClass,
+      currentLeading: leading,
+      previousTrailing: (isInitialChunk || isResumedChunk)
+          ? Duration.zero : previousTrailingSilence ?? Duration.zero,
+      isInitialChunk: isInitialChunk,
+      isResumedChunk: isResumedChunk,
+    );
+    return _durationToSamples(leading - target, sampleRate)
+        .clamp(0, leadingSilentFrames);
+  }
+
+  static bool isSilentSample(int sample) =>
+      sample.abs() / 32767.0 <= _silenceAmplitudeThreshold;
+
   Future<BoundaryCorrectionOutcome> correctWavFile({
     required String chunkId,
     required String wavFilePath,
@@ -260,9 +286,13 @@ class SynthesisBoundaryPolicy {
     var retainedSampleCount = pcm.length;
 
     if (applied) {
-      final samplesToTrim = _durationToSamples(
-        leadingBefore - targetLeading,
-        sampleRate,
+      final samplesToTrim = onsetTrimFrames(
+        leadingSilentFrames: _leadingSilentSamples(pcm),
+        sampleRate: sampleRate,
+        boundaryClass: boundaryClass,
+        isInitialChunk: isInitialChunk,
+        isResumedChunk: isResumedChunk,
+        previousTrailingSilence: previousTrailingSilence,
       ).clamp(0, pcm.length);
       final trimmedPcm = Int16List.fromList(pcm.sublist(samplesToTrim));
       retainedSampleCount = trimmedPcm.length;
@@ -366,7 +396,7 @@ class SynthesisBoundaryPolicy {
   }
 
   bool _isSilent(int sample) {
-    return sample.abs() / 32767.0 <= _silenceAmplitudeThreshold;
+    return isSilentSample(sample);
   }
 
   Duration _silenceDuration(int sampleCount, int sampleRate) {

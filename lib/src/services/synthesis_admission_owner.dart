@@ -1,3 +1,4 @@
+import 'speech_audio_packet.dart';
 import 'dart:async';
 import 'dart:collection';
 import 'speech_worker_pipeline.dart';
@@ -207,7 +208,8 @@ class _Admission {
 class _Lease
     implements
         CancellableSynthesisLease,
-        CancellableSpeechWorkerChunkProcessor {
+        CancellableSpeechWorkerChunkProcessor,
+        StreamingSpeechWorkerChunkProcessor {
   _Lease(this.owner, this.export);
   final SynthesisAdmissionOwner owner;
   final bool export;
@@ -221,6 +223,19 @@ class _Lease
   Future<void> process(
     SpeechWorkerChunkRequest request,
     void Function(SpeechWorkerEvent) emit,
+  ) => _process(request, emit, null);
+
+  @override
+  Future<void> processWithAudioPackets(
+    SpeechWorkerChunkRequest request,
+    void Function(SpeechWorkerEvent) emit,
+    Future<void> Function(SpeechAudioPacket) onAudioPacket,
+  ) => _process(request, emit, onAudioPacket);
+
+  Future<void> _process(
+    SpeechWorkerChunkRequest request,
+    void Function(SpeechWorkerEvent) emit,
+    Future<void> Function(SpeechAudioPacket)? onAudioPacket,
   ) {
     if (_closed) return Future.error(StateError('Synthesis lease closed.'));
     final epoch = _epoch;
@@ -251,7 +266,7 @@ class _Lease
         var completionObserved = false;
         _activeGeneration = request.generationId;
         try {
-          await owner.processor.process(request, (event) {
+          void receive(SpeechWorkerEvent event) {
             if (!current() ||
                 event.sessionId != request.sessionId ||
                 event.generationId != request.generationId ||
@@ -276,7 +291,21 @@ class _Lease
               }
             }
             emit(event);
-          });
+          }
+          final processor = owner.processor;
+          if (request.enableAudioPackets && onAudioPacket != null &&
+              processor is StreamingSpeechWorkerChunkProcessor) {
+            await (processor as StreamingSpeechWorkerChunkProcessor)
+                .processWithAudioPackets(request, receive, (packet) async {
+              if (!current() || completionObserved ||
+                  packet.sessionId != request.sessionId ||
+                  packet.generationId != request.generationId ||
+                  packet.chunkId != request.chunkId) return;
+              await onAudioPacket(packet);
+            });
+          } else {
+            await processor.process(request, receive);
+          }
         } finally {
           _activeGeneration = null;
         }

@@ -24,6 +24,7 @@ class SpeechAudioPacket {
         sampleRate <= 0 ||
         sampleRate > 192000 ||
         frameEnd > sampleRate * maxSceneSeconds ||
+        frameEnd * 2 > maxPcmBytes ||
         channels != 1 ||
         bitsPerSample != 16) {
       throw const FormatException('Invalid native audio packet.');
@@ -32,6 +33,7 @@ class SpeechAudioPacket {
 
   static const maxPackets = 2048;
   static const maxSceneSeconds = 600;
+  static const maxPcmBytes = 192000 * maxSceneSeconds * 2;
   final String sessionId;
   final String generationId;
   final String chunkId;
