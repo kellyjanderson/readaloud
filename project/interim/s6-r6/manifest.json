@@ -1,0 +1,15 @@
+{
+  "schema_version": 1,
+  "package_revision": "S6 R6",
+  "publication": "https://github.com/kellyjanderson/readaloud/issues/137#issuecomment-6786619846",
+  "implementation_baseline": "0489667",
+  "documents": [
+    {
+      "path": "early-playable-packets.md",
+      "revision": "S6 R6",
+      "source": "https://github.com/kellyjanderson/readaloud/blob/9cc4a11/project/interim/s6-r6/early-playable-packets.md",
+      "source_section_sha256": "bd57f6f48bc2992d8e9f7ea6e779454ba313d7a6907678ee1d9e0ed09444bcce",
+      "sha256": "bd57f6f48bc2992d8e9f7ea6e779454ba313d7a6907678ee1d9e0ed09444bcce"
+    }
+  ]
+}
