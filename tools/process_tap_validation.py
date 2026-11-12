@@ -26,6 +26,11 @@ def validate_process_tap(timing, pid, frames, rate, session_id=None):
             and timing.get('mechanism') == 'CoreAudioProcessTap'
             and timing.get('status') == 'complete' and timing.get('errors') == [],
             'timing is not final/clean')
+    require(integer(timing.get('processAudioObjectID')) and timing['processAudioObjectID'] > 0,
+            'missing/invalid process audio object identity')
+    require(timing.get('privateTap') is True and timing.get('privateAggregate') is True
+            and timing.get('muteBehavior') == 'unmuted',
+            'missing/invalid private unmuted capture properties')
     actual_session = timing.get('sessionID')
     try:
         valid_session = isinstance(actual_session, str) and str(uuid.UUID(actual_session)) == actual_session.lower()
