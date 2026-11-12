@@ -81,6 +81,10 @@ if ENV['READALOUD_QUEUE_BOUNDARY_AUDIT'] == '1'
   result[:nativeQueueBoundaryDiagnostic] = true
   result[:errors] << 'Native queue boundary diagnosis enabled; not product acceptance'
 end
+if ENV['READALOUD_QUEUE_SKIP_LOOP_OFF_REWIND'] == '1'
+  result[:skipLoopOffRewindDiagnostic] = true
+  result[:errors] << 'QA-only ended-item rewind comparison; production default unchanged'
+end
 # Read only bounded uncompressed PCM or float WAV. This checks app-emitted signal
 # separately from player intent, never labels energy as an exact speech match.
 def emitted_signal(path, timing_path, segments)
