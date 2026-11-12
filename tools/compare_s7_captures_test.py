@@ -82,9 +82,57 @@ class DualCaptureDiagnosticTest(unittest.TestCase):
         self.assertEqual(self.classifications(result), ['agreement-matched'] * 4)
         self.assertEqual(result['primaryDiagnostic']['runtimeFailures'], ['native responsiveness failed'])
         self.assertEqual(result['policy'], {'fullActiveCorrelationMinimum': .98, 'phaseMultiplier': 4,
+                                             'fullReferencePlacementCorrelationMinimum': .98,
                                              'maximumAbsoluteExternalJoinMs': 10.})
         self.assertEqual(result['timingViolations'], [])
         self.assertTrue(all(p['coreaudio']['bestFullActiveCorrelation'] >= .98 for p in result['packets']))
+
+    def low_information_first_source(self, wrong_tap_context=False, decoy=True):
+        rng = np.random.default_rng(409)
+        pcm = rng.integers(-20, 21, round(self.duration * self.rate), dtype=np.int16)
+        spike = np.array([130, 300, 394, 220, 50], dtype=np.int16)
+        pcm[1000:1005] = spike
+        ref = self.queued[0]['reference']
+        path = Path(ref['path'])
+        wavfile.write(path, self.rate, pcm)
+        ref.update(sha256=hashlib.sha256(path.read_bytes()).hexdigest(),
+                   bytes=path.stat().st_size, sampleRate=self.rate)
+        self.sck[9600:28800] = pcm.astype(np.float64) / 32768
+        emitted = (rng.integers(-20, 21, len(pcm), dtype=np.int16)
+                   if wrong_tap_context else pcm.copy())
+        emitted[1000:1005] = spike
+        self.tap[9600:28800] = emitted.astype(np.float64) / 32768
+        # Keep the following packet's onset quiet so resampler boundary bleed
+        # from an abrupt loud synthetic start cannot mask the tiny reference.
+        following_ref = self.queued[1]['reference']
+        following_path = Path(following_ref['path'])
+        following_rate, following = wavfile.read(following_path)
+        following[:16] = 0
+        wavfile.write(following_path, following_rate, following)
+        following_ref['sha256'] = hashlib.sha256(following_path.read_bytes()).hexdigest()
+        self.sck[28800:48000] = self.tap[28800:48000] = resample_poly(
+            following.astype(np.float64) / 32768, 6, 1)
+        if decoy:
+            self.sck[7480:7485] = self.tap[7480:7485] = spike.astype(np.float64) / 32768
+
+    def test_microtransient_context_selects_same_placement_in_both_captures(self):
+        self.low_information_first_source()
+        result = self.run_comparison()
+        self.assertEqual(self.classifications(result), ['agreement-matched'] * 4)
+        for name in ('capture', 'coreaudio'):
+            first = result['packets'][0][name]
+            self.assertAlmostEqual(first['captureStartSeconds'], .2, delta=1 / (self.rate * 4))
+            self.assertLess(first['activeComparisonFrames'], 25)
+            self.assertGreater(first['fullReferenceComparisonFrames'], 75000)
+            self.assertGreaterEqual(first['fullReferenceCorrelation'], .98)
+            self.assertGreaterEqual(first['bestFullActiveCorrelation'], .98)
+        self.assertEqual(result['timingViolations'], [])
+
+    def test_same_microtransient_with_wrong_tap_context_is_missing(self):
+        self.low_information_first_source(wrong_tap_context=True, decoy=False)
+        result = self.run_comparison()
+        self.assertEqual(self.classifications(result)[0], 'sck-matches-tap-missing')
+        self.assertLess(result['packets'][0]['coreaudio']['fullReferenceCorrelation'], .98)
 
     def test_swapped_tap_stream_cannot_use_names_or_primary_matches_as_identity(self):
         self.tap[9600:48000] = np.concatenate(self.sources[1::-1])

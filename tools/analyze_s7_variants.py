@@ -4,7 +4,8 @@
 Usage: analyze_s7_variants.py RUN_DIRECTORY NEW_OUTPUT.json [--diagnostic-only]
 Reads receipt.json, runner.json, capture.wav and capture.wav.timing.json. Queue
 order and copied-file SHA/size are authoritative; names never establish order.
-Every accepted reference uses its complete active waveform at correlation .98.
+Full-reference context selects placement at correlation .98; the complete active
+waveform must independently reach .98 at that same placement.
 Only the final playback-interval WAV interrupted by Pause may be excluded,
 explicitly. Prepared queue entries beyond the Pause witness remain unplayed.
 This does not establish transcript/voice quality, human listening, memory or M3.
@@ -98,6 +99,29 @@ def match(window, template):
     return index, float(scores[index])
 
 
+def match_reference(window, template, active_start, active_end):
+    """Select with all reference context, then score active PCM without shifting.
+
+    A few above-threshold samples can resemble an unrelated transient. Their
+    surrounding low-level PCM must establish placement before those samples
+    receive identity credit. Neither joins nor native position hints select a
+    correlation peak. Source-silent references are excluded by callers.
+    """
+    require(0 <= active_start < active_end <= len(template), 'Invalid active waveform span')
+    if len(window) < len(template):
+        return None, 0., 0.
+    index, context_score = match(window, template)
+    if index is None:
+        return None, 0., context_score
+    active_template = template[active_start:active_end]
+    captured = window[index + active_start:index + active_end]
+    denominator = math.sqrt(float(np.dot(active_template, active_template))
+                            * float(np.dot(captured, captured)))
+    active_score = float(np.dot(captured, active_template)) / denominator if denominator > 0 else 0.
+    require(math.isfinite(active_score), 'Nonfinite fixed-placement active correlation')
+    return (index if active_score >= THRESHOLD else None), active_score, context_score
+
+
 def source_path(uri):
     parsed = urlparse(uri)
     require(parsed.scheme == 'file' and parsed.netloc in ('', 'localhost'),
@@ -162,6 +186,7 @@ def analyze(directory, diagnostic_only=False):
                                   'nativeMainResponsiveness': native.get('nativeMainResponsiveness')},
               'mode': native.get('mode'), 'errors': [], 'segments': [],
               'policy': {'fullActiveCorrelationMinimum': THRESHOLD,
+                         'fullReferencePlacementCorrelationMinimum': THRESHOLD,
                          'maximumAbsoluteExternalJoinMs': MAX_GAP_MS,
                          'minimumCompleteReferenceSeconds': MIN_COMPLETE_SECONDS},
               'limits': 'Full queued-waveform identity/order and external joins for sustained native runs. '
@@ -307,8 +332,8 @@ def analyze(directory, diagnostic_only=False):
                 base = max(0, math.floor(low * rate))
                 finish = min(len(captured), math.ceil(high * rate))
                 window = resample_poly(captured[base:finish], 4, 1)
-                index, score = (None, 0.) if len(window) < end - start else match(window, source[start:end])
-                actual = None if index is None else base / rate + (index - start) / comparison_rate
+                index, score, context_score = match_reference(window, source, start, end)
+                actual = None if index is None else base / rate + index / comparison_rate
                 complete = actual is not None and actual >= low_time - .01 and actual + duration <= stop + .001
                 if not complete:
                     # The only permitted exclusion is the final source when the
@@ -328,6 +353,8 @@ def analyze(directory, diagnostic_only=False):
                             'queueIndex': number, 'sourcePath': row['sourcePath'],
                             'reference': row['reference'], 'sourceDurationSeconds': duration,
                             'expectedStartSeconds': expected, 'bestFullActiveCorrelation': score,
+                            'fullReferenceCorrelation': context_score,
+                            'fullReferenceComparisonFrames': len(source),
                             'searchWindowStartSeconds': base / rate,
                             'searchWindowEndSeconds': finish / rate,
                             'scope': 'FAILED complete-waveform match; diagnostic continuation, never accepted'})
@@ -344,6 +371,8 @@ def analyze(directory, diagnostic_only=False):
                 record = {'queueIndex': number, 'sourcePath': row['sourcePath'],
                           'reference': row['reference'], 'captureStartSeconds': actual,
                           'captureEndSeconds': actual + duration, 'fullActiveCorrelation': score,
+                          'fullReferenceCorrelation': context_score,
+                          'fullReferenceComparisonFrames': len(source),
                           'activeComparisonFrames': end - start, 'sourceDurationSeconds': duration,
                           'externalGapBeforeMs': gap, 'encodedSilentSecondsBefore': pending_silent_seconds,
                           'failedReferenceSecondsBefore': pending_unmatched_seconds,

@@ -21,7 +21,7 @@ from scipy.signal import resample_poly
 
 from analyze_s7_variants import (MAX_CAPTURE_BYTES, MAX_GAP_MS, THRESHOLD,
                                  analyze as primary_analyze, finite, load_json,
-                                 match, read_audio, require, resample)
+                                 match_reference, read_audio, require, resample)
 from analyze_s7_switches import verify_references
 
 
@@ -56,7 +56,7 @@ def capture(directory, name, pid, tap=False):
 
 def compare_waveform(stream, pcm, source_rate, expected, duration, low, high,
                      ordered_end=None):
-    """Full active waveform, fourfold phase resolution and bounded ordered search.
+    """Full-reference placement and fixed active score at fourfold phase resolution.
 
     All times are local PCM seconds. No padding or prefix matching. A packet
     whose complete source interval is outside shared coverage is unobserved.
@@ -75,12 +75,13 @@ def compare_waveform(stream, pcm, source_rate, expected, duration, low, high,
     base = max(0, math.ceil(a * rate))
     finish = min(len(stream['pcm']), math.floor(b * rate))
     window = resample_poly(stream['pcm'][base:finish], 4, 1) if finish > base else np.empty(0)
-    index, score = (None, 0.) if len(window) < end - start else match(window, template[start:end])
-    actual = None if index is None else base / rate + (index - start) / (rate * 4)
+    index, score, context_score = match_reference(window, template, start, end)
+    actual = None if index is None else base / rate + index / (rate * 4)
     complete = (actual is not None and actual >= low
                 and actual + duration <= high)
     row = {'status': 'matched' if complete else 'missing-full-waveform',
            'bestFullActiveCorrelation': score, 'activeComparisonFrames': end - start,
+           'fullReferenceCorrelation': context_score, 'fullReferenceComparisonFrames': len(template),
            'searchWindowStartSeconds': base / rate, 'searchWindowEndSeconds': finish / rate}
     if not complete:
         row['reason'] = 'No complete ordered match in bounded onset window; not proof of global absence'
@@ -97,6 +98,7 @@ def compare(directory):
     result = {'schema': 'readaloud-s7-dual-capture-diagnostic-v1', 'diagnosticOnly': True,
               'passed': False, 'errors': [], 'captureErrors': {}, 'packets': [],
               'policy': {'fullActiveCorrelationMinimum': THRESHOLD, 'phaseMultiplier': 4,
+                         'fullReferencePlacementCorrelationMinimum': THRESHOLD,
                          'maximumAbsoluteExternalJoinMs': MAX_GAP_MS},
               'limits': 'Diagnostic only, never product acceptance. Callback receipt origins are upper bounds, '
                         'not synchronized presentation clocks or physical speaker onset. Shared coverage uses '

@@ -15,6 +15,7 @@ import numpy as np
 from scipy.io import wavfile
 from scipy.signal import butter, resample_poly, sosfilt
 
+import analyze_s7_variants as variant_analyzer
 from analyze_s7_variants import analyze, load_json, read_audio
 
 
@@ -137,6 +138,56 @@ class S7VariantAcceptanceTest(unittest.TestCase):
         if text:
             diagnostics = str(result['errors']) + str([s['errors'] for s in result['segments']])
             self.assertIn(text, diagnostics)
+
+    def low_information_first_source(self, wrong_context=False, decoy=True):
+        # Unique quiet PCM surrounds a ~70us above-.01 transient. The same
+        # transient in the lead-in, 65ms earlier, is plausible active evidence
+        # but has none of the full reference's low-level context.
+        rng = np.random.default_rng(407)
+        pcm = rng.integers(-20, 21, 11 * self.rate, dtype=np.int16)
+        spike = np.array([130, 300, 394, 220, 50], dtype=np.int16)
+        pcm[1000:1005] = spike
+        self.native['queuedAudio'][0]['reference'] = self.reference(
+            'low-context-first.wav', pcm, self.rate)
+        emitted = (rng.integers(-20, 21, len(pcm), dtype=np.int16)
+                   if wrong_context else pcm.copy())
+        emitted[1000:1005] = spike
+        self.capture[12000:12000 + len(pcm)] = emitted.astype(np.float64) / 32768
+        if decoy:
+            self.capture[9880:9885] = spike.astype(np.float64) / 32768
+
+    def test_microtransient_uses_unique_full_reference_context_for_placement(self):
+        self.low_information_first_source()
+        result = self.run_analysis()
+        self.assertTrue(result['passed'], result)
+        report = result['segments'][0]
+        first = report['matches'][0]
+        self.assertLess(first['activeComparisonFrames'], 25)
+        self.assertGreater(first['fullReferenceComparisonFrames'], 2_000_000)
+        self.assertGreaterEqual(first['fullReferenceCorrelation'], .98)
+        self.assertGreaterEqual(first['fullActiveCorrelation'], .98)
+        self.assertAlmostEqual(first['captureStartSeconds'], .25, delta=1 / (self.rate * 4))
+        self.assertLess(report['maximumAbsoluteExternalJoinMs'], .1)
+
+    def test_same_microtransient_without_reference_context_is_refused(self):
+        self.low_information_first_source(wrong_context=True, decoy=False)
+        self.assert_refused(self.run_analysis(), 'No complete ordered waveform #1')
+
+    def test_full_context_does_not_replace_fixed_placement_active_score(self):
+        # Quiet context dominates the total energy, so deleting four active
+        # samples still passes the full-reference score. A copy elsewhere must
+        # never supply a second, freely shifted active match.
+        rng = np.random.default_rng(408)
+        template = np.clip(rng.normal(0, .0015, 48000), -.005, .005)
+        template[10000:10004] = [.012, -.012, .013, -.011]
+        window = template.copy()
+        window[10000:10004] = 0
+        window[20000:20004] = template[10000:10004]
+        index, active_score, context_score = variant_analyzer.match_reference(
+            window, template, 10000, 10004)
+        self.assertGreaterEqual(context_score, .98)
+        self.assertEqual(active_score, 0.)
+        self.assertIsNone(index)
 
     def test_complete_waveforms_natural_pauses_and_only_final_interruption(self):
         result = self.run_analysis()
