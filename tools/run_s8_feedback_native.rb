@@ -29,12 +29,15 @@ end
 abort 'Target executable already has a running PID' unless matching.call.empty?
 seconds = Integer(ENV.fetch('READALOUD_S8_WORK_SECONDS', '480'))
 abort 'Work deadline must be 30..600 seconds' unless (30..600).cover?(seconds)
+forced_frames = ENV.fetch('READALOUD_S8_FORCE_HEARTBEAT_FRAMES', '1')
+abort 'Frame control must be 0 or 1' unless %w[0 1].include?(forced_frames)
 FileUtils.mkdir_p(output)
 metadata = {app: app, bundle: bundle, bundle_id: identifier.strip,
             executable_sha256: Digest::SHA256.file(app).hexdigest,
             launch_method: 'LaunchServices open -W -n',
             app_exit_status: nil, app_exit_status_owner: 'LaunchServices; unavailable to runner',
             work_deadline_seconds: seconds, cleanup_deadline_seconds: 30,
+            force_heartbeat_frames: forced_frames == '1',
             scope: 'UI-only; coordinator owns native input, screenshots and accessibility observations',
             passed: false, normal_quit: false,
             normal_quit_evidence: 'One-way request succeeded; actual PID exit verified separately',
@@ -95,6 +98,7 @@ begin
                          '--stdout', log, '--stderr', log,
                          '--env', 'READALOUD_S8_NORMAL_QUIT=1',
                          '--env', "READALOUD_S8_WORK_SECONDS=#{seconds}",
+                         '--env', "READALOUD_S8_FORCE_HEARTBEAT_FRAMES=#{forced_frames}",
                          '--args', File.join(output, 'probe'), pgroup: true)
   metadata[:launcher_pid] = opener
   discovery_deadline = [clock.call + 15, work_deadline].min
@@ -135,6 +139,7 @@ begin
   end
   metadata[:receipt] = JSON.parse(File.read(receipt_path))
   raise 'Probe receipt failed' unless metadata[:receipt]['passed'] && metadata[:receipt]['ownersDrained']
+  raise 'QA-only natural-frame differential; default probe unchanged' if forced_frames == '0'
   metadata[:passed] = true
 rescue StandardError => error
   metadata[:error] = error.full_message

@@ -495,6 +495,12 @@ Future<void> main(List<String> args) async {
   final controller = _ProbeController(engine, root);
   final probe = _Probe(root, controller, seconds);
   final native = NativeMainResponsivenessProbe();
+  // QA differential only. The heartbeat still measures UI scheduling when the
+  // extra frame requests are disabled; normal widget animations remain owned
+  // by Flutter and are not suppressed.
+  final forceHeartbeatFrames =
+      Platform.environment['READALOUD_S8_FORCE_HEARTBEAT_FRAMES'] != '0';
+  var forcedFrameRequests = 0;
   final receipt = <String, Object?>{
     'passed': false,
     'scope':
@@ -504,6 +510,7 @@ Future<void> main(List<String> args) async {
     'localDisableAnimations': true,
     'workDeadlineSeconds': seconds,
     'crossRelaunchPreferenceClaim': false,
+    'forceHeartbeatFrames': forceHeartbeatFrames,
   };
   Timer? heartbeat;
   final uiClock = Stopwatch()..start();
@@ -519,7 +526,10 @@ Future<void> main(List<String> args) async {
       if (gap > maxTickGap) maxTickGap = gap;
       previousTick = now;
       ticks++;
-      WidgetsBinding.instance.scheduleFrame();
+      if (forceHeartbeatFrames) {
+        WidgetsBinding.instance.scheduleFrame();
+        forcedFrameRequests++;
+      }
     });
     // All waits check the same work deadline. Keep this future joined rather
     // than abandoning a timeout wrapper while its producer still runs.
@@ -536,6 +546,7 @@ Future<void> main(List<String> args) async {
     controller.removeListener(probe.activityChanged);
     receipt['nativeMain'] = await native.close();
     receipt['uiTimerTicks'] = ticks;
+    receipt['forcedFrameRequests'] = forcedFrameRequests;
     receipt['maximumUiTimerGapMs'] = maxTickGap;
     receipt['speechRequests'] = engine.speechRequests;
     receipt['snapshots'] = probe.snapshots;
