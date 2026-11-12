@@ -1,0 +1,18 @@
+{
+  "diagnosticOnly": true,
+  "passed": false,
+  "queueIndex": 11,
+  "sourcePeak": 0.012015443710827543,
+  "sourceRms": 0.00038025236970286915,
+  "fullFrames": 62416,
+  "aboveThresholdSpanFrames": 14,
+  "fullReferenceMatch": {
+    "captureStartSeconds": 9.870869791666667,
+    "score": 0.9996081422991449
+  },
+  "thresholdSpanMatch": {
+    "captureStartSeconds": 9.58978125,
+    "score": 0.9997614443934918
+  },
+  "limits": "Offline hypothesis probe; no qualification or source placement override."
+}
