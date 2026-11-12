@@ -7,6 +7,8 @@ correlation >=.98, external packet joins <=10ms, and quiet guarded gaps between
 manual Plays and after final Pause. Never substitutes for the sustained 50s gate.
 Copied reference digests/queue order establish identity; player snapshots are
 non-atomic search hints. Final interrupted WAV and prepared tails are explicit.
+Process-tap primary may begin after only the first Play, before first position;
+all raw source coverage and later Play/quiet interval gates remain mandatory.
 No transcript, voice quality, human listening, memory, startup or M3 acceptance.
 """
 import argparse
@@ -19,9 +21,9 @@ import numpy as np
 from scipy.signal import resample_poly
 
 from analyze_s7_variants import (MAX_CAPTURE_BYTES, MAX_REFERENCE_BYTES,
-                                 THRESHOLD, MAX_GAP_MS, finite, load_json, match,
+                                 THRESHOLD, MAX_GAP_MS, finite, load_json, match_reference,
                                  read_audio, require, resample, runtime_gates,
-                                 source_path)
+                                 source_path, primary_capture_mode, capture_scope, playback_bounds)
 
 MIN_COMPLETE_SECONDS = 1.0
 QUIET_PEAK = .001
@@ -103,7 +105,8 @@ def quiet_interval(captured, rate, start, finish, label, minimum=0.):
             'durationSeconds': finish - start, 'capturedPeak': peak, 'passed': True}
 
 
-def analyze_segment(segment, queued, references, samples, captured, rate, origin):
+def analyze_segment(segment, queued, references, samples, captured, rate, origin,
+                    process_primary=False, allow_late_tap=False):
     report = {'label': segment['label'], 'matches': [], 'excludedFinalWaveform': None,
               'completeReferenceSeconds': 0., 'encodedSilentPackets': [], 'errors': []}
     play = finite(segment.get('playRequestedUnixMicros'), 'Play request')
@@ -117,8 +120,11 @@ def analyze_segment(segment, queued, references, samples, captured, rate, origin
             and finite(segment.get('observedPositionAdvanceMs'), 'position advance') >= 2550
             and segment.get('positionEvidence', {}).get('overflow') is False,
             'Insufficient native player progress')
-    low_time, stop = (play - origin) / 1e6, (pause - origin) / 1e6
-    require(0 <= low_time < stop <= len(captured) / rate, 'Capture misses playback interval')
+    low_time, stop = playback_bounds(segment, origin, len(captured) / rate, allow_late_tap)
+    if allow_late_tap:
+        report['unobservedPlayToTapInterval'] = {
+            'startUnixMicros': play, 'endUnixMicros': max(play, origin),
+            'status': 'UNOBSERVED', 'inference': 'No first-audio, silence or earlier replay claim'}
     engine = segment['engineIndex']
     scoped = [(i, q, ref) for i, (q, ref) in enumerate(zip(queued, references))
               if q.get('engineIndex') == engine]
@@ -160,6 +166,7 @@ def analyze_segment(segment, queued, references, samples, captured, rate, origin
     previous_end = None
     pending_silent_seconds = 0.
     pending_silent_packets = []
+    audible_digests = set()
     for number, (global_index, row, (source_rate, pcm)) in enumerate(scoped[:final_index + 1]):
         source = resample(pcm, source_rate, comparison_rate)
         duration = len(pcm) / source_rate
@@ -173,6 +180,11 @@ def analyze_segment(segment, queued, references, samples, captured, rate, origin
             pending_silent_seconds += duration
             continue
         start, end = int(active[0]), int(active[-1]) + 1
+        if process_primary:
+            digest = row['reference']['sha256']
+            require(digest not in audible_digests,
+                    'Ambiguous duplicate audible reference identity within segment')
+            audible_digests.add(digest)
         seen = by_path.get(row['sourcePath'], [])
         estimates = [(s['unixMicros'] - origin) / 1e6 - s['positionMs'] / 1000 for s in seen]
         ordered_end = None if previous_end is None else previous_end + pending_silent_seconds
@@ -186,9 +198,11 @@ def analyze_segment(segment, queued, references, samples, captured, rate, origin
         base = max(0, math.floor(low * rate))
         finish = min(len(captured), math.ceil(high * rate))
         window = resample_poly(captured[base:finish], 4, 1)
-        index, score = (None, 0.) if len(window) < end - start else match(window, source[start:end])
-        actual = None if index is None else base / rate + (index - start) / comparison_rate
-        complete = actual is not None and actual >= low_time - .01 and actual + duration <= stop + .001
+        index, score, context_score = match_reference(window, source, start, end)
+        actual = None if index is None else base / rate + index / comparison_rate
+        complete = (actual is not None and actual >= (low_time if process_primary else low_time - .01)
+                    and actual + duration <= (min(len(captured) / rate, stop + .001)
+                                              if process_primary else stop + .001))
         if not complete:
             final_start = ordered_end if ordered_end is not None else expected
             interrupted = (number == final_index and final_start < stop
@@ -205,6 +219,7 @@ def analyze_segment(segment, queued, references, samples, captured, rate, origin
         record = {'queueIndex': global_index, 'sourcePath': row['sourcePath'], 'reference': row['reference'],
                   'captureStartSeconds': actual, 'captureEndSeconds': actual + duration,
                   'fullActiveCorrelation': score, 'activeComparisonFrames': end - start,
+                  'fullReferenceCorrelation': context_score, 'fullReferenceComparisonFrames': len(source),
                   'sourceDurationSeconds': duration, 'externalGapBeforeMs': gap,
                   'encodedSilentSecondsBefore': pending_silent_seconds}
         report['matches'].append(record)
@@ -213,7 +228,8 @@ def analyze_segment(segment, queued, references, samples, captured, rate, origin
             silent_end = silent_start + silent['durationSeconds']
             a = max(0, math.ceil((silent_start + .01) * rate))
             b = min(len(captured), math.floor((silent_end - .01) * rate))
-            require(a < b and silent_start >= low_time - .01 and silent_end <= stop,
+            require(a < b and silent_start >= (low_time if process_primary else low_time - .01)
+                    and silent_end <= stop,
                     'Silent packet lacks bounded captured interval')
             silent.update(captureStartSeconds=silent_start, captureEndSeconds=silent_end,
                           interiorCapturedPeak=float(np.max(np.abs(captured[a:b]))))
@@ -244,6 +260,7 @@ def analyze(directory):
               'policy': {'scope': 'Short three-second engine-switch routes only; not sustained acceptance',
                          'minimumCompleteReferenceSecondsPerSegment': MIN_COMPLETE_SECONDS,
                          'fullActiveCorrelationMinimum': THRESHOLD,
+                         'fullReferencePlacementCorrelationMinimum': THRESHOLD,
                          'maximumAbsoluteExternalJoinMs': MAX_GAP_MS,
                          'maximumGuardedQuietPeak': QUIET_PEAK,
                          'quietEdgeGuardSeconds': GUARD_SECONDS,
@@ -259,6 +276,8 @@ def analyze(directory):
         runner = load_json(directory / 'runner.json')
         timing = load_json(directory / 'capture.wav.timing.json')
         result['mode'] = native.get('mode')
+        capture_mode = primary_capture_mode(native, runner, timing)
+        result.update(capture_scope(capture_mode))
         switch_gates(native, runner, timing)
         rate, captured, _, _ = read_audio(directory / 'capture.wav', MAX_CAPTURE_BYTES, 300)
         require(rate in (44100, 48000) and timing.get('sampleRate') == rate
@@ -269,8 +288,11 @@ def analyze(directory):
         queued, samples, segments = native.get('queuedAudio', []), native.get('playerSamples', []), native['segments']
         require(0 < len(queued) <= 2048 and 0 < len(samples) <= 2700, 'Receipt observation bounds')
         _, references = verify_references(queued)
-        for segment in segments:
-            result['segments'].append(analyze_segment(segment, queued, references, samples, captured, rate, origin))
+        for index, segment in enumerate(segments):
+            result['segments'].append(analyze_segment(
+                segment, queued, references, samples, captured, rate, origin,
+                process_primary=capture_mode == 'process-tap',
+                allow_late_tap=capture_mode == 'process-tap' and index == 0))
         for index, segment in enumerate(segments):
             start = (segment['pauseReturnedUnixMicros'] - origin) / 1e6 + GUARD_SECONDS
             if index + 1 < len(segments):

@@ -23,6 +23,7 @@ from analyze_s7_variants import (MAX_CAPTURE_BYTES, MAX_GAP_MS, THRESHOLD,
                                  analyze as primary_analyze, finite, load_json,
                                  match_reference, read_audio, require, resample)
 from analyze_s7_switches import verify_references
+from process_tap_validation import validate_process_tap
 
 
 def capture(directory, name, pid, tap=False):
@@ -38,19 +39,7 @@ def capture(directory, name, pid, tap=False):
     gap = finite(timing.get('maxPacketGapSeconds'), f'{name} packet gap')
     require(0 <= gap <= MAX_GAP_MS / 1000, f'{name}: packet timing gap exceeds 10ms')
     if tap:
-        require(timing.get('mechanism') == 'CoreAudioProcessTap'
-                and timing.get('status') == 'complete' and timing.get('errors') == [],
-                f'{name}: CoreAudio timing is not final/clean')
-        for field in ('droppedBuffers', 'poolOverflows', 'deviceOverloads',
-                      'timestampDiscontinuities', 'formatChanges', 'callbackStalls',
-                      'writerDiscardedBuffers'):
-            require(timing.get(field) == 0, f'{name}: nonzero/missing {field}')
-        require(timing.get('framesReceived') == timing.get('framesSubmitted') == len(pcm),
-                f'{name}: incomplete received/submitted/written frames')
-        require(finite(timing.get('buffersSubmitted'), 'tap buffers') > 0
-                and timing.get('buffersWritten') == timing['buffersSubmitted']
-                and finite(timing.get('callbacks'), 'tap callbacks') > 0,
-                f'{name}: incomplete buffers')
+        validate_process_tap(timing, pid, len(pcm), rate)
     return {'rate': rate, 'pcm': pcm, 'origin': origin, 'timing': timing}
 
 

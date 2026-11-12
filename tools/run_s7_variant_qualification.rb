@@ -1,6 +1,9 @@
 #!/usr/bin/env ruby
 # #112 ACD-M1 R1. Reuses the signed-app smoke runner's bounded ownership model.
 # Model acquisition is through the app's existing managed cache; no aliases.
+# READALOUD_S7_PRIMARY_CAPTURE=process-tap explicitly selects bounded warm
+# coverage, using an exact-PID process-tap CAPTURE executable. Offline acoustic
+# acceptance is still required; Play-to-tap and first audio remain unobserved.
 require 'json'
 require 'digest'
 require 'fileutils'
@@ -12,6 +15,11 @@ abort 'Usage: run_s7_variant_qualification.rb APP MODE NEW_OUTPUT CAPTURE' unles
 bundle, mode, output, capture = ARGV
 bundle, output, capture = [bundle, output, capture].map { |p| File.expand_path(p) }
 secondary_capture = ENV['READALOUD_S7_SECONDARY_CAPTURE']
+primary_capture_mode = ENV.fetch('READALOUD_S7_PRIMARY_CAPTURE', 'screen-capture-kit')
+abort 'Invalid primary capture mode' unless %w[screen-capture-kit process-tap].include?(primary_capture_mode)
+if primary_capture_mode == 'process-tap' && ENV['READALOUD_S7_UNGATED_PROCESS_CAPTURE'] == '1'
+  abort 'Process-tap primary cannot also be the ungated diagnostic'
+end
 secondary_capture = File.expand_path(secondary_capture) if secondary_capture
 abort 'Missing secondary capture executable' if secondary_capture && !File.executable?(secondary_capture)
 abort 'Invalid mode' unless MODES.include?(mode)
@@ -37,6 +45,8 @@ receipt = File.join(output, 'receipt.json')
 log_path = File.join(output, 'app.log')
 stop = File.join(output, 'capture.stop')
 result = {schema: 'readaloud-native-variant-runner-v1', mode: mode,
+          primaryCaptureMode: primary_capture_mode,
+          primaryCaptureExecutableSha256: Digest::SHA256.file(capture).hexdigest,
           passed: false, nativePassed: false, normalQuit: false,
           appExitVerified: false, forcedCleanup: false, remainingOwnedPids: [],
           frameworkSha256: Digest::SHA256.file(File.join(bundle, 'Contents/Frameworks/App.framework/App')).hexdigest,
@@ -45,6 +55,13 @@ result = {schema: 'readaloud-native-variant-runner-v1', mode: mode,
           limits: '100ms child/process observations and emitted signal per playback interval. ' \
                   'Exact waveform matching, glitch/voice quality, total memory envelope, ' \
                   'physical-speaker and M3 acceptance remain separate. Capture 300s; work deadline 270s.'}
+if primary_capture_mode == 'process-tap'
+  result.merge!(acceptanceScope: 'bounded warm intended-source coverage only',
+    runnerPassScope: 'functional, signal and cleanup gates only; full offline analyzer still required',
+    firstEmittedAudioQualified: false, fullSessionQualified: false,
+    noEarlierPrefixOrReplayQualified: false, startupOrLoadQualified: false,
+    playToTapObservation: 'UNOBSERVED; no silence or synthesis-state inference')
+end
 if ENV['READALOUD_S7_UNGATED_PROCESS_CAPTURE'] == '1'
   result[:ungatedProcessCaptureDiagnostic] = true
   result[:primaryCaptureMechanism] = 'CoreAudio exact-PID process tap; no ScreenCaptureKit'
@@ -157,6 +174,37 @@ def emitted_signal(path, timing_path, segments)
   end
 end
 
+# Same final integrity contract as process_tap_validation.py; Ruby runner does
+# not launch an analysis Python or infer successful helper exit from metadata.
+def process_tap_session(output, pid)
+  timing = JSON.parse(File.read(File.join(output, 'capture.wav.timing.json')))
+  session = timing['sessionID']
+  raise 'Missing/invalid tap session' unless session.is_a?(String) &&
+    session.match?(/\A[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\z/i)
+  raise 'Tap is not final/clean/exact-PID' unless timing['schema'] == 'readaloud-app-capture-timing-v1' &&
+    timing['mechanism'] == 'CoreAudioProcessTap' && timing['status'] == 'complete' &&
+    timing['errors'] == [] && timing['appPid'] == pid
+  frames = timing['frames']
+  raise 'Incomplete tap frames' unless frames.is_a?(Integer) && frames > 0 &&
+    %w[framesReceived framesSubmitted].all? { |key| timing[key].is_a?(Integer) && timing[key] == frames }
+  %w[droppedBuffers poolOverflows deviceOverloads timestampDiscontinuities formatChanges callbackStalls writerDiscardedBuffers].each do |key|
+    raise "Nonzero/missing tap #{key}" unless timing[key].is_a?(Integer) && timing[key] == 0
+  end
+  buffers = timing['buffersSubmitted']
+  raise 'Incomplete tap buffers' unless buffers.is_a?(Integer) && buffers > 0 &&
+    timing['buffersWritten'].is_a?(Integer) && timing['buffersWritten'] == buffers &&
+    timing['callbacks'].is_a?(Integer) && timing['callbacks'] >= buffers
+  gap = timing['maxPacketGapSeconds']
+  raise 'Tap packet gap exceeds 10ms' unless gap.is_a?(Numeric) && gap.finite? && gap.between?(0, 0.010)
+  %w[armed ready].each do |stage|
+    record = JSON.parse(File.read(File.join(output, "capture.wav.#{stage}.json")))
+    raise "Tap #{stage} session/PID mismatch" unless record['sessionID'] == session &&
+      record['appPid'] == pid && record['mechanism'] == 'CoreAudioProcessTap' &&
+      record['schema'] == "readaloud-process-capture-#{stage}-v1"
+  end
+  session
+end
+
 begin
   log = File.open(log_path, 'w')
   env = {'HF_HUB_OFFLINE' => mode == 'online-cancel-retry' ? nil : '1',
@@ -249,6 +297,9 @@ begin
     sleep 0.1
   end
   native = JSON.parse(File.read(receipt))
+  raise 'Native/runner mode mismatch' unless native['mode'] == mode
+  raise 'Native/runner primary capture mode mismatch' unless
+    native.fetch('primaryCaptureMode', 'screen-capture-kit') == primary_capture_mode
   result[:nativePassed] = native['passed'] == true
   result[:applicationActivationRequested] = activated
   if replay_mode
@@ -345,6 +396,9 @@ ensure
   end
   if native && result[:captureExitStatus] == 0
     begin
+      if primary_capture_mode == 'process-tap'
+        result[:processTapSessionID] = process_tap_session(output, pid)
+      end
       result[:emittedSignal] = emitted_signal(File.join(output, 'capture.wav'),
         File.join(output, 'capture.wav.timing.json'), native.fetch('segments'))
     rescue StandardError => e

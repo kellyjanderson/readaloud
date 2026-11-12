@@ -17,6 +17,7 @@ from scipy.signal import butter, resample_poly, sosfilt
 
 import analyze_s7_variants as variant_analyzer
 from analyze_s7_variants import analyze, load_json, read_audio
+from process_tap_validation_test import clean_tap_timing
 
 
 class S7VariantAcceptanceTest(unittest.TestCase):
@@ -138,6 +139,113 @@ class S7VariantAcceptanceTest(unittest.TestCase):
         if text:
             diagnostics = str(result['errors']) + str([s['errors'] for s in result['segments']])
             self.assertIn(text, diagnostics)
+
+    def process_primary(self, offset=.2):
+        # Play=.1, raw tap=.2, complete source begins=.25, firstPosition=.3.
+        # No samples are synthesized/padded to cover the unobserved interval.
+        self.capture = self.capture[round(offset * self.rate):]
+        self.timing['firstPacketReceivedUnixMicros'] += round(offset * 1e6)
+        self.timing['frames'] = len(self.capture)
+        self.timing = clean_tap_timing(self.timing)
+        for receipt in (self.native, self.runner):
+            receipt['primaryCaptureMode'] = 'process-tap'
+            receipt['ungatedProcessCaptureDiagnostic'] = False
+        self.runner['primaryCaptureExecutableSha256'] = 'a' * 64
+        self.runner['processTapSessionID'] = self.timing['sessionID']
+
+    def test_process_primary_complete_warm_coverage_keeps_blind_time_unobserved(self):
+        self.process_primary()
+        result = self.run_analysis()
+        self.assertTrue(result['passed'], result)
+        self.assertEqual(result['primaryCaptureMode'], 'process-tap')
+        for key in ('firstEmittedAudioQualified', 'fullSessionQualified',
+                    'noEarlierPrefixOrReplayQualified', 'startupOrLoadQualified'):
+            self.assertIs(result[key], False)
+        self.assertIn('UNOBSERVED', result['playToTapObservation'])
+        report = result['segments'][0]
+        self.assertEqual([m['queueIndex'] for m in report['matches']], list(range(5)))
+        self.assertAlmostEqual(report['matches'][0]['captureStartSeconds'], .05, delta=.0001)
+        self.assertEqual(report['unobservedPlayToTapInterval']['endUnixMicros'], self.origin + 200000)
+
+    def test_default_method_still_refuses_late_tap(self):
+        self.process_primary()
+        self.native.pop('primaryCaptureMode')
+        self.runner.pop('primaryCaptureMode')
+        self.assert_refused(self.run_analysis(), 'Capture misses playback interval')
+
+    def test_process_primary_missing_beginning_and_late_first_position_refuse(self):
+        for offset in (.26, .3, .31):
+            with self.subTest(offset=offset):
+                self.setUp()
+                self.process_primary(offset)
+                self.assert_refused(self.run_analysis())
+
+    def test_process_primary_all_leading_quiet_must_be_in_raw_pcm(self):
+        row = copy.deepcopy(self.native['queuedAudio'][0])
+        row['sourcePath'] = '/production/leading-quiet.wav'
+        row['reference'] = self.reference('leading-quiet.wav', np.zeros(320, np.int16))
+        self.native['queuedAudio'].insert(0, row)
+        self.process_primary()
+        result = self.run_analysis()
+        self.assertTrue(result['passed'], result)  # full .04s quiet is observed
+        row['reference'] = self.reference('lost-leading-quiet.wav', np.zeros(1600, np.int16))
+        self.assert_refused(self.run_analysis(), 'Silent packet lacks bounded captured interval')
+
+    def test_process_primary_wrong_microtransient_context_refuses(self):
+        self.low_information_first_source(wrong_context=True, decoy=False)
+        self.process_primary()
+        self.assert_refused(self.run_analysis(), 'No complete ordered waveform #1')
+
+    def test_process_primary_repeated_reference_alias_refuses(self):
+        self.native['queuedAudio'][1]['reference'] = self.native['queuedAudio'][0]['reference'].copy()
+        self.capture[12000 + 11 * self.rate:12000 + 22 * self.rate] = self.sources[0]
+        self.process_primary()
+        self.assert_refused(self.run_analysis(), 'Ambiguous duplicate audible reference')
+
+    def test_process_primary_order_gap_truncation_and_quiet_tail_refuse(self):
+        for mutation in ('reverse', 'omit', 'gap', 'ending', 'quiet-tail'):
+            with self.subTest(mutation=mutation):
+                self.setUp()
+                start = 12000 + 11 * self.rate
+                if mutation == 'reverse':
+                    self.capture[12000:12000 + 22 * self.rate] = np.concatenate(self.sources[1::-1])
+                elif mutation == 'omit':
+                    self.capture[start:start + 11 * self.rate] = 0
+                elif mutation == 'gap':
+                    self.capture = np.concatenate([self.capture[:start], np.zeros(960), self.capture[start:]])
+                elif mutation == 'ending':
+                    self.capture[start + 10 * self.rate:start + 11 * self.rate] = 0
+                else:
+                    self.native['queuedAudio'][5]['reference'] = self.reference(
+                        'quiet-tail.wav', np.zeros(10 * 8000, np.int16))
+                self.process_primary()
+                self.assert_refused(self.run_analysis())
+
+    def test_process_primary_dirty_metadata_mode_and_runtime_failures_refuse(self):
+        mutations = [('timing', 'status', 'capturing'), ('timing', 'sessionID', None),
+                     ('timing', 'framesReceived', 1), ('timing', 'droppedBuffers', 1),
+                     ('runner', 'processTapSessionID', 'wrong'),
+                     ('runner', 'primaryCaptureMode', 'screen-capture-kit'),
+                     ('runner', 'primaryCaptureExecutableSha256', None),
+                     ('runner', 'normalQuit', False), ('runner', 'forcedCleanup', True),
+                     ('runner', 'remainingOwnedPids', [1235]),
+                     ('native', 'ungatedProcessCaptureDiagnostic', True),
+                     ('native', 'maxUiHeartbeatDelayMs', 251)]
+        for owner, key, value in mutations:
+            with self.subTest(key=key):
+                self.setUp()
+                self.process_primary()
+                getattr(self, owner)[key] = value
+                self.assert_refused(self.run_analysis())
+
+    def test_complete_replay_after_tap_cannot_establish_absence_of_earlier_prefix(self):
+        # A real earlier emitted prefix cannot be represented by the saved tap
+        # PCM. Even a complete later replay proves only this warm interval.
+        self.process_primary()
+        result = self.run_analysis()
+        self.assertTrue(result['passed'], result)
+        self.assertIs(result['noEarlierPrefixOrReplayQualified'], False)
+        self.assertIs(result['fullSessionQualified'], False)
 
     def low_information_first_source(self, wrong_context=False, decoy=True):
         # Unique quiet PCM surrounds a ~70us above-.01 transient. The same

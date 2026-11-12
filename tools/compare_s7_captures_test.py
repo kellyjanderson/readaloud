@@ -49,6 +49,7 @@ class DualCaptureDiagnosticTest(unittest.TestCase):
                        'firstPacketReceivedUnixMicros': self.origin,
                        'sampleRate': self.rate, 'frames': len(self.pcm), 'maxPacketGapSeconds': 0.}
         self.tap_timing = dict(self.timing, mechanism='CoreAudioProcessTap', status='complete', errors=[],
+                               sessionID='ca751a73-9705-475b-ac94-ac86ab7e6f8d',
                                droppedBuffers=0, poolOverflows=0, deviceOverloads=0,
                                timestampDiscontinuities=0, formatChanges=0, callbackStalls=0,
                                writerDiscardedBuffers=0, framesReceived=len(self.pcm),
@@ -201,6 +202,7 @@ class DualCaptureDiagnosticTest(unittest.TestCase):
 
     def test_wrong_pid_unfinished_loss_timing_and_frame_gaps_are_invalid_evidence(self):
         cases = [('appPid', 124), ('status', 'capturing'), ('errors', ['writer failed']),
+                 ('sessionID', None), ('sessionID', 'invalid-session'),
                  ('droppedBuffers', 1), ('timestampDiscontinuities', 1), ('writerDiscardedBuffers', 1),
                  ('maxPacketGapSeconds', .02), ('framesSubmitted', len(self.tap) - 1),
                  ('frames', len(self.tap) - 1)]
