@@ -70,3 +70,14 @@ uncontrolled navigation are explicitly retained, rather than called app bugs.
 S7's default-policy601ms failure remains independent. S8 has implementation,
 source and bounded native functional evidence, but shared responsiveness and
 dependency integration/reconciliation remain open. No threshold was relaxed.
+
+## Combined dependency source check
+
+Merge `b5340fa` brings declared S7 dependency `bd52661` into the S8 branch;
+this is dependency synchronization, not integration into the feature/release.
+The combined full suite passed **1109 tests /4 optional skips**; scoped analysis
+of lib/test and affected native QA entrypoints was clean. Both Ruby runners
+passed syntax checks, and the archived eight mocked first-load runner checks
+passed again. The natural-frame native candidate remains `9e5cd3b` (before this
+QA/tooling dependency merge); no exact-final-commit native or release claim is
+substituted for it. No test app remains running.
