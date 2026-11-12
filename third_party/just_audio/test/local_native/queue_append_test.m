@@ -10,6 +10,8 @@
 - (void)concatenatingRemoveRange:(NSString *)catId start:(int)start end:(int)end shuffleOrder:(NSArray<NSNumber *> *)shuffleOrder;
 - (void)concatenatingInsertAll:(NSString *)catId index:(int)index sources:(NSArray *)sources shuffleOrder:(NSArray<NSNumber *> *)shuffleOrder;
 - (void)onComplete:(NSNotification *)notification;
+- (void)load:(NSDictionary *)source initialPosition:(CMTime)initialPosition initialIndex:(NSNumber *)initialIndex result:(FlutterResult)result;
+- (void)seek:(CMTime)position index:(NSNumber *)index completionHandler:(void (^)(BOOL))completionHandler;
 - (void)updateOrder;
 - (void)queueBoundaryAudit:(NSString *)boundary item:(id)item details:(NSDictionary *)details;
 - (NSString *)queueBoundaryAuditItem:(id)item selectSource:(BOOL)selectSource;
@@ -18,10 +20,12 @@
 @interface TestItem : NSObject
 @property id audioSource;
 @property AVAsset *asset;
+@property AVPlayerItemStatus status;
 - (BOOL)isPlaybackBufferEmpty;
 @end
 @implementation TestItem
 - (BOOL)isPlaybackBufferEmpty { return NO; }
+- (BOOL)isPlaybackBufferFull { return YES; }
 @end
 
 @interface TestQueue : NSObject
@@ -66,6 +70,7 @@
     return current;
 }
 - (void)setRate:(float)rate { _rate = rate; _rateChanges++; }
+- (void)setVolume:(float)volume {}
 - (void)insertItem:(id)item afterItem:(id)previous {
     NSCAssert(previous == nil, @"enqueue appends at tail");
     NSCAssert(![_storage containsObject:item], @"duplicate queue item");
@@ -83,6 +88,7 @@
 @property id loopItem;
 @property NSUInteger seeks;
 @property CMTime lastSeek;
+@property CMTime testDuration;
 @end
 @implementation TestSource
 - (IndexedPlayerItem *)playerItem { return _item; }
@@ -90,11 +96,20 @@
 - (void)preparePlayerItem2 { _loopItem = [TestItem new]; }
 - (NSArray<NSNumber *> *)getShuffleIndices { return @[@0]; }
 - (void)seek:(CMTime)position { _seeks++; _lastSeek = position; }
+- (void)seek:(CMTime)position completionHandler:(void (^)(BOOL))completionHandler {
+    [self seek:position];
+    if (completionHandler) completionHandler(YES);
+}
+- (CMTime)position { return _lastSeek; }
+- (CMTime)duration { return _testDuration; }
 @end
 
 @interface TestPlayer : AudioPlayer
 @property NSUInteger endUpdates;
 @property NSUInteger positionUpdates;
+@property NSMutableArray<NSDictionary *> *events;
+@property AudioSource *loadSource;
+@property NSUInteger errors;
 @property (copy) void (^onRemoveObserver)(void);
 @property NSArray *insertionSources;
 @end
@@ -111,7 +126,12 @@
         action();
     }
 }
-- (void)broadcastPlaybackEvent {}
+- (void)broadcastPlaybackEvent {
+    if (!_events) _events = [NSMutableArray new];
+    [_events addObject:@{@"index": [self valueForKey:@"_index"], @"state": [self valueForKey:@"_processingState"]}];
+}
+- (AudioSource *)decodeAudioSource:(NSDictionary *)data { return _loadSource; }
+- (void)sendErrorForItem:(id)item { _errors++; }
 - (NSMutableArray *)decodeAudioSources:(NSArray *)sources { return [_insertionSources mutableCopy]; }
 @end
 
@@ -121,6 +141,9 @@ static NSArray<TestSource *> *sources(NSUInteger count, BOOL lazy) {
         TestSource *source = [[TestSource alloc] initWithId:[@(i) stringValue]];
         source.item = [TestItem new];
         [(TestItem *)source.item setAudioSource:source];
+        [(TestItem *)source.item setStatus:AVPlayerItemStatusReadyToPlay];
+        source.lastSeek = kCMTimeZero;
+        source.testDuration = CMTimeMake(1, 1);
         source.lazyLoading = lazy;
         [result addObject:source];
     }
@@ -163,6 +186,7 @@ static TestPlayer *removalPlayer(NSArray<TestSource *> *s, NSArray *order, NSArr
 int main(void) {
     @try {
     @autoreleasepool {
+        unsetenv("READALOUD_QUEUE_PHYSICAL_HEAD_INDEX");
         unsetenv("READALOUD_QUEUE_BOUNDARY_AUDIT");
         unsetenv("READALOUD_QUEUE_SKIP_LOOP_OFF_REWIND");
         NSArray<TestSource *> *s = sources(4, NO);
@@ -306,8 +330,8 @@ int main(void) {
         expect(p, @[a[0].item,a[2].item,a[1].item], 2, 1, YES);
 
         // Production completion publishes logical next index while the native
-        // queue can still own the just-ended item. A second distinct completion
-        // proves the older predecessor is no longer the physical head.
+        // queue can still own the just-ended item. Notifications alone cannot
+        // prove head advancement; the explicit queue mutation below does.
         NSArray<TestSource *> *lag = sources(4, NO);
         p = removalPlayer(lag, @[@0,@1,@2,@3], @[lag[0].item,lag[1].item,lag[2].item,lag[3].item], 0, NO);
         [p updateOrder];
@@ -462,6 +486,176 @@ int main(void) {
         unsetenv("READALOUD_QUEUE_BOUNDARY_AUDIT");
         unsetenv("READALOUD_QUEUE_SKIP_LOOP_OFF_REWIND");
         NSLog(@"PASS: default/QA completion rewind, head ownership, index/events and loop/explicit seek preservation (no app/audio)");
+        // Exact opt-in only. The old global-index path is the negative control:
+        // future packet 4 completion while packet 3 owns the head advances it.
+        setenv("READALOUD_QUEUE_PHYSICAL_HEAD_INDEX", "true", 1);
+        NSArray<TestSource *> *physical = sources(5, NO);
+        p = removalPlayer(physical, @[@0,@1,@2,@3,@4], @[physical[3].item,physical[4].item], 3, NO);
+        [p updateOrder];
+        [p onComplete:[NSNotification notificationWithName:@"ended" object:physical[4].item]];
+        NSCAssert([[p valueForKey:@"_index"] intValue] == 4, @"negative control no longer exercises speculative advancement");
+
+        setenv("READALOUD_QUEUE_PHYSICAL_HEAD_INDEX", "1", 1);
+        p = removalPlayer(physical, @[@0,@1,@2,@3,@4], @[physical[3].item,physical[4].item], 3, NO);
+        [p updateOrder]; [p setValue:@YES forKey:@"_enqueuedAll"];
+        [p onComplete:[NSNotification notificationWithName:@"ended" object:physical[4].item]];
+        [p onComplete:[NSNotification notificationWithName:@"ended" object:physical[4].item]];
+        NSCAssert([[p valueForKey:@"_index"] intValue] == 3 && [[p valueForKey:@"_processingState"] intValue] == psReady && p.events.count == 0, @"future/duplicate final completion advanced index or published EOF");
+        [p onComplete:[NSNotification notificationWithName:@"ended" object:physical[3].item]];
+        NSCAssert([[p valueForKey:@"_index"] intValue] == 3 && physical[3].seeks == 1, @"physical-head lag lost index ownership or ended rewind");
+
+        // KVO can carry an old/future/NSNull newKey. One live currentItem read
+        // owns this event even if the queue advances immediately after the read.
+        TestQueue *physicalQueue = (id)p.player;
+        [physicalQueue.storage removeObjectAtIndex:0];
+        NSUInteger beforeHead = physicalQueue.auditQueries;
+        [p observeValueForKeyPath:@"currentItem" ofObject:physicalQueue change:@{NSKeyValueChangeNewKey: physical[3].item} context:nil];
+        NSCAssert(physicalQueue.auditQueries == beforeHead + 1 && [[p valueForKey:@"_index"] intValue] == 4 && p.events.count == 1, @"KVO trusted stale newKey or reread physical head");
+        [p onComplete:[NSNotification notificationWithName:@"ended" object:physical[3].item]];
+        [p onComplete:[NSNotification notificationWithName:@"ended" object:physical[3].item]];
+        NSCAssert([[p valueForKey:@"_processingState"] intValue] == psReady && p.events.count == 1, @"stale predecessor completion falsely completed actual final head");
+        [p onComplete:[NSNotification notificationWithName:@"ended" object:physical[4].item]];
+        NSCAssert([[p valueForKey:@"_processingState"] intValue] == psCompleted && [[p.events lastObject][@"index"] intValue] == 4, @"normal final EOF missing");
+        NSUInteger finalEvents = p.events.count;
+        [p onComplete:[NSNotification notificationWithName:@"ended" object:physical[4].item]];
+        NSCAssert(p.events.count == finalEvents, @"duplicate final EOF republished completion");
+
+        // Null and retired physical heads cannot fabricate -1 or authorize EOF.
+        [physicalQueue.storage removeAllObjects];
+        [p setValue:@(psReady) forKey:@"_processingState"];
+        [p observeValueForKeyPath:@"currentItem" ofObject:physicalQueue change:@{NSKeyValueChangeNewKey: physical[4].item} context:nil];
+        [p onComplete:[NSNotification notificationWithName:@"ended" object:physical[4].item]];
+        NSCAssert([[p valueForKey:@"_index"] intValue] == 4 && [[p valueForKey:@"_processingState"] intValue] == psReady && p.events.count == finalEvents, @"null physical head fabricated index/EOF");
+        NSArray<TestSource *> *retired = sources(2, NO);
+        [physicalQueue.storage addObject:retired[0].item];
+        [p observeValueForKeyPath:@"currentItem" ofObject:physicalQueue change:@{NSKeyValueChangeNewKey: physical[0].item} context:nil];
+        [p onComplete:[NSNotification notificationWithName:@"ended" object:retired[0].item]];
+        NSCAssert([[p valueForKey:@"_index"] intValue] == 4 && p.events.count == finalEvents, @"retired physical head fabricated index");
+
+        // A future non-final item still gets its required rewind. Its callback
+        // and a duplicate cannot evict/publish past packet 3.
+        physical = sources(6, NO);
+        p = removalPlayer(physical, @[@0,@1,@2,@3,@4,@5], @[physical[3].item,physical[4].item,physical[5].item], 3, NO);
+        [p updateOrder];
+        [p onComplete:[NSNotification notificationWithName:@"ended" object:physical[4].item]];
+        [p onComplete:[NSNotification notificationWithName:@"ended" object:physical[4].item]];
+        NSCAssert(physical[4].seeks == 2 && [[p valueForKey:@"_index"] intValue] == 3 && p.events.count == 0, @"future completion lost rewind or exposed current head to pruning");
+        p.endUpdates = 0;
+        [p concatenatingRemoveRange:@"root" start:0 end:2 shuffleOrder:@[@0,@1,@2,@3]];
+        expect(p, @[physical[3].item,physical[4].item,physical[5].item], 0, 0, YES);
+        NSCAssert([[p valueForKey:@"_index"] intValue] == 1, @"safe played-prefix prune lost physical head");
+
+        // Snapshot ownership is conservative if AV advances after the one read.
+        physical = sources(3, NO);
+        p = removalPlayer(physical, @[@0,@1,@2], @[physical[0].item,physical[1].item,physical[2].item], 0, NO);
+        [p updateOrder]; [p setValue:@YES forKey:@"_enqueuedAll"];
+        physicalQueue = (id)p.player;
+        NSMutableArray *headStorage = physicalQueue.storage;
+        physicalQueue.afterCurrentRead = ^{ [headStorage removeObjectAtIndex:0]; };
+        [p observeValueForKeyPath:@"currentItem" ofObject:physicalQueue change:@{NSKeyValueChangeNewKey: physical[2].item} context:nil];
+        NSCAssert([[p valueForKey:@"_index"] intValue] == 0 && p.events.count == 0, @"single head snapshot raced into future KVO index");
+        [p observeValueForKeyPath:@"currentItem" ofObject:physicalQueue change:@{NSKeyValueChangeNewKey: [NSNull null]} context:nil];
+        NSCAssert([[p valueForKey:@"_index"] intValue] == 1, @"physical snapshot did not recover on next native callback");
+
+        // KVO may precede the predecessor's end notification. Lazy preparation
+        // must append its bounded successor without removing the head.
+        NSArray<TestSource *> *lazyPhysical = sources(4, YES);
+        TestPlayer *lazyPlayer = removalPlayer(lazyPhysical, @[@0,@1,@2,@3], @[lazyPhysical[0].item,lazyPhysical[1].item], 0, NO);
+        for (TestSource *source in lazyPhysical) source.lazyLoading = YES;
+        [lazyPlayer updateOrder];
+        TestQueue *lazyQueue = (id)lazyPlayer.player;
+        [lazyQueue.storage removeObjectAtIndex:0];
+        [lazyPlayer observeValueForKeyPath:@"currentItem" ofObject:lazyQueue change:@{NSKeyValueChangeNewKey: lazyPhysical[0].item} context:nil];
+        NSCAssert(([[lazyPlayer valueForKey:@"_index"] intValue] == 1 && [lazyQueue.storage isEqualToArray:@[lazyPhysical[1].item,lazyPhysical[2].item]] && lazyQueue.inserts == 1 && lazyQueue.removals == 0), @"KVO-before-end starved or rebuilt lazy successor");
+        [lazyPlayer onComplete:[NSNotification notificationWithName:@"ended" object:lazyPhysical[0].item]];
+        NSCAssert([[lazyPlayer valueForKey:@"_index"] intValue] == 1, @"late predecessor end skipped lazy current head");
+
+        // An early final notification need not recur: existing head KVO can
+        // finish it at observed EOF, but cannot finish it at the start or when
+        // duration is unknown. Seek/load invalidate this pending witness.
+        NSArray<TestSource *> *earlyFinal = sources(2, NO);
+        TestPlayer *finalPlayer = removalPlayer(earlyFinal, @[@0,@1], @[earlyFinal[0].item,earlyFinal[1].item], 0, NO);
+        [finalPlayer updateOrder]; [finalPlayer setValue:@YES forKey:@"_enqueuedAll"];
+        [finalPlayer onComplete:[NSNotification notificationWithName:@"ended" object:earlyFinal[1].item]];
+        TestQueue *finalQueue = (id)finalPlayer.player;
+        [finalQueue.storage removeObjectAtIndex:0];
+        [finalPlayer observeValueForKeyPath:@"currentItem" ofObject:finalQueue change:@{NSKeyValueChangeNewKey: earlyFinal[0].item} context:nil];
+        NSCAssert([[finalPlayer valueForKey:@"_index"] intValue] == 1 && [[finalPlayer valueForKey:@"_processingState"] intValue] == psReady, @"pending final completed at head start");
+        earlyFinal[1].lastSeek = CMTimeMake(1, 1);
+        earlyFinal[1].testDuration = kCMTimeIndefinite;
+        [finalPlayer observeValueForKeyPath:@"currentItem" ofObject:finalQueue change:@{NSKeyValueChangeNewKey: [NSNull null]} context:nil];
+        NSCAssert([[finalPlayer valueForKey:@"_processingState"] intValue] == psReady, @"unknown duration authorized pending EOF");
+        earlyFinal[1].testDuration = CMTimeMake(1, 1);
+        [finalPlayer observeValueForKeyPath:@"currentItem" ofObject:finalQueue change:@{NSKeyValueChangeNewKey: earlyFinal[0].item} context:nil];
+        NSCAssert([[finalPlayer valueForKey:@"_processingState"] intValue] == psCompleted, @"early final completion was lost at actual final head EOF");
+
+        // Superseding seeks and loads must not inherit that old EOF witness,
+        // even if a subsequent same-source KVO arrives with end-time position.
+        for (NSNumber *invalidateByLoad in @[@NO, @YES]) {
+            earlyFinal = sources(2, NO);
+            finalPlayer = removalPlayer(earlyFinal, @[@0,@1], @[earlyFinal[0].item,earlyFinal[1].item], 0, NO);
+            [finalPlayer updateOrder]; [finalPlayer setValue:@YES forKey:@"_enqueuedAll"];
+            [finalPlayer onComplete:[NSNotification notificationWithName:@"ended" object:earlyFinal[1].item]];
+            if (invalidateByLoad.boolValue) {
+                finalPlayer.loadSource = [[ConcatenatingAudioSource alloc] initWithId:@"same-source" audioSources:[earlyFinal mutableCopy] shuffleOrder:@[@0,@1] lazyLoading:@NO];
+                [finalPlayer load:@{@"type": @"concatenating"} initialPosition:kCMTimeZero initialIndex:@1 result:^(id result) {}];
+            } else {
+                [finalPlayer seek:kCMTimeZero index:@1 completionHandler:^(BOOL finished) {}];
+            }
+            earlyFinal[1].lastSeek = CMTimeMake(1, 1);
+            [finalPlayer observeValueForKeyPath:@"currentItem" ofObject:finalPlayer.player change:@{NSKeyValueChangeNewKey: earlyFinal[1].item} context:nil];
+            NSCAssert([[finalPlayer valueForKey:@"_processingState"] intValue] == psReady, @"superseded future-final witness completed seek/load");
+        }
+
+        // Exercise the real explicit-seek route and real load replacement. Old
+        // item callbacks are no longer members and cannot complete the new load.
+        __block BOOL seekFinished = NO;
+        [p seek:CMTimeMake(1, 2) index:@1 completionHandler:^(BOOL finished) { seekFinished = finished; }];
+        NSCAssert(seekFinished && physical[1].seeks == 1 && CMTIME_COMPARE_INLINE(physical[1].lastSeek, ==, CMTimeMake(1, 2)), @"physical flag changed explicit same-index seek");
+        seekFinished = NO;
+        [p seek:kCMTimeZero index:@2 completionHandler:^(BOOL finished) { seekFinished = finished; }];
+        NSCAssert(seekFinished && [[p valueForKey:@"_index"] intValue] == 2 && (id)p.player.currentItem == physical[2].item, @"physical flag changed explicit index seek");
+        [p setValue:@(psLoading) forKey:@"_processingState"];
+        [p onComplete:[NSNotification notificationWithName:@"ended" object:physical[2].item]];
+        NSCAssert([[p valueForKey:@"_processingState"] intValue] == psLoading, @"completion stole load ownership");
+        [p setValue:@(psReady) forKey:@"_processingState"];
+        [p setValue:[NSValue valueWithCMTime:kCMTimeZero] forKey:@"_seekPos"];
+        [p onComplete:[NSNotification notificationWithName:@"ended" object:physical[2].item]];
+        NSCAssert([[p valueForKey:@"_processingState"] intValue] == psReady, @"completion stole pending seek ownership");
+        [p setValue:[NSValue valueWithCMTime:kCMTimeInvalid] forKey:@"_seekPos"];
+        NSArray<TestSource *> *replacement = sources(2, NO);
+        p.loadSource = [[ConcatenatingAudioSource alloc] initWithId:@"replacement" audioSources:[replacement mutableCopy] shuffleOrder:@[@0,@1] lazyLoading:@NO];
+        __block BOOL loadFinished = NO;
+        [p load:@{ @"type": @"concatenating" } initialPosition:kCMTimeZero initialIndex:@1 result:^(id result) { loadFinished = YES; }];
+        NSCAssert(loadFinished && [[p valueForKey:@"_index"] intValue] == 1 && (id)p.player.currentItem == replacement[1].item, @"physical flag changed load initial index");
+        [p onComplete:[NSNotification notificationWithName:@"ended" object:physical[2].item]];
+        NSCAssert([[p valueForKey:@"_processingState"] intValue] == psReady && [[p valueForKey:@"_index"] intValue] == 1, @"retired source completed replacement");
+
+        // Shuffled finality uses playback order, not numerical source index.
+        physical = sources(3, NO);
+        p = removalPlayer(physical, @[@2,@0,@1], @[physical[0].item,physical[1].item], 0, YES);
+        [p updateOrder];
+        [p onComplete:[NSNotification notificationWithName:@"ended" object:physical[1].item]];
+        NSCAssert([[p valueForKey:@"_index"] intValue] == 0 && [[p valueForKey:@"_processingState"] intValue] == psReady, @"future shuffled final source completed early");
+        [((TestQueue *)(id)p.player).storage removeObjectAtIndex:0];
+        [p onComplete:[NSNotification notificationWithName:@"ended" object:physical[1].item]];
+        NSCAssert([[p valueForKey:@"_index"] intValue] == 1 && [[p valueForKey:@"_processingState"] intValue] == psCompleted, @"shuffled actual final source did not complete");
+
+        for (NSNumber *loop in @[@(lmLoopOne), @(lmLoopAll)]) {
+            physical = sources(2, NO);
+            p = removalPlayer(physical, @[@0,@1], @[physical[0].item,physical[1].item], 0, NO);
+            [p updateOrder]; [p setValue:loop forKey:@"_loopMode"];
+            [p onComplete:[NSNotification notificationWithName:@"ended" object:physical[0].item]];
+            NSCAssert(physical[0].seeks == 1 && [[p valueForKey:@"_justAdvanced"] boolValue], @"physical flag changed loop completion");
+            NSCAssert([[p valueForKey:@"_index"] intValue] == (loop.intValue == lmLoopAll ? 1 : 0), @"physical flag changed loop index");
+        }
+        setenv("READALOUD_QUEUE_BOUNDARY_AUDIT", "1", 1);
+        p = player(physical, @[@0,@1], @[physical[0].item]);
+        NSCAssert([[p readAloudQueueBoundaryAudit][@"physicalHeadIndex"] boolValue], @"QA mode absent from native audit receipt");
+        unsetenv("READALOUD_QUEUE_BOUNDARY_AUDIT");
+        unsetenv("READALOUD_QUEUE_PHYSICAL_HEAD_INDEX");
+        NSLog(@"PASS: physical-head QA future/stale/duplicate/EOF/KVO/snapshot/prune/load/seek/shuffle/loop scenarios (no app/audio)");
+
     }
     } @catch (NSException *exception) {
         NSLog(@"FAIL: %@", exception.reason);
