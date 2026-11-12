@@ -13,6 +13,14 @@ runtime progressadcece7. These are evidence receipts, not slice closure.
 | v60 production natural book | 10ms /838of838 | All197 words, natural EOF, six complete scenes persisted; all six emitted waveforms match, max join.01ms |
 | v61 bounded warm CoreAudio | 274ms /717of717 | Real first-synthesis native failure without ScreenCaptureKit; waveform criteria separately pass |
 | v62 no-SCK System Trace | 174ms /684of684 | Instrumented pass only; tracer forced after120s finalization; export malformed, no owner evidence |
+| v63 short launched Thread Activity | no final receipt | Readable diagnostic trace, but xctrace time limit SIGKILLed app; owned child cleaned; no normal-Quit/acceptance credit |
+| v64 production saved-book replay | 51ms /748of748 | Zero forbidden model calls; all197 words, Save/reopen, cancel quiet and restart; six full waveform matches/maxjoin.01ms |
+| v65 MLX max-ops1 diagnostic | 349ms /671of671 | First-synthesis native failure; functional/normalQuit pass; override not adopted |
+| v66 production8bit, no CUA intervention | 93ms /668of668 | Strict bounded warm intended-source acoustic/runtime pass; no prior failures erased |
+| v67 attached System Trace | 127ms /666of666 | Readable trace, profiler0/app normalQuit/noorphans; instrumented only, no >250ms reproduction |
+| v68 production4bit CoreAudio | 16ms /668of668 | Functional pass; tap begins22.288ms after firstPosition, full interval coverage refused |
+| v69 production4bit ScreenCaptureKit | 186ms /661of661 | Strict complete-waveform/runtime pass |
+| v70 production A8/B4/A8 CoreAudio | 183ms /328of328 | Strict switches acoustic/runtime pass; rapid latest selection validated |
 
 V57/v58/v59 suggest a recorder contribution, not the whole cause. V61
 falsifies a ScreenCaptureKit-only explanation. Its strict verdict fails;
@@ -26,6 +34,26 @@ V60 load-to-speech upper bound3052.390ms meets the10s first-load hard limit.
 Ordinary startup10009.064ms is excluded only from that load clock. Total
 launch-to-speech13061.564ms misses the2s goal. No target work moved to startup.
 This bounded book does not establish arbitrary-document performance.
+
+V64 reusable load-to-speech upper bound253.807ms meets the5s hard limit.
+Startup360.209ms and total614.132ms are separate; the launch goal also passes.
+All six scene correlations exceed.9997 and observed joins are.01ms or less.
+
+V63's exact state table shows401.287ms cumulative Blocked across a selected
+402.102ms CoreAnimation mutex cluster, separated by brief Running/Runnable
+states; the largest adjacent block is40.435ms. This is not one continuous
+400ms wait or sample-weight-derived occupancy. A same-process CA deferral
+worker is correlated, but lock-holder/Mach recipient/GPU ownership is not
+established. No final request-delay receipt exists. V67 attaches instead of
+launching, so stopping the15s recorder leaves the app under its standard
+runner's normal-Quit ownership. It has112ms and127ms request witnesses but no
+failed250ms witness. No speculative native source fix follows.
+
+MLX0.32.4 documents MLX_MAX_OPS_PER_BUFFER as a batching diagnostic, not GPU
+priority. V65 changed only that variable to1 in a fresh child, leaving MB,
+progress and CPU policy unchanged; native349ms still fails. This does not
+prove batching actually changed the relevant GPU work, nor establish a GPU
+cause. The runner labels any such override diagnostic and refuses acceptance.
 
 The sanitized v55 audit verifies the exact post-exec app PID/image and188ms
 window coverage. Main stacks show an AppKit window-move CAFence/CA transaction
