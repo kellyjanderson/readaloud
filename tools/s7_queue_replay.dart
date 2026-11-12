@@ -20,6 +20,7 @@ import 'package:read_aloud/src/services/work_character_repository.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'native_main_responsiveness_probe.dart';
+import 'native_queue_boundary_probe.dart';
 import 'native_playback_position_probe.dart';
 import 'native_timing_clock.dart';
 
@@ -592,6 +593,9 @@ Future<void> main(List<String> args) async {
     });
     await clean('Position subscription', subscription.cancel);
     receipt['nativeMainResponsiveness'] = await native.close();
+    await clean('Native boundary readout', () async {
+      receipt['nativeQueueBoundaryAudit'] = await readNativeQueueBoundaryAudit();
+    });
     await clean('Timing bridge', () async {
       receipt['endBridgeRequested'] = stamp();
       (await NativeTimingClockSnapshot.capture()).record(receipt, 'endBridge');

@@ -77,6 +77,10 @@ if inference_policy
   result[:inferencePolicyDiagnostic] = inference_policy
   result[:errors] << 'QA-only child scheduling differential; production policy unchanged'
 end
+if ENV['READALOUD_QUEUE_BOUNDARY_AUDIT'] == '1'
+  result[:nativeQueueBoundaryDiagnostic] = true
+  result[:errors] << 'Native queue boundary diagnosis enabled; not product acceptance'
+end
 # Read only bounded uncompressed PCM or float WAV. This checks app-emitted signal
 # separately from player intent, never labels energy as an exact speech match.
 def emitted_signal(path, timing_path, segments)
