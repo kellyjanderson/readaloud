@@ -45,6 +45,12 @@ result = {schema: 'readaloud-native-variant-runner-v1', mode: mode,
           limits: '100ms child/process observations and emitted signal per playback interval. ' \
                   'Exact waveform matching, glitch/voice quality, total memory envelope, ' \
                   'physical-speaker and M3 acceptance remain separate. Capture 300s; work deadline 270s.'}
+if ENV['READALOUD_S7_UNGATED_PROCESS_CAPTURE'] == '1'
+  result[:ungatedProcessCaptureDiagnostic] = true
+  result[:primaryCaptureMechanism] = 'CoreAudio exact-PID process tap; no ScreenCaptureKit'
+  result[:primaryCaptureExecutableSha256] = Digest::SHA256.file(capture).hexdigest
+  result[:errors] << 'QA-only ungated exact-PID capture differential; no full qualification'
+end
 if replay_mode
   result[:queueReplayDiagnostic] = true
   result[:replayMode] = replay_mode
