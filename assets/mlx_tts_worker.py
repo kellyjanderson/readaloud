@@ -53,6 +53,18 @@ _protocol_stdout = sys.stdout
 _active_request_id = ""
 _output_lock = threading.Lock()
 
+# Acoustic scene qualification is an implementation receipt, not a capability
+# that a remotely refreshed integrity manifest may grant to different weights.
+_QUALIFIED_SCENE_IDENTITIES = frozenset({
+    ('fish_drama3', 'mlx-community/fish-audio-drama-3-bf16',
+     '8c5496f9af370bb9342ab98130b27b5389d1b1cb'),
+})
+
+
+def _has_scene_qualification(model_id: str, bits: int) -> bool:
+    spec = DRAMA_MODELS.get(model_id, {})
+    return bits == 0 and (model_id, spec.get('repo'), spec.get('revision')) in _QUALIFIED_SCENE_IDENTITIES
+
 
 def _reply(request_id: str, **payload: Any) -> None:
     # Download progress and the memory sampler can publish from other threads.
@@ -77,11 +89,28 @@ def _physical_footprint() -> int:
     return int(info.counters[7])  # ri_phys_footprint
 
 
+def _physical_memory_bytes() -> int:
+    # Query the maintained platform API directly. Spawning sysctl here would
+    # create a briefly unmeasured descendant during whole-tree admission.
+    libc = ctypes.CDLL(None, use_errno=True)
+    libc.sysctlbyname.argtypes = [ctypes.c_char_p, ctypes.c_void_p,
+                                  ctypes.POINTER(ctypes.c_size_t), ctypes.c_void_p,
+                                  ctypes.c_size_t]
+    libc.sysctlbyname.restype = ctypes.c_int
+    value = ctypes.c_uint64()
+    size = ctypes.c_size_t(ctypes.sizeof(value))
+    if (libc.sysctlbyname(b'hw.memsize', ctypes.byref(value), ctypes.byref(size), None, 0)
+            != 0 or size.value != ctypes.sizeof(value) or value.value <= 0):
+        raise OSError(ctypes.get_errno(), 'Could not sample physical memory')
+    return int(value.value)
+
+
 def _report_memory(stop: threading.Event) -> None:
     # One daemon per child, no job queue. Process retirement owns cancellation.
     while not stop.is_set():
         try:
-            _reply("", type="memory", footprintBytes=_physical_footprint())
+            _reply("", type="memory", footprintBytes=_physical_footprint(),
+                   processId=os.getpid(), sampledUnixMicros=time.time_ns() // 1000)
         except Exception as error:
             _reply("", type="memory", error=str(error))
             return
@@ -209,38 +238,175 @@ def _complete_snapshot(directory: Path, model_id: str) -> bool:
         return False
 
 
-def _download_model(model_id: str, private_cache_path: str) -> Path:
-    from huggingface_hub import snapshot_download
+def _model_manifest(model_id: str) -> dict:
+    """Select trusted bundled data without changing legacy bf16 receipt identity."""
+    try:
+        bundled = json.loads(Path(__file__).with_name('fish_drama_model_checksums.json').read_text())
+        if not isinstance(bundled, dict):
+            raise ValueError('Model integrity manifest must be an object')
+        if bundled.get('schemaVersion') == 2:
+            manifest = bundled['variants'][model_id]
+        elif 'schemaVersion' not in bundled and model_id == 'fish_drama3':
+            manifest = bundled
+        else:
+            raise ValueError('Unsupported model integrity manifest schema')
+        if not isinstance(manifest, dict):
+            raise ValueError('Selected model integrity manifest must be an object')
+        spec = DRAMA_MODELS[model_id]
+        if manifest['repo'] != spec['repo'] or manifest['revision'] != spec['revision']:
+            raise ValueError('Pinned repository/revision does not match the selected model')
+        entries = manifest['files']
+        if not isinstance(entries, dict) or not entries or not set(spec['requiredFiles']).issubset(entries):
+            raise ValueError('Required model files are missing from the integrity manifest')
+        for name, entry in entries.items():
+            path = Path(name)
+            if not path.parts or path.is_absolute() or '..' in path.parts or '\\' in name or path.as_posix() != name:
+                raise ValueError('Unsafe model integrity filename')
+            algorithm = entry['algorithm']
+            length = {'sha256': 64, 'git-sha1': 40}.get(algorithm)
+            digest = entry['digest']
+            if (type(entry['size']) is not int or entry['size'] <= 0 or
+                    length is None or not isinstance(digest, str) or
+                    len(digest) != length or any(c not in '0123456789abcdef' for c in digest)):
+                raise ValueError('Invalid model integrity entry')
+        return manifest
+    except (OSError, ValueError, KeyError, TypeError) as error:
+        raise ValueError(f'Cannot verify {model_id}: bundled integrity manifest is missing or invalid. '
+                         'Update the application before loading this model.') from error
+
+
+def _validated_model_cache_directories(value: Any) -> list[str]:
+    if (not isinstance(value, list) or
+            any(not isinstance(path, str) or not path.strip() for path in value)):
+        raise ValueError('modelCacheDirectories must be a list of nonempty path strings')
+    return value
+
+
+def _download_model(model_id: str, private_cache_path: str,
+                    additional_cache_paths: tuple[str, ...] | list[str] = ()) -> Path:
+    # The protocol thread owns this one acquisition. HF provides file locking,
+    # bounded transfer workers and resume; cancelling retires the child, leaving
+    # completed blobs/partials in the same cache for the next request.
+    # Hub transfers are thread-owned in this one worker. tqdm's supported lock
+    # API avoids creating a multiprocessing resource tracker solely for its
+    # progress lock; no unaccounted inference/download child is introduced.
+    from tqdm import tqdm
+    tqdm.set_lock(threading.RLock())
+    from huggingface_hub import snapshot_download, hf_hub_download
     from huggingface_hub import constants as hf_constants
 
+    if not isinstance(additional_cache_paths, (list, tuple)):
+        raise ValueError('modelCacheDirectories must be a list of nonempty path strings')
+    extra_paths = _validated_model_cache_directories(list(additional_cache_paths))
     spec = DRAMA_MODELS.get(model_id)
     repo_id = spec['repo'] if spec else MODEL_REPOSITORIES[model_id]
     revision = spec['revision'] if spec else None
+    manifest = _model_manifest(model_id) if spec else None
+    receipt_root = Path(private_cache_path).expanduser().parent / 'model-qualification'
+    required = list(manifest['files']) if manifest else None
     private_cache = Path(private_cache_path).expanduser()
     configured_cache = Path(os.environ.get('HF_HUB_CACHE') or
                             os.environ.get('HUGGINGFACE_HUB_CACHE') or
                             str(hf_constants.HF_HUB_CACHE)).expanduser()
-    candidates = list(dict.fromkeys([private_cache, configured_cache]))
+    candidates = []
+    identities = set()
+    for path in [private_cache, configured_cache, *(Path(path).expanduser() for path in extra_paths)]:
+        identity = path.resolve()
+        if identity not in identities:
+            identities.add(identity)
+            candidates.append(path)
     # Check every accessible cache before any network request. No build number,
     # executable path or debug/release mode is part of this persistent identity.
+    repair = None
+    repair_bytes = -1
     for cache_dir in candidates:
+        if not _owned_hf_cache_layout(cache_dir, repo_id, revision):
+            continue
         try:
             cached = Path(snapshot_download(repo_id=repo_id, revision=revision,
                           cache_dir=str(cache_dir), local_files_only=True))
-            if _complete_snapshot(cached, model_id):
-                _configure_hf_cache(cache_dir, hf_constants)
-                _progress('Using downloaded speech model files', stage='modelCached')
-                return cached
         except (OSError, ValueError):
-            pass
+            if not manifest:
+                continue
+            # Hub 2.4 rejects an incomplete cached tree before returning its
+            # path. Inspect only our exact trusted pin, never an exception's
+            # suggested path or a mutable ref, so Retry retains saved weights.
+            cached = cache_dir / ('models--' + repo_id.replace('/', '--')) / 'snapshots' / revision
+        if manifest:
+            if not cached.is_dir() or not _is_managed_snapshot(cached, cache_dir, repo_id, revision):
+                continue
+            for name, entry in manifest['files'].items():
+                path = cached / name
+                if ((path.exists() or path.is_symlink()) and
+                        not _owned_hf_file(path, cached, entry)):
+                    raise ValueError(f'Cannot repair model file outside the managed Hugging Face cache: {path}')
+        invalid = []
+        try:
+            complete = (_verify_scene_model(cached, manifest, receipt_root, invalid_files=invalid)
+                        if manifest else _complete_snapshot(cached, model_id))
+        except (OSError, ValueError):
+            continue
+        if complete:
+            _configure_hf_cache(cache_dir, hf_constants)
+            _progress('Using downloaded speech model files', stage='modelCached')
+            return cached
+        if manifest:
+            # Count only stable, hash-verified required files. A cached tree or
+            # an existing partial alone does not make the first cache best.
+            verified_bytes = (sum(entry['size'] for name, entry in manifest['files'].items()
+                                  if name not in invalid) if invalid else 0)
+            if verified_bytes > repair_bytes:
+                repair_bytes = verified_bytes
+                repair = (cache_dir, cached, invalid)
 
     # One destination per attempt: retries resume the same blobs. A network
     # failure must never start a second copy in a different cache.
+    if repair:
+        private_cache, cached, invalid = repair
+    if not _owned_hf_cache_layout(private_cache, repo_id, revision):
+        raise ValueError(f'Cannot acquire model through redirected Hugging Face cache folders: {private_cache}')
+    if manifest:
+        for name, entry in manifest['files'].items():
+            repository = private_cache / ('models--' + repo_id.replace('/', '--'))
+            pointer = repository / 'snapshots' / revision / name
+            blob = repository / 'blobs' / entry['digest']
+            lock = private_cache / '.locks' / repository.name / (entry['digest'] + '.lock')
+            if (not _owned_cache_path(pointer, private_cache, allow_leaf_symlink=True) or
+                    not _owned_hf_blob(blob, private_cache) or not _owned_cache_path(lock, private_cache)):
+                raise ValueError(f'Cannot repair model file outside the managed Hugging Face cache: {pointer}')
+    if repair:
+        # HF owns transfer locking, resumable partials and atomic blob writes.
+        # Force only corrupt present files; ordinary snapshot acquisition below
+        # resumes missing files. Never unlink blobs or arbitrary explicit paths.
+        for name in invalid:
+            path = cached / name
+            if path.exists():
+                if not _owned_hf_file(path, cached, manifest['files'][name]):
+                    raise ValueError(f'Cannot repair model file outside the managed Hugging Face cache: {path}')
+                _progress(f'Repairing corrupt speech model file: {name}', stage='modelRepair')
+                if _repair_snapshot_pointer(path, cached, manifest['files'][name], require_verified_blob=False):
+                    continue  # A good existing blob repairs a corrupt copy offline.
+                if hf_constants.HF_HUB_OFFLINE:
+                    raise FileNotFoundError(
+                        'The selected model is not installed completely. Connect to download or repair it, '
+                        'or choose an installed model.')
+                hf_hub_download(repo_id=repo_id, filename=name, revision=revision,
+                                cache_dir=str(private_cache), force_download=True,
+                                tqdm_class=_download_progress_class(manifest['files'][name]['size'], 0))
+                _repair_snapshot_pointer(path, cached, manifest['files'][name])
+        if _verify_scene_model(cached, manifest, receipt_root):
+            _configure_hf_cache(private_cache, hf_constants)
+            _progress('Using verified speech model files', stage='modelCached')
+            return cached
+    if hf_constants.HF_HUB_OFFLINE:
+        raise FileNotFoundError(
+            'The selected model is not installed completely. Connect to download or repair it, '
+            'or choose an installed model.')
     private_cache.mkdir(parents=True, exist_ok=True)
     _progress('Checking saved files and remaining download size…', stage='modelCache')
     plan = snapshot_download(repo_id=repo_id, revision=revision,
                              cache_dir=str(private_cache), dry_run=True,
-                             allow_patterns=spec['requiredFiles'] if spec else None)
+                             allow_patterns=required)
     total = (sum(item.file_size for item in plan)
              if all(item.file_size is not None for item in plan) else None)
     cached_bytes = sum(item.file_size or 0 for item in plan if not item.will_download)
@@ -250,14 +416,130 @@ def _download_model(model_id: str, private_cache_path: str) -> Path:
     resolved_revision = revision or (plan[0].commit_hash if plan else None)
     snapshot = snapshot_download(
         repo_id=repo_id, revision=resolved_revision, cache_dir=str(private_cache),
-        allow_patterns=spec['requiredFiles'] if spec else None,
+        allow_patterns=required,
         tqdm_class=_download_progress_class(total, cached_bytes),
     )
     resolved = Path(snapshot)
-    if not _complete_snapshot(resolved, model_id):
+    if manifest:
+        if (not _is_managed_snapshot(resolved, private_cache, repo_id, revision) or
+                not _verify_scene_model(resolved, manifest, receipt_root)):
+            raise ValueError(f'Model download failed pinned integrity verification: {resolved}. Retry the model download.')
+    elif not _complete_snapshot(resolved, model_id):
         raise FileNotFoundError(f'Model download is incomplete: {resolved}')
     _configure_hf_cache(private_cache, hf_constants)
     return resolved
+
+
+def _is_managed_snapshot(directory: Path, cache_dir: Path, repo: str, revision: str) -> bool:
+    expected = cache_dir / ('models--' + repo.replace('/', '--')) / 'snapshots' / revision
+    # HF normalizes macOS /var -> /private/var and user cache symlinks.
+    return (directory.resolve() == expected.resolve() and
+            _owned_hf_cache_layout(cache_dir, repo, revision) and
+            _owned_cache_path(directory, cache_dir))
+
+
+def _anchored_cache_path(path: Path, cache_dir: Path) -> Path | None:
+    """Resolve the configured root alias, never a nested cache redirect."""
+    lexical_root = cache_dir.expanduser().absolute()
+    lexical_path = Path(os.path.abspath(path.expanduser()))
+    for root in (lexical_root, lexical_root.resolve()):
+        try:
+            return lexical_root.resolve() / lexical_path.relative_to(root)
+        except ValueError:
+            pass
+    # An absolute HF pointer can retain the original /var spelling after the
+    # cache lookup normalized its root to /private/var (or another root alias).
+    for root in lexical_path.parents:
+        if root.resolve() == lexical_root.resolve():
+            return lexical_root.resolve() / lexical_path.relative_to(root)
+    return None
+
+
+def _owned_cache_path(path: Path, cache_dir: Path, *, allow_leaf_symlink: bool = False) -> bool:
+    anchored = _anchored_cache_path(path, cache_dir)
+    if anchored is None:
+        return False
+    current = cache_dir.expanduser().resolve()
+    parts = anchored.relative_to(current).parts
+    for index, part in enumerate(parts):
+        current = current / part
+        leaf = index == len(parts) - 1
+        if current.is_symlink() and not (leaf and allow_leaf_symlink):
+            return False
+        if not leaf and current.exists() and not current.is_dir():
+            return False
+    return True
+
+
+def _owned_hf_cache_layout(cache_dir: Path, repo: str, revision: str | None) -> bool:
+    folder = 'models--' + repo.replace('/', '--')
+    paths = [cache_dir / folder / name for name in ('blobs', 'snapshots', 'refs')]
+    paths += [cache_dir / '.locks' / folder, cache_dir / 'blobs']
+    if revision:
+        paths.append(cache_dir / folder / 'snapshots' / revision)
+    return all(_owned_cache_path(path, cache_dir) for path in paths)
+
+
+def _owned_hf_file(path: Path, snapshot: Path, entry: dict) -> bool:
+    cache_dir = snapshot.parent.parent.parent
+    if not _owned_cache_path(path, cache_dir, allow_leaf_symlink=True):
+        return False
+    if path.is_symlink():
+        blobs = snapshot.parent.parent / 'blobs'
+        target = blobs / entry['digest']
+        # Check the first hop before resolving HF's optional shared-store hop.
+        link = Path(os.path.abspath(path.parent / os.readlink(path)))
+        if _anchored_cache_path(link, cache_dir) != _anchored_cache_path(target, cache_dir):
+            return False
+        return _owned_hf_blob(target, cache_dir)
+    return path.is_file() and path.resolve().is_relative_to(snapshot.resolve())
+
+
+def _owned_hf_blob(blob: Path, cache_dir: Path) -> bool:
+    from huggingface_hub.utils._shared_blobs import (is_shared_blobs_dir,
+                                                    _shared_blob_target, shared_blobs_dir)
+    if not _owned_cache_path(blob, cache_dir, allow_leaf_symlink=True):
+        return False
+    if blob.is_symlink():
+        # The public shared_blob_target additionally requires a present regular
+        # payload. Ownership must survive a missing payload so Hub can resume.
+        shared = _shared_blob_target(blob, cache_dir, raise_on_io_error=True)
+        return (is_shared_blobs_dir(shared_blobs_dir(cache_dir)) and shared is not None and
+                _owned_cache_path(shared, cache_dir) and
+                (not shared.exists() or shared.is_file()))
+    return not blob.exists() or blob.is_file()
+
+
+def _repair_snapshot_pointer(path: Path, snapshot: Path, entry: dict,
+                             *, require_verified_blob: bool = True) -> bool:
+    """HF force-download refreshes blobs but retains existing regular copies."""
+    from huggingface_hub.file_download import _create_symlink
+    from huggingface_hub.utils import WeakFileLock
+    from huggingface_hub.utils._verification import compute_file_hash
+
+    def matches(candidate):
+        return (candidate.is_file() and candidate.stat().st_size == entry['size'] and
+                compute_file_hash(candidate, entry['algorithm']) == entry['digest'])
+
+    cache_dir = snapshot.parent.parent.parent
+    blob = snapshot.parent.parent / 'blobs' / entry['digest']
+    lock = cache_dir / '.locks' / snapshot.parent.parent.name / (entry['digest'] + '.lock')
+    if not _owned_cache_path(lock, cache_dir):
+        raise ValueError('Cannot repair model through a redirected Hugging Face lock path')
+    with WeakFileLock(str(lock)):
+        if not _owned_hf_file(path, snapshot, entry):
+            raise ValueError(f'Cannot repair model file outside the managed Hugging Face cache: {path}')
+        if matches(path):
+            return True
+        # Only replace an owned, still-corrupt pointer/copy with verified bytes.
+        if not _owned_hf_blob(blob, cache_dir):
+            raise ValueError(f'Cannot repair model blob outside the managed Hugging Face cache: {blob}')
+        if not matches(blob):
+            if not require_verified_blob:
+                return False
+            raise ValueError(f'Repaired model blob failed pinned integrity verification: {blob}')
+        _create_symlink(str(blob), str(path), new_blob=False)
+        return True
 
 
 def _configure_hf_cache(cache_dir: Path, hf_constants: Any) -> None:
@@ -267,7 +549,8 @@ def _configure_hf_cache(cache_dir: Path, hf_constants: Any) -> None:
     hf_constants.HF_HUB_CACHE = cache
 
 
-def _verify_scene_model(directory: Path, manifest: dict, receipt_root: Path) -> bool:
+def _verify_scene_model(directory: Path, manifest: dict, receipt_root: Path,
+                        *, invalid_files: list[str] | None = None) -> bool:
     """Offline capability qualification, independent of the selected engine name.
 
     Hub's verify_repo_checksums requires a network tree query and rehashes every
@@ -277,72 +560,124 @@ def _verify_scene_model(directory: Path, manifest: dict, receipt_root: Path) -> 
     from huggingface_hub.utils._verification import compute_file_hash
     entries = manifest['files']
     expected_weights = {name for name in entries if name.endswith('.safetensors')}
-    if {p.name for p in directory.glob('*.safetensors')} != expected_weights:
+    if {p.name for p in directory.glob('*.safetensors')} - expected_weights:
         return False
     def snapshot():
         result = {}
         for name, expected in entries.items():
             p = directory / name
-            if not p.is_file() or p.stat().st_size != expected['size']:
-                return None
-            st = p.stat()
+            try:
+                st = p.stat()
+                if not p.is_file() or st.st_size != expected['size']:
+                    raise OSError('Missing or wrong-sized model file')
+            except OSError:
+                if invalid_files is not None and name not in invalid_files:
+                    invalid_files.append(name)
+                result[name] = None
+                continue
             result[name] = [st.st_dev, st.st_ino, st.st_size, st.st_mtime_ns, st.st_ctime_ns]
         return result
     before = snapshot()
-    if before is None:
-        return False
+    def unchanged():
+        after = snapshot()
+        if invalid_files is not None:
+            for name in entries:
+                if after[name] != before[name] and name not in invalid_files:
+                    invalid_files.append(name)
+        return after == before
     identity = hashlib.sha256(json.dumps([str(directory), manifest, before], sort_keys=True).encode()).hexdigest()
     receipt = receipt_root / f'{identity}.json'
     try:
-        if json.loads(receipt.read_text()).get('verifiedIdentity') == identity:
-            return True
-    except (OSError, ValueError):
+        if (None not in before.values() and
+                json.loads(receipt.read_text()).get('verifiedIdentity') == identity):
+            return unchanged()
+    except (OSError, ValueError, AttributeError):
         pass
     total = sum(e['size'] for e in entries.values())
     completed = 0
+    valid = True
     for name, expected in entries.items():
         _progress('Verifying pinned speech model files…', stage='modelVerification', completed=completed, total=total)
-        if compute_file_hash(directory / name, expected['algorithm']) != expected['digest']:
-            return False
+        try:
+            matches = before[name] is not None and compute_file_hash(directory / name, expected['algorithm']) == expected['digest']
+        except OSError:
+            matches = False
+        if not matches:
+            valid = False
+            if invalid_files is not None and name not in invalid_files:
+                invalid_files.append(name)
         completed += expected['size']
-    if snapshot() != before:
+    stable = unchanged()
+    if not valid or not stable:
         return False
     receipt_root.mkdir(parents=True, exist_ok=True)
-    with tempfile.NamedTemporaryFile(mode='w', dir=receipt_root, delete=False) as stream:
-        json.dump({'verifiedIdentity': identity, 'revision': manifest['revision'], 'files': before}, stream)
-        temporary = Path(stream.name)
+    temporary = None
     try:
+        with tempfile.NamedTemporaryFile(mode='w', dir=receipt_root, delete=False) as stream:
+            temporary = Path(stream.name)
+            json.dump({'verifiedIdentity': identity, 'revision': manifest['revision'], 'files': before}, stream)
+            stream.flush()
+            os.fsync(stream.fileno())
         temporary.replace(receipt)
     finally:
-        temporary.unlink(missing_ok=True)
+        if temporary is not None:
+            temporary.unlink(missing_ok=True)
+    if not unchanged():
+        return False
     _progress('Pinned speech model verified', stage='modelVerification', completed=total, total=total)
     return True
 
 
-def _load(model_id: str, model_path: str, private_cache_path: str, quantization_bits: int = 0) -> dict[str, Any]:
+def _load(model_id: str, model_path: str, private_cache_path: str, quantization_bits: int = 0,
+          require_verified_model_assets: bool = False,
+          model_cache_directories: list[str] | None = None,
+          runtime_memory_limit_bytes: int | None = None) -> dict[str, Any]:
     global _model, _model_id, _model_path, _model_bits, _model_native_scenes
     global _model_load_stream, _model_pending_parameters
     load_started = time.monotonic()
+    if type(require_verified_model_assets) is not bool:
+        raise ValueError('requireVerifiedModelAssets must be a boolean')
+    if runtime_memory_limit_bytes is not None and (type(runtime_memory_limit_bytes) is not int
+            or not 0 < runtime_memory_limit_bytes < 100_000_000_000):
+        raise ValueError('Invalid admitted runtime memory limit')
+    model_cache_directories = _validated_model_cache_directories(
+        [] if model_cache_directories is None else model_cache_directories)
     if quantization_bits not in (0, 4):
         raise ValueError('Supported inference precision: full or 4-bit')
     if model_id not in MODEL_IDS:
         raise ValueError(f"Unknown model ID: {model_id}")
     if model_id in DRAMA_MODELS:
-        import subprocess
-        physical = int(subprocess.check_output(['/usr/sbin/sysctl', '-n', 'hw.memsize']))
+        physical = _physical_memory_bytes()
         estimated = DRAMA_MODELS[model_id]['estimatedPeakBytes']
         if estimated > min(100_000_000_000, physical * .85):
             raise MemoryError('This Drama variant needs more memory than this Mac can safely provide. Select a smaller variant.')
-    directory = Path(model_path).expanduser().resolve() if model_path else _download_model(model_id, private_cache_path).resolve()
+    directory = (Path(model_path).expanduser().resolve() if model_path else
+                 _download_model(model_id, private_cache_path, model_cache_directories).resolve())
     if not (directory / "config.json").is_file():
         raise FileNotFoundError(f"Model config is missing: {directory / 'config.json'}")
+    verified = False
+    verified_identity = None
+    if require_verified_model_assets:
+        manifest = _model_manifest(model_id)
+        verified = _verify_scene_model(directory, manifest,
+                    Path(private_cache_path).expanduser().parent / 'model-qualification')
+        if not verified:
+            raise ValueError(f'{model_id} assets failed pinned integrity verification at {directory}. '
+                             'Retry the managed model download or choose the exact pinned model folder; no weights were loaded.')
+        verified_identity = manifest['repo'] + '@' + manifest['revision']
+    def result():
+        return {"modelId": model_id, "loaded": True, "nativeScenesQualified": _model_native_scenes,
+                "modelIdentity": _model_identity(directory, model_id, quantization_bits),
+                "modelAssetsVerified": verified, "verifiedModelIdentity": verified_identity}
     if _model is not None and _model_id == model_id and _model_path == str(directory) and _model_bits == quantization_bits:
-        return {"modelId": model_id, "loaded": True, "nativeScenesQualified": _model_native_scenes, "modelIdentity": _model_identity(directory, model_id, quantization_bits)}
+        return result()
 
     _unload()
     import mlx.core as mx
     # Reserve headroom for Flutter, Python, codec and allocator overhead.
-    mx.set_memory_limit(85_000_000_000)
+    # This is an allocator guard, not an additional footprint measurement.
+    # The app's measured whole-tree/headroom admission can lower the limit.
+    mx.set_memory_limit(min(85_000_000_000, runtime_memory_limit_bytes or 85_000_000_000))
     mx.set_cache_limit(1_000_000_000)
     from mlx_audio.tts import load
 
@@ -375,9 +710,10 @@ def _load(model_id: str, model_path: str, private_cache_path: str, quantization_
         if overlap_weights:
             verification_started = time.monotonic()
             _progress('Checking speech model qualification…', stage='modelQualification')
-            manifest = json.loads(Path(__file__).with_name('fish_drama_model_checksums.json').read_text())
-            _model_native_scenes = _verify_scene_model(directory, manifest,
-                Path(private_cache_path).parent / 'model-qualification')
+            manifest = _model_manifest(model_id)
+            _model_native_scenes = (_has_scene_qualification(model_id, quantization_bits)
+                and _verify_scene_model(directory, manifest,
+                    Path(private_cache_path).parent / 'model-qualification'))
             _timing('modelVerification', verification_started)
             if not _model_native_scenes:
                 _progress('Unverified model revision: native scenes and delivery cues are disabled', stage='modelContext')
@@ -393,7 +729,7 @@ def _load(model_id: str, model_path: str, private_cache_path: str, quantization_
     _model_id = model_id
     _model_path = str(directory)
     _timing('modelLoadTotal', load_started)
-    return {"modelId": model_id, "loaded": True, "nativeScenesQualified": _model_native_scenes, "modelIdentity": _model_identity(directory, model_id, quantization_bits)}
+    return result()
 
 
 def _qwen_language(language: str) -> str:
@@ -419,7 +755,13 @@ def _model_identity(directory: Path, model_id: str, bits: int) -> str:
     # their config and weight file identities, so they cannot share old caches.
     files = [(f.name, f.stat().st_size, f.stat().st_mtime_ns)
              for f in sorted(directory.glob("*.safetensors"))]
-    value = [str(directory), DRAMA_MODELS.get(model_id), bits, files,
+    spec = DRAMA_MODELS.get(model_id)
+    # Preserve existing content identities when adding descriptive capability,
+    # layout/notice/qualification metadata. Those declarations do not change
+    # the pinned weights, config or synthesis settings already fingerprinted.
+    if spec is not None:
+        spec = {key: value for key, value in spec.items() if key != 'profile'}
+    value = [str(directory), spec, bits, files,
              hashlib.sha256((directory / "config.json").read_bytes()).hexdigest()]
     return hashlib.sha256(json.dumps(value, sort_keys=True).encode()).hexdigest()
 
@@ -735,6 +1077,9 @@ def main() -> int:
                         str(request.get("modelPath", "")),
                         str(request.get("privateCachePath", "")),
                         int(request.get('quantizationBits', 0)),
+                        request.get('requireVerifiedModelAssets', False),
+                        _validated_model_cache_directories(request.get('modelCacheDirectories', [])),
+                        request.get('runtimeMemoryLimitBytes'),
                     )
                 elif command == "synthesize":
                     response = _synthesize(request)

@@ -1,0 +1,2 @@
+Observed 8960/8960 still Finishing; keyboard opened Activity active-first. Collapsed status third line visually clipped at 2x; this is a UI failure requiring fix, not layout acceptance. Copy keyboard sent, no visible confirmation credit.
+Reconciliation: later actual wheel scroll revealed header overflow and scrollbar; earlier visual clip alone does not establish a layout bug. Finalizing itself was not scrolled.

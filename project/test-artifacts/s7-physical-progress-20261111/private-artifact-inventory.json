@@ -1,0 +1,57 @@
+[
+  {
+    "path": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-4bit-physical-v43-20261111/capture.wav",
+    "bytes": 27552256,
+    "sha256": "b869ed4772b1d067d8eed087c7ea5de0860c73c3001b75037918220c8d64cca9"
+  },
+  {
+    "path": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-4bit-physical-v43-20261111/coreaudio.wav",
+    "bytes": 23666688,
+    "sha256": "7c0af9ab214d3051a669ff541c918489eedc00cef38e7e402db4b59c9263b307"
+  },
+  {
+    "path": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-4bit-physical-v43-20261111/receipt.json",
+    "bytes": 1489604,
+    "sha256": "2e7ea0a598c5bb7d5b2c847b36c9356084bb93fca11890a054f5c10a39f3de3d"
+  },
+  {
+    "path": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-4bit-physical-v43-20261111/app.log",
+    "bytes": 1891,
+    "sha256": "43520e3c985bf6e6e1c8cdc062f5eb69734ca0620b5ab0278b3bc71956719e4b"
+  },
+  {
+    "path": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-8bit-physical-v44-20261111/capture.wav",
+    "bytes": 26546176,
+    "sha256": "230f9b04917f8fedbb78f3c778ec75bbe3f2e260749d0ee2b30996357f442018"
+  },
+  {
+    "path": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-8bit-physical-v44-20261111/coreaudio.wav",
+    "bytes": 23597056,
+    "sha256": "79c371dab3ada3b14407591250c2a90b9620ab62af47423ae19f5ed8585b1acf"
+  },
+  {
+    "path": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-8bit-physical-v44-20261111/receipt.json",
+    "bytes": 724619,
+    "sha256": "a65773a55d2961f72218680bbf681bfe5b126ddd2ff03058dd37f52b266e44b7"
+  },
+  {
+    "path": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-8bit-physical-v44-20261111/app.log",
+    "bytes": 1894,
+    "sha256": "e79fa4e4861e04a612ff7101d5cec82efec94fa468fa1d544a03c177f1e7146a"
+  },
+  {
+    "path": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-4bit-progress-v45-20261111/capture.wav",
+    "bytes": 27214336,
+    "sha256": "82deffc29994b8a84102edfa808512ff7ca4168804ffe209a26d5a02a5a6328c"
+  },
+  {
+    "path": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-4bit-progress-v45-20261111/receipt.json",
+    "bytes": 630904,
+    "sha256": "d6ba3a6affd9bd0bccb95bfd7034899ed95546f27fd65c0de4f3c835fe0ff87d"
+  },
+  {
+    "path": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-4bit-progress-v45-20261111/app.log",
+    "bytes": 1893,
+    "sha256": "f5a0fed8115c64be5bb3efbc3ecc0b6ec49ea76ea128cfec642df304f46d3f7a"
+  }
+]

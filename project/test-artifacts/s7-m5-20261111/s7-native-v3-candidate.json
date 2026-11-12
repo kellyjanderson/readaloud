@@ -1,0 +1,18 @@
+{
+  "sourceCommit": "d4bb328",
+  "architecture": "arm64",
+  "target": "tools/s7_engine_session_smoke.dart",
+  "qaBundle": "/Users/k/.codex/worktrees/radoc-dynamic-audio/readaloud/tmp/ReadAloudS6ColdRawSeparate.app",
+  "files": [
+    {
+      "path": "/Users/k/.codex/worktrees/radoc-dynamic-audio/readaloud/tmp/ReadAloudS6ColdRawSeparate.app/Contents/Frameworks/App.framework/App",
+      "sha256": "b68f55aa87330cee96a23f0e4c959c87ec205786ccbadcb82fd08c095d13d1c4",
+      "bytes": 10984768
+    },
+    {
+      "path": "/Users/k/.codex/worktrees/radoc-dynamic-audio/readaloud/tmp/ReadAloudS6ColdRawSeparate.app/Contents/MacOS/read_aloud",
+      "sha256": "a5bc2aab8508c6f34bcbb293b42a4ab2b23f73495c7da2b93bf79d0a56a92d11",
+      "bytes": 29577056
+    }
+  ]
+}

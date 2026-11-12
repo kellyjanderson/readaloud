@@ -62,7 +62,12 @@ class KokoroTtsEngine
     String? mlxPythonPath,
     AudioArtifactStore? mlxArtifactStore,
     int mlxQuantizationBits = 0,
-  }) : _player = player ?? AudioPlayer(useLazyPreparation: false),
+  }) : _player =
+           player ??
+           AudioPlayer(
+             useLazyPreparation: false,
+             readAloudFiniteLocalWavQueue: Platform.isMacOS,
+           ),
        _artifactPins = artifactPins ?? AudioArtifactPins.shared,
        _exportAssembler = exportAssembler ?? ExportedAudioAssembler(),
        _engineId = engineId,
@@ -111,6 +116,8 @@ class KokoroTtsEngine
   late final _playbackPins = KokoroPlaybackArtifactPins(_artifactPins);
   String _synthesisIdentity = 'uninitialized';
   int get debugPlaybackPinCount => _playbackPins.length;
+  @visibleForTesting
+  bool get debugFiniteLocalWavQueue => _player.readAloudFiniteLocalWavQueue;
   int? get debugPeakMlxRuntimeBytes =>
       (_resourceProcessor is MlxSpeechWorkerChunkProcessor)
       ? (_resourceProcessor! as MlxSpeechWorkerChunkProcessor).peakRuntimeBytes
@@ -2467,6 +2474,13 @@ class KokoroTtsEngine
   }
 
   void _prunePlayedHistory() {
+    // Bounded QA differential: retain the live history without changing the
+    // synthesis/native-ahead window. At the ceiling, use ordinary pruning.
+    // The external runner always labels this experiment non-qualifying.
+    if (Platform.environment['READALOUD_S7_KEEP_HISTORY_DIAGNOSTIC'] == '1' &&
+        _activeChunks.length < 512) {
+      return;
+    }
     if (_pruneScheduled || _currentChunkIndex <= 1) return;
     _pruneScheduled = true;
     final token = _activePlaybackToken;

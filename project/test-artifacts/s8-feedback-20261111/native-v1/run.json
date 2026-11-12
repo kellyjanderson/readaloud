@@ -1,0 +1,19 @@
+{
+  "app": "/Users/k/.codex/worktrees/radoc-dynamic-audio/readaloud/tmp/ReadAloudS6ColdRawSeparate.app/Contents/MacOS/read_aloud",
+  "bundle": "/Users/k/.codex/worktrees/radoc-dynamic-audio/readaloud/tmp/ReadAloudS6ColdRawSeparate.app",
+  "bundle_id": "com.kellyjanderson.readAloud.mlxPlaybackTest",
+  "executable_sha256": "bb1a6ed46e86d12e5c968c1bbe3ae548b39e8f85405897aea6a7d64c7c59620e",
+  "work_deadline_seconds": 600,
+  "cleanup_deadline_seconds": 30,
+  "scope": "UI-only; coordinator owns native input, screenshots and accessibility observations",
+  "passed": false,
+  "normal_quit": false,
+  "forced_cleanup": false,
+  "pid": 71246,
+  "awake_guard_pid": 71247,
+  "exit_status": 0,
+  "remaining_owned_pids": [],
+  "owned_pid_exited": true,
+  "awake_guard_exited": true,
+  "awake_guard_exit_status": 0
+}

@@ -365,3 +365,23 @@ Fish recording. Existing binding preparation materializes only requested voices
 and reports their bounded preparation count. An unrelated reference download can
 no longer block model startup; selected reference validation and cancellation
 remain in the binding path. This does not itself establish cold-model continuity.
+
+## Packaged runtime progress ownership
+
+The packaged Python installer worker owns one `RuntimeProgressPublisher` per
+attempt. Maintained Dart `Timer` and `Stopwatch` schedule a single latest
+immutable progress value; there is no growing publication queue. Same-stage
+counts publish at most every100ms. First values, stage/unit/denominator changes,
+resets and final counts publish immediately. A quiet producer's pending real
+count still flushes at the existing deadline. Closing the publisher cancels its
+one timer and discards its slot before cancellation, terminal cleanup, success
+or failure; late work cannot publish into a replacement attempt. Asset
+verification, actual counts and runtime identity are unchanged.
+
+This application-specific publication policy addresses measured bursts of
+verification notifications; it does not replace installation or verification
+with synthetic progress. Deterministic publisher/cancellation tests and dated
+running-app evidence are in the S7 progress test and
+[diagnostic record](../test-artifacts/s7-physical-progress-20261111/README.md).
+That record includes failures and a secondary-recorder setup failure. A single
+cold native timing pass does not establish a universal responsiveness cure.

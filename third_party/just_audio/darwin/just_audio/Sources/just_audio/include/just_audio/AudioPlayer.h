@@ -10,8 +10,11 @@
 @property (readonly, nonatomic) AVQueuePlayer *player;
 @property (readonly, nonatomic) float speed;
 
-- (instancetype)initWithRegistrar:(NSObject<FlutterPluginRegistrar> *)registrar playerId:(NSString*)idParam loadConfiguration:(NSDictionary *)loadConfiguration useLazyPreparation:(BOOL)useLazyPreparation;
+- (instancetype)initWithRegistrar:(NSObject<FlutterPluginRegistrar> *)registrar playerId:(NSString*)idParam loadConfiguration:(NSDictionary *)loadConfiguration useLazyPreparation:(BOOL)useLazyPreparation readAloudFiniteLocalWavQueue:(BOOL)finiteLocalWavQueue;
 - (void)dispose:(BOOL)calledFromDealloc;
+// QA only: read on the main thread before disposePlayer/engine disposal.
++ (BOOL)readAloudQueueBoundaryAuditEnabled;
+- (NSDictionary *)readAloudQueueBoundaryAudit;
 
 @end
 

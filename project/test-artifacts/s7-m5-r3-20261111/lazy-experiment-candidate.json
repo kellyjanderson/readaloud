@@ -1,0 +1,8 @@
+{
+  "source": "93f0962c440f2f37ffdc33b91233087d1d7fd434",
+  "productionPolicy": "unchanged eager",
+  "experimentEnv": "READALOUD_S7_LAZY_NATIVE_PREPARATION=1",
+  "frameworkSha256": "76b623e2f42cbcfc9e108778bc43dd3e4670b7725d86ec9b00e009e471eb181e",
+  "runnerSha256": "dce7b5d41f2ceeeb09f47beda67cd29d6dbc51462932a7e154855f86de0b6371",
+  "architecture": "arm64"
+}

@@ -1,0 +1,812 @@
+{
+  "schema": "s7-v28-private-trace-sanitized-audit-v1",
+  "pid": 31414,
+  "source_at_review": "9721e92c6a58b558587d244a0928bf1b840a3d76",
+  "tested_framework_commit_from_workorder": "2c622b9",
+  "trace_wall_start": "2026-11-11T10:54:40.776-08:00",
+  "clock_bridge": {
+    "method": "nominal trace = request Unix microseconds minus TOC run start-date Unix microseconds",
+    "trace_start_unix_us": 1794423280776000,
+    "warning": "TOC displays millisecond resolution. There is no simultaneous in-trace request signpost or measured wall/trace offset/error bound. Wall-clock adjustment and bridge uncertainty remain; sub-millisecond alignment is nominal. runner nativeSamplingStartedUnixMicros precedes actual trace start by 2892.763ms and MUST NOT define trace t=0.",
+    "sample_weight_warning": "Time-profile weights are statistical attributed time, not exact on-CPU or blocked duration. Back-projection [sample timestamp-weight, sample timestamp] is an explicitly labeled diagnostic model; it is not a measured scheduler interval. Raw exported state Running does not override wait/trap frames. Exact wait ownership/duration requires Thread State Trace/System Trace."
+  },
+  "raw_sample_summary": {
+    "all": {
+      "Blocked/Stackshot": 42,
+      "Running/LPET": 41614,
+      "Running/Timer Fired": 1225
+    },
+    "main": {
+      "Blocked/Stackshot": 1,
+      "Running/LPET": 4590,
+      "Running/Timer Fired": 208
+    },
+    "times": {
+      "Blocked/Stackshot": {
+        "min_ns": 315899708,
+        "max_ns": 315899708,
+        "distinct_times": 1
+      },
+      "Running/LPET": {
+        "min_ns": 338168750,
+        "max_ns": 190460699875,
+        "distinct_times": 41614
+      },
+      "Running/Timer Fired": {
+        "min_ns": 443042625,
+        "max_ns": 184128067750,
+        "distinct_times": 1212
+      }
+    }
+  },
+  "actual_hangs": [
+    {
+      "start_ns": 3498196583,
+      "end_ns": 3767946166,
+      "duration_ms": 269.749583,
+      "type": "Microhang"
+    },
+    {
+      "start_ns": 4535360666,
+      "end_ns": 4843934791,
+      "duration_ms": 308.574125,
+      "type": "Microhang"
+    },
+    {
+      "start_ns": 9253403083,
+      "end_ns": 9539590833,
+      "duration_ms": 286.18775,
+      "type": "Microhang"
+    },
+    {
+      "start_ns": 22577834916,
+      "end_ns": 23021408500,
+      "duration_ms": 443.573584,
+      "type": "Microhang"
+    }
+  ],
+  "functional_result": {
+    "passed": false,
+    "error": "Bad state: sustained-fish_drama3_8bit insufficient actual player progress or playback failure",
+    "nativePassed": false,
+    "maxUiHeartbeatDelayMs": 3,
+    "applicationActiveSamples": 85,
+    "nativeSamples": 1855,
+    "errors": [
+      "Diagnostic native sampling enabled; timing is instrumented",
+      "Extended native diagnosis; standard qualification remains separate",
+      "Native failure: Bad state: sustained-fish_drama3_8bit insufficient actual player progress or playback failure",
+      "Emitted audio: Insufficient app-emitted signal during playback"
+    ],
+    "segment": {
+      "requestedWallPlaybackMs": 180000,
+      "observedPositionAdvanceMs": 34744,
+      "endWord": 88
+    },
+    "normalQuit": true,
+    "appExitVerified": true,
+    "remainingOwnedPids": [],
+    "nativeProfilerExitStatuses": [
+      0
+    ],
+    "M3": "NOT_ESTABLISHED"
+  },
+  "interpretation": {
+    "waiting_capture": "YES: targeted request windows contain timestamped LPET wait/trap callstacks with long variable exported weights. All are labeled Running by exporter; only startup stackshot is Blocked. State labels alone do not establish capture failure or true scheduler state.",
+    "exact_occupancy": "Recorded main-runloop individual_iteration spans are exact trace intervals; zero completed waiting_for_events overlap in all three over-limit windows means main was not sleeping normally for events. Internal CoreAnimation waits still block event delivery. Wait callstacks establish sampled wait sites, not exact per-function time or mutex owner.",
+    "clipped_weights": "Per-sample clipped_weight_model_ms intersects [sample_ns-weight_ns,sample_ns] with nominal request\u2192native-entry, using only snapshots whose timestamp lies in that window. For281ms CA IPC70.389083ms + CA deferrals mutex209.778167ms =280.167250ms; last0.609750ms has no in-window sample. For363ms CA commit mutex148.729416ms + CA deferrals mutex212.746334ms =361.475750ms; last1.989250ms has no in-window sample. These are statistical attributions under stated back-projection model, not measured scheduler blocked occupancy; timer weights may overlap adjacent records.",
+    "attribution": "286ms sampled mainly AppKit menu/window creation;281ms CA IPC\u2192MediaToolbox main-dispatch commit/deferrals mutex;363ms CA commit/deferrals mutex via AppKit UpdateCycle/source1. No FlutterResizeSynchronizer frame in these three v28 request-window main stacks. v27 resize-related flattened sample is separate evidence.",
+    "handler": "entry_to_dart_return_wall_us includes native result serialization, channel return and Dart scheduling. Values46/77/193us show remainder after native entry is tiny; they are NOT exact native handler execution durations.",
+    "bridge": "First140ms/113ms initialization requests occur before trace start, so no trace attribution is possible for them. Four recorded microhangs:269.750/308.574/286.188/443.574ms. Most probe samples inactive85/1855active; inactive does not waive recorded hangs or250ms gate."
+  },
+  "windows": {
+    "286ms": {
+      "roundtrip_monotonic_ms": 286,
+      "request_to_entry_wall_ms": 286.314,
+      "entry_to_dart_return_wall_us": 46,
+      "application_active_at_entry": false,
+      "nominal_trace_window_ns": [
+        4557107000,
+        4843421000
+      ],
+      "hangs": [
+        {
+          "start_ns": 4535360666,
+          "end_ns": 4843934791,
+          "duration_ms": 308.574125,
+          "type": "Microhang",
+          "nominal_overlap_ms": 286.314,
+          "end_minus_entry_ms": 0.513791
+        }
+      ],
+      "runloop": {
+        "interval_counts": {
+          "individual_iteration": 3,
+          "runloop_run": 2
+        },
+        "waiting_for_events_union_ms": 0.0,
+        "waiting_spans_over_1ms": [],
+        "long_iterations": [
+          {
+            "type": "individual_iteration",
+            "id": "r554_i1",
+            "level": "1",
+            "start_ns": 4513127375,
+            "end_ns": 4763433125,
+            "start_accuracy": "recorded",
+            "end_accuracy": "recorded",
+            "mode": "kCFRunLoopDefaultMode",
+            "duration_ms": 250.30575,
+            "nominal_overlap_ms": 206.326125
+          },
+          {
+            "type": "individual_iteration",
+            "id": "r554_i2",
+            "level": "1",
+            "start_ns": 4763433333,
+            "end_ns": 4842733958,
+            "start_accuracy": "recorded",
+            "end_accuracy": "recorded",
+            "mode": "kCFRunLoopDefaultMode",
+            "duration_ms": 79.300625,
+            "nominal_overlap_ms": 79.300625
+          }
+        ]
+      },
+      "samples": [
+        {
+          "trace_ns": 4610304041,
+          "sample_kind": "LPET",
+          "exported_state": "Running",
+          "category": "AppKit menu/window recreation",
+          "weight_ms": 56.9315,
+          "clipped_weight_model_ms": 53.197041,
+          "leaf_to_root": [
+            "__psynch_mutexwait",
+            "_pthread_mutex_firstfit_lock_wait",
+            "_pthread_mutex_firstfit_lock_slow",
+            "+[NSCGSWindow(NSCGSWindowCreation) windowCount]",
+            "-[NSWindow _setWindowNumber:]",
+            "_NXCreateWindow",
+            "-[NSWindow _commonAwake]",
+            "-[NSWindow _commonInitFrame:styleMask:backing:defer:]",
+            "-[NSWindow _initContent:styleMask:backing:defer:contentView:]",
+            "-[NSMenuBarReplicantWindow initWithView:]",
+            "-[NSMenuBarLocalDisplayWindow _replicantWindowWithView:]",
+            "__54-[NSMenuBarLocalDisplayWindow _ensureReplicantWindows]_block_invoke",
+            "-[NSMenuBarImpl backingViewsForDisplayID:completionHandler:]",
+            "-[NSMenuBarLocalDisplayWindow _ensureReplicantWindows]",
+            "-[NSMenuBarLocalDisplayWindow endUpdates]",
+            "__62-[NSMenuBarPresentationInstance _setBoundsAndUpdateResolution]_block_invoke",
+            "-[NSMenuBarPresentationInstance _forEachWindowDo:withBlock:]",
+            "-[NSMenuBarPresentationInstance _setBoundsAndUpdateResolution]"
+          ]
+        },
+        {
+          "trace_ns": 4613847625,
+          "sample_kind": "LPET",
+          "exported_state": "Running",
+          "category": "AppKit menu/window recreation",
+          "weight_ms": 3.543584,
+          "clipped_weight_model_ms": 3.543584,
+          "leaf_to_root": [
+            "mach_msg2_trap",
+            "mach_msg2_internal",
+            "mach_msg_overwrite",
+            "mach_msg",
+            "__CGSWindowConstructWithRegionImpl_block_invoke",
+            "SLSRegionPerformWithSerializedBytes",
+            "SLSNewWindowWithOpaqueShapeAndContext",
+            "SLSNewWindowWithOpaqueShape",
+            "-[NSCGSWindow initWithConnectionID:flags:]",
+            "+[NSCGSWindow(NSCGSWindowCreation) windowWithConnectionID:flags:]",
+            "_NXCreateWindow",
+            "-[NSWindow _commonAwake]",
+            "-[NSWindow _commonInitFrame:styleMask:backing:defer:]",
+            "-[NSWindow _initContent:styleMask:backing:defer:contentView:]",
+            "-[NSMenuBarReplicantWindow initWithView:]",
+            "-[NSMenuBarLocalDisplayWindow _replicantWindowWithView:]",
+            "__54-[NSMenuBarLocalDisplayWindow _ensureReplicantWindows]_block_invoke",
+            "-[NSMenuBarImpl backingViewsForDisplayID:completionHandler:]"
+          ]
+        },
+        {
+          "trace_ns": 4623673875,
+          "sample_kind": "LPET",
+          "exported_state": "Running",
+          "category": "AppKit menu/window recreation",
+          "weight_ms": 9.82625,
+          "clipped_weight_model_ms": 9.82625,
+          "leaf_to_root": [
+            "__psynch_mutexwait",
+            "_pthread_mutex_firstfit_lock_wait",
+            "_pthread_mutex_firstfit_lock_slow",
+            "+[NSCGSWindow(NSCGSWindowCreation) windowWithWindowID:]",
+            "-[NSWindow _setWindowNumber:]",
+            "_NXCreateWindow",
+            "-[NSWindow _commonAwake]",
+            "-[NSWindow _commonInitFrame:styleMask:backing:defer:]",
+            "-[NSWindow _initContent:styleMask:backing:defer:contentView:]",
+            "-[NSMenuBarReplicantWindow initWithView:]",
+            "-[NSMenuBarLocalDisplayWindow _replicantWindowWithView:]",
+            "__54-[NSMenuBarLocalDisplayWindow _ensureReplicantWindows]_block_invoke",
+            "-[NSMenuBarImpl backingViewsForDisplayID:completionHandler:]",
+            "-[NSMenuBarLocalDisplayWindow _ensureReplicantWindows]",
+            "-[NSMenuBarLocalDisplayWindow endUpdates]",
+            "__62-[NSMenuBarPresentationInstance _setBoundsAndUpdateResolution]_block_invoke",
+            "-[NSMenuBarPresentationInstance _forEachWindowDo:withBlock:]",
+            "-[NSMenuBarPresentationInstance _setBoundsAndUpdateResolution]"
+          ]
+        },
+        {
+          "trace_ns": 4694131166,
+          "sample_kind": "LPET",
+          "exported_state": "Running",
+          "category": "AppKit menu/window recreation",
+          "weight_ms": 70.457291,
+          "clipped_weight_model_ms": 70.457291,
+          "leaf_to_root": [
+            "__psynch_mutexwait",
+            "_pthread_mutex_firstfit_lock_wait",
+            "_pthread_mutex_firstfit_lock_slow",
+            "+[NSCGSWindow(NSCGSWindowCreation) windowWithWindowID:]",
+            "-[NSWindow _setWindowNumber:]",
+            "_NXCreateWindow",
+            "-[NSWindow _commonAwake]",
+            "-[NSWindow _commonInitFrame:styleMask:backing:defer:]",
+            "-[NSWindow _initContent:styleMask:backing:defer:contentView:]",
+            "-[NSMenuBarReplicantWindow initWithView:]",
+            "-[NSMenuBarLocalDisplayWindow _replicantWindowWithView:]",
+            "__54-[NSMenuBarLocalDisplayWindow _ensureReplicantWindows]_block_invoke",
+            "-[NSMenuBarImpl backingViewsForDisplayID:completionHandler:]",
+            "-[NSMenuBarLocalDisplayWindow _ensureReplicantWindows]",
+            "-[NSMenuBarLocalDisplayWindow endUpdates]",
+            "__62-[NSMenuBarPresentationInstance _setBoundsAndUpdateResolution]_block_invoke",
+            "-[NSMenuBarPresentationInstance _forEachWindowDo:withBlock:]",
+            "-[NSMenuBarPresentationInstance _setBoundsAndUpdateResolution]"
+          ]
+        },
+        {
+          "trace_ns": 4762246750,
+          "sample_kind": "LPET",
+          "exported_state": "Running",
+          "category": "AppKit menu/window recreation",
+          "weight_ms": 68.115584,
+          "clipped_weight_model_ms": 68.115584,
+          "leaf_to_root": [
+            "__psynch_mutexwait",
+            "_pthread_mutex_firstfit_lock_wait",
+            "_pthread_mutex_firstfit_lock_slow",
+            "+[NSCGSWindow(NSCGSWindowCreation) windowWithWindowID:]",
+            "-[NSWindow _setWindowNumber:]",
+            "_NXCreateWindow",
+            "-[NSWindow _commonAwake]",
+            "-[NSWindow _commonInitFrame:styleMask:backing:defer:]",
+            "-[NSWindow _initContent:styleMask:backing:defer:contentView:]",
+            "-[NSMenuBarReplicantWindow initWithView:]",
+            "-[NSMenuBarLocalDisplayWindow _replicantWindowWithView:]",
+            "__54-[NSMenuBarLocalDisplayWindow _ensureReplicantWindows]_block_invoke",
+            "-[NSMenuBarImpl backingViewsForDisplayID:completionHandler:]",
+            "-[NSMenuBarLocalDisplayWindow _ensureReplicantWindows]",
+            "-[NSMenuBarLocalDisplayWindow endUpdates]",
+            "__62-[NSMenuBarPresentationInstance _setBoundsAndUpdateResolution]_block_invoke",
+            "-[NSMenuBarPresentationInstance _forEachWindowDo:withBlock:]",
+            "-[NSMenuBarPresentationInstance _setBoundsAndUpdateResolution]"
+          ]
+        },
+        {
+          "trace_ns": 4763042416,
+          "sample_kind": "Timer Fired",
+          "exported_state": "Running",
+          "category": "AppKit menu/window recreation",
+          "weight_ms": 5.0,
+          "clipped_weight_model_ms": 5.0,
+          "leaf_to_root": [
+            "TTenuousComponentFont::IsAppleColorEmojiUI() const",
+            "TFont::GetStrikeMetrics(bool) const",
+            "TFont::InitStrikeMetrics() const",
+            "CTFontGetAscent",
+            "-[__NSFontExtraData initWithFont:]",
+            "__CTFontGetExtraData.cold.1",
+            "__CTFontGetExtraData",
+            "-[NSFont initWithTypefaceInfo:key:renderingMode:]",
+            "__NSGetMetaFontInstanceWithType",
+            "-[NSMenuBarItemView _effectiveFontRespectingPreferredParameters:]",
+            "-[NSMenuBarItemView _ensureValidLineCache]",
+            "-[NSMenuBarItemView idealWidth]",
+            "-[NSMenuBarRepresentation _menuItemViewWidths]",
+            "__48-[NSMenuBarRepresentation layoutMenuBarIfNeeded]_block_invoke",
+            "NSPerformVisuallyAtomicChange",
+            "-[NSMenuBarRepresentation layoutMenuBarIfNeeded]",
+            "__46-[NSMenuBarImpl layoutAllMenuBarsImmediately:]_block_invoke",
+            "-[NSMenuBarImpl forEachRepresentationViewDo:]"
+          ]
+        },
+        {
+          "trace_ns": 4784144500,
+          "sample_kind": "LPET",
+          "exported_state": "Running",
+          "category": "other",
+          "weight_ms": 21.102084,
+          "clipped_weight_model_ms": 21.102084,
+          "leaf_to_root": [
+            "mach_msg2_trap",
+            "mach_msg2_internal",
+            "mach_msg_overwrite",
+            "mach_msg",
+            "_CASRegisterClient",
+            "CA::Context::connect_remote(unsigned int)",
+            "CA::Context::connect_remote()",
+            "-[CAContext initWithCGSConnection:options:]",
+            "+[CAContext contextWithCGSConnection:options:]",
+            "+[NSCGSWindow createContext:]",
+            "-[NSCGSWindow _createContext]",
+            "-[NSCGSWindow _createRootLayerAndContextIfNeededUsingAsyncBehavior:]",
+            "-[NSCGSWindow initWithConnectionID:flags:]",
+            "+[NSCGSWindow(NSCGSWindowCreation) windowWithConnectionID:flags:]",
+            "_NXCreateWindow",
+            "-[NSWindow _commonAwake]",
+            "NSWindowWakeDeferredIfNeeded",
+            "-[NSWindow addChildWindow:ordered:]"
+          ]
+        },
+        {
+          "trace_ns": 4790207041,
+          "sample_kind": "LPET",
+          "exported_state": "Running",
+          "category": "other",
+          "weight_ms": 6.062541,
+          "clipped_weight_model_ms": 6.062541,
+          "leaf_to_root": [
+            "mach_msg2_trap",
+            "mach_msg2_internal",
+            "mach_msg_overwrite",
+            "mach_msg",
+            "SLSCopyWindowRoutingRecordsForScreenLocation",
+            "+[NSWindow windowNumberAtPoint:belowWindowWithWindowNumber:]",
+            "-[NSLocalWindowSharingWindow mouseIsInside]",
+            "-[NSLocalWindowSharingWindow _updateParentWindow]",
+            "-[NSLocalWindowSharingWindowController hostButtonDidChange]",
+            "-[NSThemeFrame _updateButtons]",
+            "-[NSWindow _updateButtonsForWindowSharingSession]",
+            "-[NSWindow _setIsSelectivelyShared:]",
+            "___windowSelectiveSharingStateChangedNotification_block_invoke",
+            "_withUncaughtExceptionHandler",
+            "_windowSelectiveSharingStateChangedNotification",
+            "(anonymous namespace)::notify_datagram_handler(unsigned int, CGSDatagramType, void*, unsigned long, void*)",
+            "CGSDatagramReadStream::dispatchMainQueueDatagrams()",
+            "invocation function for block in CGSDatagramReadStream::mainQueueWakeup()"
+          ]
+        },
+        {
+          "trace_ns": 4793044166,
+          "sample_kind": "Timer Fired",
+          "exported_state": "Running",
+          "category": "other",
+          "weight_ms": 5.0,
+          "clipped_weight_model_ms": 5.0,
+          "leaf_to_root": [
+            "<deduplicated_symbol>",
+            "outlined init with copy of ShapeStyledResponderData<Image.Resolved>",
+            "specialized ShapeStyledResponderFilter.updateValue()",
+            "specialized implicit closure #1 in closure #1 in closure #1 in Attribute.init<A>(_:)",
+            "AG::Graph::UpdateStack::update()",
+            "AG::Graph::update_attribute(AG::data::ptr<AG::Node>, unsigned int)",
+            "AG::Graph::input_value_ref_slow(AG::data::ptr<AG::Node>, AG::AttributeID, unsigned int, unsigned int, AGSwiftMetadata const*, unsigned char&, long)",
+            "AGGraphGetValue",
+            "OpacityResponderFilter.updateValue()",
+            "specialized implicit closure #1 in closure #1 in closure #1 in Attribute.init<A>(_:)",
+            "AG::Graph::UpdateStack::update()",
+            "AG::Graph::update_attribute(AG::data::ptr<AG::Node>, unsigned int)",
+            "AG::Graph::input_value_ref_slow(AG::data::ptr<AG::Node>, AG::AttributeID, unsigned int, unsigned int, AGSwiftMetadata const*, unsigned char&, long)",
+            "AGGraphGetValue",
+            "PairPreferenceCombiner.value.getter",
+            "implicit closure #1 in closure #1 in closure #1 in Attribute.init<A>(_:)",
+            "AG::Graph::UpdateStack::update()",
+            "AG::Graph::update_attribute(AG::data::ptr<AG::Node>, unsigned int)",
+            "CA::Transaction::run_commit_handlers(CATransactionPhase)",
+            "CA::Transaction::commit()",
+            "CA::Transaction::flush()",
+            "CA::Transaction::flush_as_runloop_observer(bool)"
+          ]
+        },
+        {
+          "trace_ns": 4841785875,
+          "sample_kind": "LPET",
+          "exported_state": "Running",
+          "category": "CoreAnimation transaction IPC/trap",
+          "weight_ms": 48.741709,
+          "clipped_weight_model_ms": 48.741709,
+          "leaf_to_root": [
+            "mach_msg2_trap",
+            "mach_msg2_internal",
+            "mach_msg_overwrite",
+            "mach_msg",
+            "CA::Context::commit_transaction(CA::Transaction*, double, double*)",
+            "CA::Transaction::commit()",
+            "CA::Transaction::flush()",
+            "CA::Transaction::flush_as_runloop_observer(bool)",
+            "stepTransactionFlush",
+            "UC::DriverCore::continueProcessing()",
+            "__CFRUNLOOP_IS_CALLING_OUT_TO_A_SOURCE0_PERFORM_FUNCTION__",
+            "__CFRunLoopDoSource0",
+            "__CFRunLoopDoSources0",
+            "__CFRunLoopRun",
+            "_CFRunLoopRunSpecificWithOptions",
+            "RunCurrentEventLoopInMode",
+            "ReceiveNextEventCommon",
+            "_BlockUntilNextEventMatchingListInMode"
+          ]
+        },
+        {
+          "trace_ns": 4843042500,
+          "sample_kind": "Timer Fired",
+          "exported_state": "Running",
+          "category": "just_audio source creation",
+          "weight_ms": 5.0,
+          "clipped_weight_model_ms": 5.0,
+          "leaf_to_root": [
+            "stat",
+            "_NSFileExists",
+            "-[NSURL(NSURL) initFileURLWithPath:]",
+            "+[NSURL(NSURL) fileURLWithPath:]",
+            "-[UriAudioSource createPlayerItem:]",
+            "-[UriAudioSource initWithId:uri:loadControl:headers:options:]",
+            "-[AudioPlayer decodeAudioSource:]",
+            "-[AudioPlayer decodeAudioSources:]",
+            "-[AudioPlayer concatenatingInsertAll:index:sources:shuffleOrder:]",
+            "-[AudioPlayer handleMethodCall:result:]",
+            "__79-[AudioPlayer initWithRegistrar:playerId:loadConfiguration:useLazyPreparation:]_block_invoke",
+            "__45-[FlutterMethodChannel setMethodCallHandler:]_block_invoke",
+            "-[FlutterEngine engineCallbackOnPlatformMessage:]",
+            "FlutterEngineInitialize::$_3::operator()(std::__fl::unique_ptr<flutter::PlatformMessage, std::__fl::default_delete<flutter::PlatformMessage>>) const",
+            "decltype(std::declval<FlutterEngineInitialize::$_3&>()(std::declval<std::__fl::unique_ptr<flutter::PlatformMessage, std::__fl::default_delete<flutter::PlatformMessage>>>())) std::__fl::__invoke[abi:nn210000]<FlutterEngineInitialize::$_3&, std::__fl::unique_ptr<flutter::PlatformMessage, std::__fl::default_delete<flutter::PlatformMessage>>>(FlutterEngineInitialize::$_3&, std::__fl::unique_ptr<flutter::PlatformMessage, std::__fl::default_delete<flutter::PlatformMessage>>&&)",
+            "void std::__fl::__invoke_void_return_wrapper<void, true>::__call[abi:nn210000]<FlutterEngineInitialize::$_3&, std::__fl::unique_ptr<flutter::PlatformMessage, std::__fl::default_delete<flutter::PlatformMessage>>>(FlutterEngineInitialize::$_3&, std::__fl::unique_ptr<flutter::PlatformMessage, std::__fl::default_delete<flutter::PlatformMessage>>&&)",
+            "void std::__fl::__invoke_r[abi:nn210000]<void, FlutterEngineInitialize::$_3&, std::__fl::unique_ptr<flutter::PlatformMessage, std::__fl::default_delete<flutter::PlatformMessage>>>(FlutterEngineInitialize::$_3&, std::__fl::unique_ptr<flutter::PlatformMessage, std::__fl::default_delete<flutter::PlatformMessage>>&&)",
+            "std::__fl::__function::__alloc_func<FlutterEngineInitialize::$_3, std::__fl::allocator<FlutterEngineInitialize::$_3>, void (std::__fl::unique_ptr<flutter::PlatformMessage, std::__fl::default_delete<flutter::PlatformMessage>>)>::operator()[abi:nn210000](std::__fl::unique_ptr<flutter::PlatformMessage, std::__fl::default_delete<flutter::PlatformMessage>>&&)"
+          ]
+        }
+      ],
+      "clipped_in_window_weight_ms_by_category": {
+        "AppKit menu/window recreation": 210.13975,
+        "other": 32.164625,
+        "CoreAnimation transaction IPC/trap": 48.741709,
+        "just_audio source creation": 5.0
+      },
+      "nominal_last_sample_to_entry_ms": 0.3785,
+      "no_completed_idle_wait_intervals": true
+    },
+    "281ms": {
+      "roundtrip_monotonic_ms": 281,
+      "request_to_entry_wall_ms": 280.777,
+      "entry_to_dart_return_wall_us": 77,
+      "application_active_at_entry": false,
+      "nominal_trace_window_ns": [
+        9258309000,
+        9539086000
+      ],
+      "hangs": [
+        {
+          "start_ns": 9253403083,
+          "end_ns": 9539590833,
+          "duration_ms": 286.18775,
+          "type": "Microhang",
+          "nominal_overlap_ms": 280.777,
+          "end_minus_entry_ms": 0.504833
+        }
+      ],
+      "runloop": {
+        "interval_counts": {
+          "individual_iteration": 2,
+          "runloop_run": 2
+        },
+        "waiting_for_events_union_ms": 0.0,
+        "waiting_spans_over_1ms": [],
+        "long_iterations": [
+          {
+            "type": "individual_iteration",
+            "id": "r1159_i1",
+            "level": "1",
+            "start_ns": 9253419333,
+            "end_ns": 9538575458,
+            "start_accuracy": "recorded",
+            "end_accuracy": "recorded",
+            "mode": "kCFRunLoopDefaultMode",
+            "duration_ms": 285.156125,
+            "nominal_overlap_ms": 280.266458
+          }
+        ]
+      },
+      "samples": [
+        {
+          "trace_ns": 9292255750,
+          "sample_kind": "LPET",
+          "exported_state": "Running",
+          "category": "CoreAnimation transaction IPC/trap",
+          "weight_ms": 39.211959,
+          "clipped_weight_model_ms": 33.94675,
+          "leaf_to_root": [
+            "mach_msg2_trap",
+            "mach_msg2_internal",
+            "mach_msg_overwrite",
+            "mach_msg",
+            "CA::Render::Message::send_message()",
+            "CA::Render::Encoder::send_message(unsigned int, unsigned int, unsigned int*, unsigned long)",
+            "CA::Context::commit_transaction(CA::Transaction*, double, double*)",
+            "CA::Transaction::commit()",
+            "CA::Transaction::flush()",
+            "CA::Transaction::flush_as_runloop_observer(bool)",
+            "stepTransactionFlush",
+            "UC::DriverCore::continueProcessing()",
+            "__CFRUNLOOP_IS_CALLING_OUT_TO_A_SOURCE0_PERFORM_FUNCTION__",
+            "__CFRunLoopDoSource0",
+            "__CFRunLoopDoSources0",
+            "__CFRunLoopRun",
+            "_CFRunLoopRunSpecificWithOptions",
+            "RunCurrentEventLoopInMode"
+          ]
+        },
+        {
+          "trace_ns": 9328698083,
+          "sample_kind": "LPET",
+          "exported_state": "Running",
+          "category": "CoreAnimation transaction IPC/trap",
+          "weight_ms": 36.442333,
+          "clipped_weight_model_ms": 36.442333,
+          "leaf_to_root": [
+            "mach_msg2_trap",
+            "mach_msg2_internal",
+            "mach_msg_overwrite",
+            "mach_msg",
+            "CA::Render::Message::send_message()",
+            "CA::Render::Encoder::send_message(unsigned int, unsigned int, unsigned int*, unsigned long)",
+            "CA::Context::commit_transaction(CA::Transaction*, double, double*)",
+            "CA::Transaction::commit()",
+            "CA::Transaction::pop()",
+            "0x19863f0b0 [MediaToolbox]",
+            "_dispatch_client_callout",
+            "_dispatch_main_queue_drain.cold.6",
+            "_dispatch_main_queue_drain",
+            "_dispatch_main_queue_callback_4CF",
+            "__CFRUNLOOP_IS_SERVICING_THE_MAIN_DISPATCH_QUEUE__",
+            "__CFRunLoopRun",
+            "_CFRunLoopRunSpecificWithOptions",
+            "RunCurrentEventLoopInMode"
+          ]
+        },
+        {
+          "trace_ns": 9538476250,
+          "sample_kind": "LPET",
+          "exported_state": "Running",
+          "category": "CoreAnimation send_deferrals mutex wait",
+          "weight_ms": 209.778167,
+          "clipped_weight_model_ms": 209.778167,
+          "leaf_to_root": [
+            "__psynch_mutexwait",
+            "_pthread_mutex_firstfit_lock_wait",
+            "_pthread_mutex_firstfit_lock_slow",
+            "CA::Context::send_deferrals(unsigned int, unsigned int, std::__1::unordered_set<unsigned long long, std::__1::hash<unsigned long long>, std::__1::equal_to<unsigned long long>, std::__1::allocator<unsigned long long>> const&, double, unsigned int, unsigned long long)",
+            "CA::Context::commit_transaction(CA::Transaction*, double, double*)",
+            "CA::Transaction::commit()",
+            "CA::Transaction::pop()",
+            "0x19863f0b0 [MediaToolbox]",
+            "_dispatch_client_callout",
+            "_dispatch_main_queue_drain.cold.6",
+            "_dispatch_main_queue_drain",
+            "_dispatch_main_queue_callback_4CF",
+            "__CFRUNLOOP_IS_SERVICING_THE_MAIN_DISPATCH_QUEUE__",
+            "__CFRunLoopRun",
+            "_CFRunLoopRunSpecificWithOptions",
+            "RunCurrentEventLoopInMode",
+            "ReceiveNextEventCommon",
+            "_BlockUntilNextEventMatchingListInMode"
+          ]
+        }
+      ],
+      "clipped_in_window_weight_ms_by_category": {
+        "CoreAnimation transaction IPC/trap": 70.389083,
+        "CoreAnimation send_deferrals mutex wait": 209.778167
+      },
+      "nominal_last_sample_to_entry_ms": 0.60975,
+      "no_completed_idle_wait_intervals": true
+    },
+    "363ms": {
+      "roundtrip_monotonic_ms": 363,
+      "request_to_entry_wall_ms": 363.465,
+      "entry_to_dart_return_wall_us": 193,
+      "application_active_at_entry": false,
+      "nominal_trace_window_ns": [
+        22657615000,
+        23021080000
+      ],
+      "hangs": [
+        {
+          "start_ns": 22577834916,
+          "end_ns": 23021408500,
+          "duration_ms": 443.573584,
+          "type": "Microhang",
+          "nominal_overlap_ms": 363.465,
+          "end_minus_entry_ms": 0.3285
+        }
+      ],
+      "runloop": {
+        "interval_counts": {
+          "individual_iteration": 2,
+          "runloop_run": 2
+        },
+        "waiting_for_events_union_ms": 0.0,
+        "waiting_spans_over_1ms": [],
+        "long_iterations": [
+          {
+            "type": "individual_iteration",
+            "id": "r2970_i1",
+            "level": "1",
+            "start_ns": 22577431125,
+            "end_ns": 23019364708,
+            "start_accuracy": "recorded",
+            "end_accuracy": "recorded",
+            "mode": "kCFRunLoopDefaultMode",
+            "duration_ms": 441.933583,
+            "nominal_overlap_ms": 361.749708
+          }
+        ]
+      },
+      "samples": [
+        {
+          "trace_ns": 22690929041,
+          "sample_kind": "LPET",
+          "exported_state": "Running",
+          "category": "CoreAnimation transaction mutex wait",
+          "weight_ms": 63.946666,
+          "clipped_weight_model_ms": 33.314041,
+          "leaf_to_root": [
+            "__psynch_mutexwait",
+            "_pthread_mutex_firstfit_lock_wait",
+            "_pthread_mutex_firstfit_lock_slow",
+            "CA::Context::commit_transaction(CA::Transaction*, double, double*)",
+            "CA::Transaction::commit()",
+            "CA::Transaction::flush()",
+            "CA::Transaction::flush_as_runloop_observer(bool)",
+            "stepTransactionFlush",
+            "UC::DriverCore::continueProcessing()",
+            "__CFMachPortPerform",
+            "__CFRUNLOOP_IS_CALLING_OUT_TO_A_SOURCE1_PERFORM_FUNCTION__",
+            "__CFRunLoopDoSource1",
+            "__CFRunLoopRun",
+            "_CFRunLoopRunSpecificWithOptions",
+            "RunCurrentEventLoopInMode",
+            "ReceiveNextEventCommon",
+            "_BlockUntilNextEventMatchingListInMode",
+            "_DPSBlockUntilNextEventMatchingListInMode"
+          ]
+        },
+        {
+          "trace_ns": 22753278875,
+          "sample_kind": "LPET",
+          "exported_state": "Running",
+          "category": "CoreAnimation transaction mutex wait",
+          "weight_ms": 62.349834,
+          "clipped_weight_model_ms": 62.349834,
+          "leaf_to_root": [
+            "__psynch_mutexwait",
+            "_pthread_mutex_firstfit_lock_wait",
+            "_pthread_mutex_firstfit_lock_slow",
+            "CA::Context::commit_transaction(CA::Transaction*, double, double*)",
+            "CA::Transaction::commit()",
+            "CA::Transaction::flush()",
+            "CA::Transaction::flush_as_runloop_observer(bool)",
+            "stepTransactionFlush",
+            "UC::DriverCore::continueProcessing()",
+            "__CFMachPortPerform",
+            "__CFRUNLOOP_IS_CALLING_OUT_TO_A_SOURCE1_PERFORM_FUNCTION__",
+            "__CFRunLoopDoSource1",
+            "__CFRunLoopRun",
+            "_CFRunLoopRunSpecificWithOptions",
+            "RunCurrentEventLoopInMode",
+            "ReceiveNextEventCommon",
+            "_BlockUntilNextEventMatchingListInMode",
+            "_DPSBlockUntilNextEventMatchingListInMode"
+          ]
+        },
+        {
+          "trace_ns": 22806344416,
+          "sample_kind": "LPET",
+          "exported_state": "Running",
+          "category": "CoreAnimation transaction mutex wait",
+          "weight_ms": 53.065541,
+          "clipped_weight_model_ms": 53.065541,
+          "leaf_to_root": [
+            "__psynch_mutexwait",
+            "_pthread_mutex_firstfit_lock_wait",
+            "_pthread_mutex_firstfit_lock_slow",
+            "CA::Context::commit_transaction(CA::Transaction*, double, double*)",
+            "CA::Transaction::commit()",
+            "CA::Transaction::flush()",
+            "CA::Transaction::flush_as_runloop_observer(bool)",
+            "stepTransactionFlush",
+            "UC::DriverCore::continueProcessing()",
+            "__CFMachPortPerform",
+            "__CFRUNLOOP_IS_CALLING_OUT_TO_A_SOURCE1_PERFORM_FUNCTION__",
+            "__CFRunLoopDoSource1",
+            "__CFRunLoopRun",
+            "_CFRunLoopRunSpecificWithOptions",
+            "RunCurrentEventLoopInMode",
+            "ReceiveNextEventCommon",
+            "_BlockUntilNextEventMatchingListInMode",
+            "_DPSBlockUntilNextEventMatchingListInMode"
+          ]
+        },
+        {
+          "trace_ns": 23019090750,
+          "sample_kind": "LPET",
+          "exported_state": "Running",
+          "category": "CoreAnimation send_deferrals mutex wait",
+          "weight_ms": 212.746334,
+          "clipped_weight_model_ms": 212.746334,
+          "leaf_to_root": [
+            "__psynch_mutexwait",
+            "_pthread_mutex_firstfit_lock_wait",
+            "_pthread_mutex_firstfit_lock_slow",
+            "CA::Context::send_deferrals(unsigned int, unsigned int, std::__1::unordered_set<unsigned long long, std::__1::hash<unsigned long long>, std::__1::equal_to<unsigned long long>, std::__1::allocator<unsigned long long>> const&, double, unsigned int, unsigned long long)",
+            "CA::Context::commit_transaction(CA::Transaction*, double, double*)",
+            "CA::Transaction::commit()",
+            "CA::Transaction::flush()",
+            "CA::Transaction::flush_as_runloop_observer(bool)",
+            "stepTransactionFlush",
+            "UC::DriverCore::continueProcessing()",
+            "__CFMachPortPerform",
+            "__CFRUNLOOP_IS_CALLING_OUT_TO_A_SOURCE1_PERFORM_FUNCTION__",
+            "__CFRunLoopDoSource1",
+            "__CFRunLoopRun",
+            "_CFRunLoopRunSpecificWithOptions",
+            "RunCurrentEventLoopInMode",
+            "ReceiveNextEventCommon",
+            "_BlockUntilNextEventMatchingListInMode"
+          ]
+        }
+      ],
+      "clipped_in_window_weight_ms_by_category": {
+        "CoreAnimation transaction mutex wait": 148.72941600000001,
+        "CoreAnimation send_deferrals mutex wait": 212.746334
+      },
+      "nominal_last_sample_to_entry_ms": 1.98925,
+      "no_completed_idle_wait_intervals": true
+    }
+  },
+  "source_pointers": [
+    {
+      "path": "tools/native_main_responsiveness_probe.dart",
+      "line": 25,
+      "finding": "Dart wall request stamp + monotonic roundtrip; at most one outstanding request."
+    },
+    {
+      "path": "macos/Runner/AppDelegate.swift",
+      "line": 174,
+      "finding": "Immediate native entry stamp before owner count reply, not a native exit stamp."
+    },
+    {
+      "path": "third_party/just_audio/darwin/just_audio/Sources/just_audio/AudioPlayer.m",
+      "line": 210,
+      "finding": "concatenatingInsertAll synchronously decodes new sources before enqueuing at line233."
+    },
+    {
+      "path": "third_party/just_audio/darwin/just_audio/Sources/just_audio/UriAudioSource.m",
+      "line": 45,
+      "finding": "File URL/asset/player item creation; sampled stat/NSURL path at trace4.843042500s only5ms weight."
+    }
+  ],
+  "recommendation": {
+    "production_remedy": "NOT YET ESTABLISHED. Do not repeat already-failed lazy comparison or replace playback engine from this evidence.",
+    "smallest_next_differential": "After sharedSDK ownership releases: two isolated diagnostic runs in identical productionUI: A replay copied179queued WAVs incrementally at recorded relative enqueue times through existing just_audio/AVQueuePlayer; B play one joinedWAV with identical ordered PCM through same AudioPlayer. NoMLX in either. Retain eager config and hold activation/window/menu/capture/UI update script constant. Join PCM without resampling/silence/crossfade; verify identity and duration before testing.",
+    "diagnostic_instrumentation": "Add native signpost intervals around decode/source creation, enqueue/AVQueue insertion, item-transition callbacks, and main-channel request/entry, each carrying session/revision/item identity. Use native signposts to place windows directly on trace clock. Add Thread State Trace/System Trace if permitted to measure exact blocked/scheduled spans and investigate mutex/IPC owner; current trace has contextSwitchSampling=false.",
+    "acceptance": "Keep250ms gate and actual emitted waveform/quiet gates unchanged. Both are diagnostic only, require normal Quit+verifiedexit, and do not establishM3/human listening/production acceptance.",
+    "decisions": {
+      "only_incremental_reproduces": "Supports per-item creation/preparation/transition pressure. Investigate bounded native preparation or source aggregation within existing path while retaining dynamic startup; first identify signposted operation.",
+      "both_reproduce": "Per-item granularity not isolated as cause; focus common CoreAnimation/Flutter/window state and capture environment.",
+      "neither_reproduces": "MLX concurrency/resource pressure or original timing/state remains a possible interaction; negative replay does not clear original failure.",
+      "only_joined_reproduces": "Check control fixture equivalence and operation durations before inference."
+    },
+    "why_new_information": "Separates179 source/item creations and native transition notifications from MLX synthesis pressure while holding PCM and UI constant. Current sampledCA waits alone cannot choose a production audio remedy.",
+    "primary_reference": "https://developer.apple.com/tutorials/instruments/getting-started-with-hang-analysis"
+  }
+}

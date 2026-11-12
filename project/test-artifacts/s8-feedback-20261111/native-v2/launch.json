@@ -1,0 +1,14 @@
+{
+  "app": "/Users/k/.codex/worktrees/reader-feedback-s8/readaloud/tmp/ReadAloudS8Feedback.app/Contents/MacOS/read_aloud",
+  "bundle": "/Users/k/.codex/worktrees/reader-feedback-s8/readaloud/tmp/ReadAloudS8Feedback.app",
+  "bundle_id": "com.kellyjanderson.readAloud.feedbackTest",
+  "executable_sha256": "d5e6fd0886692375a77290f3110d15451aad5bb657ae6d3add1d809043b1d35e",
+  "work_deadline_seconds": 600,
+  "cleanup_deadline_seconds": 30,
+  "scope": "UI-only; coordinator owns native input, screenshots and accessibility observations",
+  "passed": false,
+  "normal_quit": false,
+  "forced_cleanup": false,
+  "pid": 71402,
+  "awake_guard_pid": 71403
+}

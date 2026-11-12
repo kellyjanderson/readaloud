@@ -52,6 +52,7 @@ extension ReaderAudioBookSupport on ReaderController {
   /// The screen resolves launch/open/restore intake before synthesis startup.
   Future<void> completeInitialIntake() async {
     if (_disposed ||
+        _modelPreparationCancelled ||
         _audioBook != null ||
         _synthesisInitialized ||
         !deferInitialSynthesis) {
@@ -60,157 +61,206 @@ extension ReaderAudioBookSupport on ReaderController {
     await retryInitialization();
   }
 
-  void _bookProgress(RadocPackageProgress progress, int revision) {
-    if (_disposed || revision != _documentRevision) return;
-    _preparationProgress[PreparationStage.persistence] = PreparationProgress(
-      stage: PreparationStage.persistence,
-      state: progress.total == null
-          ? PreparationWorkState.waiting
-          : PreparationWorkState.working,
-      completed: progress.completed,
-      total: progress.total,
-      unit: progress.unit,
-      scope: 'Audio book ${progress.stage}',
-      waitingReason: progress.total == null ? progress.stage : null,
+  Future<T> _trackBookOperation<T>(
+    int revision,
+    String scope,
+    Future<T> Function(void Function(RadocPackageProgress)) action, {
+    void Function(ReadingStageTicket)? onOperation,
+  }) async {
+    final ticket = beginReadingStage(
+      PreparationStage.persistence,
+      producerId: 'audio-book-package',
+      scope: scope,
     );
-    _notifyAudioBookChanged();
+    onOperation?.call(ticket);
+    var latest = const PreparationProgress(
+      stage: PreparationStage.persistence,
+      state: PreparationWorkState.working,
+      completed: 0,
+      unit: 'members',
+      operationState: OperationState.queued,
+    );
+    publishReadingStage(ticket, latest);
+    try {
+      final result = await action((progress) {
+        if (_disposed || revision != _documentRevision) return;
+        latest = PreparationProgress(
+          stage: PreparationStage.persistence,
+          state: PreparationWorkState.working,
+          completed: progress.completed,
+          total: progress.total,
+          unit: progress.unit,
+          waitingReason: progress.stage,
+          operationState: progress.total == null
+              ? OperationState.finalizing
+              : null,
+        );
+        publishReadingStage(ticket, latest);
+      });
+      publishReadingStage(
+        ticket,
+        latest.withState(PreparationWorkState.complete),
+      );
+      return result;
+    } catch (error) {
+      final cancelled =
+          error is RadocPackageCancelled ||
+          error is PlanningCancelled ||
+          revision != _documentRevision ||
+          _disposed;
+      publishReadingStage(
+        ticket,
+        PreparationProgress(
+          stage: PreparationStage.persistence,
+          state: cancelled
+              ? PreparationWorkState.cancelled
+              : PreparationWorkState.failed,
+          completed: latest.completed,
+          total: latest.total,
+          unit: latest.unit,
+          error: cancelled ? null : '$error',
+        ),
+      );
+      rethrow;
+    }
   }
 
   Future<void> _openAudioBook(String path, int revision) async {
     bool current() => !_disposed && revision == _documentRevision;
-    await _ensureSceneRepository();
-    _requireRevision(revision);
-    final package = RadocAudioPackage(
-      onProgress: (p) => _bookProgress(p, revision),
-    );
-    DocumentAccessLease? lease;
-    _ReaderAudioBook? session;
-    try {
+    await _trackBookOperation<void>(revision, 'Open audio book', (
+      report,
+    ) async {
+      await _ensureSceneRepository();
+      _requireRevision(revision);
+      final package = RadocAudioPackage();
+      DocumentAccessLease? lease;
+      _ReaderAudioBook? session;
       try {
-        final token = await _documentAccessService.createPersistentRestoreToken(
-          path,
-        );
-        if (token != null) {
-          lease = await _documentAccessService.openPersistentRestoreToken(
-            token,
-          );
-        }
-      } on MissingPluginException {
-        // Platform-free tests have no security-scoped file access service.
-      }
-      _requireRevision(revision);
-      final book = await package.open(
-        File(path),
-        materializeOpeningRange: true,
-        isCurrent: current,
-      );
-      _requireRevision(revision);
-      if (book.manifest.preparedRanges.isEmpty ||
-          book.manifest.preparedRanges.first.startWord != 0) {
-        throw const FormatException(
-          'This audio book has no prepared opening range.',
-        );
-      }
-      final openingPath = book.openingRangePath;
-      if (openingPath == null) {
-        throw const FormatException('Missing opening range.');
-      }
-      final opening = await _readBookRangeFile(openingPath);
-      _requireRevision(revision);
-      session = _ReaderAudioBook(package, book, _selectedTtsEngineId, lease);
-      _audioBook = session;
-      characterAnalysis.loadBookRecord = (request, isCurrent) async {
-        final member =
-            'analysis/${DocumentAnalysisRecord.requestKey(request)}.json';
-        if (!book.manifest.analysisMembers.contains(member)) return null;
-        final reader = RadocAudioPackage();
         try {
-          final handle = await reader.open(File(path), isCurrent: isCurrent);
-          if (handle.manifestDigest != book.manifestDigest) {
-            throw const FormatException('Saved analysis book changed.');
+          final token = await _documentAccessService
+              .createPersistentRestoreToken(path);
+          if (token != null) {
+            lease = await _documentAccessService.openPersistentRestoreToken(
+              token,
+            );
           }
-          final file = await reader.materializeMember(
-            handle,
-            member,
-            isCurrent: isCurrent,
-          );
-          final recordPath = file.path;
-          return await _readBookAnalysisFile(recordPath);
-        } finally {
-          await reader.dispose();
+        } on MissingPluginException {
+          // Platform-free tests have no security-scoped file access service.
         }
-      };
-      _activeSourceRevision = book.manifest.sourceId;
-      _activePreparationRequest = DocumentPreparationRequest(
-        ownerId: _preparationOwner,
-        revision: revision,
-        kind: DocumentPreparationKind.bytes,
-        fileName: p.basename(path),
-        sourcePath: path,
-        sourceRevision: book.manifest.sourceId,
-      );
-      _publicationSequence = book.manifest.preparedRanges.length;
-      _preparedWordCount = book.manifest.preparedRanges.last.endWord;
-      _preparationComplete = book.manifest.preparationComplete;
-      final first = _publishBookRange(session, 1, opening);
-      _documentIdentityRedirects[first.fragment.displayDocument.documentId] =
-          book.manifest.documentId;
-      // These are published voice descriptions, not claims that models exist.
-      final intent = book.manifest.intent;
-      final profiles = (intent['voices'] as List? ?? const []).map((v) {
-        final m = Map<String, dynamic>.from(v as Map);
-        return VoiceProfile(
-          id: m['id'] as String,
-          label: m['label'] as String,
-          locale: m['locale'] as String? ?? '',
-          rawValue: const {},
-          gender: m['gender'] == null
-              ? null
-              : VoiceGender.values.byName(m['gender'] as String),
-          description:
-              'Published book voice. Rendering requires its speech model.',
+        _requireRevision(revision);
+        final book = await package.open(
+          File(path),
+          materializeOpeningRange: true,
+          isCurrent: current,
+          onProgress: report,
         );
-      }).toList();
-      if (profiles.isNotEmpty) _voices = List.unmodifiable(profiles);
-      if (intent['defaultVoiceId'] case final String voice) {
-        _selectedVoiceId = voice;
-      }
-      if (intent['multiVoice'] case final bool multi) {
-        _isMultiVoiceEnabled = multi;
-      }
-      if (intent['rate'] case final num rate) {
-        if (_selectedVoiceId != null) {
-          _voiceSpeeds[_selectedVoiceId!] = rate.toDouble();
+        _requireRevision(revision);
+        if (book.manifest.preparedRanges.isEmpty ||
+            book.manifest.preparedRanges.first.startWord != 0) {
+          throw const FormatException(
+            'This audio book has no prepared opening range.',
+          );
         }
+        final openingPath = book.openingRangePath;
+        if (openingPath == null) {
+          throw const FormatException('Missing opening range.');
+        }
+        final opening = await _readBookRangeFile(openingPath);
+        _requireRevision(revision);
+        session = _ReaderAudioBook(package, book, _selectedTtsEngineId, lease);
+        _audioBook = session;
+        characterAnalysis.loadBookRecord = (request, isCurrent) async {
+          final member =
+              'analysis/${DocumentAnalysisRecord.requestKey(request)}.json';
+          if (!book.manifest.analysisMembers.contains(member)) return null;
+          final reader = RadocAudioPackage();
+          try {
+            final handle = await reader.open(File(path), isCurrent: isCurrent);
+            if (handle.manifestDigest != book.manifestDigest) {
+              throw const FormatException('Saved analysis book changed.');
+            }
+            final file = await reader.materializeMember(
+              handle,
+              member,
+              isCurrent: isCurrent,
+            );
+            final recordPath = file.path;
+            return await _readBookAnalysisFile(recordPath);
+          } finally {
+            await reader.dispose();
+          }
+        };
+        _activeSourceRevision = book.manifest.sourceId;
+        _activePreparationRequest = DocumentPreparationRequest(
+          ownerId: _preparationOwner,
+          revision: revision,
+          kind: DocumentPreparationKind.bytes,
+          fileName: p.basename(path),
+          sourcePath: path,
+          sourceRevision: book.manifest.sourceId,
+        );
+        _publicationSequence = book.manifest.preparedRanges.length;
+        _preparedWordCount = book.manifest.preparedRanges.last.endWord;
+        _preparationComplete = book.manifest.preparationComplete;
+        final first = _publishBookRange(session, 1, opening);
+        _documentIdentityRedirects[first.fragment.displayDocument.documentId] =
+            book.manifest.documentId;
+        // These are published voice descriptions, not claims that models exist.
+        final intent = book.manifest.intent;
+        final profiles = (intent['voices'] as List? ?? const []).map((v) {
+          final m = Map<String, dynamic>.from(v as Map);
+          return VoiceProfile(
+            id: m['id'] as String,
+            label: m['label'] as String,
+            locale: m['locale'] as String? ?? '',
+            rawValue: const {},
+            gender: m['gender'] == null
+                ? null
+                : VoiceGender.values.byName(m['gender'] as String),
+            description:
+                'Published book voice. Rendering requires its speech model.',
+          );
+        }).toList();
+        if (profiles.isNotEmpty) _voices = List.unmodifiable(profiles);
+        if (intent['defaultVoiceId'] case final String voice) {
+          _selectedVoiceId = voice;
+        }
+        if (intent['multiVoice'] case final bool multi) {
+          _isMultiVoiceEnabled = multi;
+        }
+        if (intent['rate'] case final num rate) {
+          if (_selectedVoiceId != null) {
+            _voiceSpeeds[_selectedVoiceId!] = rate.toDouble();
+          }
+        }
+        await _replaceDocument(
+          first.fragment,
+          revision: revision,
+          sourcePath: path,
+          restoreCharacters: true,
+        );
+        _requireRevision(revision);
+        _sessionDocumentId = book.manifest.documentId;
+        _preparationComplete = book.manifest.preparationComplete;
+        _hasCompleteDocumentSnapshot =
+            book.manifest.preparationComplete &&
+            book.manifest.preparedRanges.length == 1;
+        _isInitializing = false;
+        _startupError = null;
+        await _rememberOpenedDocumentPath(path, revision: revision);
+        _requireRevision(revision);
+        _notifyAudioBookChanged();
+      } catch (_) {
+        if (identical(_audioBook, session)) _audioBook = null;
+        if (session != null) {
+          await session.dispose();
+        } else {
+          await package.dispose();
+          await lease?.close();
+        }
+        rethrow;
       }
-      await _replaceDocument(
-        first.fragment,
-        revision: revision,
-        sourcePath: path,
-        restoreCharacters: true,
-      );
-      _requireRevision(revision);
-      _sessionDocumentId = book.manifest.documentId;
-      _preparationComplete = book.manifest.preparationComplete;
-      _hasCompleteDocumentSnapshot =
-          book.manifest.preparationComplete &&
-          book.manifest.preparedRanges.length == 1;
-      _isInitializing = false;
-      _startupError = null;
-      _preparationProgress.remove(PreparationStage.persistence);
-      await _rememberOpenedDocumentPath(path, revision: revision);
-      _requireRevision(revision);
-      _notifyAudioBookChanged();
-    } catch (_) {
-      if (identical(_audioBook, session)) _audioBook = null;
-      if (session != null) {
-        await session.dispose();
-      } else {
-        await package.dispose();
-        await lease?.close();
-      }
-      rethrow;
-    }
+    });
   }
 
   Future<DocumentPreparationPublication?> _readAudioBookRange(
@@ -643,7 +693,7 @@ extension ReaderAudioBookSupport on ReaderController {
         // Engine replacement advances intent. Requeue exactly this user's Play
         // after its owned replacement; a later Pause/open/selection wins.
         final oldEngine = _ttsEngine;
-        await setTtsEngineId(publishedEngine);
+        await _setTtsEngineId(publishedEngine, preserveBookPlay: true);
         final expectedIntent =
             playbackIntent + (identical(oldEngine, _ttsEngine) ? 0 : 1);
         if (session.current &&
@@ -1054,6 +1104,21 @@ class _BookAudio {
 }
 
 extension ReaderAudioBookBoundaries on ReaderController {
+  Future<File> _materializeBookMember(
+    _ReaderAudioBook session,
+    String member,
+    bool Function() current,
+  ) => _trackBookOperation<File>(
+    _documentRevision,
+    'Read audio book member',
+    (report) => session.package.materializeMember(
+      session.book,
+      member,
+      isCurrent: current,
+      onProgress: report,
+    ),
+  );
+
   Future<_BookAudio> _resolveBookAudio(
     _ReaderAudioBook session,
     _BookScene value,
@@ -1073,11 +1138,7 @@ extension ReaderAudioBookBoundaries on ReaderController {
         previousRaw != capturedPrevious;
     if (!changedPredecessor) {
       final file = value.audioPath == null
-          ? await session.package.materializeMember(
-              session.book,
-              scene.audioMember,
-              isCurrent: current,
-            )
+          ? await _materializeBookMember(session, scene.audioMember, current)
           : File(value.audioPath!);
       return _BookAudio(
         file.path,
@@ -1098,11 +1159,7 @@ extension ReaderAudioBookBoundaries on ReaderController {
       );
     }
     final rawFile = value.rawAudioPath == null
-        ? await session.package.materializeMember(
-            session.book,
-            rawMember,
-            isCurrent: current,
-          )
+        ? await _materializeBookMember(session, rawMember, current)
         : File(value.rawAudioPath!);
     if (!current()) throw const PlanningCancelled();
     // Existing native-rate boundary policy owns DSP. A single bounded scene

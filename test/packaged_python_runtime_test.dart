@@ -54,6 +54,7 @@ void main() {
   ]);
   PackagedRuntimeLease acquire({
     void Function(Map<String, dynamic>)? onProgress,
+    String consumerRevision = 'test/revision',
     bool verify = false,
     PackagedPythonRuntimeOwner? other,
     Duration timeout = const Duration(minutes: 1),
@@ -61,7 +62,7 @@ void main() {
     runtimeId: 'mlx',
     resources: resources,
     support: support,
-    consumerRevision: 'test/revision',
+    consumerRevision: consumerRevision,
     onProgress: onProgress,
     verifyExecutable: verify,
     timeout: timeout,
@@ -271,8 +272,105 @@ void main() {
       );
       await retry.runtime;
       await retry.cancelAndDrain();
-      expect(verified, List.generate(35, (index) => index + 1));
+      expect(verified.first, 1);
+      expect(verified.last, 35);
+      expect(verified.length, lessThan(35));
+      expect(verified, orderedEquals(verified.toSet().toList()..sort()));
+      await Future<void>.delayed(const Duration(milliseconds: 120));
       expect(progress.length, eventsAfterDrain);
+      await noStaging();
+    },
+  );
+  test(
+    'replacement interest receives its own revision and no cancelled progress',
+    () async {
+      final executable = File(p.join(source.path, 'bin/python'));
+      for (var index = 0; index < 34; index++) {
+        await executable.copy(p.join(source.path, 'bin/native-$index'));
+      }
+      await package();
+      final firstProgress = <Map<String, dynamic>>[];
+      final replacementProgress = <Map<String, dynamic>>[];
+      late PackagedRuntimeLease first;
+      PackagedRuntimeLease? replacement;
+      Future<void>? firstDrain;
+      first = acquire(
+        consumerRevision: 'old/revision',
+        onProgress: (event) {
+          firstProgress.add(event);
+          if (event['stage'] == 'runtimeNative') {
+            replacement ??= acquire(
+              consumerRevision: 'replacement/revision',
+              onProgress: replacementProgress.add,
+            );
+            firstDrain ??= first.cancelAndDrain();
+          }
+        },
+      );
+      await expectLater(
+        first.runtime,
+        throwsA(isA<PackagedRuntimeCancelled>()),
+      );
+      await firstDrain;
+      final oldCount = firstProgress.length;
+      await replacement!.runtime;
+      await replacement!.cancelAndDrain();
+      await Future<void>.delayed(const Duration(milliseconds: 120));
+      expect(firstProgress, hasLength(oldCount));
+      expect(
+        replacementProgress.every(
+          (event) => event['consumerRevision'] == 'replacement/revision',
+        ),
+        true,
+      );
+      expect(replacementProgress.map((event) => event['attemptId']).toSet(), {
+        firstProgress.last['attemptId'],
+      });
+      expect(
+        replacementProgress
+            .where((event) => event['stage'] == 'runtimeNative')
+            .last['completed'],
+        35,
+      );
+      await noStaging();
+    },
+  );
+  test(
+    'native verification failure discards pending counts before error and repair',
+    () async {
+      final executable = File(p.join(source.path, 'bin/python'));
+      for (var index = 0; index < 34; index++) {
+        await executable.copy(p.join(source.path, 'bin/native-$index'));
+      }
+      await package();
+      final corrupt = File(
+        p.join(resources.path, 'python-runtimes/mlx-native/bin/native-9'),
+      );
+      final original = await corrupt.readAsBytes();
+      final changed = List<int>.of(original)..[100] ^= 1;
+      await corrupt.writeAsBytes(changed);
+      final progress = <Map<String, dynamic>>[];
+      final failed = acquire(onProgress: progress.add);
+      await expectLater(failed.runtime, throwsStateError);
+      final eventsAtError = progress.length;
+      await failed.cancelAndDrain();
+      await corrupt.writeAsBytes(original);
+      final retryProgress = <Map<String, dynamic>>[];
+      final retry = acquire(onProgress: retryProgress.add);
+      await retry.runtime;
+      await retry.cancelAndDrain();
+      await Future<void>.delayed(const Duration(milliseconds: 120));
+      expect(progress, hasLength(eventsAtError));
+      expect(
+        retryProgress.first['attemptId'],
+        isNot(progress.first['attemptId']),
+      );
+      expect(
+        retryProgress
+            .where((event) => event['stage'] == 'runtimeNative')
+            .last['completed'],
+        35,
+      );
       await noStaging();
     },
   );

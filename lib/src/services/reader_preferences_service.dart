@@ -11,7 +11,8 @@ import 'work_character_store.dart';
 
 class ReaderPreferences {
   const ReaderPreferences({
-    this.ttsEngineId = 'kokoro',
+    this.ttsEngineId = '',
+    this.activityExpanded = false,
     this.voxtralQuantizationBits = 0,
     required this.fontFamily,
     required this.fontScale,
@@ -23,6 +24,7 @@ class ReaderPreferences {
     this.characterSnapshot,
     this.resumeState,
     this.selectedVoiceId,
+    this.narratorVoiceIds = const {},
     this.lastOpenedDocumentPath,
     this.lastOpenedDocumentAccessToken,
     this.lastOpenedDirectoryPath,
@@ -35,12 +37,17 @@ class ReaderPreferences {
   static const String defaultTtsEngineId = 'kokoro';
 
   final String ttsEngineId;
+  final bool activityExpanded;
+
+  /// Empty means no user selection; an automatic effective default is not intent.
+  bool get hasExplicitTtsEngineChoice => ttsEngineId.isNotEmpty;
   final int voxtralQuantizationBits;
   final String fontFamily;
   final double fontScale;
   final ReaderAppearanceMode appearanceMode;
   final bool multiVoiceEnabled;
   final String? selectedVoiceId;
+  final Map<String, String> narratorVoiceIds;
   final Map<String, double> voiceSpeeds;
   final Map<String, Map<String, String>> storedDocumentCastVoiceAssignments;
 
@@ -99,11 +106,13 @@ class ReaderPreferencesService {
     }
   }
 
+  static const _narratorVoiceIdsKey = 'reader.narratorVoiceIds.v1';
   static const _voxtralBitsKey = 'reader.voxtralQuantizationBits';
   static const String _selectedVoiceIdKey = 'reader.selectedVoiceId';
   static const String _ttsEngineIdKey = 'reader.ttsEngineId';
   static const String _voiceSpeedsKey = 'reader.voiceSpeeds';
   static const String _fontFamilyKey = 'reader.fontFamily';
+  static const _activityExpandedKey = 'reader.activityExpanded';
   static const String _fontScaleKey = 'reader.fontScale';
   static const String _appearanceModeKey = 'reader.appearanceMode';
   static const String _multiVoiceEnabledKey = 'reader.multiVoiceEnabled';
@@ -129,11 +138,13 @@ class ReaderPreferencesService {
     final snapshot = workState.snapshot;
     final characters = snapshot.restore();
     return ReaderPreferences(
+      activityExpanded: preferences.getBool(_activityExpandedKey) ?? false,
       voxtralQuantizationBits: preferences.getInt(_voxtralBitsKey) == 4 ? 4 : 0,
-      ttsEngineId:
-          preferences.getString(_ttsEngineIdKey) ??
-          ReaderPreferences.defaultTtsEngineId,
+      ttsEngineId: preferences.getString(_ttsEngineIdKey) ?? '',
       selectedVoiceId: preferences.getString(_selectedVoiceIdKey),
+      narratorVoiceIds: _decodeNarratorVoiceIds(
+        preferences.getString(_narratorVoiceIdsKey),
+      ),
       voiceSpeeds: _decodeVoiceSpeeds(preferences.getString(_voiceSpeedsKey)),
       fontFamily:
           preferences.getString(_fontFamilyKey) ??
@@ -165,8 +176,9 @@ class ReaderPreferencesService {
   }
 
   Future<void> save({
+    bool activityExpanded = false,
     int voxtralQuantizationBits = 0,
-    String ttsEngineId = ReaderPreferences.defaultTtsEngineId,
+    String ttsEngineId = '',
     required String fontFamily,
     required double fontScale,
     required ReaderAppearanceMode appearanceMode,
@@ -178,6 +190,7 @@ class ReaderPreferencesService {
     CharacterStoreSnapshot? characterSnapshot,
     ReaderResumeState? resumeState,
     String? selectedVoiceId,
+    Map<String, String> narratorVoiceIds = const {},
     String? lastOpenedDocumentPath,
     String? lastOpenedDocumentAccessToken,
     String? lastOpenedDirectoryPath,
@@ -191,6 +204,10 @@ class ReaderPreferencesService {
     final preferences = await SharedPreferences.getInstance();
 
     await preferences.setInt(_voxtralBitsKey, voxtralQuantizationBits);
+    await preferences.setString(
+      _narratorVoiceIdsKey,
+      jsonEncode(narratorVoiceIds),
+    );
 
     if (selectedVoiceId == null || selectedVoiceId.isEmpty) {
       await preferences.remove(_selectedVoiceIdKey);
@@ -198,10 +215,15 @@ class ReaderPreferencesService {
       await preferences.setString(_selectedVoiceIdKey, selectedVoiceId);
     }
 
-    await preferences.setString(_ttsEngineIdKey, ttsEngineId);
+    if (ttsEngineId.isEmpty) {
+      await preferences.remove(_ttsEngineIdKey);
+    } else {
+      await preferences.setString(_ttsEngineIdKey, ttsEngineId);
+    }
 
     await preferences.setString(_fontFamilyKey, fontFamily);
     await preferences.setDouble(_fontScaleKey, fontScale);
+    await preferences.setBool(_activityExpandedKey, activityExpanded);
     await preferences.setString(
       _appearanceModeKey,
       appearanceMode.storageValue,
@@ -261,6 +283,22 @@ class ReaderPreferencesService {
         _lastOpenedDirectoryAccessTokenKey,
         lastOpenedDirectoryAccessToken,
       );
+    }
+  }
+
+  Map<String, String> _decodeNarratorVoiceIds(String? raw) {
+    try {
+      final value = jsonDecode(raw ?? '{}');
+      if (value is! Map<String, dynamic>) return {};
+      return {
+        for (final entry in value.entries)
+          if (entry.key.isNotEmpty &&
+              entry.value is String &&
+              (entry.value as String).isNotEmpty)
+            entry.key: entry.value as String,
+      };
+    } catch (_) {
+      return {};
     }
   }
 

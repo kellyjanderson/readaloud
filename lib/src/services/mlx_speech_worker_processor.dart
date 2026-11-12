@@ -1,5 +1,8 @@
 import 'native_speech_work_activity.dart';
+import '../models/reader_operation.dart';
 import 'speech_audio_packet.dart';
+import 'runtime_memory_policy.dart';
+import 'runtime_memory_registry.dart';
 import '../models/speech_engine_catalog.dart';
 import 'dart:async';
 import 'dart:convert';
@@ -17,6 +20,8 @@ import 'speech_worker_pipeline.dart';
 import 'tts_engine.dart';
 import 'mlx_voice_library.dart';
 import 'packaged_python_runtime.dart';
+import 'fish_drama_catalog_store.dart';
+import 'qualified_engine_selection_service.dart';
 
 const String mlxTtsModelVersion = 'mlx-audio-0.6.3-mlx-0.32.4-complete-v3';
 String mlxTtsVersionFor(
@@ -236,8 +241,11 @@ class MlxSpeechWorkerChunkProcessor
     this.quantizationBits = 0,
     this.onStatus,
     this.onResourceProgress,
+    this.runtimeMemorySampler,
+    FishDramaCatalogStore? catalogStore,
     AudioArtifactStore? artifactStore,
-  }) : _store = artifactStore {
+  }) : _store = artifactStore,
+       _catalogStore = catalogStore {
     _activeInstance = this;
     if (!_lifecycleInstalled) {
       _lifecycleInstalled = true;
@@ -251,6 +259,7 @@ class MlxSpeechWorkerChunkProcessor
 
   static bool _lifecycleInstalled = false;
   static MlxSpeechWorkerChunkProcessor? _activeInstance;
+  static bool _catalogRefreshStarted = false;
 
   final String engineId;
   final String modelPath;
@@ -258,9 +267,20 @@ class MlxSpeechWorkerChunkProcessor
   final int quantizationBits;
   final void Function(String? message)? onStatus;
   final void Function(TtsResourceProgress? progress)? onResourceProgress;
+  final Future<RuntimeMemorySnapshot> Function()? runtimeMemorySampler;
   AudioArtifactStore? _store;
   MlxTtsPythonProcess? _process;
-  int get peakRuntimeBytes => _process?.peakRuntimeBytes ?? 0;
+  FishDramaCatalogStore? _catalogStore;
+  int _retainedPeakRuntimeBytes = 0;
+  int get peakRuntimeBytes {
+    final current = _process?.peakRuntimeBytes ?? 0;
+    return current > _retainedPeakRuntimeBytes
+        ? current
+        : _retainedPeakRuntimeBytes;
+  }
+
+  static RuntimeMemorySnapshot? get debugNativeMemorySnapshot =>
+      MlxTtsPythonProcess.observedLastMemorySnapshot;
   String? _modelRoot;
   String? _helperPath;
   String? _resolvedPythonPath;
@@ -278,6 +298,9 @@ class MlxSpeechWorkerChunkProcessor
   Future<void>? _closing;
   final _closedSignal = Completer<void>();
   bool _closed = false;
+  static int _resourceEpoch = 0;
+  String? _lastFailedResource;
+  final _failedVoiceResources = <String, String>{};
   final Set<String> _cancelledGenerations = <String>{};
   final Map<String, PreparedVoiceBinding> _bindings =
       <String, PreparedVoiceBinding>{};
@@ -301,8 +324,14 @@ class MlxSpeechWorkerChunkProcessor
         throw StateError('Unknown voice for $engineName: $voiceId');
       }
       if (usesReferenceVoiceLibrary(engineId)) {
+        final epoch = ++_resourceEpoch;
+        final operationId = '$engineId:voice:$epoch';
+        final retryOf = _failedVoiceResources[voiceId];
         onResourceProgress?.call(
           TtsResourceProgress(
+            operationId: operationId,
+            ownerEpoch: epoch,
+            retryOf: retryOf,
             stage: 'voiceDownload',
             message:
                 'Preparing selected voice ${result.length + 1} of ${requestedVoices.length}…',
@@ -319,8 +348,38 @@ class MlxSpeechWorkerChunkProcessor
           );
           if (_closed) throw StateError('MLX inference owner is closed.');
           _referencePaths[voiceId] = reference.path;
-        } finally {
-          onResourceProgress?.call(null);
+          onResourceProgress?.call(
+            TtsResourceProgress(
+              operationId: operationId,
+              ownerEpoch: epoch,
+              retryOf: retryOf,
+              stage: 'voiceDownload',
+              message: 'Selected voice ready',
+              completed: result.length + 1,
+              total: requestedVoices.length,
+              unit: 'voices',
+              state: OperationState.succeeded,
+            ),
+          );
+          _failedVoiceResources.remove(voiceId);
+        } catch (error) {
+          if (!_closed && error is! MlxTtsRequestCancelled) {
+            _failedVoiceResources[voiceId] = operationId;
+          }
+          onResourceProgress?.call(
+            TtsResourceProgress(
+              operationId: operationId,
+              ownerEpoch: epoch,
+              retryOf: retryOf,
+              stage: 'voiceDownload',
+              message: 'Voice preparation stopped',
+              error: '$error',
+              state: _closed || error is MlxTtsRequestCancelled
+                  ? OperationState.cancelled
+                  : OperationState.failed,
+            ),
+          );
+          rethrow;
         }
       }
       final binding = PreparedVoiceBinding(
@@ -353,14 +412,55 @@ class MlxSpeechWorkerChunkProcessor
     // Runtime acquisition and verification precede the Python request. Keep
     // their native scheduling activity owned until all preparation drains too.
     final activity = await NativeSpeechWorkActivity.begin();
+    final epoch = ++_resourceEpoch;
+    final operationId = '$engineId:model:$epoch';
+    final retryOf = _lastFailedResource;
+    onResourceProgress?.call(
+      TtsResourceProgress(
+        operationId: operationId,
+        ownerEpoch: epoch,
+        retryOf: retryOf,
+        stage: 'modelCache',
+        message: 'Checking speech model resources…',
+        state: OperationState.queued,
+      ),
+    );
     try {
-      await _prepareModel();
+      await _prepareModel(operationId, epoch);
+      onResourceProgress?.call(
+        TtsResourceProgress(
+          operationId: operationId,
+          ownerEpoch: epoch,
+          retryOf: retryOf,
+          stage: 'modelReady',
+          message: 'Speech model ready',
+          state: OperationState.succeeded,
+        ),
+      );
+      _lastFailedResource = null;
+    } catch (error) {
+      final cancelled = _closed || error is MlxTtsRequestCancelled;
+      if (!cancelled) _lastFailedResource = operationId;
+      onResourceProgress?.call(
+        TtsResourceProgress(
+          operationId: operationId,
+          ownerEpoch: epoch,
+          retryOf: retryOf,
+          stage: 'modelLoad',
+          message: cancelled
+              ? 'Model preparation cancelled'
+              : 'Model preparation failed',
+          state: cancelled ? OperationState.cancelled : OperationState.failed,
+          error: cancelled ? null : '$error',
+        ),
+      );
+      rethrow;
     } finally {
       await activity.release();
     }
   }
 
-  Future<void> _prepareModel() async {
+  Future<void> _prepareModel(String operationId, int epoch) async {
     if (_closed) throw StateError('MLX inference owner is closed.');
     if (usesReferenceVoiceLibrary(engineId)) await MlxVoiceLibrary.load();
     if (!isMlxEngine(engineId)) {
@@ -371,14 +471,65 @@ class MlxSpeechWorkerChunkProcessor
       '${supportDirectory.path}${Platform.pathSeparator}read_aloud${Platform.pathSeparator}mlx-tts',
     );
     await mlxRoot.create(recursive: true);
+    if (_closed) throw const MlxTtsRequestCancelled();
+    final catalogStore = _catalogStore ??= FishDramaCatalogStore(
+      root: mlxRoot,
+      bundledModelsJson: await rootBundle.loadString(
+        'assets/fish_drama_models.json',
+      ),
+      bundledChecksumsJson: await rootBundle.loadString(
+        'assets/fish_drama_model_checksums.json',
+      ),
+      bundledManifestJson: await rootBundle.loadString(
+        'assets/fish_drama_catalog_update.json',
+      ),
+    );
+    final snapshot = await catalogStore.load();
+    if (_closed) throw const MlxTtsRequestCancelled();
+    final variant = isDramaEngine(engineId)
+        ? snapshot.catalog.variants[engineId]!
+        : null;
+    if (!_catalogRefreshStarted &&
+        Platform.environment['HF_HUB_OFFLINE'] != '1' &&
+        Platform.environment['FLUTTER_TEST'] != 'true') {
+      _catalogRefreshStarted = true;
+      // Refresh is owned by this session and can only affect a later one.
+      // Neither network completion nor refreshed data gates the current load.
+      unawaited(
+        catalogStore.refresh().then((result) {
+          if (result.error != null && !_closed) {
+            stderr.writeln(
+              'Fish catalog retained previous valid data: ${result.error}',
+            );
+          }
+        }),
+      );
+    }
+    // Explicit developer folders retain their unqualified provenance. Normal
+    // installed/cache discovery must establish the exact pinned bytes before
+    // the child can become the prepared model owner.
+    final requireVerifiedAssets = variant != null && modelPath.isEmpty;
+    if (requireVerifiedAssets && variant.integrityManifest == null) {
+      throw StateError(
+        'No pinned integrity manifest is available for $engineId.',
+      );
+    }
     // Model startup needs no voice recordings. prepareResources materializes
     // only voices bound to the demanded scene, including cancellation.
     if (_closed) throw StateError('MLX inference owner is closed.');
-    final modelDirectory = await _findInstalledModelDirectory(mlxRoot);
-    final installedHelper = File(
-      '${mlxRoot.path}${Platform.pathSeparator}mlx_tts_worker.py',
-    );
+    final modelDirectory = await _findInstalledModelDirectory(mlxRoot, variant);
     final helperBytes = await rootBundle.load('assets/mlx_tts_worker.py');
+    final bytes = helperBytes.buffer.asUint8List(
+      helperBytes.offsetInBytes,
+      helperBytes.lengthInBytes,
+    );
+    // A worker imports its captured JSON siblings. Refresh must never rewrite
+    // those files under a running child or change its expected RPC identity.
+    final helperRoot = Directory(
+      '${mlxRoot.path}/catalog-helpers/${snapshot.identity}-${sha256.convert(bytes)}',
+    );
+    await helperRoot.create(recursive: true);
+    final installedHelper = File('${helperRoot.path}/mlx_tts_worker.py');
     await installedHelper.writeAsBytes(
       helperBytes.buffer.asUint8List(
         helperBytes.offsetInBytes,
@@ -386,19 +537,15 @@ class MlxSpeechWorkerChunkProcessor
       ),
       flush: true,
     );
-    final modelCatalog = await rootBundle.loadString(
-      'assets/fish_drama_models.json',
-    );
     await File(
-      '${mlxRoot.path}/fish_drama_models.json',
-    ).writeAsString(modelCatalog, flush: true);
-    await File('${mlxRoot.path}/fish_drama_model_checksums.json').writeAsString(
-      await rootBundle.loadString('assets/fish_drama_model_checksums.json'),
-      flush: true,
-    );
+      '${helperRoot.path}/fish_drama_models.json',
+    ).writeAsString(snapshot.modelsJson, flush: true);
+    await File(
+      '${helperRoot.path}/fish_drama_model_checksums.json',
+    ).writeAsString(snapshot.checksumsJson, flush: true);
     _helperPath = installedHelper.path;
     _modelRoot = mlxRoot.path;
-    _resolvedPythonPath = await _findPythonRuntime(mlxRoot);
+    _resolvedPythonPath = await _findPythonRuntime(mlxRoot, operationId, epoch);
 
     final support = await getApplicationSupportDirectory();
     _store ??= AudioArtifactStore(
@@ -408,6 +555,7 @@ class MlxSpeechWorkerChunkProcessor
     );
     if (_closed) throw StateError('MLX inference owner is closed.');
     final worker = _process ??= MlxTtsPythonProcess(
+      runtimeMemorySampler: runtimeMemorySampler,
       pythonPath: _resolvedPythonPath!,
       pythonHome: _resolvedPythonHome,
       helperPath: _helperPath!,
@@ -419,6 +567,8 @@ class MlxSpeechWorkerChunkProcessor
     onStatus?.call('Preparing $engineName model…');
     onResourceProgress?.call(
       TtsResourceProgress(
+        operationId: operationId,
+        ownerEpoch: epoch,
         stage: 'modelCache',
         message:
             'Checking local files and the shared Hugging Face cache for $engineName…',
@@ -431,18 +581,32 @@ class MlxSpeechWorkerChunkProcessor
         quantizationBits: quantizationBits,
         privateCachePath:
             '${mlxRoot.path}${Platform.pathSeparator}runtime-cache${Platform.pathSeparator}hub',
-        onProgress: _handleModelLoadProgress,
+        onProgress: (event) =>
+            _handleModelLoadProgress(event, operationId, epoch),
+        requireVerifiedModelAssets: requireVerifiedAssets,
+        expectedVerifiedModelIdentity: requireVerifiedAssets
+            ? variant.pinnedIdentity
+            : null,
+        sizingEstimateBytes: variant?.estimatedPeakBytes,
+        modelCacheDirectories: variant == null
+            ? const []
+            : [
+                '${mlxRoot.path}/models',
+                '${mlxRoot.parent.parent.parent.path}/read_aloud/mlx-tts/models',
+              ],
       );
       _modelIdentity = loaded['modelIdentity'] as String;
       supportsNativeScenes = loaded['nativeScenesQualified'] == true;
       if (_closed) throw StateError('MLX inference owner is closed.');
     } finally {
-      onResourceProgress?.call(null);
       onStatus?.call(null);
     }
   }
 
-  Future<Directory?> _findInstalledModelDirectory(Directory mlxRoot) async {
+  Future<Directory?> _findInstalledModelDirectory(
+    Directory mlxRoot,
+    FishDramaVariantDescriptor? variant,
+  ) async {
     if (modelPath.isNotEmpty) {
       final explicit = Directory(modelPath);
       if (!await File(
@@ -455,32 +619,9 @@ class MlxSpeechWorkerChunkProcessor
       return explicit;
     }
 
-    if (isDramaEngine(engineId)) {
-      final catalog =
-          jsonDecode(
-                await rootBundle.loadString('assets/fish_drama_models.json'),
-              )
-              as Map;
-      final spec = catalog[engineId] as Map;
-      final snapshot =
-          'models--${(spec['repo'] as String).replaceAll('/', '--')}/snapshots/${spec['revision']}';
-      for (final root in [
-        mlxRoot.path,
-        '${mlxRoot.parent.parent.parent.path}/read_aloud/mlx-tts',
-      ]) {
-        final cached = Directory('$root/models/$snapshot');
-        var complete = true;
-        for (final file in spec['requiredFiles'] as List) {
-          if (!await File('${cached.path}/$file').exists()) {
-            complete = false;
-            break;
-          }
-        }
-        if (complete) {
-          return cached;
-        }
-      }
-    }
+    // Managed Hub snapshots stay with the Python acquisition owner, including
+    // those in older app-support roots. Passing one as an explicit folder would
+    // bypass that owner's corrupt-file repair and retry path.
     final candidates = <Directory>[
       Directory('${mlxRoot.path}${Platform.pathSeparator}$engineId'),
       // path_provider appends the bundle ID; the runtime installer predates
@@ -501,13 +642,24 @@ class MlxSpeechWorkerChunkProcessor
       if (await File(
         '${candidate.path}${Platform.pathSeparator}config.json',
       ).exists()) {
-        return candidate;
+        var complete = true;
+        for (final file in variant?.requiredFiles ?? const <String>[]) {
+          if (!await File('${candidate.path}/$file').exists()) {
+            complete = false;
+            break;
+          }
+        }
+        if (complete) return candidate;
       }
     }
     return null;
   }
 
-  Future<String> _findPythonRuntime(Directory mlxRoot) async {
+  Future<String> _findPythonRuntime(
+    Directory mlxRoot,
+    String operationId,
+    int epoch,
+  ) async {
     if (pythonPath.isNotEmpty) return pythonPath;
     final support = await getApplicationSupportDirectory();
     if (_closed) throw StateError('MLX inference owner is closed.');
@@ -519,7 +671,7 @@ class MlxSpeechWorkerChunkProcessor
       support: support,
       consumerRevision: '$engineId/${_activeGeneration ?? 'prepare'}',
       onProgress: (progress) {
-        if (!_closed) _handleModelLoadProgress(progress);
+        if (!_closed) _handleModelLoadProgress(progress, operationId, epoch);
       },
     );
     try {
@@ -533,7 +685,11 @@ class MlxSpeechWorkerChunkProcessor
     }
   }
 
-  void _handleModelLoadProgress(Map<String, Object?> event) {
+  void _handleModelLoadProgress(
+    Map<String, Object?> event,
+    String operationId,
+    int epoch,
+  ) {
     final stage = event['stage'] as String? ?? 'modelLoad';
     final message = event['message'] as String? ?? 'Preparing speech model…';
     final completed = (event['completed'] as num?)?.toInt();
@@ -542,11 +698,20 @@ class MlxSpeechWorkerChunkProcessor
     onStatus?.call(message);
     onResourceProgress?.call(
       TtsResourceProgress(
+        operationId: operationId,
+        ownerEpoch: epoch,
         stage: stage,
         message: message,
         completed: completed,
         total: total,
         unit: unit,
+        state:
+            completed != null &&
+                total != null &&
+                total > 0 &&
+                completed == total
+            ? OperationState.finalizing
+            : OperationState.running,
       ),
     );
   }
@@ -740,6 +905,7 @@ class MlxSpeechWorkerChunkProcessor
       final temporaryAudio = attempt.audio;
       String? publishedAudioPath;
       final worker = _process ??= MlxTtsPythonProcess(
+        runtimeMemorySampler: runtimeMemorySampler,
         pythonPath: _resolvedPythonPath ?? pythonPath,
         pythonHome: _resolvedPythonHome,
         helperPath: _helperPath ?? '',
@@ -887,8 +1053,10 @@ class MlxSpeechWorkerChunkProcessor
     _closed = true;
     if (!_closedSignal.isCompleted) _closedSignal.complete();
     _bindings.clear();
+    await _catalogStore?.close();
     await _runtimeLease?.cancelAndDrain();
     await _process?.shutdown();
+    _retainedPeakRuntimeBytes = peakRuntimeBytes;
     _process = null;
     if (identical(_activeInstance, this)) _activeInstance = null;
   }
@@ -907,13 +1075,24 @@ class MlxTtsPythonProcess {
     required this.privateCacheDirectory,
     this.pythonHome,
     this.memorySampler,
+    this.runtimeMemorySampler,
+    this.deviceIdentitySampler,
+    this.qualificationRecords = qualifiedModelMemoryRecords,
   });
   final String pythonPath;
   final String? pythonHome;
   final String helperPath;
   final Directory privateCacheDirectory;
   final Future<int> Function(int childPid)? memorySampler;
+
+  /// Production samples the complete process tree natively. The integer seam
+  /// above is retained for legacy process tests only, and denotes a total.
+  final Future<RuntimeMemorySnapshot> Function()? runtimeMemorySampler;
+  final Future<String> Function()? deviceIdentitySampler;
+  final Iterable<QualifiedModelMemoryRecord> qualificationRecords;
   static int observedPeakRuntimeBytes = 0;
+  static RuntimeMemorySnapshot? observedLastMemorySnapshot;
+  static const _memoryPolicy = RuntimeMemoryPolicy();
   Process? _child;
   Future<void>? _starting;
   Future<void>? _retiring;
@@ -926,16 +1105,13 @@ class MlxTtsPythonProcess {
   Future<void> Function(Map<String, Object?>)? _pendingAudioPacket;
   Map<String, Object?>? _loadSpec;
   String? _modelIdentity;
-  String _stderrTail = '';
   bool _busy = false;
   bool _disposed = false;
   int _sequence = 0;
   int _cancelEpoch = 0;
   Timer? _memoryTimer;
   bool _samplingMemory = false;
-  int? _childFootprint;
-  DateTime? _lastChildFootprint;
-  DateTime? _childStartedAt;
+  Object? _memoryToken;
   int peakRuntimeBytes = 0;
 
   Future<Map<String, Object?>> loadModel({
@@ -944,13 +1120,31 @@ class MlxTtsPythonProcess {
     required int quantizationBits,
     required String privateCachePath,
     required void Function(Map<String, Object?>) onProgress,
+    bool requireVerifiedModelAssets = false,
+    String? expectedVerifiedModelIdentity,
+    int? sizingEstimateBytes,
+    List<String> modelCacheDirectories = const [],
   }) async {
+    if (requireVerifiedModelAssets &&
+        (expectedVerifiedModelIdentity == null ||
+            expectedVerifiedModelIdentity.isEmpty)) {
+      throw ArgumentError('Verified model loading requires a pinned identity.');
+    }
     final spec = <String, Object?>{
       'command': 'load',
       'modelId': modelId,
       'modelPath': modelPath,
       'quantizationBits': quantizationBits,
       'privateCachePath': privateCachePath,
+      'sizingEstimateBytes': ?sizingEstimateBytes,
+      if (modelCacheDirectories.isNotEmpty)
+        'modelCacheDirectories': List<String>.unmodifiable(
+          modelCacheDirectories,
+        ),
+      if (requireVerifiedModelAssets) ...{
+        'requireVerifiedModelAssets': true,
+        'expectedVerifiedModelIdentity': expectedVerifiedModelIdentity,
+      },
     };
     final response = await _request(
       spec,
@@ -1024,6 +1218,13 @@ class MlxTtsPythonProcess {
       activity = await NativeSpeechWorkActivity.begin();
       await _retiring;
       final needsLoad = _child == null && body['command'] == 'synthesize';
+      final load = body['command'] == 'load'
+          ? body
+          : (needsLoad ? _loadSpec : null);
+      if (load != null) await _admitModelMemory(load, progress);
+      if (_disposed || epoch != _cancelEpoch) {
+        throw const MlxTtsRequestCancelled();
+      }
       await (_starting ??= _start().whenComplete(() => _starting = null));
       if (_disposed || epoch != _cancelEpoch) {
         throw const MlxTtsRequestCancelled();
@@ -1044,7 +1245,17 @@ class MlxTtsPythonProcess {
       if (_disposed || epoch != _cancelEpoch) {
         throw const MlxTtsRequestCancelled();
       }
-      return await _exchange(child, body, timeout, progress, audioPacket);
+      final response = await _exchange(
+        child,
+        body,
+        timeout,
+        progress,
+        audioPacket,
+      );
+      if (_disposed || epoch != _cancelEpoch) {
+        throw const MlxTtsRequestCancelled();
+      }
+      return response;
     } catch (_) {
       await _retire(); // Errors, malformed replies and timeouts poison the child.
       rethrow;
@@ -1082,7 +1293,25 @@ class MlxTtsPythonProcess {
       await child.stdin.flush();
       final response = await responseFuture;
       if (response['ok'] != true) {
-        throw StateError('${response['error']}. $_stderrTail');
+        throw StateError('${response['error']}');
+      }
+      if (body['command'] == 'load' &&
+          body['requireVerifiedModelAssets'] == true &&
+          (response['modelAssetsVerified'] != true ||
+              response['verifiedModelIdentity'] !=
+                  body['expectedVerifiedModelIdentity'])) {
+        // _request retires and joins the rejected child before another request.
+        // This check also applies to an automatic reload after cancellation.
+        throw StateError(
+          'The worker did not verify the selected pinned model.',
+        );
+      }
+      if (body['command'] == 'load' && memorySampler == null) {
+        final snapshot = await _memorySnapshot();
+        if (!identical(_child, child)) throw const MlxTtsRequestCancelled();
+        _recordMemory(snapshot);
+        final decision = _memoryPolicy.monitor(snapshot, DateTime.now());
+        if (!decision.allowed) throw StateError(decision.reason);
       }
       return response;
     } finally {
@@ -1099,9 +1328,27 @@ class MlxTtsPythonProcess {
     if (_child != null) return;
     if (_disposed) throw const MlxTtsRequestCancelled();
     await privateCacheDirectory.create(recursive: true);
+    // QA-only scheduling differential. taskpolicy execs the same owned child;
+    // default inference policy is unchanged until native/audio qualification.
+    final diagnosticPolicy =
+        Platform.environment['READALOUD_S7_INFERENCE_POLICY'];
+    final diagnosticUtility =
+        Platform.isMacOS &&
+        (diagnosticPolicy == 'background-utility' ||
+            diagnosticPolicy == 'utility');
     final child = await Process.start(
-      pythonPath,
-      ['-u', '-B', helperPath],
+      diagnosticUtility ? '/usr/sbin/taskpolicy' : pythonPath,
+      [
+        if (diagnosticUtility) ...[
+          if (diagnosticPolicy == 'background-utility') '-b',
+          '-c',
+          'utility',
+          pythonPath,
+        ],
+        '-u',
+        '-B',
+        helperPath,
+      ],
       workingDirectory: privateCacheDirectory.path,
       environment: {
         ...Platform.environment,
@@ -1112,10 +1359,9 @@ class MlxTtsPythonProcess {
       },
     );
     _child = child;
-    _childFootprint = null;
-    _lastChildFootprint = null;
-    _childStartedAt = DateTime.now();
-    _stderrTail = '';
+    final memoryToken = _memoryToken = RuntimeMemoryRegistry.shared.register(
+      child.pid,
+    );
     bool current() => identical(_child, child);
     _stdoutSubscription = child.stdout
         .transform(utf8.decoder)
@@ -1132,8 +1378,23 @@ class MlxTtsPythonProcess {
                 if (footprint is! int || footprint <= 0) {
                   throw FormatException('Invalid memory sample: $response');
                 }
-                _childFootprint = footprint;
-                _lastChildFootprint = DateTime.now();
+                final sampled = response['sampledUnixMicros'];
+                if (memorySampler == null &&
+                    (sampled is! int || response['processId'] != child.pid)) {
+                  throw const FormatException(
+                    'Unidentified inference memory sample',
+                  );
+                }
+                RuntimeMemoryRegistry.shared.update(
+                  child.pid,
+                  memoryToken,
+                  footprint,
+                  sampledAt: sampled is int
+                      ? DateTime.fromMicrosecondsSinceEpoch(sampled)
+                      : null,
+                );
+                // Self telemetry is diagnostic/trigger only. The native total
+                // already includes this PID, so adding it would double-count.
                 unawaited(_sampleMemory(child));
                 return;
               }
@@ -1181,7 +1442,9 @@ class MlxTtsPythonProcess {
           onDone: () {
             if (current()) {
               _fail(
-                StateError('MLX helper response stream closed. $_stderrTail'),
+                StateError(
+                  'Speech worker stopped responding. Retry speech startup.',
+                ),
               );
             }
           },
@@ -1191,10 +1454,9 @@ class MlxTtsPythonProcess {
         .listen(
           (chunk) {
             if (!current()) return;
-            _stderrTail += chunk;
-            if (_stderrTail.length > 8192) {
-              _stderrTail = _stderrTail.substring(_stderrTail.length - 8192);
-            }
+            // Preserve diagnostics in the local application log, rather than
+            // concatenating a Python traceback into user-facing startup text.
+            stderr.write(chunk);
           },
           onError: (Object error) {
             if (current()) _fail(error);
@@ -1203,7 +1465,12 @@ class MlxTtsPythonProcess {
     unawaited(
       child.exitCode.then((code) {
         if (current()) {
-          _fail(StateError('MLX helper exited with code $code. $_stderrTail'));
+          stderr.writeln('MLX helper exit: $code');
+          _fail(
+            StateError(
+              'Speech worker stopped unexpectedly. Retry speech startup.',
+            ),
+          );
           unawaited(_retire());
         }
       }),
@@ -1219,33 +1486,26 @@ class MlxTtsPythonProcess {
     if (_samplingMemory || !identical(_child, child)) return;
     _samplingMemory = true;
     try {
-      if (memorySampler == null) {
-        final age = DateTime.now().difference(
-          _lastChildFootprint ?? _childStartedAt!,
-        );
-        if (age > const Duration(seconds: 30)) {
-          throw StateError('Inference memory telemetry stopped');
-        }
-        if (_childFootprint == null) return;
+      final int bytes;
+      RuntimeMemoryDecision? decision;
+      if (memorySampler != null) {
+        bytes = await memorySampler!(child.pid);
+      } else {
+        final snapshot = await _memorySnapshot();
+        if (!identical(_child, child)) return;
+        _recordMemory(snapshot);
+        bytes = snapshot.totalFootprintBytes;
+        decision = _memoryPolicy.monitor(snapshot, DateTime.now());
+        if (!snapshot.complete) throw StateError(decision.reason);
       }
-      final childBytes = _childFootprint ?? 0;
-      final bytes =
-          await (memorySampler?.call(child.pid) ??
-              _mlxLifecycleChannel
-                  .invokeMethod<int>('runtimeFootprint')
-                  .then(
-                    (bytes) =>
-                        (bytes ??
-                            (throw StateError('Missing memory footprint'))) +
-                        childBytes,
-                  ));
       if (!identical(_child, child)) return;
       if (bytes > observedPeakRuntimeBytes) observedPeakRuntimeBytes = bytes;
       if (bytes > peakRuntimeBytes) peakRuntimeBytes = bytes;
-      if (bytes >= 99000000000) {
+      if (decision?.allowed == false || bytes >= 99000000000) {
         _fail(
           StateError(
-            'Speech runtime reached the 100 GB memory ceiling. Select a smaller Drama variant.',
+            decision?.reason ??
+                'Speech runtime reached the 100 GB memory ceiling. Select a smaller Drama variant.',
           ),
         );
         unawaited(_retire());
@@ -1258,6 +1518,86 @@ class MlxTtsPythonProcess {
     } finally {
       _samplingMemory = false;
     }
+  }
+
+  Future<RuntimeMemorySnapshot> _memorySnapshot() async {
+    if (runtimeMemorySampler != null) {
+      return runtimeMemorySampler!().timeout(const Duration(seconds: 3));
+    }
+    final map = await _mlxLifecycleChannel
+        .invokeMapMethod<Object?, Object?>('runtimeMemorySnapshot')
+        .timeout(const Duration(seconds: 3));
+    if (map == null) throw StateError('Missing process-tree memory snapshot');
+    return RuntimeMemoryRegistry.shared.reconcile(map);
+  }
+
+  void _recordMemory(RuntimeMemorySnapshot snapshot) {
+    observedLastMemorySnapshot = snapshot;
+    if (!snapshot.complete) return; // A partial sum is not a measured peak.
+    final bytes = snapshot.totalFootprintBytes;
+    if (bytes > observedPeakRuntimeBytes) observedPeakRuntimeBytes = bytes;
+    if (bytes > peakRuntimeBytes) peakRuntimeBytes = bytes;
+  }
+
+  Future<void> _admitModelMemory(
+    Map<String, Object?> load,
+    void Function(Map<String, Object?>)? progress,
+  ) async {
+    // Legacy process stubs intentionally replace all memory accounting.
+    if (memorySampler != null) return;
+    final snapshot = await _memorySnapshot();
+    final modelId = load['modelId'] as String;
+    RuntimeMemoryDecision decision;
+    var measuredEnvelope = false;
+    if (isDramaEngine(modelId)) {
+      final estimate = load['sizingEstimateBytes'];
+      final pin = load['expectedVerifiedModelIdentity'];
+      final device = deviceIdentitySampler != null
+          ? await deviceIdentitySampler!().timeout(const Duration(seconds: 3))
+          : runtimeMemorySampler != null
+          ? '' // Platform-free injected samples do not invent a hardware ID.
+          : await _mlxLifecycleChannel
+                    .invokeMethod<String>('runtimeDeviceIdentity')
+                    .timeout(const Duration(seconds: 3)) ??
+                '';
+      final identity = '$fishDramaCatalogRuntime|$pin';
+      final envelope = pin is String
+          ? qualifiedMemoryEnvelopeFor(
+              runtimeIdentity: identity,
+              deviceIdentity: device,
+              engineId: modelId,
+              records: qualificationRecords,
+            )
+          : null;
+      measuredEnvelope = envelope != null;
+      // Reapply the exact reviewed envelope at actual load/reload time. An
+      // explicit unqualified choice remains monitored qualification; metadata
+      // estimates cannot become automatic-selection evidence.
+      decision = _memoryPolicy.admit(
+        sample: snapshot,
+        now: DateTime.now(),
+        runtimeIdentity: identity,
+        deviceIdentity: device,
+        envelope: envelope,
+        explicitQualification: true,
+        sizingEstimateBytes: estimate is int ? estimate : null,
+      );
+    } else {
+      decision = _memoryPolicy.monitor(snapshot, DateTime.now());
+    }
+    _recordMemory(snapshot);
+    if (!decision.allowed) throw StateError(decision.reason);
+    load['runtimeMemoryLimitBytes'] = decision.budgetBytes < 85000000000
+        ? decision.budgetBytes
+        : 85000000000;
+    progress?.call({
+      'type': 'progress',
+      'stage': 'memoryAdmission',
+      'message': decision.reason,
+      'processTreeFootprintBytes': snapshot.totalFootprintBytes,
+      'additionalBudgetBytes': decision.budgetBytes,
+      'measuredEnvelope': measuredEnvelope,
+    });
   }
 
   void _fail(Object error) {
@@ -1291,7 +1631,12 @@ class MlxTtsPythonProcess {
     await _stderrSubscription?.cancel();
     _stdoutSubscription = null;
     _stderrSubscription = null;
-    if (identical(_child, child)) _child = null;
+    if (identical(_child, child)) {
+      final token = _memoryToken;
+      if (token != null) RuntimeMemoryRegistry.shared.remove(child.pid, token);
+      _memoryToken = null;
+      _child = null;
+    }
   }
 
   Future<void> shutdown() => _shutdown ??= _close();

@@ -120,6 +120,7 @@ Future<void> main(List<String> args) async {
   final receipt = <String, Object?>{
     'schema': 'readaloud-radoc-native-smoke-v1',
     'passed': false,
+    'finiteLocalWavPlayerOptIn': Platform.isMacOS,
     'book': args[0],
     'dartEntryUnixMicros': enteredAt,
     'timingMode': 'load-after-startup',
@@ -137,7 +138,10 @@ Future<void> main(List<String> args) async {
     Platform.environment['READALOUD_SMOKE_LAUNCH_UNIX_MICROS'] ?? '',
   );
   receipt['processLaunchUnixMicros'] = launchedAt;
-  final player = AudioPlayer(useLazyPreparation: false);
+  final player = AudioPlayer(
+    useLazyPreparation: false,
+    readAloudFiniteLocalWavQueue: Platform.isMacOS,
+  );
   final engine = OfflinePlaybackEngine(player);
   final controller = SmokeController(engine, '${args[1]}.state');
   final audioChecks = <String, Future<Map<String, Object?>>>{};

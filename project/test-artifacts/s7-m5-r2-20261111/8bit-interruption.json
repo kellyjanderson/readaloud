@@ -1,0 +1,81 @@
+{
+  "observedAt": 1794409147.720206,
+  "partials": [
+    {
+      "path": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/Library/Application Support/com.kellyjanderson.readAloud.mlxPlaybackTest/read_aloud/mlx-tts/models/models--mlx-community--fish-audio-drama-3-8bit/blobs/4483f5e06ff17f06cb8860fac6e9c3c7b7993a0af6156001bdb9b8023b975d20.bd2c492f.incomplete",
+      "bytes": 0
+    },
+    {
+      "path": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/Library/Application Support/com.kellyjanderson.readAloud.mlxPlaybackTest/read_aloud/mlx-tts/models/models--mlx-community--fish-audio-drama-3-8bit/blobs/4d215a0b8bdda65cb56c942b8dbc8429b7974288cf064c499b789cde9c2babfd.b95bd5a8.incomplete",
+      "bytes": 0
+    },
+    {
+      "path": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/Library/Application Support/com.kellyjanderson.readAloud.mlxPlaybackTest/read_aloud/mlx-tts/models/models--mlx-community--fish-audio-drama-3-8bit/blobs/4f457ebde3ccc3956c7c9300a56a8c1a6db64ee1417246e45c5dd18421304d6e.9d14651f.incomplete",
+      "bytes": 2751075804
+    },
+    {
+      "path": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/Library/Application Support/com.kellyjanderson.readAloud.mlxPlaybackTest/read_aloud/mlx-tts/models/models--mlx-community--fish-audio-drama-3-8bit/blobs/6ff9d6f07920b2155e3a48ada21956004b96df9114d255ed9f0788484ba73040.1c65f68c.incomplete",
+      "bytes": 768000000
+    },
+    {
+      "path": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/Library/Application Support/com.kellyjanderson.readAloud.mlxPlaybackTest/read_aloud/mlx-tts/models/models--mlx-community--fish-audio-drama-3-8bit/blobs/8c004deba5a0b760c7da81543a19d52db555a2edd45de2725d54566cbec038b5.46421797.incomplete",
+      "bytes": 0
+    },
+    {
+      "path": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/Library/Application Support/com.kellyjanderson.readAloud.mlxPlaybackTest/read_aloud/mlx-tts/models/models--mlx-community--fish-audio-drama-3-8bit/blobs/98e25de091972867f607397efb47126c3ea0528ec8d4f1aededa0ea4c829dd66.eec8e078.incomplete",
+      "bytes": 105100155
+    },
+    {
+      "path": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/Library/Application Support/com.kellyjanderson.readAloud.mlxPlaybackTest/read_aloud/mlx-tts/models/models--mlx-community--fish-audio-drama-3-8bit/blobs/bf06dbda13a539e13936742b542d579ec76e5a2943ecfbeed4dc7821fb989b9a.4a73bfaa.incomplete",
+      "bytes": 256000000
+    },
+    {
+      "path": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/Library/Application Support/com.kellyjanderson.readAloud.mlxPlaybackTest/read_aloud/mlx-tts/models/models--mlx-community--fish-audio-drama-3-8bit/blobs/c29814a41d79e452c0e9c03a106ac7b7b2ac07b43b8f4f723bbe2f367d54d066.d9c64db0.incomplete",
+      "bytes": 262607131
+    }
+  ],
+  "afterTermination": [
+    {
+      "path": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/Library/Application Support/com.kellyjanderson.readAloud.mlxPlaybackTest/read_aloud/mlx-tts/models/models--mlx-community--fish-audio-drama-3-8bit/blobs/4483f5e06ff17f06cb8860fac6e9c3c7b7993a0af6156001bdb9b8023b975d20.bd2c492f.incomplete",
+      "exists": true,
+      "bytes": 0
+    },
+    {
+      "path": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/Library/Application Support/com.kellyjanderson.readAloud.mlxPlaybackTest/read_aloud/mlx-tts/models/models--mlx-community--fish-audio-drama-3-8bit/blobs/4d215a0b8bdda65cb56c942b8dbc8429b7974288cf064c499b789cde9c2babfd.b95bd5a8.incomplete",
+      "exists": true,
+      "bytes": 0
+    },
+    {
+      "path": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/Library/Application Support/com.kellyjanderson.readAloud.mlxPlaybackTest/read_aloud/mlx-tts/models/models--mlx-community--fish-audio-drama-3-8bit/blobs/4f457ebde3ccc3956c7c9300a56a8c1a6db64ee1417246e45c5dd18421304d6e.9d14651f.incomplete",
+      "exists": true,
+      "bytes": 3197997094
+    },
+    {
+      "path": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/Library/Application Support/com.kellyjanderson.readAloud.mlxPlaybackTest/read_aloud/mlx-tts/models/models--mlx-community--fish-audio-drama-3-8bit/blobs/6ff9d6f07920b2155e3a48ada21956004b96df9114d255ed9f0788484ba73040.1c65f68c.incomplete",
+      "exists": true,
+      "bytes": 768000000
+    },
+    {
+      "path": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/Library/Application Support/com.kellyjanderson.readAloud.mlxPlaybackTest/read_aloud/mlx-tts/models/models--mlx-community--fish-audio-drama-3-8bit/blobs/8c004deba5a0b760c7da81543a19d52db555a2edd45de2725d54566cbec038b5.46421797.incomplete",
+      "exists": true,
+      "bytes": 0
+    },
+    {
+      "path": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/Library/Application Support/com.kellyjanderson.readAloud.mlxPlaybackTest/read_aloud/mlx-tts/models/models--mlx-community--fish-audio-drama-3-8bit/blobs/98e25de091972867f607397efb47126c3ea0528ec8d4f1aededa0ea4c829dd66.eec8e078.incomplete",
+      "exists": true,
+      "bytes": 105100155
+    },
+    {
+      "path": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/Library/Application Support/com.kellyjanderson.readAloud.mlxPlaybackTest/read_aloud/mlx-tts/models/models--mlx-community--fish-audio-drama-3-8bit/blobs/bf06dbda13a539e13936742b542d579ec76e5a2943ecfbeed4dc7821fb989b9a.4a73bfaa.incomplete",
+      "exists": true,
+      "bytes": 256000000
+    },
+    {
+      "path": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/Library/Application Support/com.kellyjanderson.readAloud.mlxPlaybackTest/read_aloud/mlx-tts/models/models--mlx-community--fish-audio-drama-3-8bit/blobs/c29814a41d79e452c0e9c03a106ac7b7b2ac07b43b8f4f723bbe2f367d54d066.d9c64db0.incomplete",
+      "exists": true,
+      "bytes": 262607131
+    }
+  ],
+  "terminationSignal": "TERM",
+  "pid": 29193
+}

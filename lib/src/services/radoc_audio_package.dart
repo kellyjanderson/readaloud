@@ -136,12 +136,18 @@ class RadocAudioPackage {
     File file, {
     bool materializeOpeningRange = false,
     bool Function()? isCurrent,
+    void Function(RadocPackageProgress)? onProgress,
   }) async {
-    final book = await _run<RadocAudioBook>('open', {
-      'path': file.absolute.path,
-      'cacheRoot': _cacheDirectory,
-      'materializeOpeningRange': materializeOpeningRange,
-    }, isCurrent);
+    final book = await _run<RadocAudioBook>(
+      'open',
+      {
+        'path': file.absolute.path,
+        'cacheRoot': _cacheDirectory,
+        'materializeOpeningRange': materializeOpeningRange,
+      },
+      isCurrent,
+      onProgress,
+    );
     _caches.add(book._cachePath);
     return book;
   }
@@ -154,13 +160,19 @@ class RadocAudioPackage {
     required RadocAudioManifest manifest,
     required Map<String, File> members,
     bool Function()? isCurrent,
-  }) => _run<RadocAudioManifest>('export', {
-    'path': destination.absolute.path,
-    'manifest': manifest,
-    'members': Map<String, String>.unmodifiable(
-      members.map((name, file) => MapEntry(name, file.absolute.path)),
-    ),
-  }, isCurrent);
+    void Function(RadocPackageProgress)? onProgress,
+  }) => _run<RadocAudioManifest>(
+    'export',
+    {
+      'path': destination.absolute.path,
+      'manifest': manifest,
+      'members': Map<String, String>.unmodifiable(
+        members.map((name, file) => MapEntry(name, file.absolute.path)),
+      ),
+    },
+    isCurrent,
+    onProgress,
+  );
 
   /// Accepts only a name from this book's validated manifest. Later corruption
   /// fails here, never as EOF or silently completed coverage.
@@ -168,15 +180,18 @@ class RadocAudioPackage {
     RadocAudioBook book,
     String member, {
     bool Function()? isCurrent,
+    void Function(RadocPackageProgress)? onProgress,
   }) async {
     if (!_caches.contains(book._cachePath) ||
         !book.manifest.referencedMembers.contains(member)) {
       throw const RadocPackageException('Unowned book or unapproved member.');
     }
-    final path = await _run<String>('materialize', {
-      'book': book,
-      'member': member,
-    }, isCurrent);
+    final path = await _run<String>(
+      'materialize',
+      {'book': book, 'member': member},
+      isCurrent,
+      onProgress,
+    );
     return File(path);
   }
 
@@ -206,6 +221,7 @@ class RadocAudioPackage {
     String operation,
     Map<String, Object?> payload,
     bool Function()? isCurrent,
+    void Function(RadocPackageProgress)? progress,
   ) async {
     if (_closed) throw StateError('RadocAudioPackage is disposed.');
     if (_active != null) throw StateError('Package operation already active.');
@@ -267,7 +283,7 @@ class RadocAudioPackage {
         case 'progress':
           if (!active.cancelled && _current(isCurrent)) {
             try {
-              onProgress?.call(event[1] as RadocPackageProgress);
+              (progress ?? onProgress)?.call(event[1] as RadocPackageProgress);
             } catch (_) {
               active.cancel();
             }

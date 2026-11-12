@@ -1,0 +1,49 @@
+{
+  "schema": "readaloud-native-variant-runner-v1",
+  "mode": "default-policy",
+  "passed": true,
+  "nativePassed": true,
+  "normalQuit": true,
+  "appExitVerified": true,
+  "forcedCleanup": false,
+  "remainingOwnedPids": [],
+  "frameworkSha256": "372e9877eed5f15a8b834e9b8e1eba65514b53119c4cecce20b7bf13d47e4e42",
+  "executableSha256": "57227b3e4e1d6cf45b3523672d2c1fcefb5a16c8c595507b5c7aaeef3479fab4",
+  "maxMlxChildren": 1,
+  "observedMlxSamples": 551,
+  "processEvents": [
+    {
+      "unixMicros": 1794414026560387,
+      "pids": []
+    },
+    {
+      "unixMicros": 1794414028153661,
+      "pids": [
+        71639
+      ]
+    },
+    {
+      "unixMicros": 1794414102723047,
+      "pids": []
+    }
+  ],
+  "errors": [],
+  "limits": "100ms child/process observations and emitted signal per playback interval. Exact waveform matching, glitch/voice quality, total memory envelope, physical-speaker and M3 acceptance remain separate. Capture 300s; work deadline 270s.",
+  "pid": 71619,
+  "capturePid": 71620,
+  "applicationActivationRequested": true,
+  "captureExitStatus": 0,
+  "appExitStatus": 0,
+  "emittedSignal": [
+    {
+      "label": "sustained-fish_drama3",
+      "durationSeconds": 60.010666666666665,
+      "activeWindowSeconds": 51.6,
+      "longestSilentWindowSeconds": 0.7000000000000001,
+      "peak": 0.7466462850570679,
+      "passed": true,
+      "scope": "100ms app-only signal windows; not waveform identity or acoustic continuity acceptance"
+    }
+  ],
+  "strictAcousticAcceptance": "NOT_RUN: compare copied queued WAVs with capture; listening remains separate"
+}

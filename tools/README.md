@@ -139,3 +139,25 @@ dependencies are thinned to arm64 in the build-owned staging copy before signing
 and manifest hashing; the original managed runtimes are preserved. Current R5
 native evidence and its remaining startup/continuity/listening failures are in
 the [qualification receipt](../project/test-artifacts/s6-finish-checks-20261107/r5-native-qualification.json).
+
+## S7 model qualification
+
+`tools/s7_variant_qualification.dart` is an isolated signed-app entry point for
+60-second offline bf16/8bit/4bit reading, qualified default selection, short
+A/B/A/rapid replacement and explicit online Cancel/Retry. Its Ruby runner owns
+app-only capture, sampled process ownership and normal Quit; online mode requires
+`READALOUD_S7_ALLOW_DOWNLOAD=1`. It must run in the separate mlxPlaybackTest
+profile with prepared fixtures, never an installed user app.
+
+`analyze_s7_variants.py` verifies complete waveform identity, ordered packet joins
+and at least 50 seconds of non-silent reference coverage. `analyze_s7_switches.py`
+checks the short switch routes separately, including guarded inter-Play silence.
+Use the managed MLX Python with `-B`. These are distinct from human listening,
+physical-speaker timing, first-load clocks and M3 qualification.
+
+`fish_catalog_refresh_probe.dart` checks real fixed-origin HTTPS refresh,
+offline reopening and failed-refresh retention without model loading.
+`probe_model_cache_repair.py` deliberately corrupts only a config in a verified
+isolated QA cache, restores it on failure, and requires every non-config file
+identity to stay unchanged after actual repair. Model weights and captured WAVs
+remain private; checked-in receipts identify them by exact paths and hashes.

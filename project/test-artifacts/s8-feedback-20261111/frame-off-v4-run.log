@@ -1,0 +1,4 @@
+PASS: valid signature, sandbox, file chooser read/write access and network client entitlements
+S8_STARTED pid=76407 log=/Users/k/Library/Containers/com.kellyjanderson.readAloud.feedbackTest/Data/s8-frame-off-v4-20261111/native.log gates=/Users/k/Library/Containers/com.kellyjanderson.readAloud.feedbackTest/Data/s8-frame-off-v4-20261111/probe
+S8_FAILED QA-only natural-frame differential; default probe unchanged
+S8_RESULT passed=false receipt=/Users/k/Library/Containers/com.kellyjanderson.readAloud.feedbackTest/Data/s8-frame-off-v4-20261111/probe/receipt.json cleanup=/Users/k/Library/Containers/com.kellyjanderson.readAloud.feedbackTest/Data/s8-frame-off-v4-20261111/run.json

@@ -46,6 +46,35 @@ class PdfBarrier implements PdfTextExtractor {
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
   test(
+    'supervisor reports producer identity on progress and covered ranges',
+    () async {
+      final supervisor = DocumentPreparationSupervisor();
+      addTearDown(supervisor.shutdown);
+      final reports = <PreparationProgress>[];
+      final publications = <DocumentPreparationPublication>[];
+      final result = await supervisor.prepareRanges(
+        request(71),
+        onProgress: reports.add,
+        onPublication: (publication) async => publications.add(publication),
+      );
+      expect(result.outcome, DocumentPreparationOutcome.ready);
+      expect(reports, isNotEmpty);
+      expect(
+        reports.every((p) => p.operationId == 'test:71' && p.ownerEpoch == 71),
+        isTrue,
+      );
+      expect(publications, isNotEmpty);
+      for (final publication in publications) {
+        expect(
+          publication.progress
+              .where((p) => publication.coverage.contains(p.stage))
+              .every((p) => p.operationId == 'test:71' && p.ownerEpoch == 71),
+          isTrue,
+        );
+      }
+    },
+  );
+  test(
     'PDF raw geometry is formatted on the pure worker with existing semantics',
     () async {
       final bridge = PdfBarrier();

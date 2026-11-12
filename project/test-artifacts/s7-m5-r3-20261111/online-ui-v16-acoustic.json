@@ -1,0 +1,1329 @@
+{
+  "schema": "readaloud-s7-short-switch-acoustic-v1",
+  "passed": true,
+  "errors": [],
+  "segments": [
+    {
+      "label": "initial-A8",
+      "matches": [
+        {
+          "queueIndex": 0,
+          "sourcePath": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-online-ui-v16-20261111/s7-variants-LYMkkQ/raw-0/incomplete/attempt-jTrkxr/packet-0000.wav",
+          "reference": {
+            "path": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-online-ui-v16-20261111/s7-variants-LYMkkQ/queued-1.wav",
+            "sha256": "ea3bbc7e94961c71ab360b482445927dbe50b645c000f1974ecc22ea314c30d6",
+            "bytes": 16428,
+            "sampleRate": 44100,
+            "channels": 1,
+            "bitsPerSample": 16,
+            "pcmBytes": 16384,
+            "peakPcm16": 11851
+          },
+          "captureStartSeconds": 5.689041666666666,
+          "captureEndSeconds": 5.874801303854875,
+          "fullActiveCorrelation": 0.9999772457508391,
+          "activeComparisonFrames": 25159,
+          "sourceDurationSeconds": 0.18575963718820862,
+          "externalGapBeforeMs": null,
+          "encodedSilentSecondsBefore": 0.0
+        },
+        {
+          "queueIndex": 1,
+          "sourcePath": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-online-ui-v16-20261111/s7-variants-LYMkkQ/raw-0/incomplete/attempt-jTrkxr/packet-0001.wav",
+          "reference": {
+            "path": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-online-ui-v16-20261111/s7-variants-LYMkkQ/queued-2.wav",
+            "sha256": "e6ba0f4eec8ce031204fc64e5efdf940670ebd8057b83924fcc09b80524cdb3b",
+            "bytes": 28716,
+            "sampleRate": 44100,
+            "channels": 1,
+            "bitsPerSample": 16,
+            "pcmBytes": 28672,
+            "peakPcm16": 19799
+          },
+          "captureStartSeconds": 5.874802083333334,
+          "captureEndSeconds": 6.1998814484126985,
+          "fullActiveCorrelation": 0.9999886502766979,
+          "activeComparisonFrames": 62411,
+          "sourceDurationSeconds": 0.3250793650793651,
+          "externalGapBeforeMs": 0.0007794784586678816,
+          "encodedSilentSecondsBefore": 0.0
+        },
+        {
+          "queueIndex": 2,
+          "sourcePath": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-online-ui-v16-20261111/s7-variants-LYMkkQ/raw-0/incomplete/attempt-jTrkxr/packet-0002.wav",
+          "reference": {
+            "path": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-online-ui-v16-20261111/s7-variants-LYMkkQ/queued-3.wav",
+            "sha256": "fe30ee312fafb431e0b85c9328b8d2ce2283ea03e74b4c080672e3385d97c704",
+            "bytes": 28716,
+            "sampleRate": 44100,
+            "channels": 1,
+            "bitsPerSample": 16,
+            "pcmBytes": 28672,
+            "peakPcm16": 10452
+          },
+          "captureStartSeconds": 6.199880208333333,
+          "captureEndSeconds": 6.524959573412698,
+          "fullActiveCorrelation": 0.9999676890772983,
+          "activeComparisonFrames": 62412,
+          "sourceDurationSeconds": 0.3250793650793651,
+          "externalGapBeforeMs": -0.001240079365416591,
+          "encodedSilentSecondsBefore": 0.0
+        },
+        {
+          "queueIndex": 3,
+          "sourcePath": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-online-ui-v16-20261111/s7-variants-LYMkkQ/raw-0/incomplete/attempt-jTrkxr/packet-0003.wav",
+          "reference": {
+            "path": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-online-ui-v16-20261111/s7-variants-LYMkkQ/queued-4.wav",
+            "sha256": "60ae7fd20f273be181f7eda6457f5c2dc80c5b617451967de651f9fa597de3d5",
+            "bytes": 28716,
+            "sampleRate": 44100,
+            "channels": 1,
+            "bitsPerSample": 16,
+            "pcmBytes": 28672,
+            "peakPcm16": 715
+          },
+          "captureStartSeconds": 6.524963541666667,
+          "captureEndSeconds": 6.850042906746031,
+          "fullActiveCorrelation": 0.9993193995911319,
+          "activeComparisonFrames": 2138,
+          "sourceDurationSeconds": 0.3250793650793651,
+          "externalGapBeforeMs": 0.00396825396897782,
+          "encodedSilentSecondsBefore": 0.0
+        },
+        {
+          "queueIndex": 4,
+          "sourcePath": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-online-ui-v16-20261111/s7-variants-LYMkkQ/raw-0/incomplete/attempt-jTrkxr/packet-0004.wav",
+          "reference": {
+            "path": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-online-ui-v16-20261111/s7-variants-LYMkkQ/queued-5.wav",
+            "sha256": "69b4070a7e64e0dd70ba4c42f8390c0fe244ce881975599c9474fd58a8554660",
+            "bytes": 28716,
+            "sampleRate": 44100,
+            "channels": 1,
+            "bitsPerSample": 16,
+            "pcmBytes": 28672,
+            "peakPcm16": 19573
+          },
+          "captureStartSeconds": 6.850041666666667,
+          "captureEndSeconds": 7.175121031746032,
+          "fullActiveCorrelation": 0.9998962487694726,
+          "activeComparisonFrames": 55456,
+          "sourceDurationSeconds": 0.3250793650793651,
+          "externalGapBeforeMs": -0.0012400793645284125,
+          "encodedSilentSecondsBefore": 0.0
+        },
+        {
+          "queueIndex": 5,
+          "sourcePath": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-online-ui-v16-20261111/s7-variants-LYMkkQ/raw-0/incomplete/attempt-jTrkxr/packet-0005.wav",
+          "reference": {
+            "path": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-online-ui-v16-20261111/s7-variants-LYMkkQ/queued-6.wav",
+            "sha256": "a22c307452044d0c0c329b317bbb691fc8d09dd9fae1d328db49c5a7fb05e445",
+            "bytes": 28716,
+            "sampleRate": 44100,
+            "channels": 1,
+            "bitsPerSample": 16,
+            "pcmBytes": 28672,
+            "peakPcm16": 17074
+          },
+          "captureStartSeconds": 7.175119791666667,
+          "captureEndSeconds": 7.5001991567460315,
+          "fullActiveCorrelation": 0.9999848084149854,
+          "activeComparisonFrames": 62414,
+          "sourceDurationSeconds": 0.3250793650793651,
+          "externalGapBeforeMs": -0.001240079365416591,
+          "encodedSilentSecondsBefore": 0.0
+        },
+        {
+          "queueIndex": 6,
+          "sourcePath": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-online-ui-v16-20261111/s7-variants-LYMkkQ/raw-0/incomplete/attempt-jTrkxr/packet-0006.wav",
+          "reference": {
+            "path": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-online-ui-v16-20261111/s7-variants-LYMkkQ/queued-7.wav",
+            "sha256": "3771b324ecec03daa6c0ec1475f658d9f27d8ad7c89e2d3f0e75e55a3922d780",
+            "bytes": 28716,
+            "sampleRate": 44100,
+            "channels": 1,
+            "bitsPerSample": 16,
+            "pcmBytes": 28672,
+            "peakPcm16": 15698
+          },
+          "captureStartSeconds": 7.500197916666667,
+          "captureEndSeconds": 7.8252772817460325,
+          "fullActiveCorrelation": 0.9999704332342867,
+          "activeComparisonFrames": 62370,
+          "sourceDurationSeconds": 0.3250793650793651,
+          "externalGapBeforeMs": -0.0012400793645284125,
+          "encodedSilentSecondsBefore": 0.0
+        },
+        {
+          "queueIndex": 7,
+          "sourcePath": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-online-ui-v16-20261111/s7-variants-LYMkkQ/raw-0/incomplete/attempt-jTrkxr/packet-0007.wav",
+          "reference": {
+            "path": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-online-ui-v16-20261111/s7-variants-LYMkkQ/queued-8.wav",
+            "sha256": "1ec394610b41f3dea096d96419a4d9dbeadec2de19c0302124b91903f0ceabe0",
+            "bytes": 28716,
+            "sampleRate": 44100,
+            "channels": 1,
+            "bitsPerSample": 16,
+            "pcmBytes": 28672,
+            "peakPcm16": 16566
+          },
+          "captureStartSeconds": 7.82528125,
+          "captureEndSeconds": 8.150360615079364,
+          "fullActiveCorrelation": 0.9998804810879935,
+          "activeComparisonFrames": 62350,
+          "sourceDurationSeconds": 0.3250793650793651,
+          "externalGapBeforeMs": 0.003968253967201463,
+          "encodedSilentSecondsBefore": 0.0
+        },
+        {
+          "queueIndex": 8,
+          "sourcePath": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-online-ui-v16-20261111/s7-variants-LYMkkQ/raw-0/incomplete/attempt-jTrkxr/packet-0008.wav",
+          "reference": {
+            "path": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-online-ui-v16-20261111/s7-variants-LYMkkQ/queued-9.wav",
+            "sha256": "67d1ded2ccf182d4a1a23fe32de6e5a67a9513d556cadcee83f6487901d65fd9",
+            "bytes": 28716,
+            "sampleRate": 44100,
+            "channels": 1,
+            "bitsPerSample": 16,
+            "pcmBytes": 28672,
+            "peakPcm16": 15131
+          },
+          "captureStartSeconds": 8.150359375,
+          "captureEndSeconds": 8.475438740079365,
+          "fullActiveCorrelation": 0.9999946968147171,
+          "activeComparisonFrames": 62415,
+          "sourceDurationSeconds": 0.3250793650793651,
+          "externalGapBeforeMs": -0.001240079363640234,
+          "encodedSilentSecondsBefore": 0.0
+        }
+      ],
+      "excludedFinalWaveform": {
+        "queueIndex": 9,
+        "sourcePath": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-online-ui-v16-20261111/s7-variants-LYMkkQ/raw-0/incomplete/attempt-jTrkxr/packet-0009.wav",
+        "reference": {
+          "path": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-online-ui-v16-20261111/s7-variants-LYMkkQ/queued-10.wav",
+          "sha256": "5faa89b8c1f997f372131f46ac6a98be4d04e25b7a34214e66e131a00ffa9772",
+          "bytes": 28716,
+          "sampleRate": 44100,
+          "channels": 1,
+          "bitsPerSample": 16,
+          "pcmBytes": 28672,
+          "peakPcm16": 12052
+        },
+        "durationSeconds": 0.3250793650793651,
+        "observedByPlayer": true,
+        "expectedStartSeconds": 8.4626175,
+        "reason": "Final queued WAV interrupted by Pause; no partial waveform acceptance"
+      },
+      "completeReferenceSeconds": 2.7863945578231295,
+      "encodedSilentPackets": [],
+      "errors": [],
+      "playerSnapshotOrderAnomalies": [],
+      "pauseSourceWitness": {
+        "queueIndex": 9,
+        "sample": {
+          "elapsedMs": 8902,
+          "unixMicros": 1794419170000843,
+          "phase": "initial-A8",
+          "engineIndex": 0,
+          "playing": true,
+          "processingState": "ready",
+          "positionMs": 183,
+          "currentIndex": 1,
+          "source": "file:///Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-online-ui-v16-20261111/s7-variants-LYMkkQ/raw-0/incomplete/attempt-jTrkxr/packet-0009.wav",
+          "word": 1
+        }
+      },
+      "preparedTailOutsidePlaybackInterval": [
+        {
+          "queueIndex": 10,
+          "sourcePath": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-online-ui-v16-20261111/s7-variants-LYMkkQ/raw-0/incomplete/attempt-jTrkxr/packet-0010.wav",
+          "reference": {
+            "path": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-online-ui-v16-20261111/s7-variants-LYMkkQ/queued-11.wav",
+            "sha256": "395a87638bd58b0895b0ff62e10b86990da2966c1f6895d6f4e1ba96c3d2abc3",
+            "bytes": 28716,
+            "sampleRate": 44100,
+            "channels": 1,
+            "bitsPerSample": 16,
+            "pcmBytes": 28672,
+            "peakPcm16": 8713
+          }
+        },
+        {
+          "queueIndex": 11,
+          "sourcePath": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-online-ui-v16-20261111/s7-variants-LYMkkQ/raw-0/incomplete/attempt-jTrkxr/packet-0011.wav",
+          "reference": {
+            "path": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-online-ui-v16-20261111/s7-variants-LYMkkQ/queued-12.wav",
+            "sha256": "180924cb3f87b38799ac03721724db317e16be06df880415a647bd99a3050cfe",
+            "bytes": 28716,
+            "sampleRate": 44100,
+            "channels": 1,
+            "bitsPerSample": 16,
+            "pcmBytes": 28672,
+            "peakPcm16": 9239
+          }
+        },
+        {
+          "queueIndex": 12,
+          "sourcePath": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-online-ui-v16-20261111/s7-variants-LYMkkQ/raw-0/incomplete/attempt-jTrkxr/packet-0012.wav",
+          "reference": {
+            "path": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-online-ui-v16-20261111/s7-variants-LYMkkQ/queued-13.wav",
+            "sha256": "a0d41cc0e2e452b9aee28935b6bc0fa2e7aad34fa15b7397141045396826b7d0",
+            "bytes": 28716,
+            "sampleRate": 44100,
+            "channels": 1,
+            "bitsPerSample": 16,
+            "pcmBytes": 28672,
+            "peakPcm16": 1104
+          }
+        },
+        {
+          "queueIndex": 13,
+          "sourcePath": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-online-ui-v16-20261111/s7-variants-LYMkkQ/raw-0/incomplete/attempt-jTrkxr/packet-0013.wav",
+          "reference": {
+            "path": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-online-ui-v16-20261111/s7-variants-LYMkkQ/queued-14.wav",
+            "sha256": "ffaa4346c5915007024df6f8a326613eaf77cedd29882595f5a6cb16117168ff",
+            "bytes": 28716,
+            "sampleRate": 44100,
+            "channels": 1,
+            "bitsPerSample": 16,
+            "pcmBytes": 28672,
+            "peakPcm16": 5
+          }
+        },
+        {
+          "queueIndex": 14,
+          "sourcePath": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-online-ui-v16-20261111/s7-variants-LYMkkQ/raw-0/incomplete/attempt-jTrkxr/packet-0014.wav",
+          "reference": {
+            "path": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-online-ui-v16-20261111/s7-variants-LYMkkQ/queued-15.wav",
+            "sha256": "6396edb075aae995f52efcff78116237b09517cad44cbe1d58f03b5fd819bb6d",
+            "bytes": 28716,
+            "sampleRate": 44100,
+            "channels": 1,
+            "bitsPerSample": 16,
+            "pcmBytes": 28672,
+            "peakPcm16": 6
+          }
+        },
+        {
+          "queueIndex": 15,
+          "sourcePath": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-online-ui-v16-20261111/s7-variants-LYMkkQ/raw-0/incomplete/attempt-jTrkxr/packet-0015.wav",
+          "reference": {
+            "path": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-online-ui-v16-20261111/s7-variants-LYMkkQ/queued-16.wav",
+            "sha256": "ffab27c61ba3c1679583499425490917a5cbd91e60cafc1653075599b978782c",
+            "bytes": 28716,
+            "sampleRate": 44100,
+            "channels": 1,
+            "bitsPerSample": 16,
+            "pcmBytes": 28672,
+            "peakPcm16": 6
+          }
+        },
+        {
+          "queueIndex": 16,
+          "sourcePath": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-online-ui-v16-20261111/s7-variants-LYMkkQ/raw-0/incomplete/attempt-jTrkxr/packet-0016.wav",
+          "reference": {
+            "path": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-online-ui-v16-20261111/s7-variants-LYMkkQ/queued-17.wav",
+            "sha256": "8874461a8a6ab0205a48e17a75c255343f749c1fba067aaf8ea528620b6a2a5b",
+            "bytes": 28716,
+            "sampleRate": 44100,
+            "channels": 1,
+            "bitsPerSample": 16,
+            "pcmBytes": 28672,
+            "peakPcm16": 6
+          }
+        },
+        {
+          "queueIndex": 17,
+          "sourcePath": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-online-ui-v16-20261111/s7-variants-LYMkkQ/raw-0/incomplete/attempt-jTrkxr/packet-0017.wav",
+          "reference": {
+            "path": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-online-ui-v16-20261111/s7-variants-LYMkkQ/queued-18.wav",
+            "sha256": "f99044b9ee21a5d6935f8a4d08ba2e288dd324ad02fc9a09fb51c535326b47dd",
+            "bytes": 28716,
+            "sampleRate": 44100,
+            "channels": 1,
+            "bitsPerSample": 16,
+            "pcmBytes": 28672,
+            "peakPcm16": 5
+          }
+        },
+        {
+          "queueIndex": 18,
+          "sourcePath": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-online-ui-v16-20261111/s7-variants-LYMkkQ/raw-0/incomplete/attempt-jTrkxr/packet-0018.wav",
+          "reference": {
+            "path": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-online-ui-v16-20261111/s7-variants-LYMkkQ/queued-19.wav",
+            "sha256": "1b5d97ba6ab6e306482311978cda321906522d93918e975d60082e1a74dc443d",
+            "bytes": 28716,
+            "sampleRate": 44100,
+            "channels": 1,
+            "bitsPerSample": 16,
+            "pcmBytes": 28672,
+            "peakPcm16": 7306
+          }
+        },
+        {
+          "queueIndex": 19,
+          "sourcePath": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-online-ui-v16-20261111/s7-variants-LYMkkQ/raw-0/incomplete/attempt-jTrkxr/packet-0019.wav",
+          "reference": {
+            "path": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-online-ui-v16-20261111/s7-variants-LYMkkQ/queued-20.wav",
+            "sha256": "1d5652a8a9dfcfd86e4ef4a37eaf0145e3464dc0159ec3dac7724d7c692d44d6",
+            "bytes": 28716,
+            "sampleRate": 44100,
+            "channels": 1,
+            "bitsPerSample": 16,
+            "pcmBytes": 28672,
+            "peakPcm16": 17419
+          }
+        },
+        {
+          "queueIndex": 20,
+          "sourcePath": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-online-ui-v16-20261111/s7-variants-LYMkkQ/raw-0/incomplete/attempt-jTrkxr/packet-0020.wav",
+          "reference": {
+            "path": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-online-ui-v16-20261111/s7-variants-LYMkkQ/queued-21.wav",
+            "sha256": "8a2e21b2958a57f36fb718757a7d8e55f845b302010fe575af76b530a09fe2f2",
+            "bytes": 28716,
+            "sampleRate": 44100,
+            "channels": 1,
+            "bitsPerSample": 16,
+            "pcmBytes": 28672,
+            "peakPcm16": 16062
+          }
+        },
+        {
+          "queueIndex": 21,
+          "sourcePath": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-online-ui-v16-20261111/s7-variants-LYMkkQ/raw-0/incomplete/attempt-jTrkxr/packet-0021.wav",
+          "reference": {
+            "path": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-online-ui-v16-20261111/s7-variants-LYMkkQ/queued-22.wav",
+            "sha256": "bd7213925c7968c3385b21397a996a6db829a86d75e3308b9c025452b8ab5328",
+            "bytes": 28716,
+            "sampleRate": 44100,
+            "channels": 1,
+            "bitsPerSample": 16,
+            "pcmBytes": 28672,
+            "peakPcm16": 8827
+          }
+        },
+        {
+          "queueIndex": 22,
+          "sourcePath": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-online-ui-v16-20261111/s7-variants-LYMkkQ/raw-0/incomplete/attempt-jTrkxr/packet-0022.wav",
+          "reference": {
+            "path": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-online-ui-v16-20261111/s7-variants-LYMkkQ/queued-23.wav",
+            "sha256": "b71bbf65327a4cbfa895510b4c178a5ff4db54697cd460548ef349d21e05f22d",
+            "bytes": 28716,
+            "sampleRate": 44100,
+            "channels": 1,
+            "bitsPerSample": 16,
+            "pcmBytes": 28672,
+            "peakPcm16": 15322
+          }
+        }
+      ],
+      "maximumAbsoluteExternalJoinMs": 0.00396825396897782,
+      "minimumFullActiveCorrelation": 0.9993193995911319,
+      "passed": true
+    },
+    {
+      "label": "B4",
+      "matches": [
+        {
+          "queueIndex": 23,
+          "sourcePath": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-online-ui-v16-20261111/s7-variants-LYMkkQ/raw-2/incomplete/attempt-k0tGi4/packet-0000.wav.onset-44.wav",
+          "reference": {
+            "path": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-online-ui-v16-20261111/s7-variants-LYMkkQ/queued-24.wav",
+            "sha256": "ab2d38373435ffcf2eab765f8e578bf74d7684c85bce7da03a9bacf8e9ee3e54",
+            "bytes": 16340,
+            "sampleRate": 44100,
+            "channels": 1,
+            "bitsPerSample": 16,
+            "pcmBytes": 16296,
+            "peakPcm16": 10250
+          },
+          "captureStartSeconds": 102.77918749999999,
+          "captureEndSeconds": 102.96394940476189,
+          "fullActiveCorrelation": 0.9999883276391125,
+          "activeComparisonFrames": 12399,
+          "sourceDurationSeconds": 0.18476190476190477,
+          "externalGapBeforeMs": null,
+          "encodedSilentSecondsBefore": 0.0
+        },
+        {
+          "queueIndex": 24,
+          "sourcePath": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-online-ui-v16-20261111/s7-variants-LYMkkQ/raw-2/incomplete/attempt-k0tGi4/packet-0001.wav",
+          "reference": {
+            "path": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-online-ui-v16-20261111/s7-variants-LYMkkQ/queued-25.wav",
+            "sha256": "be26aa0da476a2a1e57057c2bd3dac7574a1e54e4a063c5a52411e3e0e829cd8",
+            "bytes": 28716,
+            "sampleRate": 44100,
+            "channels": 1,
+            "bitsPerSample": 16,
+            "pcmBytes": 28672,
+            "peakPcm16": 15028
+          },
+          "captureStartSeconds": 102.963953125,
+          "captureEndSeconds": 103.28903249007936,
+          "fullActiveCorrelation": 0.9999588401370164,
+          "activeComparisonFrames": 62000,
+          "sourceDurationSeconds": 0.3250793650793651,
+          "externalGapBeforeMs": 0.0037202381122369843,
+          "encodedSilentSecondsBefore": 0.0
+        },
+        {
+          "queueIndex": 25,
+          "sourcePath": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-online-ui-v16-20261111/s7-variants-LYMkkQ/raw-2/incomplete/attempt-k0tGi4/packet-0002.wav",
+          "reference": {
+            "path": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-online-ui-v16-20261111/s7-variants-LYMkkQ/queued-26.wav",
+            "sha256": "6a7447a8df876f25286702cbe29b4e9aba4b1bb581f03f7e6df98b204e00c6c5",
+            "bytes": 28716,
+            "sampleRate": 44100,
+            "channels": 1,
+            "bitsPerSample": 16,
+            "pcmBytes": 28672,
+            "peakPcm16": 11620
+          },
+          "captureStartSeconds": 103.28903125,
+          "captureEndSeconds": 103.61411061507935,
+          "fullActiveCorrelation": 0.9999515246483938,
+          "activeComparisonFrames": 62415,
+          "sourceDurationSeconds": 0.3250793650793651,
+          "externalGapBeforeMs": -0.0012400793707456614,
+          "encodedSilentSecondsBefore": 0.0
+        },
+        {
+          "queueIndex": 26,
+          "sourcePath": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-online-ui-v16-20261111/s7-variants-LYMkkQ/raw-2/incomplete/attempt-k0tGi4/packet-0003.wav",
+          "reference": {
+            "path": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-online-ui-v16-20261111/s7-variants-LYMkkQ/queued-27.wav",
+            "sha256": "58bab0569826b7bdf120e570dfbd51ff3fda05f129c5532feba582e77362e35d",
+            "bytes": 28716,
+            "sampleRate": 44100,
+            "channels": 1,
+            "bitsPerSample": 16,
+            "pcmBytes": 28672,
+            "peakPcm16": 11396
+          },
+          "captureStartSeconds": 103.614109375,
+          "captureEndSeconds": 103.93918874007936,
+          "fullActiveCorrelation": 0.9999960911979447,
+          "activeComparisonFrames": 62415,
+          "sourceDurationSeconds": 0.3250793650793651,
+          "externalGapBeforeMs": -0.0012400793565348067,
+          "encodedSilentSecondsBefore": 0.0
+        },
+        {
+          "queueIndex": 27,
+          "sourcePath": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-online-ui-v16-20261111/s7-variants-LYMkkQ/raw-2/incomplete/attempt-k0tGi4/packet-0004.wav",
+          "reference": {
+            "path": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-online-ui-v16-20261111/s7-variants-LYMkkQ/queued-28.wav",
+            "sha256": "a534300f2c37e8cc48e7c1d1d71d1143a98505e95710f08007b9c309f7671a87",
+            "bytes": 28716,
+            "sampleRate": 44100,
+            "channels": 1,
+            "bitsPerSample": 16,
+            "pcmBytes": 28672,
+            "peakPcm16": 3615
+          },
+          "captureStartSeconds": 103.9391875,
+          "captureEndSeconds": 104.26426686507936,
+          "fullActiveCorrelation": 0.9998186456880772,
+          "activeComparisonFrames": 35028,
+          "sourceDurationSeconds": 0.3250793650793651,
+          "externalGapBeforeMs": -0.0012400793565348067,
+          "encodedSilentSecondsBefore": 0.0
+        },
+        {
+          "queueIndex": 28,
+          "sourcePath": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-online-ui-v16-20261111/s7-variants-LYMkkQ/raw-2/incomplete/attempt-k0tGi4/packet-0005.wav",
+          "reference": {
+            "path": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-online-ui-v16-20261111/s7-variants-LYMkkQ/queued-29.wav",
+            "sha256": "6b464f4a28d283f526863128c123b2dbec6f1761fd85e915b3bc23df4d92b9e5",
+            "bytes": 28716,
+            "sampleRate": 44100,
+            "channels": 1,
+            "bitsPerSample": 16,
+            "pcmBytes": 28672,
+            "peakPcm16": 10689
+          },
+          "captureStartSeconds": 104.26427083333334,
+          "captureEndSeconds": 104.5893501984127,
+          "fullActiveCorrelation": 0.9999911181374159,
+          "activeComparisonFrames": 28030,
+          "sourceDurationSeconds": 0.3250793650793651,
+          "externalGapBeforeMs": 0.003968253977859604,
+          "encodedSilentSecondsBefore": 0.0
+        },
+        {
+          "queueIndex": 29,
+          "sourcePath": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-online-ui-v16-20261111/s7-variants-LYMkkQ/raw-2/incomplete/attempt-k0tGi4/packet-0006.wav",
+          "reference": {
+            "path": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-online-ui-v16-20261111/s7-variants-LYMkkQ/queued-30.wav",
+            "sha256": "d4baac0be0fbd7494123136fabfb25edd6ed2af12e9564d97b93c427a2de1840",
+            "bytes": 28716,
+            "sampleRate": 44100,
+            "channels": 1,
+            "bitsPerSample": 16,
+            "pcmBytes": 28672,
+            "peakPcm16": 14709
+          },
+          "captureStartSeconds": 104.58934895833333,
+          "captureEndSeconds": 104.9144283234127,
+          "fullActiveCorrelation": 0.9999920168338553,
+          "activeComparisonFrames": 62000,
+          "sourceDurationSeconds": 0.3250793650793651,
+          "externalGapBeforeMs": -0.0012400793707456614,
+          "encodedSilentSecondsBefore": 0.0
+        },
+        {
+          "queueIndex": 30,
+          "sourcePath": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-online-ui-v16-20261111/s7-variants-LYMkkQ/raw-2/incomplete/attempt-k0tGi4/packet-0007.wav",
+          "reference": {
+            "path": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-online-ui-v16-20261111/s7-variants-LYMkkQ/queued-31.wav",
+            "sha256": "2f51a154aaf569ddacfd8226a20bd92162f33535e1199293e581e0b4800f6f80",
+            "bytes": 28716,
+            "sampleRate": 44100,
+            "channels": 1,
+            "bitsPerSample": 16,
+            "pcmBytes": 28672,
+            "peakPcm16": 16699
+          },
+          "captureStartSeconds": 104.91442708333334,
+          "captureEndSeconds": 105.2395064484127,
+          "fullActiveCorrelation": 0.9999750262436099,
+          "activeComparisonFrames": 62274,
+          "sourceDurationSeconds": 0.3250793650793651,
+          "externalGapBeforeMs": -0.0012400793565348067,
+          "encodedSilentSecondsBefore": 0.0
+        },
+        {
+          "queueIndex": 31,
+          "sourcePath": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-online-ui-v16-20261111/s7-variants-LYMkkQ/raw-2/incomplete/attempt-k0tGi4/packet-0008.wav",
+          "reference": {
+            "path": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-online-ui-v16-20261111/s7-variants-LYMkkQ/queued-32.wav",
+            "sha256": "cc387e11124f14f27c4d534dc5f2e2eaa131e3ef69ddbacc83bfc012e0bd5bc3",
+            "bytes": 28716,
+            "sampleRate": 44100,
+            "channels": 1,
+            "bitsPerSample": 16,
+            "pcmBytes": 28672,
+            "peakPcm16": 9060
+          },
+          "captureStartSeconds": 105.23950520833333,
+          "captureEndSeconds": 105.56458457341269,
+          "fullActiveCorrelation": 0.9999514734588012,
+          "activeComparisonFrames": 62248,
+          "sourceDurationSeconds": 0.3250793650793651,
+          "externalGapBeforeMs": -0.0012400793707456614,
+          "encodedSilentSecondsBefore": 0.0
+        }
+      ],
+      "excludedFinalWaveform": {
+        "queueIndex": 32,
+        "sourcePath": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-online-ui-v16-20261111/s7-variants-LYMkkQ/raw-2/incomplete/attempt-k0tGi4/packet-0009.wav",
+        "reference": {
+          "path": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-online-ui-v16-20261111/s7-variants-LYMkkQ/queued-33.wav",
+          "sha256": "1e26c6b947995ad7ff285ffcb84abd5273e9e27a79131f4bf463357bba733522",
+          "bytes": 28716,
+          "sampleRate": 44100,
+          "channels": 1,
+          "bitsPerSample": 16,
+          "pcmBytes": 28672,
+          "peakPcm16": 7792
+        },
+        "durationSeconds": 0.3250793650793651,
+        "observedByPlayer": true,
+        "expectedStartSeconds": 105.551575,
+        "reason": "Final queued WAV interrupted by Pause; no partial waveform acceptance"
+      },
+      "completeReferenceSeconds": 2.7853968253968255,
+      "encodedSilentPackets": [],
+      "errors": [],
+      "playerSnapshotOrderAnomalies": [],
+      "pauseSourceWitness": {
+        "queueIndex": 32,
+        "sample": {
+          "elapsedMs": 105902,
+          "unixMicros": 1794419267001544,
+          "phase": "B4",
+          "engineIndex": 2,
+          "playing": true,
+          "processingState": "ready",
+          "positionMs": 95,
+          "currentIndex": 1,
+          "source": "file:///Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-online-ui-v16-20261111/s7-variants-LYMkkQ/raw-2/incomplete/attempt-k0tGi4/packet-0009.wav",
+          "word": 25
+        }
+      },
+      "preparedTailOutsidePlaybackInterval": [
+        {
+          "queueIndex": 33,
+          "sourcePath": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-online-ui-v16-20261111/s7-variants-LYMkkQ/raw-2/incomplete/attempt-k0tGi4/packet-0010.wav",
+          "reference": {
+            "path": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-online-ui-v16-20261111/s7-variants-LYMkkQ/queued-34.wav",
+            "sha256": "7369431fef7db1ac6de27232654dbfb9b69b1c332546e2361e8b760fda51e8b8",
+            "bytes": 28716,
+            "sampleRate": 44100,
+            "channels": 1,
+            "bitsPerSample": 16,
+            "pcmBytes": 28672,
+            "peakPcm16": 8553
+          }
+        },
+        {
+          "queueIndex": 34,
+          "sourcePath": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-online-ui-v16-20261111/s7-variants-LYMkkQ/raw-2/incomplete/attempt-k0tGi4/packet-0011.wav",
+          "reference": {
+            "path": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-online-ui-v16-20261111/s7-variants-LYMkkQ/queued-35.wav",
+            "sha256": "849354d8797821898f24fa2d0b281303712e88ef3647a7bb6dbdc67f1beed938",
+            "bytes": 28716,
+            "sampleRate": 44100,
+            "channels": 1,
+            "bitsPerSample": 16,
+            "pcmBytes": 28672,
+            "peakPcm16": 8583
+          }
+        },
+        {
+          "queueIndex": 35,
+          "sourcePath": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-online-ui-v16-20261111/s7-variants-LYMkkQ/raw-2/incomplete/attempt-k0tGi4/packet-0012.wav",
+          "reference": {
+            "path": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-online-ui-v16-20261111/s7-variants-LYMkkQ/queued-36.wav",
+            "sha256": "a82ea1f3c18c85d49ccdbf3a1eabe638fe8e9c1663957d9e86a99ff2349f7dc3",
+            "bytes": 28716,
+            "sampleRate": 44100,
+            "channels": 1,
+            "bitsPerSample": 16,
+            "pcmBytes": 28672,
+            "peakPcm16": 10404
+          }
+        },
+        {
+          "queueIndex": 36,
+          "sourcePath": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-online-ui-v16-20261111/s7-variants-LYMkkQ/raw-2/incomplete/attempt-k0tGi4/packet-0013.wav",
+          "reference": {
+            "path": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-online-ui-v16-20261111/s7-variants-LYMkkQ/queued-37.wav",
+            "sha256": "a2a5d5d44834932852755b1b4c66a7edd486f8ed4d31c5b68f0045b6b7670251",
+            "bytes": 28716,
+            "sampleRate": 44100,
+            "channels": 1,
+            "bitsPerSample": 16,
+            "pcmBytes": 28672,
+            "peakPcm16": 10440
+          }
+        },
+        {
+          "queueIndex": 37,
+          "sourcePath": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-online-ui-v16-20261111/s7-variants-LYMkkQ/raw-2/incomplete/attempt-k0tGi4/packet-0014.wav",
+          "reference": {
+            "path": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-online-ui-v16-20261111/s7-variants-LYMkkQ/queued-38.wav",
+            "sha256": "7f88c28eb00317c9a98c9d91ed930619d694d7ee749813381084c48d206d1900",
+            "bytes": 28716,
+            "sampleRate": 44100,
+            "channels": 1,
+            "bitsPerSample": 16,
+            "pcmBytes": 28672,
+            "peakPcm16": 8059
+          }
+        },
+        {
+          "queueIndex": 38,
+          "sourcePath": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-online-ui-v16-20261111/s7-variants-LYMkkQ/raw-2/incomplete/attempt-k0tGi4/packet-0015.wav",
+          "reference": {
+            "path": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-online-ui-v16-20261111/s7-variants-LYMkkQ/queued-39.wav",
+            "sha256": "f45e24d197fc3db3ea21dac4a9ab7911287304cf1ce22f6a11b359ddb2dcfc2a",
+            "bytes": 28716,
+            "sampleRate": 44100,
+            "channels": 1,
+            "bitsPerSample": 16,
+            "pcmBytes": 28672,
+            "peakPcm16": 1679
+          }
+        },
+        {
+          "queueIndex": 39,
+          "sourcePath": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-online-ui-v16-20261111/s7-variants-LYMkkQ/raw-2/incomplete/attempt-k0tGi4/packet-0016.wav",
+          "reference": {
+            "path": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-online-ui-v16-20261111/s7-variants-LYMkkQ/queued-40.wav",
+            "sha256": "b88d26e810ddb2b9e5470e1ef4f2d77900a06a13ba368f590060c32de8acd3e8",
+            "bytes": 28716,
+            "sampleRate": 44100,
+            "channels": 1,
+            "bitsPerSample": 16,
+            "pcmBytes": 28672,
+            "peakPcm16": 4
+          }
+        },
+        {
+          "queueIndex": 40,
+          "sourcePath": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-online-ui-v16-20261111/s7-variants-LYMkkQ/raw-2/incomplete/attempt-k0tGi4/packet-0017.wav",
+          "reference": {
+            "path": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-online-ui-v16-20261111/s7-variants-LYMkkQ/queued-41.wav",
+            "sha256": "0858495b4756a0b19623bce3b5e4f023f5069a946ee1e3223f73afe395ec81a5",
+            "bytes": 28716,
+            "sampleRate": 44100,
+            "channels": 1,
+            "bitsPerSample": 16,
+            "pcmBytes": 28672,
+            "peakPcm16": 12573
+          }
+        },
+        {
+          "queueIndex": 41,
+          "sourcePath": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-online-ui-v16-20261111/s7-variants-LYMkkQ/raw-2/incomplete/attempt-k0tGi4/packet-0018.wav",
+          "reference": {
+            "path": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-online-ui-v16-20261111/s7-variants-LYMkkQ/queued-42.wav",
+            "sha256": "274ce847d14447a17aef6b399911b133366b88a34b04f70724330276dd27d343",
+            "bytes": 28716,
+            "sampleRate": 44100,
+            "channels": 1,
+            "bitsPerSample": 16,
+            "pcmBytes": 28672,
+            "peakPcm16": 17816
+          }
+        },
+        {
+          "queueIndex": 42,
+          "sourcePath": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-online-ui-v16-20261111/s7-variants-LYMkkQ/raw-2/incomplete/attempt-k0tGi4/packet-0019.wav",
+          "reference": {
+            "path": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-online-ui-v16-20261111/s7-variants-LYMkkQ/queued-43.wav",
+            "sha256": "a5a71bdb2b06c7a44f5f5112f3e0072e18cf25f6f8dba3f2ee833b0a734b6700",
+            "bytes": 28716,
+            "sampleRate": 44100,
+            "channels": 1,
+            "bitsPerSample": 16,
+            "pcmBytes": 28672,
+            "peakPcm16": 13643
+          }
+        },
+        {
+          "queueIndex": 43,
+          "sourcePath": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-online-ui-v16-20261111/s7-variants-LYMkkQ/raw-2/incomplete/attempt-k0tGi4/packet-0020.wav",
+          "reference": {
+            "path": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-online-ui-v16-20261111/s7-variants-LYMkkQ/queued-44.wav",
+            "sha256": "9cd7c84d7524451c5f6f1d646616e80430dc8f7698c476425b7f0a9f0a5c184c",
+            "bytes": 28716,
+            "sampleRate": 44100,
+            "channels": 1,
+            "bitsPerSample": 16,
+            "pcmBytes": 28672,
+            "peakPcm16": 12679
+          }
+        },
+        {
+          "queueIndex": 44,
+          "sourcePath": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-online-ui-v16-20261111/s7-variants-LYMkkQ/raw-2/incomplete/attempt-k0tGi4/packet-0021.wav",
+          "reference": {
+            "path": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-online-ui-v16-20261111/s7-variants-LYMkkQ/queued-45.wav",
+            "sha256": "ace428a7119594540aa4d93e344b2f70a861e56a440f3e802e099510fac61bfd",
+            "bytes": 28716,
+            "sampleRate": 44100,
+            "channels": 1,
+            "bitsPerSample": 16,
+            "pcmBytes": 28672,
+            "peakPcm16": 6177
+          }
+        },
+        {
+          "queueIndex": 45,
+          "sourcePath": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-online-ui-v16-20261111/s7-variants-LYMkkQ/raw-2/incomplete/attempt-k0tGi4/packet-0022.wav",
+          "reference": {
+            "path": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-online-ui-v16-20261111/s7-variants-LYMkkQ/queued-46.wav",
+            "sha256": "ddaa15d6cb7b95767b684b24e1feb8b7304de15b409c43300bab61b64f70af11",
+            "bytes": 28716,
+            "sampleRate": 44100,
+            "channels": 1,
+            "bitsPerSample": 16,
+            "pcmBytes": 28672,
+            "peakPcm16": 16540
+          }
+        },
+        {
+          "queueIndex": 46,
+          "sourcePath": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-online-ui-v16-20261111/s7-variants-LYMkkQ/raw-2/incomplete/attempt-k0tGi4/packet-0023.wav",
+          "reference": {
+            "path": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-online-ui-v16-20261111/s7-variants-LYMkkQ/queued-47.wav",
+            "sha256": "3643efe4e338db9b2147637efdd42319111e06d3180f1d56bef0e8459c60fb67",
+            "bytes": 28716,
+            "sampleRate": 44100,
+            "channels": 1,
+            "bitsPerSample": 16,
+            "pcmBytes": 28672,
+            "peakPcm16": 16435
+          }
+        },
+        {
+          "queueIndex": 47,
+          "sourcePath": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-online-ui-v16-20261111/s7-variants-LYMkkQ/raw-2/incomplete/attempt-k0tGi4/packet-0024.wav",
+          "reference": {
+            "path": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-online-ui-v16-20261111/s7-variants-LYMkkQ/queued-48.wav",
+            "sha256": "12119ad854c45e717d7993ae0e2c15c43635b7140f6d7c437c84fca409364946",
+            "bytes": 28716,
+            "sampleRate": 44100,
+            "channels": 1,
+            "bitsPerSample": 16,
+            "pcmBytes": 28672,
+            "peakPcm16": 13691
+          }
+        },
+        {
+          "queueIndex": 48,
+          "sourcePath": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-online-ui-v16-20261111/s7-variants-LYMkkQ/raw-2/incomplete/attempt-k0tGi4/packet-0025.wav",
+          "reference": {
+            "path": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-online-ui-v16-20261111/s7-variants-LYMkkQ/queued-49.wav",
+            "sha256": "835aef9eca58d81d9d6b62a670d7bfd8271aa06a3eade3bba19232443a276708",
+            "bytes": 28716,
+            "sampleRate": 44100,
+            "channels": 1,
+            "bitsPerSample": 16,
+            "pcmBytes": 28672,
+            "peakPcm16": 1676
+          }
+        },
+        {
+          "queueIndex": 49,
+          "sourcePath": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-online-ui-v16-20261111/s7-variants-LYMkkQ/raw-2/incomplete/attempt-k0tGi4/packet-0026.wav",
+          "reference": {
+            "path": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-online-ui-v16-20261111/s7-variants-LYMkkQ/queued-50.wav",
+            "sha256": "873c1cda3e9e3190768be1a903a3ddd3bb63a877468fcda64276de2d4522c59b",
+            "bytes": 28716,
+            "sampleRate": 44100,
+            "channels": 1,
+            "bitsPerSample": 16,
+            "pcmBytes": 28672,
+            "peakPcm16": 11603
+          }
+        }
+      ],
+      "maximumAbsoluteExternalJoinMs": 0.003968253977859604,
+      "minimumFullActiveCorrelation": 0.9998186456880772,
+      "passed": true
+    },
+    {
+      "label": "returned-A8",
+      "matches": [
+        {
+          "queueIndex": 50,
+          "sourcePath": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-online-ui-v16-20261111/s7-variants-LYMkkQ/raw-3/incomplete/attempt-PhmHVU/packet-0000.wav",
+          "reference": {
+            "path": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-online-ui-v16-20261111/s7-variants-LYMkkQ/queued-51.wav",
+            "sha256": "598949b38c86d5d25e749752f6a5ae2ec2899b99dc54283ad5287d2de32fef1a",
+            "bytes": 16428,
+            "sampleRate": 44100,
+            "channels": 1,
+            "bitsPerSample": 16,
+            "pcmBytes": 16384,
+            "peakPcm16": 7898
+          },
+          "captureStartSeconds": 111.70916666666668,
+          "captureEndSeconds": 111.89492630385489,
+          "fullActiveCorrelation": 0.9996930423207118,
+          "activeComparisonFrames": 27187,
+          "sourceDurationSeconds": 0.18575963718820862,
+          "externalGapBeforeMs": null,
+          "encodedSilentSecondsBefore": 0.0
+        },
+        {
+          "queueIndex": 51,
+          "sourcePath": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-online-ui-v16-20261111/s7-variants-LYMkkQ/raw-3/incomplete/attempt-PhmHVU/packet-0001.wav",
+          "reference": {
+            "path": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-online-ui-v16-20261111/s7-variants-LYMkkQ/queued-52.wav",
+            "sha256": "f472df026fb49025d9b4ba9a8e96b3c40de2b98671f40facc276a5e6d002ebc5",
+            "bytes": 28716,
+            "sampleRate": 44100,
+            "channels": 1,
+            "bitsPerSample": 16,
+            "pcmBytes": 28672,
+            "peakPcm16": 13275
+          },
+          "captureStartSeconds": 111.89492708333333,
+          "captureEndSeconds": 112.22000644841269,
+          "fullActiveCorrelation": 0.9999327141210459,
+          "activeComparisonFrames": 62415,
+          "sourceDurationSeconds": 0.3250793650793651,
+          "externalGapBeforeMs": 0.0007794784409043132,
+          "encodedSilentSecondsBefore": 0.0
+        },
+        {
+          "queueIndex": 52,
+          "sourcePath": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-online-ui-v16-20261111/s7-variants-LYMkkQ/raw-3/incomplete/attempt-PhmHVU/packet-0002.wav",
+          "reference": {
+            "path": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-online-ui-v16-20261111/s7-variants-LYMkkQ/queued-53.wav",
+            "sha256": "2c1a495fc62ed675cb273b5e03a29d4879c73acbb0810d66b12b28f100e85bd0",
+            "bytes": 28716,
+            "sampleRate": 44100,
+            "channels": 1,
+            "bitsPerSample": 16,
+            "pcmBytes": 28672,
+            "peakPcm16": 14050
+          },
+          "captureStartSeconds": 112.22000520833333,
+          "captureEndSeconds": 112.5450845734127,
+          "fullActiveCorrelation": 0.9999905984249903,
+          "activeComparisonFrames": 62415,
+          "sourceDurationSeconds": 0.3250793650793651,
+          "externalGapBeforeMs": -0.0012400793565348067,
+          "encodedSilentSecondsBefore": 0.0
+        },
+        {
+          "queueIndex": 53,
+          "sourcePath": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-online-ui-v16-20261111/s7-variants-LYMkkQ/raw-3/incomplete/attempt-PhmHVU/packet-0003.wav",
+          "reference": {
+            "path": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-online-ui-v16-20261111/s7-variants-LYMkkQ/queued-54.wav",
+            "sha256": "e69a289d7b0acae19d36ae7e98ca81f4cd95c1102edecc90dde12c5ad06c2668",
+            "bytes": 28716,
+            "sampleRate": 44100,
+            "channels": 1,
+            "bitsPerSample": 16,
+            "pcmBytes": 28672,
+            "peakPcm16": 6446
+          },
+          "captureStartSeconds": 112.54508333333332,
+          "captureEndSeconds": 112.87016269841268,
+          "fullActiveCorrelation": 0.9999200178257899,
+          "activeComparisonFrames": 61714,
+          "sourceDurationSeconds": 0.3250793650793651,
+          "externalGapBeforeMs": -0.0012400793707456614,
+          "encodedSilentSecondsBefore": 0.0
+        },
+        {
+          "queueIndex": 54,
+          "sourcePath": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-online-ui-v16-20261111/s7-variants-LYMkkQ/raw-3/incomplete/attempt-PhmHVU/packet-0004.wav",
+          "reference": {
+            "path": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-online-ui-v16-20261111/s7-variants-LYMkkQ/queued-55.wav",
+            "sha256": "9ff23ff04333ffc497745133ee724b47c86e99252620380d8703326ed3faa4bd",
+            "bytes": 28716,
+            "sampleRate": 44100,
+            "channels": 1,
+            "bitsPerSample": 16,
+            "pcmBytes": 28672,
+            "peakPcm16": 517
+          },
+          "captureStartSeconds": 112.87016666666666,
+          "captureEndSeconds": 113.19524603174602,
+          "fullActiveCorrelation": 0.999911692794946,
+          "activeComparisonFrames": 3264,
+          "sourceDurationSeconds": 0.3250793650793651,
+          "externalGapBeforeMs": 0.003968253977859604,
+          "encodedSilentSecondsBefore": 0.0
+        },
+        {
+          "queueIndex": 55,
+          "sourcePath": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-online-ui-v16-20261111/s7-variants-LYMkkQ/raw-3/incomplete/attempt-PhmHVU/packet-0005.wav",
+          "reference": {
+            "path": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-online-ui-v16-20261111/s7-variants-LYMkkQ/queued-56.wav",
+            "sha256": "3e42abe9029b32ff1dfe5be89865bc14167d90dc1247fb87833823aa532c52bd",
+            "bytes": 28716,
+            "sampleRate": 44100,
+            "channels": 1,
+            "bitsPerSample": 16,
+            "pcmBytes": 28672,
+            "peakPcm16": 12870
+          },
+          "captureStartSeconds": 113.19524479166667,
+          "captureEndSeconds": 113.52032415674603,
+          "fullActiveCorrelation": 0.9999795055483701,
+          "activeComparisonFrames": 42519,
+          "sourceDurationSeconds": 0.3250793650793651,
+          "externalGapBeforeMs": -0.0012400793565348067,
+          "encodedSilentSecondsBefore": 0.0
+        },
+        {
+          "queueIndex": 56,
+          "sourcePath": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-online-ui-v16-20261111/s7-variants-LYMkkQ/raw-3/incomplete/attempt-PhmHVU/packet-0006.wav",
+          "reference": {
+            "path": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-online-ui-v16-20261111/s7-variants-LYMkkQ/queued-57.wav",
+            "sha256": "4b7e3973f8dc68084add9b846060bc3efecaaf5fef8cd59b4ed6f6508ef3e24f",
+            "bytes": 28716,
+            "sampleRate": 44100,
+            "channels": 1,
+            "bitsPerSample": 16,
+            "pcmBytes": 28672,
+            "peakPcm16": 9960
+          },
+          "captureStartSeconds": 113.520328125,
+          "captureEndSeconds": 113.84540749007937,
+          "fullActiveCorrelation": 0.9997338545230173,
+          "activeComparisonFrames": 62415,
+          "sourceDurationSeconds": 0.3250793650793651,
+          "externalGapBeforeMs": 0.003968253977859604,
+          "encodedSilentSecondsBefore": 0.0
+        },
+        {
+          "queueIndex": 57,
+          "sourcePath": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-online-ui-v16-20261111/s7-variants-LYMkkQ/raw-3/incomplete/attempt-PhmHVU/packet-0007.wav",
+          "reference": {
+            "path": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-online-ui-v16-20261111/s7-variants-LYMkkQ/queued-58.wav",
+            "sha256": "46ecd54871a9a65df0a1b805496375a9e2c18da803d3a18ae55e9811e7bf3678",
+            "bytes": 28716,
+            "sampleRate": 44100,
+            "channels": 1,
+            "bitsPerSample": 16,
+            "pcmBytes": 28672,
+            "peakPcm16": 8079
+          },
+          "captureStartSeconds": 113.84540625,
+          "captureEndSeconds": 114.17048561507936,
+          "fullActiveCorrelation": 0.9999784100159801,
+          "activeComparisonFrames": 62413,
+          "sourceDurationSeconds": 0.3250793650793651,
+          "externalGapBeforeMs": -0.0012400793707456614,
+          "encodedSilentSecondsBefore": 0.0
+        },
+        {
+          "queueIndex": 58,
+          "sourcePath": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-online-ui-v16-20261111/s7-variants-LYMkkQ/raw-3/incomplete/attempt-PhmHVU/packet-0008.wav",
+          "reference": {
+            "path": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-online-ui-v16-20261111/s7-variants-LYMkkQ/queued-59.wav",
+            "sha256": "273405d3923c6d4ccc530fbca42035966846c26b714eb5ee633d0981640e72e9",
+            "bytes": 28716,
+            "sampleRate": 44100,
+            "channels": 1,
+            "bitsPerSample": 16,
+            "pcmBytes": 28672,
+            "peakPcm16": 7506
+          },
+          "captureStartSeconds": 114.170484375,
+          "captureEndSeconds": 114.49556374007936,
+          "fullActiveCorrelation": 0.9999931886943966,
+          "activeComparisonFrames": 58409,
+          "sourceDurationSeconds": 0.3250793650793651,
+          "externalGapBeforeMs": -0.0012400793565348067,
+          "encodedSilentSecondsBefore": 0.0
+        }
+      ],
+      "excludedFinalWaveform": {
+        "queueIndex": 59,
+        "sourcePath": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-online-ui-v16-20261111/s7-variants-LYMkkQ/raw-3/incomplete/attempt-PhmHVU/packet-0009.wav",
+        "reference": {
+          "path": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-online-ui-v16-20261111/s7-variants-LYMkkQ/queued-60.wav",
+          "sha256": "33f363e41e92eb81b6600ee00547057883e3f67f2f4068093b2ac2c4f1c59160",
+          "bytes": 28716,
+          "sampleRate": 44100,
+          "channels": 1,
+          "bitsPerSample": 16,
+          "pcmBytes": 28672,
+          "peakPcm16": 6477
+        },
+        "durationSeconds": 0.3250793650793651,
+        "observedByPlayer": true,
+        "expectedStartSeconds": 114.48298199999999,
+        "reason": "Final queued WAV interrupted by Pause; no partial waveform acceptance"
+      },
+      "completeReferenceSeconds": 2.7863945578231295,
+      "encodedSilentPackets": [],
+      "errors": [],
+      "playerSnapshotOrderAnomalies": [],
+      "pauseSourceWitness": {
+        "queueIndex": 59,
+        "sample": {
+          "elapsedMs": 114802,
+          "unixMicros": 1794419275900951,
+          "phase": "returned-A8",
+          "engineIndex": 3,
+          "playing": true,
+          "processingState": "ready",
+          "positionMs": 63,
+          "currentIndex": 1,
+          "source": "file:///Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-online-ui-v16-20261111/s7-variants-LYMkkQ/raw-3/incomplete/attempt-PhmHVU/packet-0009.wav",
+          "word": 25
+        }
+      },
+      "preparedTailOutsidePlaybackInterval": [
+        {
+          "queueIndex": 60,
+          "sourcePath": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-online-ui-v16-20261111/s7-variants-LYMkkQ/raw-3/incomplete/attempt-PhmHVU/packet-0010.wav",
+          "reference": {
+            "path": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-online-ui-v16-20261111/s7-variants-LYMkkQ/queued-61.wav",
+            "sha256": "4e1b5e8cbfde92ea57086f7d72994e726bef07e6bed7472e5e6a2a903f77b9d7",
+            "bytes": 28716,
+            "sampleRate": 44100,
+            "channels": 1,
+            "bitsPerSample": 16,
+            "pcmBytes": 28672,
+            "peakPcm16": 7864
+          }
+        },
+        {
+          "queueIndex": 61,
+          "sourcePath": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-online-ui-v16-20261111/s7-variants-LYMkkQ/raw-3/incomplete/attempt-PhmHVU/packet-0011.wav",
+          "reference": {
+            "path": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-online-ui-v16-20261111/s7-variants-LYMkkQ/queued-62.wav",
+            "sha256": "4b19cf90e40e334b0f2c32081f34ab48b75722cd730df6ecb0fc9887aed10c3d",
+            "bytes": 28716,
+            "sampleRate": 44100,
+            "channels": 1,
+            "bitsPerSample": 16,
+            "pcmBytes": 28672,
+            "peakPcm16": 7930
+          }
+        },
+        {
+          "queueIndex": 62,
+          "sourcePath": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-online-ui-v16-20261111/s7-variants-LYMkkQ/raw-3/incomplete/attempt-PhmHVU/packet-0012.wav",
+          "reference": {
+            "path": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-online-ui-v16-20261111/s7-variants-LYMkkQ/queued-63.wav",
+            "sha256": "8c1732117335d2c8268a69325055fcb854124cdfcf859bab5425af5945abe0df",
+            "bytes": 28716,
+            "sampleRate": 44100,
+            "channels": 1,
+            "bitsPerSample": 16,
+            "pcmBytes": 28672,
+            "peakPcm16": 7488
+          }
+        },
+        {
+          "queueIndex": 63,
+          "sourcePath": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-online-ui-v16-20261111/s7-variants-LYMkkQ/raw-3/incomplete/attempt-PhmHVU/packet-0013.wav",
+          "reference": {
+            "path": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-online-ui-v16-20261111/s7-variants-LYMkkQ/queued-64.wav",
+            "sha256": "d0d24b835c6c8fc048ff2ff6286ae3a0bc838574b37c4df4bb40cc369bbac9af",
+            "bytes": 28716,
+            "sampleRate": 44100,
+            "channels": 1,
+            "bitsPerSample": 16,
+            "pcmBytes": 28672,
+            "peakPcm16": 8513
+          }
+        },
+        {
+          "queueIndex": 64,
+          "sourcePath": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-online-ui-v16-20261111/s7-variants-LYMkkQ/raw-3/incomplete/attempt-PhmHVU/packet-0014.wav",
+          "reference": {
+            "path": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-online-ui-v16-20261111/s7-variants-LYMkkQ/queued-65.wav",
+            "sha256": "c9380c00a2a064ce66b3456937f522d796a3ce7cf4a5d52a45fa1e36bf2867ed",
+            "bytes": 28716,
+            "sampleRate": 44100,
+            "channels": 1,
+            "bitsPerSample": 16,
+            "pcmBytes": 28672,
+            "peakPcm16": 599
+          }
+        },
+        {
+          "queueIndex": 65,
+          "sourcePath": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-online-ui-v16-20261111/s7-variants-LYMkkQ/raw-3/incomplete/attempt-PhmHVU/packet-0015.wav",
+          "reference": {
+            "path": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-online-ui-v16-20261111/s7-variants-LYMkkQ/queued-66.wav",
+            "sha256": "50232a61c6c8f74d0ee21142d4b30f673eb9177b1de76f5fd067f40b063f3ced",
+            "bytes": 28716,
+            "sampleRate": 44100,
+            "channels": 1,
+            "bitsPerSample": 16,
+            "pcmBytes": 28672,
+            "peakPcm16": 10980
+          }
+        },
+        {
+          "queueIndex": 66,
+          "sourcePath": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-online-ui-v16-20261111/s7-variants-LYMkkQ/raw-3/incomplete/attempt-PhmHVU/packet-0016.wav",
+          "reference": {
+            "path": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-online-ui-v16-20261111/s7-variants-LYMkkQ/queued-67.wav",
+            "sha256": "39592aa6d31a38b59b828a4e000be2b9eecd2588a57845bc52387f5bd5c250df",
+            "bytes": 28716,
+            "sampleRate": 44100,
+            "channels": 1,
+            "bitsPerSample": 16,
+            "pcmBytes": 28672,
+            "peakPcm16": 14542
+          }
+        },
+        {
+          "queueIndex": 67,
+          "sourcePath": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-online-ui-v16-20261111/s7-variants-LYMkkQ/raw-3/incomplete/attempt-PhmHVU/packet-0017.wav",
+          "reference": {
+            "path": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-online-ui-v16-20261111/s7-variants-LYMkkQ/queued-68.wav",
+            "sha256": "494fa27968a72b345f365957a5494de699cb4176165fb8665a4c5bf73688049d",
+            "bytes": 28716,
+            "sampleRate": 44100,
+            "channels": 1,
+            "bitsPerSample": 16,
+            "pcmBytes": 28672,
+            "peakPcm16": 10781
+          }
+        },
+        {
+          "queueIndex": 68,
+          "sourcePath": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-online-ui-v16-20261111/s7-variants-LYMkkQ/raw-3/incomplete/attempt-PhmHVU/packet-0018.wav",
+          "reference": {
+            "path": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-online-ui-v16-20261111/s7-variants-LYMkkQ/queued-69.wav",
+            "sha256": "b6808c2658dfb277b644ddb268bdf22dddd856b7ff70af44531dabf78d195ce3",
+            "bytes": 28716,
+            "sampleRate": 44100,
+            "channels": 1,
+            "bitsPerSample": 16,
+            "pcmBytes": 28672,
+            "peakPcm16": 7466
+          }
+        },
+        {
+          "queueIndex": 69,
+          "sourcePath": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-online-ui-v16-20261111/s7-variants-LYMkkQ/raw-3/incomplete/attempt-PhmHVU/packet-0019.wav",
+          "reference": {
+            "path": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-online-ui-v16-20261111/s7-variants-LYMkkQ/queued-70.wav",
+            "sha256": "8bd83a2e2b93c1127c7dd65e6574ac3cf385e0252639282d65834df71fbd7e98",
+            "bytes": 28716,
+            "sampleRate": 44100,
+            "channels": 1,
+            "bitsPerSample": 16,
+            "pcmBytes": 28672,
+            "peakPcm16": 9414
+          }
+        },
+        {
+          "queueIndex": 70,
+          "sourcePath": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-online-ui-v16-20261111/s7-variants-LYMkkQ/raw-3/incomplete/attempt-PhmHVU/packet-0020.wav",
+          "reference": {
+            "path": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-online-ui-v16-20261111/s7-variants-LYMkkQ/queued-71.wav",
+            "sha256": "9f22b4ba70ce114934d02cf42e215cf8dc2ef872a62fc888a7f56a5f63b953fe",
+            "bytes": 28716,
+            "sampleRate": 44100,
+            "channels": 1,
+            "bitsPerSample": 16,
+            "pcmBytes": 28672,
+            "peakPcm16": 8993
+          }
+        }
+      ],
+      "maximumAbsoluteExternalJoinMs": 0.003968253977859604,
+      "minimumFullActiveCorrelation": 0.9996930423207118,
+      "passed": true
+    }
+  ],
+  "quietIntervals": [
+    {
+      "label": "initial-A8-to-B4",
+      "startSeconds": 8.899947,
+      "endSeconds": 101.158455,
+      "durationSeconds": 92.258508,
+      "capturedPeak": 0.0,
+      "passed": true
+    },
+    {
+      "label": "B4-to-returned-A8",
+      "startSeconds": 105.977247,
+      "endSeconds": 109.872124,
+      "durationSeconds": 3.894876999999994,
+      "capturedPeak": 0.0,
+      "passed": true
+    },
+    {
+      "label": "after-final-Pause",
+      "startSeconds": 114.877935,
+      "endSeconds": 115.74,
+      "durationSeconds": 0.8620650000000012,
+      "capturedPeak": 0.0,
+      "passed": true
+    }
+  ],
+  "policy": {
+    "scope": "Short three-second engine-switch routes only; not sustained acceptance",
+    "minimumCompleteReferenceSecondsPerSegment": 1.0,
+    "fullActiveCorrelationMinimum": 0.98,
+    "maximumAbsoluteExternalJoinMs": 10.0,
+    "maximumGuardedQuietPeak": 0.001,
+    "quietEdgeGuardSeconds": 0.25,
+    "minimumFinalQuietSeconds": 0.75
+  },
+  "limits": "Complete copied-reference waveform identity/order and packet joins for short routes. One final Pause-interrupted WAV per segment is excluded, never prefix-qualified. Source-encoded silent packets have signal/aggregate timing checks between audible anchors, no individual acoustic identity. Guards exclude 250ms at Pause and next Play. No sustained, transcript, quality/voice, human listening, startup, memory or M3 acceptance.",
+  "mode": "online-cancel-retry",
+  "captureSampleRate": 48000,
+  "comparisonSampleRate": 192000,
+  "capturePeak": 0.6041235327720642
+}

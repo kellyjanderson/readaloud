@@ -1,0 +1,8 @@
+{
+  "source": "62652a42355d470f72eb87215ceee503229a8805",
+  "nativeBuildSource": "f8bf8b2",
+  "nativeSourcesUnchanged": true,
+  "frameworkSha256": "4457edee5dc5132dd90af75eb2660da2f10b068a72a510c0a81ffbe76a148580",
+  "runnerSha256": "afe0b804d4cdc93d5b0fe8a84c5b96bda95e22655d4df021d72bed1e937f318b",
+  "architecture": "arm64"
+}

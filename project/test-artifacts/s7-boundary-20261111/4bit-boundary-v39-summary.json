@@ -1,0 +1,502 @@
+{
+  "diagnosticOnly": true,
+  "passed": false,
+  "receipt": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-4bit-boundary-v39-20261111/receipt.json",
+  "receiptSha256": "97ec667764f6c4e53e12affe734bc6023a4fde2a7697df1e15f99e27260eeb75",
+  "limits": "Native snapshots are sequential, not atomic. Entry equality does not prove physical current at later seek execution. No acoustic/causal/acceptance inference.",
+  "players": [
+    {
+      "id": "60dd86dd-04ea-46b5-bd85-03aec531a8a6",
+      "sessionIdentity": "3D18D874-C4EF-4239-B3D4-06FEBE2AEA13",
+      "skipLoopOffRewind": false,
+      "overflow": 0,
+      "offMainSkipped": 0,
+      "identityRegistryOverflow": false,
+      "eventCount": 354,
+      "trackedSources": [
+        {
+          "sourceIdentity": "6CDEEA54-5C76-4028-8BBC-253D72F82793",
+          "sourceURL": "file:///Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-4bit-boundary-v39-20261111/s7-variants-NzTK28/raw-0/incomplete/attempt-mILony/packet-0007.wav",
+          "firstRevision": 1
+        },
+        {
+          "sourceIdentity": "1D272692-707B-4309-8A58-025799D59D8E",
+          "sourceURL": "file:///Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-4bit-boundary-v39-20261111/s7-variants-NzTK28/raw-0/incomplete/attempt-mILony/packet-0004.wav",
+          "firstRevision": 1
+        },
+        {
+          "sourceIdentity": "36B6A47A-DB6D-4BC4-8F2A-8576659931DC",
+          "sourceURL": "file:///Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-4bit-boundary-v39-20261111/s7-variants-NzTK28/raw-0/incomplete/attempt-mILony/packet-0001.wav",
+          "firstRevision": 1
+        },
+        {
+          "sourceIdentity": "5012F354-43C4-4E74-90CF-94846DD79DAC",
+          "sourceURL": "file:///Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-4bit-boundary-v39-20261111/s7-variants-NzTK28/raw-0/incomplete/attempt-mILony/packet-0002.wav",
+          "firstRevision": 1
+        },
+        {
+          "sourceIdentity": "A87B4EB6-C491-4515-A1B8-D96F1C23DA88",
+          "sourceURL": "file:///Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-4bit-boundary-v39-20261111/s7-variants-NzTK28/raw-0/incomplete/attempt-mILony/packet-0003.wav",
+          "firstRevision": 1
+        },
+        {
+          "sourceIdentity": "893A2605-F6B0-4FAC-A1EB-EF333A88A677",
+          "sourceURL": "file:///Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-4bit-boundary-v39-20261111/s7-variants-NzTK28/raw-0/incomplete/attempt-mILony/packet-0005.wav",
+          "firstRevision": 1
+        },
+        {
+          "sourceIdentity": "59BA1185-F780-472D-98C2-2E0EC599CF2D",
+          "sourceURL": "file:///Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-4bit-boundary-v39-20261111/s7-variants-NzTK28/raw-0/incomplete/attempt-mILony/packet-0006.wav",
+          "firstRevision": 1
+        },
+        {
+          "sourceIdentity": "399C79A3-9F39-40BC-9C6D-EC67F03C9EAE",
+          "sourceURL": "file:///Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-4bit-boundary-v39-20261111/s7-variants-NzTK28/raw-0/incomplete/attempt-mILony/packet-0000.wav",
+          "firstRevision": 1
+        }
+      ],
+      "boundaryCounts": {
+        "load.entry": 1,
+        "source.bound": 2,
+        "native.insert.entry": 28,
+        "kvo.currentItem": 8,
+        "kvo.timeControlStatus": 10,
+        "native.insert.return": 28,
+        "kvo.playbackBufferEmpty": 25,
+        "position.read": 12,
+        "kvo.loadedTimeRanges": 85,
+        "kvo.status": 25,
+        "concatenatingInsertAll.entry": 26,
+        "observers.add": 26,
+        "concatenatingInsertAll.return": 26,
+        "item.complete.entry": 8,
+        "completion.rewind.entry": 8,
+        "completion.rewind.return": 8,
+        "item.complete.return": 8,
+        "concatenatingRemoveRange.entry": 6,
+        "observers.remove": 8,
+        "concatenatingRemoveRange.return": 6
+      },
+      "rewindEntries": [
+        {
+          "unixMicros": 1794447045142755,
+          "item": "packet-0000.wav",
+          "current": "packet-0000.wav",
+          "observedSameItemAtEntry": true,
+          "itemTimeSeconds": 0.187245066,
+          "currentTimeSeconds": 0.187245066,
+          "queueHead": "packet-0000.wav",
+          "details": {
+            "skipped": false
+          }
+        },
+        {
+          "unixMicros": 1794447045467689,
+          "item": "packet-0001.wav",
+          "current": "packet-0001.wav",
+          "observedSameItemAtEntry": true,
+          "itemTimeSeconds": 0.326358333,
+          "currentTimeSeconds": 0.326358333,
+          "queueHead": "packet-0001.wav",
+          "details": {
+            "skipped": false
+          }
+        },
+        {
+          "unixMicros": 1794447045792752,
+          "item": "packet-0002.wav",
+          "current": "packet-0002.wav",
+          "observedSameItemAtEntry": true,
+          "itemTimeSeconds": 0.32637025,
+          "currentTimeSeconds": 0.32637025,
+          "queueHead": "packet-0002.wav",
+          "details": {
+            "skipped": false
+          }
+        },
+        {
+          "unixMicros": 1794447046117869,
+          "item": "packet-0003.wav",
+          "current": "packet-0003.wav",
+          "observedSameItemAtEntry": true,
+          "itemTimeSeconds": 0.326396792,
+          "currentTimeSeconds": 0.326396792,
+          "queueHead": "packet-0003.wav",
+          "details": {
+            "skipped": false
+          }
+        },
+        {
+          "unixMicros": 1794447046442982,
+          "item": "packet-0004.wav",
+          "current": "packet-0004.wav",
+          "observedSameItemAtEntry": true,
+          "itemTimeSeconds": 0.326407,
+          "currentTimeSeconds": 0.326407,
+          "queueHead": "packet-0004.wav",
+          "details": {
+            "skipped": false
+          }
+        },
+        {
+          "unixMicros": 1794447046767508,
+          "item": "packet-0005.wav",
+          "current": "packet-0005.wav",
+          "observedSameItemAtEntry": true,
+          "itemTimeSeconds": 0.325712125,
+          "currentTimeSeconds": 0.325712125,
+          "queueHead": "packet-0005.wav",
+          "details": {
+            "skipped": false
+          }
+        },
+        {
+          "unixMicros": 1794447047223949,
+          "item": "packet-0006.wav",
+          "current": "packet-0006.wav",
+          "observedSameItemAtEntry": true,
+          "itemTimeSeconds": 0.3250793650793651,
+          "currentTimeSeconds": 0.3250793650793651,
+          "queueHead": "packet-0006.wav",
+          "details": {
+            "skipped": false
+          }
+        },
+        {
+          "unixMicros": 1794447047707491,
+          "item": "packet-0007.wav",
+          "current": "packet-0007.wav",
+          "observedSameItemAtEntry": true,
+          "itemTimeSeconds": 0.32638094,
+          "currentTimeSeconds": 0.32638094,
+          "queueHead": "packet-0007.wav",
+          "details": {
+            "skipped": false
+          }
+        }
+      ],
+      "selectedEvents": [
+        {
+          "boundary": "completion.rewind.entry",
+          "unixMicros": 1794447045142755,
+          "item": "packet-0000.wav",
+          "current": "packet-0000.wav",
+          "logicalIndex": 0,
+          "itemTimeSeconds": 0.187245066,
+          "currentTimeSeconds": 0.187245066,
+          "timeControlStatus": 2,
+          "reasonForWaiting": null,
+          "details": {
+            "skipped": false
+          }
+        },
+        {
+          "boundary": "completion.rewind.return",
+          "unixMicros": 1794447045142773,
+          "item": "packet-0000.wav",
+          "current": "packet-0000.wav",
+          "logicalIndex": 0,
+          "itemTimeSeconds": 0.187245066,
+          "currentTimeSeconds": 0.187245066,
+          "timeControlStatus": 2,
+          "reasonForWaiting": null,
+          "details": {
+            "skipped": false
+          }
+        },
+        {
+          "boundary": "completion.rewind.entry",
+          "unixMicros": 1794447045467689,
+          "item": "packet-0001.wav",
+          "current": "packet-0001.wav",
+          "logicalIndex": 1,
+          "itemTimeSeconds": 0.326358333,
+          "currentTimeSeconds": 0.326358333,
+          "timeControlStatus": 2,
+          "reasonForWaiting": null,
+          "details": {
+            "skipped": false
+          }
+        },
+        {
+          "boundary": "completion.rewind.return",
+          "unixMicros": 1794447045467713,
+          "item": "packet-0001.wav",
+          "current": "packet-0001.wav",
+          "logicalIndex": 1,
+          "itemTimeSeconds": 0.326358333,
+          "currentTimeSeconds": 0.326358333,
+          "timeControlStatus": 2,
+          "reasonForWaiting": null,
+          "details": {
+            "skipped": false
+          }
+        },
+        {
+          "boundary": "observers.remove",
+          "unixMicros": 1794447045468014,
+          "item": "packet-0000.wav",
+          "current": "packet-0002.wav",
+          "logicalIndex": 2,
+          "itemTimeSeconds": 0.0,
+          "currentTimeSeconds": 0.001891167,
+          "timeControlStatus": 2,
+          "reasonForWaiting": null,
+          "details": {}
+        },
+        {
+          "boundary": "completion.rewind.entry",
+          "unixMicros": 1794447045792752,
+          "item": "packet-0002.wav",
+          "current": "packet-0002.wav",
+          "logicalIndex": 1,
+          "itemTimeSeconds": 0.32637025,
+          "currentTimeSeconds": 0.32637025,
+          "timeControlStatus": 2,
+          "reasonForWaiting": null,
+          "details": {
+            "skipped": false
+          }
+        },
+        {
+          "boundary": "completion.rewind.return",
+          "unixMicros": 1794447045792770,
+          "item": "packet-0002.wav",
+          "current": "packet-0002.wav",
+          "logicalIndex": 1,
+          "itemTimeSeconds": 0.32637025,
+          "currentTimeSeconds": 0.32637025,
+          "timeControlStatus": 2,
+          "reasonForWaiting": null,
+          "details": {
+            "skipped": false
+          }
+        },
+        {
+          "boundary": "observers.remove",
+          "unixMicros": 1794447045793079,
+          "item": "packet-0001.wav",
+          "current": "packet-0003.wav",
+          "logicalIndex": 2,
+          "itemTimeSeconds": 0.0,
+          "currentTimeSeconds": 0.001876834,
+          "timeControlStatus": 2,
+          "reasonForWaiting": null,
+          "details": {}
+        },
+        {
+          "boundary": "completion.rewind.entry",
+          "unixMicros": 1794447046117869,
+          "item": "packet-0003.wav",
+          "current": "packet-0003.wav",
+          "logicalIndex": 1,
+          "itemTimeSeconds": 0.326396792,
+          "currentTimeSeconds": 0.326396792,
+          "timeControlStatus": 2,
+          "reasonForWaiting": null,
+          "details": {
+            "skipped": false
+          }
+        },
+        {
+          "boundary": "completion.rewind.return",
+          "unixMicros": 1794447046117889,
+          "item": "packet-0003.wav",
+          "current": "packet-0003.wav",
+          "logicalIndex": 1,
+          "itemTimeSeconds": 0.326396792,
+          "currentTimeSeconds": 0.326396792,
+          "timeControlStatus": 2,
+          "reasonForWaiting": null,
+          "details": {
+            "skipped": false
+          }
+        },
+        {
+          "boundary": "observers.remove",
+          "unixMicros": 1794447046118195,
+          "item": "packet-0002.wav",
+          "current": "packet-0004.wav",
+          "logicalIndex": 2,
+          "itemTimeSeconds": 0.0,
+          "currentTimeSeconds": 0.00191475,
+          "timeControlStatus": 2,
+          "reasonForWaiting": null,
+          "details": {}
+        },
+        {
+          "boundary": "completion.rewind.entry",
+          "unixMicros": 1794447046442982,
+          "item": "packet-0004.wav",
+          "current": "packet-0004.wav",
+          "logicalIndex": 1,
+          "itemTimeSeconds": 0.326407,
+          "currentTimeSeconds": 0.326407,
+          "timeControlStatus": 2,
+          "reasonForWaiting": null,
+          "details": {
+            "skipped": false
+          }
+        },
+        {
+          "boundary": "completion.rewind.return",
+          "unixMicros": 1794447046443001,
+          "item": "packet-0004.wav",
+          "current": "packet-0004.wav",
+          "logicalIndex": 1,
+          "itemTimeSeconds": 0.326407,
+          "currentTimeSeconds": 0.326407,
+          "timeControlStatus": 2,
+          "reasonForWaiting": null,
+          "details": {
+            "skipped": false
+          }
+        },
+        {
+          "boundary": "observers.remove",
+          "unixMicros": 1794447046443334,
+          "item": "packet-0003.wav",
+          "current": "packet-0005.wav",
+          "logicalIndex": 2,
+          "itemTimeSeconds": 0.0,
+          "currentTimeSeconds": 0.001972208,
+          "timeControlStatus": 2,
+          "reasonForWaiting": null,
+          "details": {}
+        },
+        {
+          "boundary": "completion.rewind.entry",
+          "unixMicros": 1794447046767508,
+          "item": "packet-0005.wav",
+          "current": "packet-0005.wav",
+          "logicalIndex": 1,
+          "itemTimeSeconds": 0.325712125,
+          "currentTimeSeconds": 0.325712125,
+          "timeControlStatus": 2,
+          "reasonForWaiting": null,
+          "details": {
+            "skipped": false
+          }
+        },
+        {
+          "boundary": "completion.rewind.return",
+          "unixMicros": 1794447046767538,
+          "item": "packet-0005.wav",
+          "current": "packet-0005.wav",
+          "logicalIndex": 1,
+          "itemTimeSeconds": 0.325712125,
+          "currentTimeSeconds": 0.325712125,
+          "timeControlStatus": 2,
+          "reasonForWaiting": null,
+          "details": {
+            "skipped": false
+          }
+        },
+        {
+          "boundary": "observers.remove",
+          "unixMicros": 1794447046767885,
+          "item": "packet-0004.wav",
+          "current": "packet-0006.wav",
+          "logicalIndex": 2,
+          "itemTimeSeconds": 0.0,
+          "currentTimeSeconds": 0.001443459,
+          "timeControlStatus": 2,
+          "reasonForWaiting": null,
+          "details": {}
+        },
+        {
+          "boundary": "completion.rewind.entry",
+          "unixMicros": 1794447047223949,
+          "item": "packet-0006.wav",
+          "current": "packet-0006.wav",
+          "logicalIndex": 1,
+          "itemTimeSeconds": 0.3250793650793651,
+          "currentTimeSeconds": 0.3250793650793651,
+          "timeControlStatus": 2,
+          "reasonForWaiting": null,
+          "details": {
+            "skipped": false
+          }
+        },
+        {
+          "boundary": "completion.rewind.return",
+          "unixMicros": 1794447047224016,
+          "item": "packet-0006.wav",
+          "current": "packet-0006.wav",
+          "logicalIndex": 1,
+          "itemTimeSeconds": 0.3250793650793651,
+          "currentTimeSeconds": 0.3250793650793651,
+          "timeControlStatus": 2,
+          "reasonForWaiting": null,
+          "details": {
+            "skipped": false
+          }
+        },
+        {
+          "boundary": "observers.remove",
+          "unixMicros": 1794447047227219,
+          "item": "packet-0005.wav",
+          "current": "packet-0007.wav",
+          "logicalIndex": 2,
+          "itemTimeSeconds": 0.0,
+          "currentTimeSeconds": 0.083413125,
+          "timeControlStatus": 2,
+          "reasonForWaiting": null,
+          "details": {}
+        },
+        {
+          "boundary": "completion.rewind.entry",
+          "unixMicros": 1794447047707491,
+          "item": "packet-0007.wav",
+          "current": "packet-0007.wav",
+          "logicalIndex": 1,
+          "itemTimeSeconds": 0.32638094,
+          "currentTimeSeconds": 0.32638094,
+          "timeControlStatus": 2,
+          "reasonForWaiting": null,
+          "details": {
+            "skipped": false
+          }
+        },
+        {
+          "boundary": "completion.rewind.return",
+          "unixMicros": 1794447047707522,
+          "item": "packet-0007.wav",
+          "current": "packet-0007.wav",
+          "logicalIndex": 1,
+          "itemTimeSeconds": 0.0,
+          "currentTimeSeconds": 0.0,
+          "timeControlStatus": 2,
+          "reasonForWaiting": null,
+          "details": {
+            "skipped": false
+          }
+        },
+        {
+          "boundary": "observers.remove",
+          "unixMicros": 1794447047707940,
+          "item": "packet-0006.wav",
+          "current": null,
+          "logicalIndex": 2,
+          "itemTimeSeconds": 0.0,
+          "currentTimeSeconds": 0.133975863,
+          "timeControlStatus": 2,
+          "reasonForWaiting": null,
+          "details": {}
+        },
+        {
+          "boundary": "observers.remove",
+          "unixMicros": 1794447047900320,
+          "item": "packet-0007.wav",
+          "current": null,
+          "logicalIndex": 2,
+          "itemTimeSeconds": 0.0,
+          "currentTimeSeconds": 0.001261696,
+          "timeControlStatus": 2,
+          "reasonForWaiting": null,
+          "details": {}
+        }
+      ]
+    }
+  ]
+}

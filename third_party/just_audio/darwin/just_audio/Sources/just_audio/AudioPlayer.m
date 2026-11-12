@@ -9,10 +9,24 @@
 #import "./include/just_audio/ClippingAudioSource.h"
 #import <AVFoundation/AVFoundation.h>
 #import <stdlib.h>
+#import <stdatomic.h>
+#import <time.h>
+#import <objc/runtime.h>
 #include <TargetConditionals.h>
 
 #define TREADMILL_SIZE 2
 #define ERROR_ABORT 10000000
+
+static char readAloudAuditIdentityKey;
+static NSString *readAloudAuditIdentity(id object) {
+    if (!object) return nil;
+    NSString *identity = objc_getAssociatedObject(object, &readAloudAuditIdentityKey);
+    if (!identity) {
+        identity = [NSUUID UUID].UUIDString;
+        objc_setAssociatedObject(object, &readAloudAuditIdentityKey, identity, OBJC_ASSOCIATION_COPY_NONATOMIC);
+    }
+    return identity;
+}
 
 // TODO: Check for and report invalid state transitions.
 // TODO: Apply Apple's guidance on seeking: https://developer.apple.com/library/archive/qa/qa1820/_index.html
@@ -53,11 +67,190 @@
     NSDictionary<NSString *, NSObject *> *_icyMetadata;
     NSNumber *_errorCode;
     NSString *_errorMessage;
+    // QA diagnostic ownership: main thread only, except the atomic skip counter.
+    // No dispatch, observer additions, retained media objects, logging or I/O.
+    BOOL _queueBoundaryAuditEnabled;
+    atomic_uint_fast64_t _queueBoundaryAuditOffMain;
+    NSMutableArray<NSDictionary *> *_queueBoundaryAuditEvents;
+    NSMutableDictionary<NSString *, NSDictionary *> *_queueBoundaryAuditSources;
+    NSMutableDictionary<NSString *, NSDictionary *> *_queueBoundaryAuditItems;
+    NSString *_queueBoundaryAuditSession;
+    NSUInteger _queueBoundaryAuditNext;
+    NSUInteger _queueBoundaryAuditOverflow;
+    NSUInteger _queueBoundaryAuditRevision;
+    BOOL _queueBoundaryAuditRegistryOverflow;
+    BOOL _queueBoundaryAuditDisposed;
+    BOOL _readAloudQueueSkipLoopOffRewind;
+    BOOL _readAloudQueuePhysicalHeadIndex; // QA diagnostic override only.
+    BOOL _readAloudFiniteLocalWavQueue; // Immutable per native player, macOS only.
+    __weak IndexedPlayerItem *_readAloudPendingFinalCompletion;
 }
 
-- (instancetype)initWithRegistrar:(NSObject<FlutterPluginRegistrar> *)registrar playerId:(NSString*)idParam loadConfiguration:(NSDictionary *)loadConfiguration useLazyPreparation:(BOOL)useLazyPreparation {
++ (BOOL)readAloudQueueBoundaryAuditEnabled {
+    const char *value = getenv("READALOUD_QUEUE_BOUNDARY_AUDIT");
+    return value && strcmp(value, "1") == 0;
+}
+
+- (instancetype)init {
     self = [super init];
+    if (self) {
+        _queueBoundaryAuditEnabled = [AudioPlayer readAloudQueueBoundaryAuditEnabled];
+        const char *skipRewind = getenv("READALOUD_QUEUE_SKIP_LOOP_OFF_REWIND");
+        _readAloudQueueSkipLoopOffRewind = skipRewind && strcmp(skipRewind, "1") == 0;
+        const char *physicalHead = getenv("READALOUD_QUEUE_PHYSICAL_HEAD_INDEX");
+        _readAloudQueuePhysicalHeadIndex = physicalHead && strcmp(physicalHead, "1") == 0;
+        atomic_init(&_queueBoundaryAuditOffMain, 0);
+        if (_queueBoundaryAuditEnabled) {
+            _queueBoundaryAuditEvents = [NSMutableArray new];
+            _queueBoundaryAuditSources = [NSMutableDictionary new];
+            _queueBoundaryAuditItems = [NSMutableDictionary new];
+            _queueBoundaryAuditSession = [NSUUID UUID].UUIDString;
+        }
+    }
+    return self;
+}
+
+- (BOOL)queueBoundaryAuditCanRecord {
+    if (!_queueBoundaryAuditEnabled) return NO;
+    if (![NSThread isMainThread]) {
+        atomic_fetch_add_explicit(&_queueBoundaryAuditOffMain, 1, memory_order_relaxed);
+        return NO;
+    }
+    return YES;
+}
+
+// Immutable identities are captured while the weak source link is alive. The
+// registry retains strings/numbers only, never a source/item/asset/player.
+- (NSString *)queueBoundaryAuditItem:(IndexedPlayerItem *)item selectSource:(BOOL)selectSource {
+    if (!item) return nil;
+    NSString *itemIdentity = readAloudAuditIdentity(item);
+    if (_queueBoundaryAuditItems[itemIdentity]) return itemIdentity;
+    IndexedAudioSource *source = item.audioSource;
+    NSString *sourceIdentity = readAloudAuditIdentity(source);
+    if (!sourceIdentity) return itemIdentity;
+    if (!_queueBoundaryAuditSources[sourceIdentity] && selectSource && _queueBoundaryAuditSources.count < 8) {
+        NSString *url = nil;
+        if ([item respondsToSelector:@selector(asset)] && [item.asset isKindOfClass:[AVURLAsset class]]) {
+            url = ((AVURLAsset *)item.asset).URL.absoluteString;
+        }
+        _queueBoundaryAuditSources[sourceIdentity] = @{
+            @"sourceIdentity": sourceIdentity, @"declaredSourceId": source.sourceId ?: (id)[NSNull null],
+            @"sourceURL": url ?: (id)[NSNull null], @"firstRevision": @(_queueBoundaryAuditRevision)};
+    }
+    if (_queueBoundaryAuditSources[sourceIdentity]) {
+        if (_queueBoundaryAuditItems.count == 64) {
+            _queueBoundaryAuditRegistryOverflow = YES;
+        } else {
+            _queueBoundaryAuditItems[itemIdentity] = @{@"itemIdentity": itemIdentity,
+                @"sourceIdentity": sourceIdentity, @"firstRevision": @(_queueBoundaryAuditRevision)};
+        }
+    }
+    return itemIdentity;
+}
+
+- (NSDictionary *)queueBoundaryAuditItemState:(IndexedPlayerItem *)item {
+    if (!item) return @{};
+    double position = [item respondsToSelector:@selector(currentTime)] ? CMTimeGetSeconds(item.currentTime) : NAN;
+    NSMutableArray *ranges = [NSMutableArray new];
+    NSArray *loaded = [item respondsToSelector:@selector(loadedTimeRanges)] ? item.loadedTimeRanges : @[];
+    for (NSUInteger i = 0; i < MIN((NSUInteger)8, loaded.count); i++) {
+        CMTimeRange range = [loaded[i] CMTimeRangeValue];
+        double start = CMTimeGetSeconds(range.start), duration = CMTimeGetSeconds(range.duration);
+        [ranges addObject:@{@"startSeconds": isfinite(start) ? @(start) : (id)[NSNull null],
+                            @"durationSeconds": isfinite(duration) ? @(duration) : (id)[NSNull null]}];
+    }
+    return @{@"currentTimeSeconds": isfinite(position) ? @(position) : (id)[NSNull null],
+             @"status": [item respondsToSelector:@selector(status)] ? @(item.status) : (id)[NSNull null],
+             @"bufferEmpty": [item respondsToSelector:@selector(isPlaybackBufferEmpty)] ? @(item.playbackBufferEmpty) : (id)[NSNull null],
+             @"bufferFull": [item respondsToSelector:@selector(isPlaybackBufferFull)] ? @(item.playbackBufferFull) : (id)[NSNull null],
+             @"likelyToKeepUp": [item respondsToSelector:@selector(isPlaybackLikelyToKeepUp)] ? @(item.playbackLikelyToKeepUp) : (id)[NSNull null],
+             @"loadedTimeRanges": ranges, @"loadedTimeRangesTotal": @(loaded.count),
+             @"loadedTimeRangesTruncated": @(loaded.count > 8)};
+}
+
+- (void)queueBoundaryAudit:(NSString *)boundary item:(IndexedPlayerItem *)item details:(NSDictionary *)details {
+    if (![self queueBoundaryAuditCanRecord]) return;
+    // Timestamps precede AVFoundation queries. Queue/current snapshots are
+    // sequential observations, not an atomic claim about the advancing player.
+    long long unixMicros = (long long)([NSDate date].timeIntervalSince1970 * 1000000.0);
+    struct timespec monotonic;
+    clock_gettime(CLOCK_MONOTONIC, &monotonic);
+    NSString *itemId = [self queueBoundaryAuditItem:item selectSource:NO];
+    NSArray *physicalQueue = _player.items ?: @[];
+    IndexedPlayerItem *current = (IndexedPlayerItem *)_player.currentItem;
+    NSString *currentId = [self queueBoundaryAuditItem:current selectSource:NO];
+    NSMutableArray *queueIds = [NSMutableArray new];
+    NSUInteger untrackedQueueItems = 0;
+    BOOL selectedPresent = _queueBoundaryAuditItems[itemId] != nil || _queueBoundaryAuditItems[currentId] != nil;
+    for (NSUInteger i = 0; i < MIN((NSUInteger)32, physicalQueue.count); i++) {
+        NSString *identity = [self queueBoundaryAuditItem:(IndexedPlayerItem *)physicalQueue[i] selectSource:NO];
+        [queueIds addObject:identity];
+        selectedPresent |= _queueBoundaryAuditItems[identity] != nil;
+        if (!_queueBoundaryAuditItems[identity]) untrackedQueueItems++;
+    }
+    BOOL lifecycle = [boundary hasPrefix:@"load."] || [boundary hasPrefix:@"dispose."];
+    if (!selectedPresent && !lifecycle) return;
+    id sourceInSequence = @NO;
+    NSString *sourceId = _queueBoundaryAuditItems[itemId][@"sourceIdentity"];
+    NSUInteger membershipLimit = MIN((NSUInteger)32, _indexedAudioSources.count);
+    for (NSUInteger i = 0; i < membershipLimit; i++) {
+        IndexedAudioSource *source = _indexedAudioSources[i];
+        if ([objc_getAssociatedObject(source, &readAloudAuditIdentityKey) isEqual:sourceId]) {
+            sourceInSequence = @YES;
+            break;
+        }
+    }
+    if (![sourceInSequence boolValue] && _indexedAudioSources.count > membershipLimit) sourceInSequence = [NSNull null];
+    id timeControl = [NSNull null], waitReason = [NSNull null];
+    if (@available(macOS 10.12, iOS 10.0, *)) {
+        if ([_player respondsToSelector:@selector(timeControlStatus)]) timeControl = @(_player.timeControlStatus);
+        if ([_player respondsToSelector:@selector(reasonForWaitingToPlay)]) waitReason = _player.reasonForWaitingToPlay ?: (id)[NSNull null];
+    }
+    NSDictionary *event = @{@"boundary": boundary, @"ordinal": @(_queueBoundaryAuditEvents.count + _queueBoundaryAuditOverflow), @"unixMicros": @(unixMicros),
+        @"monotonicMicros": @((uint64_t)monotonic.tv_sec * 1000000 + monotonic.tv_nsec / 1000),
+        @"revision": @(_queueBoundaryAuditRevision), @"disposed": @(_queueBoundaryAuditDisposed),
+        @"logicalIndex": @(_index), @"loopMode": @(_loopMode), @"processingState": @(_processingState),
+        @"itemIdentity": itemId ?: (id)[NSNull null], @"itemTracked": @(_queueBoundaryAuditItems[itemId] != nil),
+        @"itemSourceInSequence": sourceInSequence, @"sequenceMembershipSearchTruncated": @(_indexedAudioSources.count > membershipLimit),
+        @"itemState": [self queueBoundaryAuditItemState:item],
+        @"currentItemIdentity": currentId ?: (id)[NSNull null], @"currentItemTracked": @(_queueBoundaryAuditItems[currentId] != nil),
+        @"currentItemState": [self queueBoundaryAuditItemState:current],
+        @"queueItemIdentities": queueIds, @"queueTotal": @(physicalQueue.count), @"queueTruncated": @(physicalQueue.count > 32),
+        @"queueSnapshotUntrackedCount": @(untrackedQueueItems),
+        @"queueSnapshotHeadIdentity": queueIds.firstObject ?: (id)[NSNull null],
+        @"timeControlStatus": timeControl, @"reasonForWaitingToPlay": waitReason,
+        @"details": details ?: @{}};
+    if (_queueBoundaryAuditEvents.count < 2048) [_queueBoundaryAuditEvents addObject:event];
+    else {
+        _queueBoundaryAuditEvents[_queueBoundaryAuditNext] = event;
+        _queueBoundaryAuditOverflow++;
+    }
+    _queueBoundaryAuditNext = (_queueBoundaryAuditNext + 1) % 2048;
+}
+
+- (NSDictionary *)readAloudQueueBoundaryAudit {
+    if (![self queueBoundaryAuditCanRecord]) return @{@"id": _playerId ?: @"", @"enabled": @NO, @"events": @[]};
+    NSMutableArray *ordered = [NSMutableArray new];
+    for (NSUInteger i = 0; i < _queueBoundaryAuditEvents.count; i++) {
+        NSUInteger index = (_queueBoundaryAuditEvents.count == 2048 ? _queueBoundaryAuditNext + i : i) % 2048;
+        [ordered addObject:_queueBoundaryAuditEvents[index]];
+    }
+    return @{@"id": _playerId ?: @"", @"enabled": @YES, @"sessionIdentity": _queueBoundaryAuditSession,
+        @"events": ordered, @"sources": _queueBoundaryAuditSources.allValues, @"items": _queueBoundaryAuditItems.allValues,
+        @"overflow": @(_queueBoundaryAuditOverflow), @"offMainSkipped": @(atomic_load_explicit(&_queueBoundaryAuditOffMain, memory_order_relaxed)),
+        @"identityRegistryOverflow": @(_queueBoundaryAuditRegistryOverflow), @"disposed": @(_queueBoundaryAuditDisposed),
+        @"skipLoopOffRewind": @(_readAloudQueueSkipLoopOffRewind), @"physicalHeadIndex": @([self usesPhysicalHeadIndex]), @"physicalHeadIndexDiagnostic": @(_readAloudQueuePhysicalHeadIndex), @"finiteLocalWavQueue": @(_readAloudFiniteLocalWavQueue),
+        @"sourceLimit": @8, @"itemLimit": @64, @"eventLimit": @2048, @"queueSnapshotLimit": @32,
+        @"snapshotAtomic": @NO, @"readBeforeDisposeRequired": @YES,
+        @"scope": @"first8SourceObjectsPerPlayerLifetime", @"owner": @"mainThread", @"monotonicClock": @"CLOCK_MONOTONIC"};
+}
+
+- (instancetype)initWithRegistrar:(NSObject<FlutterPluginRegistrar> *)registrar playerId:(NSString*)idParam loadConfiguration:(NSDictionary *)loadConfiguration useLazyPreparation:(BOOL)useLazyPreparation readAloudFiniteLocalWavQueue:(BOOL)finiteLocalWavQueue {
+    self = [self init];
     NSAssert(self, @"super init cannot be nil");
+#if TARGET_OS_OSX
+    _readAloudFiniteLocalWavQueue = finiteLocalWavQueue;
+#endif
     _registrar = registrar;
     _playerId = idParam;
     _useLazyPreparation = useLazyPreparation;
@@ -185,7 +378,9 @@
         }
     } @catch (NSException *exception) {
         //NSLog(@"%@", [exception callStackSymbols]);
-        FlutterError *flutterError = [FlutterError errorWithCode:@"error" message:@"Error in handleMethodCall" details:nil];
+        BOOL unsupported = [exception.name isEqual:@"readaloud_unsupported_source"];
+        FlutterError *flutterError = [FlutterError errorWithCode:unsupported ? exception.name : @"error"
+            message:unsupported ? exception.reason : @"Error in handleMethodCall" details:nil];
         result(flutterError);
     }
 }
@@ -198,16 +393,93 @@
     return _speed;
 }
 
+- (BOOL)usesPhysicalHeadIndex {
+    return _readAloudFiniteLocalWavQueue || _readAloudQueuePhysicalHeadIndex;
+}
+
+// The caller owns WAV provenance. Native admission verifies actual file assets
+// and plain source/item identity, never a filename suffix or a ready duration.
+// These checks run on the existing method-channel owner before any mutation.
+- (BOOL)isFiniteLocalWavDefinition:(NSDictionary *)definition {
+    if ([definition[@"type"] isEqual:@"progressive"]) return YES;
+    if (![definition[@"type"] isEqual:@"concatenating"]) return NO;
+    for (NSDictionary *child in definition[@"children"]) {
+        if (![self isFiniteLocalWavDefinition:child]) return NO;
+    }
+    return YES;
+}
+
+- (BOOL)isPlainLocalFileItem:(IndexedPlayerItem *)item source:(IndexedAudioSource *)source {
+    if (![source isKindOfClass:[UriAudioSource class]]) return NO;
+    AVAsset *asset = item.asset;
+    if (![asset isKindOfClass:[AVURLAsset class]]) return NO;
+    NSURL *actualURL = ((AVURLAsset *)asset).URL;
+    NSURL *declaredURL = [NSURL URLWithString:((UriAudioSource *)source).uri];
+    return actualURL.isFileURL && actualURL.path.isAbsolutePath && declaredURL.isFileURL &&
+        declaredURL.host.length == 0 && !declaredURL.query && !declaredURL.fragment &&
+        [actualURL.URLByStandardizingPath isEqual:declaredURL.URLByStandardizingPath];
+}
+
+- (BOOL)isPlainLocalFileSource:(IndexedAudioSource *)source {
+    return [self isPlainLocalFileItem:source.playerItem source:source] &&
+        (!source.playerItem2 || [self isPlainLocalFileItem:source.playerItem2 source:source]);
+}
+
+- (BOOL)isFiniteLocalWavTree:(AudioSource *)tree {
+    if (!tree) return NO;
+    NSMutableArray<IndexedAudioSource *> *sequence = [NSMutableArray new];
+    [tree buildSequence:sequence treeIndex:0];
+    for (IndexedAudioSource *source in sequence) {
+        if (![self isPlainLocalFileSource:source]) return NO;
+    }
+    return YES;
+}
+
+- (BOOL)hasValidLocalQueueMembership {
+    for (IndexedAudioSource *source in _indexedAudioSources) {
+        if (![self isPlainLocalFileSource:source]) return NO;
+    }
+    for (IndexedPlayerItem *item in _player.items) {
+        int index = [self indexForItem:item];
+        if (index < 0 || item.audioSource != _indexedAudioSources[index] ||
+                ![self isPlainLocalFileItem:item source:_indexedAudioSources[index]]) return NO;
+    }
+    return YES;
+}
+
 // Untested
 - (void)concatenatingInsertAll:(NSString *)catId index:(int)index sources:(NSArray *)sources shuffleOrder:(NSArray<NSNumber *> *)shuffleOrder {
+    if (_queueBoundaryAuditEnabled) [self queueBoundaryAudit:@"concatenatingInsertAll.entry" item:nil details:@{@"sourceId": catId, @"index": @(index), @"childrenCount": @(sources.count)}];
     // Find all duplicates of the identified ConcatenatingAudioSource.
     NSMutableArray *matches = [[NSMutableArray alloc] init];
     [_audioSource findById:catId matches:matches];
+    // Decode and validate the entire insertion before the first matching tree
+    // changes. A bad later child/duplicate match cannot leave a partial insert.
+    NSMutableArray *decodedMatches = [NSMutableArray new];
+    if (_readAloudFiniteLocalWavQueue) {
+        if (![self hasValidLocalQueueMembership]) {
+            [NSException raise:@"readaloud_unsupported_source" format:@"Finite local WAV queue membership changed"];
+        }
+        for (NSDictionary *definition in sources) {
+            if (![self isFiniteLocalWavDefinition:definition]) {
+                [NSException raise:@"readaloud_unsupported_source" format:@"Finite local WAV player requires plain local file sources"];
+            }
+        }
+        for (NSUInteger i = 0; i < matches.count; i++) {
+            NSMutableArray *decoded = [self decodeAudioSources:sources];
+            for (AudioSource *tree in decoded) {
+                if (![self isFiniteLocalWavTree:tree]) {
+                    [NSException raise:@"readaloud_unsupported_source" format:@"Finite local WAV player requires local AVURLAsset files"];
+                }
+            }
+            [decodedMatches addObject:decoded];
+        }
+    }
     // Add each new source to each match.
     for (int i = 0; i < matches.count; i++) {
         ConcatenatingAudioSource *catSource = (ConcatenatingAudioSource *)matches[i];
         int idx = index >= 0 ? index : catSource.count;
-        NSMutableArray<AudioSource *> *audioSources = [self decodeAudioSources:sources];
+        NSMutableArray<AudioSource *> *audioSources = _readAloudFiniteLocalWavQueue ? decodedMatches[i] : [self decodeAudioSources:sources];
         for (int j = 0; j < audioSources.count; j++) {
             AudioSource *audioSource = audioSources[j];
             [catSource insertSource:audioSource atIndex:(idx + j)];
@@ -238,10 +510,12 @@
         }
     }
     [self broadcastPlaybackEvent];
+    if (_queueBoundaryAuditEnabled) [self queueBoundaryAudit:@"concatenatingInsertAll.return" item:nil details:nil];
 }
 
 // Untested
 - (void)concatenatingRemoveRange:(NSString *)catId start:(int)start end:(int)end shuffleOrder:(NSArray<NSNumber *> *)shuffleOrder {
+    if (_queueBoundaryAuditEnabled) [self queueBoundaryAudit:@"concatenatingRemoveRange.entry" item:nil details:@{@"sourceId": catId, @"start": @(start), @"end": @(end)}];
     // Find all duplicates of the identified ConcatenatingAudioSource.
     NSMutableArray *matches = [[NSMutableArray alloc] init];
     [_audioSource findById:catId matches:matches];
@@ -280,6 +554,7 @@
     if (_index < 0) _index = 0;
     [self enqueueFrom:_index preservingCurrentItem:YES];
     [self broadcastPlaybackEvent];
+    if (_queueBoundaryAuditEnabled) [self queueBoundaryAudit:@"concatenatingRemoveRange.return" item:nil details:nil];
 }
 
 // Untested
@@ -358,6 +633,7 @@
 }
 
 - (int)getCurrentPosition {
+    if (_queueBoundaryAuditEnabled) [self queueBoundaryAudit:@"position.read" item:nil details:nil];
     // XXX: During load, the second case will be selected returning 0.
     // TODO: Provide a similar case as _seekPos for _initialPos.
     if (CMTIME_IS_VALID(_seekPos)) {
@@ -400,6 +676,7 @@
 }
 
 - (void)removeItemObservers:(AVPlayerItem *)playerItem {
+    if (_queueBoundaryAuditEnabled) [self queueBoundaryAudit:@"observers.remove" item:(IndexedPlayerItem *)playerItem details:nil];
     [playerItem removeObserver:self forKeyPath:@"status"];
     [playerItem removeObserver:self forKeyPath:@"playbackBufferEmpty"];
     [playerItem removeObserver:self forKeyPath:@"playbackBufferFull"];
@@ -411,6 +688,10 @@
 }
 
 - (void)addItemObservers:(AVPlayerItem *)playerItem {
+    if (_queueBoundaryAuditEnabled && [self queueBoundaryAuditCanRecord]) {
+        [self queueBoundaryAuditItem:(IndexedPlayerItem *)playerItem selectSource:YES];
+        [self queueBoundaryAudit:@"observers.add" item:(IndexedPlayerItem *)playerItem details:nil];
+    }
     // Get notified when the item is loaded or had an error loading
     [playerItem addObserver:self forKeyPath:@"status" options:NSKeyValueObservingOptionNew context:nil];
     // Get notified of the buffer state
@@ -548,7 +829,12 @@
             _index = index;
             _enqueuedAll = enqueuedAll;
             for (NSUInteger i = existingItems.count; i < desiredItems.count; i++) {
+                if (_queueBoundaryAuditEnabled && [self queueBoundaryAuditCanRecord]) {
+                    [self queueBoundaryAuditItem:desiredItems[i] selectSource:YES];
+                    [self queueBoundaryAudit:@"native.insert.entry" item:desiredItems[i] details:nil];
+                }
                 [_player insertItem:desiredItems[i] afterItem:nil];
+                if (_queueBoundaryAuditEnabled) [self queueBoundaryAudit:@"native.insert.return" item:desiredItems[i] details:nil];
             }
             int currentIndex = [self indexForItem:(IndexedPlayerItem *)_player.currentItem];
             if (currentIndex >= 0) _index = currentIndex;
@@ -582,13 +868,17 @@
             // once to _index.
         } else {
             //NSLog(@"Removing item %d", [self indexForItem:oldPlayerItems[i]]);
+            if (_queueBoundaryAuditEnabled) [self queueBoundaryAudit:@"native.remove.entry" item:oldPlayerItems[i] details:nil];
             [_player removeItem:oldPlayerItems[i]];
+            if (_queueBoundaryAuditEnabled) [self queueBoundaryAudit:@"native.remove.return" item:oldPlayerItems[i] details:nil];
         }
     }
     // In the second pass, remove the old item (if different from new item).
     if (oldItem && newItem != oldItem) {
         //NSLog(@"removing old item %d", [self indexForItem:oldItem]);
+        if (_queueBoundaryAuditEnabled) [self queueBoundaryAudit:@"native.remove.entry" item:oldItem details:nil];
         [_player removeItem:oldItem];
+        if (_queueBoundaryAuditEnabled) [self queueBoundaryAudit:@"native.remove.return" item:oldItem details:nil];
     }
 
     /* NSLog(@"inter order: _player.items.count: ", _player.items.count); */
@@ -609,7 +899,12 @@
                     break;
                 }
                 //NSLog(@"inserting item %d", si);
+                if (_queueBoundaryAuditEnabled && [self queueBoundaryAuditCanRecord]) {
+                    [self queueBoundaryAuditItem:_indexedAudioSources[si].playerItem selectSource:YES];
+                    [self queueBoundaryAudit:@"native.insert.entry" item:_indexedAudioSources[si].playerItem details:nil];
+                }
                 [_player insertItem:_indexedAudioSources[si].playerItem afterItem:nil];
+                if (_queueBoundaryAuditEnabled) [self queueBoundaryAudit:@"native.insert.return" item:_indexedAudioSources[si].playerItem details:nil];
                 if (_loopMode == lmLoopOne) {
                     // We only want one item in the queue.
                     break;
@@ -627,14 +922,24 @@
                 [_indexedAudioSources[si] preparePlayerItem2];
                 [self addItemObservers:_indexedAudioSources[si].playerItem2];
             }
+            if (_queueBoundaryAuditEnabled && [self queueBoundaryAuditCanRecord]) {
+                [self queueBoundaryAuditItem:_indexedAudioSources[si].playerItem2 selectSource:YES];
+                [self queueBoundaryAudit:@"native.insert.entry" item:_indexedAudioSources[si].playerItem2 details:nil];
+            }
             [_player insertItem:_indexedAudioSources[si].playerItem2 afterItem:nil];
+            if (_queueBoundaryAuditEnabled) [self queueBoundaryAudit:@"native.insert.return" item:_indexedAudioSources[si].playerItem2 details:nil];
         } else if (_loopMode == lmLoopOne) {
             //NSLog(@"### add loop item:%d", _index);
             if (!_indexedAudioSources[_index].playerItem2) {
                 [_indexedAudioSources[_index] preparePlayerItem2];
                 [self addItemObservers:_indexedAudioSources[_index].playerItem2];
             }
+            if (_queueBoundaryAuditEnabled && [self queueBoundaryAuditCanRecord]) {
+                [self queueBoundaryAuditItem:_indexedAudioSources[_index].playerItem2 selectSource:YES];
+                [self queueBoundaryAudit:@"native.insert.entry" item:_indexedAudioSources[_index].playerItem2 details:nil];
+            }
             [_player insertItem:_indexedAudioSources[_index].playerItem2 afterItem:nil];
+            if (_queueBoundaryAuditEnabled) [self queueBoundaryAudit:@"native.insert.return" item:_indexedAudioSources[_index].playerItem2 details:nil];
         }
     }
 
@@ -660,6 +965,20 @@
 }
 
 - (void)load:(NSDictionary *)source initialPosition:(CMTime)initialPosition initialIndex:(NSNumber *)initialIndex result:(FlutterResult)result {
+    AudioSource *validatedSource = nil;
+    if (_readAloudFiniteLocalWavQueue) {
+        if ([self isFiniteLocalWavDefinition:source]) validatedSource = [self decodeAudioSource:source];
+        if (![self isFiniteLocalWavTree:validatedSource]) {
+            result([FlutterError errorWithCode:@"readaloud_unsupported_source"
+                message:@"Finite local WAV player requires plain local AVURLAsset file sources" details:nil]);
+            return;
+        }
+    }
+    _readAloudPendingFinalCompletion = nil;
+    if (_queueBoundaryAuditEnabled && [self queueBoundaryAuditCanRecord]) {
+        _queueBoundaryAuditRevision++;
+        [self queueBoundaryAudit:@"load.entry" item:nil details:nil];
+    }
     if (_playing) {
         [_player pause];
     }
@@ -681,7 +1000,9 @@
         }
     }
     // Decode audio source
-    if (_audioSource && [@"clipping" isEqualToString:source[@"type"]]) {
+    if (validatedSource) {
+        _audioSource = validatedSource;
+    } else if (_audioSource && [@"clipping" isEqualToString:source[@"type"]]) {
         // Check if we're clipping an audio source that was previously loaded.
         UriAudioSource *child = nil;
         if ([_audioSource isKindOfClass:[ClippingAudioSource class]]) {
@@ -718,6 +1039,10 @@
         IndexedAudioSource *source = _indexedAudioSources[i];
         [self addItemObservers:source.playerItem];
         source.playerItem.audioSource = source;
+        if (_queueBoundaryAuditEnabled && [self queueBoundaryAuditCanRecord]) {
+            [self queueBoundaryAuditItem:source.playerItem selectSource:YES];
+            [self queueBoundaryAudit:@"source.bound" item:source.playerItem details:nil];
+        }
     }
     [self updatePosition];
     [self updateOrder];
@@ -748,6 +1073,7 @@
             _timeObserver = [_player addPeriodicTimeObserverForInterval:CMTimeMake(200, 1000)
                                                                   queue:nil
                                                              usingBlock:^(CMTime time) {
+                if (weakSelf->_queueBoundaryAuditEnabled) [weakSelf queueBoundaryAudit:@"position.periodic" item:nil details:nil];
                                                                  [weakSelf checkForDiscontinuity];
                                                              }
             ];
@@ -800,31 +1126,106 @@
 }
 
 - (void)onItemStalled:(NSNotification *)notification {
+    if (_queueBoundaryAuditEnabled) [self queueBoundaryAudit:@"item.stalled" item:notification.object details:nil];
     //IndexedPlayerItem *playerItem = (IndexedPlayerItem *)notification.object;
     //NSLog(@"onItemStalled");
 }
 
 - (void)onFailToComplete:(NSNotification *)notification {
+    if (_queueBoundaryAuditEnabled) [self queueBoundaryAudit:@"item.failedToComplete" item:notification.object details:nil];
     //IndexedPlayerItem *playerItem = (IndexedPlayerItem *)notification.object;
     //NSLog(@"onFailToComplete");
 }
 
+// Opted-in finite local WAV loop-off ownership, or explicit QA diagnostic.
+// AVFoundation can notify a future
+// item's completion before its predecessor leaves the physical head. Neither
+// notification order nor the previous logical index authorizes advancement.
+// Existing native callbacks own execution; no new queue, timer or retained item.
+// This path is limited to positive finite media (the local
+// WAV route). A notification is not EOF evidence after same-item seek/reload.
+// Use rational CMTime comparison, without rounding away the last audio sample.
+- (BOOL)physicalHeadHasFiniteEOF:(IndexedPlayerItem *)head {
+    IndexedAudioSource *source = head.audioSource;
+    CMTime position = source.position, duration = source.duration;
+    return CMTIME_IS_NUMERIC(position) && CMTIME_IS_NUMERIC(duration) &&
+        CMTIME_COMPARE_INLINE(duration, >, kCMTimeZero) && CMTimeCompare(position, duration) >= 0;
+}
+
+- (void)completePendingFinalFromPhysicalHead:(IndexedPlayerItem *)head {
+    if (![self usesPhysicalHeadIndex] || _loopMode != lmLoopOff || !head ||
+            head != _readAloudPendingFinalCompletion || _processingState == psIdle ||
+            _processingState == psLoading || _processingState == psCompleted || CMTIME_IS_VALID(_seekPos)) return;
+    int headIndex = [self indexForItem:head];
+    if (headIndex < 0 || [_orderInv[headIndex] intValue] + 1 != _order.count ||
+            ![self physicalHeadHasFiniteEOF:head]) return;
+    if (_index != headIndex) {
+        _index = headIndex;
+        [self updateEndAction];
+    }
+    _readAloudPendingFinalCompletion = nil;
+    [self complete];
+}
+
+- (void)completeFromPhysicalHead:(IndexedPlayerItem *)endedPlayerItem {
+    // A replacement/load or explicit seek owns position until it finishes.
+    if (_processingState == psIdle || _processingState == psLoading || CMTIME_IS_VALID(_seekPos)) return;
+    IndexedPlayerItem *head = (IndexedPlayerItem *)_player.currentItem;
+    int headIndex = head ? [self indexForItem:head] : -1;
+    int endedIndex = endedPlayerItem ? [self indexForItem:endedPlayerItem] : -1;
+    if (headIndex < 0 || endedIndex < 0) return;
+
+    if (_index != headIndex) {
+        _index = headIndex;
+        [self updateEndAction];
+        [self broadcastPlaybackEvent];
+    }
+    if ([_orderInv[endedIndex] intValue] + 1 < _order.count) {
+        // Preserve the ended-source rewind, including a future source that
+        // finished early. The independent rewind QA flag remains explicit.
+        if (_queueBoundaryAuditEnabled) [self queueBoundaryAudit:@"completion.rewind.entry" item:endedPlayerItem details:@{@"skipped": @(_readAloudQueueSkipLoopOffRewind)}];
+        if (!_readAloudQueueSkipLoopOffRewind) [endedPlayerItem.audioSource seek:kCMTimeZero];
+        if (_queueBoundaryAuditEnabled) [self queueBoundaryAudit:@"completion.rewind.return" item:endedPlayerItem details:@{@"skipped": @(_readAloudQueueSkipLoopOffRewind)}];
+        _justAdvanced = YES;
+    } else if (endedPlayerItem == head && _processingState != psCompleted && [self physicalHeadHasFiniteEOF:head]) {
+        // A future final-item notification must not terminate the current head.
+        // Loop-off's final end action pauses, retaining this item at real EOF.
+        _readAloudPendingFinalCompletion = nil;
+        [self complete];
+    } else if (_processingState != psCompleted) {
+        // Remember an early final notification without transferring ownership.
+        // A later existing head/paused callback must also observe finite EOF.
+        _readAloudPendingFinalCompletion = endedPlayerItem;
+    }
+}
+
 - (void)onComplete:(NSNotification *)notification {
+    if (_queueBoundaryAuditEnabled) [self queueBoundaryAudit:@"item.complete.entry" item:notification.object details:nil];
     //NSLog(@"onComplete");
 
     IndexedPlayerItem *endedPlayerItem = (IndexedPlayerItem *)notification.object;
     IndexedAudioSource *endedSource = endedPlayerItem.audioSource;
 
-    if (_loopMode == lmLoopOne) {
+    if ([self usesPhysicalHeadIndex] && _loopMode == lmLoopOff) {
+        [self completeFromPhysicalHead:endedPlayerItem];
+    } else if (_loopMode == lmLoopOne) {
+        if (_queueBoundaryAuditEnabled) [self queueBoundaryAudit:@"completion.rewind.entry" item:endedPlayerItem details:@{@"skipped": @NO}];
         [endedSource seek:kCMTimeZero];
+        if (_queueBoundaryAuditEnabled) [self queueBoundaryAudit:@"completion.rewind.return" item:endedPlayerItem details:@{@"skipped": @NO}];
         _justAdvanced = YES;
     } else if (_loopMode == lmLoopAll) {
+        if (_queueBoundaryAuditEnabled) [self queueBoundaryAudit:@"completion.rewind.entry" item:endedPlayerItem details:@{@"skipped": @NO}];
         [endedSource seek:kCMTimeZero];
+        if (_queueBoundaryAuditEnabled) [self queueBoundaryAudit:@"completion.rewind.return" item:endedPlayerItem details:@{@"skipped": @NO}];
         _index = [_order[([_orderInv[_index] intValue] + 1) % _order.count] intValue];
         [self broadcastPlaybackEvent];
         _justAdvanced = YES;
     } else if ([_orderInv[_index] intValue] + 1 < [_order count]) {
-        [endedSource seek:kCMTimeZero];
+        // QA experiment only: the end notification can arrive before native
+        // head advancement. Production/default retains the upstream rewind.
+        if (_queueBoundaryAuditEnabled) [self queueBoundaryAudit:@"completion.rewind.entry" item:endedPlayerItem details:@{@"skipped": @(_readAloudQueueSkipLoopOffRewind)}];
+        if (!_readAloudQueueSkipLoopOffRewind) [endedSource seek:kCMTimeZero];
+        if (_queueBoundaryAuditEnabled) [self queueBoundaryAudit:@"completion.rewind.return" item:endedPlayerItem details:@{@"skipped": @(_readAloudQueueSkipLoopOffRewind)}];
         _index = [_order[([_orderInv[_index] intValue] + 1)] intValue];
         [self updateEndAction];
         [self broadcastPlaybackEvent];
@@ -833,12 +1234,22 @@
         // reached end of playlist
         [self complete];
     }
+    if (_queueBoundaryAuditEnabled) [self queueBoundaryAudit:@"item.complete.return" item:notification.object details:nil];
 }
 
 - (void)observeValueForKeyPath:(NSString *)keyPath
                       ofObject:(id)object
                         change:(NSDictionary<NSString *,id> *)change
                        context:(void *)context {
+
+    if (_queueBoundaryAuditEnabled) {
+        BOOL itemEvent = [keyPath isEqualToString:@"status"] || [keyPath isEqualToString:@"loadedTimeRanges"] ||
+            [keyPath isEqualToString:@"playbackBufferEmpty"] || [keyPath isEqualToString:@"playbackBufferFull"];
+        // Include nil-current transitions and non-current item readiness before
+        // the production handler's early returns. Off-main skips never query AV.
+        [self queueBoundaryAudit:[@"kvo." stringByAppendingString:keyPath]
+                            item:itemEvent ? object : nil details:nil];
+    }
 
     if ([keyPath isEqualToString:@"status"]) {
         IndexedPlayerItem *playerItem = (IndexedPlayerItem *)object;
@@ -936,12 +1347,18 @@
         if (@available(macOS 10.12, iOS 10.0, *)) {
             AVPlayerTimeControlStatus status = AVPlayerTimeControlStatusPaused;
             NSNumber *statusNumber = change[NSKeyValueChangeNewKey];
-            if ([statusNumber isKindOfClass:[NSNumber class]]) {
+            if ([self usesPhysicalHeadIndex] && _loopMode == lmLoopOff) {
+                // A delayed KVO payload cannot authorize EOF for a newer state
+                // or a replaced player. Final Pause retains the current item,
+                // so EOF need not produce another currentItem notification.
+                if (object != _player) return;
+                status = _player.timeControlStatus;
+            } else if ([statusNumber isKindOfClass:[NSNumber class]]) {
                 status = statusNumber.intValue;
             }
             switch (status) {
                 case AVPlayerTimeControlStatusPaused:
-                    //NSLog(@"AVPlayerTimeControlStatusPaused");
+                    if ([self usesPhysicalHeadIndex] && _loopMode == lmLoopOff) [self completePendingFinalFromPhysicalHead:(IndexedPlayerItem *)_player.currentItem];
                     break;
                 case AVPlayerTimeControlStatusWaitingToPlayAtSpecifiedRate:
                     //NSLog(@"AVPlayerTimeControlStatusWaitingToPlayAtSpecifiedRate");
@@ -960,15 +1377,22 @@
                     break;
             }
         }
-    } else if ([keyPath isEqualToString:@"currentItem"] && _player.currentItem) {
-        //NSLog(@"currentItem -> [%d]", [self indexForItem:_player.currentItem]);
-        IndexedPlayerItem *playerItem = (IndexedPlayerItem *)change[NSKeyValueChangeNewKey];
+    } else if ([keyPath isEqualToString:@"currentItem"]) {
+        BOOL physicalHeadIndex = [self usesPhysicalHeadIndex] && _loopMode == lmLoopOff;
+        // KVO's new value can already be obsolete when this callback runs.
+        // Consume one current head snapshot; nil/retired heads own no index.
+        IndexedPlayerItem *head = (IndexedPlayerItem *)_player.currentItem;
+        if (!head) return;
+        IndexedPlayerItem *playerItem = physicalHeadIndex ? head : (IndexedPlayerItem *)change[NSKeyValueChangeNewKey];
+        int physicalIndex = physicalHeadIndex ? [self indexForItem:playerItem] : -1;
+        if (physicalHeadIndex && physicalIndex < 0) return;
+        BOOL physicalAdvance = physicalHeadIndex && _index != physicalIndex;
         //IndexedPlayerItem *oldPlayerItem = (IndexedPlayerItem *)change[NSKeyValueChangeOldKey];
         if (playerItem.status == AVPlayerItemStatusFailed) {
             [self sendErrorForItem:playerItem];
             return;
         } else {
-            int expectedIndex = [self indexForItem:playerItem];
+            int expectedIndex = physicalHeadIndex ? physicalIndex : [self indexForItem:playerItem];
             if (_index != expectedIndex) {
                 // AVQueuePlayer will sometimes skip over error items without
                 // notifying this observer.
@@ -980,6 +1404,7 @@
         }
         //NSLog(@"currentItem changed. _index=%d", _index);
         _bufferUnconfirmed = YES;
+        if (physicalHeadIndex) [self completePendingFinalFromPhysicalHead:playerItem];
         // If we've skipped or transitioned to a new item and we're not
         // currently in the middle of a seek
         /* if (CMTIME_IS_INVALID(_seekPos) && playerItem.status == AVPlayerItemStatusReadyToPlay) { */
@@ -1017,7 +1442,7 @@
         /*     } */
         /* } */
 
-        if (_justAdvanced) {
+        if (physicalHeadIndex ? ((_justAdvanced || physicalAdvance) && _processingState != psLoading && CMTIME_IS_INVALID(_seekPos)) : _justAdvanced) {
             IndexedAudioSource *audioSource = playerItem.audioSource;
             if (_loopMode == lmLoopOne) {
                 [audioSource flip];
@@ -1049,7 +1474,9 @@
 
 - (void)sendErrorForItem:(IndexedPlayerItem *)playerItem {
     [self sendError:@((int)playerItem.error.code) errorMessage:playerItem.error.localizedDescription playerItem:playerItem switchToIdle:YES];
+    if (_queueBoundaryAuditEnabled) [self queueBoundaryAudit:@"native.removeAll.entry" item:playerItem details:nil];
     [_player removeAllItems];
+    if (_queueBoundaryAuditEnabled) [self queueBoundaryAudit:@"native.removeAll.return" item:playerItem details:nil];
 }
 
 - (void)sendError:(NSNumber *)errorCode errorMessage:(NSString *)errorMessage playerItem:(IndexedPlayerItem *)playerItem switchToIdle:(BOOL)switchToIdle {
@@ -1102,8 +1529,16 @@
         _playResult = result;
     }
     _playing = YES;
+    BOOL snapshotBeforeRate = NO;
+#if TARGET_OS_OSX
+    snapshotBeforeRate = _readAloudFiniteLocalWavQueue && _loopMode == lmLoopOff;
+#endif
+    // Rate activation can contend with AVPlayerItem.currentTime during native
+    // startup. Capture the real paused/seek position first for this owned path;
+    // keep upstream ordering for generic players, other platforms and loops.
+    if (snapshotBeforeRate) [self updatePosition];
     _player.rate = _speed;
-    [self updatePosition];
+    if (!snapshotBeforeRate) [self updatePosition];
     if (@available(macOS 10.12, iOS 10.0, *)) {}
     else {
         if (_bufferUnconfirmed && !_player.currentItem.playbackBufferFull) {
@@ -1180,6 +1615,7 @@
 
 - (void)setLoopMode:(int)loopMode {
     if (loopMode == _loopMode) return;
+    _readAloudPendingFinalCompletion = nil;
     _loopMode = loopMode;
     [self enqueueFrom:_index];
 }
@@ -1262,6 +1698,7 @@
 }
 
 - (void)seek:(CMTime)position index:(NSNumber *)newIndex completionHandler:(void (^)(BOOL))completionHandler {
+    _readAloudPendingFinalCompletion = nil;
     if (_processingState == psIdle || _processingState == psLoading) {
         if (completionHandler) {
             completionHandler(NO);
@@ -1398,6 +1835,11 @@
 }
 
 - (void)dispose:(BOOL)calledFromDealloc {
+    _readAloudPendingFinalCompletion = nil;
+    if (_queueBoundaryAuditEnabled && [self queueBoundaryAuditCanRecord]) {
+        [self queueBoundaryAudit:@"dispose.entry" item:nil details:@{@"calledFromDealloc": @(calledFromDealloc)}];
+        _queueBoundaryAuditDisposed = YES;
+    }
     if (!_player) return;
     if (_processingState != psIdle) {
         [_player pause];
@@ -1442,6 +1884,7 @@
     [_eventChannel dispose];
     [_dataEventChannel dispose];
     [_methodChannel setMethodCallHandler:nil];
+    if (_queueBoundaryAuditEnabled) [self queueBoundaryAudit:@"dispose.return" item:nil details:nil];
 }
 
 @end

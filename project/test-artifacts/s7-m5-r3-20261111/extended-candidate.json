@@ -1,0 +1,7 @@
+{
+  "source": "2c622b9a0f93dcf4e0206966816ee22313f916ee",
+  "nativeSourcesUnchangedSince": "f8bf8b2",
+  "experiment": "180s native stall diagnosis; eager production preparation retained",
+  "frameworkSha256": "78f5fed87fa928bb40bccd4af350f652129e2edb73ab74bf8f85350d6ec4a216",
+  "executableSha256": "da6fc05904e495f9dd4a09a0acb48f8048fbcdfd058fd7c87dfa5859497b810e"
+}

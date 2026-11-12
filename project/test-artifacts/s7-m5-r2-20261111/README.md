@@ -1,0 +1,13 @@
+# S7 M5 resource and native evidence
+
+The frozen variant candidate was `25c7773`. All runs use the isolated QA identity, existing full-precision weights or separately acquired exact quantized snapshots. The receipts preserve both passes and failures. No WAVs or weights are in Git; private artifact hashes identify the originals.
+
+Full pinned acquisition completed: 8bit (20 files) after a real process interruption preserving partials and retry in the same cache; 4bit (16 files). Actual deliberately corrupted 4bit config repair restored the exact bytes by downloading only the 53.4KB config. All completed non-config inode/size/mtime identities stayed unchanged. The temporarily unavailable QA config used by the cancellation run was restored.
+
+Session v7 passed native and strict acoustic cancellation: expected40ms prefix correlation .999975, then58.56s post-Pause silence at peak0, anchor29 retained, native-main37ms/UI5ms, one sampled worker and normal Quit. Earlier v4/v5 controls are retained: v4 functional pass failed307ms responsiveness; v5 native pass failed the positive prefix being wholly before Pause. v6 failed incomplete sandbox process enumeration, corrected by supported BSD process-table enumeration in v7. These limits were not relaxed.
+
+8bit v2 passed60s native reading and strict complete-waveform acceptance:177 complete non-silent waveforms /56.051s, minimum correlation .995548 and maximum external timing residual .00443ms. Non-atomic source/index snapshots and prepared-but-unplayed audio are explicitly diagnostic; actual waveform order is decisive. Encoded silent packets receive signal/timing checks and contribute no50s waveform credit. 8bit v1 was stopped by an overly short10s QA setup timeout during first full integrity hashing; no startup/document-load pass was inferred.
+
+4bit and bf16 v2 completed60s functional playback with complete footprint/normal pressure, but failed overall native responsiveness at312ms and411ms respectively. They require final-candidate reruns. Their resource observations remain useful for conservative memory admission, separately from acoustic/UI acceptance. See memory-qualification.json: observed whole-tree peaks are not the larger derived admission envelopes. Those add25% and round up; they are not absolute guarantees. Process-tree guards, OS headroom and pressure remain mandatory; explicit choices are preserved.
+
+Physical M3 qualification remains open. Human voice/quality/listening/usability stays with S11; source/route/acoustic checks cannot establish it. The two source-integration review findings (frozen sizing and terminal catalog ownership) were corrected after these initial variant runs and require final-source reconciliation.

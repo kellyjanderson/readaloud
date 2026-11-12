@@ -417,6 +417,7 @@ class _SnapshotPreferences extends ReaderPreferencesService {
   _Barrier? nextWrite;
   @override
   Future<void> save({
+    bool activityExpanded = false,
     String ttsEngineId = ReaderPreferences.defaultTtsEngineId,
     int voxtralQuantizationBits = 0,
     required String fontFamily,
@@ -430,6 +431,7 @@ class _SnapshotPreferences extends ReaderPreferencesService {
     CharacterStoreSnapshot? characterSnapshot,
     ReaderResumeState? resumeState,
     String? selectedVoiceId,
+    Map<String, String> narratorVoiceIds = const {},
     String? lastOpenedDocumentPath,
     String? lastOpenedDocumentAccessToken,
     String? lastOpenedDirectoryPath,
@@ -437,6 +439,7 @@ class _SnapshotPreferences extends ReaderPreferencesService {
   }) async {
     saved.add(
       ReaderPreferences(
+        activityExpanded: activityExpanded,
         ttsEngineId: ttsEngineId,
         voxtralQuantizationBits: voxtralQuantizationBits,
         fontFamily: fontFamily,
@@ -448,6 +451,7 @@ class _SnapshotPreferences extends ReaderPreferencesService {
         sourceVoiceDocumentIds: sourceVoiceDocumentIds,
         characterSnapshot: characterSnapshot,
         selectedVoiceId: selectedVoiceId,
+        narratorVoiceIds: Map.of(narratorVoiceIds),
       ),
     );
     final barrier = nextWrite;

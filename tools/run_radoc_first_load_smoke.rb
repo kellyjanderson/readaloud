@@ -1,6 +1,8 @@
 #!/usr/bin/env ruby
 # Default measures target load after ordinary startup; no capture/Play gate.
 # Explicit first-load retains launch diagnostic; packet-cancel retains cold cancellation.
+# READALOUD_S7_INFERENCE_POLICY selects a QA-only differential (never a pass).
+# READALOUD_FIRST_LOAD_MANAGED_MODEL=1 opts into offline service model resolution.
 require 'json'
 require 'digest'
 require 'fileutils'
@@ -12,9 +14,20 @@ abort 'Usage: run_radoc_first_load_smoke.rb APP_BUNDLE FISH_ENGINE INPUT_DOCUMEN
 bundle, engine, book, output, capture, mode = ARGV
 mode ||= 'load-after-startup'
 abort 'Invalid probe mode' unless %w[load-after-startup first-load packet-cancel].include?(mode)
+physical_head = ENV['READALOUD_QUEUE_PHYSICAL_HEAD_INDEX']
+abort 'Invalid physical-head QA flag' unless physical_head.nil? || %w[0 1].include?(physical_head)
+inference_policy = ENV['READALOUD_S7_INFERENCE_POLICY']
+abort 'Invalid QA inference policy' unless inference_policy.nil? || %w[background-utility utility].include?(inference_policy)
 bundle, book, output, capture = [bundle, book, output, capture].map { |p| File.expand_path(p) }
 abort 'Expected Fish engine' unless engine.start_with?('fish_drama3')
-abort 'Missing existing model' unless File.directory?(ENV.fetch('READALOUD_MLX_TTS_MODEL_PATH', ''))
+managed_model = ENV['READALOUD_FIRST_LOAD_MANAGED_MODEL'] == '1'
+if managed_model
+  abort 'Managed model mode cannot use an explicit model path' if ENV.key?('READALOUD_MLX_TTS_MODEL_PATH')
+  # Let the existing service resolve and verify the pinned installed/cache
+  # model, including normal memory admission. Never acquire models in this probe.
+else
+  abort 'Missing existing model' unless File.directory?(ENV.fetch('READALOUD_MLX_TTS_MODEL_PATH', ''))
+end
 explicit_python = ENV['READALOUD_MLX_PYTHON']
 abort 'Invalid explicit Python override' if explicit_python && !explicit_python.empty? && !File.executable?(explicit_python)
 app = File.join(bundle, 'Contents/MacOS/read_aloud')
@@ -34,6 +47,15 @@ app_log = File.join(output, 'app.log')
 File.write(app_log, '')
 result = {passed: false, mode: mode, launchMethod: 'LaunchServices open -W -n', deadlineSeconds: 300, normalQuit: false, forcedCleanup: false, captureIntroducedPlayGate: false}
 errors = []
+if physical_head == '1'
+  result[:physicalHeadIndexDiagnostic] = true
+  errors << 'QA-only physical-head ownership candidate; production default unchanged'
+end
+if inference_policy
+  result[:inferencePolicyDiagnostic] = inference_policy
+  errors << 'QA-only child scheduling differential; production policy unchanged'
+end
+result[:managedModelResolution] = 'existing service; offline pinned assets only' if managed_model
 alive = lambda do |p|
   Process.kill(0, p)
   true
@@ -52,7 +74,7 @@ stop_child = lambda do |p|
 end
 clock = -> { Process.clock_gettime(Process::CLOCK_MONOTONIC) }
 owned = []
-pid = opener = cap = nil
+pid = opener = cap = awake_pid = nil
 open_status = nil
 stop = File.join(output, 'capture.stop')
 deadline = clock.call + 300
@@ -61,7 +83,7 @@ begin
   result[:launchUtc] = launched.utc.iso8601(6)
   micros = (launched.to_r * 1_000_000).to_i
   result[:launchMonotonicRawNanos] = Process.clock_gettime(Process::CLOCK_MONOTONIC_RAW, :nanosecond)
-  opener = Process.spawn('/usr/bin/open', '-W', '-n', '-a', bundle, '--stdout', app_log, '--stderr', app_log, '--env', "READALOUD_SMOKE_LAUNCH_UNIX_MICROS=#{micros}", '--env', "READALOUD_FIRST_LOAD_EXPECTED_WORDS=#{expected_words}", *%w[READALOUD_MLX_TTS_MODEL_PATH READALOUD_MLX_PYTHON READALOUD_SMOKE_QUANTIZATION_BITS READALOUD_DISABLE_SPEECH_ACTIVITY READALOUD_MAPPED_MODEL_LOAD READALOUD_SERIAL_MODEL_LOAD READALOUD_CANCEL_INPUT_MODE].filter_map { |key| ['--env', "#{key}=#{ENV[key]}"] if ENV[key] }.flatten, '--args', mode, engine, copied, receipt, pgroup: true)
+  opener = Process.spawn('/usr/bin/open', '-W', '-n', '-a', bundle, '--stdout', app_log, '--stderr', app_log, '--env', "READALOUD_SMOKE_LAUNCH_UNIX_MICROS=#{micros}", '--env', "READALOUD_FIRST_LOAD_EXPECTED_WORDS=#{expected_words}", *%w[READALOUD_MLX_TTS_MODEL_PATH READALOUD_MLX_PYTHON READALOUD_SMOKE_QUANTIZATION_BITS READALOUD_DISABLE_SPEECH_ACTIVITY READALOUD_MAPPED_MODEL_LOAD READALOUD_SERIAL_MODEL_LOAD READALOUD_CANCEL_INPUT_MODE READALOUD_S7_INFERENCE_POLICY READALOUD_QUEUE_PHYSICAL_HEAD_INDEX].filter_map { |key| ['--env', "#{key}=#{ENV[key]}"] if ENV[key] }.flatten, *(managed_model ? ['--env', 'HF_HUB_OFFLINE=1', '--env', 'READALOUD_MLX_TTS_MODEL_PATH='] : []), '--args', mode, engine, copied, receipt, pgroup: true)
   result[:launcherPid] = opener
   discovery_end = clock.call + 15
   loop do
@@ -81,6 +103,8 @@ begin
     sleep 0.01
   end
   result[:pid] = pid
+  awake_pid = Process.spawn('/usr/bin/caffeinate', '-d', '-w', pid.to_s)
+  result[:awakeGuardPid] = awake_pid
   cap_log = File.open(File.join(output, 'capture.log'), 'w')
   cap = Process.spawn(capture, pid.to_s, File.join(output, 'capture.wav'), '290', stop, out: cap_log, err: cap_log)
   result[:capturePid] = cap
@@ -158,6 +182,18 @@ ensure
       errors << 'LaunchServices waiter did not exit'
     end
   end
+if awake_pid
+  begin
+    _, awake_status = Timeout.timeout(3) { Process.wait2(awake_pid) }
+    result[:awakeGuardExitStatus] = awake_status.exitstatus
+    result[:awakeGuardExited] = true
+    errors << 'Display wake guard failed' unless awake_status.success?
+  rescue Timeout::Error
+    stop_child.call(awake_pid)
+    result[:awakeGuardExited] = !alive.call(awake_pid)
+    errors << 'Display wake guard required forced cleanup'
+  end
+end
   result[:launcherExitStatus] = open_status&.exitstatus
   result[:appExitStatus] = nil # LaunchServices owns/reaps the app, not this runner.
   errors << 'LaunchServices failed' unless open_status&.success?

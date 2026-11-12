@@ -1,0 +1,58 @@
+{
+  "schema": "readaloud-native-variant-runner-v1",
+  "mode": "online-cancel-retry",
+  "passed": false,
+  "nativePassed": false,
+  "normalQuit": true,
+  "appExitVerified": true,
+  "forcedCleanup": false,
+  "remainingOwnedPids": [],
+  "frameworkSha256": "7ec8699de659e75290659e419170b090d1909a19ce70f17408bbc4e56c0e48a7",
+  "executableSha256": "3671ccdabc96fdbde92cdf1bc2727cdaa528b5a0ed7d46f2f1f9a41f1aa4882b",
+  "maxMlxChildren": 1,
+  "observedMlxSamples": 410,
+  "processEvents": [
+    {
+      "unixMicros": 1794417723790642,
+      "pids": []
+    },
+    {
+      "unixMicros": 1794417725814385,
+      "pids": [
+        97877
+      ]
+    },
+    {
+      "unixMicros": 1794417749058330,
+      "pids": []
+    },
+    {
+      "unixMicros": 1794417750539208,
+      "pids": [
+        98287
+      ]
+    }
+  ],
+  "errors": [
+    "Native failure: TimeoutException: Actual download progress before retirement"
+  ],
+  "limits": "100ms child/process observations and emitted signal per playback interval. Exact waveform matching, glitch/voice quality, total memory envelope, physical-speaker and M3 acceptance remain separate. Capture 300s; work deadline 270s.",
+  "pid": 97852,
+  "capturePid": 97853,
+  "captureReadyObservedUnixMicros": 1794417724652684,
+  "applicationActivationRequested": true,
+  "captureExitStatus": 0,
+  "appExitStatus": 0,
+  "emittedSignal": [
+    {
+      "label": "initial-A8",
+      "durationSeconds": 3.0111875,
+      "activeWindowSeconds": 2.7,
+      "longestSilentWindowSeconds": 0.0,
+      "peak": 0.5022842884063721,
+      "passed": true,
+      "scope": "100ms app-only signal windows; not waveform identity or acoustic continuity acceptance"
+    }
+  ],
+  "strictAcousticAcceptance": "NOT_RUN: compare copied queued WAVs with capture; listening remains separate"
+}

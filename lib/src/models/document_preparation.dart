@@ -2,6 +2,7 @@ import 'dart:typed_data';
 import 'character_cast_registry.dart';
 import 'reader_document.dart';
 import 'document_import_exception.dart';
+import 'reader_operation.dart';
 
 /// Provisional discovery precedes the refined range with the same sequence.
 /// The supervisor rejects old operations and discoveries after range commit.
@@ -116,6 +117,12 @@ class PreparationProgress {
     this.error,
     this.workRevision,
     this.scope,
+    this.operationId,
+    this.ownerEpoch,
+    this.updatedAt,
+    this.operationState,
+    this.retryOf,
+    this.attempt = 0,
   });
   final PreparationStage stage;
   final PreparationWorkState state;
@@ -127,12 +134,86 @@ class PreparationProgress {
   final String? error;
   final String? workRevision;
   final String? scope;
+  final String? operationId;
+  final int? ownerEpoch;
+  final DateTime? updatedAt;
+  final OperationState? operationState;
+  final String? retryOf;
+  final int attempt;
   double? get fraction =>
-      total == null || total == 0 ? null : completed / total!;
+      completed < 0 || total == null || total! <= 0 || completed > total!
+      ? null
+      : completed / total!;
+
+  bool get isTerminal =>
+      state == PreparationWorkState.complete ||
+      state == PreparationWorkState.failed ||
+      state == PreparationWorkState.cancelled;
+
+  PreparationProgress owned({
+    required String operationId,
+    required int ownerEpoch,
+    String? scope,
+    String? retryOf,
+    int? attempt,
+  }) => PreparationProgress(
+    stage: stage,
+    state: state,
+    completed: completed,
+    unit: unit,
+    total: total,
+    discovered: discovered,
+    waitingReason: waitingReason,
+    error: error,
+    workRevision: workRevision,
+    scope: scope ?? this.scope,
+    operationId: operationId,
+    ownerEpoch: ownerEpoch,
+    updatedAt: updatedAt ?? DateTime.now(),
+    operationState: operationState,
+    retryOf: retryOf ?? this.retryOf,
+    attempt: attempt ?? this.attempt,
+  );
+
+  ReaderOperation toOperation({
+    OperationOwnerKind ownerKind = OperationOwnerKind.document,
+  }) => ReaderOperation(
+    operationId: operationId ?? workRevision ?? 'legacy:${stage.name}',
+    ownerKind: ownerKind,
+    ownerEpoch: ownerEpoch ?? 0,
+    attempt: attempt,
+    stage: stage.name,
+    scope: scope ?? '',
+    state:
+        operationState ??
+        switch (state) {
+          PreparationWorkState.working => OperationState.running,
+          PreparationWorkState.waiting => OperationState.waiting,
+          PreparationWorkState.stalled => OperationState.waiting,
+          PreparationWorkState.failed => OperationState.failed,
+          PreparationWorkState.cancelled => OperationState.cancelled,
+          PreparationWorkState.complete => OperationState.succeeded,
+        },
+    completedUnits: completed,
+    totalUnits: total,
+    discoveredUnits: discovered,
+    unit: unit,
+    updatedAt: updatedAt ?? DateTime.now(),
+    error: error,
+    message: waitingReason,
+    retryOf: retryOf,
+    recoveryActions: isTerminal
+        ? [
+            if (state == PreparationWorkState.failed)
+              OperationRecoveryAction.retry,
+          ]
+        : [OperationRecoveryAction.cancel],
+  );
 
   PreparationProgress withState(
     PreparationWorkState state, {
     String? waitingReason,
+    OperationState? operationState,
   }) => PreparationProgress(
     stage: stage,
     state: state,
@@ -144,6 +225,12 @@ class PreparationProgress {
     error: error,
     workRevision: workRevision,
     scope: scope,
+    operationId: operationId,
+    ownerEpoch: ownerEpoch,
+    updatedAt: DateTime.now(),
+    operationState: operationState,
+    retryOf: retryOf,
+    attempt: attempt,
   );
 }
 

@@ -1,0 +1,234 @@
+{
+  "diagnosticOnly": true,
+  "passed": false,
+  "queueIndex": 4,
+  "scope": "Exact-zero and local fragment diagnostics; no threshold relaxation or listening claim.",
+  "streams": {
+    "capture": {
+      "contiguousExpectedStartSeconds": 7.458563740079365,
+      "nextVerifiedStartSeconds": 8.156651041666667,
+      "intervalMs": 698.0833333333334,
+      "exactZeroRuns": [
+        {
+          "startSeconds": 7.596688740079364,
+          "durationMs": 222.1875
+        },
+        {
+          "startSeconds": 8.043938740079366,
+          "durationMs": 111.625
+        }
+      ],
+      "fragments20ms": [
+        {
+          "sourceOffsetMs": 0.0,
+          "bestLocalCorrelation": 0.9985228116779935,
+          "captureStartSeconds": 7.458567708333334,
+          "relativeToContiguousMs": 0.00396825396897782
+        },
+        {
+          "sourceOffsetMs": 20.0,
+          "bestLocalCorrelation": 0.9999781559917715,
+          "captureStartSeconds": 7.478567708333333,
+          "relativeToContiguousMs": 0.003968253968551078
+        },
+        {
+          "sourceOffsetMs": 40.0,
+          "bestLocalCorrelation": 0.9999867692477948,
+          "captureStartSeconds": 7.498567708333334,
+          "relativeToContiguousMs": 0.003968253969012514
+        },
+        {
+          "sourceOffsetMs": 60.0,
+          "bestLocalCorrelation": 0.9999932763610507,
+          "captureStartSeconds": 7.518567708333333,
+          "relativeToContiguousMs": 0.0039682539685892415
+        },
+        {
+          "sourceOffsetMs": 80.0,
+          "bestLocalCorrelation": 0.9999921993210316,
+          "captureStartSeconds": 7.538567708333333,
+          "relativeToContiguousMs": 0.00396825396815903
+        },
+        {
+          "sourceOffsetMs": 100.0,
+          "bestLocalCorrelation": 0.9999931316877538,
+          "captureStartSeconds": 7.558567708333333,
+          "relativeToContiguousMs": 0.003968253968616997
+        },
+        {
+          "sourceOffsetMs": 120.0,
+          "bestLocalCorrelation": 0.9999951314757151,
+          "captureStartSeconds": 7.83778125,
+          "relativeToContiguousMs": 259.21750992063517
+        },
+        {
+          "sourceOffsetMs": 140.0,
+          "bestLocalCorrelation": 0.999994784036598,
+          "captureStartSeconds": 7.85778125,
+          "relativeToContiguousMs": 259.2175099206356
+        },
+        {
+          "sourceOffsetMs": 160.0,
+          "bestLocalCorrelation": 0.9999878062628754,
+          "captureStartSeconds": 7.87778125,
+          "relativeToContiguousMs": 259.21750992063517
+        },
+        {
+          "sourceOffsetMs": 180.0,
+          "bestLocalCorrelation": 0.9999677741323857,
+          "captureStartSeconds": 7.89778125,
+          "relativeToContiguousMs": 259.2175099206357
+        },
+        {
+          "sourceOffsetMs": 200.0,
+          "bestLocalCorrelation": 0.9999661773110441,
+          "captureStartSeconds": 7.91778125,
+          "relativeToContiguousMs": 259.2175099206352
+        },
+        {
+          "sourceOffsetMs": 220.0,
+          "bestLocalCorrelation": 0.9999636046626161,
+          "captureStartSeconds": 7.93778125,
+          "relativeToContiguousMs": 259.2175099206349
+        },
+        {
+          "sourceOffsetMs": 240.0,
+          "bestLocalCorrelation": 0.9999672645853764,
+          "captureStartSeconds": 7.95778125,
+          "relativeToContiguousMs": 259.2175099206353
+        },
+        {
+          "sourceOffsetMs": 260.0,
+          "bestLocalCorrelation": 0.9999695750101109,
+          "captureStartSeconds": 7.97778125,
+          "relativeToContiguousMs": 259.2175099206349
+        },
+        {
+          "sourceOffsetMs": 280.0,
+          "bestLocalCorrelation": 0.9999640341510153,
+          "captureStartSeconds": 7.99778125,
+          "relativeToContiguousMs": 259.2175099206353
+        },
+        {
+          "sourceOffsetMs": 300.0,
+          "bestLocalCorrelation": 0.9999681991619046,
+          "captureStartSeconds": 8.01778125,
+          "relativeToContiguousMs": 259.2175099206358
+        }
+      ]
+    },
+    "coreaudio": {
+      "contiguousExpectedStartSeconds": 1.2424804067460316,
+      "nextVerifiedStartSeconds": 1.9405677083333333,
+      "intervalMs": 698.0833333333334,
+      "exactZeroRuns": [
+        {
+          "startSeconds": 1.3806054067460316,
+          "durationMs": 222.1875
+        },
+        {
+          "startSeconds": 1.8278554067460315,
+          "durationMs": 111.625
+        }
+      ],
+      "fragments20ms": [
+        {
+          "sourceOffsetMs": 0.0,
+          "bestLocalCorrelation": 0.9985228116779935,
+          "captureStartSeconds": 1.242484375,
+          "relativeToContiguousMs": 0.00396825396853373
+        },
+        {
+          "sourceOffsetMs": 20.0,
+          "bestLocalCorrelation": 0.9999781559917715,
+          "captureStartSeconds": 1.262484375,
+          "relativeToContiguousMs": 0.003968253968551078
+        },
+        {
+          "sourceOffsetMs": 40.0,
+          "bestLocalCorrelation": 0.9999867692477948,
+          "captureStartSeconds": 1.282484375,
+          "relativeToContiguousMs": 0.00396825396834638
+        },
+        {
+          "sourceOffsetMs": 60.0,
+          "bestLocalCorrelation": 0.9999932763610507,
+          "captureStartSeconds": 1.302484375,
+          "relativeToContiguousMs": 0.003968253968367197
+        },
+        {
+          "sourceOffsetMs": 80.0,
+          "bestLocalCorrelation": 0.9999921993210316,
+          "captureStartSeconds": 1.322484375,
+          "relativeToContiguousMs": 0.003968253968381075
+        },
+        {
+          "sourceOffsetMs": 100.0,
+          "bestLocalCorrelation": 0.9999931316877538,
+          "captureStartSeconds": 1.342484375,
+          "relativeToContiguousMs": 0.0039682539683949525
+        },
+        {
+          "sourceOffsetMs": 120.0,
+          "bestLocalCorrelation": 0.9999951314757151,
+          "captureStartSeconds": 1.6216979166666667,
+          "relativeToContiguousMs": 259.21750992063517
+        },
+        {
+          "sourceOffsetMs": 140.0,
+          "bestLocalCorrelation": 0.999994784036598,
+          "captureStartSeconds": 1.6416979166666668,
+          "relativeToContiguousMs": 259.21750992063517
+        },
+        {
+          "sourceOffsetMs": 160.0,
+          "bestLocalCorrelation": 0.9999878062628754,
+          "captureStartSeconds": 1.6616979166666668,
+          "relativeToContiguousMs": 259.21750992063517
+        },
+        {
+          "sourceOffsetMs": 180.0,
+          "bestLocalCorrelation": 0.9999677741323857,
+          "captureStartSeconds": 1.6816979166666666,
+          "relativeToContiguousMs": 259.21750992063505
+        },
+        {
+          "sourceOffsetMs": 200.0,
+          "bestLocalCorrelation": 0.9999661773110441,
+          "captureStartSeconds": 1.7016979166666666,
+          "relativeToContiguousMs": 259.21750992063505
+        },
+        {
+          "sourceOffsetMs": 220.0,
+          "bestLocalCorrelation": 0.9999636046626161,
+          "captureStartSeconds": 1.7216979166666666,
+          "relativeToContiguousMs": 259.21750992063505
+        },
+        {
+          "sourceOffsetMs": 240.0,
+          "bestLocalCorrelation": 0.9999672645853764,
+          "captureStartSeconds": 1.7416979166666666,
+          "relativeToContiguousMs": 259.21750992063505
+        },
+        {
+          "sourceOffsetMs": 260.0,
+          "bestLocalCorrelation": 0.9999695750101109,
+          "captureStartSeconds": 1.7616979166666666,
+          "relativeToContiguousMs": 259.21750992063505
+        },
+        {
+          "sourceOffsetMs": 280.0,
+          "bestLocalCorrelation": 0.9999640341510153,
+          "captureStartSeconds": 1.7816979166666667,
+          "relativeToContiguousMs": 259.21750992063505
+        },
+        {
+          "sourceOffsetMs": 300.0,
+          "bestLocalCorrelation": 0.9999681991619046,
+          "captureStartSeconds": 1.8016979166666667,
+          "relativeToContiguousMs": 259.2175099206351
+        }
+      ]
+    }
+  }
+}

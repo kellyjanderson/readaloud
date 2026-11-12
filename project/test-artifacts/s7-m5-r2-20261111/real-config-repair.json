@@ -1,0 +1,174 @@
+{
+  "passed": true,
+  "modelId": "fish_drama3_4bit",
+  "pinnedIdentity": "mlx-community/fish-audio-drama-3-4bit@2b0c8028998533972e77359cce56b8bf1c5d6d4a",
+  "snapshot": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/Library/Application Support/com.kellyjanderson.readAloud.mlxPlaybackTest/read_aloud/mlx-tts/models/models--mlx-community--fish-audio-drama-3-4bit/snapshots/2b0c8028998533972e77359cce56b8bf1c5d6d4a",
+  "before": {
+    ".gitattributes": {
+      "inode": 75135349,
+      "bytes": 1570,
+      "mtimeNs": 1794409959830442828
+    },
+    "LICENSE": {
+      "inode": 75135345,
+      "bytes": 19685,
+      "mtimeNs": 1794409959829856116
+    },
+    "NOTICE": {
+      "inode": 75135343,
+      "bytes": 983,
+      "mtimeNs": 1794409959829931408
+    },
+    "README.md": {
+      "inode": 75135348,
+      "bytes": 3669,
+      "mtimeNs": 1794409959830122284
+    },
+    "chat_template.jinja": {
+      "inode": 75135355,
+      "bytes": 7756,
+      "mtimeNs": 1794409959840255719
+    },
+    "codec.safetensors": {
+      "inode": 75094801,
+      "bytes": 1572080341,
+      "mtimeNs": 1794409381770450384
+    },
+    "config.json": {
+      "inode": 75135341,
+      "bytes": 53444,
+      "mtimeNs": 1794409959820633687
+    },
+    "model-00001.safetensors": {
+      "inode": 75135331,
+      "bytes": 4324625361,
+      "mtimeNs": 1794410300772955420
+    },
+    "model-00002.safetensors": {
+      "inode": 75135339,
+      "bytes": 4390422858,
+      "mtimeNs": 1794410279355993610
+    },
+    "model-00003.safetensors": {
+      "inode": 75135353,
+      "bytes": 4304379873,
+      "mtimeNs": 1794410178150423354
+    },
+    "model-00004.safetensors": {
+      "inode": 75135367,
+      "bytes": 4426404468,
+      "mtimeNs": 1794410376892802837
+    },
+    "model-00005.safetensors": {
+      "inode": 75135369,
+      "bytes": 4302695649,
+      "mtimeNs": 1794410400875287453
+    },
+    "model-00006.safetensors": {
+      "inode": 75135368,
+      "bytes": 439426211,
+      "mtimeNs": 1794410105142670617
+    },
+    "special_tokens_map.json": {
+      "inode": 75135376,
+      "bytes": 102779,
+      "mtimeNs": 1794409959929985704
+    },
+    "tokenizer.json": {
+      "inode": 75099865,
+      "bytes": 20791070,
+      "mtimeNs": 1794409816842360133
+    },
+    "tokenizer_config.json": {
+      "inode": 75135378,
+      "bytes": 103580,
+      "mtimeNs": 1794409959938892131
+    }
+  },
+  "originalConfigSha256": "a829790347e2786a6c37096a986a34d25d8aef8dc51147604f5a64045b7bee19",
+  "after": {
+    ".gitattributes": {
+      "inode": 75135349,
+      "bytes": 1570,
+      "mtimeNs": 1794409959830442828
+    },
+    "LICENSE": {
+      "inode": 75135345,
+      "bytes": 19685,
+      "mtimeNs": 1794409959829856116
+    },
+    "NOTICE": {
+      "inode": 75135343,
+      "bytes": 983,
+      "mtimeNs": 1794409959829931408
+    },
+    "README.md": {
+      "inode": 75135348,
+      "bytes": 3669,
+      "mtimeNs": 1794409959830122284
+    },
+    "chat_template.jinja": {
+      "inode": 75135355,
+      "bytes": 7756,
+      "mtimeNs": 1794409959840255719
+    },
+    "codec.safetensors": {
+      "inode": 75094801,
+      "bytes": 1572080341,
+      "mtimeNs": 1794409381770450384
+    },
+    "config.json": {
+      "inode": 75397598,
+      "bytes": 53444,
+      "mtimeNs": 1794410799205232589
+    },
+    "model-00001.safetensors": {
+      "inode": 75135331,
+      "bytes": 4324625361,
+      "mtimeNs": 1794410300772955420
+    },
+    "model-00002.safetensors": {
+      "inode": 75135339,
+      "bytes": 4390422858,
+      "mtimeNs": 1794410279355993610
+    },
+    "model-00003.safetensors": {
+      "inode": 75135353,
+      "bytes": 4304379873,
+      "mtimeNs": 1794410178150423354
+    },
+    "model-00004.safetensors": {
+      "inode": 75135367,
+      "bytes": 4426404468,
+      "mtimeNs": 1794410376892802837
+    },
+    "model-00005.safetensors": {
+      "inode": 75135369,
+      "bytes": 4302695649,
+      "mtimeNs": 1794410400875287453
+    },
+    "model-00006.safetensors": {
+      "inode": 75135368,
+      "bytes": 439426211,
+      "mtimeNs": 1794410105142670617
+    },
+    "special_tokens_map.json": {
+      "inode": 75135376,
+      "bytes": 102779,
+      "mtimeNs": 1794409959929985704
+    },
+    "tokenizer.json": {
+      "inode": 75099865,
+      "bytes": 20791070,
+      "mtimeNs": 1794409816842360133
+    },
+    "tokenizer_config.json": {
+      "inode": 75135378,
+      "bytes": 103580,
+      "mtimeNs": 1794409959938892131
+    }
+  },
+  "completedNonConfigArtifactsUnchanged": true,
+  "repairedConfigSha256": "a829790347e2786a6c37096a986a34d25d8aef8dc51147604f5a64045b7bee19",
+  "originalConfigRestored": true
+}

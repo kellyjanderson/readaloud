@@ -1,4 +1,6 @@
 import 'package:flutter/services.dart';
+import 'package:read_aloud/src/models/reader_operation.dart';
+import 'package:read_aloud/src/services/tts_engine.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:read_aloud/src/services/native_speech_work_activity.dart';
@@ -66,14 +68,29 @@ void main() {
     await activity.release();
   });
 
-  test('model preparation failure before Python releases its activity', () async {
-    final processor = MlxSpeechWorkerChunkProcessor(
-      engineId: 'invalid-test-engine',
-      modelPath: '',
-      pythonPath: '',
-    );
-    await expectLater(processor.prepareModel(), throwsStateError);
-    expect(calls.map((c) => c.method), ['beginSpeechWork', 'endSpeechWork']);
-    expect(calls.first.arguments, calls.last.arguments);
-  });
+  test(
+    'model preparation failure before Python releases its activity',
+    () async {
+      final progress = <TtsResourceProgress?>[];
+      final processor = MlxSpeechWorkerChunkProcessor(
+        engineId: 'invalid-test-engine',
+        modelPath: '',
+        pythonPath: '',
+        onResourceProgress: progress.add,
+      );
+      await expectLater(processor.prepareModel(), throwsStateError);
+      expect(calls.map((c) => c.method), ['beginSpeechWork', 'endSpeechWork']);
+      expect(calls.first.arguments, calls.last.arguments);
+      expect(progress.map((p) => p?.state), [
+        OperationState.queued,
+        OperationState.failed,
+      ]);
+      final failedId = progress.last!.operationId;
+      await expectLater(processor.prepareModel(), throwsStateError);
+      expect(progress.last!.operationId, isNot(failedId));
+      expect(progress.last!.retryOf, failedId);
+      expect(progress.every((p) => p != null), isTrue);
+      await processor.dispose();
+    },
+  );
 }

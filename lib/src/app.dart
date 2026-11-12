@@ -323,6 +323,7 @@ class _ReadAloudAppState extends State<ReadAloudApp> {
         // Preparation already has an inline owner. A duplicate toast covers
         // its measured progress and can outlive the operation it describes.
         final inlineStatus =
+            _controller.statusOwnedByInlineFailure ||
             _controller.isInitializing ||
             _controller.speechResourceProgress != null ||
             _controller.isPreparingDocument ||

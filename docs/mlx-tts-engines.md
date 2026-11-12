@@ -1,13 +1,27 @@
 # Local MLX TTS engines
 
+Fish model metadata can refresh as validated data for the installed runtime;
+see [catalog refresh and fallback](fish-drama-catalog.md). Current sessions retain
+their captured model revision and integrity manifest throughout loading.
+
 Read Aloud offers Fish Audio Drama 3 (bf16, 8-bit and 4-bit), Qwen3-TTS
-1.7B Base/CustomVoice, Voxtral TTS 4B and MOSS-TTS v1.5. Kokoro remains the
-default. On macOS choose **Read Aloud > Settings… > Text-to-speech engine**.
+1.7B Base/CustomVoice, Voxtral TTS 4B and MOSS-TTS v1.5. New installs choose the highest qualified Fish precision that fits measured
+headroom and the 100,000,000,000-byte process-tree ceiling. Exact checkpoint,
+runtime and device qualification is required; unknown devices use a disclosed
+Kokoro fallback. Existing explicit choices remain selected. On macOS choose **Read Aloud > Settings… > Text-to-speech engine**.
 Selecting an engine starts its download and loading immediately. A saved MLX
-selection does the same at launch. Settings shows progress and offers retry on
-failure. Switching away cancels preparation, drains the old inference process,
+selection does the same at launch. Settings shows measured progress, model-file totals and a fresh available-volume
+measurement with its timestamp. The total is not the remaining download size or
+a guarantee of future space. Cancel retains resumable data; Retry resumes
+preparation without changing the selected model. Switching away cancels preparation, drains the old inference process,
 and prepares the latest selection without restarting or rebuilding the app.
 The document and reading position remain available; resume playback explicitly.
+Settings shows the selected engine separately from a validated active engine
+and the last working choice. A last working choice may need to reload. Changing
+engines cancels pending playback, preview and audio export; retry or resume is an
+explicit action. Narrator choices are retained per engine. An unavailable saved
+voice remains unresolved until you choose a compatible voice; returning to its
+engine restores the saved choice.
 
 Drama bf16 has running-app playback evidence at native 44.1 kHz, including
 short fiction turns and explicit Character choices. Full qualification remains
@@ -27,13 +41,24 @@ total, followed by a separate model-loading stage.
 There is no fixed elapsed-time cutoff for downloading a model. The Hub bounds
 individual network requests; changing the selected engine cancels preparation.
 
+Fish variants are pinned to specific checkpoint revisions. Normal installed and
+downloaded models must pass the bundled file-integrity checks before loading.
+Valid cached files work offline; retries resume missing files and repair corrupt
+files in the managed Hub cache without removing other variants. When several
+accessible caches are incomplete, Retry uses the pinned snapshot with the most
+verified completed bytes and keeps that destination after an interruption.
+Older app-support Hub caches are checked before starting a new download. An invalid legacy unpacked
+folder fails with an integrity error rather than being rewritten automatically.
+File verification does not establish listening quality, memory fit or native
+8-bit/4-bit playback qualification; those remain separate checks.
+
 The recognized Hub checkpoints are:
 
 | Engine ID | Checkpoint | Approx. size | License |
 | --- | --- | ---: | --- |
-| `fish_drama3` | `mlx-community/fish-audio-drama-3-bf16` | 67 GB | Fish Audio Community License |
-| `fish_drama3_8bit` | `mlx-community/fish-audio-drama-3-8bit` | 36 GB | Fish Audio Community License |
-| `fish_drama3_4bit` | `mlx-community/fish-audio-drama-3-4bit` | 23 GB | Fish Audio Community License |
+| `fish_drama3` | `mlx-community/fish-audio-drama-3-bf16` | 72.38 GB | Fish Audio Community License |
+| `fish_drama3_8bit` | `mlx-community/fish-audio-drama-3-8bit` | 42.18 GB | Fish Audio Community License |
+| `fish_drama3_4bit` | `mlx-community/fish-audio-drama-3-4bit` | 23.78 GB | Fish Audio Community License |
 | `qwen3_tts_1_7b` | `mlx-community/Qwen3-TTS-12Hz-1.7B-CustomVoice-bf16` | 4.2 GB | Apache 2.0 |
 | `qwen3_tts_base_1_7b` | `mlx-community/Qwen3-TTS-12Hz-1.7B-Base-bf16` | 4.2 GB | Apache 2.0 |
 | `voxtral_4b` | `mlx-community/Voxtral-4B-TTS-2603-mlx-bf16` | 7.5 GB | CC BY-NC 4.0; noncommercial use only |
@@ -368,13 +393,20 @@ is still rendering. Saving reusable audio still waits for the complete scene;
 an interrupted prefix is never saved as a completed passage. Until the final
 duration is known, highlighting stays at the scene's source anchor. Completed
 scenes retain approximate word highlighting rather than word-level alignment.
-The two-second startup goal, five-second reusable-book limit and ten-second
-first-load limit exclude normal app startup and include preparation needed by
-the measured document load after startup. These are requirements;
-the current S6 qualification record in issue #137 tracks remaining failures.
+The two-second launch-to-speech goal includes app startup. The five-second
+reusable-book limit and ten-second first-load limit exclude normal app startup
+and include preparation needed by the measured document load afterward.
+S6's bounded load evidence is recorded in
+[issue #137](https://github.com/kellyjanderson/readaloud/issues/137); it does not
+establish the two-second first-load launch goal or broader release acceptance.
 Perceptual continuity across scene boundaries,
 speech-rate handling and broader #111 acceptance remain open.
 
 Sources: [Drama bf16 model card](https://huggingface.co/mlx-community/fish-audio-drama-3-bf16),
 [MLX Audio Drama implementation](https://github.com/Blaizzy/mlx-audio/tree/main/mlx_audio/tts/models/fish_drama3),
 [Fish public voice API](https://docs.fish.audio/api-reference/endpoint/model/list-models).
+
+S7 memory admission uses reviewed, bounded M5 Max/128 GiB observations with a
+documented 25% margin. Derived admission budgets are distinct from observed
+peaks. Complete app/child coverage, OS headroom and normal pressure are checked
+before and after loading and during work. Physical M3 qualification remains open.

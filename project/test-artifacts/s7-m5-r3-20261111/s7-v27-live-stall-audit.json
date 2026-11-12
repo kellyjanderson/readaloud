@@ -1,0 +1,182 @@
+{
+  "schema": "readaloud-s7-live-stall-audit-v1",
+  "sourceCommit": "2c622b9",
+  "run": "s7-8bit-extended-v27-20261111",
+  "readOnlyAudit": true,
+  "runScope": {
+    "diagnosticProfiling": true,
+    "functionalPassed": true,
+    "lazyNativePreparationExperiment": false,
+    "maxNativeRoundTripMs": 351,
+    "native250msGatePassed": false,
+    "maxUiHeartbeatDelayMs": 13,
+    "normalQuit": true,
+    "appExitVerified": true
+  },
+  "profiles": [
+    {
+      "sampleFile": "native-stall-1.sample.txt",
+      "sampleHeaderTime": "2026-11-11 10:49:05.728 -0800",
+      "nominalStartUnixMicros": 1794422945728000,
+      "nominalEndUnixMicros": 1794422946728000,
+      "triggerRequestUnixMicros": 1794422945605789,
+      "spawnedUnixMicros": 1794422945683311,
+      "requestToSampleHeaderMicros": 122211,
+      "mainStackSamples": 300,
+      "mainRunloopServiceMachPortSamples": 293,
+      "mainNestedCAMessageSendSamples": 3,
+      "delayedRequestOverlaps": [
+        {
+          "requestedUnixMicros": 1794422945605789,
+          "nativeEntryUnixMicros": 1794422945771929,
+          "returnedUnixMicros": 1794422945772036,
+          "applicationActive": false,
+          "owners": 1,
+          "preEntryMicros": 166140,
+          "entryToDartReturnMicros": 107,
+          "nominalPreEntryOverlapMicros": 43929
+        }
+      ]
+    },
+    {
+      "sampleFile": "native-stall-2.sample.txt",
+      "sampleHeaderTime": "2026-11-11 10:49:14.727 -0800",
+      "nominalStartUnixMicros": 1794422954727000,
+      "nominalEndUnixMicros": 1794422955727000,
+      "triggerRequestUnixMicros": 1794422954605139,
+      "spawnedUnixMicros": 1794422954688580,
+      "requestToSampleHeaderMicros": 121861,
+      "mainStackSamples": 276,
+      "mainRunloopServiceMachPortSamples": 139,
+      "mainNestedCAMessageSendSamples": 133,
+      "delayedRequestOverlaps": [
+        {
+          "requestedUnixMicros": 1794422954605139,
+          "nativeEntryUnixMicros": 1794422954811679,
+          "returnedUnixMicros": 1794422954811837,
+          "applicationActive": true,
+          "owners": 1,
+          "preEntryMicros": 206540,
+          "entryToDartReturnMicros": 158,
+          "nominalPreEntryOverlapMicros": 84679
+        },
+        {
+          "requestedUnixMicros": 1794422954905255,
+          "nativeEntryUnixMicros": 1794422955048239,
+          "returnedUnixMicros": 1794422955048491,
+          "applicationActive": true,
+          "owners": 1,
+          "preEntryMicros": 142984,
+          "entryToDartReturnMicros": 252,
+          "nominalPreEntryOverlapMicros": 142984
+        },
+        {
+          "requestedUnixMicros": 1794422955108653,
+          "nativeEntryUnixMicros": 1794422955234871,
+          "returnedUnixMicros": 1794422955235041,
+          "applicationActive": true,
+          "owners": 1,
+          "preEntryMicros": 126218,
+          "entryToDartReturnMicros": 170,
+          "nominalPreEntryOverlapMicros": 126218
+        }
+      ]
+    },
+    {
+      "sampleFile": "native-stall-3.sample.txt",
+      "sampleHeaderTime": "2026-11-11 10:51:10.802 -0800",
+      "nominalStartUnixMicros": 1794423070802000,
+      "nominalEndUnixMicros": 1794423071802000,
+      "triggerRequestUnixMicros": 1794423070605921,
+      "spawnedUnixMicros": 1794423070768256,
+      "requestToSampleHeaderMicros": 196079,
+      "mainStackSamples": 357,
+      "mainRunloopServiceMachPortSamples": 221,
+      "mainNestedCAMessageSendSamples": 136,
+      "delayedRequestOverlaps": [
+        {
+          "requestedUnixMicros": 1794423070605921,
+          "nativeEntryUnixMicros": 1794423070957069,
+          "returnedUnixMicros": 1794423070957149,
+          "applicationActive": true,
+          "owners": 0,
+          "preEntryMicros": 351148,
+          "entryToDartReturnMicros": 80,
+          "nominalPreEntryOverlapMicros": 155069
+        }
+      ]
+    },
+    {
+      "sampleFile": "native-stall-4.sample.txt",
+      "sampleHeaderTime": "2026-11-11 10:51:13.616 -0800",
+      "nominalStartUnixMicros": 1794423073616000,
+      "nominalEndUnixMicros": 1794423074616000,
+      "triggerRequestUnixMicros": 1794423073506855,
+      "spawnedUnixMicros": 1794423073575377,
+      "requestToSampleHeaderMicros": 109145,
+      "mainStackSamples": 286,
+      "mainRunloopServiceMachPortSamples": 191,
+      "mainNestedCAMessageSendSamples": 91,
+      "delayedRequestOverlaps": []
+    }
+  ],
+  "findings": [
+    "Sample 3 nominally begins 196.079ms into the 351.148ms pre-entry delay and overlaps its last 155.069ms. Native entry to Dart return is 80us; that includes the return route and is not a separately measured native handler duration.",
+    "Sample 2 nominally overlaps 84.679ms of its trigger delay and all of two later pre-entry delays, 142.984ms and 126.218ms. Its main thread shows 133 of 276 aggregate samples inside CA Render Message send, including 117 main-dispatch-rooted, 15 Flutter frame-commit-rooted, and 1 AppKit flush-rooted samples.",
+    "Sample 3 main thread has 357 aggregate samples: 221 runloop port waits, 123 main-dispatch-rooted CA Render Message mach_msg waits (84 under symbolized MediaToolbox frames and 39 under a dispatch block), and 13 Flutter frame-commit-rooted equivalent waits.",
+    "Sample 1 has only 43.929ms nominal pre-entry overlap and 293 of 300 main samples in the runloop port wait; it does not identify the delay cause.",
+    "Sample 4 trigger is absent from >100ms delayedRequests, RETURN precedes the Sampling process line in app.log, and the sample header is 109.145ms after the request. There is no established trigger overlap, despite 91 of 286 aggregate main samples in CA message send.",
+    "Nested CA transaction mach_msg waits are directly observed. Aggregate sample reports discard per-stack timestamps and cannot assign those waits to a particular delayed request or establish remote IPC peer, wait reason, deadlock, lost wakeup, or a causal audio-output defect.",
+    "Pinned Flutter ResizeSynchronizer.performCommit calls its notify block for frame presentation. These frames do not establish user window resizing or the separate beginResize timeout loop; no beginResize frame appears in these main-thread samples."
+  ],
+  "uncertainty": [
+    "The header is millisecond-resolution wall time; a one-second collection span is nominal. No first/last individual sample timestamp is exported. Treat listed overlaps as approximate with at least millisecond alignment uncertainty and unassessed collection-start offset/wall-clock adjustment.",
+    "Sample counts are aggregate observations, not exact wait durations. sample suspends the process at each observation; instrumented timing cannot qualify the 250ms gate.",
+    "applicationActive is measured at native handler entry, not a continuous activity record. owners counts speech work activities, not all audio/player/framework work."
+  ],
+  "sourceEvidence": [
+    {
+      "path": "tools/native_main_responsiveness_probe.dart",
+      "lines": "22-84",
+      "meaning": "One in-flight request; 50ms pending trigger; wall stamps and monotonic gate; only >100ms retained."
+    },
+    {
+      "path": "macos/Runner/AppDelegate.swift",
+      "lines": "174-184",
+      "meaning": "Immediate native entry stamp, speech owner count and active-app state."
+    },
+    {
+      "path": "tools/run_s7_variant_qualification.rb",
+      "lines": "149-177",
+      "meaning": "Existing exactPID Time Profiler waiting-thread option; bounded triggered sample collection."
+    },
+    {
+      "path": "third_party/just_audio/darwin/just_audio/Sources/just_audio/UriAudioSource.m",
+      "lines": "17-46",
+      "meaning": "URI construction creates AVURLAsset and IndexedPlayerItem; sampled in 1/4 but not a dominant attributed wait."
+    },
+    {
+      "path": "third_party/just_audio/darwin/just_audio/Sources/just_audio/AudioPlayer.m",
+      "lines": "504-552",
+      "meaning": "Existing queue-prefix extension inserts AVPlayerItems; observed sample2 path is brief in aggregate."
+    },
+    {
+      "sdkCommit": "052f31d115eceda8cbff1b3481fcde4330c4ae12",
+      "path": "engine/src/flutter/shell/platform/darwin/macos/framework/Source/ResizeSynchronizer.swift",
+      "lines": "118-140",
+      "meaning": "Frame-present commit schedules notify on main runloop."
+    },
+    {
+      "sdkCommit": "052f31d115eceda8cbff1b3481fcde4330c4ae12",
+      "path": "engine/src/flutter/shell/platform/darwin/macos/framework/Source/FlutterRunLoop.swift",
+      "lines": "109-155",
+      "meaning": "Main-runloop task scheduling/execution source; these samples do not prove a scheduling defect."
+    }
+  ],
+  "nextExperiment": {
+    "recommendation": "Extend existing exactPID Time Profiler diagnostic from 70s to 190s for the same 180s QA workload, with recordWaitingThreads=true. Keep production and lazy/eager policy unchanged.",
+    "requiredEvidence": "Verify trace actually retained timestamped waiting and running stacks. Export main-thread stacks only within each exact request-to-native-entry interval and the aligned Hang/runloop span. Measure nested CA-message waits separately from runloop-port wait, active work and missing samples.",
+    "decisionRule": "If most delayed interval is nested CA mach_msg, main callpath occupancy is established and a narrower platform investigation follows. If delayed interval is idle, investigate task posting/deadlines/wake delivery with timestamped evidence. Neither outcome alone identifies the remote peer or proves an audio-gap cause.",
+    "boundaries": "Diagnostic only; normal Quit and verified app exit; unchanged 250ms/acoustic gates. Already-failed lazy preparation is not a remedy. No evidence-supported public Apple API policy change yet. M3 remains unavailable/open."
+  }
+}

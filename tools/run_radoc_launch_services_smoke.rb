@@ -25,7 +25,13 @@ receipt = File.join(output, 'receipt.json')
 app_log = File.join(output, 'app.log')
 File.write(app_log, '')
 result = {passed: false, launchMethod: 'LaunchServices open -W -n', deadlineSeconds: 120, normalQuit: false, forcedCleanup: false, captureIntroducedPlayGate: false}
+physical_head = ENV['READALOUD_QUEUE_PHYSICAL_HEAD_INDEX']
+abort 'Invalid physical-head QA flag' unless physical_head.nil? || %w[0 1].include?(physical_head)
 errors = []
+if physical_head == '1'
+  result[:physicalHeadIndexDiagnostic] = true
+  errors << 'QA-only physical-head ownership candidate; production default unchanged'
+end
 alive = lambda do |p|
   Process.kill(0, p)
   true
@@ -44,7 +50,7 @@ stop_child = lambda do |p|
 end
 clock = -> { Process.clock_gettime(Process::CLOCK_MONOTONIC) }
 owned = []
-pid = opener = cap = nil
+pid = opener = cap = awake_pid = nil
 open_status = nil
 stop = File.join(output, 'capture.stop')
 deadline = clock.call + 120
@@ -53,7 +59,7 @@ begin
   result[:launchUtc] = launched.utc.iso8601(6)
   micros = (launched.to_r * 1_000_000).to_i
   result[:launchMonotonicRawNanos] = Process.clock_gettime(Process::CLOCK_MONOTONIC_RAW, :nanosecond)
-  opener = Process.spawn('/usr/bin/open', '-W', '-n', '-a', bundle, '--stdout', app_log, '--stderr', app_log, '--env', "READALOUD_SMOKE_LAUNCH_UNIX_MICROS=#{micros}", '--args', copied, receipt, startup_book, pgroup: true)
+  opener = Process.spawn('/usr/bin/open', '-W', '-n', '-a', bundle, '--stdout', app_log, '--stderr', app_log, '--env', "READALOUD_SMOKE_LAUNCH_UNIX_MICROS=#{micros}", *(physical_head ? ['--env', "READALOUD_QUEUE_PHYSICAL_HEAD_INDEX=#{physical_head}"] : []), '--args', copied, receipt, startup_book, pgroup: true)
   result[:launcherPid] = opener
   discovery_end = clock.call + 15
   loop do
@@ -73,6 +79,8 @@ begin
     sleep 0.01
   end
   result[:pid] = pid
+  awake_pid = Process.spawn('/usr/bin/caffeinate', '-d', '-w', pid.to_s)
+  result[:awakeGuardPid] = awake_pid
   cap_log = File.open(File.join(output, 'capture.log'), 'w')
   cap = Process.spawn(capture, pid.to_s, File.join(output, 'capture.wav'), '110', stop, out: cap_log, err: cap_log)
   result[:capturePid] = cap
@@ -145,6 +153,18 @@ ensure
       errors << 'LaunchServices waiter did not exit'
     end
   end
+if awake_pid
+  begin
+    _, awake_status = Timeout.timeout(3) { Process.wait2(awake_pid) }
+    result[:awakeGuardExitStatus] = awake_status.exitstatus
+    result[:awakeGuardExited] = true
+    errors << 'Display wake guard failed' unless awake_status.success?
+  rescue Timeout::Error
+    stop_child.call(awake_pid)
+    result[:awakeGuardExited] = !alive.call(awake_pid)
+    errors << 'Display wake guard required forced cleanup'
+  end
+end
   result[:launcherExitStatus] = open_status&.exitstatus
   result[:appExitStatus] = nil # LaunchServices owns/reaps the app, not this runner.
   errors << 'LaunchServices failed' unless open_status&.success?

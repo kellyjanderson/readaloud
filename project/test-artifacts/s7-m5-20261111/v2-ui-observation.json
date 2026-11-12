@@ -1,0 +1,16 @@
+{
+  "source": "CUA native accessibility and screenshot",
+  "appIdentity": "com.kellyjanderson.readAloud.mlxPlaybackTest",
+  "selected": "Fish Audio Drama 3 · 8-bit",
+  "active": "No active engine",
+  "phase": "failed",
+  "lastWorking": "Fish Audio Drama 3 · bf16 (reload required)",
+  "error": "The selected model is not installed completely. Connect to download or repair it, or choose an installed model.",
+  "retryClickBeforeUnixMicros": 1794406986022000,
+  "observedRetryStages": [
+    "loading: Checking mlx runtime inventory (0 of12741)",
+    "failed: offline model unavailable"
+  ],
+  "observedResult": "Settings remained responsive, retained selected/unvalidated/last-working distinction, and exposed Retry speech engine after retry failed offline.",
+  "limits": "Programmatic native harness plus actual Settings Retry click; no quantized weights, M3 or human listening qualification. Existing model-size advice requires reconciliation."
+}

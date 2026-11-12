@@ -3,11 +3,28 @@ from pathlib import Path
 import tempfile
 import unittest
 import sys
+import threading
+from unittest.mock import patch
 
 spec=importlib.util.spec_from_file_location('provider',Path(__file__).resolve().parents[1]/'assets/modernbooknlp_worker.py')
 provider=importlib.util.module_from_spec(spec);spec.loader.exec_module(provider)
 
 class ProtocolTests(unittest.TestCase):
+    @unittest.skipUnless(sys.platform == 'darwin', 'Darwin physical footprint ABI')
+    def test_memory_uses_self_footprint_and_sampler_stops_without_model_import(self):
+        self.assertGreater(provider._physical_footprint(), 0)
+        stop = threading.Event()
+        messages = []
+        def emit(message):
+            messages.append(message)
+            stop.set()
+        with patch.object(provider, '_physical_footprint', return_value=2048):
+            provider._report_memory(stop, emit)
+        self.assertEqual(len(messages), 1)
+        self.assertEqual(messages[0]['footprintBytes'], 2048)
+        self.assertEqual(messages[0]['processId'], provider.os.getpid())
+        self.assertGreater(messages[0]['sampledUnixMicros'], 0)
+        self.assertNotIn('torch', sys.modules)
     def test_request_bounds_and_identity(self):
         value=dict(schema=1,requestId='r',ownerId='o',workId='w',sourceRevision='s',analysisRevision=1,sequence=1,text='hello')
         self.assertEqual(provider.validate_request(value),'hello')

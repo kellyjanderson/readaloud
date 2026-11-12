@@ -121,3 +121,62 @@ These legacy contracts describe intended behavior and acceptance; `final` denote
 - [uninterrupted audio primary channel](../specifications/uninterrupted-audio-primary-channel.md)
 - [voice session realization envelope](../specifications/voice-session-realization-envelope.md)
 - [watched file session refresh](../specifications/watched-file-session-refresh.md)
+
+## Finite local speech queue ownership on macOS
+
+The internally owned `KokoroTtsEngine` player opts into the vendored player's
+immutable `readAloudFiniteLocalWavQueue` contract on macOS. Injected players keep
+their caller's choice; generic players and other platforms keep legacy behavior.
+The existing player-init request carries the choice before loading. Application
+artifact validation owns finite WAV provenance. Dart shape/URI preflight runs
+before logical playlist mutation; native admission independently checks plain
+local AVURLAsset identity and queue/source membership before changing its tree.
+Neither layer guesses media format from a suffix or reads contents on the UI
+thread. Unsupported sources are rejected; no new playback scheduler is added.
+
+For opted-in loop-off playback, the actual native current item owns the logical
+index. A future item's end notification cannot advance its predecessor. Final
+completion separately requires positive finite duration and exact numeric EOF;
+one weak final-item witness is rechecked by existing head/Pause callbacks. This
+also covers a notification just before the head's final sample. Seek, accepted
+load, loop-mode change and disposal clear the witness. Both loop modes retain
+upstream completion behavior. Full details, library rationale and native fixture
+limits are in the [local adaptation](../../third_party/just_audio/README.local.md).
+
+For that macOS finite-queue loop-off path, Play samples the existing real
+paused or pending-seek position before activating the native rate. This avoids
+the direct post-activation AVPlayerItem.currentTime query found in the matched
+native trace. Position and timestamp remain paired; no synthetic position,
+extra scheduler or GPU policy is introduced. Generic players, other platforms
+and both loop modes retain the prior ordering. Existing status/KVO callbacks
+can still read position, so this is not a universal AVFoundation latency claim.
+The [position verification](../test-artifacts/s7-play-position-20261111/README.md)
+retains real-reader native negative controls and exact-candidate running-app
+results, including their snapshot and capture limits.
+
+The environment-driven physical-head experiment remains a separate diagnostic
+override. Earlier flagged acoustic passes do not qualify this production opt-in.
+[S7](https://github.com/kellyjanderson/readaloud/issues/112) owns final-source
+emitted-audio, responsiveness and cancellation evidence; M3 and human listening
+remain separate gates. The dated natural-EOF and replay diagnostics preserve
+both passing component observations and capture failures.
+
+The production-policy v77/v78 book checks cover 197 words and all six
+complete saved scene waveforms, with maximum external joins of .01ms. First-load
+playback reached natural EOF, persisted the complete book and peaked at 30ms
+native response; its model-forbidden reopen, Save/reopen, cancellation and
+restart peaked at 66ms, with every native sample foreground in both runs. These
+bounded checks verify the opted-in production queue without its experimental
+override. First-load post-startup speech took 2099.705ms; reusable loading took
+525.851ms. Total launch took 6317.906ms and 801.514ms respectively: the first
+misses the 2s goal even though both load hard limits pass. See the
+[position verification](../test-artifacts/s7-play-position-20261111/README.md).
+Its earlier, mostly background v76 case retains colder startup and all waveform
+matches, but receives no foreground responsiveness credit. Installed assets and
+OS caches remain distinct from fresh private target raw-audio stores. Earlier
+274ms/349ms failures remain preserved in the
+[preceding controls](../test-artifacts/s7-final-native-20261111/README.md).
+The exact-candidate 4bit/8bit/A-B-A checks pass the unchanged 250ms gate; a separate
+180s run passes waveform and native components while retaining its diagnostic
+overall verdict. None establishes a universal AVFoundation cure, arbitrary-book
+performance, physical output, human listening or M3 qualification.

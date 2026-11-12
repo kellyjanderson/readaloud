@@ -1,0 +1,8 @@
+2026-11-11 18:25:24.831 queue_append_test[9103:64489345] PASS: 24 native queue scenarios (recording queue; no app/audio)
+2026-11-11 18:25:24.867 queue_append_test[9103:64489345] PASS: native audit disabled, identity/stale, first-eight/queue/ring caps, off-main and dispose scenarios (no app/audio)
+2026-11-11 18:25:24.867 queue_append_test[9103:64489345] PASS: default/QA completion rewind, head ownership, index/events and loop/explicit seek preservation (no app/audio)
+2026-11-11 18:25:24.867 queue_append_test[9103:64489345] PASS: finite EOF duration/position limits and disposed witness (no app/audio)
+2026-11-11 18:25:24.867 queue_append_test[9103:64489345] PASS: physical-head QA future/stale/duplicate/EOF/KVO/snapshot/prune/load/seek/shuffle/loop scenarios (no app/audio)
+2026-11-11 18:25:24.867 queue_append_test[9103:64489345] PASS: final EOF regression stale-seek (recording queue; no app/audio)
+2026-11-11 18:25:24.867 queue_append_test[9103:64489345] PASS: final EOF regression stale-load (recording queue; no app/audio)
+2026-11-11 18:25:24.867 queue_append_test[9103:64489345] PASS: final EOF regression paused-recovery (recording queue; no app/audio)

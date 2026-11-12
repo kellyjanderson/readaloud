@@ -1,0 +1,12 @@
+{
+  "appPid" : 20083,
+  "firstBufferFrames" : 512,
+  "firstPacketMonotonicRawNanos" : 2322850159566083,
+  "firstPacketReceivedUnixMicros" : 1794420925809692,
+  "framesWritten" : 512,
+  "limit" : "A real PCM buffer was written. Silence does not establish capture permission or expected speech. Not physical speaker onset.",
+  "mechanism" : "CoreAudioProcessTap",
+  "sampleRate" : 48000,
+  "schema" : "readaloud-process-capture-ready-v1",
+  "sessionID" : "714676F5-6FDD-4D64-83F9-0DAAAA67D625"
+}

@@ -1,0 +1,1 @@
+2026-11-11 21:39:57.113 queue_append_test[57564:64812762] FAIL: Play read AVPlayerItem.currentTime while rate activation owns the startup clock lock

@@ -1,0 +1,80 @@
+{
+  "passed": false,
+  "nativePassed": false,
+  "normalQuit": true,
+  "appExitVerified": true,
+  "forcedCleanup": false,
+  "remainingOwnedPids": [],
+  "modelSource": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/character-fish-standalone",
+  "expectedOwnedAlias": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/Library/Application Support/com.kellyjanderson.readAloud.mlxPlaybackTest/read_aloud/mlx-tts/fish_drama3",
+  "frameworkSha256": "3c2eacf548dc95c22ac74cd5426afcdaf23340318f35733fddd303b643610047",
+  "executableSha256": "6b3d3636b1b3c635717d02fffd6bdd7cdbd12a55c74e3a597e3d0b23af462502",
+  "maxMlxChildren": 1,
+  "observedMlxSamples": 196,
+  "processEvents": [
+    {
+      "unixMicros": 1794406903172043,
+      "pids": []
+    },
+    {
+      "unixMicros": 1794406905110147,
+      "pids": [
+        22047
+      ]
+    },
+    {
+      "unixMicros": 1794406917975255,
+      "pids": []
+    },
+    {
+      "unixMicros": 1794406919699662,
+      "pids": [
+        22265
+      ]
+    },
+    {
+      "unixMicros": 1794406920199638,
+      "pids": []
+    },
+    {
+      "unixMicros": 1794406987110745,
+      "pids": [
+        22854
+      ]
+    },
+    {
+      "unixMicros": 1794406987608888,
+      "pids": []
+    },
+    {
+      "unixMicros": 1794407025598306,
+      "pids": [
+        23188
+      ]
+    },
+    {
+      "unixMicros": 1794407033367101,
+      "pids": []
+    },
+    {
+      "unixMicros": 1794407035708249,
+      "pids": [
+        23314
+      ]
+    },
+    {
+      "unixMicros": 1794407043765957,
+      "pids": []
+    }
+  ],
+  "errors": [
+    "Native failure: Bad state: Preview did not enter cancellable preparation before audio"
+  ],
+  "limits": "100ms process observations; source ownership checks are separate. Offline bf16 fixture, no quantized-model/M3 claim.",
+  "pid": 22023,
+  "capturePid": 22024,
+  "applicationActivationRequested": true,
+  "captureExitStatus": 0,
+  "appExitStatus": 0,
+  "ownedAliasAbsent": true
+}

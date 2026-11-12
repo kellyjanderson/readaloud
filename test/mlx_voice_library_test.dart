@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:read_aloud/src/services/mlx_speech_worker_processor.dart';
+import 'package:read_aloud/src/services/runtime_memory_policy.dart';
 import 'package:read_aloud/src/services/mlx_voice_library.dart';
 import 'package:read_aloud/src/services/speech_runtime.dart';
 import 'package:read_aloud/src/models/engine_capability.dart';
@@ -18,6 +19,14 @@ void main() {
       engineId: 'fish_drama3',
       modelPath: '',
       pythonPath: '/missing-readaloud-python-for-reference-test',
+      runtimeMemorySampler: () async => RuntimeMemorySnapshot(
+        totalFootprintBytes: 1000000000,
+        physicalMemoryBytes: 137438953472,
+        availableMemoryBytes: 110000000000,
+        pressure: RuntimeMemoryPressure.normal,
+        complete: true,
+        sampledAt: DateTime.now(),
+      ),
     );
     try {
       await HttpOverrides.runZoned(
