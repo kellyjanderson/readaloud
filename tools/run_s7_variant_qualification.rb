@@ -29,6 +29,9 @@ abort 'Invalid QA inference policy' unless inference_policy.nil? || %w[backgroun
 mlx_buffer_ops = ENV['MLX_MAX_OPS_PER_BUFFER']
 abort 'Invalid MLX command-buffer diagnostic' if mlx_buffer_ops &&
   (!mlx_buffer_ops.match?(/\A[1-9]\d{0,3}\z/) || mlx_buffer_ops.to_i > 1000)
+mlx_buffer_mb = ENV['MLX_MAX_MB_PER_BUFFER']
+abort 'Invalid MLX command-buffer memory diagnostic' if mlx_buffer_mb &&
+  (!mlx_buffer_mb.match?(/\A[1-9]\d{0,3}\z/) || mlx_buffer_mb.to_i > 1000)
 if replay_mode
   abort 'Replay requires cached-8bit and packets|joined' unless mode == 'cached-8bit' && %w[packets joined].include?(replay_mode)
   replay_input = ENV['READALOUD_S7_REPLAY_INPUT']
@@ -103,8 +106,9 @@ if inference_policy
   result[:inferencePolicyDiagnostic] = inference_policy
   result[:errors] << 'QA-only child scheduling differential; production policy unchanged'
 end
-if mlx_buffer_ops
-  result[:mlxCommandBufferDiagnostic] = {maxOpsPerBuffer: mlx_buffer_ops.to_i,
+if mlx_buffer_ops || mlx_buffer_mb
+  result[:mlxCommandBufferDiagnostic] = {maxOpsPerBuffer: mlx_buffer_ops&.to_i,
+    maxMbPerBuffer: mlx_buffer_mb&.to_i,
     scope: 'Fresh owned MLX child; diagnostic batching override, no GPU priority guarantee'}
   result[:errors] << 'MLX command-buffer batching diagnostic; production policy unchanged'
 end
@@ -443,7 +447,7 @@ ensure
   end
   result[:passed] = result[:nativePassed] && result[:normalQuit] && result[:appExitVerified] &&
     !result[:forcedCleanup] && result[:remainingOwnedPids].empty? &&
-    result[:captureExitStatus] == 0 && result[:emittedSignal]&.any? && result[:errors].empty?
+    result[:captureExitStatus] == 0 && (result[:emittedSignal]&.any? == true) && result[:errors].empty?
   result[:passed] = false if replay_mode
   result[:strictAcousticAcceptance] = 'NOT_RUN: compare copied queued WAVs with capture; listening remains separate'
   pending = File.join(output, 'runner.json.pending')
