@@ -1048,6 +1048,31 @@ static NSString *readAloudAuditIdentity(id object) {
 // item's completion before its predecessor leaves the physical head. Neither
 // notification order nor the previous logical index authorizes advancement.
 // Existing native callbacks own execution; no new queue, timer or retained item.
+// This diagnostic path is limited to positive finite media (the local
+// WAV route). A notification is not EOF evidence after same-item seek/reload.
+// Use rational CMTime comparison, without rounding away the last audio sample.
+- (BOOL)physicalHeadHasFiniteEOF:(IndexedPlayerItem *)head {
+    IndexedAudioSource *source = head.audioSource;
+    CMTime position = source.position, duration = source.duration;
+    return CMTIME_IS_NUMERIC(position) && CMTIME_IS_NUMERIC(duration) &&
+        CMTIME_COMPARE_INLINE(duration, >, kCMTimeZero) && CMTimeCompare(position, duration) >= 0;
+}
+
+- (void)completePendingFinalFromPhysicalHead:(IndexedPlayerItem *)head {
+    if (!_readAloudQueuePhysicalHeadIndex || _loopMode != lmLoopOff || !head ||
+            head != _readAloudPendingFinalCompletion || _processingState == psIdle ||
+            _processingState == psLoading || _processingState == psCompleted || CMTIME_IS_VALID(_seekPos)) return;
+    int headIndex = [self indexForItem:head];
+    if (headIndex < 0 || [_orderInv[headIndex] intValue] + 1 != _order.count ||
+            ![self physicalHeadHasFiniteEOF:head]) return;
+    if (_index != headIndex) {
+        _index = headIndex;
+        [self updateEndAction];
+    }
+    _readAloudPendingFinalCompletion = nil;
+    [self complete];
+}
+
 - (void)completeFromPhysicalHead:(IndexedPlayerItem *)endedPlayerItem {
     // A replacement/load or explicit seek owns position until it finishes.
     if (_processingState == psIdle || _processingState == psLoading || CMTIME_IS_VALID(_seekPos)) return;
@@ -1068,14 +1093,14 @@ static NSString *readAloudAuditIdentity(id object) {
         if (!_readAloudQueueSkipLoopOffRewind) [endedPlayerItem.audioSource seek:kCMTimeZero];
         if (_queueBoundaryAuditEnabled) [self queueBoundaryAudit:@"completion.rewind.return" item:endedPlayerItem details:@{@"skipped": @(_readAloudQueueSkipLoopOffRewind)}];
         _justAdvanced = YES;
-    } else if (endedPlayerItem == head && _processingState != psCompleted) {
+    } else if (endedPlayerItem == head && _processingState != psCompleted && [self physicalHeadHasFiniteEOF:head]) {
         // A future final-item notification must not terminate the current head.
         // Loop-off's final end action pauses, retaining this item at real EOF.
         _readAloudPendingFinalCompletion = nil;
         [self complete];
     } else if (endedPlayerItem != head) {
         // Remember an early final notification without transferring ownership.
-        // A later physical-head callback must additionally observe real EOF.
+        // A later existing head/paused callback must also observe finite EOF.
         _readAloudPendingFinalCompletion = endedPlayerItem;
     }
 }
@@ -1228,12 +1253,18 @@ static NSString *readAloudAuditIdentity(id object) {
         if (@available(macOS 10.12, iOS 10.0, *)) {
             AVPlayerTimeControlStatus status = AVPlayerTimeControlStatusPaused;
             NSNumber *statusNumber = change[NSKeyValueChangeNewKey];
-            if ([statusNumber isKindOfClass:[NSNumber class]]) {
+            if (_readAloudQueuePhysicalHeadIndex && _loopMode == lmLoopOff) {
+                // A delayed KVO payload cannot authorize EOF for a newer state
+                // or a replaced player. Final Pause retains the current item,
+                // so EOF need not produce another currentItem notification.
+                if (object != _player) return;
+                status = _player.timeControlStatus;
+            } else if ([statusNumber isKindOfClass:[NSNumber class]]) {
                 status = statusNumber.intValue;
             }
             switch (status) {
                 case AVPlayerTimeControlStatusPaused:
-                    //NSLog(@"AVPlayerTimeControlStatusPaused");
+                    if (_readAloudQueuePhysicalHeadIndex && _loopMode == lmLoopOff) [self completePendingFinalFromPhysicalHead:(IndexedPlayerItem *)_player.currentItem];
                     break;
                 case AVPlayerTimeControlStatusWaitingToPlayAtSpecifiedRate:
                     //NSLog(@"AVPlayerTimeControlStatusWaitingToPlayAtSpecifiedRate");
@@ -1279,17 +1310,7 @@ static NSString *readAloudAuditIdentity(id object) {
         }
         //NSLog(@"currentItem changed. _index=%d", _index);
         _bufferUnconfirmed = YES;
-        if (physicalHeadIndex && playerItem == _readAloudPendingFinalCompletion &&
-                _processingState != psIdle && _processingState != psLoading && _processingState != psCompleted &&
-                CMTIME_IS_INVALID(_seekPos) && [_orderInv[physicalIndex] intValue] + 1 == _order.count) {
-            IndexedAudioSource *source = playerItem.audioSource;
-            CMTime position = source.position, duration = source.duration;
-            if (CMTIME_IS_NUMERIC(position) && CMTIME_IS_NUMERIC(duration) &&
-                    CMTIME_COMPARE_INLINE(duration, >, kCMTimeZero) && CMTimeCompare(position, duration) >= 0) {
-                _readAloudPendingFinalCompletion = nil;
-                [self complete];
-            }
-        }
+        if (physicalHeadIndex) [self completePendingFinalFromPhysicalHead:playerItem];
         // If we've skipped or transitioned to a new item and we're not
         // currently in the middle of a seek
         /* if (CMTIME_IS_INVALID(_seekPos) && playerItem.status == AVPlayerItemStatusReadyToPlay) { */

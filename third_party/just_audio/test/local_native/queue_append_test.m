@@ -35,6 +35,7 @@
 @property NSUInteger rateChanges;
 @property NSUInteger auditQueries;
 @property (nonatomic) float rate;
+@property AVPlayerTimeControlStatus timeControlStatus;
 @property (copy) void (^afterCurrentRead)(void);
 @property (copy) void (^beforeItemsRead)(void);
 @property (copy) void (^afterItemsRead)(void);
@@ -183,9 +184,68 @@ static TestPlayer *removalPlayer(NSArray<TestSource *> *s, NSArray *order, NSArr
     return p;
 }
 
+// Run independently against the old source so each regression has its own
+// executed failing control. All callbacks below use existing production routes.
+static void finalEOFScenario(NSString *scenario) {
+    setenv("READALOUD_QUEUE_PHYSICAL_HEAD_INDEX", "1", 1);
+    NSArray<TestSource *> *s = sources(2, NO);
+    BOOL recovery = [scenario isEqualToString:@"paused-recovery"];
+    TestPlayer *p = removalPlayer(s, @[@0,@1], recovery ? @[s[0].item,s[1].item] : @[s[1].item], recovery ? 0 : 1, NO);
+    [p updateOrder]; [p setValue:@YES forKey:@"_enqueuedAll"];
+    TestQueue *queue = (id)p.player;
+    if (recovery) {
+        [p onComplete:[NSNotification notificationWithName:@"ended" object:s[1].item]];
+        [queue.storage removeObjectAtIndex:0];
+        [p observeValueForKeyPath:@"currentItem" ofObject:queue change:@{NSKeyValueChangeNewKey:s[1].item} context:nil];
+        NSCAssert([[p valueForKey:@"_processingState"] intValue] == psReady, @"early final completed at head start");
+        queue.timeControlStatus = AVPlayerTimeControlStatusPaused;
+        [p observeValueForKeyPath:@"timeControlStatus" ofObject:queue change:@{NSKeyValueChangeNewKey:@(AVPlayerTimeControlStatusPaused)} context:nil];
+        NSCAssert([[p valueForKey:@"_processingState"] intValue] == psReady, @"manual pause at head start fabricated EOF");
+        s[1].lastSeek = s[1].testDuration;
+        queue.timeControlStatus = AVPlayerTimeControlStatusPlaying;
+        [p observeValueForKeyPath:@"timeControlStatus" ofObject:queue change:@{NSKeyValueChangeNewKey:@(AVPlayerTimeControlStatusPaused)} context:nil];
+        NSCAssert([[p valueForKey:@"_processingState"] intValue] == psReady, @"stale paused payload fabricated EOF while actual state plays");
+        TestQueue *retiredQueue = [TestQueue new];
+        [p observeValueForKeyPath:@"timeControlStatus" ofObject:retiredQueue change:@{NSKeyValueChangeNewKey:@(AVPlayerTimeControlStatusPaused)} context:nil];
+        NSCAssert([[p valueForKey:@"_processingState"] intValue] == psReady, @"retired player's callback fabricated EOF");
+
+        queue.timeControlStatus = AVPlayerTimeControlStatusPaused;
+        // AVQueuePlayer's final Pause retains the head. No second head KVO.
+        // Even an old playing payload must defer to the actual paused state.
+        [p observeValueForKeyPath:@"timeControlStatus" ofObject:queue change:@{NSKeyValueChangeNewKey:@(AVPlayerTimeControlStatusPlaying)} context:nil];
+        NSCAssert([[p valueForKey:@"_processingState"] intValue] == psCompleted, @"pending final EOF lost without another currentItem KVO");
+        NSUInteger events = p.events.count;
+        [p observeValueForKeyPath:@"timeControlStatus" ofObject:queue change:@{NSKeyValueChangeNewKey:@(AVPlayerTimeControlStatusPaused)} context:nil];
+        NSCAssert(p.events.count == events, @"duplicate final pause republished EOF");
+    } else {
+        s[1].lastSeek = s[1].testDuration;
+        __block BOOL finished = NO;
+        if ([scenario isEqualToString:@"stale-load"]) {
+            p.loadSource = [[ConcatenatingAudioSource alloc] initWithId:@"same-source" audioSources:[s mutableCopy] shuffleOrder:@[@0,@1] lazyLoading:@NO];
+            [p load:@{@"type":@"concatenating"} initialPosition:kCMTimeZero initialIndex:@1 result:^(id result) { finished = YES; }];
+        } else {
+            [p seek:kCMTimeZero index:@1 completionHandler:^(BOOL success) { finished = success; }];
+        }
+        NSCAssert(finished && CMTIME_IS_INVALID([[p valueForKey:@"_seekPos"] CMTimeValue]) && CMTIME_COMPARE_INLINE(s[1].position, ==, kCMTimeZero), @"same-item seek/load did not finish at zero");
+        [p onComplete:[NSNotification notificationWithName:@"ended" object:s[1].item]];
+        NSCAssert([[p valueForKey:@"_processingState"] intValue] == psReady, @"delayed old final notification completed same-item seek/load at zero");
+        // Exact rational comparison must keep even the last WAV sample audible.
+        s[1].lastSeek = CMTimeMake(47999, 48000);
+        [p onComplete:[NSNotification notificationWithName:@"ended" object:s[1].item]];
+        NSCAssert([[p valueForKey:@"_processingState"] intValue] == psReady, @"final notification discarded the last WAV sample");
+        s[1].lastSeek = CMTimeMake(48001, 48000);
+        [p onComplete:[NSNotification notificationWithName:@"ended" object:s[1].item]];
+        NSCAssert([[p valueForKey:@"_processingState"] intValue] == psCompleted, @"genuine finite EOF notification did not complete");
+    }
+    NSLog(@"PASS: final EOF regression %@ (recording queue; no app/audio)", scenario);
+    unsetenv("READALOUD_QUEUE_PHYSICAL_HEAD_INDEX");
+}
+
 int main(void) {
     @try {
     @autoreleasepool {
+        const char *scenario = getenv("READALOUD_FINAL_EOF_SCENARIO");
+        if (scenario) { finalEOFScenario([NSString stringWithUTF8String:scenario]); return 0; }
         unsetenv("READALOUD_QUEUE_PHYSICAL_HEAD_INDEX");
         unsetenv("READALOUD_QUEUE_BOUNDARY_AUDIT");
         unsetenv("READALOUD_QUEUE_SKIP_LOOP_OFF_REWIND");
@@ -514,6 +574,7 @@ int main(void) {
         [p onComplete:[NSNotification notificationWithName:@"ended" object:physical[3].item]];
         [p onComplete:[NSNotification notificationWithName:@"ended" object:physical[3].item]];
         NSCAssert([[p valueForKey:@"_processingState"] intValue] == psReady && p.events.count == 1, @"stale predecessor completion falsely completed actual final head");
+        physical[4].lastSeek = physical[4].testDuration;
         [p onComplete:[NSNotification notificationWithName:@"ended" object:physical[4].item]];
         NSCAssert([[p valueForKey:@"_processingState"] intValue] == psCompleted && [[p.events lastObject][@"index"] intValue] == 4, @"normal final EOF missing");
         NSUInteger finalEvents = p.events.count;
@@ -570,9 +631,9 @@ int main(void) {
         [lazyPlayer onComplete:[NSNotification notificationWithName:@"ended" object:lazyPhysical[0].item]];
         NSCAssert([[lazyPlayer valueForKey:@"_index"] intValue] == 1, @"late predecessor end skipped lazy current head");
 
-        // An early final notification need not recur: existing head KVO can
-        // finish it at observed EOF, but cannot finish it at the start or when
-        // duration is unknown. Seek/load invalidate this pending witness.
+        // An early final notification need not recur. The existing paused-state
+        // callback can finish it without a synthetic second head notification.
+        // Unknown durations stay conservative; seek/load invalidate the witness.
         NSArray<TestSource *> *earlyFinal = sources(2, NO);
         TestPlayer *finalPlayer = removalPlayer(earlyFinal, @[@0,@1], @[earlyFinal[0].item,earlyFinal[1].item], 0, NO);
         [finalPlayer updateOrder]; [finalPlayer setValue:@YES forKey:@"_enqueuedAll"];
@@ -583,10 +644,10 @@ int main(void) {
         NSCAssert([[finalPlayer valueForKey:@"_index"] intValue] == 1 && [[finalPlayer valueForKey:@"_processingState"] intValue] == psReady, @"pending final completed at head start");
         earlyFinal[1].lastSeek = CMTimeMake(1, 1);
         earlyFinal[1].testDuration = kCMTimeIndefinite;
-        [finalPlayer observeValueForKeyPath:@"currentItem" ofObject:finalQueue change:@{NSKeyValueChangeNewKey: [NSNull null]} context:nil];
+        [finalPlayer observeValueForKeyPath:@"timeControlStatus" ofObject:finalQueue change:@{NSKeyValueChangeNewKey: @(AVPlayerTimeControlStatusPaused)} context:nil];
         NSCAssert([[finalPlayer valueForKey:@"_processingState"] intValue] == psReady, @"unknown duration authorized pending EOF");
         earlyFinal[1].testDuration = CMTimeMake(1, 1);
-        [finalPlayer observeValueForKeyPath:@"currentItem" ofObject:finalQueue change:@{NSKeyValueChangeNewKey: earlyFinal[0].item} context:nil];
+        [finalPlayer observeValueForKeyPath:@"timeControlStatus" ofObject:finalQueue change:@{NSKeyValueChangeNewKey: @(AVPlayerTimeControlStatusPaused)} context:nil];
         NSCAssert([[finalPlayer valueForKey:@"_processingState"] intValue] == psCompleted, @"early final completion was lost at actual final head EOF");
 
         // Superseding seeks and loads must not inherit that old EOF witness,
@@ -605,6 +666,8 @@ int main(void) {
             earlyFinal[1].lastSeek = CMTimeMake(1, 1);
             [finalPlayer observeValueForKeyPath:@"currentItem" ofObject:finalPlayer.player change:@{NSKeyValueChangeNewKey: earlyFinal[1].item} context:nil];
             NSCAssert([[finalPlayer valueForKey:@"_processingState"] intValue] == psReady, @"superseded future-final witness completed seek/load");
+            [finalPlayer observeValueForKeyPath:@"timeControlStatus" ofObject:finalPlayer.player change:@{NSKeyValueChangeNewKey:@(AVPlayerTimeControlStatusPaused)} context:nil];
+            NSCAssert([[finalPlayer valueForKey:@"_processingState"] intValue] == psReady, @"paused callback inherited superseded future-final witness");
         }
 
         // Exercise the real explicit-seek route and real load replacement. Old
@@ -638,6 +701,7 @@ int main(void) {
         [p onComplete:[NSNotification notificationWithName:@"ended" object:physical[1].item]];
         NSCAssert([[p valueForKey:@"_index"] intValue] == 0 && [[p valueForKey:@"_processingState"] intValue] == psReady, @"future shuffled final source completed early");
         [((TestQueue *)(id)p.player).storage removeObjectAtIndex:0];
+        physical[1].lastSeek = physical[1].testDuration;
         [p onComplete:[NSNotification notificationWithName:@"ended" object:physical[1].item]];
         NSCAssert([[p valueForKey:@"_index"] intValue] == 1 && [[p valueForKey:@"_processingState"] intValue] == psCompleted, @"shuffled actual final source did not complete");
 
@@ -653,8 +717,44 @@ int main(void) {
         p = player(physical, @[@0,@1], @[physical[0].item]);
         NSCAssert([[p readAloudQueueBoundaryAudit][@"physicalHeadIndex"] boolValue], @"QA mode absent from native audit receipt");
         unsetenv("READALOUD_QUEUE_BOUNDARY_AUDIT");
+        // QA finite-media limit: neither direct notifications nor an early
+        // witness + Pause can infer EOF from unknown/nonfinite/zero duration or
+        // nonnumeric position. Default media behavior above remains unchanged.
+        NSArray<NSValue *> *unprovenDurations = @[
+            [NSValue valueWithCMTime:kCMTimeInvalid], [NSValue valueWithCMTime:kCMTimeIndefinite],
+            [NSValue valueWithCMTime:kCMTimePositiveInfinity], [NSValue valueWithCMTime:kCMTimeNegativeInfinity],
+            [NSValue valueWithCMTime:kCMTimeZero], [NSValue valueWithCMTime:CMTimeMake(-1, 1)]];
+        NSArray<NSValue *> *unprovenPositions = @[
+            [NSValue valueWithCMTime:kCMTimeInvalid], [NSValue valueWithCMTime:kCMTimeIndefinite],
+            [NSValue valueWithCMTime:kCMTimePositiveInfinity], [NSValue valueWithCMTime:kCMTimeNegativeInfinity]];
+        for (NSNumber *badPosition in @[@NO, @YES]) {
+            for (NSValue *time in badPosition.boolValue ? unprovenPositions : unprovenDurations) {
+                NSArray<TestSource *> *limited = sources(2, NO);
+                TestPlayer *limitedPlayer = removalPlayer(limited, @[@0,@1], @[limited[0].item,limited[1].item], 0, NO);
+                [limitedPlayer updateOrder]; [limitedPlayer setValue:@YES forKey:@"_enqueuedAll"];
+                [limitedPlayer onComplete:[NSNotification notificationWithName:@"ended" object:limited[1].item]];
+                TestQueue *limitedQueue = (id)limitedPlayer.player;
+                [limitedQueue.storage removeObjectAtIndex:0];
+                limited[1].lastSeek = badPosition.boolValue ? time.CMTimeValue : CMTimeMake(1, 1);
+                limited[1].testDuration = badPosition.boolValue ? CMTimeMake(1, 1) : time.CMTimeValue;
+                [limitedPlayer onComplete:[NSNotification notificationWithName:@"ended" object:limited[1].item]];
+                [limitedPlayer observeValueForKeyPath:@"timeControlStatus" ofObject:limitedQueue change:@{NSKeyValueChangeNewKey:@(AVPlayerTimeControlStatusPaused)} context:nil];
+                NSCAssert([[limitedPlayer valueForKey:@"_processingState"] intValue] == psReady, @"unproven finite EOF authorized completion");
+            }
+        }
+        // Disposal owns and clears the one weak witness even without a player.
+        NSArray<TestSource *> *disposedFinal = sources(2, NO);
+        TestPlayer *disposedFinalPlayer = removalPlayer(disposedFinal, @[@0,@1], @[disposedFinal[0].item,disposedFinal[1].item], 0, NO);
+        [disposedFinalPlayer updateOrder];
+        [disposedFinalPlayer onComplete:[NSNotification notificationWithName:@"ended" object:disposedFinal[1].item]];
+        NSCAssert([disposedFinalPlayer valueForKey:@"_readAloudPendingFinalCompletion"] == disposedFinal[1].item, @"dispose fixture has no pending witness");
+        [disposedFinalPlayer setValue:nil forKey:@"_player"];
+        [disposedFinalPlayer dispose:NO];
+        NSCAssert([disposedFinalPlayer valueForKey:@"_readAloudPendingFinalCompletion"] == nil, @"dispose retained a pending final witness");
+        NSLog(@"PASS: finite EOF duration/position limits and disposed witness (no app/audio)");
         unsetenv("READALOUD_QUEUE_PHYSICAL_HEAD_INDEX");
         NSLog(@"PASS: physical-head QA future/stale/duplicate/EOF/KVO/snapshot/prune/load/seek/shuffle/loop scenarios (no app/audio)");
+        for (NSString *scenario in @[@"stale-seek", @"stale-load", @"paused-recovery"]) finalEOFScenario(scenario);
 
     }
     } @catch (NSException *exception) {
