@@ -89,6 +89,10 @@ if ENV['READALOUD_S7_KEEP_HISTORY_DIAGNOSTIC'] == '1'
   result[:keepHistoryDiagnostic] = true
   result[:errors] << 'QA-only bounded history-retention comparison; production default unchanged'
 end
+if ENV['READALOUD_QUEUE_PHYSICAL_HEAD_INDEX'] == '1'
+  result[:physicalHeadIndexDiagnostic] = true
+  result[:errors] << 'QA-only physical-head index comparison; production default unchanged'
+end
 # Read only bounded uncompressed PCM or float WAV. This checks app-emitted signal
 # separately from player intent, never labels energy as an exact speech match.
 def emitted_signal(path, timing_path, segments)
