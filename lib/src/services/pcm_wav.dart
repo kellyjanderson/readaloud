@@ -175,7 +175,9 @@ PcmWavLayout decodePcmWav(Uint8List bytes) {
 /// Canonical 44-byte header. The caller writes [dataLength] payload bytes and,
 /// when odd, one final pad byte. Padding is included only in the RIFF size.
 Uint8List encodePcmWavHeader(PcmFormat format, int dataLength) {
+  // Bound before addition: native Dart int64 arithmetic can otherwise wrap.
   if (dataLength < 0 ||
+      dataLength > 0xffffffff - 36 ||
       dataLength % format.blockAlign != 0 ||
       36 + dataLength + dataLength % 2 > 0xffffffff) {
     throw const FormatException('Unaligned PCM data or RIFF size limit.');

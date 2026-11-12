@@ -72,6 +72,45 @@ void main() {
       expect(() => decodePcmWav(entry.value), throwsFormatException);
     });
   }
+  test('header refuses native int64 overflow without allocating PCM', () {
+    final pcm16 = PcmFormat(
+      sampleRate: 24000,
+      channelCount: 1,
+      bitsPerSample: 16,
+    );
+    final pcm8 = PcmFormat(
+      sampleRate: 24000,
+      channelCount: 1,
+      bitsPerSample: 8,
+    );
+    expect(
+      () => encodePcmWavHeader(pcm16, 0x7ffffffffffffffe),
+      throwsFormatException,
+    );
+    expect(
+      () => encodePcmWavHeader(pcm8, 0x7fffffffffffffff),
+      throwsFormatException,
+    );
+  });
+  test('header honors final RIFF capacity with odd padding', () {
+    final pcm16 = PcmFormat(
+      sampleRate: 24000,
+      channelCount: 1,
+      bitsPerSample: 16,
+    );
+    final pcm8 = PcmFormat(
+      sampleRate: 24000,
+      channelCount: 1,
+      bitsPerSample: 8,
+    );
+    for (final pair in [(pcm16, 0xffffffda), (pcm8, 0xffffffd9)]) {
+      final header = ByteData.sublistView(encodePcmWavHeader(pair.$1, pair.$2));
+      expect(header.getUint32(4, Endian.little), 0xfffffffe);
+      expect(header.getUint32(40, Endian.little), pair.$2);
+    }
+    expect(() => encodePcmWavHeader(pcm16, 0xffffffdc), throwsFormatException);
+    expect(() => encodePcmWavHeader(pcm8, 0xffffffdb), throwsFormatException);
+  });
   test('header refuses partial frames and RIFF overflow', () {
     final stereo = PcmFormat(
       sampleRate: 48000,
