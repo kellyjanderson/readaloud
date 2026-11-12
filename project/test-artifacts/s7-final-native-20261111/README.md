@@ -21,6 +21,8 @@ runtime progressadcece7. These are evidence receipts, not slice closure.
 | v68 production4bit CoreAudio | 16ms /668of668 | Functional pass; tap begins22.288ms after firstPosition, full interval coverage refused |
 | v69 production4bit ScreenCaptureKit | 186ms /661of661 | Strict complete-waveform/runtime pass |
 | v70 production A8/B4/A8 CoreAudio | 183ms /328of328 | Strict switches acoustic/runtime pass; rapid latest selection validated |
+| v71 extended8bit diagnostic | 246ms /1868of1868 | Three minutes playback;164.232s complete audible references, min correlation.99177/maxjoin.00443ms; extended flag keeps overall verdict false |
+| v72 Metal System Trace | 238ms /670of670 | Readable12s all-process GPU trace; profiler0/app normalQuit/capture0/guard0/noorphans; instrumented only |
 
 V57/v58/v59 suggest a recorder contribution, not the whole cause. V61
 falsifies a ScreenCaptureKit-only explanation. Its strict verdict fails;
