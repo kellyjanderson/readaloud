@@ -1,0 +1,1 @@
+{"diagnosticOnly":true,"passed":false,"source":"25936d4","launch":"xctrace --launch; timing instrumented","normalQuit":false,"forcedCleanup":false,"errors":["trace launch exited early","normal app exit not verified"],"tracerPid":29596,"remainingOwnedPids":[],"appExitVerified":null,"traceExitStatus":20}

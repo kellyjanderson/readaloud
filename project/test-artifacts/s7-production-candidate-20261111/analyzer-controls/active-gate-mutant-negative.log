@@ -1,0 +1,14 @@
+test_full_context_does_not_replace_fixed_placement_active_score (analyze_s7_variants_test.S7VariantAcceptanceTest.test_full_context_does_not_replace_fixed_placement_active_score) ... FAIL
+
+======================================================================
+FAIL: test_full_context_does_not_replace_fixed_placement_active_score (analyze_s7_variants_test.S7VariantAcceptanceTest.test_full_context_does_not_replace_fixed_placement_active_score)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/k/.codex/worktrees/s7-waveform-context/readaloud/tools/analyze_s7_variants_test.py", line 190, in test_full_context_does_not_replace_fixed_placement_active_score
+    self.assertIsNone(index)
+AssertionError: 0 is not None
+
+----------------------------------------------------------------------
+Ran 1 test in 0.062s
+
+FAILED (failures=1)
