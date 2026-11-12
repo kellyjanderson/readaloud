@@ -26,6 +26,9 @@ abort 'Invalid mode' unless MODES.include?(mode)
 replay_mode = ENV['READALOUD_S7_REPLAY_MODE']
 inference_policy = ENV['READALOUD_S7_INFERENCE_POLICY']
 abort 'Invalid QA inference policy' unless inference_policy.nil? || %w[background-utility utility].include?(inference_policy)
+mlx_buffer_ops = ENV['MLX_MAX_OPS_PER_BUFFER']
+abort 'Invalid MLX command-buffer diagnostic' if mlx_buffer_ops &&
+  (!mlx_buffer_ops.match?(/\A[1-9]\d{0,3}\z/) || mlx_buffer_ops.to_i > 1000)
 if replay_mode
   abort 'Replay requires cached-8bit and packets|joined' unless mode == 'cached-8bit' && %w[packets joined].include?(replay_mode)
   replay_input = ENV['READALOUD_S7_REPLAY_INPUT']
@@ -99,6 +102,11 @@ end
 if inference_policy
   result[:inferencePolicyDiagnostic] = inference_policy
   result[:errors] << 'QA-only child scheduling differential; production policy unchanged'
+end
+if mlx_buffer_ops
+  result[:mlxCommandBufferDiagnostic] = {maxOpsPerBuffer: mlx_buffer_ops.to_i,
+    scope: 'Fresh owned MLX child; diagnostic batching override, no GPU priority guarantee'}
+  result[:errors] << 'MLX command-buffer batching diagnostic; production policy unchanged'
 end
 if ENV['READALOUD_QUEUE_BOUNDARY_AUDIT'] == '1'
   result[:nativeQueueBoundaryDiagnostic] = true
