@@ -18,6 +18,7 @@ from scipy.signal import butter, resample_poly, sosfilt
 
 from analyze_s7_switches import analyze
 from analyze_s7_variants import MIN_COMPLETE_SECONDS as SUSTAINED_MINIMUM
+from process_tap_validation_test import clean_tap_timing
 
 
 class S7SwitchAcceptanceTest(unittest.TestCase):
@@ -121,6 +122,82 @@ class S7SwitchAcceptanceTest(unittest.TestCase):
             (self.root / name).write_text(json.dumps(value))
         wavfile.write(self.root / 'capture.wav', self.rate, self.capture.astype(np.float32))
         return analyze(self.root)
+
+    def process_primary(self, offset=.2):
+        self.capture = self.capture[round(offset * self.rate):]
+        self.timing['firstPacketReceivedUnixMicros'] += round(offset * 1e6)
+        self.timing['frames'] = len(self.capture)
+        self.timing = clean_tap_timing(self.timing)
+        for receipt in (self.native, self.runner):
+            receipt['primaryCaptureMode'] = 'process-tap'
+            receipt['ungatedProcessCaptureDiagnostic'] = False
+        self.runner['primaryCaptureExecutableSha256'] = 'a' * 64
+        self.runner['processTapSessionID'] = self.timing['sessionID']
+
+    def low_information_first(self, wrong_context=False, shifted_active=False):
+        # A .8s unique quiet context surrounds a tiny active transient. Neither
+        # an earlier decoy nor independently moving that transient is identity.
+        rng = np.random.default_rng(712)
+        pcm = rng.integers(-20, 21, round(.8 * self.rate), dtype=np.int16)
+        pcm[1000:1005] = [130, 300, 394, 220, 50]
+        path = self.root / 'switch-low-context.wav'
+        wavfile.write(path, self.rate, pcm)
+        self.native['queuedAudio'][0]['reference'] = {
+            'path': str(path), 'bytes': path.stat().st_size,
+            'sha256': hashlib.sha256(path.read_bytes()).hexdigest(),
+            'sampleRate': self.rate, 'channels': 1, 'bitsPerSample': 16}
+        emitted = rng.integers(-20, 21, len(pcm), dtype=np.int16) if wrong_context else pcm.copy()
+        emitted[1000:1005] = pcm[1000:1005]
+        if shifted_active:
+            emitted[1000:1005] = 0
+            emitted[2000:2005] = pcm[1000:1005]
+        self.capture[12000:12000 + len(pcm)] = emitted.astype(np.float64) / 32768
+        self.capture[9880:9885] = pcm[1000:1005].astype(np.float64) / 32768
+
+    def test_short_route_requires_full_context_and_fixed_active_score(self):
+        self.low_information_first()
+        result = self.run_analysis()
+        self.assertTrue(result['passed'], result)
+        first = result['segments'][0]['matches'][0]
+        self.assertAlmostEqual(first['captureStartSeconds'], .25, delta=1 / (self.rate * 4))
+        self.assertGreaterEqual(first['fullReferenceCorrelation'], .98)
+        self.assertLess(first['activeComparisonFrames'], 25)
+        for mutation in ('wrong-context', 'shifted-active'):
+            self.setUp()
+            self.low_information_first(wrong_context=mutation == 'wrong-context',
+                                       shifted_active=mutation == 'shifted-active')
+            failed = self.run_analysis()
+            self.assertFalse(failed['passed'], failed)
+            self.assertIn('No complete ordered waveform #1', str(failed['errors']))
+
+    def test_process_primary_first_interval_only_and_all_later_routes_still_match(self):
+        self.process_primary()
+        result = self.run_analysis()
+        self.assertTrue(result['passed'], result)
+        self.assertEqual(len(result['segments']), 3)
+        self.assertIn('unobservedPlayToTapInterval', result['segments'][0])
+        self.assertNotIn('unobservedPlayToTapInterval', result['segments'][1])
+        self.assertFalse(result['firstEmittedAudioQualified'])
+        self.assertFalse(result['fullSessionQualified'])
+
+    def test_process_primary_preserves_cached_reference_reuse_across_segments(self):
+        # A/B/A can intentionally reuse A's exact PCM in its separate interval.
+        for i in range(5):
+            self.native['queuedAudio'][10 + i]['reference'] = self.native['queuedAudio'][i]['reference'].copy()
+        start, stop = round(14.25 * self.rate), round(17.3 * self.rate)
+        self.capture[start:stop] = np.concatenate(self.packets[0])[:stop - start]
+        self.process_primary()
+        result = self.run_analysis()
+        self.assertTrue(result['passed'], result)
+
+    def test_process_primary_missing_initial_pcm_and_ungated_diagnostic_refuse(self):
+        self.process_primary(.26)
+        result = self.run_analysis()
+        self.assertFalse(result['passed'], result)
+        self.setUp()
+        self.process_primary()
+        self.runner['ungatedProcessCaptureDiagnostic'] = True
+        self.assertFalse(self.run_analysis()['passed'])
 
     def assert_refused(self, text):
         result = self.run_analysis()

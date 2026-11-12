@@ -85,6 +85,17 @@ Future<void> main(List<String> args) async {
     throw ArgumentError('Expected ${modes.join('|')} RECEIPT');
   }
   final mode = args[0];
+  final primaryCaptureMode =
+      Platform.environment['READALOUD_S7_PRIMARY_CAPTURE'] ??
+      'screen-capture-kit';
+  if (!['screen-capture-kit', 'process-tap'].contains(primaryCaptureMode)) {
+    throw ArgumentError('Invalid primary capture mode');
+  }
+  final processTapPrimary = primaryCaptureMode == 'process-tap';
+  if (processTapPrimary &&
+      Platform.environment['READALOUD_S7_UNGATED_PROCESS_CAPTURE'] == '1') {
+    throw ArgumentError('Process-tap primary cannot be the ungated diagnostic');
+  }
   final online = mode == 'online-cancel-retry';
   if (!online && Platform.environment['HF_HUB_OFFLINE'] != '1') {
     throw StateError('Cached cases require HF_HUB_OFFLINE=1.');
@@ -244,6 +255,16 @@ Future<void> main(List<String> args) async {
     'schema': 'readaloud-native-variant-v1',
     'finiteLocalWavPlayerOptIn': Platform.isMacOS,
     'mode': mode,
+    'primaryCaptureMode': primaryCaptureMode,
+    if (processTapPrimary) ...{
+      'acceptanceScope': 'bounded warm intended-source coverage only',
+      'firstEmittedAudioQualified': false,
+      'fullSessionQualified': false,
+      'noEarlierPrefixOrReplayQualified': false,
+      'startupOrLoadQualified': false,
+      'playToTapObservation':
+          'UNOBSERVED; no silence or synthesis-state inference',
+    },
     'inferencePolicyDiagnostic':
         Platform.environment['READALOUD_S7_INFERENCE_POLICY'],
     'lazyNativePreparationExperiment':
@@ -564,7 +585,7 @@ Future<void> main(List<String> args) async {
     final ungatedProcessCapture =
         Platform.environment['READALOUD_S7_UNGATED_PROCESS_CAPTURE'] == '1';
     receipt['ungatedProcessCaptureDiagnostic'] = ungatedProcessCapture;
-    if (!ungatedProcessCapture) {
+    if (!ungatedProcessCapture && !processTapPrimary) {
       final captureGate = File('${output.parent.path}/capture.ready');
       final captureDeadline = watch.elapsedMilliseconds + 30000;
       while (!await captureGate.exists()) {
@@ -577,9 +598,13 @@ Future<void> main(List<String> args) async {
           DateTime.now().microsecondsSinceEpoch;
     } else {
       receipt['captureReadyBeforePlayUnixMicros'] = null;
-      receipt['captureSetupScope'] =
-          'Diagnostic exact-PID tap setup overlaps Play; no capture gate. '
-          'Complete emitted waveform coverage must be proved separately.';
+      receipt['captureSetupScope'] = processTapPrimary
+          ? 'Exact-PID process tap may register after Play intent. '
+                'Only complete raw-PCM intended-source coverage from queue '
+                'index zero through Pause can qualify offline. Play-to-tap '
+                'is unobserved; no first-audio or full-session claim.'
+          : 'Diagnostic exact-PID tap setup overlaps Play; no capture gate. '
+                'Complete emitted waveform coverage must be proved separately.';
     }
     if (mode == 'default-policy' ||
         mode == 'cached-bf16' ||

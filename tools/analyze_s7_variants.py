@@ -6,6 +6,8 @@ Reads receipt.json, runner.json, capture.wav and capture.wav.timing.json. Queue
 order and copied-file SHA/size are authoritative; names never establish order.
 Full-reference context selects placement at correlation .98; the complete active
 waveform must independently reach .98 at that same placement.
+Explicit process-tap primary receipts qualify bounded warm source coverage only;
+Play-to-tap is unobserved and never establishes first audio or a full session.
 Only the final playback-interval WAV interrupted by Pause may be excluded,
 explicitly. Prepared queue entries beyond the Pause witness remain unplayed.
 This does not establish transcript/voice quality, human listening, memory or M3.
@@ -14,12 +16,14 @@ import argparse
 import hashlib
 import json
 import math
+import re
 from pathlib import Path
 from urllib.parse import unquote, urlparse
 
 import numpy as np
 from scipy.io import wavfile
 from scipy.signal import correlate, resample_poly
+from process_tap_validation import validate_process_tap
 
 THRESHOLD = .98
 MAX_GAP_MS = 10.0
@@ -129,6 +133,43 @@ def source_path(uri):
     return unquote(parsed.path)
 
 
+def primary_capture_mode(native, runner, timing):
+    mode = native.get('primaryCaptureMode', 'screen-capture-kit')
+    require(mode in ('screen-capture-kit', 'process-tap')
+            and runner.get('primaryCaptureMode', 'screen-capture-kit') == mode,
+            'Primary capture mode mismatch')
+    if mode == 'process-tap':
+        require(native.get('ungatedProcessCaptureDiagnostic') is not True
+                and runner.get('ungatedProcessCaptureDiagnostic') is not True,
+                'Ungated diagnostic cannot qualify as process-tap primary')
+        require(re.fullmatch('[0-9a-f]{64}', str(runner.get('primaryCaptureExecutableSha256'))) is not None,
+                'Missing actual primary capture helper SHA256')
+        require(isinstance(runner.get('processTapSessionID'), str), 'Missing runner tap session identity')
+        validate_process_tap(timing, runner.get('pid'), timing.get('frames'),
+                             timing.get('sampleRate'), runner['processTapSessionID'])
+    return mode
+
+
+def capture_scope(mode):
+    if mode != 'process-tap':
+        return {'primaryCaptureMode': mode}
+    return {'primaryCaptureMode': mode, 'acceptanceScope': 'bounded warm intended-source coverage only',
+            'firstEmittedAudioQualified': False, 'fullSessionQualified': False,
+            'noEarlierPrefixOrReplayQualified': False, 'startupOrLoadQualified': False,
+            'playToTapObservation': 'UNOBSERVED; no silence or synthesis-state inference'}
+
+
+def playback_bounds(segment, origin, captured_seconds, allow_late_tap=False):
+    play = finite(segment.get('playRequestedUnixMicros'), 'Play request')
+    first = finite(segment.get('firstPositionUnixMicros'), 'first player movement')
+    stop = (finite(segment.get('pauseRequestedUnixMicros'), 'Pause request') - origin) / 1e6
+    require(origin > 0 and (origin < first if allow_late_tap else origin <= play),
+            'Capture misses playback interval')
+    low = max(0., (play - origin) / 1e6) if allow_late_tap else (play - origin) / 1e6
+    require(0 <= low < stop <= captured_seconds, 'Capture misses playback interval')
+    return low, stop
+
+
 def runtime_gates(native, runner, timing, failures=None):
     def require(condition, message):
         if not condition:
@@ -165,6 +206,7 @@ def runtime_gates(native, runner, timing, failures=None):
             '250ms responsiveness gate failed')
     require(timing.get('schema') == 'readaloud-app-capture-timing-v1'
             and timing.get('appPid') == runner.get('pid'), 'Capture app identity mismatch')
+    primary_capture_mode(native, runner, timing)
     require(finite(timing.get('firstSignalReceivedUnixMicros'), 'capture signal time') > 0,
             'Missing captured signal')
     signal = runner.get('emittedSignal') or []
@@ -195,6 +237,8 @@ def analyze(directory, diagnostic_only=False):
                         'individual silent boundaries have no acoustic identity. '
                         'No transcript, perceived quality/voice, human listening, startup, memory or M3 acceptance.'}
     try:
+        capture_mode = primary_capture_mode(native, runner, timing)
+        result.update(capture_scope(capture_mode))
         runtime_gates(native, runner, timing,
                       result['runtimeFailures'] if diagnostic_only else None)
         if diagnostic_only:
@@ -247,8 +291,12 @@ def analyze(directory, diagnostic_only=False):
                     and finite(segment.get('observedPositionAdvanceMs'), 'player advance') >= 51000
                     and segment.get('positionEvidence', {}).get('overflow') is False,
                     'Insufficient native player progress')
-            low_time, stop = (play - origin) / 1e6, (pause - origin) / 1e6
-            require(0 <= low_time < stop <= len(captured) / rate, 'Capture misses playback interval')
+            process_primary = capture_mode == 'process-tap'
+            low_time, stop = playback_bounds(segment, origin, len(captured) / rate, process_primary)
+            if process_primary:
+                report['unobservedPlayToTapInterval'] = {
+                    'startUnixMicros': play, 'endUnixMicros': max(play, origin),
+                    'status': 'UNOBSERVED', 'inference': 'No first-audio, silence or earlier replay claim'}
             engine = segment.get('engineIndex')
             require(all(q.get('engineIndex') == engine and q.get('engineId') == segment.get('engineId')
                         and finite(q.get('queuedUnixMicros'), 'queue time') <= pause for q in queued),
@@ -299,6 +347,7 @@ def analyze(directory, diagnostic_only=False):
             pending_silent_packets = []
             report['encodedSilentPackets'] = []
             report['failedWaveforms'] = []
+            audible_digests = set()
             for number, (row, (source_rate, pcm)) in enumerate(zip(queued[:final_index + 1], references)):
                 source = resample(pcm, source_rate, comparison_rate)
                 duration = len(pcm) / source_rate
@@ -316,6 +365,11 @@ def analyze(directory, diagnostic_only=False):
                     pending_silent_seconds += duration
                     continue
                 start, end = int(active[0]), int(active[-1]) + 1
+                if process_primary:
+                    digest = row['reference']['sha256']
+                    require(digest not in audible_digests,
+                            'Ambiguous duplicate audible reference identity within segment')
+                    audible_digests.add(digest)
                 seen = observations_by_path.get(row['sourcePath'], [])
                 estimates = [(s['unixMicros'] - origin) / 1e6 - s['positionMs'] / 1000 for s in seen]
                 ordered_end = (None if previous_end is None else previous_end
@@ -334,7 +388,9 @@ def analyze(directory, diagnostic_only=False):
                 window = resample_poly(captured[base:finish], 4, 1)
                 index, score, context_score = match_reference(window, source, start, end)
                 actual = None if index is None else base / rate + index / comparison_rate
-                complete = actual is not None and actual >= low_time - .01 and actual + duration <= stop + .001
+                complete = (actual is not None and actual >= (low_time if process_primary else low_time - .01)
+                            and actual + duration <= (min(len(captured) / rate, stop + .001)
+                                                      if process_primary else stop + .001))
                 if not complete:
                     # The only permitted exclusion is the final source when the
                     # expected full end crosses Pause. Wrong/missing earlier or
@@ -391,7 +447,8 @@ def analyze(directory, diagnostic_only=False):
                     group_end = silent_start + pending_silent_seconds
                     a = max(0, math.ceil((silent_start + .01) * rate))
                     b = min(len(captured), math.floor((group_end - .01) * rate))
-                    require(a < b and silent_start >= low_time - .01 and group_end <= stop,
+                    require(a < b and silent_start >= (low_time if process_primary else low_time - .01)
+                            and group_end <= stop,
                             'Silent packet lacks bounded captured interval')
                     silent_group = {
                         'queueIndices': [s['queueIndex'] for s in pending_silent_packets],
