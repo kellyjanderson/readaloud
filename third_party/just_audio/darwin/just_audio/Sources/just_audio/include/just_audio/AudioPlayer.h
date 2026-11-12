@@ -12,6 +12,9 @@
 
 - (instancetype)initWithRegistrar:(NSObject<FlutterPluginRegistrar> *)registrar playerId:(NSString*)idParam loadConfiguration:(NSDictionary *)loadConfiguration useLazyPreparation:(BOOL)useLazyPreparation;
 - (void)dispose:(BOOL)calledFromDealloc;
+// QA only: read on the main thread before disposePlayer/engine disposal.
++ (BOOL)readAloudQueueBoundaryAuditEnabled;
+- (NSDictionary *)readAloudQueueBoundaryAudit;
 
 @end
 
