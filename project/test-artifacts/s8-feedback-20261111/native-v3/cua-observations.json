@@ -1,0 +1,19 @@
+{
+  "scope": "Coordinator native CUA observations; separate from controller assertions. No audio/model/deep-analysis/physical-M3 acceptance.",
+  "candidateSource": "3cb2a26",
+  "runnerSource": "ba526b3",
+  "launch": "LaunchServices v3; direct-exec v1/v2 CUA attachment failed",
+  "checks": {
+    "ready": "Ready to read,20 words, no downstream placeholders; Tab/Return expanded Activity and Return collapsed it; visible focus",
+    "resize": "Native zoom and restore; readable local2x text and available controls; local reduced-motion override, not OS-setting qualification",
+    "unknown": "Discovering local fixture;0 bytes,total unknown,no bar/percent",
+    "known": "1 files flushed;4352 of8960 bytes;48%; actual finite visible bar",
+    "finalizing": "2 files flushed;8960 of8960 bytes;Finishing; no premature Ready/100%; Activity opened with native Return",
+    "terminal": "Ready to read; Activity succeeded,8960 of8960bytes,2 local files validated",
+    "copy": "Native Copy clicked; probe subsequently validated actual clipboard diagnostic",
+    "clear": "Native Clear error clicked; Ready summary with failed Save diagnostic retained in expanded Activity",
+    "retry": "Native AX succeeded Save and saved-path status; failed predecessor retained as history"
+  },
+  "overallPassed": false,
+  "reason": "Native-main434ms exceeds unchanged250ms; UI timer max25ms. All9 functional gates completed; normalQuit=true,no forced cleanup,no remaining owned PIDs,temporary wake guard exited."
+}

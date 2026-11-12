@@ -1,6 +1,6 @@
 # Read Aloud final user test session
 
-The release coordinator collects the user judgments for S11 under [release #122](https://github.com/kellyjanderson/readaloud/issues/122). The current cases cover cancellation during initial speech preparation, quick dialogue in S3, and listening to and editing saved audio books in S6, including complete endings. Run the cancellation case first so other tests have not already warmed the speech model. Add other residual listening or usability cases to `scenarios.js` as their slices identify them. Each case names its source issue so the coordinator can route the findings.
+The release coordinator collects the user judgments for S11 under [release #122](https://github.com/kellyjanderson/readaloud/issues/122). The cases cover cancellation during initial speech preparation, installed-model switching in S7, preparation recovery and keyboard use in S8, quick dialogue in S3, and saved audio books in S6, including complete endings. Run the cancellation case first so other tests have not already warmed the speech model. Each case names its source issue so the coordinator can route the findings.
 
 ## Prepare the session
 
@@ -19,12 +19,18 @@ window.HUMAN_ACCEPTANCE_CANDIDATE = {
     'editable-book': {
       sha256: '<64 lowercase hex characters>',
       instructions: 'Give the book filename, exchange, character and suggested replacement voice.'
+    },
+    'model-workflow': {
+      sha256: '<64 lowercase hex characters>',
+      instructions: 'Name the isolated test profile and its two qualified installed model choices, the short reading document, and the exact recoverable-error document and retry steps. Specify larger text and reduced-motion settings and how to restore the test profile.'
     }
   }
 };
 ```
 
 Use a saved, fully rendered book with distinct voices and marked expressive delivery for the first listening case. Use a portable copy with an editable Character and a working replacement voice for the second. Keep the supplied book intact and save changes to a new copy. The coordinator verifies the hashes and qualifies opening time, emitted audio continuity, Save responsiveness, offline reuse, and affected-scene regeneration before handing over the session. The browser records the supplied identity in the report.
+
+The `model-workflow` hash identifies a supplied manifest/instruction fixture, not model weights. Qualify both installed choices and the recovery path against the exact candidate in an isolated profile before supplying it; include explicit model identities and document filenames in its instructions. Keep the user's normal preferences and model cache intact. These two cases are residual S11 human checks, not claims of native S7/S8 acceptance. If the isolated fixture is unavailable or unqualified, leave those cases unrun until the coordinator supplies it.
 
 ## Run the session
 

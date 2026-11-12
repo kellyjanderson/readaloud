@@ -14,6 +14,23 @@ void main() {
   });
 
   group('ReaderPreferencesService', () {
+    test(
+      'Activity defaults quiet and persists an explicit expanded choice',
+      () async {
+        final service = ReaderPreferencesService();
+        expect((await service.load()).activityExpanded, isFalse);
+        await service.save(
+          activityExpanded: true,
+          fontFamily: 'serif',
+          fontScale: 1,
+          appearanceMode: ReaderAppearanceMode.system,
+          multiVoiceEnabled: true,
+          voiceSpeeds: {},
+          storedDocumentCastVoiceAssignments: {},
+        );
+        expect((await service.load()).activityExpanded, isTrue);
+      },
+    );
     test('narrator engine scopes preserve unresolved and legacy IDs', () async {
       final service = ReaderPreferencesService();
       await service.save(

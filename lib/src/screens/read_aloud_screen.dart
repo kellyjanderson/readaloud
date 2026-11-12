@@ -152,6 +152,11 @@ class _ReadAloudScreenState extends State<ReadAloudScreen> {
                     children: [
                       PreparationStatus(
                         progress: _controller.preparationProgress.values,
+                        operations: _controller.feedbackOperations,
+                        onClearFailure: _controller.clearFeedbackFailure,
+                        activityExpanded: _controller.activityExpanded,
+                        onActivityExpandedChanged: (value) =>
+                            unawaited(_controller.setActivityExpanded(value)),
                         isImporting: _controller.isPreparingDocument,
                         isInitializing: _controller.isInitializing,
                         isComplete: _controller.isPreparationComplete,

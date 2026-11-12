@@ -1,4 +1,5 @@
 import '../models/native_speech_turn.dart';
+import '../models/reader_operation.dart';
 import 'speech_planning_supervisor.dart';
 import '../models/chunk_plan.dart';
 import '../models/speech_document.dart';
@@ -267,6 +268,12 @@ class TtsResourceProgress {
     this.completed,
     this.total,
     this.unit = 'bytes',
+    this.operationId,
+    this.ownerEpoch = 0,
+    this.state = OperationState.running,
+    this.updatedAt,
+    this.error,
+    this.retryOf,
   });
 
   final String stage;
@@ -274,9 +281,45 @@ class TtsResourceProgress {
   final int? completed;
   final int? total;
   final String unit;
+  final String? operationId;
+  final int ownerEpoch;
+  final OperationState state;
+  final DateTime? updatedAt;
+  final String? error;
+  final String? retryOf;
 
   double? get fraction =>
-      total == null || total! <= 0 ? null : (completed ?? 0) / total!;
+      completed == null ||
+          total == null ||
+          total! <= 0 ||
+          (completed ?? 0) < 0 ||
+          (completed ?? 0) > total!
+      ? null
+      : (completed ?? 0) / total!;
+
+  ReaderOperation toOperation({int? epoch}) => ReaderOperation(
+    operationId: operationId ?? 'legacy-resource:${epoch ?? ownerEpoch}',
+    ownerKind: OperationOwnerKind.model,
+    ownerEpoch: epoch ?? ownerEpoch,
+    attempt: ownerEpoch,
+    // Loading stages are phases of one owned acquisition, not separate tasks.
+    stage: 'resources',
+    scope: 'model',
+    state: state,
+    completedUnits: completed ?? 0,
+    completedKnown: completed != null,
+    totalUnits: total,
+    unit: unit,
+    updatedAt: updatedAt ?? DateTime.now(),
+    message: message,
+    error: error,
+    retryOf: retryOf,
+    recoveryActions: state == OperationState.failed
+        ? [OperationRecoveryAction.retry]
+        : state.isTerminal
+        ? const []
+        : [OperationRecoveryAction.cancel],
+  );
 }
 
 abstract interface class TtsResourceProgressCapable {

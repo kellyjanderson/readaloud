@@ -1,0 +1,26 @@
+{
+  "source":"9e5cd3b",
+  "scope":"Confounded forced-frame counterpart. Wall-clock CUA call intervals are not app input latency.",
+  "result":"Stopped after outside interaction. Notices navigation occurred without a coordinator navigation action; later CUA explicitly reported user change and actual Play reached the inert engine. No final controller receipt or complete functional/native credit. Runner interrupted to use normal Quit; exact exit/no force/no orphans/wake guard verified.",
+  "events":[
+    {"action":"getApp","startUnixMs":1794442327099,"endUnixMs":1794442330084},
+    {"action":"ready AX/screenshot","startUnixMs":1794442334790,"endUnixMs":1794442334848},
+    {"action":"native window Raise AX/screenshot","startUnixMs":1794442368605,"endUnixMs":1794442369578},
+    {"action":"native Tab Return AX; no change","startUnixMs":1794442377429,"endUnixMs":1794442377831},
+    {"action":"Activity coordinate focus AX; expanded","startUnixMs":1794442387863,"endUnixMs":1794442388832},
+    {"action":"native Tab Return collapse AX","startUnixMs":1794442392321,"endUnixMs":1794442392707},
+    {"action":"native zoom AX","startUnixMs":1794442398484,"endUnixMs":1794442400398},
+    {"action":"native restore AX/screenshot","startUnixMs":1794442404005,"endUnixMs":1794442405854},
+    {"action":"unknown AX; unexpected Notices page","startUnixMs":1794442513052,"endUnixMs":1794442513134},
+    {"action":"unexpected Notices screenshot","startUnixMs":1794442519268,"endUnixMs":1794442519327},
+    {"action":"native Back from Notices AX","startUnixMs":1794442525414,"endUnixMs":1794442526667},
+    {"action":"refresh after expired element; actual unknown counters","startUnixMs":1794442537818,"endUnixMs":1794442537885},
+    {"action":"known AX/screenshot","startUnixMs":1794442548442,"endUnixMs":1794442548509},
+    {"action":"finalizing AX","startUnixMs":1794442557851,"endUnixMs":1794442558969},
+    {"action":"finalizing native Activity AX","startUnixMs":1794442562210,"endUnixMs":1794442563894},
+    {"action":"terminal AX","startUnixMs":1794442571121,"endUnixMs":1794442571262},
+    {"action":"copy error AX","startUnixMs":1794442577425,"endUnixMs":1794442577862},
+    {"action":"native Copy AX","startUnixMs":1794442580971,"endUnixMs":1794442581820},
+    {"action":"refresh after user-change notice; Play had requested inert synthesis","startUnixMs":1794442596068,"endUnixMs":1794442599000}
+  ]
+}

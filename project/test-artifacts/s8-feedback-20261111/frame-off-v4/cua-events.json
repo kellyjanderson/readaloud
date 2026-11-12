@@ -1,0 +1,27 @@
+{
+  "source": "9e5cd3b",
+  "scope": "Coordinator CUA wall-clock call intervals, not app input-processing latency. No emitted audio or causal conclusion.",
+  "initialFocusLimit": "Initial AX was empty and Tab/Return did not change Activity. A native coordinate Activity click established content focus; subsequent Tab/Return collapsed Activity and Return later expanded it. The initial no-change inputs have no activation credit.",
+  "events": [
+    {"action":"getApp","startUnixMs":1794441937021,"endUnixMs":1794441937619},
+    {"action":"ready AX","startUnixMs":1794441969302,"endUnixMs":1794441969381},
+    {"action":"ready screenshot","startUnixMs":1794441977482,"endUnixMs":1794441977536},
+    {"action":"native Tab and AX; no change","startUnixMs":1794441983977,"endUnixMs":1794441984374},
+    {"action":"native Return AX/screenshot; no change","startUnixMs":1794441988509,"endUnixMs":1794441988888},
+    {"action":"Activity coordinate click AX/screenshot; expanded","startUnixMs":1794442001337,"endUnixMs":1794442002285},
+    {"action":"native Return and AX; no change","startUnixMs":1794442014009,"endUnixMs":1794442014434},
+    {"action":"native Tab Return and AX; collapsed","startUnixMs":1794442018980,"endUnixMs":1794442019361},
+    {"action":"native zoom and AX","startUnixMs":1794442029804,"endUnixMs":1794442031705},
+    {"action":"native restore AX/screenshot","startUnixMs":1794442035681,"endUnixMs":1794442037517},
+    {"action":"unknown AX","startUnixMs":1794442146929,"endUnixMs":1794442147009},
+    {"action":"known AX/screenshot","startUnixMs":1794442154109,"endUnixMs":1794442154168},
+    {"action":"finalizing AX","startUnixMs":1794442161183,"endUnixMs":1794442161242},
+    {"action":"finalizing native Return Activity and AX; expanded","startUnixMs":1794442170367,"endUnixMs":1794442170755},
+    {"action":"terminal AX","startUnixMs":1794442179055,"endUnixMs":1794442179111},
+    {"action":"copy error AX","startUnixMs":1794442185588,"endUnixMs":1794442185651},
+    {"action":"native Copy and AX","startUnixMs":1794442191179,"endUnixMs":1794442191585},
+    {"action":"native Clear and AX; Ready with failed history","startUnixMs":1794442200293,"endUnixMs":1794442200692},
+    {"action":"cleared retained history AX","startUnixMs":1794442207368,"endUnixMs":1794442207426},
+    {"action":"retry success AX; succeeded and saved-path status","startUnixMs":1794442215039,"endUnixMs":1794442215101}
+  ]
+}

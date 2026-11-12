@@ -1,0 +1,13 @@
+PASS: valid signature, sandbox, file chooser read/write access and network client entitlements
+S8_STARTED pid=71246 log=/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s8-feedback-native-v1-20261111/native.log gates=/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s8-feedback-native-v1-20261111/probe
+139:143: execution error: ReadAloudS6ColdRawSeparate got an error: AppleEvent timed out. (-1712)
+tools/run_s8_feedback_native.rb:73:in 'Kernel#sleep': Interrupt
+	from tools/run_s8_feedback_native.rb:73:in 'block (3 levels) in <main>'
+	from tools/run_s8_feedback_native.rb:65:in 'Kernel#loop'
+	from tools/run_s8_feedback_native.rb:65:in 'block (2 levels) in <main>'
+	from /opt/homebrew/Cellar/ruby/4.0.9/lib/ruby/4.0.0/timeout.rb:296:in 'block in Timeout.timeout'
+	from /opt/homebrew/Cellar/ruby/4.0.9/lib/ruby/4.0.0/timeout.rb:38:in 'Timeout::Error.handle_timeout'
+	from /opt/homebrew/Cellar/ruby/4.0.9/lib/ruby/4.0.0/timeout.rb:306:in 'Timeout.timeout'
+	from tools/run_s8_feedback_native.rb:64:in 'block in <main>'
+	from tools/run_s8_feedback_native.rb:52:in 'IO.open'
+	from tools/run_s8_feedback_native.rb:52:in '<main>'

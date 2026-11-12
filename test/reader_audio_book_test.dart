@@ -1,7 +1,11 @@
 import 'dart:async';
 import 'dart:io';
 import 'dart:typed_data';
+import 'package:flutter/material.dart';
+import 'package:read_aloud/src/app.dart';
+import 'package:read_aloud/src/models/document_preparation.dart';
 import 'package:read_aloud/src/models/character.dart';
+import 'package:read_aloud/src/models/reader_operation.dart';
 import 'package:read_aloud/src/models/character_cast_registry.dart';
 import 'package:read_aloud/src/models/voice_profile.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -234,6 +238,10 @@ void main() {
       final copied = await original.copy('${temp.path}/copied.radoc');
       await original.delete();
       await controller.importFilePaths([copied.path]);
+      final openingOperation = controller.feedbackOperations.singleWhere(
+        (p) => p.scope == 'Open audio book',
+      );
+      expect(openingOperation.state, OperationState.succeeded);
       expect(
         controller.hasPublishedAudio,
         true,
@@ -262,6 +270,19 @@ void main() {
       final output = await controller.exportDocumentToPath(
         '${temp.path}/published.radoc',
       );
+      expect(
+        controller.feedbackOperations
+            .where((p) => p.scope == 'Save audio book')
+            .single
+            .state,
+        OperationState.succeeded,
+      );
+      expect(
+        controller.feedbackOperations.where(
+          (p) => p.scope == 'Read audio book member',
+        ),
+        isNotEmpty,
+      );
       expect(output, isNotNull, reason: controller.statusMessage);
       final check = RadocAudioPackage();
       final book = await check.open(output!);
@@ -280,6 +301,209 @@ void main() {
       expect(engine.modelCalls, 0);
     },
   );
+  testWidgets(
+    'failed Save has inline Clear, retains diagnostics and retries by identity',
+    (tester) async {
+      await tester.runAsync(() async {
+        await controller.importFilePaths([(await fixture()).path]);
+        final blocker = await File(
+          '${temp.path}/not-a-directory',
+        ).writeAsString('blocked');
+        expect(
+          await controller.exportDocumentToPath('${blocker.path}/book.radoc'),
+          isNull,
+        );
+      });
+      final failure = controller.feedbackOperations.singleWhere(
+        (p) => p.scope == 'Save audio book',
+      );
+      expect(failure.state, OperationState.failed);
+      expect(failure.error, isNotEmpty);
+      expect(failure.recoveryActions, [OperationRecoveryAction.clear]);
+      expect(controller.statusOwnedByInlineFailure, isTrue);
+      await tester.pumpWidget(ReadAloudApp(controller: controller));
+      await tester.pump();
+      expect(find.byKey(const Key('clear-operation-failure')), findsOneWidget);
+      expect(find.byKey(const Key('status-toast')), findsNothing);
+
+      // Even identical text from another status owner remains a separate toast.
+      final sameText = controller.statusMessage!;
+      controller.showStatusMessage(sameText);
+      await tester.pump();
+      expect(controller.statusOwnedByInlineFailure, isFalse);
+      expect(find.byKey(const Key('status-toast')), findsOneWidget);
+
+      final readerPosition = tester.getTopLeft(
+        find.byKey(const Key('reader-surface-shell')),
+      );
+      await tester.tap(find.byKey(const Key('clear-operation-failure')));
+      await tester.pump();
+      expect(find.byKey(const Key('clear-operation-failure')), findsNothing);
+      expect(controller.statusMessage, sameText);
+      expect(find.byKey(const Key('status-toast')), findsOneWidget);
+      await controller.clearStatus();
+      await tester.pump();
+      expect(
+        tester.getTopLeft(find.byKey(const Key('reader-surface-shell'))),
+        readerPosition,
+      );
+      final cleared = controller.feedbackOperations.singleWhere(
+        (p) => p.key == failure.key,
+      );
+      expect(cleared.state, OperationState.failed);
+      expect(cleared.error, failure.error);
+      expect(cleared.readerBlocking, isFalse);
+      await tester.tap(find.byKey(const Key('toggle-activity')));
+      await tester.pump();
+      expect(
+        find.text('Saving prepared document · Save audio book · failed'),
+        findsOneWidget,
+      );
+      expect(find.text(failure.error!), findsOneWidget);
+
+      // An old control callback cannot clear a newer attempt in the same lane.
+      final retry = controller.beginReadingStage(
+        PreparationStage.persistence,
+        producerId: 'audio-book-package',
+        scope: 'Save audio book',
+      );
+      controller.publishReadingStage(
+        retry,
+        const PreparationProgress(
+          stage: PreparationStage.persistence,
+          state: PreparationWorkState.failed,
+          completed: 0,
+          unit: 'members',
+          error: 'New failure',
+        ),
+      );
+      controller.clearFeedbackFailure(failure);
+      expect(
+        controller.feedbackOperations
+            .singleWhere((p) => p.error == 'New failure')
+            .readerBlocking,
+        isTrue,
+      );
+      // A real Save retries with its own linked identity and succeeds.
+      await tester.runAsync(() async {
+        expect(
+          await controller.exportDocumentToPath('${temp.path}/retried.radoc'),
+          isNotNull,
+        );
+      });
+      final successful = controller.feedbackOperations.singleWhere(
+        (p) =>
+            p.scope == 'Save audio book' && p.state == OperationState.succeeded,
+      );
+      expect(successful.operationId, isNot(failure.operationId));
+      expect(successful.retryOf, isNotNull);
+      expect(engine.modelCalls, 0);
+      await tester.pumpWidget(const SizedBox());
+    },
+  );
+  for (final unrelatedStatus in [false, true]) {
+    testWidgets(
+      unrelatedStatus
+          ? 'retry Save begins without clearing unrelated identical status'
+          : 'retry Save without Clear retires its failure status before success',
+      (tester) async {
+        await tester.pumpWidget(ReadAloudApp(controller: controller));
+        await tester.pumpAndSettle();
+        await tester.runAsync(() async {
+          await controller.importFilePaths([(await fixture()).path]);
+          final blocker = await File(
+            '${temp.path}/not-a-directory',
+          ).writeAsString('blocked');
+          expect(
+            await controller.exportDocumentToPath('${blocker.path}/book.radoc'),
+            isNull,
+          );
+        });
+        final failure = controller.feedbackOperations.singleWhere(
+          (operation) => operation.scope == 'Save audio book',
+        );
+        final failedStatus = controller.statusMessage!;
+        expect(controller.statusOwnedByInlineFailure, isTrue);
+        if (unrelatedStatus) controller.showStatusMessage(failedStatus);
+        await tester.pump();
+
+        late Completer<void> started;
+        late Completer<void> release;
+        await tester.runAsync(() async {
+          started = Completer<void>();
+          release = Completer<void>();
+          TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+              .setMockMethodCallHandler(
+                const MethodChannel('read_aloud/document_access'),
+                (call) async {
+                  if (call.method != 'createRadocExportStage') {
+                    throw MissingPluginException();
+                  }
+                  started.complete();
+                  await release.future;
+                  return (await Directory(
+                    '${temp.path}/retry-stage',
+                  ).create()).path;
+                },
+              );
+        });
+        late Future<File?> retry;
+        try {
+          await tester.runAsync(() async {
+            retry = controller.exportDocumentToPath(
+              '${temp.path}/retried.radoc',
+            );
+            await started.future.timeout(const Duration(seconds: 3));
+          });
+          await tester.pump();
+          final active = controller.feedbackOperations.singleWhere(
+            (operation) =>
+                operation.scope == failure.scope && !operation.state.isTerminal,
+          );
+          expect(active.operationId, isNot(failure.operationId));
+          expect(active.retryOf, failure.operationId);
+          expect(
+            controller.statusMessage,
+            unrelatedStatus ? failedStatus : null,
+          );
+          expect(
+            find.byKey(const Key('status-toast')),
+            unrelatedStatus ? findsOneWidget : findsNothing,
+          );
+          if (unrelatedStatus) {
+            controller.showStatusMessage('A newer unrelated status.');
+            await tester.pump();
+            expect(controller.statusMessage, 'A newer unrelated status.');
+          }
+        } finally {
+          release.complete();
+          await tester.runAsync(() async {
+            expect(await retry, isNotNull, reason: controller.statusMessage);
+          });
+        }
+        await tester.pump();
+        expect(
+          controller.feedbackOperations
+              .singleWhere(
+                (operation) =>
+                    operation.scope == failure.scope &&
+                    operation.state == OperationState.succeeded,
+              )
+              .retryOf,
+          failure.operationId,
+        );
+        // Successful Save retains its existing success notification policy.
+        expect(
+          controller.statusMessage,
+          'Saved audio book to ${temp.path}/retried.radoc.',
+        );
+        expect(controller.statusMessage, isNot(failedStatus));
+        expect(find.byKey(const Key('status-toast')), findsOneWidget);
+        expect(engine.modelCalls, 0);
+        await tester.pumpWidget(const SizedBox());
+      },
+    );
+  }
   test('native scene joins preserve paragraph source equivalence', () async {
     await controller.importFilePaths([
       (await fixture(paragraphBreak: true)).path,
