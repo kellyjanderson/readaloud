@@ -1,0 +1,1349 @@
+{
+  "schema": "readaloud-s7-dual-capture-diagnostic-v1",
+  "diagnosticOnly": true,
+  "passed": false,
+  "errors": [
+    "[Errno 2] No such file or directory: '/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-4bit-progress-v45-20261111/coreaudio.wav'"
+  ],
+  "captureErrors": {
+    "coreaudio": "[Errno 2] No such file or directory: '/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-4bit-progress-v45-20261111/coreaudio.wav'"
+  },
+  "packets": [
+    {
+      "queueIndex": 0,
+      "sourcePath": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-4bit-progress-v45-20261111/s7-variants-K4FiuP/raw-0/incomplete/attempt-cEHJUk/packet-0000.wav.onset-2205.wav",
+      "classification": "invalid-capture-evidence"
+    },
+    {
+      "queueIndex": 1,
+      "sourcePath": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-4bit-progress-v45-20261111/s7-variants-K4FiuP/raw-0/incomplete/attempt-cEHJUk/packet-0001.wav",
+      "classification": "invalid-capture-evidence"
+    },
+    {
+      "queueIndex": 2,
+      "sourcePath": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-4bit-progress-v45-20261111/s7-variants-K4FiuP/raw-0/incomplete/attempt-cEHJUk/packet-0002.wav",
+      "classification": "invalid-capture-evidence"
+    },
+    {
+      "queueIndex": 3,
+      "sourcePath": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-4bit-progress-v45-20261111/s7-variants-K4FiuP/raw-0/incomplete/attempt-cEHJUk/packet-0003.wav",
+      "classification": "invalid-capture-evidence"
+    },
+    {
+      "queueIndex": 4,
+      "sourcePath": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-4bit-progress-v45-20261111/s7-variants-K4FiuP/raw-0/incomplete/attempt-cEHJUk/packet-0004.wav",
+      "classification": "invalid-capture-evidence"
+    },
+    {
+      "queueIndex": 5,
+      "sourcePath": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-4bit-progress-v45-20261111/s7-variants-K4FiuP/raw-0/incomplete/attempt-cEHJUk/packet-0005.wav",
+      "classification": "invalid-capture-evidence"
+    },
+    {
+      "queueIndex": 6,
+      "sourcePath": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-4bit-progress-v45-20261111/s7-variants-K4FiuP/raw-0/incomplete/attempt-cEHJUk/packet-0006.wav",
+      "classification": "invalid-capture-evidence"
+    },
+    {
+      "queueIndex": 7,
+      "sourcePath": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-4bit-progress-v45-20261111/s7-variants-K4FiuP/raw-0/incomplete/attempt-cEHJUk/packet-0007.wav",
+      "classification": "invalid-capture-evidence"
+    },
+    {
+      "queueIndex": 8,
+      "sourcePath": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-4bit-progress-v45-20261111/s7-variants-K4FiuP/raw-0/incomplete/attempt-cEHJUk/packet-0008.wav",
+      "classification": "invalid-capture-evidence"
+    },
+    {
+      "queueIndex": 9,
+      "sourcePath": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-4bit-progress-v45-20261111/s7-variants-K4FiuP/raw-0/incomplete/attempt-cEHJUk/packet-0009.wav",
+      "classification": "invalid-capture-evidence"
+    },
+    {
+      "queueIndex": 10,
+      "sourcePath": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-4bit-progress-v45-20261111/s7-variants-K4FiuP/raw-0/incomplete/attempt-cEHJUk/packet-0010.wav",
+      "classification": "invalid-capture-evidence"
+    },
+    {
+      "queueIndex": 11,
+      "sourcePath": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-4bit-progress-v45-20261111/s7-variants-K4FiuP/raw-0/incomplete/attempt-cEHJUk/packet-0011.wav",
+      "classification": "invalid-capture-evidence"
+    },
+    {
+      "queueIndex": 12,
+      "sourcePath": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-4bit-progress-v45-20261111/s7-variants-K4FiuP/raw-0/incomplete/attempt-cEHJUk/packet-0012.wav",
+      "classification": "invalid-capture-evidence"
+    },
+    {
+      "queueIndex": 13,
+      "sourcePath": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-4bit-progress-v45-20261111/s7-variants-K4FiuP/raw-0/incomplete/attempt-cEHJUk/packet-0013.wav",
+      "classification": "invalid-capture-evidence"
+    },
+    {
+      "queueIndex": 14,
+      "sourcePath": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-4bit-progress-v45-20261111/s7-variants-K4FiuP/raw-0/incomplete/attempt-cEHJUk/packet-0014.wav",
+      "classification": "invalid-capture-evidence"
+    },
+    {
+      "queueIndex": 15,
+      "sourcePath": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-4bit-progress-v45-20261111/s7-variants-K4FiuP/raw-0/incomplete/attempt-cEHJUk/packet-0015.wav",
+      "classification": "invalid-capture-evidence"
+    },
+    {
+      "queueIndex": 16,
+      "sourcePath": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-4bit-progress-v45-20261111/s7-variants-K4FiuP/raw-0/incomplete/attempt-cEHJUk/packet-0016.wav",
+      "classification": "invalid-capture-evidence"
+    },
+    {
+      "queueIndex": 17,
+      "sourcePath": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-4bit-progress-v45-20261111/s7-variants-K4FiuP/raw-0/incomplete/attempt-cEHJUk/packet-0017.wav",
+      "classification": "invalid-capture-evidence"
+    },
+    {
+      "queueIndex": 18,
+      "sourcePath": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-4bit-progress-v45-20261111/s7-variants-K4FiuP/raw-0/incomplete/attempt-cEHJUk/packet-0018.wav",
+      "classification": "invalid-capture-evidence"
+    },
+    {
+      "queueIndex": 19,
+      "sourcePath": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-4bit-progress-v45-20261111/s7-variants-K4FiuP/raw-0/incomplete/attempt-cEHJUk/packet-0019.wav",
+      "classification": "invalid-capture-evidence"
+    },
+    {
+      "queueIndex": 20,
+      "sourcePath": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-4bit-progress-v45-20261111/s7-variants-K4FiuP/raw-0/incomplete/attempt-cEHJUk/packet-0020.wav",
+      "classification": "invalid-capture-evidence"
+    },
+    {
+      "queueIndex": 21,
+      "sourcePath": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-4bit-progress-v45-20261111/s7-variants-K4FiuP/raw-0/incomplete/attempt-cEHJUk/packet-0021.wav",
+      "classification": "invalid-capture-evidence"
+    },
+    {
+      "queueIndex": 22,
+      "sourcePath": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-4bit-progress-v45-20261111/s7-variants-K4FiuP/raw-0/incomplete/attempt-cEHJUk/packet-0022.wav",
+      "classification": "invalid-capture-evidence"
+    },
+    {
+      "queueIndex": 23,
+      "sourcePath": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-4bit-progress-v45-20261111/s7-variants-K4FiuP/raw-0/incomplete/attempt-cEHJUk/packet-0023.wav",
+      "classification": "invalid-capture-evidence"
+    },
+    {
+      "queueIndex": 24,
+      "sourcePath": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-4bit-progress-v45-20261111/s7-variants-K4FiuP/raw-0/incomplete/attempt-cEHJUk/packet-0024.wav",
+      "classification": "invalid-capture-evidence"
+    },
+    {
+      "queueIndex": 25,
+      "sourcePath": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-4bit-progress-v45-20261111/s7-variants-K4FiuP/raw-0/incomplete/attempt-cEHJUk/packet-0025.wav",
+      "classification": "invalid-capture-evidence"
+    },
+    {
+      "queueIndex": 26,
+      "sourcePath": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-4bit-progress-v45-20261111/s7-variants-K4FiuP/raw-0/incomplete/attempt-cEHJUk/packet-0026.wav",
+      "classification": "invalid-capture-evidence"
+    },
+    {
+      "queueIndex": 27,
+      "sourcePath": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-4bit-progress-v45-20261111/s7-variants-K4FiuP/raw-0/incomplete/attempt-cEHJUk/packet-0027.wav",
+      "classification": "invalid-capture-evidence"
+    },
+    {
+      "queueIndex": 28,
+      "sourcePath": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-4bit-progress-v45-20261111/s7-variants-K4FiuP/raw-0/incomplete/attempt-cEHJUk/packet-0028.wav",
+      "classification": "invalid-capture-evidence"
+    },
+    {
+      "queueIndex": 29,
+      "sourcePath": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-4bit-progress-v45-20261111/s7-variants-K4FiuP/raw-0/incomplete/attempt-cEHJUk/packet-0029.wav",
+      "classification": "invalid-capture-evidence"
+    },
+    {
+      "queueIndex": 30,
+      "sourcePath": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-4bit-progress-v45-20261111/s7-variants-K4FiuP/raw-0/incomplete/attempt-cEHJUk/packet-0030.wav",
+      "classification": "invalid-capture-evidence"
+    },
+    {
+      "queueIndex": 31,
+      "sourcePath": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-4bit-progress-v45-20261111/s7-variants-K4FiuP/raw-0/incomplete/attempt-cEHJUk/packet-0031.wav",
+      "classification": "invalid-capture-evidence"
+    },
+    {
+      "queueIndex": 32,
+      "sourcePath": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-4bit-progress-v45-20261111/s7-variants-K4FiuP/raw-0/incomplete/attempt-a0T3ED/packet-0000.wav.onset-4586.wav",
+      "classification": "invalid-capture-evidence"
+    },
+    {
+      "queueIndex": 33,
+      "sourcePath": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-4bit-progress-v45-20261111/s7-variants-K4FiuP/raw-0/incomplete/attempt-a0T3ED/packet-0001.wav",
+      "classification": "invalid-capture-evidence"
+    },
+    {
+      "queueIndex": 34,
+      "sourcePath": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-4bit-progress-v45-20261111/s7-variants-K4FiuP/raw-0/incomplete/attempt-a0T3ED/packet-0002.wav",
+      "classification": "invalid-capture-evidence"
+    },
+    {
+      "queueIndex": 35,
+      "sourcePath": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-4bit-progress-v45-20261111/s7-variants-K4FiuP/raw-0/incomplete/attempt-a0T3ED/packet-0003.wav",
+      "classification": "invalid-capture-evidence"
+    },
+    {
+      "queueIndex": 36,
+      "sourcePath": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-4bit-progress-v45-20261111/s7-variants-K4FiuP/raw-0/incomplete/attempt-a0T3ED/packet-0004.wav",
+      "classification": "invalid-capture-evidence"
+    },
+    {
+      "queueIndex": 37,
+      "sourcePath": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-4bit-progress-v45-20261111/s7-variants-K4FiuP/raw-0/incomplete/attempt-a0T3ED/packet-0005.wav",
+      "classification": "invalid-capture-evidence"
+    },
+    {
+      "queueIndex": 38,
+      "sourcePath": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-4bit-progress-v45-20261111/s7-variants-K4FiuP/raw-0/incomplete/attempt-a0T3ED/packet-0006.wav",
+      "classification": "invalid-capture-evidence"
+    },
+    {
+      "queueIndex": 39,
+      "sourcePath": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-4bit-progress-v45-20261111/s7-variants-K4FiuP/raw-0/incomplete/attempt-a0T3ED/packet-0007.wav",
+      "classification": "invalid-capture-evidence"
+    },
+    {
+      "queueIndex": 40,
+      "sourcePath": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-4bit-progress-v45-20261111/s7-variants-K4FiuP/raw-0/incomplete/attempt-a0T3ED/packet-0008.wav",
+      "classification": "invalid-capture-evidence"
+    },
+    {
+      "queueIndex": 41,
+      "sourcePath": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-4bit-progress-v45-20261111/s7-variants-K4FiuP/raw-0/incomplete/attempt-a0T3ED/packet-0009.wav",
+      "classification": "invalid-capture-evidence"
+    },
+    {
+      "queueIndex": 42,
+      "sourcePath": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-4bit-progress-v45-20261111/s7-variants-K4FiuP/raw-0/incomplete/attempt-a0T3ED/packet-0010.wav",
+      "classification": "invalid-capture-evidence"
+    },
+    {
+      "queueIndex": 43,
+      "sourcePath": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-4bit-progress-v45-20261111/s7-variants-K4FiuP/raw-0/incomplete/attempt-a0T3ED/packet-0011.wav",
+      "classification": "invalid-capture-evidence"
+    },
+    {
+      "queueIndex": 44,
+      "sourcePath": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-4bit-progress-v45-20261111/s7-variants-K4FiuP/raw-0/incomplete/attempt-a0T3ED/packet-0012.wav",
+      "classification": "invalid-capture-evidence"
+    },
+    {
+      "queueIndex": 45,
+      "sourcePath": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-4bit-progress-v45-20261111/s7-variants-K4FiuP/raw-0/incomplete/attempt-a0T3ED/packet-0013.wav",
+      "classification": "invalid-capture-evidence"
+    },
+    {
+      "queueIndex": 46,
+      "sourcePath": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-4bit-progress-v45-20261111/s7-variants-K4FiuP/raw-0/incomplete/attempt-a0T3ED/packet-0014.wav",
+      "classification": "invalid-capture-evidence"
+    },
+    {
+      "queueIndex": 47,
+      "sourcePath": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-4bit-progress-v45-20261111/s7-variants-K4FiuP/raw-0/incomplete/attempt-a0T3ED/packet-0015.wav",
+      "classification": "invalid-capture-evidence"
+    },
+    {
+      "queueIndex": 48,
+      "sourcePath": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-4bit-progress-v45-20261111/s7-variants-K4FiuP/raw-0/incomplete/attempt-a0T3ED/packet-0016.wav",
+      "classification": "invalid-capture-evidence"
+    },
+    {
+      "queueIndex": 49,
+      "sourcePath": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-4bit-progress-v45-20261111/s7-variants-K4FiuP/raw-0/incomplete/attempt-a0T3ED/packet-0017.wav",
+      "classification": "invalid-capture-evidence"
+    },
+    {
+      "queueIndex": 50,
+      "sourcePath": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-4bit-progress-v45-20261111/s7-variants-K4FiuP/raw-0/incomplete/attempt-a0T3ED/packet-0018.wav",
+      "classification": "invalid-capture-evidence"
+    },
+    {
+      "queueIndex": 51,
+      "sourcePath": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-4bit-progress-v45-20261111/s7-variants-K4FiuP/raw-0/incomplete/attempt-a0T3ED/packet-0019.wav",
+      "classification": "invalid-capture-evidence"
+    },
+    {
+      "queueIndex": 52,
+      "sourcePath": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-4bit-progress-v45-20261111/s7-variants-K4FiuP/raw-0/incomplete/attempt-a0T3ED/packet-0020.wav",
+      "classification": "invalid-capture-evidence"
+    },
+    {
+      "queueIndex": 53,
+      "sourcePath": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-4bit-progress-v45-20261111/s7-variants-K4FiuP/raw-0/incomplete/attempt-a0T3ED/packet-0021.wav",
+      "classification": "invalid-capture-evidence"
+    },
+    {
+      "queueIndex": 54,
+      "sourcePath": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-4bit-progress-v45-20261111/s7-variants-K4FiuP/raw-0/incomplete/attempt-a0T3ED/packet-0022.wav",
+      "classification": "invalid-capture-evidence"
+    },
+    {
+      "queueIndex": 55,
+      "sourcePath": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-4bit-progress-v45-20261111/s7-variants-K4FiuP/raw-0/incomplete/attempt-a0T3ED/packet-0023.wav",
+      "classification": "invalid-capture-evidence"
+    },
+    {
+      "queueIndex": 56,
+      "sourcePath": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-4bit-progress-v45-20261111/s7-variants-K4FiuP/raw-0/incomplete/attempt-a0T3ED/packet-0024.wav",
+      "classification": "invalid-capture-evidence"
+    },
+    {
+      "queueIndex": 57,
+      "sourcePath": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-4bit-progress-v45-20261111/s7-variants-K4FiuP/raw-0/incomplete/attempt-a0T3ED/packet-0025.wav",
+      "classification": "invalid-capture-evidence"
+    },
+    {
+      "queueIndex": 58,
+      "sourcePath": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-4bit-progress-v45-20261111/s7-variants-K4FiuP/raw-0/incomplete/attempt-a0T3ED/packet-0026.wav",
+      "classification": "invalid-capture-evidence"
+    },
+    {
+      "queueIndex": 59,
+      "sourcePath": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-4bit-progress-v45-20261111/s7-variants-K4FiuP/raw-0/incomplete/attempt-a0T3ED/packet-0027.wav",
+      "classification": "invalid-capture-evidence"
+    },
+    {
+      "queueIndex": 60,
+      "sourcePath": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-4bit-progress-v45-20261111/s7-variants-K4FiuP/raw-0/incomplete/attempt-a0T3ED/packet-0028.wav",
+      "classification": "invalid-capture-evidence"
+    },
+    {
+      "queueIndex": 61,
+      "sourcePath": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-4bit-progress-v45-20261111/s7-variants-K4FiuP/raw-0/incomplete/attempt-a0T3ED/packet-0029.wav",
+      "classification": "invalid-capture-evidence"
+    },
+    {
+      "queueIndex": 62,
+      "sourcePath": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-4bit-progress-v45-20261111/s7-variants-K4FiuP/raw-0/incomplete/attempt-a0T3ED/packet-0030.wav",
+      "classification": "invalid-capture-evidence"
+    },
+    {
+      "queueIndex": 63,
+      "sourcePath": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-4bit-progress-v45-20261111/s7-variants-K4FiuP/raw-0/incomplete/attempt-a0T3ED/packet-0031.wav",
+      "classification": "invalid-capture-evidence"
+    },
+    {
+      "queueIndex": 64,
+      "sourcePath": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-4bit-progress-v45-20261111/s7-variants-K4FiuP/raw-0/incomplete/attempt-a0T3ED/packet-0032.wav",
+      "classification": "invalid-capture-evidence"
+    },
+    {
+      "queueIndex": 65,
+      "sourcePath": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-4bit-progress-v45-20261111/s7-variants-K4FiuP/raw-0/incomplete/attempt-a0T3ED/packet-0033.wav",
+      "classification": "invalid-capture-evidence"
+    },
+    {
+      "queueIndex": 66,
+      "sourcePath": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-4bit-progress-v45-20261111/s7-variants-K4FiuP/raw-0/incomplete/attempt-a0T3ED/packet-0034.wav",
+      "classification": "invalid-capture-evidence"
+    },
+    {
+      "queueIndex": 67,
+      "sourcePath": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-4bit-progress-v45-20261111/s7-variants-K4FiuP/raw-0/incomplete/attempt-a0T3ED/packet-0035.wav",
+      "classification": "invalid-capture-evidence"
+    },
+    {
+      "queueIndex": 68,
+      "sourcePath": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-4bit-progress-v45-20261111/s7-variants-K4FiuP/raw-0/incomplete/attempt-a0T3ED/packet-0036.wav",
+      "classification": "invalid-capture-evidence"
+    },
+    {
+      "queueIndex": 69,
+      "sourcePath": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-4bit-progress-v45-20261111/s7-variants-K4FiuP/raw-0/incomplete/attempt-a0T3ED/packet-0037.wav",
+      "classification": "invalid-capture-evidence"
+    },
+    {
+      "queueIndex": 70,
+      "sourcePath": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-4bit-progress-v45-20261111/s7-variants-K4FiuP/raw-0/incomplete/attempt-a0T3ED/packet-0038.wav",
+      "classification": "invalid-capture-evidence"
+    },
+    {
+      "queueIndex": 71,
+      "sourcePath": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-4bit-progress-v45-20261111/s7-variants-K4FiuP/raw-0/incomplete/attempt-a0T3ED/packet-0039.wav",
+      "classification": "invalid-capture-evidence"
+    },
+    {
+      "queueIndex": 72,
+      "sourcePath": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-4bit-progress-v45-20261111/s7-variants-K4FiuP/raw-0/incomplete/attempt-a0T3ED/packet-0040.wav",
+      "classification": "invalid-capture-evidence"
+    },
+    {
+      "queueIndex": 73,
+      "sourcePath": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-4bit-progress-v45-20261111/s7-variants-K4FiuP/raw-0/incomplete/attempt-a0T3ED/packet-0041.wav",
+      "classification": "invalid-capture-evidence"
+    },
+    {
+      "queueIndex": 74,
+      "sourcePath": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-4bit-progress-v45-20261111/s7-variants-K4FiuP/raw-0/incomplete/attempt-a0T3ED/packet-0042.wav",
+      "classification": "invalid-capture-evidence"
+    },
+    {
+      "queueIndex": 75,
+      "sourcePath": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-4bit-progress-v45-20261111/s7-variants-K4FiuP/raw-0/incomplete/attempt-a0T3ED/packet-0043.wav",
+      "classification": "invalid-capture-evidence"
+    },
+    {
+      "queueIndex": 76,
+      "sourcePath": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-4bit-progress-v45-20261111/s7-variants-K4FiuP/raw-0/incomplete/attempt-a0T3ED/packet-0044.wav",
+      "classification": "invalid-capture-evidence"
+    },
+    {
+      "queueIndex": 77,
+      "sourcePath": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-4bit-progress-v45-20261111/s7-variants-K4FiuP/raw-0/incomplete/attempt-a0T3ED/packet-0045.wav",
+      "classification": "invalid-capture-evidence"
+    },
+    {
+      "queueIndex": 78,
+      "sourcePath": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-4bit-progress-v45-20261111/s7-variants-K4FiuP/raw-0/incomplete/attempt-a0T3ED/packet-0046.wav",
+      "classification": "invalid-capture-evidence"
+    },
+    {
+      "queueIndex": 79,
+      "sourcePath": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-4bit-progress-v45-20261111/s7-variants-K4FiuP/raw-0/incomplete/attempt-a0T3ED/packet-0047.wav",
+      "classification": "invalid-capture-evidence"
+    },
+    {
+      "queueIndex": 80,
+      "sourcePath": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-4bit-progress-v45-20261111/s7-variants-K4FiuP/raw-0/incomplete/attempt-a0T3ED/packet-0048.wav",
+      "classification": "invalid-capture-evidence"
+    },
+    {
+      "queueIndex": 81,
+      "sourcePath": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-4bit-progress-v45-20261111/s7-variants-K4FiuP/raw-0/incomplete/attempt-a0T3ED/packet-0049.wav",
+      "classification": "invalid-capture-evidence"
+    },
+    {
+      "queueIndex": 82,
+      "sourcePath": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-4bit-progress-v45-20261111/s7-variants-K4FiuP/raw-0/incomplete/attempt-a0T3ED/packet-0050.wav",
+      "classification": "invalid-capture-evidence"
+    },
+    {
+      "queueIndex": 83,
+      "sourcePath": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-4bit-progress-v45-20261111/s7-variants-K4FiuP/raw-0/incomplete/attempt-a0T3ED/packet-0051.wav",
+      "classification": "invalid-capture-evidence"
+    },
+    {
+      "queueIndex": 84,
+      "sourcePath": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-4bit-progress-v45-20261111/s7-variants-K4FiuP/raw-0/incomplete/attempt-a0T3ED/packet-0052.wav",
+      "classification": "invalid-capture-evidence"
+    },
+    {
+      "queueIndex": 85,
+      "sourcePath": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-4bit-progress-v45-20261111/s7-variants-K4FiuP/raw-0/incomplete/attempt-a0T3ED/packet-0053.wav",
+      "classification": "invalid-capture-evidence"
+    },
+    {
+      "queueIndex": 86,
+      "sourcePath": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-4bit-progress-v45-20261111/s7-variants-K4FiuP/raw-0/incomplete/attempt-a0T3ED/packet-0054.wav",
+      "classification": "invalid-capture-evidence"
+    },
+    {
+      "queueIndex": 87,
+      "sourcePath": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-4bit-progress-v45-20261111/s7-variants-K4FiuP/raw-0/incomplete/attempt-a0T3ED/packet-0055.wav",
+      "classification": "invalid-capture-evidence"
+    },
+    {
+      "queueIndex": 88,
+      "sourcePath": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-4bit-progress-v45-20261111/s7-variants-K4FiuP/raw-0/incomplete/attempt-a0T3ED/packet-0056.wav",
+      "classification": "invalid-capture-evidence"
+    },
+    {
+      "queueIndex": 89,
+      "sourcePath": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-4bit-progress-v45-20261111/s7-variants-K4FiuP/raw-0/incomplete/attempt-a0T3ED/packet-0057.wav",
+      "classification": "invalid-capture-evidence"
+    },
+    {
+      "queueIndex": 90,
+      "sourcePath": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-4bit-progress-v45-20261111/s7-variants-K4FiuP/raw-0/incomplete/attempt-a0T3ED/packet-0058.wav",
+      "classification": "invalid-capture-evidence"
+    },
+    {
+      "queueIndex": 91,
+      "sourcePath": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-4bit-progress-v45-20261111/s7-variants-K4FiuP/raw-0/incomplete/attempt-a0T3ED/packet-0059.wav",
+      "classification": "invalid-capture-evidence"
+    },
+    {
+      "queueIndex": 92,
+      "sourcePath": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-4bit-progress-v45-20261111/s7-variants-K4FiuP/raw-0/incomplete/attempt-a0T3ED/packet-0060.wav",
+      "classification": "invalid-capture-evidence"
+    },
+    {
+      "queueIndex": 93,
+      "sourcePath": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-4bit-progress-v45-20261111/s7-variants-K4FiuP/raw-0/incomplete/attempt-a0T3ED/packet-0061.wav",
+      "classification": "invalid-capture-evidence"
+    },
+    {
+      "queueIndex": 94,
+      "sourcePath": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-4bit-progress-v45-20261111/s7-variants-K4FiuP/raw-0/incomplete/attempt-a0T3ED/packet-0062.wav",
+      "classification": "invalid-capture-evidence"
+    },
+    {
+      "queueIndex": 95,
+      "sourcePath": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-4bit-progress-v45-20261111/s7-variants-K4FiuP/raw-0/incomplete/attempt-a0T3ED/packet-0063.wav",
+      "classification": "invalid-capture-evidence"
+    },
+    {
+      "queueIndex": 96,
+      "sourcePath": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-4bit-progress-v45-20261111/s7-variants-K4FiuP/raw-0/incomplete/attempt-a0T3ED/packet-0064.wav",
+      "classification": "invalid-capture-evidence"
+    },
+    {
+      "queueIndex": 97,
+      "sourcePath": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-4bit-progress-v45-20261111/s7-variants-K4FiuP/raw-0/incomplete/attempt-a0T3ED/packet-0065.wav",
+      "classification": "invalid-capture-evidence"
+    },
+    {
+      "queueIndex": 98,
+      "sourcePath": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-4bit-progress-v45-20261111/s7-variants-K4FiuP/raw-0/incomplete/attempt-a0T3ED/packet-0066.wav",
+      "classification": "invalid-capture-evidence"
+    },
+    {
+      "queueIndex": 99,
+      "sourcePath": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-4bit-progress-v45-20261111/s7-variants-K4FiuP/raw-0/incomplete/attempt-QoxJWS/packet-0000.wav.onset-2690.wav",
+      "classification": "invalid-capture-evidence"
+    },
+    {
+      "queueIndex": 100,
+      "sourcePath": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-4bit-progress-v45-20261111/s7-variants-K4FiuP/raw-0/incomplete/attempt-QoxJWS/packet-0001.wav",
+      "classification": "invalid-capture-evidence"
+    },
+    {
+      "queueIndex": 101,
+      "sourcePath": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-4bit-progress-v45-20261111/s7-variants-K4FiuP/raw-0/incomplete/attempt-QoxJWS/packet-0002.wav",
+      "classification": "invalid-capture-evidence"
+    },
+    {
+      "queueIndex": 102,
+      "sourcePath": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-4bit-progress-v45-20261111/s7-variants-K4FiuP/raw-0/incomplete/attempt-QoxJWS/packet-0003.wav",
+      "classification": "invalid-capture-evidence"
+    },
+    {
+      "queueIndex": 103,
+      "sourcePath": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-4bit-progress-v45-20261111/s7-variants-K4FiuP/raw-0/incomplete/attempt-QoxJWS/packet-0004.wav",
+      "classification": "invalid-capture-evidence"
+    },
+    {
+      "queueIndex": 104,
+      "sourcePath": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-4bit-progress-v45-20261111/s7-variants-K4FiuP/raw-0/incomplete/attempt-QoxJWS/packet-0005.wav",
+      "classification": "invalid-capture-evidence"
+    },
+    {
+      "queueIndex": 105,
+      "sourcePath": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-4bit-progress-v45-20261111/s7-variants-K4FiuP/raw-0/incomplete/attempt-QoxJWS/packet-0006.wav",
+      "classification": "invalid-capture-evidence"
+    },
+    {
+      "queueIndex": 106,
+      "sourcePath": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-4bit-progress-v45-20261111/s7-variants-K4FiuP/raw-0/incomplete/attempt-QoxJWS/packet-0007.wav",
+      "classification": "invalid-capture-evidence"
+    },
+    {
+      "queueIndex": 107,
+      "sourcePath": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-4bit-progress-v45-20261111/s7-variants-K4FiuP/raw-0/incomplete/attempt-QoxJWS/packet-0008.wav",
+      "classification": "invalid-capture-evidence"
+    },
+    {
+      "queueIndex": 108,
+      "sourcePath": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-4bit-progress-v45-20261111/s7-variants-K4FiuP/raw-0/incomplete/attempt-QoxJWS/packet-0009.wav",
+      "classification": "invalid-capture-evidence"
+    },
+    {
+      "queueIndex": 109,
+      "sourcePath": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-4bit-progress-v45-20261111/s7-variants-K4FiuP/raw-0/incomplete/attempt-QoxJWS/packet-0010.wav",
+      "classification": "invalid-capture-evidence"
+    },
+    {
+      "queueIndex": 110,
+      "sourcePath": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-4bit-progress-v45-20261111/s7-variants-K4FiuP/raw-0/incomplete/attempt-QoxJWS/packet-0011.wav",
+      "classification": "invalid-capture-evidence"
+    },
+    {
+      "queueIndex": 111,
+      "sourcePath": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-4bit-progress-v45-20261111/s7-variants-K4FiuP/raw-0/incomplete/attempt-QoxJWS/packet-0012.wav",
+      "classification": "invalid-capture-evidence"
+    },
+    {
+      "queueIndex": 112,
+      "sourcePath": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-4bit-progress-v45-20261111/s7-variants-K4FiuP/raw-0/incomplete/attempt-QoxJWS/packet-0013.wav",
+      "classification": "invalid-capture-evidence"
+    },
+    {
+      "queueIndex": 113,
+      "sourcePath": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-4bit-progress-v45-20261111/s7-variants-K4FiuP/raw-0/incomplete/attempt-QoxJWS/packet-0014.wav",
+      "classification": "invalid-capture-evidence"
+    },
+    {
+      "queueIndex": 114,
+      "sourcePath": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-4bit-progress-v45-20261111/s7-variants-K4FiuP/raw-0/incomplete/attempt-QoxJWS/packet-0015.wav",
+      "classification": "invalid-capture-evidence"
+    },
+    {
+      "queueIndex": 115,
+      "sourcePath": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-4bit-progress-v45-20261111/s7-variants-K4FiuP/raw-0/incomplete/attempt-QoxJWS/packet-0016.wav",
+      "classification": "invalid-capture-evidence"
+    },
+    {
+      "queueIndex": 116,
+      "sourcePath": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-4bit-progress-v45-20261111/s7-variants-K4FiuP/raw-0/incomplete/attempt-QoxJWS/packet-0017.wav",
+      "classification": "invalid-capture-evidence"
+    },
+    {
+      "queueIndex": 117,
+      "sourcePath": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-4bit-progress-v45-20261111/s7-variants-K4FiuP/raw-0/incomplete/attempt-QoxJWS/packet-0018.wav",
+      "classification": "invalid-capture-evidence"
+    },
+    {
+      "queueIndex": 118,
+      "sourcePath": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-4bit-progress-v45-20261111/s7-variants-K4FiuP/raw-0/incomplete/attempt-QoxJWS/packet-0019.wav",
+      "classification": "invalid-capture-evidence"
+    },
+    {
+      "queueIndex": 119,
+      "sourcePath": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-4bit-progress-v45-20261111/s7-variants-K4FiuP/raw-0/incomplete/attempt-QoxJWS/packet-0020.wav",
+      "classification": "invalid-capture-evidence"
+    },
+    {
+      "queueIndex": 120,
+      "sourcePath": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-4bit-progress-v45-20261111/s7-variants-K4FiuP/raw-0/incomplete/attempt-QoxJWS/packet-0021.wav",
+      "classification": "invalid-capture-evidence"
+    },
+    {
+      "queueIndex": 121,
+      "sourcePath": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-4bit-progress-v45-20261111/s7-variants-K4FiuP/raw-0/incomplete/attempt-QoxJWS/packet-0022.wav",
+      "classification": "invalid-capture-evidence"
+    },
+    {
+      "queueIndex": 122,
+      "sourcePath": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-4bit-progress-v45-20261111/s7-variants-K4FiuP/raw-0/incomplete/attempt-QoxJWS/packet-0023.wav",
+      "classification": "invalid-capture-evidence"
+    },
+    {
+      "queueIndex": 123,
+      "sourcePath": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-4bit-progress-v45-20261111/s7-variants-K4FiuP/raw-0/incomplete/attempt-QoxJWS/packet-0024.wav",
+      "classification": "invalid-capture-evidence"
+    },
+    {
+      "queueIndex": 124,
+      "sourcePath": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-4bit-progress-v45-20261111/s7-variants-K4FiuP/raw-0/incomplete/attempt-QoxJWS/packet-0025.wav",
+      "classification": "invalid-capture-evidence"
+    },
+    {
+      "queueIndex": 125,
+      "sourcePath": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-4bit-progress-v45-20261111/s7-variants-K4FiuP/raw-0/incomplete/attempt-QoxJWS/packet-0026.wav",
+      "classification": "invalid-capture-evidence"
+    },
+    {
+      "queueIndex": 126,
+      "sourcePath": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-4bit-progress-v45-20261111/s7-variants-K4FiuP/raw-0/incomplete/attempt-QoxJWS/packet-0027.wav",
+      "classification": "invalid-capture-evidence"
+    },
+    {
+      "queueIndex": 127,
+      "sourcePath": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-4bit-progress-v45-20261111/s7-variants-K4FiuP/raw-0/incomplete/attempt-QoxJWS/packet-0028.wav",
+      "classification": "invalid-capture-evidence"
+    },
+    {
+      "queueIndex": 128,
+      "sourcePath": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-4bit-progress-v45-20261111/s7-variants-K4FiuP/raw-0/incomplete/attempt-QoxJWS/packet-0029.wav",
+      "classification": "invalid-capture-evidence"
+    },
+    {
+      "queueIndex": 129,
+      "sourcePath": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-4bit-progress-v45-20261111/s7-variants-K4FiuP/raw-0/incomplete/attempt-QoxJWS/packet-0030.wav",
+      "classification": "invalid-capture-evidence"
+    },
+    {
+      "queueIndex": 130,
+      "sourcePath": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-4bit-progress-v45-20261111/s7-variants-K4FiuP/raw-0/incomplete/attempt-QoxJWS/packet-0031.wav",
+      "classification": "invalid-capture-evidence"
+    },
+    {
+      "queueIndex": 131,
+      "sourcePath": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-4bit-progress-v45-20261111/s7-variants-K4FiuP/raw-0/incomplete/attempt-QoxJWS/packet-0032.wav",
+      "classification": "invalid-capture-evidence"
+    },
+    {
+      "queueIndex": 132,
+      "sourcePath": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-4bit-progress-v45-20261111/s7-variants-K4FiuP/raw-0/incomplete/attempt-QoxJWS/packet-0033.wav",
+      "classification": "invalid-capture-evidence"
+    },
+    {
+      "queueIndex": 133,
+      "sourcePath": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-4bit-progress-v45-20261111/s7-variants-K4FiuP/raw-0/incomplete/attempt-QoxJWS/packet-0034.wav",
+      "classification": "invalid-capture-evidence"
+    },
+    {
+      "queueIndex": 134,
+      "sourcePath": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-4bit-progress-v45-20261111/s7-variants-K4FiuP/raw-0/incomplete/attempt-QoxJWS/packet-0035.wav",
+      "classification": "invalid-capture-evidence"
+    },
+    {
+      "queueIndex": 135,
+      "sourcePath": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-4bit-progress-v45-20261111/s7-variants-K4FiuP/raw-0/incomplete/attempt-QoxJWS/packet-0036.wav",
+      "classification": "invalid-capture-evidence"
+    },
+    {
+      "queueIndex": 136,
+      "sourcePath": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-4bit-progress-v45-20261111/s7-variants-K4FiuP/raw-0/incomplete/attempt-QoxJWS/packet-0037.wav",
+      "classification": "invalid-capture-evidence"
+    },
+    {
+      "queueIndex": 137,
+      "sourcePath": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-4bit-progress-v45-20261111/s7-variants-K4FiuP/raw-0/incomplete/attempt-QoxJWS/packet-0038.wav",
+      "classification": "invalid-capture-evidence"
+    },
+    {
+      "queueIndex": 138,
+      "sourcePath": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-4bit-progress-v45-20261111/s7-variants-K4FiuP/raw-0/incomplete/attempt-QoxJWS/packet-0039.wav",
+      "classification": "invalid-capture-evidence"
+    },
+    {
+      "queueIndex": 139,
+      "sourcePath": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-4bit-progress-v45-20261111/s7-variants-K4FiuP/raw-0/incomplete/attempt-QoxJWS/packet-0040.wav",
+      "classification": "invalid-capture-evidence"
+    },
+    {
+      "queueIndex": 140,
+      "sourcePath": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-4bit-progress-v45-20261111/s7-variants-K4FiuP/raw-0/incomplete/attempt-QoxJWS/packet-0041.wav",
+      "classification": "invalid-capture-evidence"
+    },
+    {
+      "queueIndex": 141,
+      "sourcePath": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-4bit-progress-v45-20261111/s7-variants-K4FiuP/raw-0/incomplete/attempt-QoxJWS/packet-0042.wav",
+      "classification": "invalid-capture-evidence"
+    },
+    {
+      "queueIndex": 142,
+      "sourcePath": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-4bit-progress-v45-20261111/s7-variants-K4FiuP/raw-0/incomplete/attempt-QoxJWS/packet-0043.wav",
+      "classification": "invalid-capture-evidence"
+    },
+    {
+      "queueIndex": 143,
+      "sourcePath": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-4bit-progress-v45-20261111/s7-variants-K4FiuP/raw-0/incomplete/attempt-QoxJWS/packet-0044.wav",
+      "classification": "invalid-capture-evidence"
+    },
+    {
+      "queueIndex": 144,
+      "sourcePath": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-4bit-progress-v45-20261111/s7-variants-K4FiuP/raw-0/incomplete/attempt-QoxJWS/packet-0045.wav",
+      "classification": "invalid-capture-evidence"
+    },
+    {
+      "queueIndex": 145,
+      "sourcePath": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-4bit-progress-v45-20261111/s7-variants-K4FiuP/raw-0/incomplete/attempt-QoxJWS/packet-0046.wav",
+      "classification": "invalid-capture-evidence"
+    },
+    {
+      "queueIndex": 146,
+      "sourcePath": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-4bit-progress-v45-20261111/s7-variants-K4FiuP/raw-0/incomplete/attempt-QoxJWS/packet-0047.wav",
+      "classification": "invalid-capture-evidence"
+    },
+    {
+      "queueIndex": 147,
+      "sourcePath": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-4bit-progress-v45-20261111/s7-variants-K4FiuP/raw-0/incomplete/attempt-QoxJWS/packet-0048.wav",
+      "classification": "invalid-capture-evidence"
+    },
+    {
+      "queueIndex": 148,
+      "sourcePath": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-4bit-progress-v45-20261111/s7-variants-K4FiuP/raw-0/incomplete/attempt-QoxJWS/packet-0049.wav",
+      "classification": "invalid-capture-evidence"
+    },
+    {
+      "queueIndex": 149,
+      "sourcePath": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-4bit-progress-v45-20261111/s7-variants-K4FiuP/raw-0/incomplete/attempt-QoxJWS/packet-0050.wav",
+      "classification": "invalid-capture-evidence"
+    },
+    {
+      "queueIndex": 150,
+      "sourcePath": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-4bit-progress-v45-20261111/s7-variants-K4FiuP/raw-0/incomplete/attempt-QoxJWS/packet-0051.wav",
+      "classification": "invalid-capture-evidence"
+    },
+    {
+      "queueIndex": 151,
+      "sourcePath": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-4bit-progress-v45-20261111/s7-variants-K4FiuP/raw-0/incomplete/attempt-QoxJWS/packet-0052.wav",
+      "classification": "invalid-capture-evidence"
+    },
+    {
+      "queueIndex": 152,
+      "sourcePath": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-4bit-progress-v45-20261111/s7-variants-K4FiuP/raw-0/incomplete/attempt-QoxJWS/packet-0053.wav",
+      "classification": "invalid-capture-evidence"
+    },
+    {
+      "queueIndex": 153,
+      "sourcePath": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-4bit-progress-v45-20261111/s7-variants-K4FiuP/raw-0/incomplete/attempt-QoxJWS/packet-0054.wav",
+      "classification": "invalid-capture-evidence"
+    },
+    {
+      "queueIndex": 154,
+      "sourcePath": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-4bit-progress-v45-20261111/s7-variants-K4FiuP/raw-0/incomplete/attempt-QoxJWS/packet-0055.wav",
+      "classification": "invalid-capture-evidence"
+    },
+    {
+      "queueIndex": 155,
+      "sourcePath": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-4bit-progress-v45-20261111/s7-variants-K4FiuP/raw-0/incomplete/attempt-QoxJWS/packet-0056.wav",
+      "classification": "invalid-capture-evidence"
+    },
+    {
+      "queueIndex": 156,
+      "sourcePath": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-4bit-progress-v45-20261111/s7-variants-K4FiuP/raw-0/incomplete/attempt-QoxJWS/packet-0057.wav",
+      "classification": "invalid-capture-evidence"
+    },
+    {
+      "queueIndex": 157,
+      "sourcePath": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-4bit-progress-v45-20261111/s7-variants-K4FiuP/raw-0/incomplete/attempt-QoxJWS/packet-0058.wav",
+      "classification": "invalid-capture-evidence"
+    },
+    {
+      "queueIndex": 158,
+      "sourcePath": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-4bit-progress-v45-20261111/s7-variants-K4FiuP/raw-0/incomplete/attempt-QoxJWS/packet-0059.wav",
+      "classification": "invalid-capture-evidence"
+    },
+    {
+      "queueIndex": 159,
+      "sourcePath": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-4bit-progress-v45-20261111/s7-variants-K4FiuP/raw-0/incomplete/attempt-QoxJWS/packet-0060.wav",
+      "classification": "invalid-capture-evidence"
+    },
+    {
+      "queueIndex": 160,
+      "sourcePath": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-4bit-progress-v45-20261111/s7-variants-K4FiuP/raw-0/incomplete/attempt-QoxJWS/packet-0061.wav",
+      "classification": "invalid-capture-evidence"
+    },
+    {
+      "queueIndex": 161,
+      "sourcePath": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-4bit-progress-v45-20261111/s7-variants-K4FiuP/raw-0/incomplete/attempt-QoxJWS/packet-0062.wav",
+      "classification": "invalid-capture-evidence"
+    },
+    {
+      "queueIndex": 162,
+      "sourcePath": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-4bit-progress-v45-20261111/s7-variants-K4FiuP/raw-0/incomplete/attempt-QoxJWS/packet-0063.wav",
+      "classification": "invalid-capture-evidence"
+    },
+    {
+      "queueIndex": 163,
+      "sourcePath": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-4bit-progress-v45-20261111/s7-variants-K4FiuP/raw-0/incomplete/attempt-QoxJWS/packet-0064.wav",
+      "classification": "invalid-capture-evidence"
+    },
+    {
+      "queueIndex": 164,
+      "sourcePath": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-4bit-progress-v45-20261111/s7-variants-K4FiuP/raw-0/incomplete/attempt-QoxJWS/packet-0065.wav",
+      "classification": "invalid-capture-evidence"
+    },
+    {
+      "queueIndex": 165,
+      "sourcePath": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-4bit-progress-v45-20261111/s7-variants-K4FiuP/raw-0/incomplete/attempt-QoxJWS/packet-0066.wav",
+      "classification": "invalid-capture-evidence"
+    },
+    {
+      "queueIndex": 166,
+      "sourcePath": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-4bit-progress-v45-20261111/s7-variants-K4FiuP/raw-0/incomplete/attempt-QoxJWS/packet-0067.wav",
+      "classification": "invalid-capture-evidence"
+    },
+    {
+      "queueIndex": 167,
+      "sourcePath": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-4bit-progress-v45-20261111/s7-variants-K4FiuP/raw-0/incomplete/attempt-QoxJWS/packet-0068.wav",
+      "classification": "invalid-capture-evidence"
+    },
+    {
+      "queueIndex": 168,
+      "sourcePath": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-4bit-progress-v45-20261111/s7-variants-K4FiuP/raw-0/incomplete/attempt-DcBigF/packet-0000.wav.onset-4410.wav",
+      "classification": "invalid-capture-evidence"
+    },
+    {
+      "queueIndex": 169,
+      "sourcePath": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-4bit-progress-v45-20261111/s7-variants-K4FiuP/raw-0/incomplete/attempt-DcBigF/packet-0001.wav",
+      "classification": "invalid-capture-evidence"
+    },
+    {
+      "queueIndex": 170,
+      "sourcePath": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-4bit-progress-v45-20261111/s7-variants-K4FiuP/raw-0/incomplete/attempt-DcBigF/packet-0002.wav",
+      "classification": "invalid-capture-evidence"
+    },
+    {
+      "queueIndex": 171,
+      "sourcePath": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-4bit-progress-v45-20261111/s7-variants-K4FiuP/raw-0/incomplete/attempt-DcBigF/packet-0003.wav",
+      "classification": "invalid-capture-evidence"
+    },
+    {
+      "queueIndex": 172,
+      "sourcePath": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-4bit-progress-v45-20261111/s7-variants-K4FiuP/raw-0/incomplete/attempt-DcBigF/packet-0004.wav",
+      "classification": "invalid-capture-evidence"
+    },
+    {
+      "queueIndex": 173,
+      "sourcePath": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-4bit-progress-v45-20261111/s7-variants-K4FiuP/raw-0/incomplete/attempt-DcBigF/packet-0005.wav",
+      "classification": "invalid-capture-evidence"
+    },
+    {
+      "queueIndex": 174,
+      "sourcePath": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-4bit-progress-v45-20261111/s7-variants-K4FiuP/raw-0/incomplete/attempt-DcBigF/packet-0006.wav",
+      "classification": "invalid-capture-evidence"
+    },
+    {
+      "queueIndex": 175,
+      "sourcePath": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-4bit-progress-v45-20261111/s7-variants-K4FiuP/raw-0/incomplete/attempt-DcBigF/packet-0007.wav",
+      "classification": "invalid-capture-evidence"
+    },
+    {
+      "queueIndex": 176,
+      "sourcePath": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-4bit-progress-v45-20261111/s7-variants-K4FiuP/raw-0/incomplete/attempt-DcBigF/packet-0008.wav",
+      "classification": "invalid-capture-evidence"
+    },
+    {
+      "queueIndex": 177,
+      "sourcePath": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-4bit-progress-v45-20261111/s7-variants-K4FiuP/raw-0/incomplete/attempt-DcBigF/packet-0009.wav",
+      "classification": "invalid-capture-evidence"
+    },
+    {
+      "queueIndex": 178,
+      "sourcePath": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-4bit-progress-v45-20261111/s7-variants-K4FiuP/raw-0/incomplete/attempt-DcBigF/packet-0010.wav",
+      "classification": "invalid-capture-evidence"
+    },
+    {
+      "queueIndex": 179,
+      "sourcePath": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-4bit-progress-v45-20261111/s7-variants-K4FiuP/raw-0/incomplete/attempt-DcBigF/packet-0011.wav",
+      "classification": "invalid-capture-evidence"
+    },
+    {
+      "queueIndex": 180,
+      "sourcePath": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-4bit-progress-v45-20261111/s7-variants-K4FiuP/raw-0/incomplete/attempt-DcBigF/packet-0012.wav",
+      "classification": "invalid-capture-evidence"
+    },
+    {
+      "queueIndex": 181,
+      "sourcePath": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-4bit-progress-v45-20261111/s7-variants-K4FiuP/raw-0/incomplete/attempt-DcBigF/packet-0013.wav",
+      "classification": "invalid-capture-evidence"
+    },
+    {
+      "queueIndex": 182,
+      "sourcePath": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-4bit-progress-v45-20261111/s7-variants-K4FiuP/raw-0/incomplete/attempt-DcBigF/packet-0014.wav",
+      "classification": "invalid-capture-evidence"
+    },
+    {
+      "queueIndex": 183,
+      "sourcePath": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-4bit-progress-v45-20261111/s7-variants-K4FiuP/raw-0/incomplete/attempt-DcBigF/packet-0015.wav",
+      "classification": "invalid-capture-evidence"
+    },
+    {
+      "queueIndex": 184,
+      "sourcePath": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-4bit-progress-v45-20261111/s7-variants-K4FiuP/raw-0/incomplete/attempt-DcBigF/packet-0016.wav",
+      "classification": "invalid-capture-evidence"
+    },
+    {
+      "queueIndex": 185,
+      "sourcePath": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-4bit-progress-v45-20261111/s7-variants-K4FiuP/raw-0/incomplete/attempt-DcBigF/packet-0017.wav",
+      "classification": "invalid-capture-evidence"
+    },
+    {
+      "queueIndex": 186,
+      "sourcePath": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-4bit-progress-v45-20261111/s7-variants-K4FiuP/raw-0/incomplete/attempt-DcBigF/packet-0018.wav",
+      "classification": "invalid-capture-evidence"
+    },
+    {
+      "queueIndex": 187,
+      "sourcePath": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-4bit-progress-v45-20261111/s7-variants-K4FiuP/raw-0/incomplete/attempt-DcBigF/packet-0019.wav",
+      "classification": "invalid-capture-evidence"
+    },
+    {
+      "queueIndex": 188,
+      "sourcePath": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-4bit-progress-v45-20261111/s7-variants-K4FiuP/raw-0/incomplete/attempt-DcBigF/packet-0020.wav",
+      "classification": "invalid-capture-evidence"
+    },
+    {
+      "queueIndex": 189,
+      "sourcePath": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-4bit-progress-v45-20261111/s7-variants-K4FiuP/raw-0/incomplete/attempt-DcBigF/packet-0021.wav",
+      "classification": "invalid-capture-evidence"
+    },
+    {
+      "queueIndex": 190,
+      "sourcePath": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-4bit-progress-v45-20261111/s7-variants-K4FiuP/raw-0/incomplete/attempt-DcBigF/packet-0022.wav",
+      "classification": "invalid-capture-evidence"
+    },
+    {
+      "queueIndex": 191,
+      "sourcePath": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-4bit-progress-v45-20261111/s7-variants-K4FiuP/raw-0/incomplete/attempt-DcBigF/packet-0023.wav",
+      "classification": "invalid-capture-evidence"
+    },
+    {
+      "queueIndex": 192,
+      "sourcePath": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-4bit-progress-v45-20261111/s7-variants-K4FiuP/raw-0/incomplete/attempt-DcBigF/packet-0024.wav",
+      "classification": "invalid-capture-evidence"
+    },
+    {
+      "queueIndex": 193,
+      "sourcePath": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-4bit-progress-v45-20261111/s7-variants-K4FiuP/raw-0/incomplete/attempt-DcBigF/packet-0025.wav",
+      "classification": "invalid-capture-evidence"
+    },
+    {
+      "queueIndex": 194,
+      "sourcePath": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-4bit-progress-v45-20261111/s7-variants-K4FiuP/raw-0/incomplete/attempt-DcBigF/packet-0026.wav",
+      "classification": "invalid-capture-evidence"
+    },
+    {
+      "queueIndex": 195,
+      "sourcePath": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-4bit-progress-v45-20261111/s7-variants-K4FiuP/raw-0/incomplete/attempt-DcBigF/packet-0027.wav",
+      "classification": "invalid-capture-evidence"
+    },
+    {
+      "queueIndex": 196,
+      "sourcePath": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-4bit-progress-v45-20261111/s7-variants-K4FiuP/raw-0/incomplete/attempt-DcBigF/packet-0028.wav",
+      "classification": "invalid-capture-evidence"
+    },
+    {
+      "queueIndex": 197,
+      "sourcePath": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-4bit-progress-v45-20261111/s7-variants-K4FiuP/raw-0/incomplete/attempt-DcBigF/packet-0029.wav",
+      "classification": "invalid-capture-evidence"
+    },
+    {
+      "queueIndex": 198,
+      "sourcePath": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-4bit-progress-v45-20261111/s7-variants-K4FiuP/raw-0/incomplete/attempt-DcBigF/packet-0030.wav",
+      "classification": "invalid-capture-evidence"
+    },
+    {
+      "queueIndex": 199,
+      "sourcePath": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-4bit-progress-v45-20261111/s7-variants-K4FiuP/raw-0/incomplete/attempt-DcBigF/packet-0031.wav",
+      "classification": "invalid-capture-evidence"
+    },
+    {
+      "queueIndex": 200,
+      "sourcePath": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-4bit-progress-v45-20261111/s7-variants-K4FiuP/raw-0/incomplete/attempt-DcBigF/packet-0032.wav",
+      "classification": "invalid-capture-evidence"
+    },
+    {
+      "queueIndex": 201,
+      "sourcePath": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-4bit-progress-v45-20261111/s7-variants-K4FiuP/raw-0/incomplete/attempt-DcBigF/packet-0033.wav",
+      "classification": "invalid-capture-evidence"
+    },
+    {
+      "queueIndex": 202,
+      "sourcePath": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-4bit-progress-v45-20261111/s7-variants-K4FiuP/raw-0/incomplete/attempt-lB4vcQ/packet-0000.wav.onset-794.wav",
+      "classification": "invalid-capture-evidence"
+    },
+    {
+      "queueIndex": 203,
+      "sourcePath": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-4bit-progress-v45-20261111/s7-variants-K4FiuP/raw-0/incomplete/attempt-lB4vcQ/packet-0001.wav",
+      "classification": "invalid-capture-evidence"
+    },
+    {
+      "queueIndex": 204,
+      "sourcePath": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-4bit-progress-v45-20261111/s7-variants-K4FiuP/raw-0/incomplete/attempt-lB4vcQ/packet-0002.wav",
+      "classification": "invalid-capture-evidence"
+    },
+    {
+      "queueIndex": 205,
+      "sourcePath": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-4bit-progress-v45-20261111/s7-variants-K4FiuP/raw-0/incomplete/attempt-lB4vcQ/packet-0003.wav",
+      "classification": "invalid-capture-evidence"
+    },
+    {
+      "queueIndex": 206,
+      "sourcePath": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-4bit-progress-v45-20261111/s7-variants-K4FiuP/raw-0/incomplete/attempt-lB4vcQ/packet-0004.wav",
+      "classification": "invalid-capture-evidence"
+    },
+    {
+      "queueIndex": 207,
+      "sourcePath": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-4bit-progress-v45-20261111/s7-variants-K4FiuP/raw-0/incomplete/attempt-lB4vcQ/packet-0005.wav",
+      "classification": "invalid-capture-evidence"
+    },
+    {
+      "queueIndex": 208,
+      "sourcePath": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-4bit-progress-v45-20261111/s7-variants-K4FiuP/raw-0/incomplete/attempt-lB4vcQ/packet-0006.wav",
+      "classification": "invalid-capture-evidence"
+    },
+    {
+      "queueIndex": 209,
+      "sourcePath": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-4bit-progress-v45-20261111/s7-variants-K4FiuP/raw-0/incomplete/attempt-lB4vcQ/packet-0007.wav",
+      "classification": "invalid-capture-evidence"
+    },
+    {
+      "queueIndex": 210,
+      "sourcePath": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-4bit-progress-v45-20261111/s7-variants-K4FiuP/raw-0/incomplete/attempt-lB4vcQ/packet-0008.wav",
+      "classification": "invalid-capture-evidence"
+    },
+    {
+      "queueIndex": 211,
+      "sourcePath": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-4bit-progress-v45-20261111/s7-variants-K4FiuP/raw-0/incomplete/attempt-lB4vcQ/packet-0009.wav",
+      "classification": "invalid-capture-evidence"
+    },
+    {
+      "queueIndex": 212,
+      "sourcePath": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-4bit-progress-v45-20261111/s7-variants-K4FiuP/raw-0/incomplete/attempt-lB4vcQ/packet-0010.wav",
+      "classification": "invalid-capture-evidence"
+    },
+    {
+      "queueIndex": 213,
+      "sourcePath": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-4bit-progress-v45-20261111/s7-variants-K4FiuP/raw-0/incomplete/attempt-lB4vcQ/packet-0011.wav",
+      "classification": "invalid-capture-evidence"
+    },
+    {
+      "queueIndex": 214,
+      "sourcePath": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-4bit-progress-v45-20261111/s7-variants-K4FiuP/raw-0/incomplete/attempt-lB4vcQ/packet-0012.wav",
+      "classification": "invalid-capture-evidence"
+    },
+    {
+      "queueIndex": 215,
+      "sourcePath": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-4bit-progress-v45-20261111/s7-variants-K4FiuP/raw-0/incomplete/attempt-lB4vcQ/packet-0013.wav",
+      "classification": "invalid-capture-evidence"
+    },
+    {
+      "queueIndex": 216,
+      "sourcePath": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-4bit-progress-v45-20261111/s7-variants-K4FiuP/raw-0/incomplete/attempt-lB4vcQ/packet-0014.wav",
+      "classification": "invalid-capture-evidence"
+    },
+    {
+      "queueIndex": 217,
+      "sourcePath": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-4bit-progress-v45-20261111/s7-variants-K4FiuP/raw-0/incomplete/attempt-lB4vcQ/packet-0015.wav",
+      "classification": "invalid-capture-evidence"
+    },
+    {
+      "queueIndex": 218,
+      "sourcePath": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-4bit-progress-v45-20261111/s7-variants-K4FiuP/raw-0/incomplete/attempt-lB4vcQ/packet-0016.wav",
+      "classification": "invalid-capture-evidence"
+    },
+    {
+      "queueIndex": 219,
+      "sourcePath": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-4bit-progress-v45-20261111/s7-variants-K4FiuP/raw-0/incomplete/attempt-lB4vcQ/packet-0017.wav",
+      "classification": "invalid-capture-evidence"
+    },
+    {
+      "queueIndex": 220,
+      "sourcePath": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-4bit-progress-v45-20261111/s7-variants-K4FiuP/raw-0/incomplete/attempt-lB4vcQ/packet-0018.wav",
+      "classification": "invalid-capture-evidence"
+    },
+    {
+      "queueIndex": 221,
+      "sourcePath": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-4bit-progress-v45-20261111/s7-variants-K4FiuP/raw-0/incomplete/attempt-lB4vcQ/packet-0019.wav",
+      "classification": "invalid-capture-evidence"
+    },
+    {
+      "queueIndex": 222,
+      "sourcePath": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-4bit-progress-v45-20261111/s7-variants-K4FiuP/raw-0/incomplete/attempt-lB4vcQ/packet-0020.wav",
+      "classification": "invalid-capture-evidence"
+    },
+    {
+      "queueIndex": 223,
+      "sourcePath": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-4bit-progress-v45-20261111/s7-variants-K4FiuP/raw-0/incomplete/attempt-lB4vcQ/packet-0021.wav",
+      "classification": "invalid-capture-evidence"
+    },
+    {
+      "queueIndex": 224,
+      "sourcePath": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-4bit-progress-v45-20261111/s7-variants-K4FiuP/raw-0/incomplete/attempt-lB4vcQ/packet-0022.wav",
+      "classification": "invalid-capture-evidence"
+    },
+    {
+      "queueIndex": 225,
+      "sourcePath": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-4bit-progress-v45-20261111/s7-variants-K4FiuP/raw-0/incomplete/attempt-lB4vcQ/packet-0023.wav",
+      "classification": "invalid-capture-evidence"
+    },
+    {
+      "queueIndex": 226,
+      "sourcePath": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-4bit-progress-v45-20261111/s7-variants-K4FiuP/raw-0/incomplete/attempt-lB4vcQ/packet-0024.wav",
+      "classification": "invalid-capture-evidence"
+    },
+    {
+      "queueIndex": 227,
+      "sourcePath": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-4bit-progress-v45-20261111/s7-variants-K4FiuP/raw-0/incomplete/attempt-lB4vcQ/packet-0025.wav",
+      "classification": "invalid-capture-evidence"
+    },
+    {
+      "queueIndex": 228,
+      "sourcePath": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-4bit-progress-v45-20261111/s7-variants-K4FiuP/raw-0/incomplete/attempt-lB4vcQ/packet-0026.wav",
+      "classification": "invalid-capture-evidence"
+    },
+    {
+      "queueIndex": 229,
+      "sourcePath": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-4bit-progress-v45-20261111/s7-variants-K4FiuP/raw-0/incomplete/attempt-lB4vcQ/packet-0027.wav",
+      "classification": "invalid-capture-evidence"
+    },
+    {
+      "queueIndex": 230,
+      "sourcePath": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-4bit-progress-v45-20261111/s7-variants-K4FiuP/raw-0/incomplete/attempt-lB4vcQ/packet-0028.wav",
+      "classification": "invalid-capture-evidence"
+    },
+    {
+      "queueIndex": 231,
+      "sourcePath": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-4bit-progress-v45-20261111/s7-variants-K4FiuP/raw-0/incomplete/attempt-lB4vcQ/packet-0029.wav",
+      "classification": "invalid-capture-evidence"
+    },
+    {
+      "queueIndex": 232,
+      "sourcePath": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-4bit-progress-v45-20261111/s7-variants-K4FiuP/raw-0/incomplete/attempt-lB4vcQ/packet-0030.wav",
+      "classification": "invalid-capture-evidence"
+    },
+    {
+      "queueIndex": 233,
+      "sourcePath": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-4bit-progress-v45-20261111/s7-variants-K4FiuP/raw-0/incomplete/attempt-lB4vcQ/packet-0031.wav",
+      "classification": "invalid-capture-evidence"
+    },
+    {
+      "queueIndex": 234,
+      "sourcePath": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-4bit-progress-v45-20261111/s7-variants-K4FiuP/raw-0/incomplete/attempt-lB4vcQ/packet-0032.wav",
+      "classification": "invalid-capture-evidence"
+    },
+    {
+      "queueIndex": 235,
+      "sourcePath": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-4bit-progress-v45-20261111/s7-variants-K4FiuP/raw-0/incomplete/attempt-lB4vcQ/packet-0033.wav",
+      "classification": "invalid-capture-evidence"
+    },
+    {
+      "queueIndex": 236,
+      "sourcePath": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-4bit-progress-v45-20261111/s7-variants-K4FiuP/raw-0/incomplete/attempt-lB4vcQ/packet-0034.wav",
+      "classification": "invalid-capture-evidence"
+    },
+    {
+      "queueIndex": 237,
+      "sourcePath": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-4bit-progress-v45-20261111/s7-variants-K4FiuP/raw-0/incomplete/attempt-lB4vcQ/packet-0035.wav",
+      "classification": "invalid-capture-evidence"
+    },
+    {
+      "queueIndex": 238,
+      "sourcePath": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-4bit-progress-v45-20261111/s7-variants-K4FiuP/raw-0/incomplete/attempt-lB4vcQ/packet-0036.wav",
+      "classification": "invalid-capture-evidence"
+    },
+    {
+      "queueIndex": 239,
+      "sourcePath": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-4bit-progress-v45-20261111/s7-variants-K4FiuP/raw-0/incomplete/attempt-lB4vcQ/packet-0037.wav",
+      "classification": "invalid-capture-evidence"
+    },
+    {
+      "queueIndex": 240,
+      "sourcePath": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-4bit-progress-v45-20261111/s7-variants-K4FiuP/raw-0/incomplete/attempt-lB4vcQ/packet-0038.wav",
+      "classification": "invalid-capture-evidence"
+    },
+    {
+      "queueIndex": 241,
+      "sourcePath": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-4bit-progress-v45-20261111/s7-variants-K4FiuP/raw-0/incomplete/attempt-lB4vcQ/packet-0039.wav",
+      "classification": "invalid-capture-evidence"
+    },
+    {
+      "queueIndex": 242,
+      "sourcePath": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-4bit-progress-v45-20261111/s7-variants-K4FiuP/raw-0/incomplete/attempt-lB4vcQ/packet-0040.wav",
+      "classification": "invalid-capture-evidence"
+    },
+    {
+      "queueIndex": 243,
+      "sourcePath": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-4bit-progress-v45-20261111/s7-variants-K4FiuP/raw-0/incomplete/attempt-lB4vcQ/packet-0041.wav",
+      "classification": "invalid-capture-evidence"
+    },
+    {
+      "queueIndex": 244,
+      "sourcePath": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-4bit-progress-v45-20261111/s7-variants-K4FiuP/raw-0/incomplete/attempt-lB4vcQ/packet-0042.wav",
+      "classification": "invalid-capture-evidence"
+    },
+    {
+      "queueIndex": 245,
+      "sourcePath": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-4bit-progress-v45-20261111/s7-variants-K4FiuP/raw-0/incomplete/attempt-lB4vcQ/packet-0043.wav",
+      "classification": "invalid-capture-evidence"
+    },
+    {
+      "queueIndex": 246,
+      "sourcePath": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-4bit-progress-v45-20261111/s7-variants-K4FiuP/raw-0/incomplete/attempt-lB4vcQ/packet-0044.wav",
+      "classification": "invalid-capture-evidence"
+    },
+    {
+      "queueIndex": 247,
+      "sourcePath": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-4bit-progress-v45-20261111/s7-variants-K4FiuP/raw-0/incomplete/attempt-lB4vcQ/packet-0045.wav",
+      "classification": "invalid-capture-evidence"
+    },
+    {
+      "queueIndex": 248,
+      "sourcePath": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-4bit-progress-v45-20261111/s7-variants-K4FiuP/raw-0/incomplete/attempt-lB4vcQ/packet-0046.wav",
+      "classification": "invalid-capture-evidence"
+    },
+    {
+      "queueIndex": 249,
+      "sourcePath": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-4bit-progress-v45-20261111/s7-variants-K4FiuP/raw-0/incomplete/attempt-lB4vcQ/packet-0047.wav",
+      "classification": "invalid-capture-evidence"
+    },
+    {
+      "queueIndex": 250,
+      "sourcePath": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-4bit-progress-v45-20261111/s7-variants-K4FiuP/raw-0/incomplete/attempt-lB4vcQ/packet-0048.wav",
+      "classification": "invalid-capture-evidence"
+    },
+    {
+      "queueIndex": 251,
+      "sourcePath": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-4bit-progress-v45-20261111/s7-variants-K4FiuP/raw-0/incomplete/attempt-lB4vcQ/packet-0049.wav",
+      "classification": "invalid-capture-evidence"
+    },
+    {
+      "queueIndex": 252,
+      "sourcePath": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-4bit-progress-v45-20261111/s7-variants-K4FiuP/raw-0/incomplete/attempt-lB4vcQ/packet-0050.wav",
+      "classification": "invalid-capture-evidence"
+    },
+    {
+      "queueIndex": 253,
+      "sourcePath": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-4bit-progress-v45-20261111/s7-variants-K4FiuP/raw-0/incomplete/attempt-lB4vcQ/packet-0051.wav",
+      "classification": "invalid-capture-evidence"
+    },
+    {
+      "queueIndex": 254,
+      "sourcePath": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-4bit-progress-v45-20261111/s7-variants-K4FiuP/raw-0/incomplete/attempt-lB4vcQ/packet-0052.wav",
+      "classification": "invalid-capture-evidence"
+    },
+    {
+      "queueIndex": 255,
+      "sourcePath": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-4bit-progress-v45-20261111/s7-variants-K4FiuP/raw-0/incomplete/attempt-lB4vcQ/packet-0053.wav",
+      "classification": "invalid-capture-evidence"
+    },
+    {
+      "queueIndex": 256,
+      "sourcePath": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-4bit-progress-v45-20261111/s7-variants-K4FiuP/raw-0/incomplete/attempt-lB4vcQ/packet-0054.wav",
+      "classification": "invalid-capture-evidence"
+    },
+    {
+      "queueIndex": 257,
+      "sourcePath": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-4bit-progress-v45-20261111/s7-variants-K4FiuP/raw-0/incomplete/attempt-lB4vcQ/packet-0055.wav",
+      "classification": "invalid-capture-evidence"
+    },
+    {
+      "queueIndex": 258,
+      "sourcePath": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-4bit-progress-v45-20261111/s7-variants-K4FiuP/raw-0/incomplete/attempt-lB4vcQ/packet-0056.wav",
+      "classification": "invalid-capture-evidence"
+    },
+    {
+      "queueIndex": 259,
+      "sourcePath": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-4bit-progress-v45-20261111/s7-variants-K4FiuP/raw-0/incomplete/attempt-lB4vcQ/packet-0057.wav",
+      "classification": "invalid-capture-evidence"
+    },
+    {
+      "queueIndex": 260,
+      "sourcePath": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-4bit-progress-v45-20261111/s7-variants-K4FiuP/raw-0/incomplete/attempt-lB4vcQ/packet-0058.wav",
+      "classification": "invalid-capture-evidence"
+    },
+    {
+      "queueIndex": 261,
+      "sourcePath": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-4bit-progress-v45-20261111/s7-variants-K4FiuP/raw-0/incomplete/attempt-lB4vcQ/packet-0059.wav",
+      "classification": "invalid-capture-evidence"
+    },
+    {
+      "queueIndex": 262,
+      "sourcePath": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-4bit-progress-v45-20261111/s7-variants-K4FiuP/raw-0/incomplete/attempt-lB4vcQ/packet-0060.wav",
+      "classification": "invalid-capture-evidence"
+    },
+    {
+      "queueIndex": 263,
+      "sourcePath": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-4bit-progress-v45-20261111/s7-variants-K4FiuP/raw-0/incomplete/attempt-lB4vcQ/packet-0061.wav",
+      "classification": "invalid-capture-evidence"
+    },
+    {
+      "queueIndex": 264,
+      "sourcePath": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-4bit-progress-v45-20261111/s7-variants-K4FiuP/raw-0/incomplete/attempt-lB4vcQ/packet-0062.wav",
+      "classification": "invalid-capture-evidence"
+    },
+    {
+      "queueIndex": 265,
+      "sourcePath": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-4bit-progress-v45-20261111/s7-variants-K4FiuP/raw-0/incomplete/attempt-lB4vcQ/packet-0063.wav",
+      "classification": "invalid-capture-evidence"
+    }
+  ],
+  "policy": {
+    "fullActiveCorrelationMinimum": 0.98,
+    "phaseMultiplier": 4,
+    "maximumAbsoluteExternalJoinMs": 10.0
+  },
+  "limits": "Diagnostic only, never product acceptance. Callback receipt origins are upper bounds, not synchronized presentation clocks or physical speaker onset. Shared coverage uses each actual first packet plus saved frame duration, without padding. Matches prove saved PCM identity only; two missing captures cannot identify app versus common capture/output loss. Source silence, unobserved boundaries and queued unplayed tail receive no waveform credit. No listening, transcript, quality, startup, memory or M3 claim."
+}

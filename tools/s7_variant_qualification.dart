@@ -25,6 +25,7 @@ import 'package:read_aloud/src/services/work_character_repository.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'native_main_responsiveness_probe.dart';
+import 'native_queue_boundary_probe.dart';
 import 'native_playback_position_probe.dart';
 import 'radoc_first_load_smoke.dart' show copyQueuedAudioEvidence;
 
@@ -704,6 +705,11 @@ Future<void> main(List<String> args) async {
         )
         .toList();
     final errors = <String>[];
+    try {
+      receipt['nativeQueueBoundaryAudit'] = await readNativeQueueBoundaryAudit();
+    } catch (e) {
+      errors.add('Native boundary readout: $e');
+    }
     try {
       await c.pausePlayback().timeout(budget(5, cleanup: true));
     } catch (e) {

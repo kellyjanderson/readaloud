@@ -51,7 +51,7 @@ if replay_mode
   result[:expectedMlxChildren] = 0
   result[:errors] << 'Queue replay diagnosis only; model and product qualification not applicable'
 end
-pid = cap = log = capture_log = secondary_cap = secondary_log = nil
+pid = cap = log = capture_log = secondary_cap = secondary_log = awake_pid = nil
 status = nil
 owned = []
 last_children = nil
@@ -76,6 +76,22 @@ end
 if inference_policy
   result[:inferencePolicyDiagnostic] = inference_policy
   result[:errors] << 'QA-only child scheduling differential; production policy unchanged'
+end
+if ENV['READALOUD_QUEUE_BOUNDARY_AUDIT'] == '1'
+  result[:nativeQueueBoundaryDiagnostic] = true
+  result[:errors] << 'Native queue boundary diagnosis enabled; not product acceptance'
+end
+if ENV['READALOUD_QUEUE_SKIP_LOOP_OFF_REWIND'] == '1'
+  result[:skipLoopOffRewindDiagnostic] = true
+  result[:errors] << 'QA-only ended-item rewind comparison; production default unchanged'
+end
+if ENV['READALOUD_S7_KEEP_HISTORY_DIAGNOSTIC'] == '1'
+  result[:keepHistoryDiagnostic] = true
+  result[:errors] << 'QA-only bounded history-retention comparison; production default unchanged'
+end
+if ENV['READALOUD_QUEUE_PHYSICAL_HEAD_INDEX'] == '1'
+  result[:physicalHeadIndexDiagnostic] = true
+  result[:errors] << 'QA-only physical-head index comparison; production default unchanged'
 end
 # Read only bounded uncompressed PCM or float WAV. This checks app-emitted signal
 # separately from player intent, never labels energy as an exact speech match.
@@ -142,6 +158,10 @@ begin
          'READALOUD_S7_INSPECT' => nil}
   pid = Process.spawn(env, app, mode, receipt, out: log, err: log, pgroup: true)
   result[:pid] = pid
+  # Scope display-idle prevention to this exact owned app. This neither unlocks
+  # the Mac nor changes its lock/security settings, and is reaped in cleanup.
+  awake_pid = Process.spawn('/usr/bin/caffeinate', '-d', '-w', pid.to_s)
+  result[:awakeGuardPid] = awake_pid
   capture_log = File.open(File.join(output, 'capture.log'), 'w')
   cap = Process.spawn(capture, pid.to_s, File.join(output, 'capture.wav'), '300', stop,
                       out: capture_log, err: capture_log)
@@ -323,6 +343,30 @@ ensure
         File.join(output, 'capture.wav.timing.json'), native.fetch('segments'))
     rescue StandardError => e
       result[:errors] << "Emitted audio: #{e.message}"
+    end
+  end
+  if awake_pid
+    begin
+      awake_status = Timeout.timeout(2) { Process.wait2(awake_pid).last }
+      result[:awakeGuardExited] = true
+      result[:awakeGuardExitStatus] = awake_status.exitstatus
+      result[:errors] << 'Wake guard failed' unless awake_status.success?
+    rescue Timeout::Error
+      Process.kill('TERM', awake_pid) rescue Errno::ESRCH
+      begin
+        awake_status = Timeout.timeout(1) { Process.wait2(awake_pid).last }
+      rescue Timeout::Error
+        Process.kill('KILL', awake_pid) rescue Errno::ESRCH
+        begin
+          awake_status = Timeout.timeout(1) { Process.wait2(awake_pid).last }
+        rescue Timeout::Error
+          awake_status = nil
+        end
+      end
+      result[:awakeGuardExited] = !awake_status.nil?
+      result[:awakeGuardExitStatus] = awake_status&.exitstatus
+      result[:awakeGuardForcedStop] = true
+      result[:errors] << 'Wake guard did not exit with the owned app'
     end
   end
   result[:passed] = result[:nativePassed] && result[:normalQuit] && result[:appExitVerified] &&

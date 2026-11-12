@@ -1,0 +1,3 @@
+2026-11-11 17:39:48.503 queue_append_test[93761:64383535] PASS: 24 native queue scenarios (recording queue; no app/audio)
+2026-11-11 17:39:48.539 queue_append_test[93761:64383535] PASS: native audit disabled, identity/stale, first-eight/queue/ring caps, off-main and dispose scenarios (no app/audio)
+2026-11-11 17:39:48.539 queue_append_test[93761:64383535] PASS: default/QA completion rewind, head ownership, index/events and loop/explicit seek preservation (no app/audio)

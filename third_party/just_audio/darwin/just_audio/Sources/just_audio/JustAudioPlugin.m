@@ -26,7 +26,24 @@
 
 - (void)handleMethodCall:(FlutterMethodCall*)call result:(FlutterResult)result {
     //NSLog(@"plugin method: %@", call.method);
-    if ([@"init" isEqualToString:call.method]) {
+    if ([@"readAloudQueueBoundaryAudit" isEqualToString:call.method]) {
+        BOOL enabled = [AudioPlayer readAloudQueueBoundaryAuditEnabled];
+        if (![NSThread isMainThread]) {
+            result([FlutterError errorWithCode:@"audit_off_main" message:@"Audit readout requires the main thread" details:nil]);
+            return;
+        }
+        NSMutableArray *players = [NSMutableArray new];
+        // Disabled readout does not query players or AVFoundation.
+        if (enabled) {
+            for (NSString *playerId in _players) {
+                if (players.count == 8) break;
+                [players addObject:[_players[playerId] readAloudQueueBoundaryAudit]];
+            }
+        }
+        result(@{@"schema": @"readaloud-native-queue-boundary-audit-v1", @"enabled": @(enabled),
+                 @"players": players, @"playersTruncated": @(enabled && _players.count > 8),
+                 @"readBeforeDisposeRequired": @YES});
+    } else if ([@"init" isEqualToString:call.method]) {
         NSDictionary *request = (NSDictionary *)call.arguments;
         NSString *playerId = (NSString *)request[@"id"];
         NSDictionary *loadConfiguration = (NSDictionary *)request[@"audioLoadConfiguration"];

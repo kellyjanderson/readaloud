@@ -1,0 +1,70 @@
+In file included from /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/third_party/just_audio/darwin/just_audio/Sources/just_audio/AudioPlayer.m:1:
+/Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/third_party/just_audio/darwin/just_audio/Sources/just_audio/./include/just_audio/BetterEventChannel.h:3:9: fatal error: 'FlutterMacOS/FlutterMacOS.h' file not found
+    3 | #import <FlutterMacOS/FlutterMacOS.h>
+      |         ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/third_party/just_audio/darwin/just_audio/Sources/just_audio/./include/just_audio/BetterEventChannel.h:3:9: note: did not find header 'FlutterMacOS.h' in framework 'FlutterMacOS' (loaded from '/Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/tmp/ReadAloudS7Boundary.app/Contents/Frameworks')
+1 error generated.
+In file included from /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/third_party/just_audio/darwin/just_audio/Sources/just_audio/AudioSource.m:1:
+/Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/third_party/just_audio/darwin/just_audio/Sources/just_audio/./include/just_audio/AudioSource.h:3:9: fatal error: 'FlutterMacOS/FlutterMacOS.h' file not found
+    3 | #import <FlutterMacOS/FlutterMacOS.h>
+      |         ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/third_party/just_audio/darwin/just_audio/Sources/just_audio/./include/just_audio/AudioSource.h:3:9: note: did not find header 'FlutterMacOS.h' in framework 'FlutterMacOS' (loaded from '/Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/tmp/ReadAloudS7Boundary.app/Contents/Frameworks')
+1 error generated.
+In file included from /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/third_party/just_audio/darwin/just_audio/Sources/just_audio/BetterEventChannel.m:1:
+/Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/third_party/just_audio/darwin/just_audio/Sources/just_audio/./include/just_audio/BetterEventChannel.h:3:9: fatal error: 'FlutterMacOS/FlutterMacOS.h' file not found
+    3 | #import <FlutterMacOS/FlutterMacOS.h>
+      |         ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/third_party/just_audio/darwin/just_audio/Sources/just_audio/./include/just_audio/BetterEventChannel.h:3:9: note: did not find header 'FlutterMacOS.h' in framework 'FlutterMacOS' (loaded from '/Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/tmp/ReadAloudS7Boundary.app/Contents/Frameworks')
+1 error generated.
+In file included from /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/third_party/just_audio/darwin/just_audio/Sources/just_audio/ClippingAudioSource.m:1:
+/Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/third_party/just_audio/darwin/just_audio/Sources/just_audio/./include/just_audio/AudioSource.h:3:9: fatal error: 'FlutterMacOS/FlutterMacOS.h' file not found
+    3 | #import <FlutterMacOS/FlutterMacOS.h>
+      |         ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/third_party/just_audio/darwin/just_audio/Sources/just_audio/./include/just_audio/AudioSource.h:3:9: note: did not find header 'FlutterMacOS.h' in framework 'FlutterMacOS' (loaded from '/Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/tmp/ReadAloudS7Boundary.app/Contents/Frameworks')
+1 error generated.
+In file included from /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/third_party/just_audio/darwin/just_audio/Sources/just_audio/ConcatenatingAudioSource.m:1:
+/Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/third_party/just_audio/darwin/just_audio/Sources/just_audio/./include/just_audio/AudioSource.h:3:9: fatal error: 'FlutterMacOS/FlutterMacOS.h' file not found
+    3 | #import <FlutterMacOS/FlutterMacOS.h>
+      |         ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/third_party/just_audio/darwin/just_audio/Sources/just_audio/./include/just_audio/AudioSource.h:3:9: note: did not find header 'FlutterMacOS.h' in framework 'FlutterMacOS' (loaded from '/Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/tmp/ReadAloudS7Boundary.app/Contents/Frameworks')
+1 error generated.
+In file included from /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/third_party/just_audio/darwin/just_audio/Sources/just_audio/IndexedAudioSource.m:1:
+In file included from /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/third_party/just_audio/darwin/just_audio/Sources/just_audio/./include/just_audio/IndexedAudioSource.h:1:
+/Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/third_party/just_audio/darwin/just_audio/Sources/just_audio/./include/just_audio/AudioSource.h:3:9: fatal error: 'FlutterMacOS/FlutterMacOS.h' file not found
+    3 | #import <FlutterMacOS/FlutterMacOS.h>
+      |         ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/third_party/just_audio/darwin/just_audio/Sources/just_audio/./include/just_audio/AudioSource.h:3:9: note: did not find header 'FlutterMacOS.h' in framework 'FlutterMacOS' (loaded from '/Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/tmp/ReadAloudS7Boundary.app/Contents/Frameworks')
+1 error generated.
+In file included from /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/third_party/just_audio/darwin/just_audio/Sources/just_audio/IndexedPlayerItem.m:2:
+In file included from /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/third_party/just_audio/darwin/just_audio/Sources/just_audio/./include/just_audio/IndexedAudioSource.h:1:
+/Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/third_party/just_audio/darwin/just_audio/Sources/just_audio/./include/just_audio/AudioSource.h:3:9: fatal error: 'FlutterMacOS/FlutterMacOS.h' file not found
+    3 | #import <FlutterMacOS/FlutterMacOS.h>
+      |         ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/third_party/just_audio/darwin/just_audio/Sources/just_audio/./include/just_audio/AudioSource.h:3:9: note: did not find header 'FlutterMacOS.h' in framework 'FlutterMacOS' (loaded from '/Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/tmp/ReadAloudS7Boundary.app/Contents/Frameworks')
+1 error generated.
+In file included from /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/third_party/just_audio/darwin/just_audio/Sources/just_audio/JustAudioPlugin.m:1:
+/Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/third_party/just_audio/darwin/just_audio/Sources/just_audio/./include/just_audio/JustAudioPlugin.h:3:9: fatal error: 'FlutterMacOS/FlutterMacOS.h' file not found
+    3 | #import <FlutterMacOS/FlutterMacOS.h>
+      |         ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/third_party/just_audio/darwin/just_audio/Sources/just_audio/./include/just_audio/JustAudioPlugin.h:3:9: note: did not find header 'FlutterMacOS.h' in framework 'FlutterMacOS' (loaded from '/Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/tmp/ReadAloudS7Boundary.app/Contents/Frameworks')
+1 error generated.
+In file included from /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/third_party/just_audio/darwin/just_audio/Sources/just_audio/LoopingAudioSource.m:1:
+/Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/third_party/just_audio/darwin/just_audio/Sources/just_audio/./include/just_audio/AudioSource.h:3:9: fatal error: 'FlutterMacOS/FlutterMacOS.h' file not found
+    3 | #import <FlutterMacOS/FlutterMacOS.h>
+      |         ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/third_party/just_audio/darwin/just_audio/Sources/just_audio/./include/just_audio/AudioSource.h:3:9: note: did not find header 'FlutterMacOS.h' in framework 'FlutterMacOS' (loaded from '/Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/tmp/ReadAloudS7Boundary.app/Contents/Frameworks')
+1 error generated.
+In file included from /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/third_party/just_audio/darwin/just_audio/Sources/just_audio/UriAudioSource.m:1:
+In file included from /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/third_party/just_audio/darwin/just_audio/Sources/just_audio/./include/just_audio/UriAudioSource.h:1:
+In file included from /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/third_party/just_audio/darwin/just_audio/Sources/just_audio/./include/just_audio/IndexedAudioSource.h:1:
+/Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/third_party/just_audio/darwin/just_audio/Sources/just_audio/./include/just_audio/AudioSource.h:3:9: fatal error: 'FlutterMacOS/FlutterMacOS.h' file not found
+    3 | #import <FlutterMacOS/FlutterMacOS.h>
+      |         ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/third_party/just_audio/darwin/just_audio/Sources/just_audio/./include/just_audio/AudioSource.h:3:9: note: did not find header 'FlutterMacOS.h' in framework 'FlutterMacOS' (loaded from '/Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/tmp/ReadAloudS7Boundary.app/Contents/Frameworks')
+1 error generated.
+In file included from /Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/third_party/just_audio/test/local_native/queue_append_test.m:2:
+/Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/third_party/just_audio/test/local_native/../../darwin/just_audio/Sources/just_audio/include/just_audio/AudioPlayer.h:3:9: fatal error: 'FlutterMacOS/FlutterMacOS.h' file not found
+    3 | #import <FlutterMacOS/FlutterMacOS.h>
+      |         ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/third_party/just_audio/test/local_native/../../darwin/just_audio/Sources/just_audio/include/just_audio/AudioPlayer.h:3:9: note: did not find header 'FlutterMacOS.h' in framework 'FlutterMacOS' (loaded from '/Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/tmp/ReadAloudS7Boundary.app/Contents/Frameworks')
+1 error generated.

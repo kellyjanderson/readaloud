@@ -199,6 +199,7 @@ private final class ProcessTapCapture {
     let writerQueue = DispatchQueue(label: "readaloud.qa.process-capture.writer", qos: .userInitiated)
     let poolCount = 64
     var processObject = AudioObjectID(kAudioObjectUnknown)
+    var registrationBadObjectRetries = 0
     var tap = AudioObjectID(kAudioObjectUnknown)
     var aggregate = AudioObjectID(kAudioObjectUnknown)
     var ioProc: AudioDeviceIOProcID?
@@ -254,6 +255,14 @@ private final class ProcessTapCapture {
         let status = withUnsafePointer(to: &pid) { qualifier in
             AudioObjectGetPropertyData(AudioObjectID(kAudioObjectSystemObject), &property,
                                        UInt32(MemoryLayout<pid_t>.size), qualifier, &size, &object)
+        }
+        // A live app can exist before its audio process object. macOS may
+        // return !obj instead of noErr + kAudioObjectUnknown in that interval.
+        // Retry only this condition through the existing bounded, PID-specific
+        // registration loop; never widen capture or swallow permission errors.
+        if status == kAudioHardwareBadObjectError {
+            registrationBadObjectRetries += 1
+            return AudioObjectID(kAudioObjectUnknown)
         }
         try checked(status, "Translate requested PID to CoreAudio process")
         return object
@@ -596,6 +605,7 @@ private final class ProcessTapCapture {
         var timing: [String: Any] = [
             "schema": "readaloud-app-capture-timing-v1", "mechanism": "CoreAudioProcessTap",
             "sessionID": sessionID, "appPid": options.pid, "processAudioObjectID": processObject,
+            "registrationBadObjectRetries": registrationBadObjectRetries,
             "status": errors.isEmpty ? "complete" : "failed", "errors": errors, "stopReason": stopReason,
             "frames": writerState?.frames ?? 0, "sampleRate": format?.sampleRate ?? 0,
             "signalThreshold": 0.01, "buffersWritten": writerState?.buffers ?? 0,
