@@ -1,0 +1,3 @@
+Capturing exact app PID 12802 through CoreAudio process tap; session F48C7F73-4CFD-41A8-9613-47C6820CA838
+Capture ready: first real buffer written; /Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-8bit-eof-coreaudio-v47-20261111/capture.wav.ready.json
+Captured 3577344 frames at 48000.0 Hz into /Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-8bit-eof-coreaudio-v47-20261111/capture.wav
