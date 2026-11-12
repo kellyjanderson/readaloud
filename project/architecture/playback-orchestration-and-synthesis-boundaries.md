@@ -149,3 +149,17 @@ override. Earlier flagged acoustic passes do not qualify this production opt-in.
 emitted-audio, responsiveness and cancellation evidence; M3 and human listening
 remain separate gates. The dated natural-EOF and replay diagnostics preserve
 both passing component observations and capture failures.
+
+The subsequent production-policy v60/v64 book checks cover 197 words and all six
+complete saved scene waveforms, with maximum external joins of .01ms. First-load
+playback reached natural EOF, persisted the complete book and peaked at 10ms
+native response; its model-forbidden reopen, Save/reopen, cancellation and
+restart peaked at 51ms, with every native sample foreground in both runs. These
+bounded checks verify the opted-in production queue without its experimental
+override. First-load post-startup speech took 3052.390ms; reusable loading took
+253.807ms. Total launch took 13061.564ms and 614.132ms respectively: the first
+misses the 2s goal even though both load hard limits pass. See the
+[retained evidence](../test-artifacts/s7-final-native-20261111/README.md).
+The separate sustained 8bit run still fails native responsiveness at 274ms;
+neither book pass establishes a universal cure, arbitrary-document performance,
+physical output, human listening or M3 qualification.
