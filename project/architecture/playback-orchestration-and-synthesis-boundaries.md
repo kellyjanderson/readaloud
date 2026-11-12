@@ -121,3 +121,31 @@ These legacy contracts describe intended behavior and acceptance; `final` denote
 - [uninterrupted audio primary channel](../specifications/uninterrupted-audio-primary-channel.md)
 - [voice session realization envelope](../specifications/voice-session-realization-envelope.md)
 - [watched file session refresh](../specifications/watched-file-session-refresh.md)
+
+## Finite local speech queue ownership on macOS
+
+The internally owned `KokoroTtsEngine` player opts into the vendored player's
+immutable `readAloudFiniteLocalWavQueue` contract on macOS. Injected players keep
+their caller's choice; generic players and other platforms keep legacy behavior.
+The existing player-init request carries the choice before loading. Application
+artifact validation owns finite WAV provenance. Dart shape/URI preflight runs
+before logical playlist mutation; native admission independently checks plain
+local AVURLAsset identity and queue/source membership before changing its tree.
+Neither layer guesses media format from a suffix or reads contents on the UI
+thread. Unsupported sources are rejected; no new playback scheduler is added.
+
+For opted-in loop-off playback, the actual native current item owns the logical
+index. A future item's end notification cannot advance its predecessor. Final
+completion separately requires positive finite duration and exact numeric EOF;
+one weak final-item witness is rechecked by existing head/Pause callbacks. This
+also covers a notification just before the head's final sample. Seek, accepted
+load, loop-mode change and disposal clear the witness. Both loop modes retain
+upstream completion behavior. Full details, library rationale and native fixture
+limits are in the [local adaptation](../../third_party/just_audio/README.local.md).
+
+The environment-driven physical-head experiment remains a separate diagnostic
+override. Earlier flagged acoustic passes do not qualify this production opt-in.
+[S7](https://github.com/kellyjanderson/readaloud/issues/112) owns final-source
+emitted-audio, responsiveness and cancellation evidence; M3 and human listening
+remain separate gates. The dated natural-EOF and replay diagnostics preserve
+both passing component observations and capture failures.

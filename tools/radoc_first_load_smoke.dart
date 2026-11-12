@@ -94,7 +94,10 @@ Future<void> main(
   final output = File(args[2]).absolute;
   await output.parent.create(recursive: true);
   final root = await output.parent.createTemp('s6-first-load-');
-  final player = AudioPlayer(useLazyPreparation: false);
+  final player = AudioPlayer(
+    useLazyPreparation: false,
+    readAloudFiniteLocalWavQueue: Platform.isMacOS,
+  );
   var synthesisCalls = 0;
   final engine = KokoroTtsEngine(
     player: player,
@@ -119,6 +122,7 @@ Future<void> main(
         ? 'readaloud-native-packet-cancellation-v1'
         : 'readaloud-native-first-load-v1',
     'passed': false,
+    'finiteLocalWavPlayerOptIn': player.readAloudFiniteLocalWavQueue,
     'engine': args[0],
     'input': args[1],
     'runRoot': root.path,
