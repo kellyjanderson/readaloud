@@ -284,6 +284,7 @@ class MlxSpeechWorkerChunkProcessor
   String? _helperPath;
   String? _resolvedPythonPath;
   String? _resolvedPythonHome;
+  String? _resolvedRuntimeDigest;
   PackagedRuntimeLease? _runtimeLease;
   String? _modelIdentity;
   bool supportsNativeScenes = false;
@@ -477,6 +478,10 @@ class MlxSpeechWorkerChunkProcessor
       runtimeMemorySampler: runtimeMemorySampler,
       pythonPath: _resolvedPythonPath!,
       pythonHome: _resolvedPythonHome,
+      managedRuntimeIdentity: _resolvedPythonHome == null
+          ? null
+          : mlxTtsModelVersion,
+      managedRuntimeDigest: _resolvedRuntimeDigest,
       helperPath: _helperPath!,
       privateCacheDirectory: Directory(
         '${mlxRoot.path}${Platform.pathSeparator}runtime-cache',
@@ -591,6 +596,7 @@ class MlxSpeechWorkerChunkProcessor
       final runtime = await lease.runtime;
       if (_closed) throw StateError('MLX inference owner is closed.');
       _resolvedPythonHome = runtime.pythonHome;
+      _resolvedRuntimeDigest = runtime.signedTreeDigest;
       return runtime.executable;
     } finally {
       await lease.cancelAndDrain();
@@ -808,6 +814,10 @@ class MlxSpeechWorkerChunkProcessor
         runtimeMemorySampler: runtimeMemorySampler,
         pythonPath: _resolvedPythonPath ?? pythonPath,
         pythonHome: _resolvedPythonHome,
+        managedRuntimeIdentity: _resolvedPythonHome == null
+            ? null
+            : mlxTtsModelVersion,
+        managedRuntimeDigest: _resolvedRuntimeDigest,
         helperPath: _helperPath ?? '',
         privateCacheDirectory: Directory(
           '${_modelRoot ?? ''}${Platform.pathSeparator}runtime-cache',
@@ -974,6 +984,9 @@ class MlxTtsPythonProcess {
     required this.helperPath,
     required this.privateCacheDirectory,
     this.pythonHome,
+    this.managedRuntimeIdentity,
+    this.managedRuntimeDigest,
+    this.processStarter,
     this.memorySampler,
     this.runtimeMemorySampler,
     this.deviceIdentitySampler,
@@ -981,6 +994,20 @@ class MlxTtsPythonProcess {
   });
   final String pythonPath;
   final String? pythonHome;
+
+  /// Set only after acquiring the verified packaged runtime. Developer Python
+  /// overrides have no managed identity and retain their inherited policy.
+  final String? managedRuntimeIdentity;
+  final String? managedRuntimeDigest;
+
+  /// Launch-contract seam; production always uses [Process.start] directly.
+  final Future<Process> Function(
+    String executable,
+    List<String> arguments,
+    String workingDirectory,
+    Map<String, String> environment,
+  )?
+  processStarter;
   final String helperPath;
   final Directory privateCacheDirectory;
   final Future<int> Function(int childPid)? memorySampler;
@@ -1012,6 +1039,7 @@ class MlxTtsPythonProcess {
   Timer? _memoryTimer;
   bool _samplingMemory = false;
   Object? _memoryToken;
+  String? _childSchedulingPolicy;
   int peakRuntimeBytes = 0;
 
   Future<Map<String, Object?>> loadModel({
@@ -1125,7 +1153,9 @@ class MlxTtsPythonProcess {
       if (_disposed || epoch != _cancelEpoch) {
         throw const MlxTtsRequestCancelled();
       }
-      await (_starting ??= _start().whenComplete(() => _starting = null));
+      await (_starting ??= _start(
+        load ?? _loadSpec,
+      ).whenComplete(() => _starting = null));
       if (_disposed || epoch != _cancelEpoch) {
         throw const MlxTtsRequestCancelled();
       }
@@ -1224,41 +1254,94 @@ class MlxTtsPythonProcess {
     }
   }
 
-  Future<void> _start() async {
-    if (_child != null) return;
+  String? _schedulingPolicy(Map<String, Object?>? load) {
+    if (!Platform.isMacOS) return null;
+    // Keep both QA overrides explicitly diagnostic, including for otherwise
+    // unqualified identities. They are not production qualification evidence.
+    final diagnostic = Platform.environment['READALOUD_S7_INFERENCE_POLICY'];
+    if (diagnostic == 'background-utility' || diagnostic == 'utility') {
+      return diagnostic;
+    }
+    // Experimental candidate for #144, pending native/audio acceptance. Utility
+    // QA trials still include failures; this is not a demonstrated remedy.
+    // A refreshed catalog/new runtime must not
+    // silently inherit this policy. The existing verified-load handshake still
+    // rejects mismatched assets before synthesis; admission/reload stay owned
+    // by this supervisor. This is a CPU QoS clamp, not a GPU priority promise.
+    if (pythonHome == null ||
+        managedRuntimeIdentity != 'mlx-audio-0.6.3-mlx-0.32.4-complete-v3' ||
+        managedRuntimeDigest !=
+            '1aa333dd9c99219e488d160e46efc42ee7fa20c74983c0982bed2e79f1abf7c3' ||
+        load?['requireVerifiedModelAssets'] != true) {
+      return null;
+    }
+    return switch ((
+      load?['modelId'],
+      load?['quantizationBits'],
+      load?['expectedVerifiedModelIdentity'],
+    )) {
+      (
+        'fish_drama3_8bit',
+        8,
+        'mlx-community/fish-audio-drama-3-8bit@fedc7cc92bab5a180709cbaae6208d10b390bb97',
+      ) ||
+      (
+        'fish_drama3_4bit',
+        4,
+        'mlx-community/fish-audio-drama-3-4bit@2b0c8028998533972e77359cce56b8bf1c5d6d4a',
+      ) => 'utility',
+      _ => null,
+    };
+  }
+
+  Future<void> _start(Map<String, Object?>? load) async {
+    final policy = _schedulingPolicy(load);
+    if (_child != null) {
+      if (_childSchedulingPolicy == policy) return;
+      // The clamp belongs to the launched identity. Never reuse a clamped
+      // child for a later load that requires inherited/default scheduling.
+      await _retire();
+    }
     if (_disposed) throw const MlxTtsRequestCancelled();
     await privateCacheDirectory.create(recursive: true);
-    // QA-only scheduling differential. taskpolicy execs the same owned child;
-    // default inference policy is unchanged until native/audio qualification.
-    final diagnosticPolicy =
-        Platform.environment['READALOUD_S7_INFERENCE_POLICY'];
-    final diagnosticUtility =
-        Platform.isMacOS &&
-        (diagnosticPolicy == 'background-utility' ||
-            diagnosticPolicy == 'utility');
-    final child = await Process.start(
-      diagnosticUtility ? '/usr/sbin/taskpolicy' : pythonPath,
-      [
-        if (diagnosticUtility) ...[
-          if (diagnosticPolicy == 'background-utility') '-b',
-          '-c',
-          'utility',
-          pythonPath,
-        ],
-        '-u',
-        '-B',
-        helperPath,
+    // Apple's taskpolicy uses POSIX_SPAWN_SETEXEC: the PID, pipes and retirement
+    // owner remain the Python child's. Policy/exec failure follows the existing
+    // failed-child path; do not silently retry at a different scheduling class.
+    // https://github.com/apple-oss-distributions/system_cmds/blob/main/taskpolicy/taskpolicy.c
+    final executable = policy == null ? pythonPath : '/usr/sbin/taskpolicy';
+    final arguments = <String>[
+      if (policy != null) ...[
+        if (policy == 'background-utility') '-b',
+        '-c',
+        'utility',
+        pythonPath,
       ],
-      workingDirectory: privateCacheDirectory.path,
-      environment: {
-        ...Platform.environment,
-        'PYTHONHOME': ?pythonHome,
-        'PYTHONUNBUFFERED': '1',
-        'PYTHONDONTWRITEBYTECODE': '1',
-        'HF_HUB_CACHE': '${privateCacheDirectory.path}/hub',
-      },
-    );
+      '-u',
+      '-B',
+      helperPath,
+    ];
+    final environment = <String, String>{
+      ...Platform.environment,
+      'PYTHONHOME': ?pythonHome,
+      'PYTHONUNBUFFERED': '1',
+      'PYTHONDONTWRITEBYTECODE': '1',
+      'HF_HUB_CACHE': '${privateCacheDirectory.path}/hub',
+    };
+    final child = await (processStarter == null
+        ? Process.start(
+            executable,
+            arguments,
+            workingDirectory: privateCacheDirectory.path,
+            environment: environment,
+          )
+        : processStarter!(
+            executable,
+            arguments,
+            privateCacheDirectory.path,
+            environment,
+          ));
     _child = child;
+    _childSchedulingPolicy = policy;
     final memoryToken = _memoryToken = RuntimeMemoryRegistry.shared.register(
       child.pid,
     );
@@ -1536,6 +1619,7 @@ class MlxTtsPythonProcess {
       if (token != null) RuntimeMemoryRegistry.shared.remove(child.pid, token);
       _memoryToken = null;
       _child = null;
+      _childSchedulingPolicy = null;
     }
   }
 

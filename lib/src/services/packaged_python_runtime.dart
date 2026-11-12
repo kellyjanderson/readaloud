@@ -17,9 +17,14 @@ class VerifiedPythonRuntime {
   const VerifiedPythonRuntime({
     required this.executable,
     required this.pythonHome,
+    required this.signedTreeDigest,
   });
   final String executable;
   final String pythonHome;
+
+  /// Digest already verified against the immutable manifest and complete tree.
+  /// Consumers may scope a reviewed policy to these exact packaged bytes.
+  final String signedTreeDigest;
 }
 
 class PackagedRuntimeCancelled implements Exception {
@@ -176,6 +181,7 @@ class PackagedPythonRuntimeOwner {
                 VerifiedPythonRuntime(
                   executable: value['executable'] as String,
                   pythonHome: value['pythonHome'] as String,
+                  signedTreeDigest: value['signedTreeDigest'] as String,
                 ),
               );
             }
@@ -972,6 +978,7 @@ Future<void> _installRuntime(Map<String, Object> args) async {
     result = {
       'executable': nativeTargets[executable]!,
       'pythonHome': published.path,
+      'signedTreeDigest': digest,
     };
   } catch (error) {
     failure = '$error';

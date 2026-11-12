@@ -128,6 +128,7 @@ void main() {
       final lease = acquire(onProgress: progress.add);
       final runtime = await lease.runtime;
       final executable = runtime.executable;
+      expect(runtime.signedTreeDigest, manifest()['signedTreeDigest']);
       expect(
         (await Process.run(executable, ['--version'])).stdout,
         'Python fixture\n',
@@ -141,6 +142,7 @@ void main() {
       final modified = (await File(executable).stat()).modified;
       final reused = acquire();
       expect(await reused.executable, executable);
+      expect((await reused.runtime).signedTreeDigest, runtime.signedTreeDigest);
       expect((await File(executable).stat()).modified, modified);
       await reused.cancelAndDrain();
       expect(
@@ -359,6 +361,7 @@ void main() {
     resources = moved;
     final second = acquire();
     final current = await second.runtime;
+    expect(current.signedTreeDigest, old.signedTreeDigest);
     expect(current.pythonHome, isNot(old.pythonHome));
     expect(current.executable, startsWith(await moved.resolveSymbolicLinks()));
     expect(
@@ -392,7 +395,9 @@ void main() {
     ]);
     await package();
     final second = acquire();
-    expect((await second.runtime).pythonHome, isNot(old.pythonHome));
+    final changed = await second.runtime;
+    expect(changed.pythonHome, isNot(old.pythonHome));
+    expect(changed.signedTreeDigest, isNot(old.signedTreeDigest));
     await second.cancelAndDrain();
   });
   for (final corruption in [

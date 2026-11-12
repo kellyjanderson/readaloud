@@ -59,7 +59,7 @@ STDIN.each_line do |line|
     response={id:r['id'],ok:true,modelIdentity:'pinned-model'}
     if r['requireVerifiedModelAssets'] && r['modelPath']!='missing-verification'
       response[:modelAssetsVerified]=true
-      response[:verifiedModelIdentity]='owner/checkpoint@'+'a'*40
+      response[:verifiedModelIdentity]=r['expectedVerifiedModelIdentity']
       if r['modelPath']=='wrong-verification' || File.exist?('reject-reload')
         response[:verifiedModelIdentity]='owner/other@'+'b'*40
       end
@@ -159,6 +159,282 @@ end
     expect(status.exitCode, isNot(0), reason: 'Rejected child must be reaped');
   }
 
+  Future<Map<String, Object?>> synth(String text) => worker.synthesize(
+    requestId: text,
+    modelId: 'fish_drama3',
+    sessionId: 's',
+    generationId: 'g',
+    chunkId: text,
+    bindingFingerprint: 'b',
+    bindingRevision: 1,
+    text: text,
+    voice: 'library_ava',
+    language: 'English',
+    outputPath: '${root.path}/$text',
+  );
+
+  group(
+    'quantized process scheduling candidate',
+    () {
+      const runtime = 'mlx-audio-0.6.3-mlx-0.32.4-complete-v3';
+      const runtimeDigest =
+          '1aa333dd9c99219e488d160e46efc42ee7fa20c74983c0982bed2e79f1abf7c3';
+      const pin8 =
+          'mlx-community/fish-audio-drama-3-8bit@fedc7cc92bab5a180709cbaae6208d10b390bb97';
+      const pin4 =
+          'mlx-community/fish-audio-drama-3-4bit@2b0c8028998533972e77359cce56b8bf1c5d6d4a';
+      final launches = <(String, List<String>)>[];
+      final childPids = <int>[];
+      var rejectPolicyLaunch = false;
+
+      Future<void> useRuntime({
+        String? identity = runtime,
+        String? digest = runtimeDigest,
+        String? home = 'managed-home',
+        bool missingExecutable = false,
+      }) async {
+        await worker.shutdown();
+        launches.clear();
+        childPids.clear();
+        rejectPolicyLaunch = false;
+        worker = MlxTtsPythonProcess(
+          memorySampler: (_) async => sampledBytes,
+          pythonPath:
+              '${root.path}/${missingExecutable ? 'missing-python' : 'python'}',
+          pythonHome: home,
+          managedRuntimeIdentity: identity,
+          managedRuntimeDigest: digest,
+          helperPath: '${root.path}/worker.rb',
+          privateCacheDirectory: Directory('${root.path}/cache'),
+          processStarter:
+              (executable, arguments, directory, environment) async {
+                launches.add((executable, List.of(arguments)));
+                if (rejectPolicyLaunch &&
+                    executable == '/usr/sbin/taskpolicy') {
+                  throw ProcessException(
+                    executable,
+                    arguments,
+                    'policy unavailable',
+                  );
+                }
+                final child = await Process.start(
+                  executable,
+                  arguments,
+                  workingDirectory: directory,
+                  environment: environment,
+                );
+                childPids.add(child.pid);
+                return child;
+              },
+        );
+      }
+
+      Future<Map<String, Object?>> loadVariant({
+        String id = 'fish_drama3_8bit',
+        int bits = 8,
+        String pin = pin8,
+        bool verified = true,
+      }) => worker.loadModel(
+        modelId: id,
+        modelPath: '',
+        quantizationBits: bits,
+        privateCachePath: root.path,
+        onProgress: (_) {},
+        requireVerifiedModelAssets: verified,
+        expectedVerifiedModelIdentity: pin,
+      );
+
+      void expectLaunch(bool utility) {
+        expect(
+          launches.last.$1,
+          utility ? '/usr/sbin/taskpolicy' : '${root.path}/python',
+        );
+        expect(launches.last.$2, <String>[
+          if (utility) ...['-c', 'utility', '${root.path}/python'],
+          '-u',
+          '-B',
+          '${root.path}/worker.rb',
+        ]);
+      }
+
+      for (final variant in [
+        ('fish_drama3_8bit', 8, pin8),
+        ('fish_drama3_4bit', 4, pin4),
+      ]) {
+        test(
+          'exact ${variant.$1} launches utility and keeps the owned PID',
+          () async {
+            await useRuntime();
+            await loadVariant(
+              id: variant.$1,
+              bits: variant.$2,
+              pin: variant.$3,
+            );
+            expectLaunch(true);
+            expect(
+              int.parse(
+                await File('${root.path}/cache/load.pid').readAsString(),
+              ),
+              childPids.single,
+              reason:
+                  'taskpolicy must exec the protocol child, not own a peer PID',
+            );
+            expect((await synth('scheduled'))['ok'], true);
+            expect(launches, hasLength(1));
+            await worker.shutdown();
+            await expectLoadedChildReaped();
+          },
+          skip: !Platform.isMacOS,
+        );
+      }
+
+      for (final variant in [
+        ('fish_drama3', 0, pin8, true),
+        ('kokoro', 8, pin8, true),
+        ('other_engine', 8, pin8, true),
+        ('fish_drama3_8bit', 4, pin8, true),
+        ('fish_drama3_4bit', 8, pin4, true),
+        ('fish_drama3_8bit', 8, '$pin8-changed', true),
+        ('fish_drama3_8bit', 8, pin4, true),
+        ('fish_drama3_8bit', 8, pin8, false),
+      ]) {
+        test('inherits policy for unqualified model tuple $variant', () async {
+          await useRuntime();
+          await loadVariant(
+            id: variant.$1,
+            bits: variant.$2,
+            pin: variant.$3,
+            verified: variant.$4,
+          );
+          expectLaunch(false);
+          expect((await synth('unqualified'))['ok'], true);
+        });
+      }
+
+      for (final runtimeIdentity in [
+        null,
+        'unknown-runtime',
+        '$runtime-changed',
+      ]) {
+        test('inherits policy for runtime $runtimeIdentity', () async {
+          await useRuntime(identity: runtimeIdentity);
+          await loadVariant();
+          expectLaunch(false);
+        });
+      }
+
+      for (final digest in [null, 'unreviewed-packaged-bytes']) {
+        test(
+          'inherits policy for an unreviewed runtime digest $digest',
+          () async {
+            await useRuntime(digest: digest);
+            await loadVariant();
+            expectLaunch(false);
+          },
+        );
+      }
+
+      test(
+        'explicit Python override has no managed scheduling policy',
+        () async {
+          await useRuntime(home: null);
+          await loadVariant();
+          expectLaunch(false);
+        },
+      );
+
+      test(
+        'cancel and reload preserve exact launch policy and reap both PIDs',
+        () async {
+          await useRuntime();
+          await loadVariant();
+          final active = synth('block');
+          final cancelled = expectLater(
+            active,
+            throwsA(isA<MlxTtsRequestCancelled>()),
+          );
+          while (!await File('${root.path}/block').exists()) {
+            await Future<void>.delayed(const Duration(milliseconds: 2));
+          }
+          worker.cancelActiveRequest();
+          await cancelled;
+          await expectLoadedChildReaped();
+          expect((await synth('reloaded'))['ok'], true);
+          expect(launches, hasLength(2));
+          expect(launches[0].$1, launches[1].$1);
+          expect(launches[0].$2, launches[1].$2);
+          expectLaunch(true);
+          expect(childPids.toSet(), hasLength(2));
+          await worker.shutdown();
+          await expectLoadedChildReaped();
+        },
+        skip: !Platform.isMacOS,
+      );
+
+      test(
+        'changed load policy retires child before unqualified reuse',
+        () async {
+          await useRuntime();
+          await loadVariant();
+          expectLaunch(true);
+          final oldPid = childPids.single;
+          await loadVariant(id: 'fish_drama3', bits: 0);
+          expectLaunch(false);
+          expect(launches, hasLength(2));
+          expect(
+            (await Process.run('/bin/kill', ['-0', '$oldPid'])).exitCode,
+            isNot(0),
+          );
+          expect((await synth('unclamped'))['ok'], true);
+        },
+        skip: !Platform.isMacOS,
+      );
+
+      test(
+        'policy launch failure surfaces without a default-policy retry',
+        () async {
+          await useRuntime();
+          rejectPolicyLaunch = true;
+          await expectLater(loadVariant(), throwsA(isA<ProcessException>()));
+          expect(launches, hasLength(1));
+          expectLaunch(true);
+          expect(childPids, isEmpty);
+          rejectPolicyLaunch = false;
+          await loadVariant();
+          expectLaunch(true);
+          expect((await synth('retried'))['ok'], true);
+        },
+        skip: !Platform.isMacOS,
+      );
+
+      test(
+        'taskpolicy exec failure retires its PID without fallback',
+        () async {
+          await useRuntime(missingExecutable: true);
+          await expectLater(loadVariant(), throwsA(isA<StateError>()));
+          expect(launches, hasLength(1));
+          expect(launches.single.$1, '/usr/sbin/taskpolicy');
+          expect(childPids, hasLength(1));
+          expect(
+            (await Process.run('/bin/kill', [
+              '-0',
+              '${childPids.single}',
+            ])).exitCode,
+            isNot(0),
+          );
+        },
+        skip: !Platform.isMacOS,
+      );
+    },
+    skip:
+        const [
+          'utility',
+          'background-utility',
+        ].contains(Platform.environment['READALOUD_S7_INFERENCE_POLICY'])
+        ? 'Production policy assertions require the diagnostic override unset.'
+        : false,
+  );
+
   test(
     'verified loading requires a pinned identity before starting a child',
     () async {
@@ -205,20 +481,6 @@ end
       expect((await loadVerified('verified'))['modelAssetsVerified'], isTrue);
     });
   }
-
-  Future<Map<String, Object?>> synth(String text) => worker.synthesize(
-    requestId: text,
-    modelId: 'fish_drama3',
-    sessionId: 's',
-    generationId: 'g',
-    chunkId: text,
-    bindingFingerprint: 'b',
-    bindingRevision: 1,
-    text: text,
-    voice: 'library_ava',
-    language: 'English',
-    outputPath: '${root.path}/$text',
-  );
 
   test(
     'worker diagnostics remain outside the actionable error message',
