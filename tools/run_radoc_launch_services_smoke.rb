@@ -50,7 +50,7 @@ stop_child = lambda do |p|
 end
 clock = -> { Process.clock_gettime(Process::CLOCK_MONOTONIC) }
 owned = []
-pid = opener = cap = nil
+pid = opener = cap = awake_pid = nil
 open_status = nil
 stop = File.join(output, 'capture.stop')
 deadline = clock.call + 120
@@ -79,6 +79,8 @@ begin
     sleep 0.01
   end
   result[:pid] = pid
+  awake_pid = Process.spawn('/usr/bin/caffeinate', '-d', '-w', pid.to_s)
+  result[:awakeGuardPid] = awake_pid
   cap_log = File.open(File.join(output, 'capture.log'), 'w')
   cap = Process.spawn(capture, pid.to_s, File.join(output, 'capture.wav'), '110', stop, out: cap_log, err: cap_log)
   result[:capturePid] = cap
@@ -151,6 +153,18 @@ ensure
       errors << 'LaunchServices waiter did not exit'
     end
   end
+if awake_pid
+  begin
+    _, awake_status = Timeout.timeout(3) { Process.wait2(awake_pid) }
+    result[:awakeGuardExitStatus] = awake_status.exitstatus
+    result[:awakeGuardExited] = true
+    errors << 'Display wake guard failed' unless awake_status.success?
+  rescue Timeout::Error
+    stop_child.call(awake_pid)
+    result[:awakeGuardExited] = !alive.call(awake_pid)
+    errors << 'Display wake guard required forced cleanup'
+  end
+end
   result[:launcherExitStatus] = open_status&.exitstatus
   result[:appExitStatus] = nil # LaunchServices owns/reaps the app, not this runner.
   errors << 'LaunchServices failed' unless open_status&.success?
