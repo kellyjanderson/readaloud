@@ -6,6 +6,7 @@ import 'dart:isolate';
 
 import 'package:archive/archive_io.dart';
 import 'package:crypto/crypto.dart';
+import 'package:flutter/foundation.dart' show visibleForTesting;
 import 'package:path/path.dart' as p;
 
 const _policy = 'bundled-native-data-view-v2';
@@ -245,16 +246,109 @@ class _Attempt {
   }
 }
 
+/// Attempt-local publication policy, exposed only for deterministic timing tests.
+///
+/// Dart's maintained Timer/Stopwatch provide scheduling and monotonic time. The
+/// application policy needs just one immutable latest value, not a stream
+/// scheduler or work queue. The installer isolate owns this publisher, closes it
+/// on cancellation and before terminal cleanup, and alone produces real counts.
+@visibleForTesting
+class RuntimeProgressPublisher {
+  RuntimeProgressPublisher({
+    required void Function(Map<String, dynamic>) publish,
+    Duration Function()? elapsed,
+  }) : _publish = publish,
+       _elapsed = elapsed;
+
+  static const _interval = Duration(milliseconds: 100);
+  final void Function(Map<String, dynamic>) _publish;
+  final Duration Function()? _elapsed;
+  final Stopwatch _clock = Stopwatch()..start();
+  Duration _lastPublished = Duration.zero;
+  String? _stage;
+  String? _unit;
+  int? _completed, _total;
+  Timer? _timer;
+  Map<String, dynamic>? _pending;
+  bool _closed = false;
+
+  Duration get _now => _elapsed?.call() ?? _clock.elapsed;
+
+  void add(Map<String, dynamic> progress) {
+    if (_closed) return;
+    final value = Map<String, dynamic>.unmodifiable(progress);
+    final completed = value['completed'] as int?;
+    final total = value['total'] as int?;
+    final boundary =
+        _stage != value['stage'] ||
+        _unit != value['unit'] ||
+        _total != total ||
+        (_completed == null) != (completed == null) ||
+        (completed != null && _completed != null && completed < _completed!);
+    _completed = completed;
+    _total = total;
+    _unit = value['unit'] as String?;
+    if (boundary ||
+        (completed != null &&
+            completed >= 0 &&
+            total != null &&
+            completed == total) ||
+        _now - _lastPublished >= _interval) {
+      _send(value);
+      return;
+    }
+    _pending = value;
+    // The deadline follows the last publication, not the latest producer event:
+    // a quiet producer's last actual count is delivered within 100 ms too.
+    _timer ??= Timer(_interval - (_now - _lastPublished), () {
+      _timer = null;
+      final latest = _pending;
+      if (!_closed && latest != null) _send(latest);
+    });
+  }
+
+  void _send(Map<String, dynamic> value) {
+    _timer?.cancel();
+    _timer = null;
+    _pending = null;
+    _stage = value['stage'] as String;
+    _lastPublished = _now;
+    _publish(value);
+  }
+
+  void close() {
+    _closed = true;
+    _timer?.cancel();
+    _timer = null;
+    _pending = null;
+    _clock.stop();
+  }
+}
+
 class _Installer {
-  _Installer(this.events, this.runtimeId);
+  _Installer(this.events, this.runtimeId) {
+    _progress = RuntimeProgressPublisher(
+      publish: (value) => events.send({'progress': value}),
+    );
+  }
   final String runtimeId;
   final String attemptId =
       '$pid/${DateTime.now().microsecondsSinceEpoch}/${Isolate.current.hashCode}';
   String? signedTreeDigest;
   final SendPort events;
+  late final RuntimeProgressPublisher _progress;
   bool cancelled = false;
   String cancelReason = 'Runtime installation cancelled.';
   Process? child;
+  void cancel(String reason) {
+    cancelled = true;
+    cancelReason = reason;
+    _progress.close();
+    child?.kill(ProcessSignal.sigkill);
+  }
+
+  void closeProgress() => _progress.close();
+
   void check() {
     if (cancelled) throw StateError(cancelReason);
   }
@@ -267,17 +361,15 @@ class _Installer {
     String unit = 'bytes',
   }) {
     check();
-    events.send({
-      'progress': {
-        'runtimeId': runtimeId,
-        'attemptId': attemptId,
-        'signedTreeDigest': signedTreeDigest,
-        'stage': stage,
-        'message': message,
-        'completed': completed,
-        'total': total,
-        'unit': unit,
-      },
+    _progress.add({
+      'runtimeId': runtimeId,
+      'attemptId': attemptId,
+      'signedTreeDigest': signedTreeDigest,
+      'stage': stage,
+      'message': message,
+      'completed': completed,
+      'total': total,
+      'unit': unit,
     });
   }
 
@@ -510,9 +602,7 @@ Future<void> _installRuntime(Map<String, Object> args) async {
   final control = ReceivePort();
   final installer = _Installer(events, args['runtimeId'] as String);
   final subscription = control.listen((message) {
-    installer.cancelled = true;
-    installer.cancelReason = '$message';
-    installer.child?.kill(ProcessSignal.sigkill);
+    installer.cancel('$message');
   });
   events.send(control.sendPort);
   Directory? staging;
@@ -976,6 +1066,8 @@ Future<void> _installRuntime(Map<String, Object> args) async {
   } catch (error) {
     failure = '$error';
   } finally {
+    // No delayed count may arrive during cleanup or after the result/error.
+    installer.closeProgress();
     installer.child?.kill(ProcessSignal.sigkill);
     try {
       if (staging != null && await staging.exists()) {
