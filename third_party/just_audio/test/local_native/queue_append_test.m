@@ -13,6 +13,8 @@
 - (void)onComplete:(NSNotification *)notification;
 - (void)load:(NSDictionary *)source initialPosition:(CMTime)initialPosition initialIndex:(NSNumber *)initialIndex result:(FlutterResult)result;
 - (void)seek:(CMTime)position index:(NSNumber *)index completionHandler:(void (^)(BOOL))completionHandler;
+- (void)play:(FlutterResult)result;
+- (void)pause;
 - (void)updateOrder;
 - (void)queueBoundaryAudit:(NSString *)boundary item:(id)item details:(NSDictionary *)details;
 - (NSString *)queueBoundaryAuditItem:(id)item selectSource:(BOOL)selectSource;
@@ -140,6 +142,159 @@
 - (void)sendErrorForItem:(id)item { _errors++; }
 - (NSMutableArray *)decodeAudioSources:(NSArray *)sources { return [_insertionSources mutableCopy]; }
 @end
+
+// Unlike TestPlayer/TestSource, these fixtures retain production updatePosition,
+// getCurrentPosition and UriAudioSource.position. Only the AVFoundation boundary
+// is substituted. A bounded lock surrogate represents startup owning the item
+// clock after rate activation; it does not reproduce AVFoundation's internals.
+@interface PlayPositionItem : TestItem
+@property CMTime clockPosition;
+@property NSUInteger clockReads;
+@property NSUInteger activeClockReads;
+@property BOOL active;
+@property BOOL lockOnActivation;
+@property BOOL startupOwnsClock;
+@property NSLock *clockLock;
+@property (copy) void (^pendingSeek)(BOOL);
+@property CMTime seekTarget;
+@end
+@implementation PlayPositionItem
+- (instancetype)init {
+    self = [super init];
+    if (self) { _clockLock = [NSLock new]; self.status = AVPlayerItemStatusReadyToPlay; }
+    return self;
+}
+- (NSArray *)seekableTimeRanges { return @[]; }
+- (CMTime)currentTime {
+    if (![_clockLock lockBeforeDate:[NSDate dateWithTimeIntervalSinceNow:0.025]]) {
+        [NSException raise:@"startup_position_lock" format:@"Play read AVPlayerItem.currentTime while rate activation owns the startup clock lock"];
+    }
+    _clockReads++;
+    if (_active) _activeClockReads++;
+    CMTime position = _clockPosition;
+    [_clockLock unlock];
+    return position;
+}
+- (void)seekToTime:(CMTime)position toleranceBefore:(CMTime)before toleranceAfter:(CMTime)after completionHandler:(void (^)(BOOL))completion {
+    _seekTarget = position;
+    if (completion) _pendingSeek = completion;
+    else _clockPosition = position;
+}
+@end
+
+@interface PlayPositionQueue : TestQueue
+@end
+@implementation PlayPositionQueue
+- (void)setRate:(float)rate {
+    PlayPositionItem *item = self.storage.firstObject;
+    if (item.startupOwnsClock) { [item.clockLock unlock]; item.startupOwnsClock = NO; }
+    [super setRate:rate];
+    item.active = rate != 0;
+    if (item.active && item.lockOnActivation) {
+        [item.clockLock lock];
+        item.startupOwnsClock = YES;
+    }
+}
+- (void)pause { self.rate = 0; }
+@end
+
+@interface PlayPositionPlayer : AudioPlayer
+@property NSMutableArray<NSNumber *> *positions;
+@end
+@implementation PlayPositionPlayer
+- (void)enterBuffering:(NSString *)reason {}
+- (void)leaveBuffering:(NSString *)reason {}
+- (void)broadcastPlaybackEvent {
+    if (!_positions) _positions = [NSMutableArray new];
+    [_positions addObject:[self valueForKey:@"_updatePosition"]];
+}
+@end
+
+static PlayPositionPlayer *playPositionPlayer(BOOL optedIn, int loopMode) {
+    UriAudioSource *source = [[UriAudioSource alloc] initWithId:@"real-position-reader"];
+    PlayPositionItem *item = [PlayPositionItem new];
+    [source setValue:item forKey:@"_playerItem"];
+    item.audioSource = source;
+    item.clockPosition = CMTimeMake(7250, 1000);
+    PlayPositionQueue *queue = [PlayPositionQueue new];
+    queue.storage = [@[item] mutableCopy];
+    PlayPositionPlayer *p = [PlayPositionPlayer new];
+    [p setValue:queue forKey:@"_player"];
+    [p setValue:@[source] forKey:@"_indexedAudioSources"];
+    [p setValue:@(psReady) forKey:@"_processingState"];
+    [p setValue:@(loopMode) forKey:@"_loopMode"];
+    [p setValue:@(optedIn) forKey:@"_readAloudFiniteLocalWavQueue"];
+    [p setValue:[NSValue valueWithCMTime:kCMTimeInvalid] forKey:@"_seekPos"];
+    [p setValue:@1.25 forKey:@"_speed"];
+    return p;
+}
+
+static void playPositionScenarios(BOOL startupOnly) {
+    PlayPositionPlayer *p = playPositionPlayer(YES, lmLoopOff);
+    PlayPositionQueue *queue = (id)p.player;
+    PlayPositionItem *item = queue.storage.firstObject;
+    item.lockOnActivation = YES;
+    __block NSUInteger primaryResults = 0, duplicateResults = 0, resumeResults = 0;
+    [p play:^(id result) { NSCAssert([result isEqual:@{}], @"wrong primary Play result"); primaryResults++; }];
+    NSCAssert(item.clockReads == 1 && [[p valueForKey:@"_updatePosition"] intValue] == 7250,
+        @"Play lost actual nonzero item clock snapshot");
+    NSCAssert([[p valueForKey:@"_updateTime"] longLongValue] > 0 && queue.rate == 1.25f,
+        @"Play lost snapshot time or requested rate");
+    NSCAssert(primaryResults == 0, @"Play result resolved before pause/completion");
+    [p play:^(id result) { NSCAssert([result isEqual:@{}], @"wrong duplicate Play result"); duplicateResults++; }];
+    NSCAssert(duplicateResults == 1 && primaryResults == 0 && item.clockReads == 1 && queue.rateChanges == 1,
+        @"duplicate Play read position, reactivated rate or replaced pending result");
+    // Pause releases the surrogate startup lock before the real pause snapshot.
+    item.clockPosition = CMTimeMake(9375, 1000);
+    [p pause];
+    NSCAssert(primaryResults == 1 && p.positions.lastObject.intValue == 9375,
+        @"pause lost actual nonzero position or pending Play result");
+    [p play:^(id result) { resumeResults++; }];
+    NSCAssert([[p valueForKey:@"_updatePosition"] intValue] == 9375 && item.activeClockReads == 0,
+        @"resume lost paused position or read clock after activation");
+    [p pause]; [p pause];
+    NSCAssert(resumeResults == 1 && primaryResults == 1, @"pause resolved a Play result more than once");
+    NSLog(@"PASS: production Play position chain avoids bounded startup clock lock; nonzero pause/resume and duplicate/result semantics (no app/audio)");
+    if (startupOnly) return;
+
+    // Real attach/Uri seek writes a nonzero initial position; Play must retain it.
+    p = playPositionPlayer(YES, lmLoopOff); queue = (id)p.player; item = queue.storage.firstObject;
+    UriAudioSource *source = [[p valueForKey:@"_indexedAudioSources"] firstObject];
+    [source attach:p.player initialPos:CMTimeMake(4125, 1000)];
+    [p play:nil];
+    NSCAssert([[p valueForKey:@"_updatePosition"] intValue] == 4125, @"Play reset attached initial position");
+    [p pause];
+
+    // Keep a real same-item seek outstanding at the item boundary. The existing
+    // _seekPos policy must supply its target without reading the old item clock.
+    __block BOOL seekFinished = NO;
+    [p seek:CMTimeMake(11875, 1000) index:(id)[NSNull null] completionHandler:^(BOOL finished) { seekFinished = finished; }];
+    NSUInteger beforeSeekPlay = item.clockReads;
+    [p play:nil];
+    NSCAssert(!seekFinished && item.pendingSeek && item.clockReads == beforeSeekPlay &&
+        [[p valueForKey:@"_updatePosition"] intValue] == 11875, @"Play ignored pending seek target or read stale clock");
+    [p pause];
+    item.clockPosition = item.seekTarget;
+    void (^finishSeek)(BOOL) = item.pendingSeek; item.pendingSeek = nil; finishSeek(YES);
+    NSCAssert(seekFinished && !CMTIME_IS_VALID([[p valueForKey:@"_seekPos"] CMTimeValue]), @"seek ownership did not finish");
+    [p play:nil];
+    NSCAssert([[p valueForKey:@"_updatePosition"] intValue] == 11875, @"resume after seek lost target");
+    [p pause];
+    NSLog(@"PASS: production Play preserves attached initial position and outstanding real seek target (no app/audio)");
+
+    for (NSNumber *optedIn in @[@NO, @YES]) {
+        for (NSNumber *loop in @[@(lmLoopOff), @(lmLoopOne), @(lmLoopAll)]) {
+            p = playPositionPlayer(optedIn.boolValue, loop.intValue);
+            queue = (id)p.player; item = queue.storage.firstObject;
+            [p play:nil];
+            BOOL snapshotsBeforeRate = optedIn.boolValue && loop.intValue == lmLoopOff;
+            NSCAssert(item.clockReads == 1 && item.activeClockReads == (snapshotsBeforeRate ? 0 : 1),
+                @"finite opt-in/loop isolation changed legacy Play position ordering");
+            [p pause];
+        }
+    }
+    NSLog(@"PASS: Play snapshot is finite opt-in/loop-off only; default and both loop modes retain legacy ordering (macOS source fixture; no app/audio)");
+}
 
 static NSArray<TestSource *> *sources(NSUInteger count, BOOL lazy) {
     NSMutableArray *result = [NSMutableArray new];
@@ -362,6 +517,9 @@ int main(void) {
         unsetenv("READALOUD_QUEUE_PHYSICAL_HEAD_INDEX");
         unsetenv("READALOUD_QUEUE_BOUNDARY_AUDIT");
         unsetenv("READALOUD_QUEUE_SKIP_LOOP_OFF_REWIND");
+        const char *playScenario = getenv("READALOUD_PLAY_POSITION_SCENARIO");
+        playPositionScenarios(playScenario != NULL);
+        if (playScenario) return 0;
         productionBoundaryScenarios();
         NSArray<TestSource *> *s = sources(4, NO);
         NSArray *allItems = @[s[0].item, s[1].item, s[2].item, s[3].item];

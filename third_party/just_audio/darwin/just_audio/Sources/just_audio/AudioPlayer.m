@@ -1529,8 +1529,16 @@ static NSString *readAloudAuditIdentity(id object) {
         _playResult = result;
     }
     _playing = YES;
+    BOOL snapshotBeforeRate = NO;
+#if TARGET_OS_OSX
+    snapshotBeforeRate = _readAloudFiniteLocalWavQueue && _loopMode == lmLoopOff;
+#endif
+    // Rate activation can contend with AVPlayerItem.currentTime during native
+    // startup. Capture the real paused/seek position first for this owned path;
+    // keep upstream ordering for generic players, other platforms and loops.
+    if (snapshotBeforeRate) [self updatePosition];
     _player.rate = _speed;
-    [self updatePosition];
+    if (!snapshotBeforeRate) [self updatePosition];
     if (@available(macOS 10.12, iOS 10.0, *)) {}
     else {
         if (_bufferUnconfirmed && !_player.currentItem.playbackBufferFull) {
