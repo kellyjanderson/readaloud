@@ -49,6 +49,8 @@ class DualCaptureDiagnosticTest(unittest.TestCase):
                        'firstPacketReceivedUnixMicros': self.origin,
                        'sampleRate': self.rate, 'frames': len(self.pcm), 'maxPacketGapSeconds': 0.}
         self.tap_timing = dict(self.timing, mechanism='CoreAudioProcessTap', status='complete', errors=[],
+                               processAudioObjectID=124, privateTap=True, privateAggregate=True,
+                               muteBehavior='unmuted',
                                sessionID='ca751a73-9705-475b-ac94-ac86ab7e6f8d',
                                droppedBuffers=0, poolOverflows=0, deviceOverloads=0,
                                timestampDiscontinuities=0, formatChanges=0, callbackStalls=0,

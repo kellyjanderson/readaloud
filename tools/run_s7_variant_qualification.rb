@@ -184,6 +184,10 @@ def process_tap_session(output, pid)
   raise 'Tap is not final/clean/exact-PID' unless timing['schema'] == 'readaloud-app-capture-timing-v1' &&
     timing['mechanism'] == 'CoreAudioProcessTap' && timing['status'] == 'complete' &&
     timing['errors'] == [] && timing['appPid'] == pid
+  object_id = timing['processAudioObjectID']
+  raise 'Missing/invalid tap process audio object' unless object_id.is_a?(Integer) && object_id > 0
+  raise 'Tap must be private and unmuted' unless timing['privateTap'] == true &&
+    timing['privateAggregate'] == true && timing['muteBehavior'] == 'unmuted'
   frames = timing['frames']
   raise 'Incomplete tap frames' unless frames.is_a?(Integer) && frames > 0 &&
     %w[framesReceived framesSubmitted].all? { |key| timing[key].is_a?(Integer) && timing[key] == frames }

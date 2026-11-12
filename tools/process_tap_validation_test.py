@@ -7,6 +7,8 @@ from process_tap_validation import LOSS_COUNTERS, validate_process_tap
 def clean_tap_timing(timing):
     """Complete deterministic helper receipt for analyzer fixtures."""
     return dict(timing, mechanism='CoreAudioProcessTap', status='complete', errors=[],
+                processAudioObjectID=124, privateTap=True, privateAggregate=True,
+                muteBehavior='unmuted',
                 sessionID='ca751a73-9705-475b-ac94-ac86ab7e6f8d',
                 **{key: 0 for key in LOSS_COUNTERS},
                 framesReceived=timing['frames'], framesSubmitted=timing['frames'],
@@ -32,6 +34,26 @@ class ProcessTapIntegrityTest(unittest.TestCase):
                 with self.assertRaises(ValueError):
                     self.validate()
                 self.timing[key] = value
+
+    def test_missing_or_malformed_capture_source_properties_refuse(self):
+        mutations = {
+            'processAudioObjectID': (None, 0, -1, True, '124', 124.),
+            'privateTap': (None, False, 1, 'true'),
+            'privateAggregate': (None, False, 1, 'true'),
+            'muteBehavior': (None, True, 'muted', 'Unmuted'),
+        }
+        for key, values in mutations.items():
+            original = self.timing[key]
+            for value in values:
+                with self.subTest(key=key, value=value):
+                    self.timing[key] = value
+                    with self.assertRaises(ValueError):
+                        self.validate()
+            self.timing.pop(key)
+            with self.subTest(key=key, value='missing'):
+                with self.assertRaises(ValueError):
+                    self.validate()
+            self.timing[key] = original
 
     def test_dirty_missing_mismatched_and_nonfinite_metadata_refuses(self):
         mutations = {'appPid': 124, 'sessionID': None, 'framesReceived': 999,
