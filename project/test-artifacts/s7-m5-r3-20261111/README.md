@@ -82,7 +82,8 @@ are not product passes.
 
 Native-main delays persist independently of Dart heartbeat: v13 observed715ms;
 v20's841ms request overlaps an Instruments840.620ms main Hang. The native
-handler itself returned in77 microseconds. CPU-only samples show CA/MediaToolbox
+entry-to-Dart-reply interval was77 microseconds; native handler execution was
+not separately timed. CPU-only samples show CA/MediaToolbox
 and AVPlayerItem notifications but do not identify the dominant wait. See the
 sanitized timed audit and [timing research](../../research/s7-native-response-timing.md).
 Late v17 samples cannot explain already-completed waits. Profiled cases remain
@@ -96,6 +97,50 @@ not qualification. The dual comparison matched508 full audible references in
 both paths, with54 source-silent and102 unobserved references; no audible
 reference was classified missing in this case. A diagnostic comparison's
 `passed=false` remains unchanged even when all observed references match.
+
+V28's timestamped waiting-thread trace retained Core Animation IPC/deferral
+mutex wait stacks inside the delayed-request windows. The sanitized audit
+distinguishes actual run-loop intervals from statistical sample attribution;
+the exported `Running` labels do not invalidate the wait stacks. V28 FAILED
+both responsiveness (363ms, UI3ms) and actual playback progression (34.744s
+observed during180s requested), plus the emitted-signal check. Its waveform
+diagnostic cannot meet the native-progress precondition;179 entries reported
+unobserved must not be represented as a successful content comparison. Most
+native samples observed an inactive app. Profilerexit0 and normal Quit/exit/
+no-orphan cleanup passed. Production remains unchanged while the next replay
+differential isolates per-item playback work from MLX.
+
+The first prerecorded replay control v29 did not reach Play: ScreenCaptureKit
+could not find the requested app/display and the capture-readiness gate timed
+out. Normal Quit/no-orphan cleanup passed. A subsequent read-only CoreGraphics
+query reported one online display, asleep, with the session screen locked.
+This is a native-test prerequisite blocker, not evidence of a new audio defect.
+The diagnostic harness was also corrected to initialize its native player
+before waiting for capture frames; Play still waits for actual capture readiness.
+That correction is source-analyzed/built, not a successful native rerun. Native
+checks wait for the user to unlock; independent source work can continue.
+
+After unlock, prerecorded packet v30 and joined v31 both completed at native
+232/235ms and UI2ms, with normal Quit/no-orphan cleanup. Joined waveform and
+runtime criteria met:168 full references/53.3659s, max join residual0.003968ms,
+1.212s quiet tail at peak0. Packet v30 matched168 full references but FAILED its
+final interrupted-source witness check; that control is not a paired pass.
+The harness now records the actual current source immediately before Pause,
+without weakening acoustic thresholds. This correction is not yet natively rerun.
+
+QA-only macOS child scheduling trials retain the existing process/protocol/
+memory owner and use the maintained taskpolicy facility. Background+utility v32
+completed at native179ms/UI6ms and matched172 full audible references/55.0782s
+in both captures. Utility-only v33 completed at native190ms/UI3ms and matched166
+audible references in both captures. Neither observed missing references. Both
+normally quit with one MLX child and no orphans. They remain diagnostic-only;
+one pass per policy does not establish a fix. Most v33 samples were inactive,
+whereas all751 v32 samples were active.
+
+Model-load stages took9.904s (background+utility) and6.515s (utility-only), with
+first-packet stages1.351/1.281s. These are source stages, not R25 launch/load
+clock measurements. Startup impact and repeated full-precision/quantized/switch
+checks are required before any adoption. Production policy stays unchanged.
 
 The QA-only lazy-preparation comparison v23 still failed at690ms native delay.
 It is not the production default or a completed fix. Both independent captures

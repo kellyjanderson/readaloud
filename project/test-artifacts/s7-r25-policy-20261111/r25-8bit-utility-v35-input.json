@@ -1,0 +1,54 @@
+{
+  "spokenChunks": [
+    {
+      "startWord": 0,
+      "endWord": 7,
+      "completed": true,
+      "castId": "native_scene",
+      "voiceId": "scene_cast"
+    },
+    {
+      "startWord": 7,
+      "endWord": 51,
+      "completed": true,
+      "castId": "native_scene",
+      "voiceId": "scene_cast"
+    },
+    {
+      "startWord": 51,
+      "endWord": 94,
+      "completed": true,
+      "castId": "native_scene",
+      "voiceId": "scene_cast"
+    },
+    {
+      "startWord": 94,
+      "endWord": 123,
+      "completed": true,
+      "castId": "native_scene",
+      "voiceId": "scene_cast"
+    },
+    {
+      "startWord": 123,
+      "endWord": 167,
+      "completed": true,
+      "castId": "native_scene",
+      "voiceId": "scene_cast"
+    },
+    {
+      "startWord": 167,
+      "endWord": 197,
+      "completed": true,
+      "castId": "native_scene",
+      "voiceId": "scene_cast"
+    }
+  ],
+  "audioPaths": [
+    "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-r25-8bit-utility-v35-20261111/s6-first-load-DJo4oI/complete-0d67dd0d48a2f74927c2016ccaf698efae07c26edd459d6d0aa42aad8e9f5520.wav",
+    "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-r25-8bit-utility-v35-20261111/s6-first-load-DJo4oI/complete-d51f19fcbd2f8c826b71d19d6f2f27da92061f5a4363ff2550372820f1b0d6a7.wav",
+    "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-r25-8bit-utility-v35-20261111/s6-first-load-DJo4oI/complete-2e6d681170e070ac564a691b6263a22f2161edcfbb5adba97cd7c879a66a7494.wav",
+    "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-r25-8bit-utility-v35-20261111/s6-first-load-DJo4oI/complete-b5a2972a45dd754d001eeb4c4a58f680b1c3eb1fe4d0968dde82414f32ccb11e.wav",
+    "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-r25-8bit-utility-v35-20261111/s6-first-load-DJo4oI/complete-3078ccdc3189a989bc4c4773f3f054fbece980d63e9a6c1b2b94871606eab72c.wav",
+    "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-r25-8bit-utility-v35-20261111/s6-first-load-DJo4oI/complete-75e5d99a3cb56ada32ffbccffbeb36a463a1ac9ae149fea90534700fb7dde589.wav"
+  ]
+}

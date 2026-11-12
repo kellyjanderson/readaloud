@@ -15,6 +15,14 @@ secondary_capture = ENV['READALOUD_S7_SECONDARY_CAPTURE']
 secondary_capture = File.expand_path(secondary_capture) if secondary_capture
 abort 'Missing secondary capture executable' if secondary_capture && !File.executable?(secondary_capture)
 abort 'Invalid mode' unless MODES.include?(mode)
+replay_mode = ENV['READALOUD_S7_REPLAY_MODE']
+inference_policy = ENV['READALOUD_S7_INFERENCE_POLICY']
+abort 'Invalid QA inference policy' unless inference_policy.nil? || %w[background-utility utility].include?(inference_policy)
+if replay_mode
+  abort 'Replay requires cached-8bit and packets|joined' unless mode == 'cached-8bit' && %w[packets joined].include?(replay_mode)
+  replay_input = ENV['READALOUD_S7_REPLAY_INPUT']
+  abort 'Replay requires an existing input receipt' unless replay_input && File.file?(replay_input)
+end
 if mode == 'online-cancel-retry' && ENV['READALOUD_S7_ALLOW_DOWNLOAD'] != '1'
   abort 'Online mode requires READALOUD_S7_ALLOW_DOWNLOAD=1 (may download managed model files)'
 end
@@ -37,6 +45,12 @@ result = {schema: 'readaloud-native-variant-runner-v1', mode: mode,
           limits: '100ms child/process observations and emitted signal per playback interval. ' \
                   'Exact waveform matching, glitch/voice quality, total memory envelope, ' \
                   'physical-speaker and M3 acceptance remain separate. Capture 300s; work deadline 270s.'}
+if replay_mode
+  result[:queueReplayDiagnostic] = true
+  result[:replayMode] = replay_mode
+  result[:expectedMlxChildren] = 0
+  result[:errors] << 'Queue replay diagnosis only; model and product qualification not applicable'
+end
 pid = cap = log = capture_log = secondary_cap = secondary_log = nil
 status = nil
 owned = []
@@ -58,6 +72,10 @@ end
 if ENV['READALOUD_S7_EXTENDED_NATIVE_DIAGNOSTIC'] == '1'
   result[:extendedNativeDiagnostic] = true
   result[:errors] << 'Extended native diagnosis; standard qualification remains separate'
+end
+if inference_policy
+  result[:inferencePolicyDiagnostic] = inference_policy
+  result[:errors] << 'QA-only child scheduling differential; production policy unchanged'
 end
 # Read only bounded uncompressed PCM or float WAV. This checks app-emitted signal
 # separately from player intent, never labels energy as an exact speech match.
@@ -201,13 +219,22 @@ begin
       last_children = models
     end
     raise 'Overlapping model children' if models.size > 1
+    raise 'Replay unexpectedly launched an MLX child' if replay_mode && !models.empty?
     sleep 0.1
   end
   native = JSON.parse(File.read(receipt))
   result[:nativePassed] = native['passed'] == true
   result[:applicationActivationRequested] = activated
-  raise "Native failure: #{native['error']}" unless result[:nativePassed]
-  raise 'No real model child observed' unless result[:observedMlxSamples] > 0
+  if replay_mode
+    raise 'Wrong replay diagnostic receipt' unless native['queueReplayDiagnostic'] == true &&
+      native['replayMode'] == replay_mode && native['passed'] == false
+    result[:replayCompleted] = native['replayCompleted'] == true
+    raise "Replay failure: #{native['error']}" unless result[:replayCompleted]
+    raise 'Replay model child observation' unless result[:observedMlxSamples] == 0 && result[:maxMlxChildren] == 0
+  else
+    raise "Native failure: #{native['error']}" unless result[:nativePassed]
+    raise 'No real model child observed' unless result[:observedMlxSamples] > 0
+  end
   raise 'No playback segments' if native.fetch('segments').empty?
 rescue StandardError => e
   result[:errors] << e.message
@@ -301,6 +328,7 @@ ensure
   result[:passed] = result[:nativePassed] && result[:normalQuit] && result[:appExitVerified] &&
     !result[:forcedCleanup] && result[:remainingOwnedPids].empty? &&
     result[:captureExitStatus] == 0 && result[:emittedSignal]&.any? && result[:errors].empty?
+  result[:passed] = false if replay_mode
   result[:strictAcousticAcceptance] = 'NOT_RUN: compare copied queued WAVs with capture; listening remains separate'
   pending = File.join(output, 'runner.json.pending')
   File.write(pending, JSON.pretty_generate(result) + "\n")

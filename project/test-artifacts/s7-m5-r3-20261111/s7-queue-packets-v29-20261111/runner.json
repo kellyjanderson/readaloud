@@ -1,0 +1,42 @@
+{
+  "schema": "readaloud-native-variant-runner-v1",
+  "mode": "cached-8bit",
+  "passed": false,
+  "nativePassed": false,
+  "normalQuit": true,
+  "appExitVerified": true,
+  "forcedCleanup": false,
+  "remainingOwnedPids": [],
+  "frameworkSha256": "c2835c71107261b4fed3574e1ef6b3dd5ed5da5639d17db086521125520fb8fa",
+  "executableSha256": "4f62ec3c47b945881aecd8831d0467a6f1a74e1c29210041bec96335fc8ce7bf",
+  "maxMlxChildren": 0,
+  "observedMlxSamples": 0,
+  "processEvents": [
+    {
+      "unixMicros": 1794436635661852,
+      "pids": []
+    }
+  ],
+  "errors": [
+    "Queue replay diagnosis only; model and product qualification not applicable",
+    "Replay failure: TimeoutException: Capture readiness"
+  ],
+  "limits": "100ms child/process observations and emitted signal per playback interval. Exact waveform matching, glitch/voice quality, total memory envelope, physical-speaker and M3 acceptance remain separate. Capture 300s; work deadline 270s.",
+  "queueReplayDiagnostic": true,
+  "replayMode": "packets",
+  "expectedMlxChildren": 0,
+  "pid": 53695,
+  "capturePid": 53696,
+  "secondaryCapture": {
+    "mechanism": "CoreAudio process tap",
+    "pid": 53697,
+    "executableSha256": "5c0d8167bc06529bac15e2df9d07abfb9f63d6e7e3296c90210dc5ac224ce909",
+    "scope": "Independent diagnostic recording; primary acceptance gates remain unchanged",
+    "exitStatus": 1
+  },
+  "applicationActivationRequested": true,
+  "replayCompleted": false,
+  "captureExitStatus": 1,
+  "appExitStatus": 0,
+  "strictAcousticAcceptance": "NOT_RUN: compare copied queued WAVs with capture; listening remains separate"
+}

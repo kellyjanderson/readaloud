@@ -1,0 +1,75 @@
+{
+  "schema": "readaloud-native-variant-runner-v1",
+  "mode": "cached-8bit",
+  "passed": false,
+  "nativePassed": false,
+  "normalQuit": true,
+  "appExitVerified": true,
+  "forcedCleanup": false,
+  "remainingOwnedPids": [],
+  "frameworkSha256": "78f5fed87fa928bb40bccd4af350f652129e2edb73ab74bf8f85350d6ec4a216",
+  "executableSha256": "da6fc05904e495f9dd4a09a0acb48f8048fbcdfd058fd7c87dfa5859497b810e",
+  "maxMlxChildren": 1,
+  "observedMlxSamples": 1426,
+  "processEvents": [
+    {
+      "unixMicros": 1794423277654960,
+      "pids": []
+    },
+    {
+      "unixMicros": 1794423279379674,
+      "pids": [
+        31432
+      ]
+    },
+    {
+      "unixMicros": 1794423464666939,
+      "pids": []
+    }
+  ],
+  "errors": [
+    "Diagnostic native sampling enabled; timing is instrumented",
+    "Extended native diagnosis; standard qualification remains separate",
+    "Native failure: Bad state: sustained-fish_drama3_8bit insufficient actual player progress or playback failure",
+    "Emitted audio: Insufficient app-emitted signal during playback"
+  ],
+  "limits": "100ms child/process observations and emitted signal per playback interval. Exact waveform matching, glitch/voice quality, total memory envelope, physical-speaker and M3 acceptance remain separate. Capture 300s; work deadline 270s.",
+  "diagnosticProfiling": true,
+  "extendedNativeDiagnostic": true,
+  "pid": 31414,
+  "capturePid": 31415,
+  "secondaryCapture": {
+    "mechanism": "CoreAudio process tap",
+    "pid": 31416,
+    "executableSha256": "5c0d8167bc06529bac15e2df9d07abfb9f63d6e7e3296c90210dc5ac224ce909",
+    "scope": "Independent diagnostic recording; primary acceptance gates remain unchanged",
+    "exitStatus": 0
+  },
+  "nativeSamplingStartedUnixMicros": 1794423277883237,
+  "nativeRecordingOptions": {
+    "Hangs": {
+      "detectPriorityInversions": false,
+      "hangsThreshold": 250
+    },
+    "Points of Interest": {
+      "excludeOSLogs": false
+    },
+    "Time Profiler": {
+      "contextSwitchSampling": false,
+      "highFrequencySampling": false,
+      "recordKernelStacks": false,
+      "recordWaitingThreads": true
+    }
+  },
+  "captureReadyObservedUnixMicros": 1794423279229733,
+  "applicationActivationRequested": true,
+  "nativeProfilerExitStatuses": [
+    0
+  ],
+  "nativeProfileRequests": [
+    {}
+  ],
+  "captureExitStatus": 0,
+  "appExitStatus": 0,
+  "strictAcousticAcceptance": "NOT_RUN: compare copied queued WAVs with capture; listening remains separate"
+}
