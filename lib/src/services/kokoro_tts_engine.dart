@@ -2467,6 +2467,13 @@ class KokoroTtsEngine
   }
 
   void _prunePlayedHistory() {
+    // Bounded QA differential: retain the live history without changing the
+    // synthesis/native-ahead window. At the ceiling, use ordinary pruning.
+    // The external runner always labels this experiment non-qualifying.
+    if (Platform.environment['READALOUD_S7_KEEP_HISTORY_DIAGNOSTIC'] == '1' &&
+        _activeChunks.length < 512) {
+      return;
+    }
     if (_pruneScheduled || _currentChunkIndex <= 1) return;
     _pruneScheduled = true;
     final token = _activePlaybackToken;
