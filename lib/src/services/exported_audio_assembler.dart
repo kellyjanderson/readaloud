@@ -5,6 +5,8 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
 
+import 'pcm_wav.dart';
+import 'pcm_wav_io.dart';
 import 'tts_engine.dart';
 
 class ExportedPronunciationArtifact {
@@ -355,7 +357,7 @@ Future<void> _assemblyWorker(_AssemblyInput input) async {
     final stagedAudio = File('${staging.path}/audio.wav');
     final stagedJson = File('${staging.path}/metadata.json');
     final writer = await stagedAudio.open(mode: FileMode.write);
-    final formats = <_WavInfo>[];
+    final formats = <PcmWavLayout>[];
     var totalBytes = 0;
     try {
       await writer.writeFrom(Uint8List(44));
@@ -363,19 +365,20 @@ Future<void> _assemblyWorker(_AssemblyInput input) async {
         checkCancelled();
         final reader = await File(chunk.audioPath).open();
         try {
-          final info = await _scanWav(reader);
-          if (formats.isNotEmpty && !info.sameFormat(formats.first)) {
+          final info = await scanPcmWavFile(reader, checkpoint: checkCancelled);
+          if (formats.isNotEmpty &&
+              !info.format.matches(formats.first.format)) {
             throw StateError(
               'Audio export requires matching chunk audio formats across the whole document.',
             );
           }
           formats.add(info);
-          totalBytes += info.length;
+          totalBytes += info.dataLength;
           if (totalBytes + 36 + totalBytes % 2 > 0xffffffff) {
             throw StateError('Audio export exceeds RIFF size limit.');
           }
-          await reader.setPosition(info.offset);
-          var remaining = info.length;
+          await reader.setPosition(info.dataOffset);
+          var remaining = info.dataLength;
           while (remaining > 0) {
             checkCancelled();
             final bytes = await reader.read(
@@ -393,13 +396,15 @@ Future<void> _assemblyWorker(_AssemblyInput input) async {
       }
       if (totalBytes.isOdd) await writer.writeByte(0);
       await writer.setPosition(0);
-      await writer.writeFrom(_wavHeader(formats.first, totalBytes));
+      await writer.writeFrom(
+        encodePcmWavHeader(formats.first.format, totalBytes),
+      );
       await writer.flush();
     } finally {
       await writer.close();
     }
     checkCancelled();
-    final format = formats.first;
+    final format = formats.first.format;
     final frames = totalBytes ~/ format.blockAlign;
     final duration = Duration(
       microseconds:
@@ -513,143 +518,42 @@ Future<void> _assemblyWorker(_AssemblyInput input) async {
   Isolate.exit();
 }
 
-class _WavInfo {
-  const _WavInfo(
-    this.sampleRate,
-    this.channels,
-    this.bits,
-    this.offset,
-    this.length,
-  );
-  final int sampleRate, channels, bits, offset, length;
-  int get blockAlign => channels * (bits ~/ 8);
-  int get frames => length ~/ blockAlign;
-  bool sameFormat(_WavInfo other) =>
-      sampleRate == other.sampleRate &&
-      channels == other.channels &&
-      bits == other.bits;
-}
-
-Future<_WavInfo> _scanWav(RandomAccessFile file) async {
-  Future<ByteData> read(int length) async {
-    final bytes = await file.read(length);
-    if (bytes.length != length) {
-      throw const FormatException('Truncated WAV header.');
-    }
-    return ByteData.sublistView(bytes);
-  }
-
-  final size = await file.length();
-  final header = await read(12);
-  String tag(ByteData bytes, int offset) =>
-      ascii.decode(bytes.buffer.asUint8List(bytes.offsetInBytes + offset, 4));
-  if (tag(header, 0) != 'RIFF' ||
-      tag(header, 8) != 'WAVE' ||
-      header.getUint32(4, Endian.little) + 8 != size) {
-    throw const FormatException('Invalid RIFF/WAVE length or signature.');
-  }
-  int? rate, channels, bits, pcmOffset, pcmLength;
-  var offset = 12;
-  while (offset + 8 <= size) {
-    await file.setPosition(offset);
-    final section = await read(8);
-    final length = section.getUint32(4, Endian.little);
-    final end = offset + 8 + length;
-    if (end + length % 2 > size) {
-      throw const FormatException('Truncated WAV section.');
-    }
-    if (tag(section, 0) == 'fmt ') {
-      if (rate != null || length < 16) {
-        throw const FormatException('Invalid WAV format section.');
-      }
-      final format = await read(16);
-      channels = format.getUint16(2, Endian.little);
-      rate = format.getUint32(4, Endian.little);
-      bits = format.getUint16(14, Endian.little);
-      if (format.getUint16(0, Endian.little) != 1 ||
-          channels == 0 ||
-          rate == 0 ||
-          ![8, 16, 24, 32].contains(bits) ||
-          format.getUint16(12, Endian.little) != channels * bits ~/ 8 ||
-          format.getUint32(8, Endian.little) != rate * channels * bits ~/ 8) {
-        throw const FormatException('Unsupported or inconsistent PCM format.');
-      }
-    } else if (tag(section, 0) == 'data') {
-      if (pcmOffset != null) {
-        throw const FormatException('Multiple WAV data sections.');
-      }
-      pcmOffset = offset + 8;
-      pcmLength = length;
-    }
-    offset = end + length % 2;
-  }
-  if (offset != size ||
-      rate == null ||
-      channels == null ||
-      bits == null ||
-      pcmOffset == null ||
-      pcmLength == null ||
-      pcmLength % (channels * bits ~/ 8) != 0) {
-    throw const FormatException('Missing or unaligned PCM data.');
-  }
-  return _WavInfo(rate, channels, bits, pcmOffset, pcmLength);
-}
-
-Uint8List _wavHeader(_WavInfo format, int length) {
-  final bytes = Uint8List(44);
-  final data = ByteData.sublistView(bytes);
-  void text(int offset, String value) =>
-      bytes.setRange(offset, offset + value.length, ascii.encode(value));
-  text(0, 'RIFF');
-  data.setUint32(4, 36 + length + length % 2, Endian.little);
-  text(8, 'WAVE');
-  text(12, 'fmt ');
-  data.setUint32(16, 16, Endian.little);
-  data.setUint16(20, 1, Endian.little);
-  data.setUint16(22, format.channels, Endian.little);
-  data.setUint32(24, format.sampleRate, Endian.little);
-  data.setUint32(28, format.sampleRate * format.blockAlign, Endian.little);
-  data.setUint16(32, format.blockAlign, Endian.little);
-  data.setUint16(34, format.bits, Endian.little);
-  text(36, 'data');
-  data.setUint32(40, length, Endian.little);
-  return bytes;
-}
-
-Map<String, Object?> _chunkMetadata(ExportedAudioChunk chunk, _WavInfo info) =>
-    {
-      'chunkId': chunk.chunkId,
-      'cacheKey': chunk.cacheKey,
-      'audioPath': chunk.audioPath,
-      'durationMillis': (info.frames * 1000 / info.sampleRate).round(),
-      'frameCount': info.frames,
-      'segmentIds': chunk.segmentIds,
-      'startWordIndex': chunk.startWordIndex,
-      'endWordIndex': chunk.endWordIndex,
-      'voiceId': chunk.voiceId,
-      'routeId': chunk.routeId,
-      'sceneTurns': chunk.sceneTurns.map((t) => t.toMap()).toList(),
-      'castId': chunk.castId,
-      'dialogueSpanId': chunk.dialogueSpanId,
-      'capabilityProfileId': chunk.capabilityProfileId,
-      'missingFallbackWordCount': chunk.missingFallbackWordCount,
-      'boundaryMetadata': _boundaryMetadataToMap(chunk.boundaryMetadata),
-      'pronunciationArtifacts': [
-        for (final artifact in chunk.pronunciationArtifacts)
-          {
-            'artifactId': artifact.artifactId,
-            'segmentId': artifact.segmentId,
-            'startWord': artifact.startWord,
-            'endWord': artifact.endWord,
-            'resolutionClass': artifact.resolutionClass,
-            'translationIntent': artifact.translationIntent,
-            'translationOutcome': artifact.translationOutcome,
-            'representationType': artifact.representationType,
-            'representationValue': artifact.representationValue,
-            'diagnosticCodes': artifact.diagnosticCodes,
-          },
-      ],
-    };
+Map<String, Object?> _chunkMetadata(
+  ExportedAudioChunk chunk,
+  PcmWavLayout info,
+) => {
+  'chunkId': chunk.chunkId,
+  'cacheKey': chunk.cacheKey,
+  'audioPath': chunk.audioPath,
+  'durationMillis': (info.frameCount * 1000 / info.format.sampleRate).round(),
+  'frameCount': info.frameCount,
+  'segmentIds': chunk.segmentIds,
+  'startWordIndex': chunk.startWordIndex,
+  'endWordIndex': chunk.endWordIndex,
+  'voiceId': chunk.voiceId,
+  'routeId': chunk.routeId,
+  'sceneTurns': chunk.sceneTurns.map((t) => t.toMap()).toList(),
+  'castId': chunk.castId,
+  'dialogueSpanId': chunk.dialogueSpanId,
+  'capabilityProfileId': chunk.capabilityProfileId,
+  'missingFallbackWordCount': chunk.missingFallbackWordCount,
+  'boundaryMetadata': _boundaryMetadataToMap(chunk.boundaryMetadata),
+  'pronunciationArtifacts': [
+    for (final artifact in chunk.pronunciationArtifacts)
+      {
+        'artifactId': artifact.artifactId,
+        'segmentId': artifact.segmentId,
+        'startWord': artifact.startWord,
+        'endWord': artifact.endWord,
+        'resolutionClass': artifact.resolutionClass,
+        'translationIntent': artifact.translationIntent,
+        'translationOutcome': artifact.translationOutcome,
+        'representationType': artifact.representationType,
+        'representationValue': artifact.representationValue,
+        'diagnosticCodes': artifact.diagnosticCodes,
+      },
+  ],
+};
 Map<String, Object?>? _boundaryMetadataToMap(
   ExportedBoundaryMetadata? metadata,
 ) {
