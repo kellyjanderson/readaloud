@@ -353,22 +353,33 @@ def analyze(directory, diagnostic_only=False):
                 report['matches'].append(record)
                 silent_start = (previous_end if previous_end is not None
                                 else actual - pending_silent_seconds)
+                silent_group = None
+                if pending_silent_packets and not pending_unmatched_seconds:
+                    # Consecutive quiet sources have no independent acoustic
+                    # boundaries. Check their single anchored interval, keeping
+                    # the same 10ms outer guards and aggregate join threshold.
+                    # A tiny packet must not erase a larger checkable interval.
+                    group_end = silent_start + pending_silent_seconds
+                    a = max(0, math.ceil((silent_start + .01) * rate))
+                    b = min(len(captured), math.floor((group_end - .01) * rate))
+                    require(a < b and silent_start >= low_time - .01 and group_end <= stop,
+                            'Silent packet lacks bounded captured interval')
+                    silent_group = {
+                        'queueIndices': [s['queueIndex'] for s in pending_silent_packets],
+                        'durationSeconds': pending_silent_seconds,
+                        'captureStartSeconds': silent_start, 'captureEndSeconds': group_end,
+                        'interiorCapturedPeak': float(np.max(np.abs(captured[a:b]))),
+                        'scope': 'One anchored quiet interval; no individual boundary or waveform credit'}
+                    require(silent_group['interiorCapturedPeak'] <= .01,
+                            'Unexpected captured signal in source-encoded silent packet')
                 for silent in pending_silent_packets:
                     if pending_unmatched_seconds:
                         silent['signalCheckNotRun'] = 'Failed preceding waveform placement; diagnostic only'
                         continue
                     silent_end = silent_start + silent['durationSeconds']
-                    # Edge guards cover the existing 10ms timing policy and
-                    # resampling boundaries, not arbitrary missing source time.
-                    a = max(0, math.ceil((silent_start + .01) * rate))
-                    b = min(len(captured), math.floor((silent_end - .01) * rate))
-                    require(a < b and silent_start >= low_time - .01 and silent_end <= stop,
-                            'Silent packet lacks bounded captured interval')
                     silent['captureStartSeconds'] = silent_start
                     silent['captureEndSeconds'] = silent_end
-                    silent['interiorCapturedPeak'] = float(np.max(np.abs(captured[a:b])))
-                    require(silent['interiorCapturedPeak'] <= .01,
-                            'Unexpected captured signal in source-encoded silent packet')
+                    silent['signalCheckGroup'] = silent_group
                     silent_start = silent_end
                 if gap is not None and abs(gap) > MAX_GAP_MS:
                     report['errors'].append(f'External join #{number}: {gap:.3f}ms exceeds 10ms')

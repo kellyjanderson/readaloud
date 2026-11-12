@@ -209,6 +209,30 @@ class S7VariantAcceptanceTest(unittest.TestCase):
         self.capture[round(4.4 * self.rate):round(4.5 * self.rate)] = .5
         self.assert_refused(self.run_analysis(), 'Unexpected captured signal')
 
+    def test_adjacent_short_silent_packet_uses_anchored_group_without_waveform_credit(self):
+        self.split_first_source_at_encoded_pause()
+        quiet = self.native['queuedAudio'][1]
+        _, pcm = wavfile.read(quiet['reference']['path'])
+        short = copy.deepcopy(quiet)
+        short['sourcePath'] = '/production/quiet-short.wav'
+        short['reference'] = self.reference('quiet-short.wav', pcm[-80:])
+        quiet['reference'] = self.reference('quiet-long.wav', pcm[:-80])
+        self.native['queuedAudio'].insert(2, short)
+        result = self.run_analysis()
+        self.assertTrue(result['passed'], result)
+        report = result['segments'][0]
+        self.assertAlmostEqual(report['completeReferenceSeconds'], 54.4, places=3)
+        self.assertEqual(len(report['encodedSilentPackets']), 2)
+        group = report['encodedSilentPackets'][1]['signalCheckGroup']
+        self.assertEqual(group['queueIndices'], [1, 2])
+        self.assertAlmostEqual(group['durationSeconds'], .6)
+        self.assertNotIn('interiorCapturedPeak', report['encodedSilentPackets'][1])
+        # Even inside the tiny source, an extra 20ms remains an external gap.
+        split = round(4.845 * self.rate)
+        self.capture = np.concatenate([self.capture[:split], np.zeros(960), self.capture[split:]])
+        self.timing['frames'] = len(self.capture)
+        self.assert_refused(self.run_analysis(), 'exceeds 10ms')
+
     def test_external_gap_within_source_silent_packet_is_still_refused(self):
         self.split_first_source_at_encoded_pause()
         split = round(4.5 * self.rate)
