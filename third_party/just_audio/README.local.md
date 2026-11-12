@@ -3,7 +3,8 @@
 This directory vendors the complete published **just_audio 0.10.5** package,
 including its license, upstream README, examples and tests. The application pins
 this copy through the root `pubspec.yaml` path override. The upstream package
-version and Dart/platform APIs are unchanged.
+version is unchanged. The local Dart/player init API adds the opt-in contract
+described below; upstream defaults remain unchanged.
 
 - Upstream: <https://github.com/ryanheise/just_audio/tree/minor/just_audio>
 - Published package: <https://pub.dev/packages/just_audio/versions/0.10.5>
@@ -29,7 +30,7 @@ scheduling, decoding or lifecycle infrastructure.
 
 ## Exact change and ownership
 
-Only `AudioPlayer.m` changes upstream runtime behavior. At `enqueueFrom:` entry,
+The queue-preservation adaptation in `AudioPlayer.m` works as follows. At `enqueueFrom:` entry,
 a loop-off, non-loading, non-seeking call whose target is the native queue
 snapshot's head computes the desired queue using `_order` and the existing per-source
 `lazyLoading`/`TREADMILL_SIZE` rules. An existing queue must be a pointer-identical
@@ -80,6 +81,47 @@ with AVFoundation's internal playback thread; native boundary/append overlap
 still needs running-app validation. No new cancellation or shutdown work is
 introduced, and upstream dispose/seek/fallback behavior is retained.
 
+## Finite local WAV player contract
+
+[S7's production-boundary work order](https://github.com/kellyjanderson/readaloud/issues/142#issuecomment-6812807878)
+adds `AudioPlayer(readAloudFiniteLocalWavQueue: true)`, a false-by-default,
+immutable per-player option. The application enables it only on the internally
+owned `KokoroTtsEngine` player on macOS. Injected players preserve their caller's
+policy. The existing platform `init` request carries the option before the first
+load, and carries it again for replacement native players after stop. Other
+platforms receive no opt-in; native production activation is also compiled only
+for macOS. There is no second configuration call, producer, timer or queue.
+
+The caller must own validated, finite WAV provenance. Native admission verifies
+plain progressive URI sources (optionally nested in concatenations), actual
+`AVURLAsset` absolute file URLs matching the declared URI (empty authority, no
+query/fragment), and pointer-identical
+queue/source membership before insertion. It never guesses format from a suffix
+or reads media contents on the main thread. All decoded insertions are checked
+before any matching tree changes. Unsupported remote, HLS/DASH, clipping,
+looping-source, composition or mismatched asset loads/inserts are rejected before
+the existing native tree/queue is changed. A narrow Dart preflight also rejects
+non-file/wrapped shapes before the maintained load/add/insert entrypoints mutate
+their logical playlist. Native asset/membership errors remain authoritative and
+must be handled by the caller; no rollback state machine is added.
+
+For an opted-in loop-off player, the actual native head owns the logical index;
+an early future-item completion cannot advance it. An initially unknown duration
+does not change this ownership policy. Final completion separately requires a
+current member, positive finite numeric duration and numeric position at or past
+EOF using exact rational `CMTime` comparison. One weak final-item witness records
+an early notification, including one already belonging to the head before its
+last sample. The existing head/Pause callback rechecks EOF. Seek, accepted load,
+loop-mode change and dispose clear the witness; stale callbacks cannot claim a
+new load or pending seek. Both loop modes retain upstream completion behavior.
+Generic players retain their complete legacy index/completion path.
+
+`READALOUD_QUEUE_PHYSICAL_HEAD_INDEX=1` remains an explicitly diagnostic override,
+separate from production activation. Audit receipts expose `finiteLocalWavQueue`
+and `physicalHeadIndexDiagnostic` independently; QA-flag evidence does not prove
+production adoption. Source/fixture verification does not establish running-app
+continuity or human listening acceptance.
+
 ## Focused verification
 
 Run the native recording-queue test on macOS with Xcode and an installed Flutter
@@ -107,6 +149,16 @@ production completion and removal methods. The script
 cleans up its temporary executable/module cache and starts no Flutter engine,
 application or audio playback. These are native compilation and queue-call
 checks, not emitted-audio evidence.
+
+The fixture also exercises production opt-in admission/rejection, initially
+unknown duration, pointer/URL identity, shuffled EOF and unchanged loop/default
+behavior. `READALOUD_FINAL_EOF_SCENARIO=same-head-early-final` isolates the single
+end-notice-before-last-sample then Pause regression. It fails the previous source
+and a mutant that discards same-head early notices, and passes the corrected
+implementation. Existing fixtures cover seek/load invalidation, retired callbacks,
+nonfinite EOF refusal and dispose. The root
+`test/kokoro_finite_local_wav_player_test.dart` exercises actual init serialization,
+idle construction, stop/reinit, default engine ownership and injected policy.
 
 Adoption still requires the coordinator's comparable running-app A/B captures,
 audio order and continuity, pause/cancel/shutdown checks, bounded long traversal

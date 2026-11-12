@@ -17,6 +17,29 @@ import 'package:uuid/uuid.dart';
 
 const _uuid = Uuid();
 
+// Extend serialization on the maintained init path; no separate configuration
+// call can race the first load or accidentally address a replacement player.
+class _ReadAloudInitRequest extends InitRequest {
+  final bool readAloudFiniteLocalWavQueue;
+
+  _ReadAloudInitRequest({
+    required super.id,
+    super.audioLoadConfiguration,
+    super.androidAudioEffects,
+    super.darwinAudioEffects,
+    super.androidOffloadSchedulingEnabled,
+    super.androidAudioOffloadPreferences,
+    super.useLazyPreparation,
+    required this.readAloudFiniteLocalWavQueue,
+  });
+
+  @override
+  Map<dynamic, dynamic> toMap() => {
+        ...super.toMap(),
+        if (readAloudFiniteLocalWavQueue) 'readAloudFiniteLocalWavQueue': true,
+      };
+}
+
 JustAudioPlatform? _pluginPlatformCache;
 
 JustAudioPlatform get _pluginPlatform {
@@ -186,6 +209,14 @@ class AudioPlayer {
   final bool _androidApplyAudioAttributes;
   final bool _handleAudioSessionActivation;
 
+  /// Read Aloud's macOS-only, per-player finite local WAV contract.
+  ///
+  /// Set only for an owned player whose sources are validated finite WAV files.
+  /// Native load/insert rejects non-file or wrapped sources before mutation.
+  /// Unknown initial duration is allowed; completion requires exact finite EOF.
+  /// The policy is immutable and defaults to upstream ownership behavior.
+  final bool readAloudFiniteLocalWavQueue;
+
   /// Counts how many times [_setPlatformActive] is called.
   int _activationCount = 0;
 
@@ -248,6 +279,7 @@ class AudioPlayer {
     bool androidOffloadSchedulingEnabled = false,
     bool useProxyForRequestHeaders = true,
     bool useLazyPreparation = true,
+    this.readAloudFiniteLocalWavQueue = false,
     ShuffleOrder? shuffleOrder,
     int maxSkipsOnError = 0,
   })  : _id = _generateId(),
@@ -881,6 +913,7 @@ class AudioPlayer {
     Duration? initialPosition,
     ShuffleOrder? shuffleOrder,
   }) async {
+    _validateReadAloudFiniteLocalWavSources(audioSources);
     _pluginLoadRequest?.interrupted = true;
     if (_disposed) return null;
     final loadRequest = _pluginLoadRequest = _PluginLoadRequest(
@@ -913,6 +946,7 @@ class AudioPlayer {
   /// interrupted this invocation.
   Future<Duration?> load() async {
     if (_disposed) return null;
+    _validateReadAloudFiniteLocalWavSources(_playlist.children);
     final pluginLoadRequest = _pluginLoadRequest;
     if (_playlist.children.isEmpty) return null;
     if (_active) {
@@ -956,6 +990,25 @@ class AudioPlayer {
 
   /// Clears the playlist.
   Future<void> clearAudioSources() => _playlist.clear();
+
+  // Shape/URI preflight runs before maintained playlist mutation, without I/O.
+  // Native admission still verifies the decoded AVURLAsset and item identity.
+  void _validateReadAloudFiniteLocalWavSources(Iterable<AudioSource> sources) {
+    if (!readAloudFiniteLocalWavQueue || kIsWeb || !Platform.isMacOS) return;
+    for (final source in sources) {
+      if (source is ConcatenatingAudioSource) {
+        _validateReadAloudFiniteLocalWavSources(source.children);
+      } else if (source is! ProgressiveAudioSource ||
+          source.uri.scheme != 'file' ||
+          source.uri.authority.isNotEmpty ||
+          source.uri.hasQuery ||
+          source.uri.hasFragment ||
+          !p.isAbsolute(source.uri.path)) {
+        throw ArgumentError.value(source, 'audioSource',
+            'Finite local WAV player requires plain absolute file sources');
+      }
+    }
+  }
 
   /// The playlist.
   List<AudioSource> get audioSources => _playlist.children;
@@ -1633,7 +1686,9 @@ class AudioPlayer {
         // During initialisation, we must only use this platform reference in case
         // _platform is updated again during initialisation.
         final platform = active && !_disposed
-            ? await (_nativePlatform = _pluginPlatform.init(InitRequest(
+            ? await (_nativePlatform = _pluginPlatform.init(_ReadAloudInitRequest(
+                readAloudFiniteLocalWavQueue:
+                    !kIsWeb && Platform.isMacOS && readAloudFiniteLocalWavQueue,
                 id: _id = _generateId(),
                 audioLoadConfiguration: _audioLoadConfiguration?._toMessage(),
                 androidAudioEffects: (_isAndroid() || _isUnitTest())
@@ -2988,6 +3043,7 @@ class ConcatenatingAudioSource extends AudioSource {
   /// Appends an [AudioSource].
   Future<void> add(AudioSource audioSource) {
     return _lock.synchronized(() async {
+      _player?._validateReadAloudFiniteLocalWavSources([audioSource]);
       final index = children.length;
       children.add(audioSource);
       _shuffleOrder.insert(index, 1);
@@ -3011,6 +3067,7 @@ class ConcatenatingAudioSource extends AudioSource {
   /// Inserts an [AudioSource] at [index].
   Future<void> insert(int index, AudioSource audioSource) {
     return _lock.synchronized(() async {
+      _player?._validateReadAloudFiniteLocalWavSources([audioSource]);
       children.insert(index, audioSource);
       _shuffleOrder.insert(index, 1);
       final player = _player;
@@ -3033,6 +3090,7 @@ class ConcatenatingAudioSource extends AudioSource {
   /// Appends multiple [AudioSource]s.
   Future<void> addAll(List<AudioSource> children) {
     return _lock.synchronized(() async {
+      _player?._validateReadAloudFiniteLocalWavSources(children);
       final index = this.children.length;
       this.children.addAll(children);
       _shuffleOrder.insert(index, children.length);
@@ -3060,6 +3118,7 @@ class ConcatenatingAudioSource extends AudioSource {
   /// Inserts multiple [AudioSource]s at [index].
   Future<void> insertAll(int index, List<AudioSource> children) {
     return _lock.synchronized(() async {
+      _player?._validateReadAloudFiniteLocalWavSources(children);
       this.children.insertAll(index, children);
       _shuffleOrder.insert(index, children.length);
       final player = _player;

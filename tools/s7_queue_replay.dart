@@ -275,7 +275,10 @@ Future<void> main(List<String> args) async {
   // ignore: invalid_use_of_visible_for_testing_member
   SharedPreferences.setMockInitialValues({});
   final c = _Controller(root);
-  final player = AudioPlayer(useLazyPreparation: false);
+  final player = AudioPlayer(
+    useLazyPreparation: false,
+    readAloudFiniteLocalWavQueue: Platform.isMacOS,
+  );
   final position = NativePlaybackPositionProbe(player);
   final watch = Stopwatch()..start();
   var phase = 'initialization', cancelled = false;
@@ -297,6 +300,7 @@ Future<void> main(List<String> args) async {
     'queueReplayDiagnostic': true,
     'useLazyPreparation': false,
     'passed': false,
+    'finiteLocalWavPlayerOptIn': player.readAloudFiniteLocalWavQueue,
     'functionalPassed': false,
     'modelQualification': 'NOT_APPLICABLE',
     'runRoot': root.path,
@@ -594,7 +598,8 @@ Future<void> main(List<String> args) async {
     await clean('Position subscription', subscription.cancel);
     receipt['nativeMainResponsiveness'] = await native.close();
     await clean('Native boundary readout', () async {
-      receipt['nativeQueueBoundaryAudit'] = await readNativeQueueBoundaryAudit();
+      receipt['nativeQueueBoundaryAudit'] =
+          await readNativeQueueBoundaryAudit();
     });
     await clean('Timing bridge', () async {
       receipt['endBridgeRequested'] = stamp();

@@ -145,6 +145,7 @@ Future<void> main(List<String> args) async {
     if (engines.length >= 8) throw StateError('Engine creation bound');
     final number = engines.length;
     final player = AudioPlayer(
+      readAloudFiniteLocalWavQueue: Platform.isMacOS,
       useLazyPreparation:
           Platform.environment['READALOUD_S7_LAZY_NATIVE_PREPARATION'] == '1',
     );
@@ -241,6 +242,7 @@ Future<void> main(List<String> args) async {
   });
   final receipt = <String, Object?>{
     'schema': 'readaloud-native-variant-v1',
+    'finiteLocalWavPlayerOptIn': Platform.isMacOS,
     'mode': mode,
     'inferencePolicyDiagnostic':
         Platform.environment['READALOUD_S7_INFERENCE_POLICY'],
@@ -706,7 +708,8 @@ Future<void> main(List<String> args) async {
         .toList();
     final errors = <String>[];
     try {
-      receipt['nativeQueueBoundaryAudit'] = await readNativeQueueBoundaryAudit();
+      receipt['nativeQueueBoundaryAudit'] =
+          await readNativeQueueBoundaryAudit();
     } catch (e) {
       errors.add('Native boundary readout: $e');
     }
