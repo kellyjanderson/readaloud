@@ -48,6 +48,10 @@ and all three sidecars must be new. The tool refuses to overwrite them. It
 waits at most 15 seconds within that deadline for the exact PID to register with
 CoreAudio, and never substitutes a different process, bundle or system mix.
 Child/helper-process audio is not implicitly included.
+During this bounded registration wait, a live PID with no audio object may
+return `kAudioHardwareBadObjectError` (`!obj`). Only that status is retried as
+not-yet-registered; other errors still fail. The final receipt records
+`registrationBadObjectRetries`. A retry is not permission or audio evidence.
 
 Creating `STOP_FILE`, SIGINT or SIGTERM requests a stop. The supervisor checks
 these at 100 ms intervals after native calls return. Apple's HAL functions are
