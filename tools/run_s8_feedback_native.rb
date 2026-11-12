@@ -29,7 +29,7 @@ end
 abort 'Target executable already has a running PID' unless matching.call.empty?
 seconds = Integer(ENV.fetch('READALOUD_S8_WORK_SECONDS', '480'))
 abort 'Work deadline must be 30..600 seconds' unless (30..600).cover?(seconds)
-forced_frames = ENV.fetch('READALOUD_S8_FORCE_HEARTBEAT_FRAMES', '1')
+forced_frames = ENV.fetch('READALOUD_S8_FORCE_HEARTBEAT_FRAMES', '0')
 abort 'Frame control must be 0 or 1' unless %w[0 1].include?(forced_frames)
 FileUtils.mkdir_p(output)
 metadata = {app: app, bundle: bundle, bundle_id: identifier.strip,
@@ -139,7 +139,7 @@ begin
   end
   metadata[:receipt] = JSON.parse(File.read(receipt_path))
   raise 'Probe receipt failed' unless metadata[:receipt]['passed'] && metadata[:receipt]['ownersDrained']
-  raise 'QA-only natural-frame differential; default probe unchanged' if forced_frames == '0'
+  raise 'QA-only forced-frame stress diagnostic; not production frame scheduling' if forced_frames == '1'
   metadata[:passed] = true
 rescue StandardError => error
   metadata[:error] = error.full_message

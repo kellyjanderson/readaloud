@@ -499,7 +499,7 @@ Future<void> main(List<String> args) async {
   // extra frame requests are disabled; normal widget animations remain owned
   // by Flutter and are not suppressed.
   final forceHeartbeatFrames =
-      Platform.environment['READALOUD_S8_FORCE_HEARTBEAT_FRAMES'] != '0';
+      Platform.environment['READALOUD_S8_FORCE_HEARTBEAT_FRAMES'] == '1';
   var forcedFrameRequests = 0;
   final receipt = <String, Object?>{
     'passed': false,
