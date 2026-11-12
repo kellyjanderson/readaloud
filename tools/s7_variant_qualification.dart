@@ -410,26 +410,58 @@ Future<void> main(List<String> args) async {
       // audible source so the unchanged strict analyzer can bound its final
       // Pause-interrupted WAV. Never accept a silent tail by player intent.
       final boundaryStarted = watch.elapsedMilliseconds;
+      String? boundaryPath;
+      int? boundaryPositionMs;
+      bool strongReference(String path) {
+        for (final queued in evidence.reversed) {
+          if (queued['sourcePath'] != path) continue;
+          final reference = queued['reference'];
+          return reference is Map &&
+              reference['peakPcm16'] is num &&
+              (reference['peakPcm16'] as num) > 1000;
+        }
+        return false;
+      }
+
+      row['pauseBoundarySelection'] =
+          'Two consecutive strong references; stable current source with positive progress. '
+          'No quiet-tail or zero-position witness credit.';
       await until(
         () {
           final index = player.currentIndex;
-          if (index == null || index >= player.sequence.length) return false;
+          if (index == null || index < 1 || index >= player.sequence.length) {
+            boundaryPath = null;
+            return false;
+          }
           final source = player.sequence[index];
-          if (source is! UriAudioSource || source.uri.scheme != 'file') {
+          final previous = player.sequence[index - 1];
+          if (source is! UriAudioSource ||
+              previous is! UriAudioSource ||
+              source.uri.scheme != 'file' ||
+              previous.uri.scheme != 'file') {
+            boundaryPath = null;
             return false;
           }
           final path = source.uri.toFilePath();
-          for (final queued in evidence.reversed) {
-            if (queued['sourcePath'] != path) continue;
-            final reference = queued['reference'];
-            return reference is Map &&
-                reference['peakPcm16'] is num &&
-                (reference['peakPcm16'] as num) > 327.68;
+          final position = player.position.inMilliseconds;
+          final duration = player.duration?.inMilliseconds;
+          if (!strongReference(path) ||
+              !strongReference(previous.uri.toFilePath()) ||
+              position < 30 ||
+              duration == null ||
+              position >= duration - 30) {
+            boundaryPath = null;
+            return false;
           }
-          return false;
+          if (boundaryPath != path) {
+            boundaryPath = path;
+            boundaryPositionMs = position;
+            return false;
+          }
+          return position >= boundaryPositionMs! + 15;
         },
         '$label identifiable Pause boundary',
-        seconds: 2,
+        seconds: 5,
       );
       row['audibleBoundaryWaitMs'] =
           watch.elapsedMilliseconds - boundaryStarted;
