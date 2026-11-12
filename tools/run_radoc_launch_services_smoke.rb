@@ -25,7 +25,13 @@ receipt = File.join(output, 'receipt.json')
 app_log = File.join(output, 'app.log')
 File.write(app_log, '')
 result = {passed: false, launchMethod: 'LaunchServices open -W -n', deadlineSeconds: 120, normalQuit: false, forcedCleanup: false, captureIntroducedPlayGate: false}
+physical_head = ENV['READALOUD_QUEUE_PHYSICAL_HEAD_INDEX']
+abort 'Invalid physical-head QA flag' unless physical_head.nil? || %w[0 1].include?(physical_head)
 errors = []
+if physical_head == '1'
+  result[:physicalHeadIndexDiagnostic] = true
+  errors << 'QA-only physical-head ownership candidate; production default unchanged'
+end
 alive = lambda do |p|
   Process.kill(0, p)
   true
@@ -53,7 +59,7 @@ begin
   result[:launchUtc] = launched.utc.iso8601(6)
   micros = (launched.to_r * 1_000_000).to_i
   result[:launchMonotonicRawNanos] = Process.clock_gettime(Process::CLOCK_MONOTONIC_RAW, :nanosecond)
-  opener = Process.spawn('/usr/bin/open', '-W', '-n', '-a', bundle, '--stdout', app_log, '--stderr', app_log, '--env', "READALOUD_SMOKE_LAUNCH_UNIX_MICROS=#{micros}", '--args', copied, receipt, startup_book, pgroup: true)
+  opener = Process.spawn('/usr/bin/open', '-W', '-n', '-a', bundle, '--stdout', app_log, '--stderr', app_log, '--env', "READALOUD_SMOKE_LAUNCH_UNIX_MICROS=#{micros}", *(physical_head ? ['--env', "READALOUD_QUEUE_PHYSICAL_HEAD_INDEX=#{physical_head}"] : []), '--args', copied, receipt, startup_book, pgroup: true)
   result[:launcherPid] = opener
   discovery_end = clock.call + 15
   loop do
