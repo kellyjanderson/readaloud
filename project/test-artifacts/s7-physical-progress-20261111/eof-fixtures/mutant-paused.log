@@ -1,0 +1,1 @@
+2026-11-11 18:24:34.062 queue_append_test[8991:64487963] FAIL: pending final EOF lost without another currentItem KVO
