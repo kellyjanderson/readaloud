@@ -2,6 +2,7 @@
 #import "../../darwin/just_audio/Sources/just_audio/include/just_audio/AudioPlayer.h"
 #import "../../darwin/just_audio/Sources/just_audio/include/just_audio/IndexedAudioSource.h"
 #import "../../darwin/just_audio/Sources/just_audio/include/just_audio/ConcatenatingAudioSource.h"
+#import "../../darwin/just_audio/Sources/just_audio/include/just_audio/UriAudioSource.h"
 
 // Exercise the production enqueueFrom: with a recording queue. No Flutter
 // engine, AVPlayer playback, media assets or application are started.
@@ -84,14 +85,18 @@
 }
 @end
 
-@interface TestSource : IndexedAudioSource
+@interface TestSource : UriAudioSource
 @property id item;
 @property id loopItem;
 @property NSUInteger seeks;
 @property CMTime lastSeek;
 @property CMTime testDuration;
+@property NSString *declaredUri;
 @end
 @implementation TestSource
+- (NSString *)uri {
+    return _declaredUri ?: [((AVURLAsset *)((TestItem *)_item).asset) URL].absoluteString;
+}
 - (IndexedPlayerItem *)playerItem { return _item; }
 - (IndexedPlayerItem *)playerItem2 { return _loopItem; }
 - (void)preparePlayerItem2 { _loopItem = [TestItem new]; }
@@ -184,6 +189,104 @@ static TestPlayer *removalPlayer(NSArray<TestSource *> *s, NSArray *order, NSArr
     return p;
 }
 
+static void localAssets(NSArray<TestSource *> *s, BOOL local) {
+    for (TestSource *source in s) {
+        // The .data suffix deliberately carries no format evidence. These are
+        // asset identity/admission tests, not decoding or emitted audio tests.
+        ((TestItem *)source.item).asset = [AVURLAsset URLAssetWithURL:
+            [NSURL URLWithString:local ? @"file:///owned-speech.data" : @"https://example.test/speech.wav"] options:nil];
+    }
+}
+
+static void productionBoundaryScenarios(void) {
+    unsetenv("READALOUD_QUEUE_PHYSICAL_HEAD_INDEX");
+    NSArray<TestSource *> *s = sources(2, NO);
+    localAssets(s, YES);
+    TestPlayer *p = removalPlayer(s, @[@0,@1], @[s[0].item,s[1].item], 0, NO);
+    [p updateOrder];
+    NSCAssert(![[p valueForKey:@"_readAloudFiniteLocalWavQueue"] boolValue], @"production policy enabled by default");
+    s[0].testDuration = kCMTimeIndefinite;
+    [p onComplete:[NSNotification notificationWithName:@"ended" object:s[1].item]];
+    NSCAssert([[p valueForKey:@"_index"] intValue] == 1, @"generic local/indefinite player lost legacy index policy");
+
+    p = removalPlayer(s, @[@0,@1], @[s[0].item,s[1].item], 0, NO);
+    [p setValue:@YES forKey:@"_readAloudFiniteLocalWavQueue"];
+    [p updateOrder]; [p setValue:@YES forKey:@"_enqueuedAll"];
+    p.loadSource = [p valueForKey:@"_audioSource"];
+    __block id loadResult = nil;
+    [p load:@{@"type":@"concatenating", @"children":@[@{@"type":@"progressive"},@{@"type":@"progressive"}]} initialPosition:kCMTimeZero initialIndex:@0 result:^(id value) { loadResult = value; }];
+    NSCAssert([loadResult isKindOfClass:[NSDictionary class]], @"local AVURLAsset with unknown duration rejected at load");
+    [p onComplete:[NSNotification notificationWithName:@"ended" object:s[1].item]];
+    NSCAssert([[p valueForKey:@"_index"] intValue] == 0 && [[p valueForKey:@"_processingState"] intValue] == psReady, @"initial unknown duration bounced physical ownership to legacy");
+
+    TestQueue *queue = (id)p.player;
+    NSArray *before = [queue.storage copy];
+    id oldTree = [p valueForKey:@"_audioSource"];
+    id oldWitness = [p valueForKey:@"_readAloudPendingFinalCompletion"];
+    NSArray<TestSource *> *remote = sources(1, NO);
+    localAssets(remote, NO);
+    p.loadSource = remote[0];
+    for (NSDictionary *definition in @[@{@"type":@"progressive"}, @{@"type":@"hls"}, @{@"type":@"clipping"}, @{@"type":@"looping"}]) {
+        loadResult = nil;
+        [p load:definition initialPosition:kCMTimeZero initialIndex:@0 result:^(id value) { loadResult = value; }];
+        NSCAssert([loadResult isKindOfClass:[FlutterError class]], @"unsupported production load accepted");
+        NSCAssert([queue.storage isEqual:before] && [p valueForKey:@"_audioSource"] == oldTree && [p valueForKey:@"_readAloudPendingFinalCompletion"] == oldWitness, @"rejected load mutated current queue/tree/witness");
+    }
+    // A file-looking declaration cannot authorize a different asset identity.
+    localAssets(remote, YES);
+    remote[0].declaredUri = @"file:///different-file.data";
+    [p load:@{@"type":@"progressive"} initialPosition:kCMTimeZero initialIndex:@0 result:^(id value) { loadResult = value; }];
+    NSCAssert([loadResult isKindOfClass:[FlutterError class]] && [queue.storage isEqual:before], @"mismatched file identity admitted");
+    remote[0].declaredUri = @"file:///composition.wav";
+    ((TestItem *)remote[0].item).asset = [AVMutableComposition composition];
+    [p load:@{@"type":@"progressive"} initialPosition:kCMTimeZero initialIndex:@0 result:^(id value) { loadResult = value; }];
+    NSCAssert([loadResult isKindOfClass:[FlutterError class]] && [queue.storage isEqual:before], @"non-URL native asset admitted");
+    localAssets(remote, NO);
+
+    NSArray<TestSource *> *incoming = sources(2, NO);
+    localAssets(incoming, YES);
+    ((TestItem *)incoming[1].item).asset = ((TestItem *)remote[0].item).asset;
+    p.insertionSources = incoming;
+    NSUInteger inserts = queue.inserts, removals = queue.removals;
+    BOOL rejected = NO;
+    @try { [p concatenatingInsertAll:@"root" index:2 sources:@[@{@"type":@"progressive"},@{@"type":@"progressive"}] shuffleOrder:@[@0,@1,@2,@3]]; }
+    @catch (NSException *exception) { rejected = YES; }
+    NSCAssert(rejected && [queue.storage isEqual:before] && queue.inserts == inserts && queue.removals == removals && [(ConcatenatingAudioSource *)oldTree count] == 2, @"late unsupported insertion partially mutated queue/tree");
+    localAssets(incoming, YES);
+    p.insertionSources = incoming;
+    // Source IDs collide deliberately; only native pointer membership matters.
+    ((TestItem *)s[0].item).audioSource = incoming[0];
+    rejected = NO;
+    @try { [p concatenatingInsertAll:@"root" index:2 sources:@[@{@"type":@"progressive"}] shuffleOrder:@[@0,@1,@2]]; }
+    @catch (NSException *exception) { rejected = YES; }
+    NSCAssert(rejected && [queue.storage isEqual:before], @"foreign item/source membership admitted");
+    ((TestItem *)s[0].item).audioSource = s[0];
+    [p concatenatingInsertAll:@"root" index:2 sources:@[@{@"type":@"progressive"},@{@"type":@"progressive"}] shuffleOrder:@[@0,@1,@2,@3]];
+    NSCAssert((queue.storage.count == 4 && queue.inserts == inserts + 2 && queue.removals == removals), @"valid local append did not preserve native queue");
+
+    // Production completion obeys playback order with no diagnostic flag.
+    p = removalPlayer(s, @[@1,@0], @[s[0].item], 0, YES);
+    [p setValue:@YES forKey:@"_readAloudFiniteLocalWavQueue"];
+    [p updateOrder]; [p setValue:@YES forKey:@"_enqueuedAll"];
+    s[0].testDuration = CMTimeMake(1, 1);
+    s[0].lastSeek = CMTimeMake(47999, 48000);
+    [p onComplete:[NSNotification notificationWithName:@"ended" object:s[0].item]];
+    s[0].lastSeek = s[0].testDuration;
+    queue = (id)p.player;
+    queue.timeControlStatus = AVPlayerTimeControlStatusPaused;
+    [p observeValueForKeyPath:@"timeControlStatus" ofObject:queue change:@{NSKeyValueChangeNewKey:@(AVPlayerTimeControlStatusPaused)} context:nil];
+    NSCAssert([[p valueForKey:@"_processingState"] intValue] == psCompleted, @"production shuffled same-head final witness lost");
+    for (NSNumber *loop in @[@(lmLoopOne), @(lmLoopAll)]) {
+        p = removalPlayer(s, @[@0,@1], @[s[0].item,s[1].item], 0, NO);
+        [p setValue:@YES forKey:@"_readAloudFiniteLocalWavQueue"];
+        [p updateOrder]; [p setValue:loop forKey:@"_loopMode"];
+        NSUInteger seeks = s[0].seeks;
+        [p onComplete:[NSNotification notificationWithName:@"ended" object:s[0].item]];
+        NSCAssert(s[0].seeks == seeks + 1 && [[p valueForKey:@"_index"] intValue] == (loop.intValue == lmLoopAll ? 1 : 0), @"production policy changed loop behavior");
+    }
+    NSLog(@"PASS: production default/unknown/local load/rejected load+insert/membership/append/shuffle/final/loop boundaries (no app/audio)");
+}
+
 // Run independently against the old source so each regression has its own
 // executed failing control. All callbacks below use existing production routes.
 static void finalEOFScenario(NSString *scenario) {
@@ -193,7 +296,17 @@ static void finalEOFScenario(NSString *scenario) {
     TestPlayer *p = removalPlayer(s, @[@0,@1], recovery ? @[s[0].item,s[1].item] : @[s[1].item], recovery ? 0 : 1, NO);
     [p updateOrder]; [p setValue:@YES forKey:@"_enqueuedAll"];
     TestQueue *queue = (id)p.player;
-    if (recovery) {
+    if ([scenario isEqualToString:@"same-head-early-final"]) {
+        // One notification at the penultimate sample, while already the head.
+        // The end action only pauses: no second end notice or head KVO follows.
+        s[1].lastSeek = CMTimeMake(47999, 48000);
+        [p onComplete:[NSNotification notificationWithName:@"ended" object:s[1].item]];
+        NSCAssert([[p valueForKey:@"_processingState"] intValue] == psReady, @"same-head notice discarded final sample");
+        s[1].lastSeek = s[1].testDuration;
+        queue.timeControlStatus = AVPlayerTimeControlStatusPaused;
+        [p observeValueForKeyPath:@"timeControlStatus" ofObject:queue change:@{NSKeyValueChangeNewKey:@(AVPlayerTimeControlStatusPaused)} context:nil];
+        NSCAssert([[p valueForKey:@"_processingState"] intValue] == psCompleted, @"single same-head early final witness lost at Pause EOF");
+    } else if (recovery) {
         [p onComplete:[NSNotification notificationWithName:@"ended" object:s[1].item]];
         [queue.storage removeObjectAtIndex:0];
         [p observeValueForKeyPath:@"currentItem" ofObject:queue change:@{NSKeyValueChangeNewKey:s[1].item} context:nil];
@@ -249,6 +362,7 @@ int main(void) {
         unsetenv("READALOUD_QUEUE_PHYSICAL_HEAD_INDEX");
         unsetenv("READALOUD_QUEUE_BOUNDARY_AUDIT");
         unsetenv("READALOUD_QUEUE_SKIP_LOOP_OFF_REWIND");
+        productionBoundaryScenarios();
         NSArray<TestSource *> *s = sources(4, NO);
         NSArray *allItems = @[s[0].item, s[1].item, s[2].item, s[3].item];
         TestPlayer *p = player(s, @[@0, @1, @2, @3], @[s[0].item, s[1].item]);
@@ -754,7 +868,7 @@ int main(void) {
         NSLog(@"PASS: finite EOF duration/position limits and disposed witness (no app/audio)");
         unsetenv("READALOUD_QUEUE_PHYSICAL_HEAD_INDEX");
         NSLog(@"PASS: physical-head QA future/stale/duplicate/EOF/KVO/snapshot/prune/load/seek/shuffle/loop scenarios (no app/audio)");
-        for (NSString *scenario in @[@"stale-seek", @"stale-load", @"paused-recovery"]) finalEOFScenario(scenario);
+        for (NSString *scenario in @[@"stale-seek", @"stale-load", @"paused-recovery", @"same-head-early-final"]) finalEOFScenario(scenario);
 
     }
     } @catch (NSException *exception) {

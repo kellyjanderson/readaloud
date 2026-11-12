@@ -52,7 +52,7 @@
             FlutterError *flutterError = [FlutterError errorWithCode:@"error" message:@"Platform player already exists" details:nil];
             result(flutterError);
         } else {
-            AudioPlayer* player = [[AudioPlayer alloc] initWithRegistrar:_registrar playerId:playerId loadConfiguration:loadConfiguration useLazyPreparation:useLazyPreparation];
+            AudioPlayer* player = [[AudioPlayer alloc] initWithRegistrar:_registrar playerId:playerId loadConfiguration:loadConfiguration useLazyPreparation:useLazyPreparation readAloudFiniteLocalWavQueue:[request[@"readAloudFiniteLocalWavQueue"] isEqual:@YES]];
             [_players setValue:player forKey:playerId];
             result(nil);
         }
