@@ -38,3 +38,35 @@ No emitted-audio, physical speaker, human listening/usability, physical M3,
 release packaging or integrated release acceptance is claimed. Human cases are
 collected for S11. #119 remains open until responsiveness and integration gates
 are satisfied. Actions and paid execution were not run.
+
+## QA frame-pressure control
+
+Read-only review found a QA-only20ms `scheduleFrame()` call absent from
+production and the S7/R25 heartbeat probes. Maintained Flutter draw/composite
+and native presentation sources support extra presentation opportunities, not
+one native commit per request or a demonstrated cause of434ms.
+Source `9e5cd3b` adds an explicit runtime flag around that call only, preserving
+the default,20ms timer,100ms single-flight native probe and250ms threshold.
+
+Natural-frame v4 completed all9 actual gates: native maximum184ms across2913
+active-app replies, UI timer gap24ms,14592timer ticks, zero forced frame requests
+and zero speech requests. Duration291.855s. Normal Quit, owner drain, exact exit,
+no force/no orphans and wake-guard exit verified. Controller/native receipttrue;
+runner overallfalse deliberately labels this QA differential. This is a bounded
+natural-frame pass, not a production scheduling remedy. Native keyboard toggles
+were observed after coordinate content focus; earlier no-change Tab/Return calls
+have no activation credit. CUA intervals are retained in `frame-off-v4`.
+
+The same-source forced counterpart v5 was **confounded and stopped**. Notices
+navigation appeared during the Ready dwell without a coordinator navigation
+action; later CUA reported user interaction and Play reached the inert engine.
+The fixture is intentionally silent. Partial counter/Copy observations cannot
+substitute for a final controller receipt. Root interrupted only its runner;
+normal Quit and exact app exit/no force/no orphans/wake-guard cleanup passed.
+There is no valid matched A/B result or forced-frame causal conclusion. The
+default probe remains unchanged. Initial CUA focus/AX staleness and the
+uncontrolled navigation are explicitly retained, rather than called app bugs.
+
+S7's default-policy601ms failure remains independent. S8 has implementation,
+source and bounded native functional evidence, but shared responsiveness and
+dependency integration/reconciliation remain open. No threshold was relaxed.

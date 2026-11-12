@@ -1,0 +1,6 @@
+PASS: valid signature, sandbox, file chooser read/write access and network client entitlements
+S8_STARTED pid=76946 log=/Users/k/Library/Containers/com.kellyjanderson.readAloud.feedbackTest/Data/s8-frame-on-v5-20261111/native.log gates=/Users/k/Library/Containers/com.kellyjanderson.readAloud.feedbackTest/Data/s8-frame-on-v5-20261111/probe
+tools/run_s8_feedback_native.rb:138:in 'Kernel#sleep': Interrupt
+	from tools/run_s8_feedback_native.rb:138:in 'block in <main>'
+	from tools/run_s8_feedback_native.rb:130:in 'Kernel#loop'
+	from tools/run_s8_feedback_native.rb:130:in '<main>'
