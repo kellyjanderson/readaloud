@@ -346,12 +346,17 @@ ensure
     rescue Timeout::Error
       Process.kill('TERM', awake_pid) rescue Errno::ESRCH
       begin
-        Timeout.timeout(1) { Process.waitpid(awake_pid) }
+        awake_status = Timeout.timeout(1) { Process.wait2(awake_pid).last }
       rescue Timeout::Error
         Process.kill('KILL', awake_pid) rescue Errno::ESRCH
-        Process.waitpid(awake_pid) rescue Errno::ECHILD
+        begin
+          awake_status = Timeout.timeout(1) { Process.wait2(awake_pid).last }
+        rescue Timeout::Error
+          awake_status = nil
+        end
       end
-      result[:awakeGuardExited] = true
+      result[:awakeGuardExited] = !awake_status.nil?
+      result[:awakeGuardExitStatus] = awake_status&.exitstatus
       result[:awakeGuardForcedStop] = true
       result[:errors] << 'Wake guard did not exit with the owned app'
     end
