@@ -88,6 +88,28 @@ opening-to-audio acceptance measurement. A primary CoreAudio setup gate can use
 `armed`, but the full expected waveform still must match; `armed` cannot waive
 an unobserved opening interval or qualify a quiet interval before callbacks.
 
+The S7 variant runner also supports the explicit
+`READALOUD_S7_PRIMARY_CAPTURE=process-tap` mode, paired with a QA app declaring
+the same mode. It allows Play before tap readiness and qualifies only bounded
+warm intended-source coverage. The tap must begin before the first observed
+player position, cover the measured playback interval, and contain every
+intended source from index zero, including leading quiet samples. The analyzer
+requires full-reference context and complete active waveform correlation at the
+same placement, both at least .98, at least 50 seconds of complete audible
+references and external joins within 10ms. Only the final Pause-interrupted
+source may be excluded; an unanchored quiet tail fails. Native/UI 250ms,
+foreground, functional and normal-Quit gates remain unchanged.
+
+Play-to-tap is **unobserved**. Matching the complete first source cannot exclude
+an earlier prefix or replay outside the capture. This mode never qualifies
+first emitted audio, a full session, startup or document-load timing. The old
+ungated diagnostic mode cannot qualify through this protocol. Final, armed and
+ready records must agree on exact PID and session; helper identity, positive
+process audio object, private unmuted tap/aggregate, exact written frame counts,
+zero loss/discontinuity and successful teardown are checked independently.
+These requirements are implemented in the runner and
+`tools/process_tap_validation.py`; source tests include refusal controls.
+
 The final timing uses `readaloud-app-capture-timing-v1`, preserving `appPid`,
 `frames`, `sampleRate`, `signalThreshold`, `maxPacketGapSeconds`,
 `firstPacketReceivedUnixMicros`, `firstSignalReceivedUnixMicros`,
