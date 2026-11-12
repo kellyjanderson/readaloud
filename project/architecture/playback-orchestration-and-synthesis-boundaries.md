@@ -143,6 +143,17 @@ load, loop-mode change and disposal clear the witness. Both loop modes retain
 upstream completion behavior. Full details, library rationale and native fixture
 limits are in the [local adaptation](../../third_party/just_audio/README.local.md).
 
+For that macOS finite-queue loop-off path, Play samples the existing real
+paused or pending-seek position before activating the native rate. This avoids
+the direct post-activation AVPlayerItem.currentTime query found in the matched
+native trace. Position and timestamp remain paired; no synthetic position,
+extra scheduler or GPU policy is introduced. Generic players, other platforms
+and both loop modes retain the prior ordering. Existing status/KVO callbacks
+can still read position, so this is not a universal AVFoundation latency claim.
+The [position verification](../test-artifacts/s7-play-position-20261111/README.md)
+retains real-reader native negative controls and exact-candidate running-app
+results, including their snapshot and capture limits.
+
 The environment-driven physical-head experiment remains a separate diagnostic
 override. Earlier flagged acoustic passes do not qualify this production opt-in.
 [S7](https://github.com/kellyjanderson/readaloud/issues/112) owns final-source
@@ -150,16 +161,22 @@ emitted-audio, responsiveness and cancellation evidence; M3 and human listening
 remain separate gates. The dated natural-EOF and replay diagnostics preserve
 both passing component observations and capture failures.
 
-The subsequent production-policy v60/v64 book checks cover 197 words and all six
+The production-policy v77/v78 book checks cover 197 words and all six
 complete saved scene waveforms, with maximum external joins of .01ms. First-load
-playback reached natural EOF, persisted the complete book and peaked at 10ms
+playback reached natural EOF, persisted the complete book and peaked at 30ms
 native response; its model-forbidden reopen, Save/reopen, cancellation and
-restart peaked at 51ms, with every native sample foreground in both runs. These
+restart peaked at 66ms, with every native sample foreground in both runs. These
 bounded checks verify the opted-in production queue without its experimental
-override. First-load post-startup speech took 3052.390ms; reusable loading took
-253.807ms. Total launch took 13061.564ms and 614.132ms respectively: the first
+override. First-load post-startup speech took 2099.705ms; reusable loading took
+525.851ms. Total launch took 6317.906ms and 801.514ms respectively: the first
 misses the 2s goal even though both load hard limits pass. See the
-[retained evidence](../test-artifacts/s7-final-native-20261111/README.md).
-The separate sustained 8bit run still fails native responsiveness at 274ms;
-neither book pass establishes a universal cure, arbitrary-document performance,
-physical output, human listening or M3 qualification.
+[position verification](../test-artifacts/s7-play-position-20261111/README.md).
+Its earlier, mostly background v76 case retains colder startup and all waveform
+matches, but receives no foreground responsiveness credit. Installed assets and
+OS caches remain distinct from fresh private target raw-audio stores. Earlier
+274ms/349ms failures remain preserved in the
+[preceding controls](../test-artifacts/s7-final-native-20261111/README.md).
+The exact-candidate 4bit/8bit/A-B-A checks pass the unchanged 250ms gate; a separate
+180s run passes waveform and native components while retaining its diagnostic
+overall verdict. None establishes a universal AVFoundation cure, arbitrary-book
+performance, physical output, human listening or M3 qualification.
