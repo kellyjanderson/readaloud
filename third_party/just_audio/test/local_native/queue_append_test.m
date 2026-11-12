@@ -11,10 +11,13 @@
 - (void)concatenatingInsertAll:(NSString *)catId index:(int)index sources:(NSArray *)sources shuffleOrder:(NSArray<NSNumber *> *)shuffleOrder;
 - (void)onComplete:(NSNotification *)notification;
 - (void)updateOrder;
+- (void)queueBoundaryAudit:(NSString *)boundary item:(id)item details:(NSDictionary *)details;
+- (NSString *)queueBoundaryAuditItem:(id)item selectSource:(BOOL)selectSource;
 @end
 
 @interface TestItem : NSObject
 @property id audioSource;
+@property AVAsset *asset;
 - (BOOL)isPlaybackBufferEmpty;
 @end
 @implementation TestItem
@@ -26,6 +29,7 @@
 @property NSUInteger inserts;
 @property NSUInteger removals;
 @property NSUInteger rateChanges;
+@property NSUInteger auditQueries;
 @property (nonatomic) float rate;
 @property (copy) void (^afterCurrentRead)(void);
 @property (copy) void (^beforeItemsRead)(void);
@@ -37,6 +41,7 @@
 @end
 @implementation TestQueue
 - (NSArray *)items {
+    _auditQueries++;
     if (_beforeItemsRead) {
         void (^action)(void) = _beforeItemsRead;
         _beforeItemsRead = nil;
@@ -51,6 +56,7 @@
     return snapshot;
 }
 - (id)currentItem {
+    _auditQueries++;
     id current = _storage.firstObject;
     if (_afterCurrentRead) {
         void (^action)(void) = _afterCurrentRead;
@@ -75,12 +81,15 @@
 @interface TestSource : IndexedAudioSource
 @property id item;
 @property id loopItem;
+@property NSUInteger seeks;
+@property CMTime lastSeek;
 @end
 @implementation TestSource
 - (IndexedPlayerItem *)playerItem { return _item; }
 - (IndexedPlayerItem *)playerItem2 { return _loopItem; }
 - (void)preparePlayerItem2 { _loopItem = [TestItem new]; }
 - (NSArray<NSNumber *> *)getShuffleIndices { return @[@0]; }
+- (void)seek:(CMTime)position { _seeks++; _lastSeek = position; }
 @end
 
 @interface TestPlayer : AudioPlayer
@@ -154,6 +163,8 @@ static TestPlayer *removalPlayer(NSArray<TestSource *> *s, NSArray *order, NSArr
 int main(void) {
     @try {
     @autoreleasepool {
+        unsetenv("READALOUD_QUEUE_BOUNDARY_AUDIT");
+        unsetenv("READALOUD_QUEUE_SKIP_LOOP_OFF_REWIND");
         NSArray<TestSource *> *s = sources(4, NO);
         NSArray *allItems = @[s[0].item, s[1].item, s[2].item, s[3].item];
         TestPlayer *p = player(s, @[@0, @1, @2, @3], @[s[0].item, s[1].item]);
@@ -312,6 +323,145 @@ int main(void) {
         expect(p, @[lag[1].item,lag[2].item,lag[3].item], 0, 0, YES);
 
         NSLog(@"PASS: 24 native queue scenarios (recording queue; no app/audio)");
+
+        // A disabled audit must perform no native queue queries, even when its
+        // capture/readout methods are called directly. Existing 24 race cases
+        // above also run disabled so their exact query interleavings stay valid.
+        p = player(s, @[@0,@1,@2,@3], allItems);
+        TestQueue *disabledQueue = (id)p.player;
+        [p queueBoundaryAudit:@"disabled" item:s[0].item details:nil];
+        NSDictionary *disabled = [p readAloudQueueBoundaryAudit];
+        NSCAssert([(NSArray *)disabled[@"events"] count] == 0 && disabledQueue.auditQueries == 0, @"disabled audit touched queue");
+        NSCAssert(![disabled[@"enabled"] boolValue], @"audit enabled by default");
+
+        setenv("READALOUD_QUEUE_BOUNDARY_AUDIT", "true", 1);
+        NSCAssert(![AudioPlayer readAloudQueueBoundaryAuditEnabled], @"only exact opt-in 1 is allowed");
+        setenv("READALOUD_QUEUE_BOUNDARY_AUDIT", "1", 1);
+        // Exercise enabled instrumentation around the real production enqueue.
+        NSArray<TestSource *> *admission = sources(2, NO);
+        p = player(admission, @[@0,@1], @[admission[0].item]);
+        [p queueBoundaryAuditItem:admission[0].item selectSource:YES];
+        [p enqueueFrom:0];
+        NSArray<NSDictionary *> *admissionEvents = [p readAloudQueueBoundaryAudit][@"events"];
+        NSCAssert(admissionEvents.count == 2 && [admissionEvents[0][@"boundary"] isEqual:@"native.insert.entry"] && [admissionEvents[1][@"boundary"] isEqual:@"native.insert.return"], @"native admission boundaries missing");
+        NSCAssert([admissionEvents[0][@"queueTotal"] intValue] == 1 && [admissionEvents[1][@"queueTotal"] intValue] == 2, @"admission did not capture actual physical queue before/after");
+
+        // Two real source objects with identical declared IDs remain distinct.
+        TestSource *sameA = [[TestSource alloc] initWithId:@"same"];
+        TestSource *sameB = [[TestSource alloc] initWithId:@"same"];
+        sameA.item = [TestItem new]; sameB.item = [TestItem new];
+        [(TestItem *)sameA.item setAudioSource:sameA];
+        [(TestItem *)sameB.item setAudioSource:sameB];
+        p = player(@[sameA,sameB], @[], @[sameA.item,sameB.item]);
+        NSString *sameAId = [p queueBoundaryAuditItem:sameA.item selectSource:YES];
+        NSString *sameBId = [p queueBoundaryAuditItem:sameB.item selectSource:YES];
+        NSCAssert(![sameAId isEqual:sameBId] && [(NSArray *)[p readAloudQueueBoundaryAudit][@"sources"] count] == 2, @"declared IDs collapsed actual identities");
+        for (NSUInteger i = 0; i < 65; i++) {
+            TestItem *extra = [TestItem new]; extra.audioSource = sameA;
+            [p queueBoundaryAuditItem:(id)extra selectSource:YES];
+        }
+        NSDictionary *identityCap = [p readAloudQueueBoundaryAudit];
+        NSCAssert([(NSArray *)identityCap[@"items"] count] == 64 && [identityCap[@"identityRegistryOverflow"] boolValue], @"item identity registry is unbounded or silently truncated");
+
+        NSArray<TestSource *> *auditSources = sources(40, NO);
+        NSMutableArray *auditItems = [NSMutableArray new];
+        for (TestSource *source in auditSources) [auditItems addObject:source.item];
+        p = player(auditSources, @[], auditItems);
+        for (TestSource *source in auditSources) {
+            [(TestItem *)source.item setAsset:[AVURLAsset URLAssetWithURL:[NSURL URLWithString:@"file:///immutable-first.wav"] options:nil]];
+            [p queueBoundaryAuditItem:source.item selectSource:YES];
+        }
+        [p queueBoundaryAudit:@"fixture.initial" item:auditSources[0].item details:nil];
+        NSDictionary *initial = [p readAloudQueueBoundaryAudit];
+        NSCAssert([(NSArray *)initial[@"sources"] count] == 8 && [(NSArray *)initial[@"items"] count] == 8, @"first-eight identity cap failed");
+        NSDictionary *firstEvent = [initial[@"events"] firstObject];
+        NSCAssert([(NSArray *)firstEvent[@"queueItemIdentities"] count] == 32 && [firstEvent[@"queueTotal"] intValue] == 40 && [firstEvent[@"queueTruncated"] boolValue], @"physical queue snapshot bound is not explicit");
+        NSCAssert([firstEvent[@"unixMicros"] longLongValue] > 0 && [firstEvent[@"monotonicMicros"] longLongValue] > 0, @"clock evidence missing");
+        NSCAssert([firstEvent[@"queueSnapshotHeadIdentity"] isEqual:firstEvent[@"itemIdentity"]], @"item identity differs from physical head");
+
+        // Immutable registry facts survive URL/source-link mutation and logical
+        // sequence removal. Neither filenames nor sourceId strings are identity.
+        id auditedItem = auditSources[0].item;
+        [(TestItem *)auditedItem setAsset:[AVURLAsset URLAssetWithURL:[NSURL URLWithString:@"file:///changed.wav"] options:nil]];
+        [(TestItem *)auditedItem setAudioSource:nil];
+        [p setValue:@[] forKey:@"_indexedAudioSources"];
+        [p queueBoundaryAudit:@"fixture.stale" item:auditedItem details:nil];
+        NSDictionary *stale = [p readAloudQueueBoundaryAudit];
+        NSDictionary *staleEvent = [stale[@"events"] lastObject];
+        NSCAssert([staleEvent[@"itemIdentity"] isEqual:firstEvent[@"itemIdentity"]] && [staleEvent[@"itemTracked"] boolValue], @"weak-link removal changed immutable identity");
+        NSCAssert(![staleEvent[@"itemSourceInSequence"] boolValue], @"removed source reported current");
+        for (NSDictionary *source in stale[@"sources"]) NSCAssert([source[@"sourceURL"] isEqual:@"file:///immutable-first.wav"], @"registry URL mutated");
+
+        // Ring overwrites oldest events and reports loss without growing. The
+        // returned snapshot is independent of subsequent callback mutations.
+        for (NSUInteger i = 0; i < 2055; i++) [p queueBoundaryAudit:@"fixture.cap" item:auditedItem details:@{@"n": @(i)}];
+        NSDictionary *capped = [p readAloudQueueBoundaryAudit];
+        NSCAssert([(NSArray *)capped[@"events"] count] == 2048 && [capped[@"overflow"] intValue] == 9, @"ring bound/loss accounting failed");
+        NSCAssert([capped[@"events"] firstObject][@"details"] && [[capped[@"events"] firstObject][@"details"][@"n"] intValue] == 7, @"ring chronological ordering failed");
+        NSCAssert([(NSArray *)initial[@"events"] count] == 1, @"readout was not an immutable snapshot");
+
+        TestQueue *auditQueue = (id)p.player;
+        NSUInteger queries = auditQueue.auditQueries;
+        dispatch_semaphore_t finished = dispatch_semaphore_create(0);
+        dispatch_async(dispatch_get_global_queue(QOS_CLASS_DEFAULT, 0), ^{
+            [p queueBoundaryAudit:@"fixture.offmain" item:auditedItem details:nil];
+            dispatch_semaphore_signal(finished);
+        });
+        NSCAssert(dispatch_semaphore_wait(finished, dispatch_time(DISPATCH_TIME_NOW, NSEC_PER_SEC)) == 0, @"off-main fixture timed out");
+        NSDictionary *offMain = [p readAloudQueueBoundaryAudit];
+        NSCAssert([offMain[@"offMainSkipped"] intValue] == 1 && auditQueue.auditQueries == queries, @"off-main audit queried/mutated native queue");
+        NSCAssert([NSJSONSerialization isValidJSONObject:offMain], @"receipt is not serializable");
+
+        // Dispose remains observable on the retained player snapshot even if
+        // there is no AVQueuePlayer. Global plugin readout requires pre-dispose.
+        [p setValue:nil forKey:@"_player"];
+        [p dispose:NO];
+        NSDictionary *disposed = [p readAloudQueueBoundaryAudit];
+        NSCAssert([disposed[@"disposed"] boolValue] && [[[disposed[@"events"] lastObject] objectForKey:@"boundary"] isEqual:@"dispose.entry"], @"dispose lifetime boundary missing");
+        unsetenv("READALOUD_QUEUE_BOUNDARY_AUDIT");
+        NSLog(@"PASS: native audit disabled, identity/stale, first-eight/queue/ring caps, off-main and dispose scenarios (no app/audio)");
+
+        // Completion can publish index 1 while item 0 is still the physical
+        // head. Default behavior still rewinds that item; only the exact QA
+        // opt-in may suppress this loop-off, non-final seek.
+        setenv("READALOUD_QUEUE_BOUNDARY_AUDIT", "1", 1);
+        setenv("READALOUD_QUEUE_SKIP_LOOP_OFF_REWIND", "true", 1);
+        NSArray<TestSource *> *rewind = sources(2, NO);
+        p = removalPlayer(rewind, @[@0,@1], @[rewind[0].item,rewind[1].item], 0, NO);
+        [p updateOrder];
+        [p queueBoundaryAuditItem:rewind[0].item selectSource:YES];
+        [p onComplete:[NSNotification notificationWithName:@"ended" object:rewind[0].item]];
+        NSCAssert(rewind[0].seeks == 1 && CMTIME_COMPARE_INLINE(rewind[0].lastSeek, ==, kCMTimeZero), @"default loop-off rewind changed");
+        NSCAssert([[p valueForKey:@"_index"] intValue] == 1 && (id)p.player.currentItem == rewind[0].item, @"completion head-lag fixture invalid");
+        NSArray<NSDictionary *> *rewindEvents = [p readAloudQueueBoundaryAudit][@"events"];
+        NSCAssert(rewindEvents.count == 4 && [rewindEvents[1][@"boundary"] isEqual:@"completion.rewind.entry"] && [rewindEvents[2][@"boundary"] isEqual:@"completion.rewind.return"] && ![rewindEvents[1][@"details"][@"skipped"] boolValue], @"default rewind boundary trace missing");
+        NSCAssert([rewindEvents[1][@"itemIdentity"] isEqual:rewindEvents[1][@"currentItemIdentity"]], @"trace lost ended/current physical identity");
+
+        setenv("READALOUD_QUEUE_SKIP_LOOP_OFF_REWIND", "1", 1);
+        rewind = sources(2, NO);
+        p = removalPlayer(rewind, @[@0,@1], @[rewind[0].item,rewind[1].item], 0, NO);
+        [p updateOrder];
+        [p queueBoundaryAuditItem:rewind[0].item selectSource:YES];
+        [p onComplete:[NSNotification notificationWithName:@"ended" object:rewind[0].item]];
+        NSCAssert(rewind[0].seeks == 0 && [[p valueForKey:@"_index"] intValue] == 1 && [[p valueForKey:@"_justAdvanced"] boolValue], @"QA skip changed logical completion");
+        NSCAssert(p.endUpdates == 1 && (id)p.player.currentItem == rewind[0].item, @"QA skip mutated physical queue/end action");
+        NSDictionary *skipped = [p readAloudQueueBoundaryAudit];
+        NSCAssert([skipped[@"skipLoopOffRewind"] boolValue] && [skipped[@"events"][1][@"details"][@"skipped"] boolValue], @"QA skip not declared in receipt");
+
+        // Loop-one/all still rewind under the flag; an explicit source seek is
+        // likewise untouched. No change is made to final-item completion.
+        for (NSNumber *loop in @[@(lmLoopOne), @(lmLoopAll)]) {
+            rewind = sources(2, NO);
+            p = removalPlayer(rewind, @[@0,@1], @[rewind[0].item,rewind[1].item], 0, NO);
+            [p updateOrder]; [p setValue:loop forKey:@"_loopMode"];
+            [p onComplete:[NSNotification notificationWithName:@"ended" object:rewind[0].item]];
+            NSCAssert(rewind[0].seeks == 1, @"QA flag suppressed a loop rewind");
+            [rewind[0] seek:CMTimeMake(1, 2)];
+            NSCAssert(rewind[0].seeks == 2 && CMTIME_COMPARE_INLINE(rewind[0].lastSeek, ==, CMTimeMake(1, 2)), @"QA flag suppressed explicit seek");
+        }
+        unsetenv("READALOUD_QUEUE_BOUNDARY_AUDIT");
+        unsetenv("READALOUD_QUEUE_SKIP_LOOP_OFF_REWIND");
+        NSLog(@"PASS: default/QA completion rewind, head ownership, index/events and loop/explicit seek preservation (no app/audio)");
     }
     } @catch (NSException *exception) {
         NSLog(@"FAIL: %@", exception.reason);
