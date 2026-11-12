@@ -1,0 +1,72 @@
+{
+  "captureSampleRate": 48000,
+  "comparisonSampleRate": 192000,
+  "capturePeak": 0.7445152997970581,
+  "matchedTurns": [
+    {
+      "startWord": 0,
+      "endWord": 7,
+      "castId": "native_scene",
+      "voiceId": "scene_cast",
+      "captureStartSeconds": 14.203505208333333,
+      "correlation": 0.9999998811093869,
+      "activeSpeechStartSeconds": 14.244677083333332,
+      "gapBeforeMs": null
+    },
+    {
+      "startWord": 7,
+      "endWord": 51,
+      "castId": "native_scene",
+      "voiceId": "scene_cast",
+      "captureStartSeconds": 16.943458333333332,
+      "correlation": 0.9999254586310715,
+      "activeSpeechStartSeconds": 16.988380208333332,
+      "gapBeforeMs": -0.01
+    },
+    {
+      "startWord": 51,
+      "endWord": 94,
+      "castId": "native_scene",
+      "voiceId": "scene_cast",
+      "captureStartSeconds": 32.73303125,
+      "correlation": 0.999858282735349,
+      "activeSpeechStartSeconds": 32.79105729166667,
+      "gapBeforeMs": 0.0
+    },
+    {
+      "startWord": 94,
+      "endWord": 123,
+      "castId": "native_scene",
+      "voiceId": "scene_cast",
+      "captureStartSeconds": 47.22228125,
+      "correlation": 0.9999963333304347,
+      "activeSpeechStartSeconds": 47.222286458333336,
+      "gapBeforeMs": -0.01
+    },
+    {
+      "startWord": 123,
+      "endWord": 167,
+      "castId": "native_scene",
+      "voiceId": "scene_cast",
+      "captureStartSeconds": 57.500057291666664,
+      "correlation": 0.999937422575692,
+      "activeSpeechStartSeconds": 57.541744791666666,
+      "gapBeforeMs": -0.01
+    },
+    {
+      "startWord": 167,
+      "endWord": 197,
+      "castId": "native_scene",
+      "voiceId": "scene_cast",
+      "captureStartSeconds": 72.314390625,
+      "correlation": 0.9999680751410034,
+      "activeSpeechStartSeconds": 72.34275,
+      "gapBeforeMs": 0.0
+    }
+  ],
+  "firstSpeechStartSeconds": 14.203505208333333,
+  "lastSpeechEndSeconds": 83.22777083333334,
+  "maxJoinGapMs": 0.0,
+  "passed": true,
+  "limit": "Queued-waveform presence/order and joins only; human expression/identity/transcript review required."
+}

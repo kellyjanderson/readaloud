@@ -82,6 +82,17 @@ describes I/O/scheduling policies, not a GPU-priority guarantee. Model loading
 was slower, and affected R25 clocks were not measured. The default launch policy
 remains unchanged pending repeated native/audio and load qualification.
 
+The [R25 first-load differential](../test-artifacts/s7-r25-policy-20261111/README.md)
+subsequently measured managed8bit utility v35 at6800.774ms after document loading
+versus3547.286ms with default scheduling v36; ordinary startup is separate.
+Both matched all six full waveforms with no positive join gap. Utility native
+maximum229ms passed; default601ms failed. These single sequential observations
+retain uncontrolled OS/cache state and do not justify production adoption.
+Full-precision v34 was refused by unchanged measured headroom admission before
+target loading. S8's inert-engine UI v3 independently exceeded250ms at434ms:
+inference is not necessary for a delayed native delivery. Its QA-only forced
+20ms frame requests are a separate controlled diagnostic, not a proven cause.
+
 ## Maintained platform and library boundaries
 
 The pinned Flutter run-loop implementation rearms a CF timer for positive-delay

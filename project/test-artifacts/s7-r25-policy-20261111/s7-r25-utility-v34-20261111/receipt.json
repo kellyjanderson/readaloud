@@ -1,0 +1,114 @@
+{
+  "schema": "readaloud-native-first-load-v1",
+  "passed": false,
+  "engine": "fish_drama3",
+  "input": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-r25-utility-v34-20261111/copied-input.txt",
+  "runRoot": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-r25-utility-v34-20261111/s6-first-load-APilVz",
+  "dartEntryUnixMicros": 1794441542523430,
+  "controlledCaptureGate": false,
+  "timingMode": "load-after-startup",
+  "documentLoadClockScope": "Explicit target import after ordinary no-target app startup; all target intake, preparation, binding and synthesis included",
+  "rawAudioCache": "fresh private per-run store; existing model assets only",
+  "emittedAudioCapture": "external waveform comparison required",
+  "humanListening": "not established by this probe",
+  "inputResponsiveness": "heartbeat and native roundtrip only; actual UI input separate",
+  "processLaunchUnixMicros": 1794441542046092,
+  "resourceStages": [
+    {
+      "elapsedMs": 254,
+      "stage": "runtimeManifest",
+      "message": "Checking packaged mlx runtime identity"
+    },
+    {
+      "elapsedMs": 371,
+      "stage": "runtimeNative",
+      "message": "Verified 1 of 186 bundled mlx native targets"
+    },
+    {
+      "elapsedMs": 505,
+      "stage": "runtimeNativeFile",
+      "message": "Verifying bundled native lib/python3.12/site-packages/mlx/lib/mlx.metallib"
+    },
+    {
+      "elapsedMs": 553,
+      "stage": "runtimeNative",
+      "message": "Verified 48 of 186 bundled mlx native targets"
+    },
+    {
+      "elapsedMs": 602,
+      "stage": "runtimeInventory",
+      "message": "Checking mlx runtime inventory"
+    },
+    {
+      "elapsedMs": 767,
+      "stage": "runtimeTree",
+      "message": "Verified 1588 of 12741 mlx runtime entries"
+    },
+    {
+      "elapsedMs": 1423,
+      "stage": "runtimeExecutable",
+      "message": "Verifying signed arm64 mlx interpreter"
+    },
+    {
+      "elapsedMs": 1451,
+      "stage": "modelCache",
+      "message": "Checking local files and the shared Hugging Face cache for Fish Audio Drama 3 · bf16…"
+    }
+  ],
+  "error": "Bad state: Speech startup failed: Bad state: Selected model exceeds measured device headroom or the 100 GB total-runtime ceiling. Select a smaller model.",
+  "stack": "#0      main.checkFailure (file:///Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/tools/radoc_first_load_smoke.dart:273)\n#1      main (file:///Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/tools/radoc_first_load_smoke.dart:329)\n<asynchronous suspension>\n#2      main (file:///Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/tools/s6_acceptance_smoke.dart:17)\n<asynchronous suspension>\n",
+  "nativeMainResponsiveness": {
+    "samples": 12,
+    "applicationActiveSamples": 12,
+    "maxRoundTripMs": 111,
+    "delayedRequests": [
+      {
+        "startedMs": 402,
+        "elapsedMs": 111,
+        "phaseAtStart": "ordinary-app-startup",
+        "phaseAtEnd": "ordinary-app-startup",
+        "requestedUnixMicros": 1794441542930336,
+        "nativeEntryUnixMicros": 1794441543041627,
+        "returnedUnixMicros": 1794441543041700,
+        "applicationActive": true,
+        "owners": 1
+      },
+      {
+        "startedMs": 602,
+        "elapsedMs": 108,
+        "phaseAtStart": "ordinary-app-startup",
+        "phaseAtEnd": "ordinary-app-startup",
+        "requestedUnixMicros": 1794441543130022,
+        "nativeEntryUnixMicros": 1794441543236784,
+        "returnedUnixMicros": 1794441543238182,
+        "applicationActive": true,
+        "owners": 1
+      }
+    ],
+    "error": null,
+    "passed": true,
+    "scope": "Monotonic UI-isolate roundtrip through the native main-thread channel; unchanged 250ms gate. Wall-clock request/native-entry/return stamps and active-app state diagnose delivery only and never replace the gate. No utility query or keyboard/mouse delivery claim."
+  },
+  "speechWorkActivity": {
+    "started": 2,
+    "active": 0,
+    "ended": 2,
+    "peak": 2
+  },
+  "speechWorkActivitySuppressed": false,
+  "nativePlaybackPositions": {
+    "sampledSourceCount": 0,
+    "sampledSourcePositionTotalMs": 0,
+    "maxNativePositionMs": 0,
+    "overflow": false,
+    "scope": "Observed maximum native positions per distinct queued local WAV; not emitted duration. Exact captured waveform comparison is required."
+  },
+  "maxNativePositionMs": 0,
+  "maxUiHeartbeatDelayMs": 7,
+  "delayedTicks": [],
+  "synthesisCallbacks": 0,
+  "resourceShutdownComplete": true,
+  "shutdownErrors": [],
+  "normalQuit": "runner must request and verify",
+  "elapsedMs": 1453
+}
