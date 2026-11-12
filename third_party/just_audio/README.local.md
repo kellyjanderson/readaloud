@@ -116,6 +116,19 @@ loop-mode change and dispose clear the witness; stale callbacks cannot claim a
 new load or pending seek. Both loop modes retain upstream completion behavior.
 Generic players retain their complete legacy index/completion path.
 
+For this macOS opt-in with looping off, `play:` snapshots position and update
+time immediately before activating the requested rate. It uses the existing
+position reader, including a pending seek's target; it does not invent a start
+position, rewind, or replace the actual paused/initial item position. Duplicate
+Play and pending Play-result ownership remain unchanged. Generic players, both
+loop modes and other platforms retain the upstream rate-then-position ordering.
+This narrow ordering change follows [the matched native Play wait](https://github.com/kellyjanderson/readaloud/issues/144#issuecomment-6815633761):
+the sampled call chain reached `AVPlayerItem.currentTime` synchronously from
+`play:` after rate activation. It adds no asynchronous work, scheduler, queue,
+timer, cancellation domain or EOF policy. It removes that direct post-activation
+read from the opted-in Play method; it does not establish that AVFoundation's
+rate activation or another callback cannot block.
+
 `READALOUD_QUEUE_PHYSICAL_HEAD_INDEX=1` remains an explicitly diagnostic override,
 separate from production activation. Audit receipts expose `finiteLocalWavQueue`
 and `physicalHeadIndexDiagnostic` independently; QA-flag evidence does not prove
@@ -159,6 +172,19 @@ implementation. Existing fixtures cover seek/load invalidation, retired callback
 nonfinite EOF refusal and dispose. The root
 `test/kokoro_finite_local_wav_player_test.dart` exercises actual init serialization,
 idle construction, stop/reinit, default engine ownership and injected policy.
+
+The Play regression uses production `AudioPlayer.updatePosition`,
+`getCurrentPosition` and `UriAudioSource.position`, with a recording item at the
+AVFoundation boundary. Rate activation takes a surrogate clock lock; a subsequent
+`currentTime` read fails after a bounded 25 ms lock attempt. This deterministic
+control rejects the previous source ordering. It also checks real nonzero
+initial/paused/resumed positions, an outstanding item seek and its target,
+duplicate Play/results, and default/loop isolation. Set
+`READALOUD_PLAY_POSITION_SCENARIO=startup-lock` to run only the lock/resume/result
+case; `JUST_AUDIO_SOURCE_DIR` can select an older source tree for a negative
+control. The surrogate proves call-path ordering and preserved position policy,
+not the timing or internal locking of a real AVPlayerItem. Other platforms are
+source-gated here, not compiled or runtime-qualified by the macOS fixture.
 
 Adoption still requires the coordinator's comparable running-app A/B captures,
 audio order and continuity, pause/cancel/shutdown checks, bounded long traversal
