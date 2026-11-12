@@ -495,7 +495,7 @@ Future<void> main(List<String> args) async {
   final controller = _ProbeController(engine, root);
   final probe = _Probe(root, controller, seconds);
   final native = NativeMainResponsivenessProbe();
-  // QA differential only. The heartbeat still measures UI scheduling when the
+  // QA stress is opt-in. The heartbeat still measures UI scheduling when the
   // extra frame requests are disabled; normal widget animations remain owned
   // by Flutter and are not suppressed.
   final forceHeartbeatFrames =
