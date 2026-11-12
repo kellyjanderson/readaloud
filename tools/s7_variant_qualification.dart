@@ -529,16 +529,26 @@ Future<void> main(List<String> args) async {
     // Capture setup must have actually written frames before manual Play, or
     // a delayed ScreenCaptureKit connection could miss the beginning entirely.
     phase = 'capture-setup';
-    final captureGate = File('${output.parent.path}/capture.ready');
-    final captureDeadline = watch.elapsedMilliseconds + 30000;
-    while (!await captureGate.exists()) {
-      if (watch.elapsedMilliseconds > captureDeadline) {
-        throw TimeoutException('App-only capture setup');
+    final ungatedProcessCapture =
+        Platform.environment['READALOUD_S7_UNGATED_PROCESS_CAPTURE'] == '1';
+    receipt['ungatedProcessCaptureDiagnostic'] = ungatedProcessCapture;
+    if (!ungatedProcessCapture) {
+      final captureGate = File('${output.parent.path}/capture.ready');
+      final captureDeadline = watch.elapsedMilliseconds + 30000;
+      while (!await captureGate.exists()) {
+        if (watch.elapsedMilliseconds > captureDeadline) {
+          throw TimeoutException('App-only capture setup');
+        }
+        await Future<void>.delayed(const Duration(milliseconds: 25));
       }
-      await Future<void>.delayed(const Duration(milliseconds: 25));
+      receipt['captureReadyBeforePlayUnixMicros'] =
+          DateTime.now().microsecondsSinceEpoch;
+    } else {
+      receipt['captureReadyBeforePlayUnixMicros'] = null;
+      receipt['captureSetupScope'] =
+          'Diagnostic exact-PID tap setup overlaps Play; no capture gate. '
+          'Complete emitted waveform coverage must be proved separately.';
     }
-    receipt['captureReadyBeforePlayUnixMicros'] =
-        DateTime.now().microsecondsSinceEpoch;
     if (mode == 'default-policy' ||
         mode == 'cached-bf16' ||
         mode == 'cached-8bit' ||
