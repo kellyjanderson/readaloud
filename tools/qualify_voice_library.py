@@ -1,53 +1,57 @@
-"""Exercise every reference with actual inference. Keeps audio/receipts local."""
+"""Exercise the selected production voice bank with offline references.
+
+Receipts prove emitted PCM/accounting, not perceptual speaker distinctness.
+"""
 import argparse
-import hashlib
-import importlib.util
 import json
 from pathlib import Path
 import time
 
-parser = argparse.ArgumentParser()
-parser.add_argument('engine', choices=['qwen3_tts_base_1_7b', 'moss_tts_8b'])
-parser.add_argument('checkpoint')
-parser.add_argument('output')
-args = parser.parse_args()
-root = Path(__file__).resolve().parents[1]
-spec = importlib.util.spec_from_file_location('voice_worker', root / 'assets/mlx_tts_worker.py')
-worker = importlib.util.module_from_spec(spec)
-spec.loader.exec_module(worker)
-manifest = json.loads((root / 'assets/voice_library/library.json').read_text())
-output = Path(args.output)
-output.mkdir(parents=True, exist_ok=True)
-rows = []
-import soundfile as sf
-import mlx.core as mx
-try:
-    worker._load(args.engine, args.checkpoint, str(output / 'hub'))
-    for index, voice in enumerate(manifest['voices']):
-        path = output / f'{voice["id"]}.wav'
-        started = time.monotonic()
-        mx.random.seed(8931)
-        if not path.exists():
-            worker._synthesize(dict(
-                modelId=args.engine, voice=voice['id'],
-                text='The lantern by the window is still burning.',
-                outputPath=str(path), referenceAudioPath=str(root / voice['asset']),
-                referenceText=voice['referenceText'], synthesisIdentity=f'voices-{index}',
-            ))
-        audio, rate = sf.read(path)
-        row = dict(voice=voice['id'], referenceSha256=voice['sha256'],
-                   outputSha256=hashlib.sha256(path.read_bytes()).hexdigest(),
-                   durationSeconds=len(audio)/rate, peak=float(abs(audio).max()),
-                   synthesisSeconds=time.monotonic()-started, audioPath=str(path))
-        if row['durationSeconds'] < 1 or row['peak'] < 0.01:
-            raise RuntimeError(f'Unusable output: {row}')
-        rows.append(row)
-        (output / 'receipt.json').write_text(json.dumps(dict(
-            engine=args.engine, voiceCount=len(rows), complete=len(rows)==30,
-            rows=rows), indent=2))
-        print(json.dumps(row), flush=True)
-        mx.clear_cache()
-    if len({r['outputSha256'] for r in rows}) != 30:
-        raise RuntimeError('Identical outputs across requested reference identities')
-finally:
-    worker._unload()
+from mlx_protocol_client import MlxClient
+from mlx_probe_support import descriptor, load_model, provenance, resolve_voice, synthesize
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('engine', help='Exact installed production model ID')
+    parser.add_argument('checkpoint', help='Existing local checkpoint; never downloads')
+    parser.add_argument('output', help='New evidence directory; existing files are never reused')
+    parser.add_argument('--reference-cache', help='Existing app MLX root containing voice-library')
+    parser.add_argument('--bits', type=int, choices=(0, 4), default=0)
+    args = parser.parse_args()
+    output = Path(args.output).resolve()
+    with MlxClient() as client:
+        metadata = client.metadata()
+        model = descriptor(metadata, args.engine)
+        # Resolve the complete bank before inference; a missing remote reference
+        # is an actionable offline blocker, never a silently reduced voice count.
+        voices = [resolve_voice(model, voice['id'], args.reference_cache) for voice in model['voices']]
+        if not voices:
+            raise ValueError('Production engine has no usable voices')
+        output.mkdir(parents=True, exist_ok=False)
+        loaded = load_model(client, model, args.checkpoint, output / 'hub', args.bits)
+        receipt = {**provenance(metadata, model, loaded, args.bits), 'expectedVoiceCount': len(voices),
+                   'complete': False, 'rows': []}
+        for index, (voice, voice_provenance) in enumerate(voices):
+            started = time.monotonic()
+            evidence = synthesize(client, model, voice, 'The lantern by the window is still burning.',
+                                  output / voice['voice'], f'voices-{index}')
+            row = {**evidence, 'voice': voice_provenance, 'synthesisSeconds': time.monotonic() - started}
+            if row['durationSeconds'] < 1 or row['peak'] < .01:
+                raise RuntimeError(f'Output failed duration/peak signal checks: {row}')
+            receipt['rows'].append(row)
+            receipt['voiceCount'] = len(receipt['rows'])
+            # Hash equality is a diagnostic. Different bytes cannot establish
+            # perceptual diversity; identical bytes must not imply listening.
+            receipt['distinctOutputHashes'] = len({value['outputSha256'] for value in receipt['rows']})
+            (output / 'receipt.json').write_text(json.dumps(receipt, indent=2) + '\n')
+            print(json.dumps(row), flush=True)
+        if receipt['distinctOutputHashes'] != len(voices):
+            raise RuntimeError('Repeated output bytes across requested voice identities; perceptual identity remains untested')
+    receipt['complete'] = True
+    receipt['workerExitCode'] = client.child.returncode
+    (output / 'receipt.json').write_text(json.dumps(receipt, indent=2) + '\n')
+
+
+if __name__ == '__main__':
+    main()
