@@ -31,7 +31,9 @@ It preserves split tags/entities and UTF-16 surrogate pairs, excluded-navigation
 diagnostics and trailing media/separators, including sources containing only
 structure. Structural-only units advance a single newline in the normalized
 source coordinate space so successive range-local IDs cannot alias; they add no
-speech. Locators remain member/block coordinates, not raw archive byte offsets.
+speech. Metadata-only terminal events instead carry diagnostics/title metadata
+with no source span, display blocks or speech, and explicitly suppress synthetic
+title fallback. Locators remain member/block coordinates, not raw archive byte offsets.
 Text file, pasted and shared entry points share recovery policy while retaining
 their distinct source identities and descriptions. Heuristic mapping fallback
 clamps inline offsets to the actual display block and retains low confidence and
@@ -48,6 +50,15 @@ one image's bytes and base64 display representation; this is not a constant
 memory claim for arbitrarily large media. The existing `archive`, `xml`, `html`
 and `pdfrx` packages remain in use; the shared adapter is application-specific
 structure/provenance policy, not a replacement ZIP/XML/HTML parser.
+
+Only the preparation supervisor retains a successor for EOF/dialogue lookahead;
+HTML and EPUB adapters yield each completed content unit immediately rather
+than holding another successor. Later excluded content or metadata cannot make
+two already completed readable units wait for EOF. Trailing diagnostics use the
+metadata-only events above. The HTML context stack accounts for implicit end
+tags, including repeated paragraphs and list items, before applying its nesting
+limit; the maintained HTML parser still builds and repairs the bounded DOMs.
+Genuine excessive nesting and oversized incomplete tokens remain typed failures.
 
 Interactive preparation freezes each normalized range on the worker before transfer. Display blocks/inlines/assets/metadata, speech segments/index/word spans, position entries, diagnostics, pronunciation artifacts and cast alias/id arrays are unmodifiable. Existing immutable annotation/attribution/identity objects retain their evidence and uncertainty. PDF data uses an unmodifiable owned byte snapshot. HTML, flat text and document word spans cross with each fragment without rebuilding on the UI isolate. The controller publishes contiguous ranges under one document revision and bounds unconsumed reading-ahead; downstream consumption and later preparation can overlap. This does not establish universal source-format incrementality or whole-book readiness at first publication.
 

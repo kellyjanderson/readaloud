@@ -33,6 +33,264 @@ Map<String, String> _epub({String? chapter, String extraSpine = ''}) => {
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
+  for (final format in ['html', 'epub']) {
+    test(
+      '$format terminal diagnostics carry no synthetic display or speech',
+      () async {
+        final paragraph = '<p>${'Readable words. ' * 90}</p>';
+        final html =
+            '$paragraph$paragraph<nav>${'Excluded tail. ' * 2000}</nav>';
+        final bytes = format == 'html'
+            ? Uint8List.fromList(utf8.encode(html))
+            : _zip(
+                _epub(chapter: html, extraSpine: '<itemref idref="absent"/>'),
+              );
+        final importer = DocumentImportService();
+        final units = await importer
+            .streamUnits(fileName: 'diagnostic.$format', bytes: bytes)
+            .toList();
+        final metadata = units
+            .where((unit) => unit.text.isEmpty && (unit.html ?? '').isEmpty)
+            .toList();
+        expect(metadata, isNotEmpty);
+        expect(
+          metadata.every((unit) => unit.text.isEmpty && unit.html!.isEmpty),
+          isTrue,
+        );
+        final supervisor = DocumentPreparationSupervisor();
+        addTearDown(supervisor.shutdown);
+        final publications = <DocumentPreparationPublication>[];
+        final result = await supervisor.prepareRanges(
+          DocumentPreparationRequest(
+            ownerId: 'metadata-$format',
+            revision: 9,
+            kind: DocumentPreparationKind.bytes,
+            fileName: 'diagnostic.$format',
+            bytes: bytes,
+          ),
+          onPublication: (publication) async => publications.add(publication),
+        );
+        expect(
+          result.outcome,
+          DocumentPreparationOutcome.ready,
+          reason: result.error,
+        );
+        final terminal = publications
+            .where((publication) => publication.fragment.wordCount == 0)
+            .toList();
+        expect(terminal, isNotEmpty);
+        for (final publication in terminal) {
+          expect(publication.fragment.displayDocument.blocks, isEmpty);
+          expect(publication.fragment.speechDocument.segments, isEmpty);
+          expect(publication.fragment.speakableText, isEmpty);
+          expect(publication.range.sourceStart, publication.range.sourceEnd);
+        }
+        expect(publications.last.isLast, isTrue);
+        expect(
+          publications.expand((p) => p.fragment.diagnostics).map((d) => d.code),
+          contains('navigation_content_skipped'),
+        );
+        if (format == 'epub') {
+          expect(
+            publications
+                .expand((p) => p.fragment.diagnostics)
+                .map((d) => d.code),
+            contains('missing_asset'),
+          );
+        }
+        final whole = await importer.importBytes(
+          fileName: 'diagnostic.$format',
+          bytes: bytes,
+        );
+        expect(
+          publications
+              .expand((p) => p.fragment.displayDocument.blocks)
+              .map((b) => (b.kind, b.plainText)),
+          whole.displayDocument.blocks.map((b) => (b.kind, b.plainText)),
+        );
+        expect(
+          publications
+              .expand((p) => p.fragment.speechDocument.segments)
+              .map((s) => s.normalizedText),
+          whole.speechDocument.segments.map((s) => s.normalizedText),
+        );
+      },
+    );
+  }
+
+  test(
+    'HTML genuine deep nesting remains a typed refusal in both entry paths',
+    () async {
+      final bytes = Uint8List.fromList(
+        utf8.encode('${'<div>' * 257}Too deep.${'</div>' * 257}'),
+      );
+      final importer = DocumentImportService();
+      final refusal = isA<DocumentImportException>().having(
+        (error) => error.code,
+        'code',
+        'html_parse_failed',
+      );
+      await expectLater(
+        importer.streamUnits(fileName: 'deep.html', bytes: bytes).toList(),
+        throwsA(refusal),
+      );
+      await expectLater(
+        importer.importBytes(fileName: 'deep.html', bytes: bytes),
+        throwsA(refusal),
+      );
+    },
+  );
+
+  for (final format in ['html', 'epub']) {
+    for (final excludedKind in ['navigation', 'hidden']) {
+      test(
+        '$format worker publishes before a large $excludedKind tail reaches refusal',
+        () async {
+          final paragraph = '<p>${'Available speech now. ' * 2}</p>';
+          final prefix = '$paragraph$paragraph';
+          final tail = '${'Hidden navigation. ' * 40000}CRC sentinel';
+          final excluded = excludedKind == 'navigation'
+              ? '<nav>$tail</nav>'
+              : '<div hidden>$tail</div>';
+          late Uint8List bytes;
+          if (format == 'html') {
+            // Refusal is deliberately after the excluded tail. Publication must
+            // have happened before the worker scans that tail, not after EOF.
+            bytes = Uint8List.fromList(
+              utf8.encode('$prefix$excluded<${'x' * 65537}'),
+            );
+          } else {
+            final files = _epub(chapter: '$prefix$excluded');
+            final archive = Archive();
+            for (final entry in files.entries) {
+              final data = utf8.encode(entry.value);
+              archive.addFile(
+                ArchiveFile.noCompress(entry.key, data.length, data),
+              );
+            }
+            bytes = Uint8List.fromList(ZipEncoder().encode(archive));
+            final marker = utf8.encode('CRC sentinel');
+            var changed = false;
+            for (
+              var offset = 0;
+              offset <= bytes.length - marker.length;
+              offset++
+            ) {
+              if (List.generate(
+                marker.length,
+                (n) => bytes[offset + n] == marker[n],
+              ).every((match) => match)) {
+                bytes[offset] = 'X'.codeUnitAt(0);
+                changed = true;
+                break;
+              }
+            }
+            expect(changed, isTrue);
+            // CRC validation refuses only at member EOF. This makes publication
+            // before that refusal a deterministic witness of no member-EOF gate.
+          }
+          final supervisor = DocumentPreparationSupervisor();
+          addTearDown(supervisor.shutdown);
+          final publications = <DocumentPreparationPublication>[];
+          final result = await supervisor.prepareRanges(
+            DocumentPreparationRequest(
+              ownerId: 'tail-$format',
+              revision: 7,
+              kind: DocumentPreparationKind.bytes,
+              fileName: 'tail.$format',
+              bytes: bytes,
+            ),
+            onPublication: (publication) async => publications.add(publication),
+          );
+          expect(result.outcome, DocumentPreparationOutcome.failed);
+          expect(
+            publications.where((p) => p.fragment.wordCount > 0),
+            isNotEmpty,
+            reason:
+                'The worker must publish from two complete prefix units without reading the excluded tail.',
+          );
+          expect(
+            result.importFailure?.code,
+            '${format}_parse_failed',
+            reason: result.error,
+          );
+          expect(
+            publications.first.fragment.speakableText,
+            contains('Available speech now.'),
+          );
+          expect(publications.first.isLast, isFalse);
+          expect(
+            publications.every(
+              (p) => p.request.operationId == 'tail-$format:7',
+            ),
+            isTrue,
+          );
+        },
+      );
+    }
+  }
+
+  test(
+    'HTML two readable units are acquired before excluded-tail EOF',
+    () async {
+      final paragraph = '<p>${'Readable prefix. ' * 90}</p>';
+      final bytes = Uint8List.fromList(
+        utf8.encode(
+          '$paragraph$paragraph<nav>${'Hidden tail. ' * 50000}</nav>',
+        ),
+      );
+      var eof = false;
+      var acquired = 0;
+      final units = await DocumentImportService()
+          .streamUnits(
+            fileName: 'prefix.html',
+            bytes: bytes,
+            onAcquiredBytes: (chunk) => acquired += chunk.length,
+            onAcquiredEof: () => eof = true,
+          )
+          .take(2)
+          .toList();
+      expect(units, hasLength(2));
+      expect(
+        units.every((unit) => unit.text.contains('Readable prefix.')),
+        isTrue,
+      );
+      expect(eof, isFalse);
+      expect(acquired, lessThan(bytes.length ~/ 10));
+    },
+  );
+
+  for (final tag in ['p', 'li']) {
+    test(
+      'HTML accepts repeated omitted $tag end tags without false nesting refusal',
+      () async {
+        final content = List.generate(
+          600,
+          (index) => '<$tag>Paragraph $index.',
+        ).join();
+        final html = tag == 'li' ? '<ul>$content</ul>' : content;
+        final bytes = Uint8List.fromList(utf8.encode(html));
+        final importer = DocumentImportService();
+        final units = await importer
+            .streamUnits(fileName: 'omitted.html', bytes: bytes)
+            .toList();
+        final whole = await importer.importBytes(
+          fileName: 'omitted.html',
+          bytes: bytes,
+        );
+        expect(
+          units.map((unit) => unit.text).join(' '),
+          contains('Paragraph 599.'),
+        );
+        expect(whole.speechDocument.segments, hasLength(600));
+        expect(
+          whole.speechDocument.segments.map((s) => s.normalizedText),
+          List.generate(600, (index) => 'Paragraph $index.'),
+        );
+      },
+    );
+  }
+
   test('valid empty DOCX retains metadata without inventing speech', () async {
     final bytes = _zip({
       'docProps/core.xml': '<core><title>Empty title</title></core>',
