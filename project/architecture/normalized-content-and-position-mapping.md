@@ -1,6 +1,6 @@
 # Normalized Content and Position Mapping
 
-Reconciled: October 26, 2026; RC2 implementation through feature head 2734b47
+Reconciled: November 13, 2026; shared import adapters, [S9.3 #149](https://github.com/kellyjanderson/readaloud/issues/149)
 Status: Current source architecture with incremental range publication and automatic checkpoints
 
 ## Implemented structure and limitations
@@ -11,7 +11,7 @@ Import produces a normalized result envelope, `DisplayDocument`, `SpeechDocument
 
 Source-native mapping quality varies by importer. PDF text extraction and line-wrap/paragraph recovery are heuristic. A successful import or a mapping fixture does not prove perfect reading order for arbitrary documents. Source bytes are acquired separately from these normalized representations.
 
-DOCX and EPUB use the same `DocumentImportUnit` adapters for interactive
+Text/Markdown, HTML, DOCX and EPUB use the same `DocumentImportUnit` adapters for interactive
 preparation and the explicit whole-file collector in `importBytes`. Units carry
 source member/block locators, title, structural HTML, attachment records and
 diagnostics. DOCX paragraphs preserve headings, exposed list markers and inline
@@ -24,6 +24,19 @@ failure can follow earlier bounded publications and never establishes complete
 source readiness. Optional invalid DOCX title metadata still falls back to the
 filename. The collector accumulates the entire document only when explicitly
 requested; the interactive path does not use it.
+
+HTML normalizes bounded fragments with the maintained parser and reuses display
+block policy for speech boundaries around lists, captions and nested structures.
+It preserves split tags/entities and UTF-16 surrogate pairs, excluded-navigation
+diagnostics and trailing media/separators, including sources containing only
+structure. Structural-only units advance a single newline in the normalized
+source coordinate space so successive range-local IDs cannot alias; they add no
+speech. Locators remain member/block coordinates, not raw archive byte offsets.
+Text file, pasted and shared entry points share recovery policy while retaining
+their distinct source identities and descriptions. Heuristic mapping fallback
+clamps inline offsets to the actual display block and retains low confidence and
+exact recovery evidence. RTF keeps its existing shared decoder, and PDF keeps its
+separate native extraction/formatting ownership.
 
 The existing preparation worker owns each adapter instance and source handle.
 Its revision/session identity, eight-credit publication window, stale-result

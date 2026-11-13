@@ -9,7 +9,6 @@ import 'package:crypto/crypto.dart' as crypto;
 import 'package:html/parser.dart' as html_parser;
 import 'package:html/dom.dart' as html_dom;
 import 'package:pdfrx/pdfrx.dart';
-import 'package:xml/xml.dart';
 import 'package:xml/xml_events.dart';
 
 import '../models/character_cast_registry.dart';
@@ -56,8 +55,9 @@ class PdfTextExtractionPage {
   final PdfPageRawText? rawText;
 }
 
-/// Bounded importer output before normalization/analysis. Container locators
-/// identify the member/page; offsets within it are decoded UTF-16 coordinates.
+/// Bounded adapter output before analysis. Locators identify source members and
+/// blocks; publication offsets concatenate adapter text in UTF-16 coordinates,
+/// including a newline for structural-only units, rather than raw byte offsets.
 class DocumentImportUnit {
   const DocumentImportUnit({
     required this.text,
@@ -311,7 +311,17 @@ class DocumentImportService {
       onEof: onAcquiredEof,
     ).transform(const Utf8Decoder(allowMalformed: true));
     if (extension == 'html' || extension == 'htm') {
-      yield* _htmlUnits(decoded(), locator: fileName);
+      try {
+        yield* _htmlUnits(decoded(), locator: fileName);
+      } catch (error) {
+        throw DocumentImportException(
+          code: 'html_parse_failed',
+          message:
+              'Read Aloud could not parse this HTML into a bounded document.',
+          fileName: fileName,
+          cause: error,
+        );
+      }
       return;
     }
     if (extension == 'rtf') {
@@ -330,7 +340,7 @@ class DocumentImportService {
     }
     if (extension != 'docx' && extension != 'epub') {
       await for (final part in boundedProseUnits(decoded())) {
-        yield DocumentImportUnit(text: part, locator: fileName);
+        yield _plainTextUnit(part, locator: fileName);
       }
       return;
     }
@@ -353,11 +363,22 @@ class DocumentImportService {
           );
         }
         final title = await _docxTitle(entries) ?? fileName;
+        var published = false;
         await for (final unit in _docxUnits(
           _archiveText(entry),
           locator: entry.name,
         )) {
+          published = true;
           yield _copyImportUnit(unit, title: title);
+        }
+        if (!published) {
+          yield DocumentImportUnit(
+            text: '\n',
+            html: '',
+            title: title,
+            locator: entry.name,
+            type: ReaderDocumentType.html,
+          );
         }
       } else {
         yield* _epubUnits(entries, fileName: fileName);
@@ -420,10 +441,10 @@ class DocumentImportService {
       case 'text':
       case 'md':
       case 'markdown':
-        return _importPlainText(fileName, bytes, sourceDescriptor);
+        return _collectImport(fileName, bytes, sourceDescriptor);
       case 'html':
       case 'htm':
-        return _importHtml(fileName, bytes, sourceDescriptor);
+        return _collectImport(fileName, bytes, sourceDescriptor);
       case 'epub':
         return _collectImport(fileName, bytes, sourceDescriptor);
       case 'pdf':
@@ -437,104 +458,39 @@ class DocumentImportService {
     }
   }
 
-  ReaderDocument importPastedText(String text) {
-    final sourceDescriptor = _sourceDescriptorForText(
-      title: 'Pasted Text',
-      text: text,
-      mode: 'pasted-text',
-    );
-    final recovered = _recoverPlainTextStructure(text);
-    return _buildReaderDocument(
-      title: 'Pasted Text',
-      type: ReaderDocumentType.plainText,
-      displayHtml: recovered.displayHtml,
-      speakableText: recovered.speakableText,
-      sourceDescriptor: sourceDescriptor,
-      sourceDescription: 'Pasted into Read Aloud',
-      diagnostics: const [
-        ImportDiagnostic(
-          severity: ImportDiagnosticSeverity.info,
-          code: 'fallback_paragraph_grouping',
-          message:
-              'Pasted text paragraph grouping used lightweight line-wrap recovery heuristics.',
-        ),
-      ],
-    );
-  }
+  ReaderDocument importPastedText(String text) => _importTextEntry(
+    text,
+    title: 'Pasted Text',
+    mode: 'pasted-text',
+    description: 'Pasted into Read Aloud',
+  );
 
-  ReaderDocument importSharedText(String text) {
-    final sourceDescriptor = _sourceDescriptorForText(
-      title: 'Shared Text',
-      text: text,
-      mode: 'shared-text',
-    );
-    final recovered = _recoverPlainTextStructure(text);
-    return _buildReaderDocument(
-      title: 'Shared Text',
-      type: ReaderDocumentType.plainText,
-      displayHtml: recovered.displayHtml,
-      speakableText: recovered.speakableText,
-      sourceDescriptor: sourceDescriptor,
-      sourceDescription: 'Shared into Read Aloud',
-      diagnostics: const [
-        ImportDiagnostic(
-          severity: ImportDiagnosticSeverity.info,
-          code: 'fallback_paragraph_grouping',
-          message:
-              'Shared text paragraph grouping used lightweight line-wrap recovery heuristics.',
-        ),
-      ],
-    );
-  }
+  ReaderDocument importSharedText(String text) => _importTextEntry(
+    text,
+    title: 'Shared Text',
+    mode: 'shared-text',
+    description: 'Shared into Read Aloud',
+  );
 
-  ReaderDocument _importPlainText(
-    String fileName,
-    Uint8List bytes,
-    _ImportSourceDescriptor sourceDescriptor,
-  ) {
-    final recovered = _recoverPlainTextStructure(
-      utf8.decode(bytes, allowMalformed: true),
-    );
+  ReaderDocument _importTextEntry(
+    String text, {
+    required String title,
+    required String mode,
+    required String description,
+  }) {
+    final unit = _plainTextUnit(text);
     return _buildReaderDocument(
-      title: fileName,
-      type: ReaderDocumentType.plainText,
-      displayHtml: recovered.displayHtml,
-      speakableText: recovered.speakableText,
-      sourceDescriptor: sourceDescriptor,
-      sourceDescription: 'Plain text import',
-      diagnostics: const [
-        ImportDiagnostic(
-          severity: ImportDiagnosticSeverity.info,
-          code: 'fallback_paragraph_grouping',
-          message:
-              'Plain text paragraph grouping used lightweight line-wrap recovery heuristics.',
-        ),
-      ],
-    );
-  }
-
-  ReaderDocument _importHtml(
-    String fileName,
-    Uint8List bytes,
-    _ImportSourceDescriptor sourceDescriptor,
-  ) {
-    final rawHtml = utf8.decode(bytes, allowMalformed: true);
-    final document = html_parser.parse(rawHtml);
-    final diagnostics = <ImportDiagnostic>[];
-    final body = document.body;
-    if (body != null) {
-      _pruneHtmlForNormalization(body, diagnostics: diagnostics);
-    }
-    final bodyHtml = body?.innerHtml ?? rawHtml;
-    final speakableText = _normalizeReadableText(body?.text.trim() ?? '');
-    return _buildReaderDocument(
-      title: fileName,
-      type: ReaderDocumentType.html,
-      displayHtml: '<article>$bodyHtml</article>',
-      speakableText: speakableText,
-      sourceDescriptor: sourceDescriptor,
-      sourceDescription: 'HTML import',
-      diagnostics: diagnostics,
+      title: title,
+      type: unit.type,
+      displayHtml: unit.html!,
+      speakableText: _recoverPlainTextStructure(text).speakableText,
+      sourceDescriptor: _sourceDescriptorForText(
+        title: title,
+        text: text,
+        mode: mode,
+      ),
+      sourceDescription: description,
+      diagnostics: unit.diagnostics,
     );
   }
 
@@ -720,7 +676,13 @@ class DocumentImportService {
     for (final unit in units) {
       final recovered = _recoverPlainTextStructure(unit.text);
       html.write(unit.html ?? recovered.displayHtml);
-      if (unit.text.trim().isNotEmpty) text.add(unit.text);
+      if (unit.text.trim().isNotEmpty) {
+        text.add(
+          unit.type == ReaderDocumentType.plainText
+              ? recovered.speakableText
+              : unit.text,
+        );
+      }
       attachments.addAll(unit.attachments);
       diagnostics.addAll(unit.diagnostics);
     }
@@ -1020,14 +982,27 @@ Future<String?> _docxTitle(Map<String, ArchiveFile> entries) async {
   if (entry == null) return null;
   // Optional malformed metadata never invalidates otherwise usable body text.
   try {
-    final xml = XmlDocument.parse(await _archiveText(entry).join());
-    final title = xml.descendants
-        .whereType<XmlElement>()
-        .where((element) => element.name.local == 'title')
-        .firstOrNull
-        ?.innerText
-        .trim();
-    return title == null || title.isEmpty ? null : title;
+    final title = StringBuffer();
+    var seenTitle = false;
+    var inTitle = false;
+    await for (final events in _archiveText(
+      entry,
+    ).toXmlEvents(validateNesting: true, validateDocument: true)) {
+      for (final event in events) {
+        if (event is XmlStartElementEvent &&
+            event.localName == 'title' &&
+            !seenTitle) {
+          seenTitle = true;
+          inTitle = !event.isSelfClosing;
+        } else if (event is XmlEndElementEvent && event.localName == 'title') {
+          inTitle = false;
+        } else if (event is XmlTextEvent && inTitle) {
+          title.write(event.value);
+        }
+      }
+    }
+    final value = title.toString().trim();
+    return value.isEmpty ? null : value;
   } catch (_) {
     return null;
   }
@@ -1413,8 +1388,18 @@ class _NormalizedDocumentFactory {
           final words = RegExp(
             r'\S+',
           ).allMatches(fragment.text).toList(growable: false);
-          final displayStart = sentenceDisplayStart + fragment.startOffset;
-          final displayEnd = sentenceDisplayStart + fragment.endOffset;
+          final requestedStart = sentenceDisplayStart + fragment.startOffset;
+          final requestedEnd = sentenceDisplayStart + fragment.endOffset;
+          // Heuristic paragraph recovery can disagree with source structure.
+          // Keep its recovery anchor/uncertainty without emitting invalid
+          // inline offsets or failing a later sentence's lookup.
+          final displayLimit = block?.plainText.length ?? requestedEnd;
+          final displayStart = requestedStart.clamp(0, displayLimit);
+          final displayEnd = requestedEnd.clamp(displayStart, displayLimit);
+          final confidence =
+              displayStart == requestedStart && displayEnd == requestedEnd
+              ? sentenceConfidence
+              : math.min(sentenceConfidence, 0.55);
 
           speechSegments.add(
             SpeechSegment(
@@ -1456,7 +1441,7 @@ class _NormalizedDocumentFactory {
               displayEnd: math.max(0, displayEnd),
               speechStartWord: 0,
               speechEndWord: words.length,
-              confidence: sentenceConfidence,
+              confidence: confidence,
               recoveryAnchor: RecoveryAnchor(
                 exact: fragment.text,
                 prefix: _prefixFor(fragment.text),
@@ -1891,13 +1876,17 @@ void _pruneHtmlForNormalization(
 
   final navigationNodes = root.querySelectorAll('nav');
   if (navigationNodes.isNotEmpty) {
-    diagnostics.add(
-      const ImportDiagnostic(
-        severity: ImportDiagnosticSeverity.info,
-        code: 'navigation_content_skipped',
-        message: 'Navigation scaffolding was excluded from body content.',
-      ),
-    );
+    if (!diagnostics.any(
+      (diagnostic) => diagnostic.code == 'navigation_content_skipped',
+    )) {
+      diagnostics.add(
+        const ImportDiagnostic(
+          severity: ImportDiagnosticSeverity.info,
+          code: 'navigation_content_skipped',
+          message: 'Navigation scaffolding was excluded from body content.',
+        ),
+      );
+    }
     for (final node in navigationNodes) {
       node.remove();
     }
@@ -2411,7 +2400,10 @@ class _SpeechFragment {
 
 int _matchOffset(String blockText, String sentence, int startAt) {
   final normalizedBlock = _normalizeImportedText(blockText);
-  final index = normalizedBlock.indexOf(sentence, startAt);
+  final index = normalizedBlock.indexOf(
+    sentence,
+    startAt.clamp(0, normalizedBlock.length),
+  );
   return index >= 0 ? index : 0;
 }
 
@@ -2502,8 +2494,9 @@ Stream<String> _archiveText(ArchiveFile entry) async* {
       var end = math.min(start + 4096, text.length);
       if (end < text.length &&
           text.codeUnitAt(end - 1) >= 0xd800 &&
-          text.codeUnitAt(end - 1) <= 0xdbff)
+          text.codeUnitAt(end - 1) <= 0xdbff) {
         end--;
+      }
       yield text.substring(start, end);
       start = end;
     }
@@ -2539,6 +2532,23 @@ Stream<String> boundedProseUnits(Stream<String> source) async* {
   if (pending.trim().isNotEmpty) yield pending;
 }
 
+DocumentImportUnit _plainTextUnit(String text, {String? locator}) {
+  final recovered = _recoverPlainTextStructure(text);
+  return DocumentImportUnit(
+    text: text,
+    html: recovered.displayHtml,
+    locator: locator,
+    diagnostics: const [
+      ImportDiagnostic(
+        severity: ImportDiagnosticSeverity.info,
+        code: 'fallback_paragraph_grouping',
+        message:
+            'Text paragraph grouping used lightweight line-wrap recovery heuristics.',
+      ),
+    ],
+  );
+}
+
 DocumentImportUnit _copyImportUnit(
   DocumentImportUnit unit, {
   String? title,
@@ -2569,12 +2579,21 @@ Stream<DocumentImportUnit> _epubUnits(
       'EPUB container metadata is missing.',
     );
   }
-  final containerXml = XmlDocument.parse(await _archiveText(container).join());
-  final path = containerXml.descendants
-      .whereType<XmlElement>()
-      .where((e) => e.name.local == 'rootfile')
-      .firstOrNull
-      ?.getAttribute('full-path');
+  String? path;
+  await for (final events in _archiveText(
+    container,
+  ).toXmlEvents(validateNesting: true, validateDocument: true)) {
+    for (final event in events) {
+      if (event is XmlStartElementEvent &&
+          event.localName == 'rootfile' &&
+          path == null) {
+        path = event.attributes
+            .where((a) => a.name == 'full-path')
+            .firstOrNull
+            ?.value;
+      }
+    }
+  }
   if (path == null || path.isEmpty) {
     throw missing('epub_missing_package_path', 'EPUB package path is missing.');
   }
@@ -2589,19 +2608,24 @@ Stream<DocumentImportUnit> _epubUnits(
   final diagnostics = <ImportDiagnostic>[];
   var title = '';
   var inTitle = false;
+  var seenTitle = false;
   DocumentImportUnit? pending;
   // OPF metadata/manifest precede the spine in the maintained EPUB format.
   // No chapter DOM or complete package/spine is retained before publication.
   await for (final events in _archiveText(
     package,
-  ).toXmlEvents(validateNesting: true)) {
+  ).toXmlEvents(validateNesting: true, validateDocument: true)) {
     for (final event in events) {
       if (event is XmlTextEvent && inTitle) title += event.value;
-      if (event is XmlEndElementEvent && event.localName == 'title')
+      if (event is XmlEndElementEvent && event.localName == 'title') {
         inTitle = false;
+      }
       if (event is! XmlStartElementEvent) continue;
       final attributes = {for (final a in event.attributes) a.name: a.value};
-      if (event.localName == 'title') inTitle = !event.isSelfClosing;
+      if (event.localName == 'title' && !seenTitle) {
+        seenTitle = true;
+        inTitle = !event.isSelfClosing;
+      }
       if (event.localName == 'item') {
         final id = attributes['id'];
         final href = attributes['href'];
@@ -2663,8 +2687,9 @@ Stream<DocumentImportUnit> _epubUnits(
             if (src == null ||
                 src.isEmpty ||
                 src.startsWith('data:') ||
-                src.startsWith('http'))
+                src.startsWith('http')) {
               continue;
+            }
             final resolved = _resolveArchivePath(asset.href, src);
             final entry = entries[resolved];
             if (entry == null) {
@@ -2708,7 +2733,7 @@ Stream<DocumentImportUnit> _epubUnits(
     );
   } else {
     yield DocumentImportUnit(
-      text: '',
+      text: '\n',
       title: title.trim().isEmpty ? fileName : title.trim(),
       type: ReaderDocumentType.epub,
       diagnostics: List.unmodifiable(diagnostics),
@@ -2733,7 +2758,7 @@ Stream<DocumentImportUnit> _docxUnits(
     final media = hasImage;
     hasImage = false;
     final unit = DocumentImportUnit(
-      text: text,
+      text: text.isEmpty ? '\n' : text,
       html:
           '${media ? '<div data-read-aloud-kind="attachment-placeholder" data-attachment-type="image" data-label="Inline DOCX media"></div>' : ''}'
           '${text.isEmpty ? '' : '<$tag>${const HtmlEscape().convert(text)}</$tag>'}',
@@ -2762,15 +2787,20 @@ Stream<DocumentImportUnit> _docxUnits(
     return unit;
   }
 
-  await for (final events in source.toXmlEvents(validateNesting: true)) {
+  await for (final events in source.toXmlEvents(
+    validateNesting: true,
+    validateDocument: true,
+  )) {
     for (final event in events) {
       if (event is XmlStartElementEvent) {
         if (event.localName == 't') inText = !event.isSelfClosing;
         if (event.localName == 'tab') paragraph.write(' ');
-        if (event.localName == 'br' || event.localName == 'cr')
+        if (event.localName == 'br' || event.localName == 'cr') {
           paragraph.write('\n');
-        if (event.localName == 'drawing' || event.localName == 'pict')
+        }
+        if (event.localName == 'drawing' || event.localName == 'pict') {
           hasImage = true;
+        }
         if (event.localName == 'numPr') tag = 'li';
         if (event.localName == 'pStyle') {
           final style =
@@ -2792,8 +2822,9 @@ Stream<DocumentImportUnit> _docxUnits(
           if (end < remaining.length &&
               end > 0 &&
               remaining.codeUnitAt(end - 1) >= 0xd800 &&
-              remaining.codeUnitAt(end - 1) <= 0xdbff)
+              remaining.codeUnitAt(end - 1) <= 0xdbff) {
             end--;
+          }
           if (end == 0) {
             final unit = flush();
             if (unit != null) yield unit;
@@ -2838,6 +2869,14 @@ Stream<DocumentImportUnit> _htmlUnits(
   final tagNames = <String>[];
   String? suppressed;
   var ordinal = 0;
+  final diagnostics = <ImportDiagnostic>[];
+  DocumentImportUnit? pendingUnit;
+  DocumentImportUnit? enqueue(DocumentImportUnit unit) {
+    final previous = pendingUnit;
+    pendingUnit = unit;
+    return previous;
+  }
+
   const voidTags = {
     'area',
     'base',
@@ -2876,12 +2915,31 @@ Stream<DocumentImportUnit> _htmlUnits(
     final parsed = html_parser.parseFragment(raw);
     final wrapper = html_dom.Element.tag('article')
       ..nodes.addAll(parsed.nodes.toList());
-    _pruneHtmlForNormalization(wrapper, diagnostics: <ImportDiagnostic>[]);
-    final text = _normalizeReadableText(wrapper.text);
+    _pruneHtmlForNormalization(wrapper, diagnostics: diagnostics);
+    // Reuse display block policy rather than DOM .text concatenation, which
+    // loses boundaries around captions, list items and nested structures.
+    final display = _DisplayDocumentBuilder(
+      documentId: '',
+      sourceType: ReaderDocumentType.html.name,
+      title: '',
+      normalizationVersion: DocumentImportService._normalizationVersion,
+      diagnostics: [],
+    )..addNode(wrapper);
+    final text = display.blocks
+        .where((block) => block.plainText.trim().isNotEmpty)
+        .map((block) => _normalizeReadableText(block.plainText))
+        .join('\n\n');
     block = StringBuffer()..writeAll(open);
-    if (text.isEmpty) return null;
+    if (text.isEmpty &&
+        wrapper.querySelector('img,audio,video,hr,[data-read-aloud-kind]') ==
+            null) {
+      return null;
+    }
+    final unitDiagnostics = List<ImportDiagnostic>.unmodifiable(diagnostics);
+    diagnostics.clear();
     return DocumentImportUnit(
-      text: text,
+      text: text.isEmpty ? '\n' : text,
+      diagnostics: unitDiagnostics,
       html: wrapper.outerHtml,
       locator: '$locator:block${ordinal++}',
       type: ReaderDocumentType.html,
@@ -2930,8 +2988,7 @@ Stream<DocumentImportUnit> _htmlUnits(
         if (match == null) continue;
         final tag = match.group(2)!.toLowerCase();
         final closing = match.group(1) == '/';
-        if (!closing &&
-            const {'head', 'script', 'style', 'nav'}.contains(tag)) {
+        if (!closing && const {'head', 'script', 'style'}.contains(tag)) {
           suppressed = tag;
           continue;
         }
@@ -2951,9 +3008,13 @@ Stream<DocumentImportUnit> _htmlUnits(
             open.add(raw);
           }
         }
-        if (closing && boundaries.contains(tag) && block.length >= 1024) {
+        if ((closing && boundaries.contains(tag) && block.length >= 1024) ||
+            block.length >= 4096) {
           final unit = flush();
-          if (unit != null) yield unit;
+          if (unit != null) {
+            final previous = enqueue(unit);
+            if (previous != null) yield previous;
+          }
         }
       } else {
         var end = pending.indexOf('<');
@@ -2965,12 +3026,21 @@ Stream<DocumentImportUnit> _htmlUnits(
           if (amp == 0 && pending.length < 64) break;
           if (amp > 0) end = amp;
         }
+        if (end > 0 &&
+            end < pending.length &&
+            pending.codeUnitAt(end - 1) >= 0xd800 &&
+            pending.codeUnitAt(end - 1) <= 0xdbff) {
+          end--;
+        }
         if (end == 0) break;
         block.write(pending.substring(0, end));
         pending = pending.substring(end);
         if (block.length >= 4096) {
           final unit = flush();
-          if (unit != null) yield unit;
+          if (unit != null) {
+            final previous = enqueue(unit);
+            if (previous != null) yield previous;
+          }
         }
       }
     }
@@ -2982,7 +3052,24 @@ Stream<DocumentImportUnit> _htmlUnits(
   }
   if (pending.isNotEmpty && suppressed == null) block.write(pending);
   final unit = flush();
-  if (unit != null) yield unit;
+  if (unit != null) {
+    final previous = enqueue(unit);
+    if (previous != null) yield previous;
+  }
+  if (pendingUnit != null) {
+    yield _copyImportUnit(
+      pendingUnit!,
+      diagnostics: [...pendingUnit!.diagnostics, ...diagnostics],
+    );
+  } else if (diagnostics.isNotEmpty) {
+    yield DocumentImportUnit(
+      text: '\n',
+      html: '',
+      locator: locator,
+      type: ReaderDocumentType.html,
+      diagnostics: List.unmodifiable(diagnostics),
+    );
+  }
 }
 
 class _IncrementalRtfDecoder {
