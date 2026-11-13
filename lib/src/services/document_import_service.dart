@@ -67,6 +67,7 @@ class DocumentImportUnit {
     this.title,
     this.attachments = const [],
     this.diagnostics = const [],
+    this.metadataOnly = false,
   });
   final String text;
   final String? html;
@@ -75,6 +76,9 @@ class DocumentImportUnit {
   final String? title;
   final List<ReaderAttachment> attachments;
   final List<ImportDiagnostic> diagnostics;
+
+  /// A source-located metadata/diagnostic event has no display or speech body.
+  final bool metadataOnly;
 }
 
 class PdfrxPdfTextExtractor implements PdfTextExtractor {
@@ -251,6 +255,7 @@ class DocumentImportService {
         speakableText: next.speakableText,
         normalizationVersion: _normalizationVersion,
         diagnostics: const [],
+        includeTitleFallback: !followingUnit.metadataOnly,
       ).build().speechDocument.segments.take(12).toList(growable: false);
     }
     _fragmentIdentityNamespace = 'r${sourceStart}_';
@@ -271,6 +276,7 @@ class DocumentImportService {
         sourceDescription: 'Incremental source range at $sourceStart',
         attachments: unit?.attachments ?? const [],
         diagnostics: unit?.diagnostics ?? const [],
+        includeTitleFallback: !(unit?.metadataOnly ?? false),
       );
     } finally {
       _buildingFragment = false;
@@ -312,7 +318,9 @@ class DocumentImportService {
     ).transform(const Utf8Decoder(allowMalformed: true));
     if (extension == 'html' || extension == 'htm') {
       try {
-        yield* _htmlUnits(decoded(), locator: fileName);
+        await for (final unit in _htmlUnits(decoded(), locator: fileName)) {
+          yield unit;
+        }
       } catch (error) {
         throw DocumentImportException(
           code: 'html_parse_failed',
@@ -373,15 +381,18 @@ class DocumentImportService {
         }
         if (!published) {
           yield DocumentImportUnit(
-            text: '\n',
+            text: '',
             html: '',
             title: title,
             locator: entry.name,
             type: ReaderDocumentType.html,
+            metadataOnly: true,
           );
         }
       } else {
-        yield* _epubUnits(entries, fileName: fileName);
+        await for (final unit in _epubUnits(entries, fileName: fileName)) {
+          yield unit;
+        }
       }
     } on DocumentImportException {
       rethrow;
@@ -674,6 +685,9 @@ class DocumentImportService {
     final attachments = <ReaderAttachment>[];
     final diagnostics = <ImportDiagnostic>[];
     for (final unit in units) {
+      attachments.addAll(unit.attachments);
+      diagnostics.addAll(unit.diagnostics);
+      if (unit.metadataOnly) continue;
       final recovered = _recoverPlainTextStructure(unit.text);
       html.write(unit.html ?? recovered.displayHtml);
       if (unit.text.trim().isNotEmpty) {
@@ -683,8 +697,6 @@ class DocumentImportService {
               : unit.text,
         );
       }
-      attachments.addAll(unit.attachments);
-      diagnostics.addAll(unit.diagnostics);
     }
     html.write('</article>');
     return _buildReaderDocument(
@@ -696,6 +708,8 @@ class DocumentImportService {
       sourceDescription: '${extension.toUpperCase()} import',
       attachments: attachments,
       diagnostics: diagnostics,
+      includeTitleFallback:
+          units.isEmpty || units.any((unit) => !unit.metadataOnly),
     );
   }
 
@@ -710,6 +724,7 @@ class DocumentImportService {
     String? sourceDescription,
     List<ReaderAttachment> attachments = const <ReaderAttachment>[],
     List<ImportDiagnostic> diagnostics = const <ImportDiagnostic>[],
+    bool includeTitleFallback = true,
   }) {
     final normalized = _NormalizedDocumentFactory(
       title: title,
@@ -721,6 +736,7 @@ class DocumentImportService {
       speakableText: speakableText,
       diagnostics: diagnostics,
       normalizationVersion: _normalizationVersion,
+      includeTitleFallback: includeTitleFallback,
     ).build();
     final baseSpeechAnnotations = _annotationInferenceService.infer(
       speechDocument: normalized.speechDocument,
@@ -1291,6 +1307,7 @@ class _NormalizedDocumentFactory {
     required this.speakableText,
     required this.diagnostics,
     required this.normalizationVersion,
+    this.includeTitleFallback = true,
   });
 
   final String title;
@@ -1302,6 +1319,7 @@ class _NormalizedDocumentFactory {
   final String speakableText;
   final List<ImportDiagnostic> diagnostics;
   final String normalizationVersion;
+  final bool includeTitleFallback;
 
   NormalizedImportResult build() {
     final workingDiagnostics = List<ImportDiagnostic>.from(diagnostics);
@@ -1321,7 +1339,9 @@ class _NormalizedDocumentFactory {
         displayBuilder.addNode(node);
       }
     }
-    if (displayBuilder.blocks.isEmpty && title.isNotEmpty) {
+    if (includeTitleFallback &&
+        displayBuilder.blocks.isEmpty &&
+        title.isNotEmpty) {
       displayBuilder.addTextBlock(
         kind: DisplayBlockKind.heading,
         text: title,
@@ -2564,6 +2584,7 @@ DocumentImportUnit _copyImportUnit(
   title: title ?? unit.title,
   attachments: List.unmodifiable(attachments ?? unit.attachments),
   diagnostics: List.unmodifiable(diagnostics ?? unit.diagnostics),
+  metadataOnly: unit.metadataOnly,
 );
 
 Stream<DocumentImportUnit> _epubUnits(
@@ -2609,7 +2630,7 @@ Stream<DocumentImportUnit> _epubUnits(
   var title = '';
   var inTitle = false;
   var seenTitle = false;
-  DocumentImportUnit? pending;
+  var published = false;
   // OPF metadata/manifest precede the spine in the maintained EPUB format.
   // No chapter DOM or complete package/spine is retained before publication.
   await for (final events in _archiveText(
@@ -2677,7 +2698,7 @@ Stream<DocumentImportUnit> _epubUnits(
           _archiveText(chapter),
           locator: asset.href,
         )) {
-          if (pending != null) yield pending;
+          published = true;
           final root = html_parser.parseFragment(unit.html!);
           final attachments = <ReaderAttachment>[];
           final localDiagnostics = [...diagnostics, ...unit.diagnostics];
@@ -2714,7 +2735,7 @@ Stream<DocumentImportUnit> _epubUnits(
               ),
             );
           }
-          pending = _copyImportUnit(
+          yield _copyImportUnit(
             unit,
             title: title.trim().isEmpty ? fileName : title.trim(),
             type: ReaderDocumentType.epub,
@@ -2726,17 +2747,15 @@ Stream<DocumentImportUnit> _epubUnits(
       }
     }
   }
-  if (pending != null) {
-    yield _copyImportUnit(
-      pending,
-      diagnostics: [...pending.diagnostics, ...diagnostics],
-    );
-  } else {
+  if (!published || diagnostics.isNotEmpty) {
     yield DocumentImportUnit(
-      text: '\n',
+      text: '',
+      html: '',
       title: title.trim().isEmpty ? fileName : title.trim(),
+      locator: path,
       type: ReaderDocumentType.epub,
       diagnostics: List.unmodifiable(diagnostics),
+      metadataOnly: true,
     );
   }
 }
@@ -2870,13 +2889,6 @@ Stream<DocumentImportUnit> _htmlUnits(
   String? suppressed;
   var ordinal = 0;
   final diagnostics = <ImportDiagnostic>[];
-  DocumentImportUnit? pendingUnit;
-  DocumentImportUnit? enqueue(DocumentImportUnit unit) {
-    final previous = pendingUnit;
-    pendingUnit = unit;
-    return previous;
-  }
-
   const voidTags = {
     'area',
     'base',
@@ -2908,6 +2920,111 @@ Stream<DocumentImportUnit> _htmlUnits(
     'blockquote',
     'tr',
   };
+  // This stack carries fragment context, not a replacement HTML tree builder.
+  // Apply the format's omitted-end-tag rules before counting retained nesting;
+  // the maintained HTML parser still constructs/repairs each fragment's DOM.
+  bool closeInScope(Set<String> targets, Set<String> scope) {
+    for (var index = tagNames.length - 1; index >= 0; index--) {
+      if (targets.contains(tagNames[index])) {
+        final closed = tagNames.sublist(index);
+        for (final tag in closed.reversed) {
+          block.write('</$tag>');
+        }
+        final closedBlock = closed.any(boundaries.contains);
+        if (closedBlock) block.write('\n\n');
+        tagNames.removeRange(index, tagNames.length);
+        open.removeRange(index, open.length);
+        return closedBlock;
+      }
+      if (scope.contains(tagNames[index])) return false;
+    }
+    return false;
+  }
+
+  bool closeImplicitly(String incoming) {
+    const scope = {
+      'applet',
+      'caption',
+      'html',
+      'table',
+      'td',
+      'th',
+      'marquee',
+      'object',
+      'template',
+    };
+    const closesParagraph = {
+      'address',
+      'article',
+      'aside',
+      'blockquote',
+      'details',
+      'dialog',
+      'div',
+      'dl',
+      'fieldset',
+      'figcaption',
+      'figure',
+      'footer',
+      'form',
+      'h1',
+      'h2',
+      'h3',
+      'h4',
+      'h5',
+      'h6',
+      'header',
+      'hgroup',
+      'hr',
+      'main',
+      'menu',
+      'nav',
+      'ol',
+      'p',
+      'pre',
+      'section',
+      'table',
+      'ul',
+      'li',
+      'dd',
+      'dt',
+    };
+    var closedBlock = false;
+    if (closesParagraph.contains(incoming)) {
+      closedBlock = closeInScope({'p'}, {...scope, 'button'});
+    }
+    if (incoming == 'li') {
+      return closeInScope({'li'}, {...scope, 'ol', 'ul', 'menu'}) ||
+          closedBlock;
+    }
+    if (incoming == 'dd' || incoming == 'dt') {
+      return closeInScope({'dd', 'dt'}, {...scope, 'dl'}) || closedBlock;
+    }
+    if (RegExp(r'^h[1-6]$').hasMatch(incoming) &&
+        tagNames.isNotEmpty &&
+        RegExp(r'^h[1-6]$').hasMatch(tagNames.last)) {
+      return closeInScope({'h1', 'h2', 'h3', 'h4', 'h5', 'h6'}, scope) ||
+          closedBlock;
+    }
+    if (incoming == 'option' || incoming == 'optgroup') {
+      closeInScope({'option'}, {'select', 'datalist', 'optgroup'});
+      if (incoming == 'optgroup') closeInScope({'optgroup'}, {'select'});
+    }
+    if ({'td', 'th', 'tr', 'tbody', 'thead', 'tfoot'}.contains(incoming)) {
+      closedBlock = closeInScope({'td', 'th'}, {'table', 'tr'}) || closedBlock;
+      if ({'tr', 'tbody', 'thead', 'tfoot'}.contains(incoming)) {
+        closedBlock =
+            closeInScope({'tr'}, {'table', 'tbody', 'thead', 'tfoot'}) ||
+            closedBlock;
+      }
+      if ({'tbody', 'thead', 'tfoot'}.contains(incoming)) {
+        closedBlock =
+            closeInScope({'tbody', 'thead', 'tfoot'}, {'table'}) || closedBlock;
+      }
+    }
+    return closedBlock;
+  }
+
   DocumentImportUnit? flush() {
     if (block.isEmpty) return null;
     final raw =
@@ -2988,6 +3105,7 @@ Stream<DocumentImportUnit> _htmlUnits(
         if (match == null) continue;
         final tag = match.group(2)!.toLowerCase();
         final closing = match.group(1) == '/';
+        final implicitBoundary = !closing && closeImplicitly(tag);
         if (!closing && const {'head', 'script', 'style'}.contains(tag)) {
           suppressed = tag;
           continue;
@@ -3004,17 +3122,26 @@ Stream<DocumentImportUnit> _htmlUnits(
           block.write(raw);
           if (tag == 'br') block.write('\n');
           if (!voidTags.contains(tag) && !raw.endsWith('/>')) {
+            if (open.length >= 256) {
+              throw const FormatException(
+                'HTML token or nesting exceeds bounded parser capacity.',
+              );
+            }
             tagNames.add(tag);
             open.add(raw);
           }
         }
-        if ((closing && boundaries.contains(tag) && block.length >= 1024) ||
+        // A complete paragraph is already a useful bounded unit, even when
+        // short. Packing two short paragraphs together would make the
+        // supervisor's successor lookup scan an arbitrary excluded tail.
+        final completedParagraph =
+            (closing && tag == 'p') || (implicitBoundary && tag != 'li');
+        if (completedParagraph ||
+            ((closing && boundaries.contains(tag) || implicitBoundary) &&
+                block.length >= 1024) ||
             block.length >= 4096) {
           final unit = flush();
-          if (unit != null) {
-            final previous = enqueue(unit);
-            if (previous != null) yield previous;
-          }
+          if (unit != null) yield unit;
         }
       } else {
         var end = pending.indexOf('<');
@@ -3037,10 +3164,7 @@ Stream<DocumentImportUnit> _htmlUnits(
         pending = pending.substring(end);
         if (block.length >= 4096) {
           final unit = flush();
-          if (unit != null) {
-            final previous = enqueue(unit);
-            if (previous != null) yield previous;
-          }
+          if (unit != null) yield unit;
         }
       }
     }
@@ -3052,22 +3176,15 @@ Stream<DocumentImportUnit> _htmlUnits(
   }
   if (pending.isNotEmpty && suppressed == null) block.write(pending);
   final unit = flush();
-  if (unit != null) {
-    final previous = enqueue(unit);
-    if (previous != null) yield previous;
-  }
-  if (pendingUnit != null) {
-    yield _copyImportUnit(
-      pendingUnit!,
-      diagnostics: [...pendingUnit!.diagnostics, ...diagnostics],
-    );
-  } else if (diagnostics.isNotEmpty) {
+  if (unit != null) yield unit;
+  if (diagnostics.isNotEmpty) {
     yield DocumentImportUnit(
-      text: '\n',
+      text: '',
       html: '',
       locator: locator,
       type: ReaderDocumentType.html,
       diagnostics: List.unmodifiable(diagnostics),
+      metadataOnly: true,
     );
   }
 }
