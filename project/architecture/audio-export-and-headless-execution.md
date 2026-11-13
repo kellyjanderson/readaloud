@@ -17,6 +17,21 @@ shutdown claim. `headless_reader_session_test.dart` covers option ordering,
 missing-voice refusal and failure cleanup. Native process exit remains separate
 acceptance under #151/#114.
 
+Offline model probes use `tools/mlx_protocol_client.py` to own one production
+JSON-lines child and one request at a time through standard `subprocess` and
+`selectors`. Metadata is a data-only worker command derived from adapter lists
+and bundled model/reference catalogs. Protocol buffers/events are bounded and
+identity checked; packetized completed PCM must equal ordered packet PCM.
+Timeout, cancellation and protocol failure retire/reap the owned child, and
+complete receipts require acknowledged shutdown and successful process exit.
+Benchmark/voice-bank workload and acoustic policy remain separate. No production
+seed override exists, so those receipts report null rather than inventing a seed.
+VoiceDesign authoring drains its generator before publishing a reference; this
+change regenerated no assets. Descriptor-based QA staging creates an independent
+root, includes current Fish variants/reference caches and refuses overwrite and
+escaping symlinks. Fake-process/catalog/generator tests establish these tool
+contracts; actual model/app, native timing and listening are separate #151 gates.
+
 `ExportedAudioAssembler` is a stateful main-isolate supervisor with one active request and no waiting queue. Overlap is rejected. Each accepted request has a monotonic owner-local identity and a dedicated pure Dart isolate; only DTOs, file paths, progress and the terminal result cross the port. The worker scans RIFF sections, verifies matching PCM formats, copies audio in at most 64 KiB blocks and streams one chunk's JSON metadata at a time. It retains the request graph and per-chunk format descriptors, not whole-document PCM. WAV encoding, metadata traversal, file I/O and publication are worker-owned. Source chunks remain read-only.
 
 Cancellation is cooperative between bounded reads/writes and at an explicit staged/commit handshake. `cancel()` suppresses publication before commit authorization; after authorization, the short synchronous publication step completes and returns its result. `shutdown()` closes intake, cancels staging and awaits worker exit and file/temp cleanup. The default five-minute deadline requests cancellation and reports a timeout after drain; it does not pretend an unresponsive filesystem operation was forcibly cancelled. Worker errors/exit become terminal failures; a previous request's callbacks cannot clear a newer request. The engine owns document/session invalidation and must call these lifecycle seams. Progress callbacks are short main-isolate notifications, never assembly work.
