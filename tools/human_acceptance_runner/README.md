@@ -41,3 +41,28 @@ The `model-workflow` hash identifies a supplied manifest/instruction fixture, no
 5. Download the results and return the JSON to the release coordinator. Skipped and incomplete cases are identified in the report.
 
 Results are saved in the browser for this candidate. A different package or source revision starts a separate session. Earlier RC2 notes found in the same browser storage are exported separately with their original source revision.
+
+## Final combined session (S11)
+
+Run this session only after the remaining implementation slices and automated/native
+checks are ready. The coordinator collects results here once; no intermediate
+listening pass is required. The case list also covers transport/following text,
+explicit versus Automatic voice selection, shared import adapters, exported audio
+and sustained long-book listening. Skips and unlistened intervals stay untested.
+
+The handoff copy of `candidate.js` must additionally name and hash these fixture
+manifests. Do not fill them with placeholders or a hash of unrelated content:
+
+- `import-workflow`: matching cleared DOCX/EPUB/HTML/text inputs, title/heading/list
+  reference and exact final words, file hashes and steps for incremental reading.
+- `export-workflow`: qualified book, marked scene ranges, expected voices and
+  export/player instructions; identify original and newly exported files.
+- `long-book`: local-only book identity/hash, sustained interval and final-chapter
+  route, recurring voice checks and reopen instructions. Private City manuscript
+  text and raw recordings remain local; the public report uses locations and
+  descriptions rather than manuscript quotations.
+
+All fixture IDs required by the case list are checked before the session opens.
+Package/source identity remains exact; a new candidate starts a new session.
+This runner collects human observations; it does not certify M3 hardware, measured
+startup/response bounds, native PCM parity, notices or release publication.

@@ -29,6 +29,58 @@ owned by [the Drama issue](https://github.com/kellyjanderson/readaloud/issues/11
 Builds, source tests and playback position do not establish listening quality or
 the startup goal and hard limits in the [product definition](../project/product-definition.md).
 
+## Support and evidence
+
+This is a development support matrix, not a release certification. Settings exposes
+all rows below; availability still requires the matching model, voice assets and
+runtime. Source coverage is recorded by the [engine catalog tests](../test/speech_engine_catalog_test.dart),
+[worker tests](../tools/mlx_tts_worker_test.py) and controller/runtime tests.
+Those locations do not assert a new test run for this documentation change.
+
+| Engine / selectable configuration | Source state | Native evidence and limits | Distributed state |
+| --- | --- | --- | --- |
+| Fish Drama 3 bf16 | Pinned integrity, scene/delivery adapter, memory admission and lifecycle implemented | Bounded scenes and M5 Max/128 GiB memory evidence; earlier scene listening only | Unreleased; final candidate packaging/onboarding open |
+| Fish Drama 3 8-bit | Independent pinned checkpoint, separate-turn adapter and lifecycle implemented | S7/S8 M5 strict captured-audio/runtime checks; no inherited bf16 scene/voice-quality certification | Unreleased; final candidate packaging/onboarding open |
+| Fish Drama 3 4-bit | Independent pinned checkpoint, separate-turn adapter and lifecycle implemented | S7/S8 M5 strict captured-audio/runtime checks; no M3 qualification | Unreleased; final candidate packaging/onboarding open |
+| Qwen3-TTS Base / CustomVoice | Reference-conditioned Base and fixed-preset CustomVoice adapters implemented | Earlier bounded native smoke; current integrated candidate and perceptual variety unqualified | Unreleased; declared MLX runtime required |
+| Voxtral TTS 4B / optional in-memory 4-bit | Preset adapter and precision/cache identity implemented | Earlier bounded native smoke; local reference cloning unavailable; current candidate unqualified | Unreleased; noncommercial model license; declared MLX runtime required |
+| MOSS-TTS v1.5 | Reference-conditioned adapter implemented | Earlier bounded native smoke; current candidate and perceptual variety unqualified | Unreleased; declared MLX runtime/tokenizer required |
+| Kokoro | ONNX adapter and resource/voice routing implemented | Earlier P0–P4 bounded evidence; current candidate/human gates remain open | Local Kokoro-only builds possible; public release qualification open |
+
+Fish qualification uses `mlx-audio-0.6.3-mlx-0.32.4-complete-v3` on
+Apple M5 Max with 137,438,953,472 bytes (128 GiB) RAM. The exact bundled checkpoint
+revisions are:
+
+| Engine ID | Checkpoint revision |
+| --- | --- |
+| `fish_drama3` | `8c5496f9af370bb9342ab98130b27b5389d1b1cb` |
+| `fish_drama3_8bit` | `fedc7cc92bab5a180709cbaae6208d10b390bb97` |
+| `fish_drama3_4bit` | `2b0c8028998533972e77359cce56b8bf1c5d6d4a` |
+
+The [catalog](../assets/fish_drama_models.json) and
+[trusted memory records](../lib/src/services/qualified_engine_selection_service.dart)
+bind these identities. A refreshed descriptor cannot confer native qualification.
+Other engines' earlier smoke observations do not pin the model snapshot of a future
+candidate; record its exact revision/runtime/hardware before reusing evidence.
+
+The [S7/S8 final receipt](https://github.com/kellyjanderson/readaloud/issues/112#issuecomment-6816503511)
+and [integration receipt](https://github.com/kellyjanderson/readaloud/issues/112#issuecomment-6827533847)
+identify qualified S8 `a1ea19e` and identical integrated tree `36b9efe`.
+Their strict candidate checks, natural EOF/save and model-free replay are bounded
+software-output evidence. The extended 180-second run passes its components while
+retaining an overall diagnostic `false`; do not report that whole run as a pass.
+Subsequent consolidation requires applicable candidate checks. Physical output,
+physical M3, current human listening/usability and final distribution remain
+separate gates. Earlier accepted scene samples do not certify this candidate.
+
+The same receipt records first/reusable post-startup loads of
+2,099.705/525.851 ms, within the ten-/five-second hard limits. Separately measured
+startup is 4,218.100/275.554 ms and total launch-to-emission is
+6,317.906/801.514 ms; first launch still misses the two-second goal.
+Only the load hard limits exclude ordinary startup. All target document
+preparation, resource setup and synthesis after the explicit load request remain
+inside those clocks; no warmup shift or guessed startup subtraction is allowed.
+
 ## Model downloads and cache
 
 At launch with an MLX selection, or when selecting one in Settings, Read Aloud checks for a compatible local
@@ -50,7 +102,8 @@ verified completed bytes and keeps that destination after an interruption.
 Older app-support Hub caches are checked before starting a new download. An invalid legacy unpacked
 folder fails with an integrity error rather than being rewritten automatically.
 File verification does not establish listening quality, memory fit or native
-8-bit/4-bit playback qualification; those remain separate checks.
+playback qualification. The support matrix records separate bounded M5 evidence;
+M3 and current human acceptance remain open.
 
 The recognized Hub checkpoints are:
 
@@ -72,7 +125,7 @@ runtime and MLX packages once with `sh tools/install_mlx_tts_runtime.sh`.
 The Xcode embed phase assembles and signs the standalone interpreter/packages
 for sandbox inheritance outside the bundle, then packages its signed tree as
 `Resources/python-runtimes/mlx.zip` with an adjacent schema-2 content manifest.
-All Mach-O code and Metal libraries remain signed/bound in the app under
+All Mach-O code and Metal libraries remain signed and bound in the app under
 `Resources/python-runtimes/mlx-native/`; the ZIP contains only Python/data.
 It does not archive the build venv. First MLX use verifies the bundled targets
 and extracts data into an immutable Application Support view under
@@ -96,18 +149,36 @@ READALOUD_TTS_ENGINE=moss_tts_8b tools/flutter run -d macos
 ```
 
 The build input interpreter is installed at
-`<app-support>/read_aloud/mlx-tts/runtime/venv/bin/python`. The packaged app uses
-its verified extracted standalone interpreter. It must be arm64
+`<app-support>/read_aloud/mlx-tts/runtime/venv/bin/python`. The packaged app executes
+its signed bundled standalone interpreter with a verified extracted data home. It must be arm64
 with `mlx==0.32.4` and `mlx-audio==0.6.3`. `READALOUD_MLX_PYTHON` can override
 the packaged interpreter explicitly when the override is accessible to the sandbox.
 This override has developer provenance and does not qualify a bundled runtime. An alternate local
 checkpoint directory can be supplied with `READALOUD_MLX_TTS_MODEL_PATH`; it
 must be readable from the app sandbox. If no recognized `READALOUD_TTS_ENGINE`
-is present, the saved preference is used (Kokoro on a fresh installation).
+is present, an explicit saved preference is used. With no explicit choice, the\nqualified-device/headroom policy above selects Fish or discloses the Kokoro fallback.
 
 ## Runtime boundary
 
 ### Local macOS release packaging
+
+Install the arm64 MLX runtime with `sh tools/install_mlx_tts_runtime.sh` before
+building an MLX-capable candidate. The embed phase can succeed with a warning
+when that optional runtime is absent: the resulting build is Kokoro-only.
+A Flutter/Xcode build success therefore cannot establish Drama capability.
+For the full candidate, also follow the independent
+[ModernBookNLP packaging prerequisites](modernbooknlp-provider.md), including its
+qualified OpenMP artifact. Model weights remain in persistent app storage across
+rebuilds and are not included by either runtime embed step.
+
+Verify the candidate's `Resources/python-runtimes/` contains the declared schema-2
+manifests, Python/data ZIPs and signed native roots (`mlx`, and `modernbooknlp`
+when declared). Record their exact identities with the source commit and
+model/runtime provenance. Validate clean-profile bootstrap, packaged runtime
+installation and model reuse in the actual candidate before distribution;
+these final onboarding/package checks remain open under
+[release #122](https://github.com/kellyjanderson/readaloud/issues/122).
+[Notices and distribution approval](release-compliance.md) remain separate.
 
 Local releases must retain `Runner/Release.entitlements`. The file-picker
 plugin checks the running app's signed entitlements before presenting a panel;
@@ -260,8 +331,8 @@ These models currently receive the planned plain-text chunk and a supported
 preset or a selected synthetic audio reference. Engine-specific phoneme/IPA adaptation and acoustic quality have
 not been qualified. The integration is for side-by-side engine evaluation;
 it does not establish that any model improves pronunciation or meets the
-existing latency target. Per-chunk speech-rate realization is also not yet
-implemented by these adapters. Voxtral's noncommercial license must be observed.
+existing latency target. Speech-rate support is scoped by the engine capability profile; current Fish
+rate handling uses player-side post-processing rather than native model speed. Voxtral's noncommercial license must be observed.
 
 Voxtral defaults to **Full precision**. Settings offers optional **Fast (4-bit)** inference;
 changing precision retires and reloads the model in the current session. The helper quantizes
@@ -361,8 +432,9 @@ headroom before loading, caps MLX allocation, and retires the child at a sampled
 99 GB application-plus-inference-child physical-footprint high water, queried
 through macOS libproc. Each process samples itself, respecting sandbox rules;
 the parent combines its footprint with telemetry from its current child only.
-These sampled guards have not yet been qualified under
-full Drama model memory pressure.
+The reviewed M5 Max/128 GiB observations support exact runtime/checkpoint
+admission with a 25% margin, separately from observed peaks. These bounded
+results do not qualify physical M3 or arbitrary contexts; see the support matrix.
 
 bf16 and 4-bit are pinned to conversions of the October 29 updated weights.
 The available 8-bit conversion has an older lineage; a comparison therefore
@@ -400,7 +472,7 @@ S6's bounded load evidence is recorded in
 [issue #137](https://github.com/kellyjanderson/readaloud/issues/137); it does not
 establish the two-second first-load launch goal or broader release acceptance.
 Perceptual continuity across scene boundaries,
-speech-rate handling and broader #111 acceptance remain open.
+broader speech-rate acceptance and #111 listening gates remain open.
 
 Sources: [Drama bf16 model card](https://huggingface.co/mlx-community/fish-audio-drama-3-bf16),
 [MLX Audio Drama implementation](https://github.com/Blaizzy/mlx-audio/tree/main/mlx_audio/tts/models/fish_drama3),

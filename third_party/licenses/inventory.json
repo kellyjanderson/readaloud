@@ -2,7 +2,7 @@
   "schema": 1,
   "scope": "Conservative pubspec.lock superset, source grants and native notices; not release clearance",
   "lockfiles": {
-    "pubspec.lock": "487288b1cf69a127913310d6963c58264d9d975c08235b03fe06b0cb60507d09",
+    "pubspec.lock": "7b567b91ed1938088fa3df42715c30b71c71d7295114434885e07c9f81a1301b",
     "macos/Podfile.lock": "68d9ee161c6509ca3c2162fdbde53d02cf2e70f29d9ade7846e270e4d24645fe"
   },
   "packages": [
@@ -260,7 +260,12 @@
       "version": "1.6.3",
       "dependency": "direct main",
       "package_source": "path",
-      "archive_sha256": null
+      "archive_sha256": null,
+      "package_description": {
+        "path": "third_party/flutter_onnxruntime",
+        "relative": true
+      },
+      "vendored_notice": "third_party/flutter_onnxruntime/LICENSE"
     },
     {
       "id": "dart:flutter_plugin_android_lifecycle",
@@ -356,11 +361,19 @@
       "id": "dart:just_audio",
       "notice": "dart/just_audio/LICENSE",
       "sha256": "63ce4443e916b27424700d7fe970003add9f54944daf732f2dbcc1d8caf1bbad",
-      "source": "https://pub.dev/api/archives/just_audio-0.10.5.tar.gz",
+      "source": "third_party/just_audio/LICENSE",
       "version": "0.10.5",
       "dependency": "direct main",
-      "package_source": "hosted",
-      "archive_sha256": "9694e4734f515f2a052493d1d7e0d6de219ee0427c7c29492e246ff32a219908"
+      "package_source": "path",
+      "archive_sha256": null,
+      "package_description": {
+        "path": "third_party/just_audio",
+        "relative": true
+      },
+      "vendored_notice": "third_party/just_audio/LICENSE",
+      "upstream_archive_url": "https://pub.dev/api/archives/just_audio-0.10.5.tar.gz",
+      "upstream_archive_sha256": "9694e4734f515f2a052493d1d7e0d6de219ee0427c7c29492e246ff32a219908",
+      "qualification": "Vendored 0.10.5 with Read Aloud Dart/native player changes documented in third_party/just_audio/README.local.md; retained LICENSE byte-matches the exact upstream archive verified against its prior lockfile SHA-256. The path override has no current Pub archive digest. MIT wrapper and Android ExoPlayer Apache text retained; macOS uses AVFoundation, with final linked framework inspection still required."
     },
     {
       "id": "dart:just_audio_platform_interface",
@@ -1123,6 +1136,25 @@
       "dependency": "direct main",
       "package_source": "hosted",
       "archive_sha256": "b1e1e64d08ce40e459b9bb5d9f8e361617c26b8c9f3bb967760b0f436b6e3f56"
+    },
+    {
+      "id": "runtime:modernbooknlp",
+      "version": "84f1f34f6f0ec7c6e9c558b4371e61ea2354d95b",
+      "notice": "native/modernbooknlp-84f1f34/LICENSE",
+      "sha256": "69e72d0cc745738138a31688378be82cb203de220137e1c6d807cc04b086afeb",
+      "source": "https://github.com/gasmichel/ModernBookNLP_QA/blob/84f1f34f6f0ec7c6e9c558b4371e61ea2354d95b/ModernBookNLP/LICENSE",
+      "archive_url": "https://github.com/gasmichel/ModernBookNLP_QA/archive/84f1f34f6f0ec7c6e9c558b4371e61ea2354d95b.tar.gz",
+      "archive_sha256": "9dbd060df5448bf5e802975e2b117acbb99dd4fc5b8192e4cbd92b78f2b47db6",
+      "qualification": "Exact upstream source MIT text extracted from the cached archive after verifying its SHA-256 against assets/modernbooknlp_models.json and tools/install_modernbooknlp_runtime.sh. Local runtime patch remains documented separately. This text does not close Python/transitive native dependencies or downloaded model/data distribution obligations."
+    },
+    {
+      "id": "native:llvm-openmp",
+      "version": "22.1.6",
+      "notice": "native/llvm-openmp-22.1.6/LICENSE.TXT",
+      "sha256": "8d85c1057d742e597985c7d4e6320b015a9139385cff4cbae06ffc0ebe89afee",
+      "source": "Qualified local build input /opt/homebrew/opt/libomp/LICENSE.TXT adjacent to /opt/homebrew/opt/libomp/lib/libomp.dylib",
+      "artifact_sha256": "7f07009be4fb2ec519ef62f7cc864aa2412c7ece7de41c15eb89dce5eb991650",
+      "qualification": "Exact adjacent license bytes copied after the local library matched the qualified pre-signing SHA-256 required by tools/embed_modernbooknlp_runtime.sh. Candidate signing changes library bytes; actual candidate/library/notice correspondence remains required. Not the complete Torch/Python runtime notice set."
     }
   ],
   "assets": [
@@ -1132,9 +1164,25 @@
       "sha256": "81917843c7f44ce2b094ac63873c2c7a4cf802040792c455ba3ca406891c3d22"
     },
     {
+      "path": "assets/fish_drama_catalog_update.json",
+      "identity_source": "Git source snapshot at b6046a7688ac39e15910be9bd2c5508d3513e1c5:assets/fish_drama_catalog_update.json",
+      "qualification": "Tracked Read Aloud Fish catalog/update metadata identity only. Model download revision/checksum/capability pins do not establish distribution permission or complete runtime/model notices.",
+      "size": 514,
+      "sha256": "df524aa86f32c3aff649d4743cb3dca3a60444012765f9a5d10275145bf4e9a3"
+    },
+    {
+      "path": "assets/fish_drama_model_checksums.json",
+      "identity_source": "Git source snapshot at b6046a7688ac39e15910be9bd2c5508d3513e1c5:assets/fish_drama_model_checksums.json",
+      "qualification": "Tracked Read Aloud Fish catalog/update metadata identity only. Model download revision/checksum/capability pins do not establish distribution permission or complete runtime/model notices.",
+      "size": 12316,
+      "sha256": "2b9f6ae926849759c2971d665ebdfe2070f7cdf1e8e9140e49e1c1df31fd00eb"
+    },
+    {
       "path": "assets/fish_drama_models.json",
-      "size": 2451,
-      "sha256": "1a3430aa5c1d79a09e7659ce38e7916b2504a220cedf1953f546a96ec0efe2e4"
+      "size": 6773,
+      "sha256": "10a4173e2bf1bd25c65a1b749d0f2f08e5f51176791ceeeb8f135a194bb7c2a2",
+      "identity_source": "Git source snapshot at b6046a7688ac39e15910be9bd2c5508d3513e1c5:assets/fish_drama_models.json",
+      "qualification": "Tracked Read Aloud Fish catalog/update metadata identity only. Model download revision/checksum/capability pins do not establish distribution permission or complete runtime/model notices."
     },
     {
       "path": "assets/fish_voice_library.json",
@@ -1240,8 +1288,31 @@
     },
     {
       "path": "assets/mlx_tts_worker.py",
-      "size": 17370,
-      "sha256": "65f24b217d4f4fc907f8acefe2cf64e62596d3256cc18f29a900897530c9a589"
+      "size": 55296,
+      "sha256": "668b67bf97fb51cbfbee57c4bbca2c484b3e2258f7e31c4d996b0363c85085e9",
+      "identity_source": "Git source snapshot at dd7a50738b43ba5f5e0ffad55eb38b63cdb5a180:assets/mlx_tts_worker.py",
+      "qualification": "Tracked Read Aloud adapter source identity only; not MLX/Python/model/reference-voice distribution clearance. Reconcile this hash again after any protocol-worker integration."
+    },
+    {
+      "path": "assets/modernbooknlp_assets.py",
+      "identity_source": "Git source snapshot at b6046a7688ac39e15910be9bd2c5508d3513e1c5:assets/modernbooknlp_assets.py",
+      "qualification": "Tracked Read Aloud provider/catalog source identity only. Catalog pins code/model/data identities; the upstream source grant is collected separately. Python/transitive runtime and model/data notice closure remain unresolved.",
+      "size": 6076,
+      "sha256": "cefa76211223f6677dba330a8c214ff2905e893331dc1adc38bf98729e199d9d"
+    },
+    {
+      "path": "assets/modernbooknlp_models.json",
+      "identity_source": "Git source snapshot at b6046a7688ac39e15910be9bd2c5508d3513e1c5:assets/modernbooknlp_models.json",
+      "qualification": "Tracked Read Aloud provider/catalog source identity only. Catalog pins code/model/data identities; the upstream source grant is collected separately. Python/transitive runtime and model/data notice closure remain unresolved.",
+      "size": 3121,
+      "sha256": "d11e936fd9f2aec188d8101b24536a1a82635b276c090431978f6ec8027ba5aa"
+    },
+    {
+      "path": "assets/modernbooknlp_worker.py",
+      "identity_source": "Git source snapshot at b6046a7688ac39e15910be9bd2c5508d3513e1c5:assets/modernbooknlp_worker.py",
+      "qualification": "Tracked Read Aloud provider/catalog source identity only. Catalog pins code/model/data identities; the upstream source grant is collected separately. Python/transitive runtime and model/data notice closure remain unresolved.",
+      "size": 13254,
+      "sha256": "0f1d51694de697c26ddaf1110d4a96353db4648851f0422fde5caac236dce62e"
     },
     {
       "path": "assets/tokenizer_vocab.json",
@@ -1446,11 +1517,11 @@
     },
     {
       "id": "candidate-sdk",
-      "detail": "Flutter 3.41.5 engine notices collected from coordinator-verified arm64 SDK. Match actual candidate SDK/engine/native versions and lockfiles at packaging; no integrated candidate exists yet."
+      "detail": "Flutter 3.41.5 engine notices collected from coordinator-verified arm64 SDK. Match the exact final candidate SDK/engine/native versions and lockfiles at packaging; earlier candidate evidence does not qualify a changed artifact."
     },
     {
       "id": "in-app-notices",
-      "detail": "Open Source Notices UI/asset access not implemented by this worker; #78 owns UI handoff."
+      "detail": "Open Source Notices route, reader menu access and NOTICES.txt Flutter asset are implemented in source. Exact final-candidate native screen/content/access evidence remains required; source and widget checks alone do not close this gate."
     },
     {
       "id": "distribution-signing",
@@ -1458,7 +1529,7 @@
     },
     {
       "id": "mlx-runtime-and-reference-voices",
-      "detail": "Directed MLX baseline adds embedded Python/MLX runtime dependencies and thirty synthetic Qwen VoiceDesign references (provenance in assets/voice_library/library.json). Full bundled runtime license closure and generated reference distribution review remain required before a distributable release. Cleanup tag is a source checkpoint, not clearance."
+      "detail": "Embedded MLX/Python runtime dependencies, Fish model variants and thirty synthetic Qwen VoiceDesign references require complete runtime/model/reference distribution review. ModernBookNLP adds an independent Python/Torch/Transformers/spaCy/native runtime and pinned downloaded model/data files. Exact upstream ModernBookNLP source and qualified LLVM OpenMP license texts are now retained, but the full transitive notice set and model/data grants remain unresolved. Tracked catalogs/worker hashes establish identity only, not distribution permission."
     }
   ]
 }

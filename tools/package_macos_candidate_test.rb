@@ -154,6 +154,20 @@ class MacosCandidateTest < Minitest::Test
     assert_match(/release build mode/, assert_raises(RuntimeError) { read_build }.message)
   end
 
+  def test_candidate_build_uses_the_attested_repository_launcher
+    launcher = File.join(@root, 'launcher')
+    File.write(launcher, '# fixture launcher')
+    launcher = File.realpath(launcher)
+    sdk = @sdk.merge('launcher_path' => launcher)
+    expected = [launcher, 'build', 'macos', '--release']
+    assert_equal expected, MacosCandidate.build_command([launcher, 'build', 'macos'], sdk)
+    assert_equal expected, MacosCandidate.build_command(['flutter', 'build', 'macos'], sdk)
+    assert_equal expected, MacosCandidate.build_command([sdk['flutter_path'], 'build', 'macos'], sdk)
+    assert_match(/different Flutter SDK/, assert_raises(RuntimeError) {
+      MacosCandidate.build_command(['/bin/sh', 'build', 'macos'], sdk)
+    }.message)
+  end
+
   def test_build_environment_allowlist_effective_settings_and_unrelated_secret_exclusion
     assert_equal @inherited['PATH'], @environment['PATH']
     assert_equal 'arm64', @environment['ARCHS']

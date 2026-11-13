@@ -29,6 +29,23 @@ This ownership change alone does not establish native responsiveness.
 
 `AudioArtifactStore` writes a private generation containing canonical mono PCM16 WAV, metadata and a complete schema manifest, flushes all files, and atomically renames the directory into its identity bucket. A hit validates schema/completeness, WAV and PCM SHA256, metadata SHA256, canonical RIFF/data sizes, format, frames and duration. Incomplete or corrupt generations are misses. A replacement gets a distinct generation path; published or queued paths are never overwritten. Publication is atomic within the local filesystem, not a claim of survival across sudden power loss. Failed writers remove only their own staging directories.
 
+The [C03 consumer migration](https://github.com/kellyjanderson/readaloud/issues/148)
+uses the existing shared `PcmFormat`, bounded RIFF scanner and header writer in
+`pcm_wav.dart`/`pcm_wav_io.dart`. Artifact validation keeps its narrower policy:
+nonempty mono PCM16, exactly a 16-byte fmt followed by data, no extra chunks.
+The scanner validates signatures, RIFF/chunk lengths, odd padding, integer PCM,
+byte rate and frame alignment; this policy then requires data at byte 44 and
+ending at EOF. Native sample rates remain unchanged. Export's broader metadata
+and format support is not narrowed by artifact policy. No dependency or new
+asynchronous owner is introduced; the existing bounded module and package
+evaluation are described in [audio export](audio-export-and-headless-execution.md).
+
+Kokoro retains its provider-specific clipped/rounded float-to-mono-PCM16
+quantization in `encodeKokoroWav`, writes samples explicitly little endian and
+delegates RIFF headers to the shared writer. Boundary correction likewise
+rebuilds the canonical header through that writer after trimming, preserving
+the exact retained sample bytes and existing versioned onset policy.
+
 Boundary correction runs in the runtime's ordered compute slot. Its derivative identity includes raw content, the complete versioned silence policy, initial/resumed/break context, predecessor artifact identity and predecessor trailing silence. It trims a private copy, publishes a new complete artifact, and returns that path. Raw WAV and sidecar remain unchanged. Different join contexts cannot overwrite each other's audio; a failed or cancelled predecessor clears both context records. Cancellation suppresses stale runtime publication after the compute task drains; completed immutable artifacts can remain reusable.
 
 `AudioArtifactPins` provides an injectable shared main-isolate registry and idempotent release handles. Playback owners retain pins through native removal/clear acknowledgment; export owners retain them through assembly drain. Releasing a pin does not delete a file. There is no eviction or background cleanup of published artifacts. The engine acquires pins for corrected playback artifacts and accepted export chunks. Playback ownership is generation plus chunk; removal/reset captures the exact pin set and releases it after native acknowledgment, preserving newer same-path ownership. Export releases pins after its assembler/runtime/planner drain. The registry is main-isolate accounting, not cross-isolate shared memory; workers retain immutable publications and do not delete them. The bounded assignment probe observed pause retaining native sources/pins and stop clearing them; the [e18c81d supplement](https://github.com/kellyjanderson/readaloud/issues/53#issuecomment-6396165816) additionally observed 118 export pins retained during cancellation of a diagnostically held assembler, then released before replacement playback (one new playback pin), with no cancelled output/sidecar published. The hold was waiting, not CPU-heavy assembly; the store cannot infer playlist or export lifetime from synthesis completion alone.
@@ -59,6 +76,24 @@ raw/boundary evidence fails actionably. Package replay verifies content hashes;
 matching IDs alone are not acoustic identity proof. No new eviction policy is
 introduced. [S6 #137](https://github.com/kellyjanderson/readaloud/issues/137) owns current
 native/offline/regeneration acceptance.
+
+`RadocAudioPackage` uses the shared random-access scanner for scene WAV
+validation without loading PCM. Its separate canonical PCM16 policy retains
+the manifest's rate and channel count (one through eight), rejects metadata or
+reordered fmt/data chunks, and compares final scene frames with the manifest.
+Raw scenes retain the existing exception to that frame comparison. Each bounded
+scanner read checks the existing package worker's cancellation owner; the
+validation caller closes its file handle in `finally`. The one-active-request,
+zero-waiting-queue admission, timeout, stale publication rejection and private
+stage cleanup remain with the package worker.
+
+Focused source fixtures compare exact Kokoro PCM bytes and duration at
+24/44.1/48 kHz; artifact/trim fixtures reject structurally valid noncanonical
+layouts; boundary fixtures preserve retained PCM; package fixtures preserve
+native rates and one/two/eight-channel PCM while rejecting malformed lengths,
+alignment, duplicate data and noncanonical layouts. These are structural and
+transformation checks, not emitted-audio, responsiveness or human listening
+acceptance. Those running-app gates remain with the coordinator.
 
 ## Incremental playable packets
 

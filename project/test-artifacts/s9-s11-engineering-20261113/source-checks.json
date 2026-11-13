@@ -1,0 +1,99 @@
+{
+  "schema": "readaloud-s9-s11-source-checks-v1",
+  "date": "2026-11-13",
+  "source_under_test": "f621e21aa9d4528d0b82084e778fb18d70349cd4",
+  "checks": {
+    "flutter": {
+      "command": "tools/flutter test",
+      "passed": 1311,
+      "skipped": 4,
+      "failed": 0
+    },
+    "application_analysis": {
+      "command": "tools/flutter analyze lib test tools",
+      "result": "no issues found"
+    },
+    "whole_workspace_analysis": {
+      "command": "tools/flutter analyze",
+      "result": "failed: 73 diagnostics in standalone vendored just_audio example/test projects; their development dependencies were not provisioned; not an app analysis pass"
+    },
+    "python_protocol": {
+      "passed": 26
+    },
+    "python_worker": {
+      "passed": 63,
+      "warning": "existing unclosed socket ResourceWarning"
+    },
+    "notice_integrity": {
+      "texts": 118,
+      "assets": 58,
+      "preserved_distribution_blockers": 7
+    },
+    "ruby_notice_tests": {
+      "tests": 7,
+      "assertions": 26,
+      "failed": 0
+    },
+    "ruby_packaging_tests": {
+      "tests": 28,
+      "assertions": 237,
+      "failed": 0
+    },
+    "ruby_bootstrap_tests": {
+      "tests": 7,
+      "assertions": 26,
+      "failed": 0
+    },
+    "docs": "passed",
+    "javascript_syntax": "passed",
+    "diff": "passed",
+    "clean_asset_preflight": "passed with preserved Kokoro SHA-256",
+    "pinned_sdk": "Flutter 3.41.5 / Dart 3.11.3 arm64"
+  },
+  "independent_review": {
+    "pcm_envelope_headless": "no actionable findings",
+    "imports": "EOF-gate and omitted end-tag findings repaired in242c019; seven failing old-code controls",
+    "protocol": "absolute-link alias repaired in7dc44fe; actual-copy independence controls"
+  },
+  "evidence_limits": {
+    "native": "not run for this combined source; Mac reports locked, unlock request pending; no app launched",
+    "human": "unrun; one final candidate-bound session after engineering",
+    "m3": "unavailable, unqualified",
+    "first_two_second_goal": "not newly qualified; prior first launch miss retained",
+    "release": "unreleased; no main merge/tag/publication"
+  },
+  "local_logs": {
+    "readaloud-s11-app-analyze.log": {
+      "sha256": "d4d90579d0f0309693211458ebb8ac22c85cdae5e528b4ac3b6de49028d799df",
+      "bytes": 2592
+    },
+    "readaloud-s11-bootstrap-tests.log": {
+      "sha256": "0ff51f4bba3f1bcaf51aa86b130f5b17d5a6b8e88535d74ff929cd4592288149",
+      "bytes": 551
+    },
+    "readaloud-s11-final-analyze.log": {
+      "sha256": "eedf2921ed321a68b9b2a84c8b416852fbfd7326708d1e93a7bbe61582f1d61d",
+      "bytes": 14323
+    },
+    "readaloud-s11-final-tests.log": {
+      "sha256": "6c849dabc01d160af9952f3c5748c372f0ec636920fdd3c73be41e9b59b9e220",
+      "bytes": 252896
+    },
+    "readaloud-s11-notice-tests.log": {
+      "sha256": "5074111fb784221f29c392a6239084f9bc6f681ea9d000599badb4a240dea070",
+      "bytes": 163
+    },
+    "readaloud-s11-package-tests.log": {
+      "sha256": "748280b8d5226f422610f3ade3db7d88f9fd9dd671cb7b2ecc3e7cfc8d83f836",
+      "bytes": 186
+    },
+    "readaloud-s11-protocol-tests.log": {
+      "sha256": "1ef9015ab58fb5832f4b865d3c67d596168d88ff16adfd986b86c7f8a5082d99",
+      "bytes": 125
+    },
+    "readaloud-s11-worker-tests.log": {
+      "sha256": "bc7f794f0e05ce031df263397d47688876244c28ed7b8e5e16e1f4e012e9ae1a",
+      "bytes": 6454
+    }
+  }
+}

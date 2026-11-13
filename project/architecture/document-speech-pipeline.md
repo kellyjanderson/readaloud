@@ -25,6 +25,20 @@ Preparation exposes controller APIs for cancellation and retry (`cancelDocumentP
 
 Residual limits are explicit: the controller constructs the small fixed bundled sample synchronously at startup; later sample requests use the worker. `loadDocument` accepts an already constructed complete graph. Headless export/probe runners still call the importer directly and do not host the interactive range/checkpoint lifecycle. An injected importer is a controllable test/legacy adapter on the caller isolate, not production-worker proof. Runtime realization and cast-aware chunk planning run in the resident planning worker, with separate playback/export owners and bounded returned windows. Framework HTML layout remains on Flutter. RC2 has bounded local implementation evidence, but current integrated native build/app behavior, launch timing, emitted-audio continuity and human listening remain unqualified; no native, release or audio acceptance is claimed. See #83 and #90 for current gates.
 
+## Shared document encoding (S9 C05)
+
+`ReaderDocumentSerializationService.encodeEnvelope` creates a fresh data-only
+current-schema envelope. Normal `.radoc` encoding, explicit range assembly and
+inspection encoding use this mapping. Inspection passes `includePdfData: false`
+so no PDF base64 bytes are allocated and no JSON encode/decode round trip is
+needed. Canonical directions, analysis records and character identity remain in
+the mapping. The normal format/version and separate `.radoc-v2` inspection
+format do not change; decoder validation, worker snapshots, repository generations
+and stale-write/atomic-publication ownership remain distinct. Large encodes stay
+on their existing admitted workers. This is encoding/parity evidence, not native
+reopen or listening acceptance. Source and tests: `reader_document_serialization_service.dart`,
+`instrumented_document_artifact_codec.dart` and their tests; #151 / #114 ACD-D1 R1.
+
 ## Incremental whole-document display
 
 The transport's `ReaderController.document` remains the active audio fragment;

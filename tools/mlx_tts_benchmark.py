@@ -1,46 +1,52 @@
-"""Measure emitted speech throughput for a supplied corpus; no quality claims."""
+"""Measure production-worker throughput for a supplied corpus; no quality claims."""
 import argparse
-import importlib.util
 import json
 from pathlib import Path
 import time
 
-import mlx.core as mx
+from mlx_protocol_client import MlxClient
+from mlx_probe_support import descriptor, load_model, provenance, resolve_voice, synthesize
 
-parser = argparse.ArgumentParser()
-parser.add_argument('model')
-parser.add_argument('checkpoint')
-parser.add_argument('corpus')
-parser.add_argument('output')
-parser.add_argument('--bits', type=int, default=0)
-args = parser.parse_args()
-output = Path(args.output)
-output.mkdir(parents=True, exist_ok=False)
-spec = importlib.util.spec_from_file_location('worker', Path(__file__).parents[1] / 'assets/mlx_tts_worker.py')
-worker = importlib.util.module_from_spec(spec)
-spec.loader.exec_module(worker)
-started = time.monotonic()
-worker._load(args.model, args.checkpoint, str(output / 'hub'))
-if args.bits:
-    from mlx_audio.lm.convert import quantize_model
-    predicate = getattr(worker._model, 'model_quant_predicate', lambda p, m: True)
-    worker._model, _ = quantize_model(worker._model, {}, 64, args.bits, quant_predicate=predicate)
-    mx.eval(worker._model.parameters())
-load_seconds = time.monotonic() - started
-words = Path(args.corpus).read_text().split()
-rows = []
-for index, count in enumerate((18, 60, 60)):
-    text = ' '.join(words[index * 60:index * 60 + count])
-    path = output / f'{index}.wav'
-    mx.random.seed(0)
-    started = time.monotonic()
-    worker._synthesize({'modelId': args.model, 'text': text, 'outputPath': str(path), 'voice': 'casual_male'})
-    elapsed = time.monotonic() - started
-    import soundfile as sf
-    data, rate = sf.read(path)
-    duration = len(data) / rate
-    row = {'words': count, 'synthesisSeconds': elapsed, 'audioSeconds': duration, 'realTimeFactor': elapsed / duration, 'audioPath': str(path)}
-    rows.append(row)
-    print(json.dumps(row), flush=True)
-(output / 'receipt.json').write_text(json.dumps({'engine': args.model, 'bits': args.bits, 'loadSeconds': load_seconds, 'samples': rows}, indent=2))
-worker._unload()
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('model')
+    parser.add_argument('checkpoint', help='Existing local checkpoint; never downloads')
+    parser.add_argument('corpus')
+    parser.add_argument('output', help='New evidence directory')
+    parser.add_argument('--bits', type=int, choices=(0, 4), default=0)
+    parser.add_argument('--voice', required=True, help='Exact production preset or library ID')
+    parser.add_argument('--reference-cache', help='Existing app MLX root for downloaded references')
+    args = parser.parse_args()
+    words = Path(args.corpus).read_text().split()
+    if len(words) < 180:
+        parser.error('Corpus must contain at least 180 words for the three unchanged workloads')
+    output = Path(args.output).resolve()
+    with MlxClient() as client:
+        metadata = client.metadata()
+        model = descriptor(metadata, args.model)
+        voice, voice_provenance = resolve_voice(model, args.voice, args.reference_cache)
+        output.mkdir(parents=True, exist_ok=False)
+        started = time.monotonic()
+        loaded = load_model(client, model, args.checkpoint, output / 'hub', args.bits)
+        receipt = {**provenance(metadata, model, loaded, args.bits), 'voice': voice_provenance,
+                   'loadSeconds': time.monotonic() - started, 'complete': False, 'samples': []}
+        for index, count in enumerate((18, 60, 60)):
+            text = ' '.join(words[index * 60:index * 60 + count])
+            started = time.monotonic()
+            evidence = synthesize(client, model, voice, text, output / str(index), f'benchmark-{index}')
+            elapsed = time.monotonic() - started
+            row = {**evidence, 'words': len(text.split()), 'synthesisSeconds': elapsed,
+                   'audioSeconds': evidence['durationSeconds'],
+                   'realTimeFactor': elapsed / evidence['durationSeconds']}
+            receipt['samples'].append(row)
+            (output / 'receipt.json').write_text(json.dumps(receipt, indent=2) + '\n')
+            print(json.dumps(row), flush=True)
+    # A complete receipt includes successful terminal shutdown and verified exit.
+    receipt['complete'] = True
+    receipt['workerExitCode'] = client.child.returncode
+    (output / 'receipt.json').write_text(json.dumps(receipt, indent=2) + '\n')
+
+
+if __name__ == '__main__':
+    main()

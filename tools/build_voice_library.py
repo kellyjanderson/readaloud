@@ -47,6 +47,49 @@ VOICES = [
 ]
 
 
+def complete_voice_design(results):
+    """Collect the complete authoring generator before publishing any reference.
+
+    Keep this offline authoring policy separate from production packet spooling.
+    Late generator failures and changing formats must never publish a prefix.
+    """
+    import numpy as np
+    pieces, sample_rate, frames = [], None, 0
+    ended = False
+    try:
+        for result in results:
+            if ended:
+                raise ValueError('VoiceDesign output after final marker')
+            rate = int(result.sample_rate)
+            audio = np.asarray(result.audio, dtype=np.float32).squeeze()
+            if audio.ndim == 0:
+                audio = audio.reshape(1)
+            if audio.ndim != 1 or rate <= 0:
+                raise ValueError('VoiceDesign requires mono audio and a valid sample rate')
+            if sample_rate is not None and rate != sample_rate:
+                raise ValueError('VoiceDesign sample rate changed')
+            if not audio.size:
+                if (getattr(result, 'is_streaming_chunk', False) is True
+                        and getattr(result, 'is_final_chunk', False) is True):
+                    ended = True
+                    continue
+                raise ValueError('Empty VoiceDesign audio')
+            if not np.isfinite(audio).all():
+                raise ValueError('Non-finite VoiceDesign audio')
+            sample_rate = rate
+            frames += audio.size
+            if frames > rate * 30:
+                raise ValueError('VoiceDesign reference exceeded thirty seconds')
+            pieces.append(audio.copy())
+    finally:
+        close = getattr(results, 'close', None)
+        if close:
+            close()
+    if not pieces:
+        raise ValueError('VoiceDesign generated no audio')
+    return np.concatenate(pieces), sample_rate
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--output', default='assets/voice_library')
@@ -68,14 +111,14 @@ def main():
             mx.random.seed(seed)
             instruct = (description + ' Speak naturally in English, in a neutral '
                         'storytelling manner. One speaker, clean close microphone, no music.')
-            result = next(model.generate_voice_design(
+            audio, sample_rate = complete_voice_design(model.generate_voice_design(
                 text=REFERENCE_TEXT, language='English', instruct=instruct,
                 max_tokens=512, stream=False, verbose=False,
             ))
-            audio = mx.array(result.audio).squeeze()
+            audio = mx.array(audio)
             mx.eval(audio)
             temporary = output / f'{key}.partial.wav'
-            write(str(temporary), audio, result.sample_rate)
+            write(str(temporary), audio, sample_rate)
             temporary.replace(target)
         audio, rate = sf.read(target)
         duration = len(audio) / rate
@@ -87,9 +130,9 @@ def main():
                             asset=f'assets/voice_library/{key}.wav',
                             sha256=digest, referenceText=REFERENCE_TEXT,
                             durationSeconds=duration, seed=seed))
-        print(f'{index + 1}/30 {label}: {duration:.2f}s {digest[:12]}', flush=True)
+        print(f'{index + 1}/{len(VOICES)} {label}: {duration:.2f}s {digest[:12]}', flush=True)
         mx.clear_cache()
-    if len({e['sha256'] for e in entries}) != 30:
+    if len({e['sha256'] for e in entries}) != len(VOICES):
         raise ValueError('Voice references must have distinct audio content')
     manifest = dict(schema=1, version='synthetic-reference-v1',
                     sourceModel=DESIGN_MODEL, sourceRevision=DESIGN_REVISION,

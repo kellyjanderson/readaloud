@@ -7,7 +7,125 @@ import 'dart:typed_data';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:read_aloud/src/services/exported_audio_assembler.dart';
 
+import 'pcm_wav_test.dart' show buildPcmWavFixture, malformedPcmWavFixtures;
+
 void main() {
+  for (final rate in [24000, 44100, 48000]) {
+    for (final bits in [8, 16, 24, 32]) {
+      for (final channels in [1, 2]) {
+        test(
+          'export preserves PCM$bits/$channels at $rate including padding',
+          () async {
+            final dir = await Directory.systemTemp.createTemp('export-pcm-');
+            addTearDown(() => dir.delete(recursive: true));
+            final payload = List<int>.generate(
+              3 * channels * (bits ~/ 8),
+              (i) => (i * 73 + 19) % 256,
+            );
+            final source = await File('${dir.path}/input.wav').writeAsBytes(
+              buildPcmWavFixture(
+                payload: payload,
+                bits: bits,
+                channels: channels,
+                rate: rate,
+                junk: true,
+                extended: true,
+                dataFirst: true,
+              ),
+            );
+            final assembler = ExportedAudioAssembler();
+            addTearDown(assembler.shutdown);
+            // Three odd mono PCM8 chunks produce an odd final payload: each
+            // source pad must be removed and only one final output pad added.
+            final result = await assembler.assemble(
+              _request(dir, List.filled(3, source.path)),
+            );
+            final bytes = await File(result.outputPath).readAsBytes();
+            final data = ByteData.sublistView(bytes);
+            final expectedPayload = [...payload, ...payload, ...payload];
+            expect(data.getUint32(24, Endian.little), rate);
+            expect(data.getUint16(22, Endian.little), channels);
+            expect(data.getUint16(34, Endian.little), bits);
+            expect(data.getUint32(40, Endian.little), expectedPayload.length);
+            expect(data.getUint32(4, Endian.little), bytes.length - 8);
+            expect(
+              bytes.sublist(44, 44 + expectedPayload.length),
+              expectedPayload,
+            );
+            expect(
+              bytes.length,
+              44 + expectedPayload.length + expectedPayload.length % 2,
+            );
+            if (expectedPayload.length.isOdd) expect(bytes.last, 0);
+            expect(
+              result.duration,
+              Duration(microseconds: (9000000 / rate).round()),
+            );
+            final metadata =
+                jsonDecode(await File(result.sidecarPath).readAsString())
+                    as Map;
+            expect(metadata['frameCount'], 9);
+            expect(
+              (metadata['chunks'] as List).map((chunk) => chunk['frameCount']),
+              [3, 3, 3],
+            );
+          },
+        );
+      }
+    }
+  }
+  test(
+    'malformed structural inputs fail without output or staging leaks',
+    () async {
+      final dir = await Directory.systemTemp.createTemp('export-refusal-');
+      addTearDown(() => dir.delete(recursive: true));
+      final source = File('${dir.path}/input.wav');
+      final assembler = ExportedAudioAssembler();
+      addTearDown(assembler.shutdown);
+      for (final entry in malformedPcmWavFixtures().entries) {
+        await source.writeAsBytes(entry.value);
+        await expectLater(
+          assembler.assemble(_request(dir, [source.path])),
+          throwsStateError,
+          reason: entry.key,
+        );
+        expect(
+          await File('${dir.path}/out.wav').exists(),
+          isFalse,
+          reason: entry.key,
+        );
+        expect(
+          await File('${dir.path}/out.json').exists(),
+          isFalse,
+          reason: entry.key,
+        );
+        expect(await _stagingDirectories(dir), isEmpty, reason: entry.key);
+      }
+    },
+  );
+  for (final changed in ['channels', 'bits']) {
+    test('whole-export matching includes $changed', () async {
+      final dir = await Directory.systemTemp.createTemp('export-matching-');
+      addTearDown(() => dir.delete(recursive: true));
+      final a = await File(
+        '${dir.path}/a.wav',
+      ).writeAsBytes(buildPcmWavFixture());
+      final b = await File('${dir.path}/b.wav').writeAsBytes(
+        buildPcmWavFixture(
+          channels: changed == 'channels' ? 2 : 1,
+          bits: changed == 'bits' ? 8 : 16,
+        ),
+      );
+      final assembler = ExportedAudioAssembler();
+      addTearDown(assembler.shutdown);
+      await expectLater(
+        assembler.assemble(_request(dir, [a.path, b.path])),
+        throwsStateError,
+      );
+      expect(await File('${dir.path}/out.wav').exists(), isFalse);
+      expect(await _stagingDirectories(dir), isEmpty);
+    });
+  }
   test('44.1 kHz export preserves source PCM without resampling', () async {
     final root = await Directory.systemTemp.createTemp('native-export-');
     addTearDown(() => root.delete(recursive: true));

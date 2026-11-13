@@ -1,11 +1,36 @@
 # Audio Export and Headless Execution
 
-Reconciled: October 26, 2026; RC2 #90 complete-range export source, retained P4 native evidence e18c81d
+Reconciled: November 12, 2026; S9.1 shared RIFF/PCM export and analysis core (#146), RC2 #90 complete-range export source; retained P4 native evidence e18c81d
 Status: Bounded P4 native export/cancellation evidence; active-export input and human listening unverified
 
 ## Implemented structure and limitations
 
 Launch options select interactive reading or headless execution. The headless runner imports inputs and uses the TTS engine instead of a separate synthesis implementation. Export assembles finalized chunk WAVs and metadata. Pronunciation and sentence probes exercise speech generation and emit diagnostic artifacts.
+
+The export, pronunciation and sentence runners share `HeadlessReaderSession`
+for controller/importer construction, initialization, exact requested-voice
+resolution and bounded speed options. Each runner keeps its workload and reports,
+and closes its one session in `finally`, including missing voice and initialization
+failure. Close is idempotent and delegates to the existing controller disposal;
+this extraction adds no worker, queue, cancellation policy or stronger native
+shutdown claim. `headless_reader_session_test.dart` covers option ordering,
+missing-voice refusal and failure cleanup. Native process exit remains separate
+acceptance under #151/#114.
+
+Offline model probes use `tools/mlx_protocol_client.py` to own one production
+JSON-lines child and one request at a time through standard `subprocess` and
+`selectors`. Metadata is a data-only worker command derived from adapter lists
+and bundled model/reference catalogs. Protocol buffers/events are bounded and
+identity checked; packetized completed PCM must equal ordered packet PCM.
+Timeout, cancellation and protocol failure retire/reap the owned child, and
+complete receipts require acknowledged shutdown and successful process exit.
+Benchmark/voice-bank workload and acoustic policy remain separate. No production
+seed override exists, so those receipts report null rather than inventing a seed.
+VoiceDesign authoring drains its generator before publishing a reference; this
+change regenerated no assets. Descriptor-based QA staging creates an independent
+root, includes current Fish variants/reference caches and refuses overwrite and
+escaping symlinks. Fake-process/catalog/generator tests establish these tool
+contracts; actual model/app, native timing and listening are separate #151 gates.
 
 `ExportedAudioAssembler` is a stateful main-isolate supervisor with one active request and no waiting queue. Overlap is rejected. Each accepted request has a monotonic owner-local identity and a dedicated pure Dart isolate; only DTOs, file paths, progress and the terminal result cross the port. The worker scans RIFF sections, verifies matching PCM formats, copies audio in at most 64 KiB blocks and streams one chunk's JSON metadata at a time. It retains the request graph and per-chunk format descriptors, not whole-document PCM. WAV encoding, metadata traversal, file I/O and publication are worker-owned. Source chunks remain read-only.
 
@@ -21,6 +46,67 @@ A new controller export is refused while voice choices are pending, with an appl
 
 RC2 #90 also accepts a complete committed multi-range checkpoint. The controller reads all its ranges, validates their contiguous coverage/totals and merges existing derived data on a worker before planning export from the beginning. Global word offsets and source ordering cover the full book, even when playback currently displays its last fragment. Required cast resources are prepared against the complete graph while retaining the resident playback document identity. Partial, cancelled or corrupt checkpoints cannot dispatch an audio export. Whole-document graph metadata is materialized for explicit export; ordinary opening/replay remains incremental. Source tests with a recording engine establish request coverage and failure boundaries, not synthesized or live audio. Current-candidate native export/playback/resource competition remains an acceptance requirement.
 
+## Shared RIFF/PCM structure
+
+The first [C03 consumer group](https://github.com/kellyjanderson/readaloud/issues/146)
+uses `pcm_wav.dart` for immutable `PcmFormat`/`PcmWavLayout`, structural scanning
+and canonical PCM headers. The byte-buffer adapter and `pcm_wav_io.dart` file
+adapter drive the same scan state machine. It retains one fmt/data descriptor,
+never a chunk list; requests are only the 12-byte RIFF header, 8-byte chunk headers
+and 16-byte PCM fmt prefix. Ancillary payloads and fmt extensions are skipped by
+offset, including odd-byte padding. Exactly one fmt and data chunk are required,
+in either order. RIFF signature/declared extent, chunk bounds/padding, integer PCM
+format code, nonzero rate/channels, supported bit depth, byte rate/block alignment
+and whole-frame data length are validated before consumers receive a layout.
+
+Export keeps its integer PCM8/16/24/32 subset, native sample rates/channels and
+whole-export format matching. The shared header includes final odd padding in
+RIFF size but excludes it from data size. Assembly copies source sample bytes
+unchanged in the existing 64 KiB blocks, discards source pad bytes and writes one
+final pad when needed. Existing worker admission, request identity, staging,
+commit handshake, timeout, cancellation, publication and scene-turn metadata
+remain with `ExportedAudioAssembler`. The file adapter introduces no owner,
+queue, task or file lifetime: the caller serializes its handle, selects the worker
+execution context and closes it in `finally`. Checkpoints bracket every bounded
+structural read; worker cancellation discards both stale success and failure,
+drains cleanup and preserves the established terminal-result route.
+
+Analysis keeps a separate PCM16-only policy and its existing sample normalization
+(including `abs(-32768) / 32767`), PCM/WAV hashes, envelope, frame accounting and
+microsecond-rounded duration for valid inputs. It now finds fmt by structure
+rather than assuming fixed offsets, so metadata, extended PCM fmt and
+data-before-fmt layouts are supported. This deliberately tightens invalid-input
+behavior: malformed extents, duplicate/missing fmt/data, truncated headers,
+payloads or padding, non-PCM codes (including float/extensible), zero fields,
+inconsistent byte rate/alignment and partial frames raise `FormatException`.
+Earlier analysis could accept some of these or fail incidentally; invalid-input
+parity is not claimed. Valid integer PCM8/24/32 still fails analysis's explicit
+PCM16 policy with `StateError`.
+
+The maintained [wav 1.5.0 package](https://pub.dev/packages/wav) was evaluated for
+this extraction. Its public `Wav.readFile`/`read` API materializes complete bytes
+and decoded `Float64List` channels; its upstream
+[file adapter](https://github.com/liamappelbe/wav/blob/master/lib/wav_io.dart)
+uses `File.readAsBytes`, and its
+[byte reader](https://github.com/liamappelbe/wav/blob/master/lib/bytes_reader.dart)
+walks an already resident buffer. This does not meet the concrete requirements
+for bounded random-access structural reads and byte-preserving streamed assembly.
+No dependency was installed or adopted; this is a candidate-specific evaluation,
+not a claim that every WAV library was surveyed.
+
+Independent source fixtures cover 24/44.1/48 kHz, supported integer depths and
+mono/stereo, exact payload preservation, odd metadata/data padding, fmt ordering,
+extensions, malformed/refusal cases and PCM16 analysis arithmetic. A caller-owned
+handle instrumented against a sparse file with 512 MiB PCM and 256 MiB metadata
+records just `[12, 8, 8, 16, 8]` bytes requested (52 bytes total), establishing
+bounded structural scanning rather than whole-payload loading. Existing
+cancellation/drain/deadline, previous-output restoration, alias protection and
+request isolation tests remain applicable. These are source-level results;
+current-candidate native emitted-audio/export comparison and human listening
+remain required before final S9 acceptance. Artifact validation, boundary
+correction, Kokoro encoding and package validation retain their own adapters;
+this group does not complete [C03/#114](https://github.com/kellyjanderson/readaloud/issues/114).
+
 ## Bounded P4 native evidence
 
 The engine accepts optional assembler injection at `843f6b5`; the default remains `ExportedAudioAssembler`. The `e18c81d` repair changes only the supplemental probe's early-release latch and timeout-state cleanup. Its diagnostic hold waits before actual assembly and must not be described as CPU-heavy export work.
@@ -34,10 +120,15 @@ Actual UI action count was zero after CUA binding timeouts. The blocker was reco
 
 - [app_launch_options.dart](../../lib/src/services/app_launch_options.dart)
 - [headless_session_runner_io.dart](../../lib/src/services/headless_session_runner_io.dart)
+- [pcm_wav.dart](../../lib/src/services/pcm_wav.dart)
+- [pcm_wav_io.dart](../../lib/src/services/pcm_wav_io.dart)
+- [wav_analysis_service.dart](../../lib/src/services/wav_analysis_service.dart)
 - [exported_audio_assembler.dart](../../lib/src/services/exported_audio_assembler.dart)
 - [pronunciation_probe_runner_io.dart](../../lib/src/services/pronunciation_probe_runner_io.dart)
 - [sentence_probe_runner_io.dart](../../lib/src/services/sentence_probe_runner_io.dart)
 - [app_launch_options_test.dart](../../test/app_launch_options_test.dart)
+- [pcm_wav_test.dart](../../test/pcm_wav_test.dart)
+- [pcm_wav_io_test.dart](../../test/pcm_wav_io_test.dart)
 - [exported_audio_assembler_test.dart](../../test/exported_audio_assembler_test.dart)
 - [pronunciation_probe_runner_io_test.dart](../../test/pronunciation_probe_runner_io_test.dart)
 - [sentence_probe_runner_io_test.dart](../../test/sentence_probe_runner_io_test.dart)
