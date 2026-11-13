@@ -11,12 +11,18 @@ Installation happens in a unique staging directory; a failed download or checksu
 Install Xcode and CocoaPods for macOS development and run `tools/flutter pub get`. For Kokoro supply the compatible model described in [model setup](../assets/kokoro/model/README.md); for Fish or another MLX engine install the [arm64 runtime before building](mlx-tts-engines.md#local-macos-release-packaging). The optional embed phase can succeed with a warning and omit MLX entirely; build success alone does not qualify an MLX-capable package. Model weights are not committed. Voices and pronunciation resources are bundled; ONNX uses the [vendored override](../third_party/flutter_onnxruntime/pubspec.yaml).
 
 ```sh
-tools/flutter analyze
+tools/flutter analyze lib test tools
 tools/flutter test
 tools/flutter run -d macos
 tools/flutter build macos
 ruby tools/check_docs.rb
 ```
+
+Analyze the application's `lib`, `test` and `tools` together. Vendored packages
+also retain standalone example/test projects with their own development
+dependencies; a root-wide analysis does not provision those projects. When
+changing vendored implementation, run its relevant package/native checks as well
+and report that evidence separately rather than treating the app check as proof.
 
 Run focused tests first when changing one subsystem. Native session lifetime, actual audio output and visible UI responsiveness require running-app/native checks. Pure Dart or widget tests do not establish these. Generated outputs are normally ignored under `project/test-artifacts/` and `tmp/`; deliberately tracked evidence receipts are retained. Use synthetic examples in public output; keep private manuscripts/audio local.
 
