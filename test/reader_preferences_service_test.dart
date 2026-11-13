@@ -15,6 +15,47 @@ void main() {
 
   group('ReaderPreferencesService', () {
     test(
+      'Activity defaults quiet and persists an explicit expanded choice',
+      () async {
+        final service = ReaderPreferencesService();
+        expect((await service.load()).activityExpanded, isFalse);
+        await service.save(
+          activityExpanded: true,
+          fontFamily: 'serif',
+          fontScale: 1,
+          appearanceMode: ReaderAppearanceMode.system,
+          multiVoiceEnabled: true,
+          voiceSpeeds: {},
+          storedDocumentCastVoiceAssignments: {},
+        );
+        expect((await service.load()).activityExpanded, isTrue);
+      },
+    );
+    test('narrator engine scopes preserve unresolved and legacy IDs', () async {
+      final service = ReaderPreferencesService();
+      await service.save(
+        ttsEngineId: 'kokoro',
+        selectedVoiceId: 'legacy-unavailable',
+        narratorVoiceIds: {
+          'kokoro': 'legacy-unavailable',
+          'fish_drama3': 'fish-reference',
+        },
+        fontFamily: 'serif',
+        fontScale: 1,
+        appearanceMode: ReaderAppearanceMode.system,
+        multiVoiceEnabled: true,
+        voiceSpeeds: {},
+        storedDocumentCastVoiceAssignments: {},
+      );
+      final restored = await service.load();
+      expect(restored.selectedVoiceId, 'legacy-unavailable');
+      expect(restored.narratorVoiceIds, {
+        'kokoro': 'legacy-unavailable',
+        'fish_drama3': 'fish-reference',
+      });
+    });
+
+    test(
       'VS17 migration writes one owner; Reset and aliases survive a preference reload',
       () async {
         SharedPreferences.setMockInitialValues({
@@ -106,6 +147,7 @@ void main() {
       final preferences = await service.load();
 
       expect(preferences.voxtralQuantizationBits, 0);
+      expect(preferences.hasExplicitTtsEngineChoice, false);
 
       expect(preferences.fontFamily, ReaderPreferences.defaultFontFamily);
       expect(preferences.fontScale, ReaderPreferences.defaultFontScale);
@@ -124,6 +166,33 @@ void main() {
       expect(preferences.lastOpenedDirectoryPath, isNull);
       expect(preferences.lastOpenedDirectoryAccessToken, isNull);
     });
+
+    test(
+      'unset, explicit Kokoro and unknown choices survive saves distinctly',
+      () async {
+        final service = ReaderPreferencesService();
+        for (final id in ['', 'kokoro', 'future_engine_variant']) {
+          await service.save(
+            ttsEngineId: id,
+            fontFamily: 'serif',
+            fontScale: 1,
+            appearanceMode: ReaderAppearanceMode.system,
+            multiVoiceEnabled: true,
+            voiceSpeeds: {},
+            storedDocumentCastVoiceAssignments: {},
+          );
+          final value = await service.load();
+          expect(value.ttsEngineId, id);
+          expect(value.hasExplicitTtsEngineChoice, id.isNotEmpty);
+          expect(
+            (await SharedPreferences.getInstance()).containsKey(
+              'reader.ttsEngineId',
+            ),
+            id.isNotEmpty,
+          );
+        }
+      },
+    );
 
     test('persists last opened document and folder paths', () async {
       final service = ReaderPreferencesService();

@@ -1,0 +1,333 @@
+{
+  "schema": "readaloud-s7-dual-loss-audit-v1",
+  "diagnosticOnly": true,
+  "passed": false,
+  "strictPolicyUnchanged": {
+    "fullActiveCorrelationMinimum": 0.98,
+    "maximumExternalJoinMs": 10,
+    "finalPauseExclusion": true
+  },
+  "summary": "Both cases have true local captured-content loss/alteration; neither is only an onset-search miss. Complete packet full-active .98 gate still fails globally. Both captures are exactly identical over acoustic overlap. The historical v5 cause remains unresolved.",
+  "limits": [
+    "No product acceptance; 30/40ms fragments receive no waveform credit.",
+    "Saved PCM comparisons do not establish physical speaker output or listening.",
+    "Native roundtrip wall stamps and capture receipt origins are callback upper bounds, not synchronized presentation times.",
+    "No app, device, synthesis, SDK, model cache, source or index writes."
+  ],
+  "cases": [
+    {
+      "case": "s7-8bit-lazy-v23-20261111",
+      "classification": "Real local zero-filled saved-PCM dropout and boundary waveform alteration in both paths; not bounded-search placement failure, uniform gain change or whole-packet stretch. Upstream origin unresolved.",
+      "inputSha256": {
+        "capture.wav": "0708d9d60a993652804ce58d9397bc7809a6591f83d02794cfc3fcc9eb1fc593",
+        "coreaudio.wav": "8e71fff1c14e60341b5dcfea331681f19374f6c3d258b9e010b268f3e479a1a2",
+        "receipt.json": "7566f8b3607cac90ac63c68a32776be6c5ad7513ba3bad00e72f46458e1c7503"
+      },
+      "captureAgreement": {
+        "acousticSckMinusCoreAudioFrames": 286769,
+        "acousticSckMinusCoreAudioSeconds": 5.974354166666667,
+        "receiptOriginDeltaSeconds": 5.955346,
+        "comparedFrames": 2959951,
+        "exactPcmEquality": true,
+        "maxAbsoluteSampleDifference": 0.0
+      },
+      "outerAnchorAccounting": {
+        "firstTargetSckSeconds": 48.366792906746035,
+        "followingAnchorSckSeconds": 49.016947916666666,
+        "fullTargetSourceDurationSeconds": 0.6501587301587302,
+        "elapsedCaptureSeconds": 0.6501550099206312,
+        "netResidualMs": -0.003720238098914308
+      },
+      "anchors": [
+        {
+          "queueIndex": 130,
+          "durationSeconds": 0.3250793650793651,
+          "sckStartSeconds": 47.71663541666667,
+          "coreAudioStartSeconds": 41.742281250000005,
+          "fullCorrelationSck": 0.9999988866349009,
+          "fullCorrelationCoreAudio": 0.9999988866349004
+        },
+        {
+          "queueIndex": 131,
+          "durationSeconds": 0.3250793650793651,
+          "sckStartSeconds": 48.04171354166667,
+          "coreAudioStartSeconds": 42.067359375,
+          "fullCorrelationSck": 0.9999719310910063,
+          "fullCorrelationCoreAudio": 0.999971931091006
+        },
+        {
+          "queueIndex": 134,
+          "durationSeconds": 0.3250793650793651,
+          "sckStartSeconds": 49.016947916666666,
+          "coreAudioStartSeconds": 43.04259375,
+          "fullCorrelationSck": 0.99999976412808,
+          "fullCorrelationCoreAudio": 0.9999997641280799
+        },
+        {
+          "queueIndex": 135,
+          "durationSeconds": 0.3250793650793651,
+          "sckStartSeconds": 49.34202604166667,
+          "coreAudioStartSeconds": 43.367671875,
+          "fullCorrelationSck": 0.9999913965026351,
+          "fullCorrelationCoreAudio": 0.9999913965026346
+        }
+      ],
+      "nativeDelayReceiptMappedSckIntervals": [
+        {
+          "startedMs": 502,
+          "elapsedMs": 184,
+          "sckStartSeconds": 0.167414,
+          "sckNativeEntrySeconds": 0.351051,
+          "sckReturnedSeconds": 0.351111,
+          "applicationActive": true
+        },
+        {
+          "startedMs": 6301,
+          "elapsedMs": 204,
+          "sckStartSeconds": 5.966959,
+          "sckNativeEntrySeconds": 6.170203,
+          "sckReturnedSeconds": 6.170293,
+          "applicationActive": true
+        },
+        {
+          "startedMs": 48401,
+          "elapsedMs": 690,
+          "sckStartSeconds": 48.066471,
+          "sckNativeEntrySeconds": 48.756255,
+          "sckReturnedSeconds": 48.756441,
+          "applicationActive": true
+        },
+        {
+          "startedMs": 49101,
+          "elapsedMs": 114,
+          "sckStartSeconds": 48.767194,
+          "sckNativeEntrySeconds": 48.880499,
+          "sckReturnedSeconds": 48.880838,
+          "applicationActive": true
+        }
+      ],
+      "limits": [
+        "Equal captured PCM cannot distinguish application/native output failure from a common output/capture layer.",
+        "Unchanged outer anchors exclude net timeline insertion/drop only; localized edge remapping or compensation remains possible.",
+        "Diagnostic fragment scores can have plausible displaced periodic-speech candidates and do not establish replacement identity."
+      ],
+      "packets": [
+        {
+          "queueIndex": 132,
+          "referenceSha256": "2d664399262ffa8485f37140c515084ac7081c1c03ad02f1175726bd627e6ae7",
+          "sourceDurationSeconds": 0.3250793650793651,
+          "sourceStats": {
+            "frames": 14336,
+            "peak": 0.544769287109375,
+            "rms": 0.15544334366433232,
+            "exactZeroFrames": 12
+          },
+          "nativeRateExactZeroRuns": [
+            {
+              "sckStartFrame": 2326605,
+              "sckEndFrameExclusive": 2336172,
+              "sckStartSeconds": 48.4709375,
+              "sckEndSeconds": 48.67025,
+              "coreAudioStartFrame": 2039836,
+              "frames": 9567,
+              "durationMs": 199.3125,
+              "correspondingSourcePeak": 0.5449425796041569,
+              "correspondingSourceRms": 0.13336310969294846,
+              "correspondingSourceFramesAbove0_01": 8037,
+              "overlappingNativeDelays": [
+                48401
+              ]
+            }
+          ],
+          "globalSearches": {
+            "capture": {
+              "bestCorrelation": 0.6083365169612821,
+              "bestCandidateStartSeconds": 48.36678645833333,
+              "strictMatched": false,
+              "strictMatchedStartSeconds": null,
+              "searchedSeconds": [
+                0,
+                67.64
+              ]
+            },
+            "coreaudio": {
+              "bestCorrelation": 0.6083365169612818,
+              "bestCandidateStartSeconds": 42.392432291666665,
+              "strictMatched": false,
+              "strictMatchedStartSeconds": null,
+              "searchedSeconds": [
+                0,
+                61.696
+              ]
+            }
+          }
+        },
+        {
+          "queueIndex": 133,
+          "referenceSha256": "4cd7abb06c12ab0fb68736d3a5c00a280c5e3d7a278cbe775ab243624659df84",
+          "sourceDurationSeconds": 0.3250793650793651,
+          "sourceStats": {
+            "frames": 14336,
+            "peak": 0.3692626953125,
+            "rms": 0.10098726543641026,
+            "exactZeroFrames": 5
+          },
+          "nativeRateExactZeroRuns": [],
+          "globalSearches": {
+            "capture": {
+              "bestCorrelation": 0.8781967616040981,
+              "bestCandidateStartSeconds": 48.69186979166667,
+              "strictMatched": false,
+              "strictMatchedStartSeconds": null,
+              "searchedSeconds": [
+                0,
+                67.64
+              ]
+            },
+            "coreaudio": {
+              "bestCorrelation": 0.878196761604098,
+              "bestCandidateStartSeconds": 42.717515625,
+              "strictMatched": false,
+              "strictMatchedStartSeconds": null,
+              "searchedSeconds": [
+                0,
+                61.696
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "case": "s7-8bit-stall-v17-20261111",
+      "classification": "Real early local zero-filled saved-PCM dropout and adjacent waveform alteration in both paths; later source resumes on original time at unity gain. Upstream origin unresolved.",
+      "inputSha256": {
+        "capture.wav": "850c45d0dea78eebf1cb2b75e78ff425d99996bb75accd7689b9cb2b31d528d4",
+        "coreaudio.wav": "eacc64d2c9da39075c2434980ddae73f2c573f5bdb9e57852190e8b26ee22e28",
+        "receipt.json": "fcee406f4bb60d74e475d31aecaa0b765f8a4005165b951419e549154777c5cd"
+      },
+      "captureAgreement": {
+        "acousticSckMinusCoreAudioFrames": 277819,
+        "acousticSckMinusCoreAudioSeconds": 5.787895833333334,
+        "receiptOriginDeltaSeconds": 5.770676,
+        "comparedFrames": 2957381,
+        "exactPcmEquality": true,
+        "maxAbsoluteSampleDifference": 0.0
+      },
+      "outerAnchorAccounting": {
+        "firstTargetSckSeconds": 6.140217970521542,
+        "followingAnchorSckSeconds": 6.465296875,
+        "fullTargetSourceDurationSeconds": 0.3250793650793651,
+        "elapsedCaptureSeconds": 0.3250789044784579,
+        "netResidualMs": -0.00046060090719279856
+      },
+      "anchors": [
+        {
+          "queueIndex": 0,
+          "durationSeconds": 0.18575963718820862,
+          "sckStartSeconds": 5.954458333333333,
+          "coreAudioStartSeconds": 0.1665625,
+          "fullCorrelationSck": 0.9999729132058285,
+          "fullCorrelationCoreAudio": 0.9999729132058285
+        },
+        {
+          "queueIndex": 2,
+          "durationSeconds": 0.3250793650793651,
+          "sckStartSeconds": 6.465296875,
+          "coreAudioStartSeconds": 0.6774010416666666,
+          "fullCorrelationSck": 0.9999561838059587,
+          "fullCorrelationCoreAudio": 0.9999561838059585
+        },
+        {
+          "queueIndex": 3,
+          "durationSeconds": 0.3250793650793651,
+          "sckStartSeconds": 6.7903802083333336,
+          "coreAudioStartSeconds": 1.002484375,
+          "fullCorrelationSck": 0.9999839564454609,
+          "fullCorrelationCoreAudio": 0.9999839564454606
+        }
+      ],
+      "nativeDelayReceiptMappedSckIntervals": [
+        {
+          "startedMs": 5901,
+          "elapsedMs": 225,
+          "sckStartSeconds": 5.659192,
+          "sckNativeEntrySeconds": 5.880018,
+          "sckReturnedSeconds": 5.884361,
+          "applicationActive": true
+        },
+        {
+          "startedMs": 7901,
+          "elapsedMs": 105,
+          "sckStartSeconds": 7.658898,
+          "sckNativeEntrySeconds": 7.763738,
+          "sckReturnedSeconds": 7.763816,
+          "applicationActive": false
+        },
+        {
+          "startedMs": 12801,
+          "elapsedMs": 302,
+          "sckStartSeconds": 12.558927,
+          "sckNativeEntrySeconds": 12.861169,
+          "sckReturnedSeconds": 12.861223,
+          "applicationActive": false
+        }
+      ],
+      "limits": [
+        "Equal captured PCM cannot distinguish application/native output failure from a common output/capture layer.",
+        "Unchanged outer anchors exclude net timeline insertion/drop only; localized edge remapping or compensation remains possible.",
+        "Diagnostic fragment scores can have plausible displaced periodic-speech candidates and do not establish replacement identity."
+      ],
+      "packets": [
+        {
+          "queueIndex": 1,
+          "referenceSha256": "6f556e46144c43f12d425fac7f0ecb429d50fc52e6298a7f82eda797fe57225a",
+          "sourceDurationSeconds": 0.3250793650793651,
+          "sourceStats": {
+            "frames": 14336,
+            "peak": 0.581878662109375,
+            "rms": 0.17896069439952828,
+            "exactZeroFrames": 14
+          },
+          "nativeRateExactZeroRuns": [
+            {
+              "sckStartFrame": 295897,
+              "sckEndFrameExclusive": 296908,
+              "sckStartSeconds": 6.1645208333333334,
+              "sckEndSeconds": 6.185583333333334,
+              "coreAudioStartFrame": 18078,
+              "frames": 1011,
+              "durationMs": 21.0625,
+              "correspondingSourcePeak": 0.17896465018907223,
+              "correspondingSourceRms": 0.03758479259802581,
+              "correspondingSourceFramesAbove0_01": 467,
+              "overlappingNativeDelays": []
+            }
+          ],
+          "globalSearches": {
+            "capture": {
+              "bestCorrelation": 0.9602910924332902,
+              "bestCandidateStartSeconds": 6.14021875,
+              "strictMatched": false,
+              "strictMatchedStartSeconds": null,
+              "searchedSeconds": [
+                0,
+                67.4
+              ]
+            },
+            "coreaudio": {
+              "bestCorrelation": 0.9602910924332899,
+              "bestCandidateStartSeconds": 0.35232291666666665,
+              "strictMatched": false,
+              "strictMatchedStartSeconds": null,
+              "searchedSeconds": [
+                0,
+                61.64266666666666
+              ]
+            }
+          }
+        }
+      ]
+    }
+  ]
+}

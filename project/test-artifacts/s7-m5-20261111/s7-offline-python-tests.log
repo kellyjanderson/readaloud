@@ -1,0 +1,39 @@
+[readaloud-timing] {"requestId":"","stage":"synthesisFirstPacket","elapsedMilliseconds":21.55}
+[readaloud-timing] {"requestId":"","stage":"synthesisFirstPacket","elapsedMilliseconds":0.536}
+[readaloud-timing] {"requestId":"","stage":"synthesisFirstPacket","elapsedMilliseconds":0.443}
+[readaloud-timing] {"requestId":"","stage":"synthesisFirstPacket","elapsedMilliseconds":0.368}
+[readaloud-timing] {"requestId":"","stage":"synthesisFirstPacket","elapsedMilliseconds":0.354}
+[readaloud-timing] {"requestId":"","stage":"synthesisFirstPacket","elapsedMilliseconds":0.347}
+[readaloud-timing] {"requestId":"","stage":"synthesisFirstPacket","elapsedMilliseconds":0.404}
+.....[readaloud-timing] {"requestId":"","stage":"synthesisFirstPacket","elapsedMilliseconds":0.23}
+.......[readaloud-timing] {"requestId":"","stage":"referencePrepared","elapsedMilliseconds":0.001}
+[readaloud-timing] {"requestId":"","stage":"synthesisFirstPacket","elapsedMilliseconds":0.301}
+..[readaloud-timing] {"requestId":"","stage":"synthesisFirstPacket","elapsedMilliseconds":0.187}
+[readaloud-timing] {"requestId":"","stage":"synthesisFirstPacket","elapsedMilliseconds":0.119}
+...[readaloud-timing] {"requestId":"","stage":"synthesisFirstPacket","elapsedMilliseconds":0.158}
+.[readaloud-timing] {"requestId":"","stage":"synthesisFirstPacket","elapsedMilliseconds":0.209}
+..[readaloud-timing] {"requestId":"","stage":"synthesisFirstPacket","elapsedMilliseconds":0.301}
+.[readaloud-timing] {"requestId":"","stage":"synthesisFirstPacket","elapsedMilliseconds":0.194}
+.[readaloud-timing] {"requestId":"","stage":"modelBuildAndCodec","elapsedMilliseconds":0.015}
+[readaloud-timing] {"requestId":"","stage":"modelWeightsAndVerification","elapsedMilliseconds":0.001}
+[readaloud-timing] {"requestId":"","stage":"modelLoadTotal","elapsedMilliseconds":3.945}
+[readaloud-timing] {"requestId":"","stage":"modelBuildAndCodec","elapsedMilliseconds":0.012}
+[readaloud-timing] {"requestId":"","stage":"modelWeightsAndVerification","elapsedMilliseconds":0.013}
+[readaloud-timing] {"requestId":"","stage":"modelLoadTotal","elapsedMilliseconds":3.493}
+[readaloud-timing] {"requestId":"","stage":"modelBuildAndCodec","elapsedMilliseconds":0.009}
+[readaloud-timing] {"requestId":"","stage":"modelWeightsAndVerification","elapsedMilliseconds":0.0}
+[readaloud-timing] {"requestId":"","stage":"modelLoadTotal","elapsedMilliseconds":3.328}
+...[readaloud-timing] {"requestId":"","stage":"synthesisFirstPacket","elapsedMilliseconds":0.32}
+..........................[dry-run] Fetching 3 files:   0%|          | 0/3 [00:00<?, ?it/s][dry-run] Fetching 3 files: 100%|██████████| 3/3 [00:00<00:00, 4399.62it/s]
+Downloading bytes:           |  0.00B            
+Reconstructing (incomplete total...): |          |  0.00B /  0.00B            [A
+
+Fetching 3 files:   0%|          | 0/3 [00:00<?, ?it/s][A[AFetching 3 files: 100%|██████████| 3/3 [00:00<00:00, 1040.51it/s]
+Download complete:           |  0.00B            
+Reconstruction complete: |          |  0.00B /  0.00B                         [ADownload complete:           |  0.00B            
+Reconstruction complete: |          |  0.00B /  0.00B            
+....
+----------------------------------------------------------------------
+Ran 55 tests in 2.626s
+
+OK

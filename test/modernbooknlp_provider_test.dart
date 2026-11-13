@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:read_aloud/src/services/modernbooknlp_provider.dart';
+import 'package:read_aloud/src/services/runtime_memory_registry.dart';
 
 void main() {
   late Directory root;
@@ -16,6 +17,9 @@ $stdout.sync=true
 STDIN.each_line do |line|
 r=JSON.parse(line)
 File.write(ARGV[0]+'/pid',Process.pid)
+File.write(ARGV[0]+'/python-home',ENV.fetch('PYTHONHOME','unset'))
+puts JSON.generate(type:'memory',footprintBytes:2048,processId:Process.pid,
+  sampledUnixMicros:(Time.now.to_r*1000000).to_i)
 if r['text']=='block'
   sleep 30
 elsif r['text']=='oversize'
@@ -94,6 +98,64 @@ end
     );
     await reaped();
   });
+  test(
+    'attribution memory is routed separately and removed only after reap',
+    () async {
+      final progress = <Map<String, dynamic>>[];
+      expect(
+        (await provider.analyze(
+          request('valid'),
+          onProgress: progress.add,
+        ))['ok'],
+        true,
+      );
+      final childPid = provider.processId!;
+      final native = <Object?, Object?>{
+        'totalFootprintBytes': 1024,
+        'physicalMemoryBytes': 128000000000,
+        'availableMemoryBytes': 100000000000,
+        'pressure': 'normal',
+        'complete': false,
+        'enumerationComplete': true,
+        'processIds': [1, childPid],
+        'processes': [
+          {'pid': 1, 'footprintBytes': 1024},
+        ],
+        'sampledUnixMicros': DateTime.now().microsecondsSinceEpoch,
+      };
+      final sample = RuntimeMemoryRegistry.shared.reconcile(native);
+      expect(sample.complete, true);
+      expect(sample.totalFootprintBytes, 3072);
+      expect(progress, isEmpty);
+      await provider.cancel();
+      await reaped();
+      expect(RuntimeMemoryRegistry.shared.reconcile(native).complete, false);
+    },
+  );
+  test(
+    'BookNLP home belongs only to its child and injected override stays explicit',
+    () async {
+      final inherited = Platform.environment['PYTHONHOME'];
+      await provider.analyze(request('valid'));
+      expect(
+        await File('${root.path}/python-home').readAsString(),
+        inherited ?? 'unset',
+      );
+      await provider.close();
+      provider = ModernBookNlpProvider(
+        pythonPath: '${root.path}/python',
+        pythonHome: '${root.path}/verified-booknlp-home',
+        helperPath: '${root.path}/worker.rb',
+        runtimePath: root.path,
+      );
+      await provider.analyze(request('valid'));
+      expect(
+        await File('${root.path}/python-home').readAsString(),
+        '${root.path}/verified-booknlp-home',
+      );
+      expect(Platform.environment['PYTHONHOME'], inherited);
+    },
+  );
   test('oversized output is bounded and child is reaped', () async {
     await expectLater(provider.analyze(request('oversize')), throwsStateError);
     await reaped();

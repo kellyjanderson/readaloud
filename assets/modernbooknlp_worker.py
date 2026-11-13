@@ -5,6 +5,7 @@ and reap it out of band. Production default promotion remains a separate gate.
 """
 from __future__ import annotations
 import contextlib
+import ctypes
 import csv
 import hashlib
 import json
@@ -14,12 +15,40 @@ import resource
 import sys
 import tempfile
 import time
+import threading
 
 UPSTREAM = '84f1f34f6f0ec7c6e9c558b4371e61ea2354d95b'
 ADAPTER_VERSION = 'readaloud-cpu-2'
 MAX_UTF16 = 16384
 MAX_TOKENS = 4096
 MAX_OUTPUT = 1024 * 1024
+
+
+def _physical_footprint():
+    # Darwin rusage_info_v2: self-inspection remains permitted in the sandbox.
+    class RusageInfoV2(ctypes.Structure):
+        _fields_ = [('uuid', ctypes.c_uint8 * 16),
+                    ('counters', ctypes.c_uint64 * 18)]
+    libproc = ctypes.CDLL('/usr/lib/libproc.dylib', use_errno=True)
+    libproc.proc_pid_rusage.argtypes = [ctypes.c_int, ctypes.c_int, ctypes.c_void_p]
+    libproc.proc_pid_rusage.restype = ctypes.c_int
+    info = RusageInfoV2()
+    if libproc.proc_pid_rusage(os.getpid(), 2, ctypes.byref(info)) != 0:
+        raise OSError(ctypes.get_errno(), 'Could not sample attribution memory')
+    return int(info.counters[7])
+
+
+def _report_memory(stop, emit):
+    # Single daemon and no queue. The serving process owns stop/join; all output
+    # shares the protocol writer lock and cannot interleave JSON records.
+    while not stop.is_set():
+        try:
+            emit({'type': 'memory', 'footprintBytes': _physical_footprint(),
+                  'processId': os.getpid(), 'sampledUnixMicros': time.time_ns() // 1000})
+        except Exception as error:
+            emit({'type': 'memory', 'error': str(error)})
+            return
+        stop.wait(2)
 
 
 def utf16_offset(text, position):
@@ -162,8 +191,28 @@ def analyze(pipeline, request):
 
 def main():
     protocol = sys.stdout
+    output_lock = threading.Lock()
+    def emit(payload):
+        with output_lock:
+            protocol.write(json.dumps(payload) + '\n')
+            protocol.flush()
     pipeline = manifest = None
     serving = '--serve' in sys.argv
+    stop_memory = threading.Event()
+    memory_thread = None
+    if serving and os.environ.get('READALOUD_MEMORY_TELEMETRY') == '1':
+        memory_thread = threading.Thread(target=_report_memory,
+            args=(stop_memory, emit), name='attribution-memory', daemon=True)
+        memory_thread.start()
+    try:
+        _serve(protocol, serving, emit, pipeline, manifest)
+    finally:
+        stop_memory.set()
+        if memory_thread is not None:
+            memory_thread.join(timeout=1)
+
+
+def _serve(protocol, serving, emit, pipeline, manifest):
     while True:
         raw = sys.stdin.buffer.readline(128 * 1024 + 1)
         if not raw:
@@ -178,8 +227,7 @@ def main():
                 raise ValueError('Missing bounded request identity')
             def progress(**values):
                 if serving:
-                    protocol.write(json.dumps({'requestId': request['requestId'], 'type': 'progress', **values}) + '\n')
-                    protocol.flush()
+                    emit({'requestId': request['requestId'], 'type': 'progress', **values})
             started = time.monotonic()
             reused = pipeline is not None
             command = request.get('command', 'analyze')
@@ -215,8 +263,7 @@ def main():
         if len(encoded.encode()) > MAX_OUTPUT:
             failed = True
             encoded = json.dumps({'ok': False, 'requestId': request.get('requestId'), 'error': 'Provider output exceeded bound'})
-        protocol.write(encoded + '\n')
-        protocol.flush()
+        emit(json.loads(encoded))
         if not serving or failed:
             break
 

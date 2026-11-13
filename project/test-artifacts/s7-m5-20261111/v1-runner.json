@@ -1,0 +1,50 @@
+{
+  "passed": false,
+  "nativePassed": false,
+  "normalQuit": true,
+  "appExitVerified": true,
+  "forcedCleanup": false,
+  "remainingOwnedPids": [],
+  "modelSource": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/character-fish-standalone",
+  "expectedOwnedAlias": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/Library/Application Support/com.kellyjanderson.readAloud.mlxPlaybackTest/read_aloud/mlx-tts/fish_drama3",
+  "frameworkSha256": "4a710451e2335ece447b7454be285e6de25d29cbcbd20168df1f1be4e284711f",
+  "executableSha256": "ffc9de574441b1e44de81a69b2019be725c9494ba627b4a1146b0b4ac0f73a91",
+  "maxMlxChildren": 1,
+  "observedMlxSamples": 109,
+  "processEvents": [
+    {
+      "unixMicros": 1794405913864056,
+      "pids": []
+    },
+    {
+      "unixMicros": 1794405915833062,
+      "pids": [
+        16851
+      ]
+    },
+    {
+      "unixMicros": 1794405931301766,
+      "pids": []
+    },
+    {
+      "unixMicros": 1794405933278652,
+      "pids": [
+        17087
+      ]
+    },
+    {
+      "unixMicros": 1794405933651244,
+      "pids": []
+    }
+  ],
+  "errors": [
+    "Native failure: TimeoutException: UI inspection"
+  ],
+  "limits": "100ms process observations; source ownership checks are separate. Offline bf16 fixture, no quantized-model/M3 claim.",
+  "pid": 16825,
+  "capturePid": 16826,
+  "applicationActivationRequested": true,
+  "captureExitStatus": null,
+  "appExitStatus": 0,
+  "ownedAliasAbsent": true
+}

@@ -1,0 +1,22 @@
+[
+  {
+    "path": "/Users/k/.codex/worktrees/reader-feedback-s8/readaloud/tmp/s7-final/full-flutter-test.log",
+    "bytes": 207684,
+    "sha256": "8496e4c9098fb8bf4228c1d317b4cf80786468dc4f53f3f076e763e77a0cbbf1"
+  },
+  {
+    "path": "/Users/k/.codex/worktrees/reader-feedback-s8/readaloud/tmp/s7-final/analysis.log",
+    "bytes": 2592,
+    "sha256": "f5d4d96b44cd63e2e70df203be20d1da369269d5250f827bb86f5a2c93172ff9"
+  },
+  {
+    "path": "/Users/k/.codex/worktrees/reader-feedback-s8/readaloud/tmp/s7-final/build.log",
+    "bytes": 1298105,
+    "sha256": "7aa34546f5bede111a65fca2664802e0e5ec20892cc2354f9ce438581cf9f167"
+  },
+  {
+    "path": "/Users/k/.codex/worktrees/reader-feedback-s8/readaloud/tmp/s7-final/s8-aot-build.log",
+    "bytes": 65105,
+    "sha256": "e2d0b6bc5e2992102caecffbb6460ec479f476828a69576bd200251a376e9373"
+  }
+]

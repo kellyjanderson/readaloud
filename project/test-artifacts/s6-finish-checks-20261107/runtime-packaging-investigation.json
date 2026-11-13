@@ -1,0 +1,757 @@
+{
+  "schema": "readaloud-s6-runtime-packaging-investigation-v1",
+  "accepted": false,
+  "limits": "Diagnostic and failed candidates retained. Saved-book timing alone does not qualify runtime first use. No security policy or quarantine attributes changed. No release or full-book acceptance.",
+  "cases": [
+    {
+      "source": "42ba3c2",
+      "note": "Full compressed runtimes before bytecode omission",
+      "evidenceDirectory": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.s6PackagedCold/Data/s6-packaged-cold-20261107",
+      "native": {
+        "passed": true,
+        "launchToNativePositionMs": 2257.068,
+        "maxUiHeartbeatDelayMs": 34,
+        "forbiddenModelCallCount": 0
+      },
+      "emitted": {
+        "schema": "readaloud-ungated-startup-audio-v1",
+        "passed": false,
+        "errors": [
+          "Opening to captured speech exceeds two seconds"
+        ],
+        "launchToSpeechReceiptUpperBoundMs": 2501.363333,
+        "firstSignalExpectedSpeechAlignmentMs": 0.07291666666667251,
+        "launchToNativePositionMs": 2257.068,
+        "waveformComparison": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.s6PackagedCold/Data/s6-packaged-cold-20261107/comparison.json",
+        "limits": "CLOCK_MONOTONIC_RAW from immediately before process spawn to receipt of the first signal-bearing app-only packet, aligned with the exact expected waveform. An upper bound on app-emitted speech, not physical speaker latency or human listening. Candidate completeness and fresh-profile provenance must be verified separately."
+      },
+      "cleanup": {
+        "passed": true,
+        "deadlineSeconds": 120,
+        "normalQuit": true,
+        "forcedCleanup": false,
+        "launchUtc": "2026-11-07T18:19:20.122396Z",
+        "launchMonotonicRawNanos": 1977486033692500,
+        "pid": 21380,
+        "capturePid": 21381,
+        "captureIntroducedPlayGate": false,
+        "nativeReceipt": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.s6PackagedCold/Data/s6-packaged-cold-20261107/receipt.json",
+        "nativePassed": true,
+        "launchToNativePositionMs": 2257.068,
+        "nativePositionWithinTwoSeconds": false,
+        "captureExitStatus": 0,
+        "ownedPidsAfterNormalQuit": [],
+        "remainingOwnedPids": [],
+        "exitStatus": 0,
+        "appExitVerified": true,
+        "elapsedSeconds": 36.4922709998209,
+        "errors": []
+      }
+    },
+    {
+      "source": "e0f8ee1",
+      "note": "Full compressed runtimes; saved-book timing passes but first-use execution fails",
+      "evidenceDirectory": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.s6PackagedSlim/Data/s6-packaged-slim-20261107",
+      "native": {
+        "passed": true,
+        "launchToNativePositionMs": 1640.896,
+        "maxUiHeartbeatDelayMs": 48,
+        "forbiddenModelCallCount": 0
+      },
+      "emitted": {
+        "schema": "readaloud-ungated-startup-audio-v1",
+        "passed": true,
+        "errors": [],
+        "launchToSpeechReceiptUpperBoundMs": 1873.721458,
+        "firstSignalExpectedSpeechAlignmentMs": 0.07291666666667251,
+        "launchToNativePositionMs": 1640.896,
+        "waveformComparison": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.s6PackagedSlim/Data/s6-packaged-slim-20261107/comparison.json",
+        "limits": "CLOCK_MONOTONIC_RAW from immediately before process spawn to receipt of the first signal-bearing app-only packet, aligned with the exact expected waveform. An upper bound on app-emitted speech, not physical speaker latency or human listening. Candidate completeness and fresh-profile provenance must be verified separately."
+      },
+      "cleanup": {
+        "passed": true,
+        "deadlineSeconds": 120,
+        "normalQuit": true,
+        "forcedCleanup": false,
+        "launchUtc": "2026-11-07T18:30:38.880192Z",
+        "launchMonotonicRawNanos": 1978164787642833,
+        "pid": 23542,
+        "capturePid": 23543,
+        "captureIntroducedPlayGate": false,
+        "nativeReceipt": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.s6PackagedSlim/Data/s6-packaged-slim-20261107/receipt.json",
+        "nativePassed": true,
+        "launchToNativePositionMs": 1640.896,
+        "nativePositionWithinTwoSeconds": true,
+        "captureExitStatus": 0,
+        "ownedPidsAfterNormalQuit": [],
+        "remainingOwnedPids": [],
+        "exitStatus": 0,
+        "appExitVerified": true,
+        "elapsedSeconds": 35.892766000004485,
+        "errors": []
+      }
+    },
+    {
+      "source": "aec2101 plus diagnostic packaging",
+      "note": "Expanded runtimes, redundant bytecode omitted",
+      "evidenceDirectory": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.s6PrunedRuntime/Data/s6-pruned-runtime-20261107",
+      "native": {
+        "passed": true,
+        "launchToNativePositionMs": 3893.23,
+        "maxUiHeartbeatDelayMs": 70,
+        "forbiddenModelCallCount": 0
+      },
+      "emitted": {
+        "schema": "readaloud-ungated-startup-audio-v1",
+        "passed": false,
+        "errors": [
+          "Opening to captured speech exceeds two seconds"
+        ],
+        "launchToSpeechReceiptUpperBoundMs": 4114.236917,
+        "firstSignalExpectedSpeechAlignmentMs": 0.07291666666670027,
+        "launchToNativePositionMs": 3893.23,
+        "waveformComparison": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.s6PrunedRuntime/Data/s6-pruned-runtime-20261107/comparison.json",
+        "limits": "CLOCK_MONOTONIC_RAW from immediately before process spawn to receipt of the first signal-bearing app-only packet, aligned with the exact expected waveform. An upper bound on app-emitted speech, not physical speaker latency or human listening. Candidate completeness and fresh-profile provenance must be verified separately."
+      },
+      "cleanup": {
+        "passed": true,
+        "deadlineSeconds": 120,
+        "normalQuit": true,
+        "forcedCleanup": false,
+        "launchUtc": "2026-11-07T18:50:40.029869Z",
+        "launchMonotonicRawNanos": 1979365929594541,
+        "pid": 26210,
+        "capturePid": 26211,
+        "captureIntroducedPlayGate": false,
+        "nativeReceipt": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.s6PrunedRuntime/Data/s6-pruned-runtime-20261107/receipt.json",
+        "nativePassed": true,
+        "launchToNativePositionMs": 3893.23,
+        "nativePositionWithinTwoSeconds": false,
+        "captureExitStatus": 0,
+        "ownedPidsAfterNormalQuit": [],
+        "remainingOwnedPids": [],
+        "exitStatus": 0,
+        "appExitVerified": true,
+        "elapsedSeconds": 38.627509999787435,
+        "errors": []
+      }
+    },
+    {
+      "source": "aec2101 plus diagnostic packaging",
+      "note": "Bundled native files, compressed data; runtime view supplied explicitly for separate inference diagnostic",
+      "evidenceDirectory": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.s6SplitRuntime/Data/s6-split-runtime-20261107",
+      "native": {
+        "passed": true,
+        "launchToNativePositionMs": 2166.762,
+        "maxUiHeartbeatDelayMs": 19,
+        "forbiddenModelCallCount": 0
+      },
+      "emitted": {
+        "schema": "readaloud-ungated-startup-audio-v1",
+        "passed": false,
+        "errors": [
+          "Opening to captured speech exceeds two seconds"
+        ],
+        "launchToSpeechReceiptUpperBoundMs": 2391.406666,
+        "firstSignalExpectedSpeechAlignmentMs": 0.07291666666664476,
+        "launchToNativePositionMs": 2166.762,
+        "waveformComparison": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.s6SplitRuntime/Data/s6-split-runtime-20261107/comparison.json",
+        "limits": "CLOCK_MONOTONIC_RAW from immediately before process spawn to receipt of the first signal-bearing app-only packet, aligned with the exact expected waveform. An upper bound on app-emitted speech, not physical speaker latency or human listening. Candidate completeness and fresh-profile provenance must be verified separately."
+      },
+      "cleanup": {
+        "passed": true,
+        "deadlineSeconds": 120,
+        "normalQuit": true,
+        "forcedCleanup": false,
+        "launchUtc": "2026-11-07T18:54:03.210744Z",
+        "launchMonotonicRawNanos": 1979569109280375,
+        "pid": 27035,
+        "capturePid": 27036,
+        "captureIntroducedPlayGate": false,
+        "nativeReceipt": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.s6SplitRuntime/Data/s6-split-runtime-20261107/receipt.json",
+        "nativePassed": true,
+        "launchToNativePositionMs": 2166.762,
+        "nativePositionWithinTwoSeconds": false,
+        "captureExitStatus": 0,
+        "ownedPidsAfterNormalQuit": [],
+        "remainingOwnedPids": [],
+        "exitStatus": 0,
+        "appExitVerified": true,
+        "elapsedSeconds": 36.412107000127435,
+        "errors": []
+      }
+    },
+    {
+      "source": "42ba3c2",
+      "note": "Archive extraction cancellation mlx",
+      "evidenceDirectory": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.s6PackagedCold/Data/s6-runtime-cancel-mlx-20261107",
+      "native": {
+        "schema": "readaloud-native-runtime-cancel-v1",
+        "passed": true,
+        "runtimeId": "mlx",
+        "privateSupport": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.s6PackagedCold/Data/Library/Application Support/com.kellyjanderson.readAloud.s6PackagedCold/s6-runtime-cancel/attempt-JKjaqf",
+        "progress": [
+          {
+            "runtimeId": "mlx",
+            "attemptId": "21689/1794075850874412/663493632",
+            "signedTreeDigest": null,
+            "stage": "runtimeManifest",
+            "message": "Checking packaged mlx runtime identity",
+            "completed": null,
+            "total": null,
+            "unit": "bytes",
+            "consumerRevision": "native-cancel-1794075850874190",
+            "elapsedMs": 0
+          },
+          {
+            "runtimeId": "mlx",
+            "attemptId": "21689/1794075850874412/663493632",
+            "signedTreeDigest": "69ea314912a037214930548605a06a53fd25d5ded86eebd0b2f2f011c4e3fad9",
+            "stage": "runtimeArchive",
+            "message": "Verifying packaged runtime archive",
+            "completed": 19529728,
+            "total": 198745650,
+            "unit": "bytes",
+            "consumerRevision": "native-cancel-1794075850874190",
+            "elapsedMs": 176
+          },
+          {
+            "runtimeId": "mlx",
+            "attemptId": "21689/1794075850874412/663493632",
+            "signedTreeDigest": "69ea314912a037214930548605a06a53fd25d5ded86eebd0b2f2f011c4e3fad9",
+            "stage": "runtimeArchive",
+            "message": "Verifying packaged runtime archive",
+            "completed": 39190528,
+            "total": 198745650,
+            "unit": "bytes",
+            "consumerRevision": "native-cancel-1794075850874190",
+            "elapsedMs": 276
+          },
+          {
+            "runtimeId": "mlx",
+            "attemptId": "21689/1794075850874412/663493632",
+            "signedTreeDigest": "69ea314912a037214930548605a06a53fd25d5ded86eebd0b2f2f011c4e3fad9",
+            "stage": "runtimeArchive",
+            "message": "Verifying packaged runtime archive",
+            "completed": 58982400,
+            "total": 198745650,
+            "unit": "bytes",
+            "consumerRevision": "native-cancel-1794075850874190",
+            "elapsedMs": 376
+          },
+          {
+            "runtimeId": "mlx",
+            "attemptId": "21689/1794075850874412/663493632",
+            "signedTreeDigest": "69ea314912a037214930548605a06a53fd25d5ded86eebd0b2f2f011c4e3fad9",
+            "stage": "runtimeArchive",
+            "message": "Verifying packaged runtime archive",
+            "completed": 79101952,
+            "total": 198745650,
+            "unit": "bytes",
+            "consumerRevision": "native-cancel-1794075850874190",
+            "elapsedMs": 476
+          },
+          {
+            "runtimeId": "mlx",
+            "attemptId": "21689/1794075850874412/663493632",
+            "signedTreeDigest": "69ea314912a037214930548605a06a53fd25d5ded86eebd0b2f2f011c4e3fad9",
+            "stage": "runtimeArchive",
+            "message": "Verifying packaged runtime archive",
+            "completed": 99418112,
+            "total": 198745650,
+            "unit": "bytes",
+            "consumerRevision": "native-cancel-1794075850874190",
+            "elapsedMs": 576
+          },
+          {
+            "runtimeId": "mlx",
+            "attemptId": "21689/1794075850874412/663493632",
+            "signedTreeDigest": "69ea314912a037214930548605a06a53fd25d5ded86eebd0b2f2f011c4e3fad9",
+            "stage": "runtimeArchive",
+            "message": "Verifying packaged runtime archive",
+            "completed": 119603200,
+            "total": 198745650,
+            "unit": "bytes",
+            "consumerRevision": "native-cancel-1794075850874190",
+            "elapsedMs": 676
+          },
+          {
+            "runtimeId": "mlx",
+            "attemptId": "21689/1794075850874412/663493632",
+            "signedTreeDigest": "69ea314912a037214930548605a06a53fd25d5ded86eebd0b2f2f011c4e3fad9",
+            "stage": "runtimeArchive",
+            "message": "Verifying packaged runtime archive",
+            "completed": 139657216,
+            "total": 198745650,
+            "unit": "bytes",
+            "consumerRevision": "native-cancel-1794075850874190",
+            "elapsedMs": 776
+          },
+          {
+            "runtimeId": "mlx",
+            "attemptId": "21689/1794075850874412/663493632",
+            "signedTreeDigest": "69ea314912a037214930548605a06a53fd25d5ded86eebd0b2f2f011c4e3fad9",
+            "stage": "runtimeArchive",
+            "message": "Verifying packaged runtime archive",
+            "completed": 159711232,
+            "total": 198745650,
+            "unit": "bytes",
+            "consumerRevision": "native-cancel-1794075850874190",
+            "elapsedMs": 877
+          },
+          {
+            "runtimeId": "mlx",
+            "attemptId": "21689/1794075850874412/663493632",
+            "signedTreeDigest": "69ea314912a037214930548605a06a53fd25d5ded86eebd0b2f2f011c4e3fad9",
+            "stage": "runtimeArchive",
+            "message": "Verifying packaged runtime archive",
+            "completed": 179961856,
+            "total": 198745650,
+            "unit": "bytes",
+            "consumerRevision": "native-cancel-1794075850874190",
+            "elapsedMs": 977
+          },
+          {
+            "runtimeId": "mlx",
+            "attemptId": "21689/1794075850874412/663493632",
+            "signedTreeDigest": "69ea314912a037214930548605a06a53fd25d5ded86eebd0b2f2f011c4e3fad9",
+            "stage": "runtimeArchive",
+            "message": "Packaged runtime archive verified",
+            "completed": 198745650,
+            "total": 198745650,
+            "unit": "bytes",
+            "consumerRevision": "native-cancel-1794075850874190",
+            "elapsedMs": 1070
+          },
+          {
+            "runtimeId": "mlx",
+            "attemptId": "21689/1794075850874412/663493632",
+            "signedTreeDigest": "69ea314912a037214930548605a06a53fd25d5ded86eebd0b2f2f011c4e3fad9",
+            "stage": "runtimeArchiveInventory",
+            "message": "Checking mlx archive members",
+            "completed": null,
+            "total": null,
+            "unit": "bytes",
+            "consumerRevision": "native-cancel-1794075850874190",
+            "elapsedMs": 1070
+          },
+          {
+            "runtimeId": "mlx",
+            "attemptId": "21689/1794075850874412/663493632",
+            "signedTreeDigest": "69ea314912a037214930548605a06a53fd25d5ded86eebd0b2f2f011c4e3fad9",
+            "stage": "runtimeExtract",
+            "message": "Extracting mlx runtime; waiting for verified inventory",
+            "completed": null,
+            "total": null,
+            "unit": "bytes",
+            "consumerRevision": "native-cancel-1794075850874190",
+            "elapsedMs": 1106
+          }
+        ],
+        "consumerCancellationMs": 0,
+        "cancelledDuringExtraction": true,
+        "progressAfterCancellation": 0,
+        "leftoverFiles": [],
+        "progressEventCount": 13,
+        "progressLogTruncated": false,
+        "maxUiHeartbeatDelayMs": 3,
+        "resourceShutdownComplete": true,
+        "elapsedMs": 1278
+      },
+      "cleanup": {
+        "normalQuit": true,
+        "forcedCleanup": false,
+        "ownedPidsAfterNormalQuit": [],
+        "remainingOwnedPids": [],
+        "exitStatus": 0,
+        "error": null,
+        "passed": true
+      }
+    },
+    {
+      "source": "42ba3c2",
+      "note": "Archive extraction cancellation booknlp",
+      "evidenceDirectory": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.s6PackagedCold/Data/s6-runtime-cancel-booknlp-20261107",
+      "native": {
+        "schema": "readaloud-native-runtime-cancel-v1",
+        "passed": true,
+        "runtimeId": "modernbooknlp",
+        "privateSupport": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.s6PackagedCold/Data/Library/Application Support/com.kellyjanderson.readAloud.s6PackagedCold/s6-runtime-cancel/attempt-i7ewX0",
+        "progress": [
+          {
+            "runtimeId": "modernbooknlp",
+            "attemptId": "21747/1794075896793643/186368868",
+            "signedTreeDigest": null,
+            "stage": "runtimeManifest",
+            "message": "Checking packaged modernbooknlp runtime identity",
+            "completed": null,
+            "total": null,
+            "unit": "bytes",
+            "consumerRevision": "native-cancel-1794075896793448",
+            "elapsedMs": 0
+          },
+          {
+            "runtimeId": "modernbooknlp",
+            "attemptId": "21747/1794075896793643/186368868",
+            "signedTreeDigest": "8871d28a3669767d108e6d71d4279671409be6991d18941e070181fde39031b4",
+            "stage": "runtimeArchive",
+            "message": "Verifying packaged runtime archive",
+            "completed": 20316160,
+            "total": 312041371,
+            "unit": "bytes",
+            "consumerRevision": "native-cancel-1794075896793448",
+            "elapsedMs": 356
+          },
+          {
+            "runtimeId": "modernbooknlp",
+            "attemptId": "21747/1794075896793643/186368868",
+            "signedTreeDigest": "8871d28a3669767d108e6d71d4279671409be6991d18941e070181fde39031b4",
+            "stage": "runtimeArchive",
+            "message": "Verifying packaged runtime archive",
+            "completed": 40501248,
+            "total": 312041371,
+            "unit": "bytes",
+            "consumerRevision": "native-cancel-1794075896793448",
+            "elapsedMs": 456
+          },
+          {
+            "runtimeId": "modernbooknlp",
+            "attemptId": "21747/1794075896793643/186368868",
+            "signedTreeDigest": "8871d28a3669767d108e6d71d4279671409be6991d18941e070181fde39031b4",
+            "stage": "runtimeArchive",
+            "message": "Verifying packaged runtime archive",
+            "completed": 60555264,
+            "total": 312041371,
+            "unit": "bytes",
+            "consumerRevision": "native-cancel-1794075896793448",
+            "elapsedMs": 556
+          },
+          {
+            "runtimeId": "modernbooknlp",
+            "attemptId": "21747/1794075896793643/186368868",
+            "signedTreeDigest": "8871d28a3669767d108e6d71d4279671409be6991d18941e070181fde39031b4",
+            "stage": "runtimeArchive",
+            "message": "Verifying packaged runtime archive",
+            "completed": 80609280,
+            "total": 312041371,
+            "unit": "bytes",
+            "consumerRevision": "native-cancel-1794075896793448",
+            "elapsedMs": 656
+          },
+          {
+            "runtimeId": "modernbooknlp",
+            "attemptId": "21747/1794075896793643/186368868",
+            "signedTreeDigest": "8871d28a3669767d108e6d71d4279671409be6991d18941e070181fde39031b4",
+            "stage": "runtimeArchive",
+            "message": "Verifying packaged runtime archive",
+            "completed": 100597760,
+            "total": 312041371,
+            "unit": "bytes",
+            "consumerRevision": "native-cancel-1794075896793448",
+            "elapsedMs": 756
+          },
+          {
+            "runtimeId": "modernbooknlp",
+            "attemptId": "21747/1794075896793643/186368868",
+            "signedTreeDigest": "8871d28a3669767d108e6d71d4279671409be6991d18941e070181fde39031b4",
+            "stage": "runtimeArchive",
+            "message": "Verifying packaged runtime archive",
+            "completed": 120520704,
+            "total": 312041371,
+            "unit": "bytes",
+            "consumerRevision": "native-cancel-1794075896793448",
+            "elapsedMs": 857
+          },
+          {
+            "runtimeId": "modernbooknlp",
+            "attemptId": "21747/1794075896793643/186368868",
+            "signedTreeDigest": "8871d28a3669767d108e6d71d4279671409be6991d18941e070181fde39031b4",
+            "stage": "runtimeArchive",
+            "message": "Verifying packaged runtime archive",
+            "completed": 140181504,
+            "total": 312041371,
+            "unit": "bytes",
+            "consumerRevision": "native-cancel-1794075896793448",
+            "elapsedMs": 957
+          },
+          {
+            "runtimeId": "modernbooknlp",
+            "attemptId": "21747/1794075896793643/186368868",
+            "signedTreeDigest": "8871d28a3669767d108e6d71d4279671409be6991d18941e070181fde39031b4",
+            "stage": "runtimeArchive",
+            "message": "Verifying packaged runtime archive",
+            "completed": 160038912,
+            "total": 312041371,
+            "unit": "bytes",
+            "consumerRevision": "native-cancel-1794075896793448",
+            "elapsedMs": 1057
+          },
+          {
+            "runtimeId": "modernbooknlp",
+            "attemptId": "21747/1794075896793643/186368868",
+            "signedTreeDigest": "8871d28a3669767d108e6d71d4279671409be6991d18941e070181fde39031b4",
+            "stage": "runtimeArchive",
+            "message": "Verifying packaged runtime archive",
+            "completed": 178585600,
+            "total": 312041371,
+            "unit": "bytes",
+            "consumerRevision": "native-cancel-1794075896793448",
+            "elapsedMs": 1157
+          },
+          {
+            "runtimeId": "modernbooknlp",
+            "attemptId": "21747/1794075896793643/186368868",
+            "signedTreeDigest": "8871d28a3669767d108e6d71d4279671409be6991d18941e070181fde39031b4",
+            "stage": "runtimeArchive",
+            "message": "Verifying packaged runtime archive",
+            "completed": 198705152,
+            "total": 312041371,
+            "unit": "bytes",
+            "consumerRevision": "native-cancel-1794075896793448",
+            "elapsedMs": 1257
+          },
+          {
+            "runtimeId": "modernbooknlp",
+            "attemptId": "21747/1794075896793643/186368868",
+            "signedTreeDigest": "8871d28a3669767d108e6d71d4279671409be6991d18941e070181fde39031b4",
+            "stage": "runtimeArchive",
+            "message": "Verifying packaged runtime archive",
+            "completed": 218824704,
+            "total": 312041371,
+            "unit": "bytes",
+            "consumerRevision": "native-cancel-1794075896793448",
+            "elapsedMs": 1357
+          },
+          {
+            "runtimeId": "modernbooknlp",
+            "attemptId": "21747/1794075896793643/186368868",
+            "signedTreeDigest": "8871d28a3669767d108e6d71d4279671409be6991d18941e070181fde39031b4",
+            "stage": "runtimeArchive",
+            "message": "Verifying packaged runtime archive",
+            "completed": 239009792,
+            "total": 312041371,
+            "unit": "bytes",
+            "consumerRevision": "native-cancel-1794075896793448",
+            "elapsedMs": 1457
+          },
+          {
+            "runtimeId": "modernbooknlp",
+            "attemptId": "21747/1794075896793643/186368868",
+            "signedTreeDigest": "8871d28a3669767d108e6d71d4279671409be6991d18941e070181fde39031b4",
+            "stage": "runtimeArchive",
+            "message": "Verifying packaged runtime archive",
+            "completed": 258998272,
+            "total": 312041371,
+            "unit": "bytes",
+            "consumerRevision": "native-cancel-1794075896793448",
+            "elapsedMs": 1558
+          },
+          {
+            "runtimeId": "modernbooknlp",
+            "attemptId": "21747/1794075896793643/186368868",
+            "signedTreeDigest": "8871d28a3669767d108e6d71d4279671409be6991d18941e070181fde39031b4",
+            "stage": "runtimeArchive",
+            "message": "Verifying packaged runtime archive",
+            "completed": 279052288,
+            "total": 312041371,
+            "unit": "bytes",
+            "consumerRevision": "native-cancel-1794075896793448",
+            "elapsedMs": 1658
+          },
+          {
+            "runtimeId": "modernbooknlp",
+            "attemptId": "21747/1794075896793643/186368868",
+            "signedTreeDigest": "8871d28a3669767d108e6d71d4279671409be6991d18941e070181fde39031b4",
+            "stage": "runtimeArchive",
+            "message": "Verifying packaged runtime archive",
+            "completed": 298975232,
+            "total": 312041371,
+            "unit": "bytes",
+            "consumerRevision": "native-cancel-1794075896793448",
+            "elapsedMs": 1758
+          },
+          {
+            "runtimeId": "modernbooknlp",
+            "attemptId": "21747/1794075896793643/186368868",
+            "signedTreeDigest": "8871d28a3669767d108e6d71d4279671409be6991d18941e070181fde39031b4",
+            "stage": "runtimeArchive",
+            "message": "Packaged runtime archive verified",
+            "completed": 312041371,
+            "total": 312041371,
+            "unit": "bytes",
+            "consumerRevision": "native-cancel-1794075896793448",
+            "elapsedMs": 1823
+          },
+          {
+            "runtimeId": "modernbooknlp",
+            "attemptId": "21747/1794075896793643/186368868",
+            "signedTreeDigest": "8871d28a3669767d108e6d71d4279671409be6991d18941e070181fde39031b4",
+            "stage": "runtimeArchiveInventory",
+            "message": "Checking modernbooknlp archive members",
+            "completed": null,
+            "total": null,
+            "unit": "bytes",
+            "consumerRevision": "native-cancel-1794075896793448",
+            "elapsedMs": 1823
+          },
+          {
+            "runtimeId": "modernbooknlp",
+            "attemptId": "21747/1794075896793643/186368868",
+            "signedTreeDigest": "8871d28a3669767d108e6d71d4279671409be6991d18941e070181fde39031b4",
+            "stage": "runtimeExtract",
+            "message": "Extracting modernbooknlp runtime; waiting for verified inventory",
+            "completed": null,
+            "total": null,
+            "unit": "bytes",
+            "consumerRevision": "native-cancel-1794075896793448",
+            "elapsedMs": 1943
+          }
+        ],
+        "consumerCancellationMs": 0,
+        "cancelledDuringExtraction": true,
+        "progressAfterCancellation": 0,
+        "leftoverFiles": [],
+        "progressEventCount": 19,
+        "progressLogTruncated": false,
+        "maxUiHeartbeatDelayMs": 3,
+        "resourceShutdownComplete": true,
+        "elapsedMs": 2110
+      },
+      "cleanup": {
+        "normalQuit": true,
+        "forcedCleanup": false,
+        "ownedPidsAfterNormalQuit": [],
+        "remainingOwnedPids": [],
+        "exitStatus": 0,
+        "error": null,
+        "passed": true
+      }
+    },
+    {
+      "note": "s6-packaged-regeneration-20261107",
+      "evidenceDirectory": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s6-packaged-regeneration-20261107",
+      "native": {
+        "passed": false,
+        "error": "Bad state: Speech startup failed: Bad state: Bad state: Runtime command failed (1): /usr/bin/lipo xcrun: error: cannot be used within an App Sandbox.\n",
+        "maxUiHeartbeatDelayMs": 3
+      },
+      "cleanup": {
+        "normalQuit": true,
+        "forcedCleanup": false,
+        "exitStatus": 0,
+        "remainingOwnedPids": [],
+        "captures": {}
+      },
+      "limits": "Diagnostic split uses explicit interpreter/home override, not production resolver; missing-middle export cacheHit=true is not cold uncached continuity proof."
+    },
+    {
+      "note": "s6-packaged-regeneration-v2-20261107",
+      "evidenceDirectory": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s6-packaged-regeneration-v2-20261107",
+      "native": {
+        "passed": false,
+        "error": "Bad state: Speech startup failed: ProcessException: Operation not permitted\n  Command: /Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/Library/Application Support/com.kellyjanderson.readAloud.mlxPlaybackTest/python-runtimes/v1/mlx/d0d25053f89ddd2d5d1904b050e5d468716229bdfd47a9e5ba49ed428f42433a/bin/python3.12 -u -B /Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/Library/Application Support/com.kellyjanderson.readAloud.mlxPlaybackTest/read_aloud/mlx-tts/mlx_tts_worker.py",
+        "maxUiHeartbeatDelayMs": 3
+      },
+      "cleanup": {
+        "normalQuit": true,
+        "forcedCleanup": false,
+        "exitStatus": 0,
+        "remainingOwnedPids": [],
+        "captures": {}
+      },
+      "limits": "Diagnostic split uses explicit interpreter/home override, not production resolver; missing-middle export cacheHit=true is not cold uncached continuity proof."
+    },
+    {
+      "note": "s6-bundled-launcher-diagnostic-v2-20261107",
+      "evidenceDirectory": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s6-bundled-launcher-diagnostic-v2-20261107",
+      "native": {
+        "passed": false,
+        "error": "Bad state: Speech startup failed: Bad state: Speech memory monitoring failed: Bad state: Inference memory telemetry stopped",
+        "maxUiHeartbeatDelayMs": 3
+      },
+      "cleanup": {
+        "normalQuit": true,
+        "forcedCleanup": false,
+        "exitStatus": 0,
+        "remainingOwnedPids": [],
+        "captures": {}
+      },
+      "limits": "Diagnostic split uses explicit interpreter/home override, not production resolver; missing-middle export cacheHit=true is not cold uncached continuity proof."
+    },
+    {
+      "note": "s6-split-runtime-regeneration-20261107",
+      "evidenceDirectory": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s6-split-runtime-regeneration-20261107",
+      "native": {
+        "passed": true,
+        "maxUiHeartbeatDelayMs": 143,
+        "exportChunkReady": [
+          {
+            "phase": "changed",
+            "metric": "exportChunkReady",
+            "documentId": "doc_76a6104320c9ef4c",
+            "sessionId": "book_5_0",
+            "voiceId": "library_fishselene",
+            "engineId": "fish_drama3",
+            "recordedAt": "2026-11-07T18:57:37.295861Z",
+            "chunkId": "scene_chunk_r0_s_0",
+            "value": {
+              "cacheHit": false,
+              "startWord": 0,
+              "endWord": 51,
+              "rawArtifactIdentity": "wav-sha256:c80d81fbe1130701d51f178f2e81ffa6ff2431b8a92b14aab4ec621f399597da"
+            }
+          },
+          {
+            "phase": "missing",
+            "metric": "exportChunkReady",
+            "documentId": "doc_76a6104320c9ef4c",
+            "sessionId": "book_2_51",
+            "voiceId": "library_fishadrian",
+            "engineId": "fish_drama3",
+            "recordedAt": "2026-11-07T19:00:28.740396Z",
+            "chunkId": "scene_chunk_r0_s_5",
+            "value": {
+              "cacheHit": true,
+              "startWord": 51,
+              "endWord": 94,
+              "rawArtifactIdentity": "wav-sha256:6e2bbaca6ec0df3d090605c0cdea8b6e99f2aeddd58fd1525556a13bafd0bb1b"
+            }
+          }
+        ],
+        "savedReopenReuse": {
+          "additionalExports": 0,
+          "additionalSynthesisCallbacks": 0
+        }
+      },
+      "cleanup": {
+        "normalQuit": true,
+        "forcedCleanup": false,
+        "exitStatus": 0,
+        "remainingOwnedPids": [],
+        "captures": {
+          "initial": {
+            "pid": 27152,
+            "stop": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s6-split-runtime-regeneration-20261107/initial.stop",
+            "exitStatus": 0
+          },
+          "changed": {
+            "pid": 27212,
+            "stop": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s6-split-runtime-regeneration-20261107/changed.stop",
+            "exitStatus": 0
+          },
+          "reused": {
+            "pid": 27663,
+            "stop": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s6-split-runtime-regeneration-20261107/reused.stop",
+            "exitStatus": 0
+          },
+          "missing": {
+            "pid": 27704,
+            "stop": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s6-split-runtime-regeneration-20261107/missing.stop",
+            "exitStatus": 0
+          }
+        }
+      },
+      "limits": "Diagnostic split uses explicit interpreter/home override, not production resolver; missing-middle export cacheHit=true is not cold uncached continuity proof."
+    }
+  ]
+}

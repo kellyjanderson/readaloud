@@ -1,0 +1,547 @@
+{
+  "schema": "readaloud-native-packet-cancellation-v1",
+  "passed": true,
+  "engine": "fish_drama3",
+  "input": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s6-r25-packet-cancel-v11-20261111/copied-input.txt",
+  "runRoot": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s6-r25-packet-cancel-v11-20261111/s6-first-load-yCVdtL",
+  "dartEntryUnixMicros": 1794388692583474,
+  "controlledCaptureGate": false,
+  "timingMode": "launch-with-document-diagnostic",
+  "documentLoadClockScope": "No independent post-startup target load; launch diagnostic only",
+  "rawAudioCache": "fresh private per-run store; existing model assets only",
+  "emittedAudioCapture": "external waveform comparison required",
+  "humanListening": "not established by this probe",
+  "inputResponsiveness": "heartbeat and native roundtrip only; actual UI input separate",
+  "processLaunchUnixMicros": 1794388692367385,
+  "resourceStages": [
+    {
+      "elapsedMs": 287,
+      "stage": "runtimeManifest",
+      "message": "Checking packaged mlx runtime identity"
+    },
+    {
+      "elapsedMs": 370,
+      "stage": "runtimeNative",
+      "message": "Verified 1 of 186 bundled mlx native targets"
+    },
+    {
+      "elapsedMs": 494,
+      "stage": "runtimeNativeFile",
+      "message": "Verifying bundled native lib/python3.12/site-packages/mlx/lib/mlx.metallib"
+    },
+    {
+      "elapsedMs": 501,
+      "stage": "runtimeNative",
+      "message": "Verified 48 of 186 bundled mlx native targets"
+    },
+    {
+      "elapsedMs": 544,
+      "stage": "runtimeInventory",
+      "message": "Checking mlx runtime inventory"
+    },
+    {
+      "elapsedMs": 716,
+      "stage": "runtimeTree",
+      "message": "Verified 1298 of 12741 mlx runtime entries"
+    },
+    {
+      "elapsedMs": 1490,
+      "stage": "runtimeExecutable",
+      "message": "Verifying signed arm64 mlx interpreter"
+    },
+    {
+      "elapsedMs": 1519,
+      "stage": "modelCache",
+      "message": "Checking local files and the shared Hugging Face cache for Fish Audio Drama 3 · bf16…"
+    },
+    {
+      "elapsedMs": 2117,
+      "stage": "modelLoad",
+      "message": "Loading speech model weights into memory…"
+    },
+    {
+      "elapsedMs": 8118,
+      "stage": "modelBuildAndCodec",
+      "message": "Speech model and codec constructed (6000.57 ms)"
+    },
+    {
+      "elapsedMs": 8118,
+      "stage": "modelQualification",
+      "message": "Checking speech model qualification…"
+    },
+    {
+      "elapsedMs": 8127,
+      "stage": "modelVerification",
+      "message": "Speech model qualification checked (6.391 ms)"
+    },
+    {
+      "elapsedMs": 8127,
+      "stage": "modelWeights",
+      "message": "Waiting for remaining speech model weights…"
+    },
+    {
+      "elapsedMs": 9421,
+      "stage": "modelWeightsAndVerification",
+      "message": "Speech model weights and qualification ready (1303.34 ms)"
+    },
+    {
+      "elapsedMs": 9421,
+      "stage": "modelLoadTotal",
+      "message": "Speech model prepared (7804.61 ms)"
+    },
+    {
+      "elapsedMs": 10438,
+      "stage": "voiceDownload",
+      "message": "Preparing selected voice 1 of 2…"
+    }
+  ],
+  "cancellationScope": "Controller commands through normal app/player; native flags and positions do not establish emitted silence or keyboard/mouse input.",
+  "cancellationEvents": [
+    {
+      "event": "cold-cancel-request",
+      "elapsedMs": 2130,
+      "unixMicros": 1794388694714024,
+      "stage": "modelLoad",
+      "initializing": true,
+      "pendingIntent": true,
+      "controllerState": "idle",
+      "playerPlaying": false,
+      "playerProcessingState": "idle",
+      "nativePositionMs": 0,
+      "nativeIndex": null,
+      "queuedSources": 0,
+      "completedExports": 0,
+      "completedOrdinaryScenes": 0,
+      "unknownActiveScene": false,
+      "spokenScenes": [],
+      "pendingPlaybackPreparationTasks": 0,
+      "playbackPins": 0
+    },
+    {
+      "event": "cold-cancel-immediate-intent",
+      "elapsedMs": 2130,
+      "unixMicros": 1794388694714051,
+      "stage": "modelLoad",
+      "initializing": true,
+      "pendingIntent": false,
+      "controllerState": "paused",
+      "playerPlaying": false,
+      "playerProcessingState": "idle",
+      "nativePositionMs": 0,
+      "nativeIndex": null,
+      "queuedSources": 0,
+      "completedExports": 0,
+      "completedOrdinaryScenes": 0,
+      "unknownActiveScene": false,
+      "spokenScenes": [],
+      "pendingPlaybackPreparationTasks": 0,
+      "playbackPins": 0
+    },
+    {
+      "event": "cold-pause-returned",
+      "elapsedMs": 2131,
+      "unixMicros": 1794388694715013,
+      "stage": "modelLoad",
+      "initializing": true,
+      "pendingIntent": false,
+      "controllerState": "paused",
+      "playerPlaying": false,
+      "playerProcessingState": "idle",
+      "nativePositionMs": 0,
+      "nativeIndex": null,
+      "queuedSources": 0,
+      "completedExports": 0,
+      "completedOrdinaryScenes": 0,
+      "unknownActiveScene": false,
+      "spokenScenes": [],
+      "pendingPlaybackPreparationTasks": 0,
+      "playbackPins": 0
+    },
+    {
+      "event": "cold-preparation-drained",
+      "elapsedMs": 10437,
+      "unixMicros": 1794388703020651,
+      "stage": null,
+      "initializing": false,
+      "pendingIntent": false,
+      "controllerState": "paused",
+      "playerPlaying": false,
+      "playerProcessingState": "idle",
+      "nativePositionMs": 0,
+      "nativeIndex": null,
+      "queuedSources": 0,
+      "completedExports": 0,
+      "completedOrdinaryScenes": 0,
+      "unknownActiveScene": false,
+      "spokenScenes": [],
+      "pendingPlaybackPreparationTasks": 0,
+      "playbackPins": 0
+    },
+    {
+      "event": "retry-play-request",
+      "elapsedMs": 10437,
+      "unixMicros": 1794388703021111,
+      "stage": null,
+      "initializing": false,
+      "pendingIntent": false,
+      "controllerState": "paused",
+      "playerPlaying": false,
+      "playerProcessingState": "idle",
+      "nativePositionMs": 0,
+      "nativeIndex": null,
+      "queuedSources": 0,
+      "completedExports": 0,
+      "completedOrdinaryScenes": 0,
+      "unknownActiveScene": false,
+      "spokenScenes": [],
+      "pendingPlaybackPreparationTasks": 0,
+      "playbackPins": 0
+    },
+    {
+      "event": "packet-pause-request",
+      "elapsedMs": 15840,
+      "unixMicros": 1794388708423787,
+      "stage": null,
+      "initializing": false,
+      "pendingIntent": false,
+      "controllerState": "playing",
+      "playerPlaying": true,
+      "playerProcessingState": "ready",
+      "nativePositionMs": 185,
+      "nativeIndex": 0,
+      "queuedSources": 4,
+      "completedExports": 0,
+      "completedOrdinaryScenes": 0,
+      "unknownActiveScene": true,
+      "spokenScenes": [
+        {
+          "chunkId": "scene_range_1_chunk_r0_s_0",
+          "startWord": 0,
+          "endWord": 1,
+          "audioDurationMicros": 0,
+          "completed": false
+        }
+      ],
+      "pendingPlaybackPreparationTasks": 0,
+      "playbackPins": 4
+    },
+    {
+      "event": "packet-pause-immediate-intent",
+      "elapsedMs": 15840,
+      "unixMicros": 1794388708423875,
+      "stage": null,
+      "initializing": false,
+      "pendingIntent": false,
+      "controllerState": "paused",
+      "playerPlaying": true,
+      "playerProcessingState": "ready",
+      "nativePositionMs": 185,
+      "nativeIndex": 0,
+      "queuedSources": 4,
+      "completedExports": 0,
+      "completedOrdinaryScenes": 0,
+      "unknownActiveScene": true,
+      "spokenScenes": [
+        {
+          "chunkId": "scene_range_1_chunk_r0_s_0",
+          "startWord": 0,
+          "endWord": 1,
+          "audioDurationMicros": 0,
+          "completed": false
+        }
+      ],
+      "pendingPlaybackPreparationTasks": 0,
+      "playbackPins": 4
+    },
+    {
+      "event": "packet-pause-returned",
+      "elapsedMs": 15842,
+      "unixMicros": 1794388708426067,
+      "stage": null,
+      "initializing": false,
+      "pendingIntent": false,
+      "controllerState": "paused",
+      "playerPlaying": false,
+      "playerProcessingState": "ready",
+      "nativePositionMs": 135,
+      "nativeIndex": 0,
+      "queuedSources": 4,
+      "completedExports": 0,
+      "completedOrdinaryScenes": 0,
+      "unknownActiveScene": false,
+      "spokenScenes": [
+        {
+          "chunkId": "scene_range_1_chunk_r0_s_0",
+          "startWord": 0,
+          "endWord": 1,
+          "audioDurationMicros": 0,
+          "completed": true
+        }
+      ],
+      "pendingPlaybackPreparationTasks": 0,
+      "playbackPins": 4
+    },
+    {
+      "event": "packet-pause-observation-ended",
+      "elapsedMs": 16845,
+      "unixMicros": 1794388709428916,
+      "stage": null,
+      "initializing": false,
+      "pendingIntent": false,
+      "controllerState": "paused",
+      "playerPlaying": false,
+      "playerProcessingState": "ready",
+      "nativePositionMs": 135,
+      "nativeIndex": 0,
+      "queuedSources": 4,
+      "completedExports": 0,
+      "completedOrdinaryScenes": 0,
+      "unknownActiveScene": false,
+      "spokenScenes": [
+        {
+          "chunkId": "scene_range_1_chunk_r0_s_0",
+          "startWord": 0,
+          "endWord": 1,
+          "audioDurationMicros": 0,
+          "completed": true
+        }
+      ],
+      "pendingPlaybackPreparationTasks": 0,
+      "playbackPins": 4
+    }
+  ],
+  "coldInputMode": "controller-command",
+  "coldIntentCancellationMs": 0,
+  "coldCancelDrainMs": 8307,
+  "coldCancellationActivity": {
+    "peak": 2,
+    "ended": 2,
+    "active": 0,
+    "started": 2
+  },
+  "firstNativePacket": {
+    "elapsedMs": 15617,
+    "unixMicros": 1794388708201038,
+    "nativePositionMs": 0,
+    "nativeIndex": 0,
+    "queuedSources": 2,
+    "source": "Instance of 'ProgressiveAudioSource'",
+    "completedExports": 0,
+    "completedOrdinaryScenes": 0,
+    "unknownActiveScene": true,
+    "spokenScenes": [
+      {
+        "chunkId": "scene_range_1_chunk_r0_s_0",
+        "startWord": 0,
+        "endWord": 1,
+        "audioDurationMicros": 0,
+        "completed": false
+      }
+    ],
+    "pendingPlaybackPreparationTasks": 0,
+    "playbackPins": 2
+  },
+  "firstNativePositionUnixMicros": 1794388708201038,
+  "sceneIncompleteAtFirstPacket": true,
+  "nativePlaybackIntervalBeforePause": {
+    "elapsedMs": 15840,
+    "unixMicros": 1794388708423778,
+    "sampledPositionTotalMs": 185,
+    "nativePositionMicros": 185000,
+    "nativePositionMs": 185,
+    "playerPlaying": true,
+    "unknownActiveScene": true,
+    "completedOrdinaryScenes": 0,
+    "completedExports": 0
+  },
+  "packetIntentCancellationMs": 0,
+  "packetPauseDrainMs": 2,
+  "nativePlayerStoppedEventIndex": 7,
+  "nativePlayerStoppedMs": 15840,
+  "nativePlayerStopLatencyMs": 0,
+  "packetPauseActivity": {
+    "ended": 3,
+    "peak": 2,
+    "active": 0,
+    "started": 3
+  },
+  "packetPauseCoverage": "native packet before complete scene; paused",
+  "functionalPassed": true,
+  "nativeMainResponsiveness": {
+    "samples": 167,
+    "maxRoundTripMs": 161,
+    "delayedRequests": [
+      {
+        "startedMs": 403,
+        "elapsedMs": 161,
+        "phaseAtStart": "cold-pending-play",
+        "phaseAtEnd": "cold-pending-play"
+      }
+    ],
+    "error": null,
+    "passed": true,
+    "scope": "UI-isolate request through the native main-thread channel and immediate bounded owner-count response; no utility query or keyboard/mouse delivery claim. Historical footprint roundtrips are a different measurement."
+  },
+  "queuedAudio": [
+    {
+      "queueIndex": 0,
+      "originalPath": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s6-r25-packet-cancel-v11-20261111/s6-first-load-yCVdtL/raw/incomplete/attempt-NDbqUI/packet-0000.wav",
+      "path": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s6-r25-packet-cancel-v11-20261111/s6-first-load-yCVdtL/queued-0.wav",
+      "sha256": "ec1e852440b0ba87a905baf68e7a835e0e81dfa37a22e6d824e6aec0d168b7c3",
+      "bytes": 16428,
+      "sampleRate": 44100,
+      "channels": 1,
+      "bitsPerSample": 16,
+      "pcmBytes": 16384,
+      "peakPcm16": 13084
+    },
+    {
+      "queueIndex": 1,
+      "originalPath": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s6-r25-packet-cancel-v11-20261111/s6-first-load-yCVdtL/raw/incomplete/attempt-NDbqUI/packet-0001.wav",
+      "path": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s6-r25-packet-cancel-v11-20261111/s6-first-load-yCVdtL/queued-1.wav",
+      "sha256": "b799084899aac5b41c82113ba82ccfe28a4f72ffc7c5b7ed36736dcd204084de",
+      "bytes": 28716,
+      "sampleRate": 44100,
+      "channels": 1,
+      "bitsPerSample": 16,
+      "pcmBytes": 28672,
+      "peakPcm16": 13225
+    },
+    {
+      "queueIndex": 2,
+      "originalPath": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s6-r25-packet-cancel-v11-20261111/s6-first-load-yCVdtL/raw/incomplete/attempt-NDbqUI/packet-0002.wav",
+      "path": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s6-r25-packet-cancel-v11-20261111/s6-first-load-yCVdtL/queued-2.wav",
+      "sha256": "c38ba08f44a7a18951d8066aa83540a4cb73c0289c271e0e9630fb31038d3551",
+      "bytes": 28716,
+      "sampleRate": 44100,
+      "channels": 1,
+      "bitsPerSample": 16,
+      "pcmBytes": 28672,
+      "peakPcm16": 12861
+    },
+    {
+      "queueIndex": 3,
+      "originalPath": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s6-r25-packet-cancel-v11-20261111/s6-first-load-yCVdtL/raw/incomplete/attempt-NDbqUI/packet-0003.wav",
+      "path": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s6-r25-packet-cancel-v11-20261111/s6-first-load-yCVdtL/queued-3.wav",
+      "sha256": "abddf691bf492e581cc4385b1c18e45e05ca43967df0f281e3de2f392410b344",
+      "bytes": 28716,
+      "sampleRate": 44100,
+      "channels": 1,
+      "bitsPerSample": 16,
+      "pcmBytes": 28672,
+      "peakPcm16": 9966
+    }
+  ],
+  "playerStateEvents": [
+    {
+      "elapsedMs": 3,
+      "unixMicros": 1794388692586586,
+      "phase": "normal-intake",
+      "playing": false,
+      "processingState": "idle",
+      "positionMs": 0,
+      "index": null
+    },
+    {
+      "elapsedMs": 3,
+      "unixMicros": 1794388692586599,
+      "phase": "normal-intake",
+      "playing": false,
+      "processingState": "idle",
+      "positionMs": 0,
+      "index": null
+    },
+    {
+      "elapsedMs": 15491,
+      "unixMicros": 1794388708075021,
+      "phase": "fresh-play-retry",
+      "playing": false,
+      "processingState": "loading",
+      "positionMs": 0,
+      "index": 0
+    },
+    {
+      "elapsedMs": 15617,
+      "unixMicros": 1794388708200835,
+      "phase": "fresh-play-retry",
+      "playing": false,
+      "processingState": "ready",
+      "positionMs": 0,
+      "index": 0
+    },
+    {
+      "elapsedMs": 15617,
+      "unixMicros": 1794388708201035,
+      "phase": "fresh-play-retry",
+      "playing": true,
+      "processingState": "ready",
+      "positionMs": 0,
+      "index": 0
+    },
+    {
+      "elapsedMs": 15617,
+      "unixMicros": 1794388708201330,
+      "phase": "fresh-play-retry",
+      "playing": true,
+      "processingState": "buffering",
+      "positionMs": 0,
+      "index": 0
+    },
+    {
+      "elapsedMs": 15643,
+      "unixMicros": 1794388708227225,
+      "phase": "packet-native-playback-observation",
+      "playing": true,
+      "processingState": "ready",
+      "positionMs": 0,
+      "index": 0
+    },
+    {
+      "elapsedMs": 15840,
+      "unixMicros": 1794388708424026,
+      "phase": "packet-pause",
+      "playing": false,
+      "processingState": "ready",
+      "positionMs": 185,
+      "index": 0
+    },
+    {
+      "elapsedMs": 16848,
+      "unixMicros": 1794388709431591,
+      "phase": "shutdown",
+      "playing": false,
+      "processingState": "idle",
+      "positionMs": 135,
+      "index": 0
+    }
+  ],
+  "playerStateOverflow": false,
+  "finalNativeResources": {
+    "playerPlaying": false,
+    "pendingPlaybackPreparationTasks": 0,
+    "playbackPins": 0,
+    "resourcesReady": false
+  },
+  "speechWorkActivity": {
+    "ended": 3,
+    "peak": 2,
+    "active": 0,
+    "started": 3
+  },
+  "speechWorkActivitySuppressed": false,
+  "nativePlaybackPositions": {
+    "sampledSourceCount": 1,
+    "sampledSourcePositionTotalMs": 185,
+    "maxNativePositionMs": 185,
+    "overflow": false,
+    "scope": "Observed maximum native positions per distinct queued local WAV; not emitted duration. Exact captured waveform comparison is required."
+  },
+  "maxNativePositionMs": 185,
+  "maxUiHeartbeatDelayMs": 4,
+  "delayedTicks": [],
+  "synthesisCallbacks": 1,
+  "resourceShutdownComplete": true,
+  "shutdownErrors": [],
+  "normalQuit": "runner must request and verify",
+  "elapsedMs": 16853
+}

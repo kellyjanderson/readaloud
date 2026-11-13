@@ -1,0 +1,12 @@
+{"phase":"fixture","elapsedMs":4,"unixMicros":1794389597786958}
+{"phase":"initial","elapsedMs":8918,"unixMicros":1794389606700614}
+{"phase":"initial-save","elapsedMs":92944,"unixMicros":1794389690727332}
+{"phase":"copy-reopen","elapsedMs":93661,"unixMicros":1794389691444386}
+{"phase":"changed","elapsedMs":93674,"unixMicros":1794389691457030}
+{"phase":"changed-save","elapsedMs":174915,"unixMicros":1794389772698225}
+{"phase":"saved-reopen","elapsedMs":175382,"unixMicros":1794389773165815}
+{"phase":"reused","elapsedMs":175395,"unixMicros":1794389773178145}
+{"phase":"missing-import","elapsedMs":255360,"unixMicros":1794389853144030}
+{"phase":"missing","elapsedMs":255390,"unixMicros":1794389853174506}
+{"phase":"missing-save","elapsedMs":335912,"unixMicros":1794389933696039}
+{"phase":"shutdown","elapsedMs":336597,"unixMicros":1794389934381063}

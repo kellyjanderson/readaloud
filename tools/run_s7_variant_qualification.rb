@@ -1,0 +1,458 @@
+#!/usr/bin/env ruby
+# #112 ACD-M1 R1. Reuses the signed-app smoke runner's bounded ownership model.
+# Model acquisition is through the app's existing managed cache; no aliases.
+# READALOUD_S7_PRIMARY_CAPTURE=process-tap explicitly selects bounded warm
+# coverage, using an exact-PID process-tap CAPTURE executable. Offline acoustic
+# acceptance is still required; Play-to-tap and first audio remain unobserved.
+require 'json'
+require 'digest'
+require 'fileutils'
+require 'timeout'
+require 'rbconfig'
+
+MODES = %w[default-policy cached-bf16 cached-8bit cached-4bit cached-aba online-cancel-retry].freeze
+abort 'Usage: run_s7_variant_qualification.rb APP MODE NEW_OUTPUT CAPTURE' unless ARGV.size == 4
+bundle, mode, output, capture = ARGV
+bundle, output, capture = [bundle, output, capture].map { |p| File.expand_path(p) }
+secondary_capture = ENV['READALOUD_S7_SECONDARY_CAPTURE']
+primary_capture_mode = ENV.fetch('READALOUD_S7_PRIMARY_CAPTURE', 'screen-capture-kit')
+abort 'Invalid primary capture mode' unless %w[screen-capture-kit process-tap].include?(primary_capture_mode)
+if primary_capture_mode == 'process-tap' && ENV['READALOUD_S7_UNGATED_PROCESS_CAPTURE'] == '1'
+  abort 'Process-tap primary cannot also be the ungated diagnostic'
+end
+secondary_capture = File.expand_path(secondary_capture) if secondary_capture
+abort 'Missing secondary capture executable' if secondary_capture && !File.executable?(secondary_capture)
+abort 'Invalid mode' unless MODES.include?(mode)
+replay_mode = ENV['READALOUD_S7_REPLAY_MODE']
+inference_policy = ENV['READALOUD_S7_INFERENCE_POLICY']
+abort 'Invalid QA inference policy' unless inference_policy.nil? || %w[background-utility utility].include?(inference_policy)
+mlx_buffer_ops = ENV['MLX_MAX_OPS_PER_BUFFER']
+abort 'Invalid MLX command-buffer diagnostic' if mlx_buffer_ops &&
+  (!mlx_buffer_ops.match?(/\A[1-9]\d{0,3}\z/) || mlx_buffer_ops.to_i > 1000)
+mlx_buffer_mb = ENV['MLX_MAX_MB_PER_BUFFER']
+abort 'Invalid MLX command-buffer memory diagnostic' if mlx_buffer_mb &&
+  (!mlx_buffer_mb.match?(/\A[1-9]\d{0,3}\z/) || mlx_buffer_mb.to_i > 1000)
+if replay_mode
+  abort 'Replay requires cached-8bit and packets|joined' unless mode == 'cached-8bit' && %w[packets joined].include?(replay_mode)
+  replay_input = ENV['READALOUD_S7_REPLAY_INPUT']
+  abort 'Replay requires an existing input receipt' unless replay_input && File.file?(replay_input)
+end
+if mode == 'online-cancel-retry' && ENV['READALOUD_S7_ALLOW_DOWNLOAD'] != '1'
+  abort 'Online mode requires READALOUD_S7_ALLOW_DOWNLOAD=1 (may download managed model files)'
+end
+app = File.join(bundle, 'Contents/MacOS/read_aloud')
+abort 'Missing app/capture or existing output' unless File.executable?(app) && File.executable?(capture) && !File.exist?(output)
+abort 'Signature failure' unless system(RbConfig.ruby, File.join(__dir__, 'verify_macos_release_entitlements.rb'), bundle)
+identity = IO.popen(['/usr/libexec/PlistBuddy', '-c', 'Print :CFBundleIdentifier', File.join(bundle, 'Contents/Info.plist')], &:read).strip
+abort 'Requires isolated mlxPlaybackTest identity' unless identity == 'com.kellyjanderson.readAloud.mlxPlaybackTest'
+abort 'QA app already running' unless IO.popen(['/usr/bin/pgrep', '-f', '^' + Regexp.escape(app) + '( |$)'], &:read).split.empty?
+FileUtils.mkdir_p(output)
+receipt = File.join(output, 'receipt.json')
+log_path = File.join(output, 'app.log')
+stop = File.join(output, 'capture.stop')
+result = {schema: 'readaloud-native-variant-runner-v1', mode: mode,
+          primaryCaptureMode: primary_capture_mode,
+          primaryCaptureExecutableSha256: Digest::SHA256.file(capture).hexdigest,
+          passed: false, nativePassed: false, normalQuit: false,
+          appExitVerified: false, forcedCleanup: false, remainingOwnedPids: [],
+          frameworkSha256: Digest::SHA256.file(File.join(bundle, 'Contents/Frameworks/App.framework/App')).hexdigest,
+          executableSha256: Digest::SHA256.file(app).hexdigest,
+          maxMlxChildren: 0, observedMlxSamples: 0, processEvents: [], errors: [],
+          limits: '100ms child/process observations and emitted signal per playback interval. ' \
+                  'Exact waveform matching, glitch/voice quality, total memory envelope, ' \
+                  'physical-speaker and M3 acceptance remain separate. Capture 300s; work deadline 270s.'}
+if primary_capture_mode == 'process-tap'
+  result.merge!(acceptanceScope: 'bounded warm intended-source coverage only',
+    runnerPassScope: 'functional, signal and cleanup gates only; full offline analyzer still required',
+    firstEmittedAudioQualified: false, fullSessionQualified: false,
+    noEarlierPrefixOrReplayQualified: false, startupOrLoadQualified: false,
+    playToTapObservation: 'UNOBSERVED; no silence or synthesis-state inference')
+end
+if ENV['READALOUD_S7_UNGATED_PROCESS_CAPTURE'] == '1'
+  result[:ungatedProcessCaptureDiagnostic] = true
+  result[:primaryCaptureMechanism] = 'CoreAudio exact-PID process tap; no ScreenCaptureKit'
+  result[:primaryCaptureExecutableSha256] = Digest::SHA256.file(capture).hexdigest
+  result[:errors] << 'QA-only ungated exact-PID capture differential; no full qualification'
+end
+if replay_mode
+  result[:queueReplayDiagnostic] = true
+  result[:replayMode] = replay_mode
+  result[:expectedMlxChildren] = 0
+  result[:errors] << 'Queue replay diagnosis only; model and product qualification not applicable'
+end
+pid = cap = log = capture_log = secondary_cap = secondary_log = awake_pid = nil
+status = nil
+owned = []
+last_children = nil
+native = nil
+profiles = []
+profile_stalls = ENV['READALOUD_S7_PROFILE_STALLS'] == '1'
+profile_continuously = ENV['READALOUD_S7_PROFILE_STALLS'] == 'continuous'
+profile_instruments = ENV['READALOUD_S7_PROFILE_STALLS'] == 'timeprofiler'
+profile_seconds = ENV['READALOUD_S7_EXTENDED_NATIVE_DIAGNOSTIC'] == '1' ? 190 : 70
+if profile_stalls || profile_continuously || profile_instruments
+  result[:diagnosticProfiling] = true
+  result[:errors] << 'Diagnostic native sampling enabled; timing is instrumented'
+end
+if ENV['READALOUD_S7_LAZY_NATIVE_PREPARATION'] == '1'
+  result[:lazyNativePreparationExperiment] = true
+  result[:errors] << 'QA-only native preparation comparison; production default unchanged'
+end
+if ENV['READALOUD_S7_EXTENDED_NATIVE_DIAGNOSTIC'] == '1'
+  result[:extendedNativeDiagnostic] = true
+  result[:errors] << 'Extended native diagnosis; standard qualification remains separate'
+end
+if inference_policy
+  result[:inferencePolicyDiagnostic] = inference_policy
+  result[:errors] << 'QA-only child scheduling differential; production policy unchanged'
+end
+if mlx_buffer_ops || mlx_buffer_mb
+  result[:mlxCommandBufferDiagnostic] = {maxOpsPerBuffer: mlx_buffer_ops&.to_i,
+    maxMbPerBuffer: mlx_buffer_mb&.to_i,
+    scope: 'Fresh owned MLX child; diagnostic batching override, no GPU priority guarantee'}
+  result[:errors] << 'MLX command-buffer batching diagnostic; production policy unchanged'
+end
+if ENV['READALOUD_QUEUE_BOUNDARY_AUDIT'] == '1'
+  result[:nativeQueueBoundaryDiagnostic] = true
+  result[:errors] << 'Native queue boundary diagnosis enabled; not product acceptance'
+end
+if ENV['READALOUD_QUEUE_SKIP_LOOP_OFF_REWIND'] == '1'
+  result[:skipLoopOffRewindDiagnostic] = true
+  result[:errors] << 'QA-only ended-item rewind comparison; production default unchanged'
+end
+if ENV['READALOUD_S7_KEEP_HISTORY_DIAGNOSTIC'] == '1'
+  result[:keepHistoryDiagnostic] = true
+  result[:errors] << 'QA-only bounded history-retention comparison; production default unchanged'
+end
+if ENV['READALOUD_QUEUE_PHYSICAL_HEAD_INDEX'] == '1'
+  result[:physicalHeadIndexDiagnostic] = true
+  result[:errors] << 'QA-only physical-head index comparison; production default unchanged'
+end
+# Read only bounded uncompressed PCM or float WAV. This checks app-emitted signal
+# separately from player intent, never labels energy as an exact speech match.
+def emitted_signal(path, timing_path, segments)
+  timing = JSON.parse(File.read(timing_path))
+  bytes = File.binread(path)
+  raise 'Capture size bound' if bytes.bytesize > 300 * 192_000 * 8 + 4096
+  raise 'Not RIFF/WAVE capture' unless bytes[0, 4] == 'RIFF' && bytes[8, 4] == 'WAVE'
+  offset = 12
+  format = data = nil
+  while offset + 8 <= bytes.bytesize
+    tag = bytes[offset, 4]
+    count = bytes[offset + 4, 4].unpack1('V')
+    raise 'Truncated WAV chunk' if offset + 8 + count > bytes.bytesize
+    format = bytes[offset + 8, count] if tag == 'fmt '
+    data = bytes[offset + 8, count] if tag == 'data'
+    offset += 8 + count + count % 2
+  end
+  raise 'Capture missing format/data' unless format && data && format.bytesize >= 16
+  encoding, channels, rate, _, align, bits = format.unpack('vvVVvv')
+  raise 'Unsupported capture format' unless [44_100, 48_000].include?(rate) && channels.between?(1, 2) &&
+    [[1, 16], [3, 32]].include?([encoding, bits]) && align == channels * bits / 8
+  frames = data.bytesize / align
+  raise 'Capture timing mismatch' unless rate == timing['sampleRate'] && frames == timing['frames'] && frames <= rate * 300
+  origin = timing.fetch('firstPacketReceivedUnixMicros')
+  raise 'Missing capture signal' unless timing['firstSignalReceivedUnixMicros'].is_a?(Integer)
+  segments.map do |segment|
+    from = ((segment.fetch('firstPositionUnixMicros') - origin) * rate / 1_000_000.0).round
+    finish = ((segment.fetch('pauseRequestedUnixMicros') - origin) * rate / 1_000_000.0).round
+    raise 'Capture does not cover playback interval' unless from >= 0 && finish <= frames && finish > from
+    active = 0
+    silent_run = max_silent = 0
+    peak = 0.0
+    # 100ms windows, any channel. A 200ms edge guard permits callback delivery
+    # variance; this is not a startup latency or sample-accurate alignment clock.
+    window = rate / 10
+    ((from + rate / 5)...(finish - rate / 5)).step(window) do |start|
+      count = [window, finish - rate / 5 - start].min
+      chunk = data.byteslice(start * align, count * align)
+      values = encoding == 3 ? chunk.unpack('e*') : chunk.unpack('s<*').map { |v| v / 32768.0 }
+      raise 'Invalid capture samples' unless values.all?(&:finite?)
+      value = values.map(&:abs).max || 0.0
+      peak = [peak, value].max
+      if value > 0.001
+        active += 1
+        silent_run = 0
+      else
+        silent_run += 1
+        max_silent = [max_silent, silent_run].max
+      end
+    end
+    duration = (finish - from) / rate.to_f
+    raise 'Insufficient app-emitted signal during playback' unless active * 0.1 >= duration * 0.55 && max_silent <= 20 && peak > 0.01
+    {label: segment['label'], durationSeconds: duration, activeWindowSeconds: active * 0.1,
+     longestSilentWindowSeconds: max_silent * 0.1, peak: peak,
+     passed: true, scope: '100ms app-only signal windows; not waveform identity or acoustic continuity acceptance'}
+  end
+end
+
+# Same final integrity contract as process_tap_validation.py; Ruby runner does
+# not launch an analysis Python or infer successful helper exit from metadata.
+def process_tap_session(output, pid)
+  timing = JSON.parse(File.read(File.join(output, 'capture.wav.timing.json')))
+  session = timing['sessionID']
+  raise 'Missing/invalid tap session' unless session.is_a?(String) &&
+    session.match?(/\A[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\z/i)
+  raise 'Tap is not final/clean/exact-PID' unless timing['schema'] == 'readaloud-app-capture-timing-v1' &&
+    timing['mechanism'] == 'CoreAudioProcessTap' && timing['status'] == 'complete' &&
+    timing['errors'] == [] && timing['appPid'] == pid
+  object_id = timing['processAudioObjectID']
+  raise 'Missing/invalid tap process audio object' unless object_id.is_a?(Integer) && object_id > 0
+  raise 'Tap must be private and unmuted' unless timing['privateTap'] == true &&
+    timing['privateAggregate'] == true && timing['muteBehavior'] == 'unmuted'
+  frames = timing['frames']
+  raise 'Incomplete tap frames' unless frames.is_a?(Integer) && frames > 0 &&
+    %w[framesReceived framesSubmitted].all? { |key| timing[key].is_a?(Integer) && timing[key] == frames }
+  %w[droppedBuffers poolOverflows deviceOverloads timestampDiscontinuities formatChanges callbackStalls writerDiscardedBuffers].each do |key|
+    raise "Nonzero/missing tap #{key}" unless timing[key].is_a?(Integer) && timing[key] == 0
+  end
+  buffers = timing['buffersSubmitted']
+  raise 'Incomplete tap buffers' unless buffers.is_a?(Integer) && buffers > 0 &&
+    timing['buffersWritten'].is_a?(Integer) && timing['buffersWritten'] == buffers &&
+    timing['callbacks'].is_a?(Integer) && timing['callbacks'] >= buffers
+  gap = timing['maxPacketGapSeconds']
+  raise 'Tap packet gap exceeds 10ms' unless gap.is_a?(Numeric) && gap.finite? && gap.between?(0, 0.010)
+  %w[armed ready].each do |stage|
+    record = JSON.parse(File.read(File.join(output, "capture.wav.#{stage}.json")))
+    raise "Tap #{stage} session/PID mismatch" unless record['sessionID'] == session &&
+      record['appPid'] == pid && record['mechanism'] == 'CoreAudioProcessTap' &&
+      record['schema'] == "readaloud-process-capture-#{stage}-v1"
+  end
+  session
+end
+
+begin
+  log = File.open(log_path, 'w')
+  env = {'HF_HUB_OFFLINE' => mode == 'online-cancel-retry' ? nil : '1',
+         'READALOUD_MLX_PYTHON' => nil, 'READALOUD_MLX_TTS_MODEL_PATH' => nil,
+         'READALOUD_S7_INSPECT' => nil}
+  pid = Process.spawn(env, app, mode, receipt, out: log, err: log, pgroup: true)
+  result[:pid] = pid
+  # Scope display-idle prevention to this exact owned app. This neither unlocks
+  # the Mac nor changes its lock/security settings, and is reaped in cleanup.
+  awake_pid = Process.spawn('/usr/bin/caffeinate', '-d', '-w', pid.to_s)
+  result[:awakeGuardPid] = awake_pid
+  capture_log = File.open(File.join(output, 'capture.log'), 'w')
+  cap = Process.spawn(capture, pid.to_s, File.join(output, 'capture.wav'), '300', stop,
+                      out: capture_log, err: capture_log)
+  result[:capturePid] = cap
+  if secondary_capture
+    secondary_log = File.open(File.join(output, 'coreaudio.log'), 'w')
+    secondary_cap = Process.spawn(secondary_capture, pid.to_s,
+      File.join(output, 'coreaudio.wav'), '300', stop, out: secondary_log, err: secondary_log)
+    result[:secondaryCapture] = {mechanism: 'CoreAudio process tap', pid: secondary_cap,
+      executableSha256: Digest::SHA256.file(secondary_capture).hexdigest,
+      scope: 'Independent diagnostic recording; primary acceptance gates remain unchanged'}
+  end
+  deadline = Process.clock_gettime(Process::CLOCK_MONOTONIC) + 270
+  activated = false
+  capture_ready = false
+  until File.exist?(receipt)
+    raise 'Native app exited before receipt' if Process.waitpid(pid, Process::WNOHANG)
+    raise 'Variant probe 270s deadline' if Process.clock_gettime(Process::CLOCK_MONOTONIC) > deadline
+    if (profile_continuously || profile_instruments) && profiles.empty? &&
+        File.read(log_path).include?('S7_VARIANT_NATIVE_STARTED')
+      result[:nativeSamplingStartedUnixMicros] = (Time.now.to_r * 1_000_000).to_i
+      command = if profile_instruments
+        options = JSON.parse(IO.popen(['/usr/bin/xcrun', 'xctrace', 'record',
+          '--template', 'Time Profiler', '--show-recording-options'], &:read))
+        options.fetch('Time Profiler')['recordWaitingThreads'] = true
+        options_path = File.join(output, 'native-recording-options.json')
+        File.write(options_path, JSON.pretty_generate(options) + "\n")
+        result[:nativeRecordingOptions] = options
+        ['/usr/bin/xcrun', 'xctrace', 'record', '--template', 'Time Profiler',
+         '--attach', pid.to_s, '--time-limit', "#{profile_seconds}s", '--recording-options', options_path,
+         '--output', File.join(output, 'native-time.trace')]
+      else
+        ['/usr/bin/sample', pid.to_s, profile_seconds.to_s, '10', '-file', File.join(output, 'native-continuous.sample.txt')]
+      end
+      profiles << {pid: Process.spawn(*command, out: log, err: log), status: nil}
+    end
+    profiles.each do |profile|
+      next if profile[:status]
+      finished = Process.wait2(profile[:pid], Process::WNOHANG)
+      profile[:status] = finished.last if finished
+    end
+    if profile_stalls && profiles.length < 4 && profiles.none? { |p| p[:status].nil? }
+      text = File.read(log_path)
+      pending = text.scan(/^NATIVE_MAIN_PROBE_PENDING (\d+) ([^\n]+)$/).last
+      if pending && !text.include?("NATIVE_MAIN_PROBE_RETURN #{pending.first}") &&
+          profiles.none? { |p| p[:request] == pending.first }
+        path = File.join(output, "native-stall-#{profiles.length + 1}.sample.txt")
+        profiles << {pid: Process.spawn('/usr/bin/sample', pid.to_s, '1', '2', '-file', path,
+          out: log, err: log), status: nil, request: pending.first,
+          spawnedUnixMicros: (Time.now.to_r * 1_000_000).to_i}
+      end
+    end
+    wave = File.join(output, 'capture.wav')
+    # Some processes register with CoreAudio only on first Play. A secondary
+    # diagnostic must not deadlock that Play waiting for a tap to be installed.
+    # Its actual first frame bounds its own independently observed interval.
+    if !capture_ready && File.file?(wave) && File.size(wave) > 4096
+      File.write(File.join(output, 'capture.ready'), 'Audio frames observed')
+      capture_ready = true
+      result[:captureReadyObservedUnixMicros] = (Time.now.to_r * 1_000_000).to_i
+    end
+    if !activated && File.read(log_path).include?('S7_VARIANT_NATIVE_STARTED')
+      activated = system('/usr/bin/osascript', '-e', "tell application #{bundle.inspect} to activate")
+      raise 'Could not activate test app' unless activated
+    end
+    children = IO.popen(['/usr/bin/pgrep', '-P', pid.to_s], &:read).split.map(&:to_i)
+    owned |= children
+    rows = children.empty? ? '' : IO.popen(['/bin/ps', '-ww', '-p', children.join(','), '-o', 'pid=,command='], &:read)
+    models = rows.lines.filter_map { |line| line.split.first.to_i if line.include?('mlx_tts_worker.py') }.sort
+    result[:observedMlxSamples] += 1 unless models.empty?
+    result[:maxMlxChildren] = [result[:maxMlxChildren], models.size].max
+    if models != last_children
+      raise 'Process observation bound' if result[:processEvents].size >= 128
+      result[:processEvents] << {unixMicros: (Time.now.to_r * 1_000_000).to_i, pids: models}
+      last_children = models
+    end
+    raise 'Overlapping model children' if models.size > 1
+    raise 'Replay unexpectedly launched an MLX child' if replay_mode && !models.empty?
+    sleep 0.1
+  end
+  native = JSON.parse(File.read(receipt))
+  raise 'Native/runner mode mismatch' unless native['mode'] == mode
+  raise 'Native/runner primary capture mode mismatch' unless
+    native.fetch('primaryCaptureMode', 'screen-capture-kit') == primary_capture_mode
+  result[:nativePassed] = native['passed'] == true
+  result[:applicationActivationRequested] = activated
+  if replay_mode
+    raise 'Wrong replay diagnostic receipt' unless native['queueReplayDiagnostic'] == true &&
+      native['replayMode'] == replay_mode && native['passed'] == false
+    result[:replayCompleted] = native['replayCompleted'] == true
+    raise "Replay failure: #{native['error']}" unless result[:replayCompleted]
+    raise 'Replay model child observation' unless result[:observedMlxSamples] == 0 && result[:maxMlxChildren] == 0
+  else
+    raise "Native failure: #{native['error']}" unless result[:nativePassed]
+    raise 'No real model child observed' unless result[:observedMlxSamples] > 0
+  end
+  raise 'No playback segments' if native.fetch('segments').empty?
+rescue StandardError => e
+  result[:errors] << e.message
+ensure
+  profiles.each do |profile|
+    begin
+      profiler_status = profile[:status] || Timeout.timeout(30) { Process.wait2(profile[:pid]).last }
+      (result[:nativeProfilerExitStatuses] ||= []) << profiler_status.exitstatus
+      (result[:nativeProfileRequests] ||= []) << profile.slice(:request, :spawnedUnixMicros)
+      result[:errors] << 'Native profiler failed' unless profiler_status.success?
+    rescue Timeout::Error
+      Process.kill('TERM', profile[:pid]) rescue Errno::ESRCH
+      Process.waitpid(profile[:pid]) rescue Errno::ECHILD
+      result[:errors] << 'Native sampler did not stop'
+    end
+  end
+  FileUtils.touch(stop) if cap || secondary_cap
+  if secondary_cap
+    begin
+      _, captured = Timeout.timeout(12) { Process.wait2(secondary_cap) }
+      result[:secondaryCapture][:exitStatus] = captured.exitstatus
+    rescue Timeout::Error
+      Process.kill('TERM', secondary_cap) rescue Errno::ESRCH
+      Process.waitpid(secondary_cap) rescue Errno::ECHILD
+      result[:secondaryCapture][:error] = 'Secondary capture did not stop'
+    ensure
+      secondary_log&.close
+    end
+  end
+  if cap
+    FileUtils.touch(stop)
+    begin
+      _, captured = Timeout.timeout(12) { Process.wait2(cap) }
+      result[:captureExitStatus] = captured.exitstatus
+    rescue Timeout::Error
+      Process.kill('TERM', cap) rescue Errno::ESRCH
+      Process.waitpid(cap) rescue Errno::ECHILD
+      result[:errors] << 'Capture did not stop'
+    end
+    capture_log&.close
+  end
+  if pid
+    alive = begin
+      Process.kill(0, pid)
+      true
+    rescue Errno::ESRCH
+      false
+    end
+    if alive
+      result[:normalQuit] = system('/usr/bin/osascript', '-e', "ignoring application responses\ntell application #{bundle.inspect} to quit\nend ignoring")
+    else
+      result[:errors] << 'Owned app exited before normal Quit'
+    end
+    begin
+      _, status = Timeout.timeout(25) { Process.wait2(pid) }
+      result[:appExitVerified] = true
+    rescue Errno::ECHILD
+      result[:appExitVerified] = true
+    rescue Timeout::Error
+      result[:forcedCleanup] = true
+      Process.kill('TERM', -pid) rescue Errno::ESRCH
+      Process.waitpid(pid) rescue Errno::ECHILD
+    end
+    result[:appExitStatus] = status&.exitstatus
+    result[:errors] << 'App failed during normal Quit' if status && !status.success?
+    group = IO.popen(['/usr/bin/pgrep', '-g', pid.to_s], &:read).split.map(&:to_i)
+    alive_owned = owned.select do |child|
+      begin
+        Process.kill(0, child)
+        true
+      rescue Errno::ESRCH
+        false
+      end
+    end
+    result[:remainingOwnedPids] = (group | alive_owned).sort
+    unless result[:remainingOwnedPids].empty?
+      result[:errors] << 'Owned workers remain after normal Quit'
+      result[:forcedCleanup] = true
+      result[:remainingOwnedPids].each { |child| Process.kill('TERM', child) rescue Errno::ESRCH }
+    end
+    log&.close
+  end
+  if native && result[:captureExitStatus] == 0
+    begin
+      if primary_capture_mode == 'process-tap'
+        result[:processTapSessionID] = process_tap_session(output, pid)
+      end
+      result[:emittedSignal] = emitted_signal(File.join(output, 'capture.wav'),
+        File.join(output, 'capture.wav.timing.json'), native.fetch('segments'))
+    rescue StandardError => e
+      result[:errors] << "Emitted audio: #{e.message}"
+    end
+  end
+  if awake_pid
+    begin
+      awake_status = Timeout.timeout(2) { Process.wait2(awake_pid).last }
+      result[:awakeGuardExited] = true
+      result[:awakeGuardExitStatus] = awake_status.exitstatus
+      result[:errors] << 'Wake guard failed' unless awake_status.success?
+    rescue Timeout::Error
+      Process.kill('TERM', awake_pid) rescue Errno::ESRCH
+      begin
+        awake_status = Timeout.timeout(1) { Process.wait2(awake_pid).last }
+      rescue Timeout::Error
+        Process.kill('KILL', awake_pid) rescue Errno::ESRCH
+        begin
+          awake_status = Timeout.timeout(1) { Process.wait2(awake_pid).last }
+        rescue Timeout::Error
+          awake_status = nil
+        end
+      end
+      result[:awakeGuardExited] = !awake_status.nil?
+      result[:awakeGuardExitStatus] = awake_status&.exitstatus
+      result[:awakeGuardForcedStop] = true
+      result[:errors] << 'Wake guard did not exit with the owned app'
+    end
+  end
+  result[:passed] = result[:nativePassed] && result[:normalQuit] && result[:appExitVerified] &&
+    !result[:forcedCleanup] && result[:remainingOwnedPids].empty? &&
+    result[:captureExitStatus] == 0 && (result[:emittedSignal]&.any? == true) && result[:errors].empty?
+  result[:passed] = false if replay_mode
+  result[:strictAcousticAcceptance] = 'NOT_RUN: compare copied queued WAVs with capture; listening remains separate'
+  pending = File.join(output, 'runner.json.pending')
+  File.write(pending, JSON.pretty_generate(result) + "\n")
+  File.rename(pending, File.join(output, 'runner.json'))
+end
+puts JSON.generate(result.slice(:passed, :nativePassed, :normalQuit, :maxMlxChildren, :errors))
+exit(result[:passed] ? 0 : 1)

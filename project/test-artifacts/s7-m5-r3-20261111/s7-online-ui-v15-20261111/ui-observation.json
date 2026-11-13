@@ -1,0 +1,13 @@
+{
+  "beforeCancelUnixMicros": 1794418840408920,
+  "newCompletedBlobExists": false,
+  "source": "Observed before clicking Settings Cancel; original is held by owned fixture",
+  "observedStates": [
+    "4-bit acquiring, no active engine, last-working8-bit",
+    "Settings Cancel:4-bit cancelled, no active engine, last-working8-bit",
+    "Settings Retry:loading then acquiring",
+    "4-bit selected and active after validated Retry"
+  ],
+  "actionSource": "cua_repl native Settings buttons",
+  "retryActiveObservedUnixMicros": 1794419004998638
+}

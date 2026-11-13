@@ -1,0 +1,98 @@
+{
+  "schema": "readaloud-native-variant-runner-v1",
+  "mode": "online-cancel-retry",
+  "passed": true,
+  "nativePassed": true,
+  "normalQuit": true,
+  "appExitVerified": true,
+  "forcedCleanup": false,
+  "remainingOwnedPids": [],
+  "frameworkSha256": "1f0dbee99aeda9b22bc18fc5aab9a409819e0c4ed8ade7df434f06d942e231a6",
+  "executableSha256": "2c3ddcc2c517816a60f4e6fea8c0887f9306155a3359c542e65e0b00cd9d4a47",
+  "maxMlxChildren": 1,
+  "observedMlxSamples": 545,
+  "processEvents": [
+    {
+      "unixMicros": 1794419160933273,
+      "pids": []
+    },
+    {
+      "unixMicros": 1794419162394064,
+      "pids": [
+        9832
+      ]
+    },
+    {
+      "unixMicros": 1794419170106541,
+      "pids": []
+    },
+    {
+      "unixMicros": 1794419194030635,
+      "pids": [
+        10198
+      ]
+    },
+    {
+      "unixMicros": 1794419220643002,
+      "pids": []
+    },
+    {
+      "unixMicros": 1794419239841901,
+      "pids": [
+        10863
+      ]
+    },
+    {
+      "unixMicros": 1794419267191871,
+      "pids": []
+    },
+    {
+      "unixMicros": 1794419268422269,
+      "pids": [
+        11344
+      ]
+    },
+    {
+      "unixMicros": 1794419276047252,
+      "pids": []
+    }
+  ],
+  "errors": [],
+  "limits": "100ms child/process observations and emitted signal per playback interval. Exact waveform matching, glitch/voice quality, total memory envelope, physical-speaker and M3 acceptance remain separate. Capture 300s; work deadline 270s.",
+  "pid": 9799,
+  "capturePid": 9800,
+  "captureReadyObservedUnixMicros": 1794419161384467,
+  "applicationActivationRequested": true,
+  "captureExitStatus": 0,
+  "appExitStatus": 0,
+  "emittedSignal": [
+    {
+      "label": "initial-A8",
+      "durationSeconds": 3.0195,
+      "activeWindowSeconds": 2.5,
+      "longestSilentWindowSeconds": 0.2,
+      "peak": 0.6041235327720642,
+      "passed": true,
+      "scope": "100ms app-only signal windows; not waveform identity or acoustic continuity acceptance"
+    },
+    {
+      "label": "B4",
+      "durationSeconds": 3.0019583333333335,
+      "activeWindowSeconds": 2.5,
+      "longestSilentWindowSeconds": 0.2,
+      "peak": 0.5074947476387024,
+      "passed": true,
+      "scope": "100ms app-only signal windows; not waveform identity or acoustic continuity acceptance"
+    },
+    {
+      "label": "returned-A8",
+      "durationSeconds": 3.000375,
+      "activeWindowSeconds": 2.4000000000000004,
+      "longestSilentWindowSeconds": 0.30000000000000004,
+      "peak": 0.42969515919685364,
+      "passed": true,
+      "scope": "100ms app-only signal windows; not waveform identity or acoustic continuity acceptance"
+    }
+  ],
+  "strictAcousticAcceptance": "NOT_RUN: compare copied queued WAVs with capture; listening remains separate"
+}

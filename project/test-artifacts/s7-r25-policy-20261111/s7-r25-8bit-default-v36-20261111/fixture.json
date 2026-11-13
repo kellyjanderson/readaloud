@@ -1,0 +1,8 @@
+{
+  "sourcePath": "/Users/k/.codex/worktrees/radoc-dynamic-audio/readaloud/tmp/s6/first-load-fixture.txt",
+  "copiedPath": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-r25-8bit-default-v36-20261111/copied-input.txt",
+  "sha256": "7f7c0dd75b007248e577acfc5c1c0691be2934d6d4442399d1558eca19e6529e",
+  "copiedSha256": "7f7c0dd75b007248e577acfc5c1c0691be2934d6d4442399d1558eca19e6529e",
+  "executable": "/Users/k/.codex/worktrees/radoc-dynamic-audio/readaloud/tmp/ReadAloudS6ColdRawSeparate.app/Contents/MacOS/read_aloud",
+  "executableSha256": "cb4731767491136dd1b848728f61f20f398c51b16945666d76afe21ce5a091de"
+}

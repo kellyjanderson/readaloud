@@ -1,0 +1,193 @@
+# Read Aloud local adaptation
+
+This directory vendors the complete published **just_audio 0.10.5** package,
+including its license, upstream README, examples and tests. The application pins
+this copy through the root `pubspec.yaml` path override. The upstream package
+version is unchanged. The local Dart/player init API adds the opt-in contract
+described below; upstream defaults remain unchanged.
+
+- Upstream: <https://github.com/ryanheise/just_audio/tree/minor/just_audio>
+- Published package: <https://pub.dev/packages/just_audio/versions/0.10.5>
+- Pub archive SHA-256 (from the installed package cache receipt):
+  `9694e4734f515f2a052493d1d7e0d6de219ee0427c7c29492e246ff32a219908`
+- Original `darwin/just_audio/Sources/just_audio/AudioPlayer.m` SHA-256:
+  `e9debb9231e4edf7c2bfcbde041df4fd726b33b6f4545425b19738be0454d573`
+- Assignment/evaluation: [S6 native continuity repair](https://github.com/kellyjanderson/readaloud/issues/137#issuecomment-6710786783),
+  under [S6 R3](https://github.com/kellyjanderson/readaloud/issues/137#issuecomment-6710591303).
+
+## Why the native patch is needed
+
+Read Aloud extends a bounded local-WAV playlist during speech. In this upstream
+version, supported playlist add/insert operations reach `enqueueFrom:`, which
+removes and reinserts every future native item while preserving the current
+item. Removing an already buffered future item coincided with an approximately
+119 ms hole inside the currently playing scene in the coordinator's capture.
+Changing AVPlayer's automatic-stall setting did not resolve that observation.
+The assignment records evaluation of the maintained upstream implementation and
+0.10.6 changelog; no supported API supplied the required queue preservation.
+This adaptation retains the maintained player rather than replacing its
+scheduling, decoding or lifecycle infrastructure.
+
+## Exact change and ownership
+
+The queue-preservation adaptation in `AudioPlayer.m` works as follows. At `enqueueFrom:` entry,
+a loop-off, non-loading, non-seeking call whose target is the native queue
+snapshot's head computes the desired queue using `_order` and the existing per-source
+`lazyLoading`/`TREADMILL_SIZE` rules. An existing queue must be a pointer-identical
+prefix of that desired queue. Only after this check does the fast path update
+the index/end state, append the missing suffix and update the end action. It
+does not remove items, seek, change rate or update playback position. A prune
+of an already played prefix therefore performs no native queue mutation when
+AVQueuePlayer has already removed those items. Non-prefix edits, item
+replacement, loading, seeking and loop modes retain the original rebuild.
+
+Concatenating insert/remove calls explicitly request current-item preservation;
+other callers retain the requested target. Preservation derives its head and
+prefix check from one immutable native queue snapshot. Native advancement after
+the caller's current-item read or during prefix computation can only consume a
+prefix of that snapshot, so appending the missing tail remains safe and does
+not rebuild or replay the surviving queue. A removed current item or a changed
+future order still fails the prefix check and follows the existing fallback.
+
+Played-prefix removal also resolves the new source index from the actual native
+current-item identity after rebuilding the source tree. Its removed-current
+fallback compares removed old indices with one immutable old current index.
+Previously, removing two predecessors from old index 2 decremented the index to
+1 while inspecting old index 0, then mistook old index 1 for the current item;
+the resulting enqueue skipped the still-playing source. Resolving identity also
+accounts for native advancement during removal. Source/shuffle order and the
+existing removed-current successor policy remain intact.
+
+The application also retains one logical predecessor when pruning played
+history. Upstream `onComplete:` publishes the next logical index before the
+native current-item transition necessarily settles. Removing every logical
+predecessor can therefore intentionally remove the still-live native head and
+force the removed-current fallback. A following distinct item cannot complete
+without native playback advancing to it, so one retained predecessor fences
+that transition without a timed delay. Application pins remain held until
+native removal acknowledges, and lead/capacity accounting excludes history.
+
+In particular, dynamically inserted URI sources retain upstream's default
+non-lazy setting. The patch does not cap them to two items or change their
+preparation policy. Read Aloud remains responsible for bounding work ahead.
+
+There is no new asynchronous producer, queue, timer or ownership domain. The
+existing native method-channel and player callback paths retain queue ownership
+and lifecycle. Prefix computation has no player side effects; appending to a
+nonempty queue does not deliberately replace the current item or trigger its
+replacement observer. Automatic advancement and its existing observers remain
+upstream responsibilities. Snapshot checks do not create an atomic transaction
+with AVFoundation's internal playback thread; native boundary/append overlap
+still needs running-app validation. No new cancellation or shutdown work is
+introduced, and upstream dispose/seek/fallback behavior is retained.
+
+## Finite local WAV player contract
+
+[S7's production-boundary work order](https://github.com/kellyjanderson/readaloud/issues/142#issuecomment-6812807878)
+adds `AudioPlayer(readAloudFiniteLocalWavQueue: true)`, a false-by-default,
+immutable per-player option. The application enables it only on the internally
+owned `KokoroTtsEngine` player on macOS. Injected players preserve their caller's
+policy. The existing platform `init` request carries the option before the first
+load, and carries it again for replacement native players after stop. Other
+platforms receive no opt-in; native production activation is also compiled only
+for macOS. There is no second configuration call, producer, timer or queue.
+
+The caller must own validated, finite WAV provenance. Native admission verifies
+plain progressive URI sources (optionally nested in concatenations), actual
+`AVURLAsset` absolute file URLs matching the declared URI (empty authority, no
+query/fragment), and pointer-identical
+queue/source membership before insertion. It never guesses format from a suffix
+or reads media contents on the main thread. All decoded insertions are checked
+before any matching tree changes. Unsupported remote, HLS/DASH, clipping,
+looping-source, composition or mismatched asset loads/inserts are rejected before
+the existing native tree/queue is changed. A narrow Dart preflight also rejects
+non-file/wrapped shapes before the maintained load/add/insert entrypoints mutate
+their logical playlist. Native asset/membership errors remain authoritative and
+must be handled by the caller; no rollback state machine is added.
+
+For an opted-in loop-off player, the actual native head owns the logical index;
+an early future-item completion cannot advance it. An initially unknown duration
+does not change this ownership policy. Final completion separately requires a
+current member, positive finite numeric duration and numeric position at or past
+EOF using exact rational `CMTime` comparison. One weak final-item witness records
+an early notification, including one already belonging to the head before its
+last sample. The existing head/Pause callback rechecks EOF. Seek, accepted load,
+loop-mode change and dispose clear the witness; stale callbacks cannot claim a
+new load or pending seek. Both loop modes retain upstream completion behavior.
+Generic players retain their complete legacy index/completion path.
+
+For this macOS opt-in with looping off, `play:` snapshots position and update
+time immediately before activating the requested rate. It uses the existing
+position reader, including a pending seek's target; it does not invent a start
+position, rewind, or replace the actual paused/initial item position. Duplicate
+Play and pending Play-result ownership remain unchanged. Generic players, both
+loop modes and other platforms retain the upstream rate-then-position ordering.
+This narrow ordering change follows [the matched native Play wait](https://github.com/kellyjanderson/readaloud/issues/144#issuecomment-6815633761):
+the sampled call chain reached `AVPlayerItem.currentTime` synchronously from
+`play:` after rate activation. It adds no asynchronous work, scheduler, queue,
+timer, cancellation domain or EOF policy. It removes that direct post-activation
+read from the opted-in Play method; it does not establish that AVFoundation's
+rate activation or another callback cannot block.
+
+`READALOUD_QUEUE_PHYSICAL_HEAD_INDEX=1` remains an explicitly diagnostic override,
+separate from production activation. Audit receipts expose `finiteLocalWavQueue`
+and `physicalHeadIndexDiagnostic` independently; QA-flag evidence does not prove
+production adoption. Source/fixture verification does not establish running-app
+continuity or human listening acceptance.
+
+## Focused verification
+
+Run the native recording-queue test on macOS with Xcode and an installed Flutter
+macOS engine framework:
+
+```sh
+FLUTTER_FRAMEWORK_DIR=/absolute/path/containing/FlutterMacOS.framework \
+  third_party/just_audio/test/local_native/run.sh
+```
+
+The script compiles all vendored Objective-C sources against the selected
+FlutterMacOS and system AVFoundation frameworks, then invokes the production
+`enqueueFrom:`, completion and concatenating insert/removal methods with a recording queue. Twenty-four scenarios cover preserved
+future items, complete/pruned no-ops, actual shuffle order, lazy/mixed lazy
+preparation, native treadmill replenishment, non-prefix reorder/removal,
+pending seek, loading, both loop modes, target replacement, two-predecessor
+removal, native advancement during removal, removed-current successor fallback
+and shuffled removal. Additional cases advance the native head after the caller
+reads it, before/after the queue snapshot, and during append; intentional future
+insertion still uses the reorder fallback. The batch-removal regression rejects
+the uncorrected implementation, and the snapshot-race regression rejects the
+earlier identity-reindex-only fix. The completion scenario demonstrates the
+logical-ahead/physical-head state and safe one-predecessor retention using the
+production completion and removal methods. The script
+cleans up its temporary executable/module cache and starts no Flutter engine,
+application or audio playback. These are native compilation and queue-call
+checks, not emitted-audio evidence.
+
+The fixture also exercises production opt-in admission/rejection, initially
+unknown duration, pointer/URL identity, shuffled EOF and unchanged loop/default
+behavior. `READALOUD_FINAL_EOF_SCENARIO=same-head-early-final` isolates the single
+end-notice-before-last-sample then Pause regression. It fails the previous source
+and a mutant that discards same-head early notices, and passes the corrected
+implementation. Existing fixtures cover seek/load invalidation, retired callbacks,
+nonfinite EOF refusal and dispose. The root
+`test/kokoro_finite_local_wav_player_test.dart` exercises actual init serialization,
+idle construction, stop/reinit, default engine ownership and injected policy.
+
+The Play regression uses production `AudioPlayer.updatePosition`,
+`getCurrentPosition` and `UriAudioSource.position`, with a recording item at the
+AVFoundation boundary. Rate activation takes a surrogate clock lock; a subsequent
+`currentTime` read fails after a bounded 25 ms lock attempt. This deterministic
+control rejects the previous source ordering. It also checks real nonzero
+initial/paused/resumed positions, an outstanding item seek and its target,
+duplicate Play/results, and default/loop isolation. Set
+`READALOUD_PLAY_POSITION_SCENARIO=startup-lock` to run only the lock/resume/result
+case; `JUST_AUDIO_SOURCE_DIR` can select an older source tree for a negative
+control. The surrogate proves call-path ordering and preserved position policy,
+not the timing or internal locking of a real AVPlayerItem. Other platforms are
+source-gated here, not compiled or runtime-qualified by the macOS fixture.
+
+Adoption still requires the coordinator's comparable running-app A/B captures,
+audio order and continuity, pause/cancel/shutdown checks, bounded long traversal
+and appropriate human listening. The shared Darwin source also affects iOS,
+which is not qualified here. Future upstream updates should re-evaluate and
+remove this patch once maintained queue preservation meets the requirement.

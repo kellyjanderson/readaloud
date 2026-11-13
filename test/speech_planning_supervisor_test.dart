@@ -2,12 +2,96 @@ import 'dart:async';
 import 'dart:isolate';
 import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:read_aloud/src/models/speech_annotation.dart';
+import 'package:read_aloud/src/services/document_import_service.dart';
+import 'package:read_aloud/src/services/base_speech_annotation_inference_service.dart';
+import 'package:read_aloud/src/services/mlx_speech_worker_processor.dart';
 import 'package:read_aloud/src/models/reader_document.dart';
 import 'package:read_aloud/src/models/narration_state.dart';
 import 'package:read_aloud/src/models/voice_session_realization.dart';
 import 'package:read_aloud/src/services/speech_planning_supervisor.dart';
 
 void main() {
+  test(
+    'scene repacking never admits directions beyond realized horizon',
+    () async {
+      final doc = DocumentImportService().importPastedText(
+        [
+          19,
+          28,
+          9,
+          26,
+          23,
+          8,
+          7,
+          12,
+          19,
+        ].map((n) => '${List.filled(n, 'word').join(' ')}.').join('\n\n'),
+      );
+      final segments = doc.speechDocument.segments;
+      expect(segments.length, 9);
+      final annotations = const BaseSpeechAnnotationInferenceService().infer(
+        speechDocument: doc.speechDocument,
+        displayDocument: doc.displayDocument,
+        explicitIntents: [
+          for (final index in [1, 8])
+            SpeechAnnotation(
+              annotationId: 'direction-$index',
+              segmentId: segments[index].segmentId,
+              kind: SpeechAnnotationKind.deliveryIntent,
+              startWord: 0,
+              endWord: segments[index].wordCount,
+              confidence: 1,
+              source: SpeechAnnotationSource.userOverride,
+              deliveryIntent: index == 1
+                  ? DeliveryIntent.shouted
+                  : DeliveryIntent.whispered,
+            ),
+        ],
+      );
+      final owner = SpeechPlanningSupervisor();
+      addTearDown(owner.shutdown);
+      final context = SpeechPlanningContext(
+        engineVersion: mlxTtsVersionFor(0, engineId: 'fish_drama3'),
+        realization: VoiceSessionRealizationInput(
+          speechDocument: doc.speechDocument,
+          baseAnnotations: annotations,
+          basePronunciationArtifacts: doc.basePronunciationArtifacts,
+          startSegmentId: segments.first.segmentId,
+          voiceId: 'library_fishsarah',
+          engineId: 'fish_drama3',
+          rate: 1,
+          narrationState: NarrationState.initial(),
+        ),
+      );
+      String? next = segments.first.segmentId;
+      var end = 0;
+      final controls = <String>[];
+      while (next != null) {
+        final window = await owner.plan(
+          context,
+          startSegmentId: next,
+          maxChunks: 3,
+        );
+        expect(
+          window.realization.ttsArtifactSet.segments.map((s) => s.segmentId),
+          containsAll(window.plan.chunks.expand((c) => c.segmentIds)),
+        );
+        expect(window.plan.chunks.first.startWordIndex, end);
+        end = window.plan.chunks.last.endWordIndex;
+        controls.addAll(
+          window.plan.chunks
+              .expand((c) => c.ttsSegments)
+              .expand((s) => s.performanceIntents)
+              .map((i) => i.engineControl)
+              .whereType<String>(),
+        );
+        next = window.plan.nextSegmentId;
+      }
+      expect(end, doc.wordCount);
+      expect(controls, ['[shouting]', '[whispers]']);
+    },
+  );
   final doc = ReaderDocument.sample();
   SpeechPlanningContext context([String version = '2']) =>
       SpeechPlanningContext(

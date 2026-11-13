@@ -1,0 +1,4 @@
+2026-11-11 15:20:42.294 read_aloud[71246:64115317] [read_aloud.document_access] Document access channel registered.
+2026-11-11 15:20:42.332 read_aloud[71246:64115317] [read_aloud.document_access] Created restore token for path: /Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s8-feedback-native-v1-20261111/probe/short-source.txt
+2026-11-11 15:20:42.352 read_aloud[71246:64115317] [read_aloud.document_access] Created restore token for path: /Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s8-feedback-native-v1-20261111/probe
+S8_GATE ready /Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s8-feedback-native-v1-20261111/probe/ready.continue

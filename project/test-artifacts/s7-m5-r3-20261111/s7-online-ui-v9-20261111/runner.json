@@ -1,0 +1,72 @@
+{
+  "schema": "readaloud-native-variant-runner-v1",
+  "mode": "online-cancel-retry",
+  "passed": false,
+  "nativePassed": false,
+  "normalQuit": true,
+  "appExitVerified": true,
+  "forcedCleanup": false,
+  "remainingOwnedPids": [],
+  "frameworkSha256": "0348ded75065eda462ab20987886c46ab4ff2a3ebe407113cb732bcf540fcdd1",
+  "executableSha256": "f3e675f245912c0478c4beb41ed7a4bf2157eb0542b73a4638273451d3fa326d",
+  "maxMlxChildren": 1,
+  "observedMlxSamples": 1070,
+  "processEvents": [
+    {
+      "unixMicros": 1794417094974966,
+      "pids": []
+    },
+    {
+      "unixMicros": 1794417096699437,
+      "pids": [
+        90504
+      ]
+    },
+    {
+      "unixMicros": 1794417105997457,
+      "pids": []
+    },
+    {
+      "unixMicros": 1794417122577454,
+      "pids": [
+        90846
+      ]
+    },
+    {
+      "unixMicros": 1794417135094342,
+      "pids": []
+    },
+    {
+      "unixMicros": 1794417142516333,
+      "pids": [
+        91147
+      ]
+    },
+    {
+      "unixMicros": 1794417255149867,
+      "pids": []
+    }
+  ],
+  "errors": [
+    "Native failure: TimeoutException: Settings Retry"
+  ],
+  "limits": "100ms child/process observations and emitted signal per playback interval. Exact waveform matching, glitch/voice quality, total memory envelope, physical-speaker and M3 acceptance remain separate. Capture 300s; work deadline 270s.",
+  "pid": 90481,
+  "capturePid": 90482,
+  "captureReadyObservedUnixMicros": 1794417095432277,
+  "applicationActivationRequested": true,
+  "captureExitStatus": 0,
+  "appExitStatus": 0,
+  "emittedSignal": [
+    {
+      "label": "initial-A8",
+      "durationSeconds": 3.02125,
+      "activeWindowSeconds": 2.6,
+      "longestSilentWindowSeconds": 0.1,
+      "peak": 0.5534610748291016,
+      "passed": true,
+      "scope": "100ms app-only signal windows; not waveform identity or acoustic continuity acceptance"
+    }
+  ],
+  "strictAcousticAcceptance": "NOT_RUN: compare copied queued WAVs with capture; listening remains separate"
+}

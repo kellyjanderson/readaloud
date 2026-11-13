@@ -1,3 +1,4 @@
+import 'package:read_aloud/src/models/engine_session.dart';
 import 'dart:async';
 import 'dart:convert';
 import 'dart:typed_data';
@@ -5,6 +6,10 @@ import 'package:cross_file/cross_file.dart';
 import 'package:crypto/crypto.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:read_aloud/src/models/native_speech_turn.dart';
+import 'package:read_aloud/src/services/speech_planning_supervisor.dart';
+import 'package:read_aloud/src/models/speech_annotation.dart';
+import 'package:read_aloud/src/services/base_speech_annotation_inference_service.dart';
 import 'package:read_aloud/src/controllers/reader_controller.dart';
 import 'package:read_aloud/src/models/cast_voice_assignment.dart';
 import 'package:read_aloud/src/models/reading_focus_state.dart';
@@ -21,6 +26,7 @@ import 'package:read_aloud/src/services/document_import_service.dart';
 import 'package:read_aloud/src/services/document_preparation_supervisor.dart';
 import 'package:read_aloud/src/services/playback_instrumentation_service.dart';
 import 'package:read_aloud/src/services/reader_preferences_service.dart';
+import 'package:read_aloud/src/services/qualified_engine_selection_service.dart';
 import 'package:read_aloud/src/services/reader_document_repository.dart';
 import 'package:read_aloud/src/services/reader_document_serialization_service.dart';
 import 'dart:io';
@@ -28,6 +34,305 @@ import 'package:read_aloud/src/services/tts_engine.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
+  test(
+    'early retry joins held default selection without loading old default',
+    () async {
+      SharedPreferences.setMockInitialValues({});
+      final selector = _HeldDefaultSelection();
+      final created = <String>[];
+      final controller = ReaderController(
+        defaultEngineSelection: selector,
+        engineFactory: (id, _) {
+          created.add(id);
+          return _ModelPreparationEngine();
+        },
+        enablePlatformIntakeChannels: false,
+      );
+      addTearDown(controller.dispose);
+      final initializing = controller.initialize();
+      await selector.started.future;
+      await controller.cancelSpeechResourcePreparation();
+      var finished = false;
+      final retry = controller.retryInitialization().then(
+        (_) => finished = true,
+      );
+      await Future<void>.delayed(Duration.zero);
+      expect(finished, isFalse);
+      expect(created, isEmpty);
+      expect(controller.engineSession.active, isNull);
+      selector.ready.complete();
+      await Future.wait([initializing, retry]);
+      expect(created, ['fish_drama3_8bit']);
+      expect(controller.engineSession.active!.engineId, 'fish_drama3_8bit');
+    },
+  );
+
+  for (final holdDefault in [false, true]) {
+    for (final deferred in [false, true]) {
+      test(
+        'early cancellation survives held ${holdDefault ? 'default selection' : 'preferences'} and deferred=$deferred intake until explicit retry',
+        () async {
+          SharedPreferences.setMockInitialValues({
+            if (!holdDefault) 'reader.ttsEngineId': 'fish_drama3_8bit',
+            'reader.narratorVoiceIds.v1': jsonEncode({
+              'fish_drama3_8bit': 'af_bella',
+            }),
+            'reader.fontScale': 1.4,
+            'reader.lastOpenedDocumentPath': '/saved/book.radoc',
+          });
+          final preferences = _HeldPreferences();
+          final selector = _HeldDefaultSelection();
+          final created = <String>[];
+          final engine = _ModelPreparationEngine();
+          final controller = ReaderController(
+            preferencesService: preferences,
+            defaultEngineSelection: selector,
+            deferInitialSynthesis: deferred,
+            engineFactory: (id, _) {
+              created.add(id);
+              return engine;
+            },
+            enablePlatformIntakeChannels: false,
+          );
+          addTearDown(controller.dispose);
+          final initializing = controller.initialize();
+          if (holdDefault) {
+            preferences.ready.complete();
+            await selector.started.future;
+          }
+          await controller.cancelSpeechResourcePreparation();
+          await controller.cancelSpeechResourcePreparation();
+          if (holdDefault) {
+            selector.ready.complete();
+          } else {
+            preferences.ready.complete();
+          }
+          await initializing;
+          await controller.completeInitialIntake();
+          expect(controller.engineSession.phase, EngineSessionPhase.cancelled);
+          expect(
+            controller.engineSession.selected.engineId,
+            'fish_drama3_8bit',
+          );
+          expect(controller.engineSession.active, isNull);
+          expect(controller.isInitializing, isFalse);
+          expect(controller.fontScale, 1.4);
+          expect(created, isEmpty);
+          expect(engine.preparations, 0);
+          await controller.retryInitialization();
+          expect(created, ['fish_drama3_8bit']);
+          expect(engine.preparations, 1);
+          expect(engine.lastSelectedVoiceId, 'af_bella');
+          expect(controller.engineSession.active!.engineId, 'fish_drama3_8bit');
+          expect(engine.speakCallCount, 0);
+        },
+      );
+    }
+  }
+
+  test(
+    'early retry waits for hydration and later selection owns replacement',
+    () async {
+      SharedPreferences.setMockInitialValues({
+        'reader.ttsEngineId': 'fish_drama3_8bit',
+      });
+      final preferences = _HeldPreferences();
+      final retired = _ModelPreparationEngine();
+      final created = <String>[];
+      final controller = ReaderController(
+        preferencesService: preferences,
+        ttsEngine: retired,
+        engineFactory: (id, _) {
+          created.add(id);
+          return _ModelPreparationEngine();
+        },
+        enablePlatformIntakeChannels: false,
+      );
+      addTearDown(controller.dispose);
+      final initializing = controller.initialize();
+      await controller.cancelSpeechResourcePreparation();
+      var retried = false;
+      final retry = controller.retryInitialization().then(
+        (_) => retried = true,
+      );
+      final latest = controller.setTtsEngineId('fish_drama3_4bit');
+      await Future<void>.delayed(Duration.zero);
+      expect(created, isEmpty);
+      expect(retried, isFalse);
+      preferences.ready.complete();
+      await Future.wait([initializing, retry, latest]);
+      expect(created, ['fish_drama3_4bit']);
+      expect(retired.disposals, 1);
+      expect(controller.engineSession.active!.engineId, 'fish_drama3_4bit');
+    },
+  );
+
+  test(
+    'a second early cancel invalidates retry waiting for preferences',
+    () async {
+      SharedPreferences.setMockInitialValues({
+        'reader.ttsEngineId': 'fish_drama3_8bit',
+      });
+      final preferences = _HeldPreferences();
+      final created = <String>[];
+      final controller = ReaderController(
+        preferencesService: preferences,
+        ttsEngine: _FakeTtsEngine(),
+        engineFactory: (id, _) {
+          created.add(id);
+          return _ModelPreparationEngine();
+        },
+        enablePlatformIntakeChannels: false,
+      );
+      addTearDown(controller.dispose);
+      final initializing = controller.initialize();
+      await controller.cancelSpeechResourcePreparation();
+      final retry = controller.retryInitialization();
+      await controller.cancelSpeechResourcePreparation();
+      preferences.ready.complete();
+      await Future.wait([initializing, retry]);
+      expect(created, isEmpty);
+      expect(controller.engineSession.phase, EngineSessionPhase.cancelled);
+      expect(controller.engineSession.active, isNull);
+    },
+  );
+
+  test(
+    'explicit resource cancellation fences stale completion and retries honestly',
+    () async {
+      SharedPreferences.setMockInitialValues({});
+      final initial = _FakeTtsEngine();
+      final held = _ModelPreparationEngine()..hold = true;
+      final recovered = _ModelPreparationEngine();
+      var creations = 0;
+      final controller = ReaderController(
+        ttsEngine: initial,
+        engineFactory: (_, _) => creations++ == 0 ? held : recovered,
+        enablePlatformIntakeChannels: false,
+      );
+      addTearDown(controller.dispose);
+      await controller.initialize();
+      await controller.importPastedText('A retained reading anchor.');
+      final document = controller.document;
+      final switching = controller.setTtsEngineId('fish_drama3');
+      await held.started.future;
+      final staleError = held._onError;
+      final cancel = controller.cancelSpeechResourcePreparation();
+      final cancelAgain = controller.cancelSpeechResourcePreparation();
+      expect(controller.engineSession.phase, EngineSessionPhase.cancelled);
+      expect(controller.engineSession.active, isNull);
+      expect(controller.engineSession.lastWorking!.engineId, 'kokoro');
+      expect(controller.isInitializing, false);
+      staleError?.call('late cancelled failure');
+      await Future.wait([switching, cancel, cancelAgain]);
+      expect(creations, 1);
+      expect(controller.startupError, isNull);
+      expect(controller.engineSession.phase, EngineSessionPhase.cancelled);
+      expect(controller.document, same(document));
+      expect(held.disposals, 0);
+      await controller.retryInitialization();
+      expect(held.disposals, 1);
+      expect(creations, 2);
+      expect(recovered.closed, false);
+      expect(controller.engineSession.active!.engineId, 'fish_drama3');
+      expect(recovered.speakCallCount, 0);
+    },
+  );
+
+  test(
+    'new selection during cancellation wins without reviving cancelled target',
+    () async {
+      SharedPreferences.setMockInitialValues({});
+      final held = _HeldSessionEngine()..fail = true;
+      final recovered = _FakeTtsEngine();
+      final created = <String>[];
+      final controller = ReaderController(
+        ttsEngine: _FakeTtsEngine(),
+        engineFactory: (id, _) {
+          created.add(id);
+          return id == 'fish_drama3' ? held : recovered;
+        },
+        enablePlatformIntakeChannels: false,
+      );
+      addTearDown(controller.dispose);
+      await controller.initialize();
+      final first = controller.setTtsEngineId('fish_drama3');
+      await held.started.future;
+      final cancelled = controller.cancelSpeechResourcePreparation();
+      final latest = controller.setTtsEngineId('fish_drama3_4bit');
+      await Future<void>.delayed(Duration.zero);
+      held.release.complete();
+      await Future.wait([first, cancelled, latest]);
+      expect(created, ['fish_drama3', 'fish_drama3_4bit']);
+      expect(controller.engineSession.active!.engineId, 'fish_drama3_4bit');
+      expect(controller.startupError, isNull);
+      expect(recovered.speakCallCount, 0);
+    },
+  );
+
+  test(
+    'new default resolves once without persisting an explicit engine choice',
+    () async {
+      SharedPreferences.setMockInitialValues({});
+      final selector = _FixedDefaultSelection('fish_drama3_8bit');
+      final created = <String>[];
+      final controller = ReaderController(
+        defaultEngineSelection: selector,
+        engineFactory: (id, _) {
+          created.add(id);
+          return _FakeTtsEngine();
+        },
+        enablePlatformIntakeChannels: false,
+      );
+      addTearDown(controller.dispose);
+      await controller.initialize();
+      expect(selector.calls, 1);
+      expect(created, ['fish_drama3_8bit']);
+      expect(controller.selectedTtsEngineId, 'fish_drama3_8bit');
+      final preferences = await SharedPreferences.getInstance();
+      expect(preferences.containsKey('reader.ttsEngineId'), false);
+      await controller.setTtsEngineId('fish_drama3_8bit');
+      expect(preferences.getString('reader.ttsEngineId'), 'fish_drama3_8bit');
+      expect(selector.calls, 1);
+    },
+  );
+
+  test(
+    'explicit Kokoro bypasses quality selection; unknown choice stays unavailable',
+    () async {
+      for (final id in ['kokoro', 'future_engine_variant']) {
+        SharedPreferences.setMockInitialValues({'reader.ttsEngineId': id});
+        final selector = _FixedDefaultSelection('fish_drama3');
+        final created = <String>[];
+        final controller = ReaderController(
+          defaultEngineSelection: selector,
+          engineFactory: (engineId, _) {
+            created.add(engineId);
+            return _FakeTtsEngine();
+          },
+          enablePlatformIntakeChannels: false,
+        );
+        await controller.initialize();
+        expect(selector.calls, 0);
+        expect(controller.selectedTtsEngineId, id);
+        if (id == 'kokoro') {
+          expect(created, ['kokoro']);
+          expect(controller.startupError, isNull);
+        } else {
+          expect(created, isEmpty);
+          expect(controller.engineSession.active, isNull);
+          expect(controller.startupError, contains('unavailable'));
+          expect(
+            (await SharedPreferences.getInstance()).getString(
+              'reader.ttsEngineId',
+            ),
+            id,
+          );
+        }
+        controller.dispose();
+      }
+    },
+  );
   test(
     'launch prepares selected model and settings can cancel model preparation',
     () async {
@@ -74,10 +379,21 @@ void main() {
       final document = controller.document;
       old.holdNext = true;
       final stale = old._onStatus;
+      final staleError = old._onError;
+      final staleActivity = old._onActivity;
       final first = controller.setTtsEngineId('fish_drama3');
       await Future<void>.delayed(Duration.zero);
       final second = controller.setTtsEngineId('fish_drama3_4bit');
       await Future<void>.delayed(Duration.zero);
+      final session = controller.engineSession;
+      stale?.call('stale failure during drain');
+      staleError?.call('stale error during drain');
+      staleActivity?.call(
+        const TtsPlaybackActivity(phase: TtsPlaybackPhase.playing),
+      );
+      expect(controller.engineSession, same(session));
+      expect(controller.isPlaying, isFalse);
+      expect(controller.statusMessage, isNot('stale failure during drain'));
       old.release.complete();
       await Future.wait([first, second]);
       stale?.call('stale failure');
@@ -86,6 +402,285 @@ void main() {
       expect(controller.ttsEngineRestartRequired, isFalse);
       expect(controller.document, same(document));
       expect(replacements, ['fish_drama3_4bit']);
+    },
+  );
+
+  for (final returnsToA in [false, true]) {
+    for (final staleFailure in [false, true]) {
+      test(
+        'loading latest wins ${returnsToA ? 'A-B-A' : 'A-B-C'} stale failure=$staleFailure',
+        () async {
+          final old = _FakeTtsEngine(voices: _multiVoiceTestVoices);
+          final held = _HeldSessionEngine()..fail = staleFailure;
+          final last = _FakeTtsEngine(voices: _multiVoiceTestVoices);
+          final controller = ReaderController(
+            ttsEngine: old,
+            engineFactory: (id, _) => id == 'fish_drama3' ? held : last,
+            enablePlatformIntakeChannels: false,
+          );
+          addTearDown(controller.dispose);
+          await controller.initialize();
+          await controller.selectVoiceById('am_michael');
+          await controller.setVoiceSpeed(1.25);
+          final first = controller.setTtsEngineId('fish_drama3');
+          await held.started.future;
+          expect(controller.engineSession.active, isNull);
+          expect(controller.engineSession.lastWorking!.engineId, 'kokoro');
+          final second = controller.setTtsEngineId(
+            returnsToA ? 'kokoro' : 'fish_drama3_4bit',
+          );
+          held.release.complete();
+          await Future.wait([first, second]);
+          expect(controller.engineSession.phase, EngineSessionPhase.active);
+          expect(
+            controller.engineSession.active!.engineId,
+            returnsToA ? 'kokoro' : 'fish_drama3_4bit',
+          );
+          expect(controller.startupError, isNull);
+          expect(last.speakCallCount, 0);
+          if (returnsToA) {
+            expect(controller.selectedVoice!.id, 'am_michael');
+            expect(controller.currentSpeed, 1.25);
+          }
+        },
+      );
+    }
+  }
+
+  test(
+    'failure preserves selected/last working, same selection retries honestly',
+    () async {
+      final failed = _HeldSessionEngine()..fail = true;
+      failed.release.complete();
+      var attempts = 0;
+      final recovered = _FakeTtsEngine();
+      final controller = ReaderController(
+        ttsEngine: _FakeTtsEngine(),
+        engineFactory: (_, _) => attempts++ == 0 ? failed : recovered,
+        enablePlatformIntakeChannels: false,
+      );
+      addTearDown(controller.dispose);
+      await controller.initialize();
+      await controller.setTtsEngineId('fish_drama3');
+      expect(controller.engineSession.selected.engineId, 'fish_drama3');
+      expect(controller.engineSession.active, isNull);
+      expect(controller.engineSession.lastWorking!.engineId, 'kokoro');
+      expect(controller.engineSession.phase, EngineSessionPhase.failed);
+      expect(controller.runningTtsEngineId, 'kokoro');
+      await controller.setTtsEngineId('fish_drama3');
+      expect(attempts, 2);
+      expect(controller.engineSession.active!.engineId, 'fish_drama3');
+      expect(recovered.speakCallCount, 0);
+    },
+  );
+
+  for (final finalTarget in ['kokoro', 'fish_drama3_4bit']) {
+    for (final fail in [false, true]) {
+      test(
+        'preview held in voice selection cannot speak or fail replacement ($fail,$finalTarget)',
+        () async {
+          final old = _HeldPreviewEngine();
+          final replacement = _FakeTtsEngine();
+          final controller = ReaderController(
+            ttsEngine: old,
+            engineFactory: (_, _) => replacement,
+            enablePlatformIntakeChannels: false,
+          );
+          addTearDown(controller.dispose);
+          await controller.initialize();
+          old.hold = true;
+          old.fail = fail;
+          final preview = controller.previewVoice('af_bella');
+          await old.started.future;
+          await controller.setTtsEngineId('fish_drama3');
+          await controller.setTtsEngineId(finalTarget);
+          final status = controller.statusMessage;
+          old.release.complete();
+          await preview;
+          expect(controller.statusMessage, status);
+          expect(old.speakCallCount, 0);
+          expect(replacement.speakCallCount, 0);
+          expect(
+            controller.previewStateForVoice('af_bella'),
+            VoicePreviewState.idle,
+          );
+        },
+      );
+    }
+  }
+  test(
+    'unavailable narrator intent survives reload instead of persisting fallback',
+    () async {
+      SharedPreferences.setMockInitialValues({
+        'reader.selectedVoiceId': 'saved-uninstalled',
+        'reader.ttsEngineId': 'kokoro',
+      });
+      final controller = ReaderController(
+        ttsEngine: _FakeTtsEngine(),
+        engineFactory: (_, _) => _FakeTtsEngine(),
+        enablePlatformIntakeChannels: false,
+      );
+      addTearDown(controller.dispose);
+      await controller.initialize();
+      expect(controller.selectedVoice, isNull);
+      expect(controller.statusMessage, contains('saved-uninstalled'));
+      await controller.setTtsEngineId('fish_drama3');
+      await controller.setTtsEngineId('kokoro');
+      expect(controller.selectedVoice, isNull);
+      final saved = await ReaderPreferencesService().load();
+      expect(saved.narratorVoiceIds['kokoro'], 'saved-uninstalled');
+      expect(saved.selectedVoiceId, 'saved-uninstalled');
+    },
+  );
+
+  for (final finalTarget in ['kokoro', 'fish_drama3_4bit']) {
+    for (final fail in [false, true]) {
+      test(
+        'engine replacement visibly cancels held export and rejects stale result ($fail,$finalTarget)',
+        () async {
+          final old = _HeldExportEngine()..fail = fail;
+          final controller = ReaderController(
+            ttsEngine: old,
+            engineFactory: (_, _) => _FakeTtsEngine(),
+            enablePlatformIntakeChannels: false,
+          );
+          addTearDown(controller.dispose);
+          await controller.initialize();
+          final exporting = controller.exportAudioToPath(
+            '/tmp/session-export.wav',
+          );
+          await old.started.future;
+          final messages = <String?>[];
+          controller.addListener(() => messages.add(controller.statusMessage));
+          await controller.setTtsEngineId('fish_drama3');
+          expect(
+            messages,
+            contains(
+              'Audio export cancelled because the speech engine changed.',
+            ),
+          );
+          await controller.setTtsEngineId(finalTarget);
+          final status = controller.statusMessage;
+          old.release.complete();
+          expect(await exporting, isNull);
+          expect(controller.statusMessage, status);
+        },
+      );
+    }
+  }
+
+  for (final replace in [false, true]) {
+    test(
+      'pending Play cancelled during load never auto-starts (replace=$replace)',
+      () async {
+        final held = _HeldSessionEngine();
+        final replacement = _FakeTtsEngine();
+        final controller = ReaderController(
+          ttsEngine: _FakeTtsEngine(),
+          engineFactory: (id, _) => id == 'fish_drama3' ? held : replacement,
+          enablePlatformIntakeChannels: false,
+        );
+        addTearDown(controller.dispose);
+        await controller.initialize();
+        final switching = controller.setTtsEngineId('fish_drama3');
+        await held.started.future;
+        await controller.startPlayback();
+        final cancellation = replace
+            ? controller.setTtsEngineId('fish_drama3_4bit')
+            : controller.pausePlayback();
+        held.release.complete();
+        await Future.wait([switching, cancellation]);
+        expect(held.speakCallCount, 0);
+        expect(replacement.speakCallCount, 0);
+        expect(controller.isPlaying, isFalse);
+      },
+    );
+  }
+
+  test(
+    'saved Voxtral precision does not become a Fish runtime quantization request',
+    () async {
+      final creations = <(String, int)>[];
+      final controller = ReaderController(
+        ttsEngine: _FakeTtsEngine(),
+        engineFactory: (id, bits) {
+          creations.add((id, bits));
+          return _FakeTtsEngine();
+        },
+        enablePlatformIntakeChannels: false,
+      );
+      addTearDown(controller.dispose);
+      await controller.initialize();
+      await controller.setTtsEngineId('voxtral_4b');
+      await controller.setVoxtralQuantizationBits(4);
+      await controller.setTtsEngineId('fish_drama3');
+      expect(creations, [
+        ('voxtral_4b', 0),
+        ('voxtral_4b', 4),
+        ('fish_drama3', 0),
+      ]);
+      expect(controller.engineSession.active!.quantizationBits, 0);
+      expect(controller.voxtralQuantizationBits, 4);
+      expect(
+        (await ReaderPreferencesService().load()).voxtralQuantizationBits,
+        4,
+      );
+    },
+  );
+
+  for (final install in [false, true]) {
+    for (final fail in [false, true]) {
+      test(
+        'voice library work rejects obsolete ${install ? 'install' : 'refresh'} ${fail ? 'error' : 'success'}',
+        () async {
+          final old = _HeldVoiceLibraryEngine()..fail = fail;
+          final controller = ReaderController(
+            ttsEngine: old,
+            engineFactory: (_, _) => _FakeTtsEngine(),
+            enablePlatformIntakeChannels: false,
+          );
+          addTearDown(controller.dispose);
+          await controller.initialize();
+          old.hold = true;
+          final installing = install
+              ? controller.installVoice('af_bella')
+              : null;
+          if (!install) old.changed?.call();
+          await old.started.future;
+          await controller.setTtsEngineId('fish_drama3');
+          final status = controller.statusMessage;
+          old.release.complete();
+          if (installing != null) await installing;
+          await old.done.future;
+          await Future<void>.delayed(Duration.zero);
+          expect(controller.statusMessage, status);
+          expect(controller.selectedVoice!.id, 'af_bella');
+        },
+      );
+    }
+  }
+
+  test(
+    'current voice library failure stays visible without an unhandled future',
+    () async {
+      final engine = _HeldVoiceLibraryEngine()..fail = true;
+      final controller = ReaderController(
+        ttsEngine: engine,
+        enablePlatformIntakeChannels: false,
+      );
+      addTearDown(controller.dispose);
+      await controller.initialize();
+      engine.hold = true;
+      engine.changed?.call();
+      await engine.started.future;
+      engine.release.complete();
+      await engine.done.future;
+      await Future<void>.delayed(Duration.zero);
+      expect(
+        controller.statusMessage,
+        'Could not refresh speech voices. Try again.',
+      );
+      expect(controller.selectedVoice!.id, 'af_bella');
     },
   );
 
@@ -1365,12 +1960,34 @@ void main() {
             startOffset: 0,
             endOffset: 6,
             word: 'Second',
+            chunkId: 'second-scene',
+            voiceId: 'voice-a',
+            rate: 1,
+            elapsedInChunk: const Duration(milliseconds: 500),
+            chunkAudioDuration: const Duration(seconds: 2),
+            sceneTurns: const [
+              NativeSpeechTurn(
+                voiceId: 'voice-a',
+                text: 'Second distinct words.',
+                segmentIds: ['second'],
+                startWord: 3,
+                endWord: 6,
+                bindingFingerprint: 'binding',
+                bindingRevision: 1,
+              ),
+            ],
             documentId: first.documentId,
             wordStartIndex: 3,
             wordEndIndex: 4,
           ),
         );
         expect(controller.currentWordIndex, 1);
+        expect(controller.spokenChunkRecords.single.startWordIndex, 3);
+        expect(controller.spokenChunkRecords.single.endWordIndex, 4);
+        expect(
+          controller.spokenChunkRecords.single.sceneTurns.single.startWord,
+          3,
+        );
         final third = (await second.continuation!.next(
           2,
           cancellation.future,
@@ -1419,6 +2036,77 @@ void main() {
             expect(controller.canRetryDocumentPreparation, isTrue);
           }
           expect(engine.speakCallCount, 1);
+        },
+      );
+    }
+    for (final fails in [false, true]) {
+      test(
+        'file replacement during resource await retires stale ${fails ? 'error' : 'success'} without retry',
+        () async {
+          final directory = await Directory.systemTemp.createTemp(
+            's3-stale-resource',
+          );
+          addTearDown(() => directory.delete(recursive: true));
+          final file = File('${directory.path}/dialogue.txt');
+          await file.writeAsString(
+            'Mira said, "Stay quiet." Mara replied, "Footsteps!"',
+          );
+          final engine = _ResourceBarrierEngine();
+          final controller = ReaderController(ttsEngine: engine);
+          addTearDown(controller.dispose);
+          await controller.initialize();
+          await controller.importFilePaths([file.path]);
+          final playing = controller.startPlayback();
+          await engine.started.future;
+          final source = controller.document;
+          final segment = source.speechDocument.segments.first;
+          final annotations = const BaseSpeechAnnotationInferenceService()
+              .infer(
+                speechDocument: source.speechDocument,
+                displayDocument: source.displayDocument,
+                explicitIntents: [
+                  SpeechAnnotation(
+                    annotationId: 'explicit-whisper',
+                    segmentId: segment.segmentId,
+                    kind: SpeechAnnotationKind.deliveryIntent,
+                    startWord: 0,
+                    endWord: segment.wordCount,
+                    confidence: 1,
+                    source: SpeechAnnotationSource.userOverride,
+                    deliveryIntent: DeliveryIntent.whispered,
+                  ),
+                ],
+              );
+          await controller.loadDocument(
+            ReaderDocument.fromNormalized(
+              title: source.title,
+              type: source.type,
+              normalizedImportResult: source.normalizedImportResult,
+              baseSpeechAnnotations: annotations,
+              dialogueAttributions: source.dialogueAttributions,
+              characterCastRegistry: source.characterCastRegistry,
+              documentVoiceAttribution: source.documentVoiceAttribution,
+              basePronunciationArtifacts: source.basePronunciationArtifacts,
+            ),
+          );
+          engine.ready = true;
+          if (fails) {
+            engine.barrier.completeError(StateError('obsolete'));
+          } else {
+            engine.barrier.complete(const []);
+          }
+          await playing.timeout(const Duration(seconds: 2));
+          expect(engine.preparations, 1);
+          expect(engine.speakCallCount, 0);
+          await controller.startPlayback();
+          expect(engine.preparations, 2);
+          expect(engine.speakCallCount, 1);
+          expect(
+            controller.document.baseSpeechAnnotations.annotations.any(
+              (a) => a.annotationId == 'explicit-whisper',
+            ),
+            isTrue,
+          );
         },
       );
     }
@@ -3132,7 +3820,17 @@ void main() {
         final chunkPlan = request!.chunkPlan;
         expect(chunkPlan, isNotNull);
 
-        final chunks = chunkPlan!.chunks;
+        final chunks = [...chunkPlan!.chunks];
+        final planner = SpeechPlanningSupervisor();
+        addTearDown(planner.shutdown);
+        if (chunkPlan.nextSegmentId != null) {
+          chunks.addAll(
+            (await planner.plan(
+              request.planningContext!,
+              startSegmentId: chunkPlan.nextSegmentId,
+            )).plan.chunks,
+          );
+        }
         expect(chunks.length, greaterThanOrEqualTo(3));
         expect(chunks[0].speakText, 'John said,');
         expect(chunks[0].voiceId, 'af_bella');
@@ -3317,7 +4015,17 @@ void main() {
         final chunkPlan = request!.chunkPlan;
         expect(chunkPlan, isNotNull);
 
-        final chunks = chunkPlan!.chunks;
+        final chunks = [...chunkPlan!.chunks];
+        final planner = SpeechPlanningSupervisor();
+        addTearDown(planner.shutdown);
+        if (chunkPlan.nextSegmentId != null) {
+          chunks.addAll(
+            (await planner.plan(
+              request.planningContext!,
+              startSegmentId: chunkPlan.nextSegmentId,
+            )).plan.chunks,
+          );
+        }
         expect(
           chunks.map((chunk) => chunk.speakText).toList(growable: false),
           containsAllInOrder(<String>[
@@ -3861,12 +4569,37 @@ class _RecordingPreparationSupervisor extends DocumentPreparationSupervisor {
   }
 }
 
+class _FixedDefaultSelection extends QualifiedEngineSelectionService {
+  _FixedDefaultSelection(this.id);
+  final String id;
+  int calls = 0;
+  @override
+  Future<DefaultEngineSelection> select() async {
+    calls++;
+    return DefaultEngineSelection(id, 'test measured default');
+  }
+}
+
 class _HeldPreferences extends ReaderPreferencesService {
   final ready = Completer<void>();
   @override
   Future<ReaderPreferences> load() async {
     await ready.future;
     return super.load();
+  }
+}
+
+class _HeldDefaultSelection extends QualifiedEngineSelectionService {
+  final started = Completer<void>();
+  final ready = Completer<void>();
+  @override
+  Future<DefaultEngineSelection> select() async {
+    started.complete();
+    await ready.future;
+    return const DefaultEngineSelection(
+      'fish_drama3_8bit',
+      'held measured default',
+    );
   }
 }
 
@@ -4315,6 +5048,13 @@ class _ModelPreparationEngine extends _FakeTtsEngine
     implements ModelPreparationCapable, ResourcePreparationCapable {
   bool hold = false, closed = false;
   int preparations = 0;
+  int disposals = 0;
+  @override
+  void dispose() {
+    disposals++;
+    super.dispose();
+  }
+
   final started = Completer<void>();
   final released = Completer<void>();
   @override
@@ -4341,4 +5081,76 @@ class _ModelPreparationEngine extends _FakeTtsEngine
     closed = true;
     if (!released.isCompleted) released.complete();
   }
+}
+
+class _HeldSessionEngine extends _FakeTtsEngine {
+  final started = Completer<void>();
+  final release = Completer<void>();
+  bool fail = false;
+  @override
+  Future<List<VoiceProfile>> loadVoices() async {
+    started.complete();
+    await release.future;
+    if (fail) throw StateError('held stale loading failed');
+    return super.loadVoices();
+  }
+}
+
+class _HeldPreviewEngine extends _FakeTtsEngine {
+  bool hold = false, fail = false;
+  final started = Completer<void>();
+  final release = Completer<void>();
+  @override
+  Future<void> selectVoice(VoiceProfile voice) async {
+    if (hold) {
+      if (!started.isCompleted) started.complete();
+      await release.future;
+      if (fail) throw StateError('held preview failed');
+    }
+    await super.selectVoice(voice);
+  }
+}
+
+class _HeldExportEngine extends _ExportTtsEngine {
+  bool fail = false;
+  final started = Completer<void>();
+  final release = Completer<void>();
+  @override
+  Future<TtsExportResult> exportAudio(TtsExportRequest request) async {
+    started.complete();
+    await release.future;
+    if (fail) throw StateError('held export failed');
+    return super.exportAudio(request);
+  }
+}
+
+class _HeldVoiceLibraryEngine extends _FakeTtsEngine
+    implements VoiceLibraryCapable {
+  bool hold = false, fail = false;
+  void Function()? changed;
+  final started = Completer<void>();
+  final release = Completer<void>();
+  final done = Completer<void>();
+  @override
+  List<VoiceLibraryEntry> get voiceLibrary => const [];
+  @override
+  set onVoiceLibraryChanged(void Function()? callback) => changed = callback;
+  Future<void> held() async {
+    started.complete();
+    try {
+      await release.future;
+      if (fail) throw StateError('obsolete library failure');
+    } finally {
+      done.complete();
+    }
+  }
+
+  @override
+  Future<List<VoiceProfile>> loadVoices() async {
+    if (hold) await held();
+    return super.loadVoices();
+  }
+
+  @override
+  Future<void> installVoice(String voiceId) => held();
 }

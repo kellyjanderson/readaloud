@@ -12,8 +12,10 @@ case "$python_root" in
   "$runtime_root"/python/*) ;;
   *) echo 'ModernBookNLP packaging requires a managed standalone Python under runtime/python.' >&2; exit 1 ;;
 esac
-destination="$TARGET_BUILD_DIR/$UNLOCALIZED_RESOURCES_FOLDER_PATH/modernbooknlp-python"
-mkdir -p "$destination"
+# Assemble outside the bundle: expanded executable trees slow cold app admission.
+resources="$TARGET_BUILD_DIR/$UNLOCALIZED_RESOURCES_FOLDER_PATH"
+destination=$(mktemp -d "${TARGET_TEMP_DIR:-${TMPDIR:-/tmp}}/modernbooknlp-python.XXXXXX")
+trap 'rm -rf "$destination"' EXIT HUP INT TERM
 ditto "$python_root" "$destination"
 ditto "$runtime_root/venv/lib/python3.11/site-packages" "$destination/lib/python3.11/site-packages"
 # Torch 2.6's bundled OpenMP aborts on SHM2 in the macOS app sandbox.
@@ -31,5 +33,8 @@ actual_openmp=$(shasum -a 256 "$openmp" | cut -d ' ' -f 1)
 cp "$openmp" "$destination/lib/python3.11/site-packages/torch/lib/libomp.dylib"
 cp "$openmp_license" "$destination/lib/python3.11/site-packages/torch/lib/LLVM-OpenMP-LICENSE.txt"
 identity="${EXPANDED_CODE_SIGN_IDENTITY:--}"
-find "$destination" -type f \( -name '*.so' -o -name '*.dylib' \) -exec codesign --force --sign "$identity" {} \;
-codesign --force --sign "$identity" --entitlements "$project_root/tools/mlx_python.entitlements" "$destination/bin/python3.11"
+ruby "$project_root/tools/package_python_runtime.rb" --sign-native "$destination" "$identity" "$project_root/tools/mlx_python.entitlements" bin/python3.11
+
+ruby "$project_root/tools/package_python_runtime.rb" --omit-redundant-bytecode "$destination" modernbooknlp bin/python3.11 "$resources/python-runtimes"
+# Delete only obsolete expanded output, never the source runtime.
+rm -rf "$resources/modernbooknlp-python"

@@ -1,0 +1,9 @@
+{
+  "nativeSourcesUnchangedSince": "f8bf8b2",
+  "experiment": "190s waiting-thread trace of180s playback; all failed gates retained",
+  "frameworkSha256": "78f5fed87fa928bb40bccd4af350f652129e2edb73ab74bf8f85350d6ec4a216",
+  "executableSha256": "da6fc05904e495f9dd4a09a0acb48f8048fbcdfd058fd7c87dfa5859497b810e",
+  "frameworkSourceCommit": "2c622b9a0f93dcf4e0206966816ee22313f916ee",
+  "runnerSourceCommit": "9721e92c6a58b558587d244a0928bf1b840a3d76",
+  "run": "s7-8bit-extendedwaiting-v28-20261111"
+}

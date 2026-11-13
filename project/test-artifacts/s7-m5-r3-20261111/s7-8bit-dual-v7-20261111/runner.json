@@ -1,0 +1,59 @@
+{
+  "schema": "readaloud-native-variant-runner-v1",
+  "mode": "cached-8bit",
+  "passed": false,
+  "nativePassed": false,
+  "normalQuit": true,
+  "appExitVerified": true,
+  "forcedCleanup": false,
+  "remainingOwnedPids": [],
+  "frameworkSha256": "0348ded75065eda462ab20987886c46ab4ff2a3ebe407113cb732bcf540fcdd1",
+  "executableSha256": "f3e675f245912c0478c4beb41ed7a4bf2157eb0542b73a4638273451d3fa326d",
+  "maxMlxChildren": 1,
+  "observedMlxSamples": 508,
+  "processEvents": [
+    {
+      "unixMicros": 1794416863291489,
+      "pids": []
+    },
+    {
+      "unixMicros": 1794416864913015,
+      "pids": [
+        87644
+      ]
+    },
+    {
+      "unixMicros": 1794416930644627,
+      "pids": []
+    }
+  ],
+  "errors": [
+    "Native failure: "
+  ],
+  "limits": "100ms child/process observations and emitted signal per playback interval. Exact waveform matching, glitch/voice quality, total memory envelope, physical-speaker and M3 acceptance remain separate. Capture 300s; work deadline 270s.",
+  "pid": 87605,
+  "capturePid": 87606,
+  "secondaryCapture": {
+    "mechanism": "CoreAudio process tap",
+    "pid": 87607,
+    "executableSha256": "5c0d8167bc06529bac15e2df9d07abfb9f63d6e7e3296c90210dc5ac224ce909",
+    "scope": "Independent diagnostic recording; primary acceptance gates remain unchanged",
+    "exitStatus": 0
+  },
+  "captureReadyObservedUnixMicros": 1794416863768821,
+  "applicationActivationRequested": true,
+  "captureExitStatus": 0,
+  "appExitStatus": 0,
+  "emittedSignal": [
+    {
+      "label": "sustained-fish_drama3_8bit",
+      "durationSeconds": 60.016,
+      "activeWindowSeconds": 50.300000000000004,
+      "longestSilentWindowSeconds": 0.9,
+      "peak": 0.7842869162559509,
+      "passed": true,
+      "scope": "100ms app-only signal windows; not waveform identity or acoustic continuity acceptance"
+    }
+  ],
+  "strictAcousticAcceptance": "NOT_RUN: compare copied queued WAVs with capture; listening remains separate"
+}

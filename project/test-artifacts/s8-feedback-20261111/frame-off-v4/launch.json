@@ -1,0 +1,23 @@
+{
+  "app": "/Users/k/.codex/worktrees/reader-feedback-s8/readaloud/tmp/ReadAloudS8Feedback.app/Contents/MacOS/read_aloud",
+  "bundle": "/Users/k/.codex/worktrees/reader-feedback-s8/readaloud/tmp/ReadAloudS8Feedback.app",
+  "bundle_id": "com.kellyjanderson.readAloud.feedbackTest",
+  "executable_sha256": "3358cb010ea40b230c4cd2027e3e7e81fdcc69aabc1d2bba1b8b47820cdbf278",
+  "launch_method": "LaunchServices open -W -n",
+  "app_exit_status": null,
+  "app_exit_status_owner": "LaunchServices; unavailable to runner",
+  "work_deadline_seconds": 600,
+  "cleanup_deadline_seconds": 30,
+  "force_heartbeat_frames": false,
+  "scope": "UI-only; coordinator owns native input, screenshots and accessibility observations",
+  "passed": false,
+  "normal_quit": false,
+  "normal_quit_evidence": "One-way request succeeded; actual PID exit verified separately",
+  "forced_cleanup": false,
+  "app_framework": "/Users/k/.codex/worktrees/reader-feedback-s8/readaloud/tmp/ReadAloudS8Feedback.app/Contents/Frameworks/App.framework/Versions/A/App",
+  "app_framework_sha256": "aae61407575a17a9c7ef6397f1c349d53e0280cb5a7252415dc54ac5ce28a4e6",
+  "launch_utc": "2026-11-12T00:05:29.101781Z",
+  "launcher_pid": 76405,
+  "pid": 76407,
+  "awake_guard_pid": 76409
+}

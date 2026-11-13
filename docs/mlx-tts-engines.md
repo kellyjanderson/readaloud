@@ -1,18 +1,33 @@
 # Local MLX TTS engines
 
+Fish model metadata can refresh as validated data for the installed runtime;
+see [catalog refresh and fallback](fish-drama-catalog.md). Current sessions retain
+their captured model revision and integrity manifest throughout loading.
+
 Read Aloud offers Fish Audio Drama 3 (bf16, 8-bit and 4-bit), Qwen3-TTS
-1.7B Base/CustomVoice, Voxtral TTS 4B and MOSS-TTS v1.5. Kokoro remains the
-default. On macOS choose **Read Aloud > Settings… > Text-to-speech engine**.
+1.7B Base/CustomVoice, Voxtral TTS 4B and MOSS-TTS v1.5. New installs choose the highest qualified Fish precision that fits measured
+headroom and the 100,000,000,000-byte process-tree ceiling. Exact checkpoint,
+runtime and device qualification is required; unknown devices use a disclosed
+Kokoro fallback. Existing explicit choices remain selected. On macOS choose **Read Aloud > Settings… > Text-to-speech engine**.
 Selecting an engine starts its download and loading immediately. A saved MLX
-selection does the same at launch. Settings shows progress and offers retry on
-failure. Switching away cancels preparation, drains the old inference process,
+selection does the same at launch. Settings shows measured progress, model-file totals and a fresh available-volume
+measurement with its timestamp. The total is not the remaining download size or
+a guarantee of future space. Cancel retains resumable data; Retry resumes
+preparation without changing the selected model. Switching away cancels preparation, drains the old inference process,
 and prepares the latest selection without restarting or rebuilding the app.
 The document and reading position remain available; resume playback explicitly.
+Settings shows the selected engine separately from a validated active engine
+and the last working choice. A last working choice may need to reload. Changing
+engines cancels pending playback, preview and audio export; retry or resume is an
+explicit action. Narrator choices are retained per engine. An unavailable saved
+voice remains unresolved until you choose a compatible voice; returning to its
+engine restores the saved choice.
 
-Drama's source integration and lifecycle checks are implemented. Real Drama
-playback with *City of Births and Deaths* remains unqualified while the large
-checkpoint downloads following upstream CDN timeouts. Do not interpret a build or source
-test pass as successful Drama inference or listening acceptance.
+Drama bf16 has running-app playback evidence at native 44.1 kHz, including
+short fiction turns and explicit Character choices. Full qualification remains
+owned by [the Drama issue](https://github.com/kellyjanderson/readaloud/issues/111).
+Builds, source tests and playback position do not establish listening quality or
+the startup goal and hard limits in the [product definition](../project/product-definition.md).
 
 ## Model downloads and cache
 
@@ -26,13 +41,24 @@ total, followed by a separate model-loading stage.
 There is no fixed elapsed-time cutoff for downloading a model. The Hub bounds
 individual network requests; changing the selected engine cancels preparation.
 
+Fish variants are pinned to specific checkpoint revisions. Normal installed and
+downloaded models must pass the bundled file-integrity checks before loading.
+Valid cached files work offline; retries resume missing files and repair corrupt
+files in the managed Hub cache without removing other variants. When several
+accessible caches are incomplete, Retry uses the pinned snapshot with the most
+verified completed bytes and keeps that destination after an interruption.
+Older app-support Hub caches are checked before starting a new download. An invalid legacy unpacked
+folder fails with an integrity error rather than being rewritten automatically.
+File verification does not establish listening quality, memory fit or native
+8-bit/4-bit playback qualification; those remain separate checks.
+
 The recognized Hub checkpoints are:
 
 | Engine ID | Checkpoint | Approx. size | License |
 | --- | --- | ---: | --- |
-| `fish_drama3` | `mlx-community/fish-audio-drama-3-bf16` | 67 GB | Fish Audio Community License |
-| `fish_drama3_8bit` | `mlx-community/fish-audio-drama-3-8bit` | 36 GB | Fish Audio Community License |
-| `fish_drama3_4bit` | `mlx-community/fish-audio-drama-3-4bit` | 23 GB | Fish Audio Community License |
+| `fish_drama3` | `mlx-community/fish-audio-drama-3-bf16` | 72.38 GB | Fish Audio Community License |
+| `fish_drama3_8bit` | `mlx-community/fish-audio-drama-3-8bit` | 42.18 GB | Fish Audio Community License |
+| `fish_drama3_4bit` | `mlx-community/fish-audio-drama-3-4bit` | 23.78 GB | Fish Audio Community License |
 | `qwen3_tts_1_7b` | `mlx-community/Qwen3-TTS-12Hz-1.7B-CustomVoice-bf16` | 4.2 GB | Apache 2.0 |
 | `qwen3_tts_base_1_7b` | `mlx-community/Qwen3-TTS-12Hz-1.7B-Base-bf16` | 4.2 GB | Apache 2.0 |
 | `voxtral_4b` | `mlx-community/Voxtral-4B-TTS-2603-mlx-bf16` | 7.5 GB | CC BY-NC 4.0; noncommercial use only |
@@ -43,9 +69,22 @@ directory or the older sandbox container directory are reused. Checkpoints
 are not committed to Git or bundled into the application. The JSON-lines
 Python worker is bundled as a Flutter asset. Install the build's arm64 Python
 runtime and MLX packages once with `sh tools/install_mlx_tts_runtime.sh`.
-The Xcode embed phase copies this executable runtime into the app bundle and
-signs the interpreter for sandbox inheritance. Model weights remain in the
-cache. The sandbox cannot execute the external build-time interpreter directly.
+The Xcode embed phase assembles and signs the standalone interpreter/packages
+for sandbox inheritance outside the bundle, then packages its signed tree as
+`Resources/python-runtimes/mlx.zip` with an adjacent schema-2 content manifest.
+All Mach-O code and Metal libraries remain signed/bound in the app under
+`Resources/python-runtimes/mlx-native/`; the ZIP contains only Python/data.
+It does not archive the build venv. First MLX use verifies the bundled targets
+and extracts data into an immutable Application Support view under
+`python-runtimes/v2/mlx/<signed-tree-digest>-<bundle-location-digest>/`, containing
+only explicit verified links to the app's native code. The bundled interpreter
+receives this view as its own `PYTHONHOME`. Moving the app creates a new view;
+changed/missing bundle code fails visibly. No native code runs from extraction.
+Archive/tree verification reports measured progress; extraction reports an
+explicit stage. Closing the resource owner cancels and drains installation.
+Model weights remain in the cache. The sandbox cannot execute the external
+build-time interpreter directly. Completed portable-book playback does not
+extract or initialize this runtime.
 
 For development, `READALOUD_TTS_ENGINE` can still override the saved preference
 for the process that launches the macOS app:
@@ -56,10 +95,12 @@ READALOUD_TTS_ENGINE=voxtral_4b tools/flutter run -d macos
 READALOUD_TTS_ENGINE=moss_tts_8b tools/flutter run -d macos
 ```
 
-The default interpreter is installed at
-`<app-support>/read_aloud/mlx-tts/runtime/venv/bin/python`. It must be arm64
+The build input interpreter is installed at
+`<app-support>/read_aloud/mlx-tts/runtime/venv/bin/python`. The packaged app uses
+its verified extracted standalone interpreter. It must be arm64
 with `mlx==0.32.4` and `mlx-audio==0.6.3`. `READALOUD_MLX_PYTHON` can override
-that path when the override is accessible to the sandbox. An alternate local
+the packaged interpreter explicitly when the override is accessible to the sandbox.
+This override has developer provenance and does not qualify a bundled runtime. An alternate local
 checkpoint directory can be supplied with `READALOUD_MLX_TTS_MODEL_PATH`; it
 must be readable from the app sandbox. If no recognized `READALOUD_TTS_ENGINE`
 is present, the saved preference is used (Kokoro on a fresh installation).
@@ -123,11 +164,41 @@ ruby tools/run_mlx_playback_smoke.rb /tmp/ReadAloudPlaybackTest.app/Contents/Mac
   "$HOME/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/tmp/new-playback-receipts"
 ```
 
-The runner tests Voxtral, Qwen and MOSS sequentially, bounds each run to six
-minutes, records native playback position and PCM peak, and terminates the app
-and inference children on failure. Rebuild with `FLUTTER_TARGET=lib/main.dart`
+The runner tests Voxtral, Qwen and MOSS sequentially by default; append an engine
+ID such as `fish_drama3` to select a single backend. Each run is bounded to six
+minutes plus `READALOUD_SMOKE_PLAY_SECONDS`. It requests normal Quit after success
+or failure, verifies app/owned-child exit, and reports forced cleanup as failure.
+Rebuild with `FLUTTER_TARGET=lib/main.dart`
 before handing a normal release app to a user. The smoke establishes native
 playback and non-silent generated audio; acoustic quality still needs listening.
+
+For S3 dialogue checks, `READALOUD_SMOKE_REQUIRE_END=1` requires contiguous
+completed source spans through the final word. `READALOUD_SMOKE_CAST_VOICES`
+accepts a JSON map of Character labels to explicit voice IDs, and
+`READALOUD_SMOKE_EXPECT_CAST_SEQUENCE=Mara,Mira,Mara` checks dialogue order.
+`READALOUD_SMOKE_WHISPER_TEXT` and `READALOUD_SMOKE_SHOUT_TEXT` identify
+synthetic-fixture segments to receive explicit canonical delivery annotations;
+they do not infer directions from
+prose. `READALOUD_SMOKE_TRANSPORT=1` checks pause, seek acknowledgment and a
+superseded pending Play. The receipt separates transport latency, startup,
+playhead stalls, app/worker peak footprint and UI event-loop delay. The latter
+is a timer-latency diagnostic, not a claim of human input-response acceptance.
+Release-build metrics are written beside the receipt as `.metrics.jsonl` only
+when this harness explicitly installs its observer.
+
+For actual app-output evidence, compile `tools/capture_macos_app_audio.swift`
+with `swiftc -parse-as-library` and run the resulting executable with the owned
+test PID, a new WAV path and a duration of at most 300 seconds. ScreenCaptureKit
+filters to that process; it does not change output routing or record a microphone.
+It rejects capture packet timestamp discontinuities of 100 ms or more so a
+missing capture interval cannot silently shorten the evidence recording.
+The tool requires existing screen/audio-capture authorization and does not
+request new permissions. Start it before first speech. Run
+`tools/compare_captured_dialogue.py RECEIPT CAPTURE.wav NEW_RESULT.json` with the
+managed MLX Python to compare captured waveforms to queued files. It requires
+strong whole-turn acoustic matches and measures gaps between matched turns;
+human review still decides transcript correctness, expression and perceived
+voice continuity. Keep private manuscript recordings local.
 
 `tools/mlx_tts_worker_test.py`, run with the MLX runtime Python, separately
 regresses full generator consumption and native sample-rate preservation and rejects
@@ -147,8 +218,21 @@ does not inherit another model's exceptions. Saved books retain adjustment
 references separately from their text. Recognized legacy records migrate when
 opened; an unknown or mismatched adjustment is retained but not applied.
 Document intent such as a pronunciation request or “whispered” direction remains
-separate. Expressive directions are currently preserved without model-specific
-emotion controls; no supported delivery mapping is claimed.
+separate. The pinned Drama bf16 adapter lowers one unambiguous, explicit,
+whole-segment whisper or shout direction to native `[whispers]` or `[shouting]`
+cues, preserving directed turn boundaries within a scene. Partial/conflicting directions, other
+delivery types and untested variants remain preserved with unsupported fallback.
+The November 5 S3 listening check found expressive delivery but failed perceived
+Character continuity: Mara sounded like a different person between her whispered
+and ordinary turns. Matching selected reference IDs does not satisfy this gate.
+A subsequent direct-native scene sample passed the user's same-person listening
+check and a revised whisper/shout sample passed the requested contrast check.
+Scene synthesis is now integrated into playback and export. The integrated
+app capture passed the user's listening check for the whispered warning,
+shouted reply and recognizable returning voice. This fixture does not establish
+identity across scene boundaries or all character references; broader acceptance
+remains open in [S3 evidence](https://github.com/kellyjanderson/readaloud/issues/111#issuecomment-6680557601). Unchanged raw speech is reused across
+seek/replay; join corrections have their own cache identity.
 
 A supervised child process loads one model and handles one
 request at a time. Cancellation retires the in-flight process so it cannot
@@ -185,12 +269,16 @@ supported model layers in memory with mlx-audio's model-specific predicate. The
 original cached checkpoint is retained, and precision is part of the speech-cache
 identity. Qwen and MOSS keep their original precision.
 
-MLX playback uses a bounded 20-second high / 12-second low playable-audio lead
-and the existing 64-chunk cap. Voxtral warms the startup buffer before playback;
+Fish playback uses a bounded 30-second high / 20-second low playable-audio lead;
+other MLX adapters use 20-second high / 12-second low lead. The existing 64-chunk
+cap applies to both. The Fish threshold covers the observed 16.5-second complete-WAV
+generation in the long native probe; it is not a hardware-independent guarantee.
+Voxtral and Fish warm the startup buffer before playback. Fish's single-chunk
+shortcut requires twenty playable seconds, or a ready following chunk;
 Qwen and MOSS start with their first validated chunk. At the five-second MLX
 warmup deadline, already validated audio can start rather than failing solely
 because the target lead was not reached. Cancellation and stale-result checks
-continue to apply. This does not establish the two-second startup requirement.
+continue to apply. Startup acceptance uses the goal and hard limits in the [product definition](../project/product-definition.md).
 
 For a sustained native check, set `READALOUD_SMOKE_DOCUMENT_PATH` to a local text
 file, `READALOUD_SMOKE_PLAY_SECONDS=45`, and
@@ -290,12 +378,35 @@ this repository. The descriptions are catalog claims, not verified acoustic
 quality. Each selected reference is passed to the model; missing references
 fail visibly rather than selecting a different voice.
 
-Current story reading retains one selected voice per planned chunk. Drama's
-native multi-speaker scene API is not yet connected to the document/timing DTOs;
-source-offset-aware scene synthesis remains open in #111. Do not describe
-per-character chunk routing as native scene generation. Speech-rate handling
-for MLX and perceptual voice continuity also remain acceptance gaps.
+Pinned bf16 story reading now sends bounded ordered turns to Drama's native
+multi-speaker API in one generation call per scene. Each turn retains its selected
+reference, source span, binding revision and explicit directions. The library owns
+within-scene context; no additional model-history cache is maintained by the app.
+Other precisions keep separate-turn synthesis. The app verifies bf16 model files
+against the pinned revision before enabling native scenes and delivery controls,
+including when a local model folder is supplied. First verification shows real
+byte progress; unchanged file state reuses its local verification receipt. An
+unverified checkpoint keeps plain delivery and separate turns while preserving
+saved directions. Verification performed during normal app startup is reported with that startup. Verification triggered by a document load after startup belongs inside its ten-second first-load hard limit. The launch-to-speech goal remains two seconds. Qualification requires separate startup/load boundaries and emitted-audio evidence.
+Drama can begin playing validated audio packets while the rest of a native scene
+is still rendering. Saving reusable audio still waits for the complete scene;
+an interrupted prefix is never saved as a completed passage. Until the final
+duration is known, highlighting stays at the scene's source anchor. Completed
+scenes retain approximate word highlighting rather than word-level alignment.
+The two-second launch-to-speech goal includes app startup. The five-second
+reusable-book limit and ten-second first-load limit exclude normal app startup
+and include preparation needed by the measured document load afterward.
+S6's bounded load evidence is recorded in
+[issue #137](https://github.com/kellyjanderson/readaloud/issues/137); it does not
+establish the two-second first-load launch goal or broader release acceptance.
+Perceptual continuity across scene boundaries,
+speech-rate handling and broader #111 acceptance remain open.
 
 Sources: [Drama bf16 model card](https://huggingface.co/mlx-community/fish-audio-drama-3-bf16),
 [MLX Audio Drama implementation](https://github.com/Blaizzy/mlx-audio/tree/main/mlx_audio/tts/models/fish_drama3),
 [Fish public voice API](https://docs.fish.audio/api-reference/endpoint/model/list-models).
+
+S7 memory admission uses reviewed, bounded M5 Max/128 GiB observations with a
+documented 25% margin. Derived admission budgets are distinct from observed
+peaks. Complete app/child coverage, OS headroom and normal pressure are checked
+before and after loading and during work. Physical M3 qualification remains open.

@@ -1,0 +1,16 @@
+PASS clean actual v57 tap helper metadata only; historical qualification remains FAILED
+PASS refused dirty status
+PASS refused dirty framesReceived
+PASS refused dirty buffersWritten
+PASS refused dirty callbacks
+PASS refused dirty droppedBuffers
+PASS refused dirty poolOverflows
+PASS refused dirty deviceOverloads
+PASS refused dirty timestampDiscontinuities
+PASS refused dirty formatChanges
+PASS refused dirty callbackStalls
+PASS refused dirty writerDiscardedBuffers
+PASS refused dirty appPid
+PASS refused dirty sessionID
+PASS refused dirty maxPacketGapSeconds
+PASS refused mismatched ready session

@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require_relative 'release_notices'
+require_relative 'package_python_runtime'
 require 'fileutils'
 require 'open3'
 require 'find'
@@ -153,11 +154,12 @@ module MacosCandidate
     # so staging the same signed bundle does not appear to change its identity.
     signature = capture('/usr/bin/codesign', '--verify', '--deep', '--strict', '--verbose=2', app)
       .gsub(app, '<APP>').lines.map(&:strip).sort.join("\n")
+    runtimes = PackagedPythonRuntime.validate_resources(File.join(app, 'Contents/Resources'))
     files = tree(app)
     { 'tree_sha256' => digest(files), 'files' => files, 'executable' => executable,
       'bundle_identifier' => identifier, 'minimum_system_version' => minimum_os,
       'executable_identity' => file_identity(File.join(app, executable)), 'architectures' => architectures,
-      'signature_verification' => signature, 'assets' => bundled }
+      'signature_verification' => signature, 'assets' => bundled, 'packaged_python_runtimes' => runtimes }
   end
 
   def self.toolchain(root)

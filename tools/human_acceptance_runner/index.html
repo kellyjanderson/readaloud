@@ -14,8 +14,8 @@
       <h1>Try Read Aloud</h1>
     </div>
     <div class="session-actions">
-      <button id="export-session" class="button secondary">Export results</button>
-      <button id="reset-session" class="button quiet">Reset session</button>
+      <button id="export-session" disabled class="button secondary">Export results</button>
+      <button id="reset-session" disabled class="button quiet">Reset session</button>
     </div>
   </header>
 
@@ -30,12 +30,12 @@
       </div>
       <div class="setup-grid">
         <label>Read Aloud app
-          <span class="path-control"><input id="build-path" autocomplete="off" readonly value="/tmp/readaloud-rc2-final-9ed4532/build/macos/Build/Products/Release/read_aloud.app"><button id="copy-build-path" class="button secondary" type="button">Copy path</button></span>
+          <span class="path-control"><input id="build-path" autocomplete="off" readonly placeholder="Waiting for the release candidate"><button id="copy-build-path" disabled class="button secondary" type="button">Copy path</button></span>
         </label>
         <label>Your name (optional)
-          <input id="tester" autocomplete="name" placeholder="Name">
+          <input id="tester" disabled autocomplete="name" placeholder="Name">
         </label>
-        <p class="start-instruction">In Finder, press ⌘⇧G, paste the app path, then open Read Aloud. Each test will give you a passage and tell you what to try. Quit Read Aloud (⌘Q) after each test.</p>
+        <p id="start-instruction" class="start-instruction">The release coordinator will supply the test build and book fixtures.</p>
       </div>
       <p id="prior-session-note" class="prior-session-note" hidden>Your earlier test notes are kept and will be included when you download the results.</p>
     </section>
@@ -48,10 +48,11 @@
       </nav>
 
       <section class="test-panel" aria-labelledby="case-title">
-        <div id="case-content"></div>
+        <div id="case-content"><h2 id="case-title">Final user tests</h2><p>The release coordinator will provide the test build after engineering qualification.</p></div>
       </section>
     </div>
   </main>
+  <script src="candidate.js"></script>
   <script src="passages.js"></script>
   <script src="scenarios.js"></script>
   <script src="runner.js"></script>

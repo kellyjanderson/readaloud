@@ -1,0 +1,60 @@
+{
+  "schema": "readaloud-native-variant-runner-v1",
+  "mode": "cached-8bit",
+  "passed": false,
+  "nativePassed": true,
+  "normalQuit": true,
+  "appExitVerified": true,
+  "forcedCleanup": false,
+  "remainingOwnedPids": [],
+  "frameworkSha256": "c61385539301ecdea16bbe440d23b018b4630000d5299327e28ce6432fdf2757",
+  "executableSha256": "007926292fc5f762f7935491c61a8add39a912cb80847f2d036263eaa59196de",
+  "maxMlxChildren": 1,
+  "observedMlxSamples": 494,
+  "processEvents": [
+    {
+      "unixMicros": 1794421881324797,
+      "pids": []
+    },
+    {
+      "unixMicros": 1794421883095815,
+      "pids": [
+        24112
+      ]
+    },
+    {
+      "unixMicros": 1794421949180676,
+      "pids": []
+    }
+  ],
+  "errors": [
+    "Diagnostic native sampling enabled; timing is instrumented"
+  ],
+  "limits": "100ms child/process observations and emitted signal per playback interval. Exact waveform matching, glitch/voice quality, total memory envelope, physical-speaker and M3 acceptance remain separate. Capture 300s; work deadline 270s.",
+  "diagnosticProfiling": true,
+  "pid": 24088,
+  "capturePid": 24089,
+  "secondaryCapture": {
+    "mechanism": "CoreAudio process tap",
+    "pid": 24090,
+    "executableSha256": "5c0d8167bc06529bac15e2df9d07abfb9f63d6e7e3296c90210dc5ac224ce909",
+    "scope": "Independent diagnostic recording; primary acceptance gates remain unchanged",
+    "exitStatus": 0
+  },
+  "captureReadyObservedUnixMicros": 1794421882178783,
+  "applicationActivationRequested": true,
+  "captureExitStatus": 0,
+  "appExitStatus": 0,
+  "emittedSignal": [
+    {
+      "label": "sustained-fish_drama3_8bit",
+      "durationSeconds": 60.015458333333335,
+      "activeWindowSeconds": 51.7,
+      "longestSilentWindowSeconds": 1.1,
+      "peak": 0.8196120262145996,
+      "passed": true,
+      "scope": "100ms app-only signal windows; not waveform identity or acoustic continuity acceptance"
+    }
+  ],
+  "strictAcousticAcceptance": "NOT_RUN: compare copied queued WAVs with capture; listening remains separate"
+}

@@ -1,0 +1,13 @@
+2026-11-11 19:17:44.428 read_aloud[28581:64611424] [read_aloud.document_access] Document access channel registered.
+2026-11-11 19:17:44.465 read_aloud[28581:64611424] [read_aloud.document_access] Created restore token for path: /Users/k/Library/Containers/com.kellyjanderson.readAloud.feedbackTest/Data/s8-final-v6-20261111/probe/short-source.txt
+2026-11-11 19:17:44.492 read_aloud[28581:64611424] [read_aloud.document_access] Created restore token for path: /Users/k/Library/Containers/com.kellyjanderson.readAloud.feedbackTest/Data/s8-final-v6-20261111/probe
+S8_GATE ready /Users/k/Library/Containers/com.kellyjanderson.readAloud.feedbackTest/Data/s8-final-v6-20261111/probe/ready.continue
+S8_GATE unknown /Users/k/Library/Containers/com.kellyjanderson.readAloud.feedbackTest/Data/s8-final-v6-20261111/probe/unknown.continue
+S8_GATE known /Users/k/Library/Containers/com.kellyjanderson.readAloud.feedbackTest/Data/s8-final-v6-20261111/probe/known.continue
+S8_GATE finalizing /Users/k/Library/Containers/com.kellyjanderson.readAloud.feedbackTest/Data/s8-final-v6-20261111/probe/finalizing.continue
+S8_GATE terminal /Users/k/Library/Containers/com.kellyjanderson.readAloud.feedbackTest/Data/s8-final-v6-20261111/probe/terminal.continue
+S8_GATE copy-error /Users/k/Library/Containers/com.kellyjanderson.readAloud.feedbackTest/Data/s8-final-v6-20261111/probe/copy-error.continue
+S8_GATE clear-error /Users/k/Library/Containers/com.kellyjanderson.readAloud.feedbackTest/Data/s8-final-v6-20261111/probe/clear-error.continue
+S8_GATE cleared /Users/k/Library/Containers/com.kellyjanderson.readAloud.feedbackTest/Data/s8-final-v6-20261111/probe/cleared.continue
+S8_GATE retry-success /Users/k/Library/Containers/com.kellyjanderson.readAloud.feedbackTest/Data/s8-final-v6-20261111/probe/retry-success.continue
+S8_RECEIPT /Users/k/Library/Containers/com.kellyjanderson.readAloud.feedbackTest/Data/s8-final-v6-20261111/probe/receipt.json

@@ -1,0 +1,28 @@
+{
+  "normalQuit": true,
+  "forcedCleanup": false,
+  "exitStatus": 0,
+  "remainingOwnedPids": [],
+  "captures": {
+    "initial": {
+      "pid": 55929,
+      "stop": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s6-r6-full-v3-20261110/initial.stop",
+      "exitStatus": 0
+    },
+    "changed": {
+      "pid": 56158,
+      "stop": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s6-r6-full-v3-20261110/changed.stop",
+      "exitStatus": 0
+    },
+    "reused": {
+      "pid": 56260,
+      "stop": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s6-r6-full-v3-20261110/reused.stop",
+      "exitStatus": 0
+    },
+    "missing": {
+      "pid": 56474,
+      "stop": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s6-r6-full-v3-20261110/missing.stop",
+      "exitStatus": 0
+    }
+  }
+}

@@ -43,7 +43,25 @@ Validate a saved installation without network acquisition:
 
 The native build embeds the separate interpreter/packages using
 `embed_modernbooknlp_runtime.sh` (override `READALOUD_BOOKNLP_RUNTIME_ROOT` to change
-the build input). It includes code, not model weights. Settings prepares missing
+the build input). It assembles/signs the standalone tree outside the bundle and
+packages Python/data as `Resources/python-runtimes/modernbooknlp.zip` plus a
+schema-2 content manifest. All Mach-O code and adjacent Metal resources remain
+in `Resources/python-runtimes/modernbooknlp-native/`, including the qualified
+OpenMP binary; licenses remain in the data inventory. It does not archive the
+build venv. First provider creation owns progress/cancellation before awaiting
+verification and extraction into Application Support
+`python-runtimes/v2/modernbooknlp/<signed-tree-digest>-<bundle-location-digest>/`.
+This immutable data view has explicit manifest-owned links to verified bundled
+native files. The provider's own child receives this home through `PYTHONHOME`,
+independently of MLX; explicit injected interpreters receive no inferred home.
+The shared installer verifies current bundled targets, archive bytes, exact
+inventory, links, modes, file hashes and the signed
+arm64 interpreter before atomic immutable publication. Stop/replacement cancels
+setup and drains its extractor/validation lifetime; damaged published trees fail
+visibly and are never overwritten. App relocation creates a new view without
+rewriting published links; removed/changed native targets require reinstalling
+the app. No native code is extracted or re-signed. Saved portable-book analysis bypasses provider
+creation. It includes code, not model weights. Settings prepares missing
 models under the actual app's Application Support `modernbooknlp/models` directory.
 The shared acquisition helper reports downloaded bytes and verified file counts;
 unmeasured model initialization displays its stage without a spinner. Complete
@@ -165,7 +183,7 @@ passage in 0.75 seconds, with approximately 4.61 GB peak process RSS. Cached loa
 was about 5.5 seconds; six subsequent tiny windows took 0.66–0.75 seconds each. The first run passed five of six smoke cases; the unidentified-speaker case raised
 an upstream `IndexError`. After the output-list shape correction, all six passed,
 including explicit unknown preservation. Both receipts remain in the issue evidence.
-Do not equate these measurements with two-second app startup, physical process-tree
+Do not equate these measurements with the two-second app startup goal, physical process-tree
 memory, a held-out quality score, or smooth Fish playback.
 
 Remaining promotion gates: independent literary and private City labels, fair

@@ -1,0 +1,37 @@
+{
+  "schema": "readaloud-native-variant-runner-v1",
+  "mode": "cached-8bit",
+  "passed": false,
+  "nativePassed": false,
+  "normalQuit": true,
+  "appExitVerified": true,
+  "forcedCleanup": false,
+  "remainingOwnedPids": [],
+  "frameworkSha256": "42bea3a9739c94871d448af0a7784de09328e74c84af604263acc218f7352e6e",
+  "executableSha256": "1acbc856f1200fe7083b7aac343469478d2ef5f6b0df8b813a9bb69ab04729be",
+  "maxMlxChildren": 1,
+  "observedMlxSamples": 69,
+  "processEvents": [
+    {
+      "unixMicros": 1794410893290494,
+      "pids": []
+    },
+    {
+      "unixMicros": 1794410895248728,
+      "pids": [
+        48899
+      ]
+    }
+  ],
+  "errors": [
+    "Native failure: TimeoutException after 0:00:10.000000: Future not completed",
+    "Emitted audio: Missing capture signal"
+  ],
+  "limits": "100ms child/process observations and emitted signal per playback interval. Exact waveform matching, glitch/voice quality, total memory envelope, physical-speaker and M3 acceptance remain separate. Capture 300s; work deadline 270s.",
+  "pid": 48876,
+  "capturePid": 48877,
+  "applicationActivationRequested": true,
+  "captureExitStatus": 0,
+  "appExitStatus": 0,
+  "strictAcousticAcceptance": "NOT_RUN: compare copied queued WAVs with capture; listening remains separate"
+}

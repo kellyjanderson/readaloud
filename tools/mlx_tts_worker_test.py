@@ -1,9 +1,14 @@
 """Run with the installed MLX runtime Python. No model weights are needed."""
 import importlib.util
+import hashlib
 from pathlib import Path
 import tempfile
+import contextlib
 import io
+import json
+import wave
 import os
+import shutil
 import subprocess
 import sys
 from types import SimpleNamespace
@@ -21,6 +26,285 @@ spec.loader.exec_module(worker)
 
 
 class GeneratorAdapterTest(unittest.TestCase):
+    def test_physical_memory_query_has_no_unaccounted_subprocess(self):
+        with patch('subprocess.Popen', side_effect=AssertionError('Unexpected descendant')):
+            self.assertGreater(worker._physical_memory_bytes(), 1_000_000_000)
+
+    def test_descriptor_profile_does_not_invalidate_legacy_audio_identity(self):
+        with tempfile.TemporaryDirectory() as root:
+            directory = Path(root)
+            (directory / 'config.json').write_text('{}')
+            (directory / 'model.safetensors').write_bytes(b'identity fixture')
+            original = dict(worker.DRAMA_MODELS['fish_drama3'])
+            legacy = {key: value for key, value in original.items() if key != 'profile'}
+            with patch.dict(worker.DRAMA_MODELS, {'fish_drama3': legacy}):
+                before = worker._model_identity(directory, 'fish_drama3', 0)
+            with patch.dict(worker.DRAMA_MODELS, {'fish_drama3': dict(original, profile={'declaration': 'updated'})}):
+                self.assertEqual(worker._model_identity(directory, 'fish_drama3', 0), before)
+            with patch.dict(worker.DRAMA_MODELS, {'fish_drama3': dict(original, revision='f' * 40)}):
+                self.assertNotEqual(worker._model_identity(directory, 'fish_drama3', 0), before)
+
+    def test_invalid_admitted_memory_limits_never_reach_model_acquisition(self):
+        for limit in (True, 0, -1, 100_000_000_000, '80000000000', 1.5):
+            with self.subTest(limit=limit), patch.object(worker, '_download_model',
+                    side_effect=AssertionError('Acquisition before limit validation')):
+                with self.assertRaisesRegex(ValueError, 'Invalid admitted runtime memory limit'):
+                    worker._load('fish_drama3', '', 'unused', runtime_memory_limit_bytes=limit)
+
+    def test_catalog_refresh_cannot_grant_native_scene_qualification(self):
+        self.assertTrue(worker._has_scene_qualification('fish_drama3', 0))
+        changed = dict(worker.DRAMA_MODELS['fish_drama3'], revision='f' * 40)
+        with patch.dict(worker.DRAMA_MODELS, {'fish_drama3': changed}):
+            self.assertFalse(worker._has_scene_qualification('fish_drama3', 0))
+        self.assertFalse(worker._has_scene_qualification('fish_drama3_8bit', 0))
+        self.assertFalse(worker._has_scene_qualification('fish_drama3_4bit', 0))
+        self.assertFalse(worker._has_scene_qualification('fish_drama3', 4))
+
+    def test_owned_stream_joins_real_bounded_mlx_graph_without_model_weights(self):
+        worker._unload()
+        stream = mx.new_stream(mx.gpu)
+        with mx.stream(stream):
+            parameters = {'weight': mx.ones((2, 2)) + 2}
+        with patch.object(worker, '_model_load_stream', stream), \
+                patch.object(worker, '_model_pending_parameters', parameters):
+            mx.async_eval(parameters)
+            worker._join_model_weights()
+            self.assertIsNone(worker._model_pending_parameters)
+            self.assertEqual(parameters['weight'].sum().item(), 12)
+
+    def test_drama_load_joins_async_weights_after_existing_qualification(self):
+        worker._unload()
+        events = []
+        parameters = {'weight': mx.ones((2, 2))}
+        model = SimpleNamespace(parameters=lambda: parameters)
+        stream = object()
+        with tempfile.TemporaryDirectory() as root:
+            (Path(root) / 'config.json').write_text('{}')
+            def verify(*args):
+                self.assertIsNone(worker._model_id)
+                self.assertIs(worker._model_pending_parameters, parameters)
+                events.append('verify')
+                return True
+            with patch.object(worker, '_physical_memory_bytes', return_value=137438953472), \
+                    patch('mlx_audio.tts.load', side_effect=lambda *a, **k: (events.append(('load', k)), model)[1]), \
+                    patch.object(mx, 'new_stream', return_value=stream), \
+                    patch.object(mx, 'stream', return_value=contextlib.nullcontext()), \
+                    patch.object(mx, 'async_eval', side_effect=lambda tree: events.append('async')), \
+                    patch.object(mx, 'eval', side_effect=lambda tree: events.append('join')), \
+                    patch.object(mx, 'synchronize', side_effect=lambda owned: events.append(('sync', owned))), \
+                    patch.object(worker, '_verify_scene_model', side_effect=verify), \
+                    patch.object(worker, '_timing'):
+                result = worker._load('fish_drama3', root, root)
+            self.assertEqual(events, [('load', {'lazy': True}), 'async', 'verify', 'join', ('sync', stream)])
+            self.assertTrue(result['loaded'])
+            self.assertTrue(result['nativeScenesQualified'])
+            self.assertIsNone(worker._model_pending_parameters)
+            self.assertEqual(worker._model_id, 'fish_drama3')
+        worker._unload()
+
+    def test_failed_qualification_still_joins_and_cannot_report_loaded(self):
+        worker._unload()
+        parameters = {}
+        model = SimpleNamespace(parameters=lambda: parameters)
+        with tempfile.TemporaryDirectory() as root:
+            (Path(root) / 'config.json').write_text('{}')
+            with patch.object(worker, '_physical_memory_bytes', return_value=137438953472), \
+                    patch('mlx_audio.tts.load', return_value=model), \
+                    patch.object(mx, 'async_eval'), patch.object(mx, 'eval') as join, \
+                    patch.object(mx, 'synchronize') as synchronize, \
+                    patch.object(worker, '_verify_scene_model', side_effect=RuntimeError('qualification failed')), \
+                    patch.object(worker, '_timing'):
+                with self.assertRaisesRegex(RuntimeError, 'qualification failed'):
+                    worker._load('fish_drama3', root, root)
+                join.assert_called_once_with(parameters)
+                synchronize.assert_called_once_with(worker._model_load_stream)
+            self.assertIsNone(worker._model_id)
+            self.assertIsNone(worker._model_pending_parameters)
+        worker._unload()
+
+    def test_unload_joins_owned_pending_work_before_releasing_model(self):
+        worker._unload()
+        parameters, model, stream = {}, object(), object()
+        with patch.object(worker, '_model', model), \
+                patch.object(worker, '_model_pending_parameters', parameters), \
+                patch.object(worker, '_model_load_stream', stream), \
+                patch.object(mx, 'eval') as join, patch.object(mx, 'synchronize') as synchronize:
+            worker._unload()
+            join.assert_called_once_with(parameters)
+            synchronize.assert_called_once_with(stream)
+            self.assertIsNone(worker._model)
+            self.assertIsNone(worker._model_load_stream)
+            self.assertIsNone(worker._model_pending_parameters)
+
+    def test_drama_reference_timing_restores_instance_on_failure_and_close(self):
+        timings = []
+        class Model:
+            def _voice(self, ref):
+                return ref
+            def generate(self, **kwargs):
+                self._voice('reference')
+                yield 'first'
+                raise RuntimeError('late error')
+        model = Model()
+        for close in (False, True):
+            with self.subTest(close=close), patch.object(worker, '_timing', side_effect=lambda stage, start: timings.append(stage)):
+                results = worker._drama_results(model)
+                self.assertEqual(next(results), 'first')
+                self.assertIn('_voice', vars(model))
+                if close:
+                    results.close()
+                else:
+                    with self.assertRaisesRegex(RuntimeError, 'late error'):
+                        next(results)
+                self.assertNotIn('_voice', vars(model))
+        self.assertEqual(timings, ['referencePrepared'] * 2)
+
+    def test_failed_unload_retains_stream_and_tree_until_join_or_retirement(self):
+        worker._unload()
+        parameters, model, stream = {}, object(), object()
+        with patch.object(worker, '_model', model), \
+                patch.object(worker, '_model_pending_parameters', parameters), \
+                patch.object(worker, '_model_load_stream', stream), \
+                patch.object(mx, 'eval', side_effect=RuntimeError('join failed')):
+            with self.assertRaisesRegex(RuntimeError, 'join failed'):
+                worker._unload()
+            self.assertIs(worker._model, model)
+            self.assertIs(worker._model_load_stream, stream)
+            self.assertIs(worker._model_pending_parameters, parameters)
+
+    def test_stage_timing_is_request_scoped_diagnostic_without_fake_work(self):
+        with patch.object(worker, '_active_request_id', 'load-request'), \
+                patch.object(worker, '_reply') as reply, \
+                patch.object(worker.time, 'monotonic', return_value=1.25), \
+                contextlib.redirect_stderr(io.StringIO()):
+            worker._timing('modelBuildAndCodec', 1)
+        args, event = reply.call_args
+        self.assertEqual(args, ('load-request',))
+        self.assertEqual(event['stage'], 'modelBuildAndCodec')
+        self.assertEqual(event['elapsedMilliseconds'], 250)
+        self.assertIsNone(event['completed'])
+        self.assertIsNone(event['total'])
+
+    def test_opt_in_packets_are_closed_exact_pcm_before_final_publication(self):
+        events = []
+        class Model:
+            def generate(self, **kwargs):
+                self.kwargs = kwargs
+                yield SimpleNamespace(sample_rate=24000, audio=mx.array([.2, -.2, .1]))
+                # The first immutable packet exists before requesting more PCM.
+                self.assert_packet()
+                yield SimpleNamespace(sample_rate=24000, audio=mx.array([.3, -.3]))
+        model = Model()
+        with tempfile.TemporaryDirectory() as root, patch.object(worker, '_model', model), patch.object(worker, '_model_id', 'qwen3_tts_1_7b'):
+            destination = Path(root) / 'scene.wav'
+            def packet_published():
+                self.assertFalse(destination.exists())
+                self.assertEqual(len(events), 1)
+                with wave.open(events[0]['audioPath']) as packet:
+                    self.assertEqual(packet.getnframes(), 3)
+            model.assert_packet = packet_published
+            identity = dict(sessionId='s', generationId='g', chunkId='c', synthesisIdentity='synth', bindingFingerprint='b', bindingRevision=3)
+            with patch.object(worker, '_reply', side_effect=lambda request_id, **event: events.append(event)), patch.object(worker, '_progress'):
+                result = worker._synthesize(dict(modelId='qwen3_tts_1_7b', voice='Ryan', text='Hello', outputPath=str(destination), enableAudioPackets=True, **identity))
+            self.assertEqual([(e['packetIndex'], e['frameStart'], e['frameCount']) for e in events], [(0, 0, 3), (1, 3, 2)])
+            self.assertEqual(result['streamedPacketCount'], 2)
+            self.assertEqual(result['streamedFrameCount'], 5)
+            for event in events:
+                self.assertEqual({key: event[key] for key in identity}, identity)
+                self.assertEqual((event['channels'], event['bitsPerSample']), (1, 16))
+            with wave.open(str(destination)) as full:
+                actual = full.readframes(full.getnframes())
+            expected = b''
+            for event in events:
+                with wave.open(event['audioPath']) as packet:
+                    expected += packet.readframes(packet.getnframes())
+            self.assertEqual(actual, expected)
+
+    def test_packet_opt_in_requires_full_identity_and_no_packets_by_default(self):
+        class Model:
+            def generate(self, **kwargs):
+                yield SimpleNamespace(sample_rate=24000, audio=mx.array([.2, -.2]))
+        with tempfile.TemporaryDirectory() as root, patch.object(worker, '_model', Model()), patch.object(worker, '_model_id', 'qwen3_tts_1_7b'), patch.object(worker, '_reply') as reply, patch.object(worker, '_progress'):
+            request = dict(modelId='qwen3_tts_1_7b', voice='Ryan', text='Hello', outputPath=str(Path(root) / 'scene.wav'))
+            with self.assertRaisesRegex(ValueError, 'packet identity'):
+                worker._synthesize(dict(request, enableAudioPackets=True))
+            result = worker._synthesize(request)
+            reply.assert_not_called()
+            self.assertEqual(result['streamedPacketCount'], 0)
+            self.assertEqual(list(Path(root).glob('packet-*.wav')), [])
+
+    def test_streamed_late_failure_retains_packets_without_publishing_scene(self):
+        class Model:
+            def generate(self, **kwargs):
+                yield SimpleNamespace(sample_rate=24000, audio=mx.array([.2, -.2]))
+                raise RuntimeError('late producer failure')
+        with tempfile.TemporaryDirectory() as root, patch.object(worker, '_model', Model()), patch.object(worker, '_model_id', 'qwen3_tts_1_7b'), patch.object(worker, '_reply') as reply, patch.object(worker, '_progress'):
+            destination = Path(root) / 'scene.wav'
+            with self.assertRaisesRegex(RuntimeError, 'late producer failure'):
+                worker._synthesize(dict(modelId='qwen3_tts_1_7b', voice='Ryan', text='Hello', outputPath=str(destination), enableAudioPackets=True, sessionId='s', generationId='g', chunkId='c', synthesisIdentity='synth', bindingFingerprint='b', bindingRevision=1))
+            reply.assert_called_once()
+            self.assertFalse(destination.exists())
+            with wave.open(str(Path(root) / 'packet-0000.wav')) as packet:
+                self.assertEqual(packet.getnframes(), 2)
+
+    def test_packet_limit_retains_prefix_without_complete_publication(self):
+        class Model:
+            def generate(self, **kwargs):
+                for _ in range(2049):
+                    yield SimpleNamespace(sample_rate=24000, audio=mx.array([.2]))
+        with tempfile.TemporaryDirectory() as root, patch.object(worker, '_model', Model()), patch.object(worker, '_model_id', 'qwen3_tts_1_7b'), patch.object(worker, '_reply'), patch.object(worker, '_progress'):
+            destination = Path(root) / 'scene.wav'
+            with self.assertRaisesRegex(RuntimeError, 'spool exceeded'):
+                worker._synthesize(dict(modelId='qwen3_tts_1_7b', voice='Ryan', text='Hello', outputPath=str(destination), enableAudioPackets=True, sessionId='s', generationId='g', chunkId='c', synthesisIdentity='synth', bindingFingerprint='b', bindingRevision=1))
+            self.assertFalse(destination.exists())
+            self.assertEqual(len(list(Path(root).glob('packet-*.wav'))), 2048)
+
+    def test_model_qualification_is_content_based_and_cached_by_exact_file_state(self):
+        with tempfile.TemporaryDirectory() as root:
+            directory=Path(root)/'model'; directory.mkdir()
+            receipt=Path(root)/'receipts'
+            path=directory/'model.safetensors'; path.write_bytes(b'known pinned bytes')
+            manifest=dict(revision='pinned',files={'model.safetensors':dict(size=path.stat().st_size,
+                algorithm='sha256',digest=hashlib.sha256(path.read_bytes()).hexdigest())})
+            with patch.object(worker, '_progress'):
+                self.assertTrue(worker._verify_scene_model(directory,manifest,receipt))
+                with patch('huggingface_hub.utils._verification.compute_file_hash',side_effect=AssertionError('must reuse exact verification')):
+                    self.assertTrue(worker._verify_scene_model(directory,manifest,receipt))
+                path.write_bytes(b'wrong pinned bytes')
+                self.assertFalse(worker._verify_scene_model(directory,manifest,receipt))
+                path.unlink()
+                self.assertFalse(worker._verify_scene_model(directory,manifest,receipt))
+
+    def test_unqualified_model_cannot_accept_scene_turns(self):
+        with tempfile.TemporaryDirectory() as root, patch.object(worker,'_model_native_scenes',False):
+            path=Path(root)/'voice.wav'; path.write_bytes(b'reference')
+            req=dict(voice='library_a',references=[dict(voice='library_a',referenceAudioPath=str(path),referenceText='Reference.')],
+                     sceneTurns=[dict(voice='library_a',text='Hello.',startWord=0,endWord=1)])
+            with self.assertRaisesRegex(ValueError,'verified pinned'):
+                worker._drama_reference_inputs(req,'Hello.')
+
+    def test_native_scene_is_one_ordered_call_with_delivery_and_source_validation(self):
+        calls = []
+        class Model:
+            def generate(self, **kwargs):
+                calls.append(kwargs)
+                yield SimpleNamespace(sample_rate=44100, audio=mx.array([.2, -.2]))
+        with tempfile.TemporaryDirectory() as root, patch.object(worker, '_model', Model()), patch.object(worker, '_model_id', 'fish_drama3'), patch.object(worker, '_model_native_scenes', True):
+            ref = Path(root) / 'ref.wav'
+            ref.write_bytes(b'input routing only')
+            refs = [dict(voice=v, referenceAudioPath=str(ref), referenceText='Reference.') for v in ['library_mira', 'library_mara']]
+            turns = [dict(voice='library_mira', text='[whispers] Be quiet.', startWord=0, endWord=2),
+                     dict(voice='library_mara', text='[shouting] I hear footsteps!', startWord=2, endWord=5),
+                     dict(voice='library_mira', text='Wait here.', startWord=5, endWord=7)]
+            req = dict(modelId='fish_drama3', voice='library_mira', references=refs, sceneTurns=turns,
+                       text='Be quiet. I hear footsteps! Wait here.', outputPath=str(Path(root) / 'scene.wav'))
+            worker._synthesize(req)
+            self.assertEqual(len(calls), 1)
+            self.assertEqual(calls[0]['text'], '<|speaker:0|> [whispers] Be quiet.\n<|speaker:1|> [shouting] I hear footsteps!\n<|speaker:0|> Wait here.')
+            for changed in [dict(turns[1], startWord=3), dict(turns[1], voice='missing'), dict(turns[1], text='<|speaker:0|> injected')]:
+                with self.assertRaises(ValueError):
+                    worker._drama_reference_inputs(dict(req, sceneTurns=[turns[0], changed, turns[2]]), req['text'])
+
     def test_drama_turns_share_reference_set_and_use_selected_native_slot(self):
         with tempfile.TemporaryDirectory() as root:
             paths = [Path(root) / name for name in ('a.wav', 'b.wav')]
@@ -64,6 +348,8 @@ class GeneratorAdapterTest(unittest.TestCase):
             self.assertEqual(calls[0]['ref_text'], [
                 '<|speaker:0|> Reference alice.', '<|speaker:1|> Reference beth.'])
             self.assertTrue(calls[0]['stream'])
+            self.assertEqual(calls[0]['streaming_interval'], 0.32)
+            self.assertEqual(calls[0]['first_chunk_frames'], 4)
 
     def test_installed_drama_generator_exact_boundary_writes_complete_wav(self):
         """Use the installed producer's real framing, with bounded codec input.
@@ -319,23 +605,507 @@ worker._synthesize({'modelId': 'qwen3_tts_1_7b', 'voice': 'Ryan',
 
 
 class ModelDownloadReuseTest(unittest.TestCase):
+    @staticmethod
+    def cache_tree(snapshot, manifest, content):
+        from huggingface_hub import _snapshot_download
+        tree = {name: _snapshot_download.TreeCacheEntry(size=len(data), blob_id='0' * 40,
+                    lfs_sha256=manifest['files'][name]['digest'], lfs_size=len(data))
+                for name, data in content.items()}
+        _snapshot_download.write_tree_cache(str(snapshot.parent.parent), manifest['revision'], tree)
+
+    @contextlib.contextmanager
+    def fixture(self, model_id='fish_drama3'):
+        # Tiny pinned fixtures exercise real HF offline resolution and hashing.
+        # Only the network transfer boundary is substituted in repair tests.
+        with tempfile.TemporaryDirectory() as root:
+            cache = Path(root) / 'hub'
+            spec = dict(worker.DRAMA_MODELS[model_id], requiredFiles=['config.json', 'model.safetensors', 'codec.safetensors'])
+            snapshot = cache / ('models--' + spec['repo'].replace('/', '--')) / 'snapshots' / spec['revision']
+            snapshot.mkdir(parents=True)
+            content = {'config.json': b'{}', 'model.safetensors': b'pinned weights', 'codec.safetensors': b'pinned codec'}
+            entries = {}
+            for name, data in content.items():
+                (snapshot / name).write_bytes(data)
+                entries[name] = dict(size=len(data), algorithm='sha256', digest=hashlib.sha256(data).hexdigest())
+            manifest = dict(repo=spec['repo'], revision=spec['revision'], files=entries)
+            with patch.dict(worker.DRAMA_MODELS, {model_id: spec}), \
+                    patch.object(worker, '_model_manifest', return_value=manifest), \
+                    patch.dict(os.environ, {'HF_HUB_CACHE': str(cache)}), \
+                    patch('socket.socket.connect', side_effect=AssertionError('fixture attempted network')), \
+                    patch.object(worker, '_configure_hf_cache'), patch.object(worker, '_progress'):
+                yield cache, snapshot, manifest, content
+
     def test_completed_pinned_snapshot_reuses_files_without_network(self):
         import huggingface_hub
-        spec = worker.DRAMA_MODELS['fish_drama3']
-        with tempfile.TemporaryDirectory() as tmp:
-            snapshot = Path(tmp) / ('models--' + spec['repo'].replace('/', '--')) / 'snapshots' / spec['revision']
-            snapshot.mkdir(parents=True)
-            for name in spec['requiredFiles']:
-                (snapshot / name).write_bytes(b'cached fixture')
+        with self.fixture() as (cache, snapshot, manifest, _):
             real_download = huggingface_hub.snapshot_download
             def offline_only(**kwargs):
                 self.assertTrue(kwargs.get('local_files_only'), 'Warm startup attempted network/download')
                 return real_download(**kwargs)
-            with patch('huggingface_hub.snapshot_download', side_effect=offline_only) as download, patch.object(worker, '_configure_hf_cache'), patch.object(worker, '_progress') as progress:
+            with patch('huggingface_hub.snapshot_download', side_effect=offline_only) as download:
                 for _ in range(3):
-                    self.assertEqual(worker._download_model('fish_drama3', tmp).resolve(), snapshot.resolve())
+                    self.assertEqual(worker._download_model('fish_drama3', str(cache)).resolve(), snapshot.resolve())
                 self.assertEqual(download.call_count, 3)
-                self.assertTrue(all(c.kwargs['stage'] == 'modelCached' for c in progress.call_args_list))
+            receipts = list((cache.parent / 'model-qualification').glob('*.json'))
+            self.assertEqual(len(receipts), 1)
+            self.assertEqual(json.loads(receipts[0].read_text())['revision'], manifest['revision'])
+
+    def test_real_hub_incomplete_tree_uses_best_verified_cache_and_only_missing_transfer(self):
+        import huggingface_hub
+        from huggingface_hub import file_download
+        from huggingface_hub.errors import IncompleteSnapshotError
+        for first_defect in ['missing', 'corrupt']:
+            with self.subTest(first_defect=first_defect), self.fixture() as (extra, snapshot, manifest, content):
+                private = extra.parent / 'runtime-cache' / 'hub'
+                private_snapshot = private / snapshot.relative_to(extra)
+                shutil.copytree(snapshot, private_snapshot)
+                (private_snapshot / 'codec.safetensors').unlink()
+                if first_defect == 'missing':
+                    (private_snapshot / 'model.safetensors').unlink()
+                else:
+                    (private_snapshot / 'model.safetensors').write_bytes(b'x' * len(content['model.safetensors']))
+                missing = snapshot / 'codec.safetensors'; missing.unlink()
+                self.cache_tree(snapshot, manifest, content)
+                self.cache_tree(private_snapshot, manifest, content)
+                good = {name: (snapshot / name).stat() for name in content if name != missing.name}
+                private_before = {p: p.stat() for p in private_snapshot.iterdir()}
+                with self.assertRaises(IncompleteSnapshotError):
+                    huggingface_hub.snapshot_download(repo_id=manifest['repo'], revision=manifest['revision'],
+                        cache_dir=str(extra), local_files_only=True)
+                real_snapshot = huggingface_hub.snapshot_download
+                destinations = []
+                def snapshot_download(**kwargs):
+                    if not kwargs.get('local_files_only'):
+                        destinations.append(kwargs['cache_dir'])
+                    return real_snapshot(**kwargs)
+                def metadata(**kwargs):
+                    self.assertEqual(kwargs['filename'], missing.name, 'A complete file requested metadata')
+                    self.assertEqual(Path(kwargs['storage_folder']).resolve(), snapshot.parent.parent.resolve())
+                    entry = manifest['files'][missing.name]
+                    return ('https://fixture.invalid/missing', entry['digest'], manifest['revision'], entry['size'], None, None)
+                def http_bytes(url, stream, **kwargs):
+                    stream.write(content[missing.name])
+                with patch('huggingface_hub.snapshot_download', side_effect=snapshot_download), \
+                        patch.object(file_download, '_get_metadata_or_catch_error', side_effect=metadata), \
+                        patch.object(file_download, 'http_get', side_effect=http_bytes) as transfer, \
+                        patch('huggingface_hub.hf_hub_download', side_effect=AssertionError('A missing file must resume, not force repair')), \
+                        patch.object(worker, '_progress') as progress:
+                    self.assertEqual(worker._download_model('fish_drama3', str(private), [str(extra)]).resolve(), snapshot.resolve())
+                transfer.assert_called_once()
+                self.assertEqual(destinations, [str(extra), str(extra)])
+                for name, before in good.items():
+                    self.assertEqual((snapshot / name).stat(), before)
+                self.assertEqual({p: p.stat() for p in private_snapshot.iterdir()}, private_before)
+                self.assertEqual(missing.read_bytes(), content[missing.name])
+                initial = [call.kwargs for call in progress.call_args_list
+                           if call.kwargs.get('stage') == 'modelDownload'][0]
+                self.assertEqual(initial['completed'], sum(len(content[name]) for name in good))
+                self.assertEqual(initial['total'], sum(map(len, content.values())))
+
+    def test_real_hub_incomplete_tree_failure_keeps_one_destination_and_retries(self):
+        import huggingface_hub
+        from huggingface_hub import file_download
+        with self.fixture() as (extra, snapshot, manifest, content):
+            private = extra.parent / 'runtime-cache' / 'hub'
+            missing = snapshot / 'codec.safetensors'; missing.unlink()
+            self.cache_tree(snapshot, manifest, content)
+            good = (snapshot / 'model.safetensors').stat()
+            real_snapshot = huggingface_hub.snapshot_download
+            destinations = []
+            def snapshot_download(**kwargs):
+                if not kwargs.get('local_files_only'):
+                    destinations.append(kwargs['cache_dir'])
+                return real_snapshot(**kwargs)
+            def metadata(**kwargs):
+                self.assertEqual(kwargs['filename'], missing.name)
+                entry = manifest['files'][missing.name]
+                return ('https://fixture.invalid/missing', entry['digest'], manifest['revision'], entry['size'], None, None)
+            def interrupted(url, stream, **kwargs):
+                stream.write(content[missing.name][:3])
+                raise ConnectionError('fixture interrupted')
+            with patch('huggingface_hub.snapshot_download', side_effect=snapshot_download), \
+                    patch.object(file_download, '_get_metadata_or_catch_error', side_effect=metadata), \
+                    patch.object(file_download, 'http_get', side_effect=interrupted) as transfer:
+                for _ in range(2):
+                    with self.assertRaisesRegex(ConnectionError, 'fixture interrupted'):
+                        worker._download_model('fish_drama3', str(private), [str(extra)])
+            self.assertEqual(transfer.call_count, 2)
+            self.assertEqual(destinations, [str(extra)] * 4)
+            self.assertFalse(private.exists())
+            self.assertEqual((snapshot / 'model.safetensors').stat(), good)
+            self.assertFalse(missing.exists())
+
+    def test_incomplete_tree_cannot_redirect_fallback_or_read_external_file(self):
+        from huggingface_hub.errors import IncompleteSnapshotError
+        for redirect in ['snapshot', 'file']:
+            with self.subTest(redirect=redirect), self.fixture() as (cache, snapshot, manifest, content):
+                missing = snapshot / 'codec.safetensors'; missing.unlink()
+                self.cache_tree(snapshot, manifest, content)
+                outside = cache.parent / 'external'; outside.mkdir()
+                (outside / 'model.safetensors').write_bytes(content['model.safetensors'])
+                if redirect == 'snapshot':
+                    shutil.rmtree(snapshot); snapshot.symlink_to(outside, target_is_directory=True)
+                else:
+                    weight = snapshot / 'model.safetensors'; weight.unlink(); weight.symlink_to(outside / weight.name)
+                before = (outside / 'model.safetensors').stat()
+                # Exception metadata is untrusted; the exact catalog pin and
+                # ownership validators must independently establish the path.
+                with patch('huggingface_hub.snapshot_download', side_effect=IncompleteSnapshotError('partial', snapshot_path=str(outside))), \
+                        patch('huggingface_hub.hf_hub_download', side_effect=AssertionError('unsafe transfer')), \
+                        patch('huggingface_hub.utils._verification.compute_file_hash', side_effect=AssertionError('unsafe hash')):
+                    with self.assertRaisesRegex(ValueError, 'redirected|outside the managed'):
+                        worker._download_model('fish_drama3', str(cache))
+                self.assertEqual((outside / 'model.safetensors').stat(), before)
+
+    def test_extra_app_cache_reuses_offline_across_two_build_paths_and_deduplicates(self):
+        import huggingface_hub
+        with self.fixture() as (extra, snapshot, _, _):
+            env_cache = extra.parent / 'environment-cache'
+            alias = extra.parent / 'environment-alias'; alias.symlink_to(env_cache, target_is_directory=True)
+            real_download = huggingface_hub.snapshot_download
+            calls = []
+            def offline_only(**kwargs):
+                self.assertTrue(kwargs.get('local_files_only'), 'Extra installed cache attempted network')
+                calls.append(Path(kwargs['cache_dir']).resolve())
+                return real_download(**kwargs)
+            with patch.dict(os.environ, {'HF_HUB_CACHE': str(env_cache)}), \
+                    patch('huggingface_hub.snapshot_download', side_effect=offline_only):
+                for name in ['build-one', 'build-two']:
+                    private = extra.parent / name / 'hub'
+                    result = worker._download_model('fish_drama3', str(private),
+                        [str(alias), str(env_cache), str(extra), str(extra)])
+                    self.assertEqual(result.resolve(), snapshot.resolve())
+                    self.assertFalse(private.exists())
+            self.assertEqual(calls, [extra.parent.joinpath('build-one/hub').resolve(), env_cache.resolve(), extra.resolve(),
+                                     extra.parent.joinpath('build-two/hub').resolve(), env_cache.resolve(), extra.resolve()])
+
+    def test_extra_corrupt_cache_repairs_in_place_without_duplicate_private_copy(self):
+        import huggingface_hub
+        with self.fixture() as (extra, snapshot, manifest, content):
+            private = extra.parent / 'new-build' / 'hub'
+            env_cache = extra.parent / 'environment-cache'
+            bad = snapshot / 'model.safetensors'; bad.write_bytes(b'x' * len(content[bad.name]))
+            good = (snapshot / 'codec.safetensors').stat()
+            real_download = huggingface_hub.snapshot_download
+            writes = []
+            offline = []
+            def download(**kwargs):
+                if kwargs.get('local_files_only'):
+                    offline.append(Path(kwargs['cache_dir']).resolve())
+                    return real_download(**kwargs)
+                self.assertEqual(offline, [private.resolve(), env_cache.resolve(), extra.resolve()])
+                self.assertEqual(kwargs['cache_dir'], str(extra))
+                writes.append(kwargs)
+                if kwargs.get('dry_run'):
+                    return [SimpleNamespace(file_size=len(data), will_download=False) for data in content.values()]
+                return str(snapshot)
+            def repair(**kwargs):
+                self.assertEqual(offline, [private.resolve(), env_cache.resolve(), extra.resolve()])
+                self.assertEqual((kwargs['cache_dir'], kwargs['filename'], kwargs['repo_id'], kwargs['revision']),
+                    (str(extra), bad.name, manifest['repo'], manifest['revision']))
+                self.assertTrue(kwargs['force_download'])
+                bad.write_bytes(content[bad.name])
+            with patch.dict(os.environ, {'HF_HUB_CACHE': str(env_cache)}), \
+                    patch('huggingface_hub.snapshot_download', side_effect=download), \
+                    patch('huggingface_hub.hf_hub_download', side_effect=repair) as repair_call:
+                self.assertEqual(worker._download_model('fish_drama3', str(private), [str(extra)]).resolve(), snapshot.resolve())
+                repair_call.assert_called_once()
+            self.assertEqual(len(writes), 0, 'A repaired complete snapshot needs no metadata request')
+            self.assertFalse(private.exists())
+            self.assertEqual((snapshot / 'codec.safetensors').stat(), good)
+
+    def test_valid_extra_cache_wins_over_corrupt_private_without_repair(self):
+        import huggingface_hub
+        with self.fixture() as (extra, snapshot, manifest, content):
+            private = extra.parent / 'private'
+            corrupt = private / snapshot.relative_to(extra)
+            corrupt.mkdir(parents=True)
+            for name, data in content.items():
+                (corrupt / name).write_bytes(b'x' * len(data))
+            before = {name: (corrupt / name).stat() for name in content}
+            real_download = huggingface_hub.snapshot_download
+            def offline_only(**kwargs):
+                self.assertTrue(kwargs.get('local_files_only'))
+                return real_download(**kwargs)
+            with patch.dict(os.environ, {'HF_HUB_CACHE': str(private)}), \
+                    patch('huggingface_hub.snapshot_download', side_effect=offline_only), \
+                    patch('huggingface_hub.hf_hub_download') as repair:
+                self.assertEqual(worker._download_model('fish_drama3', str(private), [str(extra)]).resolve(), snapshot.resolve())
+                repair.assert_not_called()
+            self.assertEqual({name: (corrupt / name).stat() for name in content}, before)
+
+    def test_real_hub_repairs_shared_blob_and_regular_snapshot_copy(self):
+        from huggingface_hub import file_download, _snapshot_download
+        from huggingface_hub.utils import XetFileData
+        from huggingface_hub.utils._shared_blobs import publish_blob_to_shared_store, shared_blob_target
+        for layout in ['shared', 'shared-missing', 'regular', 'regular-good-blob', 'regular-copy-fallback']:
+            with self.subTest(layout=layout), self.fixture() as (cache, snapshot, manifest, content):
+                bad = snapshot / 'model.safetensors'
+                entry = manifest['files'][bad.name]
+                blobs = snapshot.parent.parent / 'blobs'; blobs.mkdir()
+                blob = blobs / entry['digest']
+                xet_hash = 'b' * 64
+                blob.write_bytes(content[bad.name])
+                if layout.startswith('shared'):
+                    self.assertTrue(publish_blob_to_shared_store(blob_path=str(blob), xet_hash=xet_hash,
+                        cache_dir=cache, expected_size=entry['size']))
+                    bad.unlink(); file_download._create_symlink(str(blob), str(bad), new_blob=False)
+                    shared = shared_blob_target(blob, cache)
+                    self.assertIsNotNone(shared)
+                    if layout == 'shared-missing':
+                        shared.unlink()
+                    else:
+                        shared.chmod(0o600); shared.write_bytes(b'x' * entry['size'])
+                    self.assertTrue(blob.is_symlink())
+                    self.assertTrue(worker._owned_hf_file(bad, snapshot, entry))
+                else:
+                    bad.write_bytes(b'x' * entry['size'])
+                    if layout in ('regular', 'regular-copy-fallback'):
+                        blob.write_bytes(b'y' * entry['size'])
+                blob_before = blob.stat() if blob.exists() else None
+                good = {name: (snapshot / name).stat() for name in content if name != bad.name}
+                other = cache / 'other-variant'; other.write_bytes(b'preserve other variant')
+                partial = blobs / 'unrelated.incomplete'; partial.write_bytes(b'preserve partial')
+                # Real tree metadata avoids a network tree query; only the
+                # metadata endpoint and byte transport are substituted below.
+                tree = {name: _snapshot_download.TreeCacheEntry(size=len(data), blob_id='0' * 40,
+                            lfs_sha256=manifest['files'][name]['digest'], lfs_size=len(data),
+                            xet_hash=xet_hash if name == bad.name and layout.startswith('shared') else None)
+                        for name, data in content.items()}
+                _snapshot_download.write_tree_cache(str(snapshot.parent.parent), manifest['revision'], tree)
+                def metadata(**kwargs):
+                    self.assertEqual((kwargs['repo_id'], kwargs['revision'], kwargs['filename']),
+                                     (manifest['repo'], manifest['revision'], bad.name))
+                    return ('https://fixture.invalid/model', entry['digest'], manifest['revision'], entry['size'],
+                            XetFileData(xet_hash, 'https://fixture.invalid/refresh') if layout.startswith('shared') else None, None)
+                def http_bytes(url, stream, **kwargs):
+                    stream.write(content[bad.name])
+                def xet_bytes(**kwargs):
+                    kwargs['incomplete_path'].write_bytes(content[bad.name])
+                with patch.object(file_download, '_get_metadata_or_catch_error', side_effect=metadata), \
+                        patch.object(file_download, 'http_get', side_effect=http_bytes) as http, \
+                        patch.object(file_download, 'xet_get', side_effect=xet_bytes) as xet, \
+                        (patch.object(file_download, 'are_symlinks_supported', return_value=False)
+                         if layout == 'regular-copy-fallback' else contextlib.nullcontext()):
+                    self.assertEqual(worker._download_model('fish_drama3', str(cache)).resolve(), snapshot.resolve())
+                expected_transfers = {'shared': (0, 1), 'shared-missing': (0, 1), 'regular': (1, 0),
+                                     'regular-good-blob': (0, 0), 'regular-copy-fallback': (1, 0)}
+                self.assertEqual((http.call_count, xet.call_count), expected_transfers[layout])
+                self.assertEqual(bad.read_bytes(), content[bad.name])
+                self.assertEqual(bad.is_symlink(), layout != 'regular-copy-fallback')
+                if layout.startswith('shared'):
+                    self.assertTrue(blob.is_symlink())
+                    self.assertIsNotNone(shared_blob_target(blob, cache))
+                if layout == 'regular-good-blob':
+                    self.assertEqual(blob.stat(), blob_before)
+                for name, before in good.items():
+                    self.assertEqual((snapshot / name).stat(), before)
+                self.assertEqual(other.read_bytes(), b'preserve other variant')
+                self.assertEqual(partial.read_bytes(), b'preserve partial')
+
+    def test_nested_cache_redirects_are_never_accepted_or_mutated(self):
+        import huggingface_hub
+        from huggingface_hub.utils._shared_blobs import publish_blob_to_shared_store
+        for redirected in ['repository', 'snapshots', 'revision', 'blobs', 'locks', 'shared-prefix']:
+            with self.subTest(redirected=redirected), self.fixture() as (cache, snapshot, manifest, content):
+                outside = cache.parent / 'user-folder'; outside.mkdir()
+                protected = outside / 'protected'; protected.write_bytes(b'user data')
+                repository = snapshot.parent.parent
+                if redirected == 'repository':
+                    destination = repository
+                elif redirected == 'snapshots':
+                    destination = snapshot.parent
+                elif redirected == 'revision':
+                    destination = snapshot
+                elif redirected == 'blobs':
+                    destination = repository / 'blobs'; destination.mkdir()
+                elif redirected == 'locks':
+                    destination = cache / '.locks'; destination.mkdir()
+                else:
+                    blob_dir = repository / 'blobs'; blob_dir.mkdir()
+                    blob = blob_dir / manifest['files']['model.safetensors']['digest']
+                    blob.write_bytes(content['model.safetensors'])
+                    self.assertTrue(publish_blob_to_shared_store(blob_path=str(blob), xet_hash='b' * 64,
+                        cache_dir=cache, expected_size=len(content['model.safetensors'])))
+                    destination = cache / 'blobs' / 'bb'
+                moved = outside / 'moved'; destination.replace(moved)
+                destination.symlink_to(moved, target_is_directory=True)
+                bad = snapshot / 'model.safetensors'
+                bad.write_bytes(b'x' * len(content[bad.name]))
+                before = protected.stat(), protected.read_bytes(), bad.stat(), bad.read_bytes()
+                real_download = huggingface_hub.snapshot_download
+                def offline_only(**kwargs):
+                    self.assertTrue(kwargs.get('local_files_only'), 'unsafe download')
+                    return real_download(**kwargs)
+                with patch('huggingface_hub.hf_hub_download', side_effect=AssertionError('unsafe repair')), \
+                        patch('huggingface_hub.snapshot_download', side_effect=offline_only):
+                    with self.assertRaisesRegex(ValueError, 'redirected|outside the managed'):
+                        worker._download_model('fish_drama3', str(cache))
+                self.assertEqual((protected.stat(), protected.read_bytes(), bad.stat(), bad.read_bytes()), before)
+
+    def test_bad_repair_payload_never_replaces_existing_snapshot_copy(self):
+        from huggingface_hub import file_download
+        with self.fixture() as (cache, snapshot, manifest, content):
+            bad = snapshot / 'model.safetensors'
+            entry = manifest['files'][bad.name]
+            bad.write_bytes(b'y' * entry['size'])
+            before = bad.stat(), bad.read_bytes()
+            def metadata(**kwargs):
+                return ('https://fixture.invalid/model', entry['digest'], manifest['revision'], entry['size'], None, None)
+            def corrupt_transport(url, stream, **kwargs):
+                stream.write(b'x' * entry['size'])
+            with patch.object(file_download, '_get_metadata_or_catch_error', side_effect=metadata), \
+                    patch.object(file_download, 'http_get', side_effect=corrupt_transport):
+                with self.assertRaisesRegex(ValueError, 'Repaired model blob failed pinned integrity'):
+                    worker._download_model('fish_drama3', str(cache))
+            self.assertEqual((bad.stat(), bad.read_bytes()), before)
+            self.assertFalse((cache.parent / 'model-qualification').exists())
+
+    def test_configured_cache_root_alias_remains_managed(self):
+        with self.fixture() as (cache, snapshot, manifest, _):
+            alias = cache.parent / 'configured-root'; alias.symlink_to(cache, target_is_directory=True)
+            self.assertTrue(worker._is_managed_snapshot(snapshot, alias, manifest['repo'], manifest['revision']))
+            self.assertTrue(worker._owned_hf_file(snapshot / 'model.safetensors', snapshot, manifest['files']['model.safetensors']))
+            self.assertEqual(worker._download_model('fish_drama3', str(alias)).resolve(), snapshot.resolve())
+
+    def test_same_size_corruption_repairs_only_bad_owned_file_and_preserves_variant(self):
+        import huggingface_hub
+        with self.fixture() as (cache, snapshot, manifest, content):
+            bad = snapshot / 'model.safetensors'
+            blobs = snapshot.parent.parent / 'blobs'; blobs.mkdir()
+            blob = blobs / manifest['files'][bad.name]['digest']
+            bad.replace(blob); bad.symlink_to(blob)
+            worker._download_model('fish_drama3', str(cache))  # establish real stat receipt
+            bad.write_bytes(b'x' * len(content[bad.name]))
+            good = {name: (snapshot / name).stat() for name in content if name != bad.name}
+            other = cache / 'other-variant' / 'weights'; other.parent.mkdir(); other.write_bytes(b'unrelated')
+            partial = cache / 'resume.incomplete'; partial.write_bytes(b'partial')
+            real_download = huggingface_hub.snapshot_download
+            def snapshot_download(**kwargs):
+                self.assertEqual((kwargs['repo_id'], kwargs['revision']), (manifest['repo'], manifest['revision']))
+                if kwargs.get('local_files_only'):
+                    return real_download(**kwargs)
+                if kwargs.get('dry_run'):
+                    return [SimpleNamespace(file_size=len(data), will_download=False) for data in content.values()]
+                self.assertFalse(kwargs.get('force_download', False))
+                return str(snapshot)
+            def repair(**kwargs):
+                self.assertIn('tqdm_class', kwargs)
+                self.assertEqual({key: value for key, value in kwargs.items() if key != 'tqdm_class'}, dict(repo_id=manifest['repo'], filename=bad.name,
+                    revision=manifest['revision'], cache_dir=str(cache), force_download=True))
+                bad.write_bytes(content[bad.name])
+                return str(bad)
+            with patch('huggingface_hub.snapshot_download', side_effect=snapshot_download), \
+                    patch('huggingface_hub.hf_hub_download', side_effect=repair) as transfer:
+                self.assertEqual(worker._download_model('fish_drama3', str(cache)).resolve(), snapshot.resolve())
+                transfer.assert_called_once()
+            self.assertEqual(other.read_bytes(), b'unrelated')
+            self.assertEqual(partial.read_bytes(), b'partial')
+            for name, before in good.items():
+                self.assertEqual((snapshot / name).stat(), before)
+
+    def test_download_returning_different_pin_or_corrupt_bytes_is_not_completed(self):
+        for defect in ['revision', 'bytes']:
+            with self.subTest(defect=defect), self.fixture() as (cache, snapshot, manifest, content):
+                missing = snapshot / 'model.safetensors'; missing.unlink()
+                returned = snapshot
+                if defect == 'revision':
+                    returned = snapshot.with_name('0' * 40)
+                    returned.mkdir()
+                def download(**kwargs):
+                    self.assertEqual(kwargs['revision'], manifest['revision'])
+                    if kwargs.get('local_files_only'):
+                        raise FileNotFoundError('snapshot not complete')
+                    if kwargs.get('dry_run'):
+                        return [SimpleNamespace(file_size=len(data), will_download=True) for data in content.values()]
+                    for name, data in content.items():
+                        (returned / name).write_bytes(data if defect == 'revision' else b'x' * len(data))
+                    return str(returned)
+                with patch('huggingface_hub.snapshot_download', side_effect=download):
+                    with self.assertRaisesRegex(ValueError, 'failed pinned integrity'):
+                        worker._download_model('fish_drama3', str(cache))
+                self.assertFalse((cache.parent / 'model-qualification').exists())
+
+    def test_interruption_retains_partial_and_good_files_then_retries_same_cache(self):
+        import huggingface_hub
+        with self.fixture('fish_drama3_4bit') as (cache, snapshot, manifest, content):
+            missing = snapshot / 'model.safetensors'; missing.unlink()
+            partial = cache / 'model.incomplete'; partial.write_bytes(b'pinned ')
+            good = (snapshot / 'codec.safetensors').stat()
+            real_download = huggingface_hub.snapshot_download
+            attempts = 0
+            def transfer(**kwargs):
+                nonlocal attempts
+                self.assertEqual(kwargs['cache_dir'], str(cache))
+                self.assertEqual(kwargs['repo_id'], manifest['repo'])
+                if kwargs.get('local_files_only'):
+                    return real_download(**kwargs)
+                if kwargs.get('dry_run'):
+                    return [SimpleNamespace(file_size=len(data), will_download=(name == missing.name))
+                            for name, data in content.items()]
+                self.assertFalse(kwargs.get('force_download', False))
+                self.assertEqual(partial.read_bytes(), b'pinned ')
+                attempts += 1
+                if attempts == 1:
+                    raise ConnectionError('interrupted transfer')
+                missing.write_bytes(partial.read_bytes() + b'weights')
+                partial.unlink()
+                return str(snapshot)
+            with patch('huggingface_hub.snapshot_download', side_effect=transfer), \
+                    patch('huggingface_hub.hf_hub_download', side_effect=AssertionError('missing file must resume')):
+                with self.assertRaisesRegex(ConnectionError, 'interrupted'):
+                    worker._download_model('fish_drama3_4bit', str(cache))
+                self.assertFalse((cache.parent / 'model-qualification').exists())
+                self.assertEqual(worker._download_model('fish_drama3_4bit', str(cache)), snapshot)
+            self.assertEqual(attempts, 2)
+            self.assertEqual((snapshot / 'codec.safetensors').stat(), good)
+
+    def test_corrupt_external_symlink_is_refused_without_mutation(self):
+        with self.fixture() as (cache, snapshot, _, content):
+            external = cache.parent / 'user-weights'; external.write_bytes(b'x' * len(content['model.safetensors']))
+            weight = snapshot / 'model.safetensors'; weight.unlink(); weight.symlink_to(external)
+            with patch('huggingface_hub.hf_hub_download') as transfer:
+                with self.assertRaisesRegex(ValueError, 'outside the managed'):
+                    worker._download_model('fish_drama3', str(cache))
+                transfer.assert_not_called()
+            self.assertEqual(external.read_bytes(), b'x' * len(content['model.safetensors']))
+
+    def test_offline_missing_file_is_actionable_without_metadata_or_transfer(self):
+        import huggingface_hub
+        from huggingface_hub import constants
+        with self.fixture() as (cache, snapshot, manifest, content):
+            (snapshot / 'model.safetensors').unlink()
+            real_download = huggingface_hub.snapshot_download
+            def offline_only(**kwargs):
+                self.assertTrue(kwargs.get('local_files_only'), 'Offline model attempted metadata')
+                return real_download(**kwargs)
+            with patch.object(constants, 'HF_HUB_OFFLINE', True), \
+                    patch('huggingface_hub.snapshot_download', side_effect=offline_only), \
+                    patch('huggingface_hub.hf_hub_download', side_effect=AssertionError('Offline transfer')):
+                with self.assertRaisesRegex(FileNotFoundError, 'Connect to download or repair'):
+                    worker._download_model('fish_drama3', str(cache))
+            self.assertFalse((snapshot / 'model.safetensors').exists())
+
+    def test_offline_good_blob_repairs_copy_without_metadata(self):
+        import huggingface_hub
+        from huggingface_hub import constants
+        with self.fixture() as (cache, snapshot, manifest, content):
+            bad = snapshot / 'model.safetensors'
+            blob = snapshot.parent.parent / 'blobs' / manifest['files'][bad.name]['digest']
+            blob.parent.mkdir()
+            blob.write_bytes(content[bad.name])
+            before = blob.stat()
+            bad.write_bytes(b'x' * len(content[bad.name]))
+            real_download = huggingface_hub.snapshot_download
+            def offline_only(**kwargs):
+                self.assertTrue(kwargs.get('local_files_only'), 'Repair attempted metadata')
+                return real_download(**kwargs)
+            with patch.object(constants, 'HF_HUB_OFFLINE', True), \
+                    patch('huggingface_hub.snapshot_download', side_effect=offline_only), \
+                    patch('huggingface_hub.hf_hub_download', side_effect=AssertionError('Offline transfer')):
+                self.assertEqual(worker._download_model('fish_drama3', str(cache)).resolve(), snapshot.resolve())
+            self.assertEqual(bad.read_bytes(), content[bad.name])
+            self.assertEqual(blob.stat(), before)
 
     def test_checks_secondary_cache_before_any_network(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -375,6 +1145,175 @@ class ModelDownloadReuseTest(unittest.TestCase):
                 bar._emit_progress()
             self.assertEqual(report.call_args.kwargs['completed'], 50)
             self.assertEqual(report.call_args.kwargs['total'], 100)
+
+    def test_transfer_bar_does_not_double_count_cached_or_reconstructed_bytes(self):
+        with patch.object(worker, '_progress') as report:
+            cls = worker._download_progress_class(100, 30)
+            with cls(desc='Downloading bytes', initial=70, total=70, file=io.StringIO()) as bar:
+                bar._last_report = 0
+                bar._emit_progress()
+            report.assert_not_called()
+
+
+class ModelAssetVerificationTest(unittest.TestCase):
+    fixture = ModelDownloadReuseTest.fixture
+
+    def test_manifest_selects_exact_variant_and_preserves_legacy_identity(self):
+        original = worker._model_manifest
+        with self.fixture() as (_, _, manifest, _):
+            with patch('pathlib.Path.read_text', return_value=json.dumps(manifest)):
+                self.assertEqual(original('fish_drama3'), manifest)
+                with self.assertRaisesRegex(ValueError, 'manifest'):
+                    original('fish_drama3_4bit')
+            bundle = dict(schemaVersion=2, variants={'fish_drama3': manifest})
+            with patch('pathlib.Path.read_text', return_value=json.dumps(bundle)):
+                self.assertEqual(original('fish_drama3'), manifest)
+            for invalid in [dict(bundle, schemaVersion=3), dict(schemaVersion=2, variants={}),
+                            dict(manifest, revision='0' * 40), dict(manifest, repo='wrong/repo'),
+                            dict(manifest, files={}), [], dict(manifest, files=[]),
+                            dict(manifest, files=dict(manifest['files'], **{'../escape': manifest['files']['config.json']}))]:
+                with self.subTest(invalid=invalid), patch('pathlib.Path.read_text', return_value=json.dumps(invalid)):
+                    with self.assertRaisesRegex(ValueError, 'manifest'):
+                        original('fish_drama3')
+            with patch('pathlib.Path.read_text', side_effect=FileNotFoundError('missing bundle')):
+                with self.assertRaisesRegex(ValueError, 'Update the application'):
+                    original('fish_drama3')
+
+    def test_legacy_stat_receipt_reuses_without_hashing_and_publication_is_atomic(self):
+        with self.fixture() as (cache, snapshot, manifest, _):
+            receipt_root = cache.parent / 'model-qualification'
+            state = {}
+            for name in manifest['files']:
+                st = (snapshot / name).stat()
+                state[name] = [st.st_dev, st.st_ino, st.st_size, st.st_mtime_ns, st.st_ctime_ns]
+            identity = hashlib.sha256(json.dumps([str(snapshot), manifest, state], sort_keys=True).encode()).hexdigest()
+            receipt = receipt_root / (identity + '.json')
+            real_replace = Path.replace
+            publications = []
+            def publish(temporary, destination):
+                self.assertFalse(destination.exists())
+                payload = json.loads(temporary.read_text())
+                self.assertEqual(payload, dict(verifiedIdentity=identity, revision=manifest['revision'], files=state))
+                publications.append(payload)
+                return real_replace(temporary, destination)
+            with patch.object(Path, 'replace', publish):
+                self.assertTrue(worker._verify_scene_model(snapshot, manifest, receipt_root))
+            self.assertEqual(len(publications), 1)
+            self.assertEqual(list(receipt_root.iterdir()), [receipt])
+            with patch('huggingface_hub.utils._verification.compute_file_hash', side_effect=AssertionError('legacy receipt rehashed')):
+                self.assertTrue(worker._verify_scene_model(snapshot, manifest, receipt_root))
+
+    def test_interrupted_receipt_never_publishes_complete_and_retry_recovers(self):
+        with self.fixture() as (cache, snapshot, manifest, _):
+            receipts = cache.parent / 'model-qualification'
+            with patch.object(Path, 'replace', side_effect=OSError('interrupted receipt')):
+                with self.assertRaisesRegex(OSError, 'interrupted receipt'):
+                    worker._verify_scene_model(snapshot, manifest, receipts)
+            self.assertEqual(list(receipts.iterdir()), [])
+            self.assertTrue(worker._verify_scene_model(snapshot, manifest, receipts))
+
+    def test_change_during_hash_or_receipt_publication_cannot_be_accepted(self):
+        from huggingface_hub.utils._verification import compute_file_hash
+        for phase in ['hash', 'publish']:
+            with self.subTest(phase=phase), self.fixture() as (cache, snapshot, manifest, content):
+                receipts = cache.parent / 'model-qualification'
+                real_replace = Path.replace
+                def hash_and_change(path, algorithm):
+                    digest = compute_file_hash(path, algorithm)
+                    if path.name == 'model.safetensors':
+                        path.write_bytes(b'x' * len(content[path.name]))
+                    return digest
+                def publish_and_change(path, destination):
+                    result = real_replace(path, destination)
+                    weight = snapshot / 'model.safetensors'
+                    weight.write_bytes(b'x' * len(content[weight.name]))
+                    return result
+                target = ('huggingface_hub.utils._verification.compute_file_hash'
+                          if phase == 'hash' else 'pathlib.Path.replace')
+                effect = hash_and_change if phase == 'hash' else publish_and_change
+                invalid = []
+                with patch(target, side_effect=effect, autospec=(phase == 'publish')):
+                    self.assertFalse(worker._verify_scene_model(snapshot, manifest, receipts, invalid_files=invalid))
+                self.assertIn('model.safetensors', invalid, 'Changing bytes must not count toward cache selection')
+                self.assertFalse(worker._verify_scene_model(snapshot, manifest, receipts))
+
+    def test_verified_quantized_load_is_direct_and_rechecks_resident_assets(self):
+        worker._unload()
+        with self.fixture('fish_drama3_8bit') as (cache, snapshot, manifest, content):
+            with patch.object(worker, '_physical_memory_bytes', return_value=137438953472), \
+                    patch('mlx_audio.tts.load', return_value=SimpleNamespace()) as load, \
+                    patch('mlx_audio.lm.convert.quantize_model', side_effect=AssertionError('prequantized variant must load directly')), \
+                    patch.object(worker, '_timing'):
+                result = worker._load('fish_drama3_8bit', str(snapshot), str(cache), require_verified_model_assets=True)
+                self.assertTrue(result['modelAssetsVerified'])
+                self.assertEqual(result['verifiedModelIdentity'], manifest['repo'] + '@' + manifest['revision'])
+                self.assertFalse(result['nativeScenesQualified'])
+                load.assert_called_once_with(str(snapshot.resolve()), lazy=False)
+                self.assertEqual(worker._load('fish_drama3_8bit', str(snapshot), str(cache), require_verified_model_assets=True), result)
+                bad = snapshot / 'codec.safetensors'; bad.write_bytes(b'x' * len(content[bad.name]))
+                with self.assertRaisesRegex(ValueError, 'failed pinned integrity'):
+                    worker._load('fish_drama3_8bit', str(snapshot), str(cache), require_verified_model_assets=True)
+                load.assert_called_once()
+                self.assertEqual(bad.read_bytes(), b'x' * len(content[bad.name]))
+        worker._unload()
+
+    def test_unverified_explicit_path_refused_before_loading_and_never_mutated(self):
+        worker._unload()
+        with self.fixture() as (cache, snapshot, _, content):
+            bad = snapshot / 'model.safetensors'; bad.write_bytes(b'x' * len(content[bad.name]))
+            with patch.object(worker, '_physical_memory_bytes', return_value=137438953472), \
+                    patch('mlx_audio.tts.load') as load:
+                with self.assertRaisesRegex(ValueError, 'no weights were loaded'):
+                    worker._load('fish_drama3', str(snapshot), str(cache), require_verified_model_assets=True)
+                load.assert_not_called()
+            self.assertEqual(bad.read_bytes(), b'x' * len(content[bad.name]))
+
+    def test_require_verified_request_flag_is_strict_boolean(self):
+        replies = []
+        requests = [dict(id=str(i), command='load', modelId='fish_drama3', requireVerifiedModelAssets=value)
+                    for i, value in enumerate(['false', 1, None, [], {}])]
+        with patch.object(sys, 'stdin', io.StringIO(''.join(json.dumps(r) + '\n' for r in requests))), \
+                patch.object(worker, '_reply', side_effect=lambda request_id, **payload: replies.append(payload)), \
+                patch.object(worker, '_unload'), contextlib.redirect_stderr(io.StringIO()):
+            self.assertEqual(worker.main(), 0)
+        self.assertEqual(len(replies), len(requests))
+        self.assertTrue(all(not reply['ok'] and 'must be a boolean' in reply['error'] for reply in replies))
+
+    def test_model_cache_directories_request_is_strict_and_forwarded(self):
+        invalid = [None, False, True, 'cache/path', 1, {}, [None], [True], [''], ['   '], [1]]
+        requests = [dict(id=str(i), command='load', modelId='fish_drama3', modelCacheDirectories=value)
+                    for i, value in enumerate(invalid)]
+        requests += [dict(id='valid', command='load', modelId='fish_drama3', modelPath='', privateCachePath='private',
+                          requireVerifiedModelAssets=True, modelCacheDirectories=['legacy/models', 'current/hub']),
+                     dict(id='legacy', command='load', modelId='fish_drama3')]
+        replies = []
+        with patch.object(sys, 'stdin', io.StringIO(''.join(json.dumps(r) + '\n' for r in requests))), \
+                patch.object(worker, '_load', return_value=dict(loaded=True)) as load, \
+                patch.object(worker, '_reply', side_effect=lambda request_id, **payload: replies.append(payload)), \
+                patch.object(worker, '_unload'), contextlib.redirect_stderr(io.StringIO()):
+            self.assertEqual(worker.main(), 0)
+        self.assertEqual(len(replies), len(requests))
+        self.assertTrue(all(not reply['ok'] and 'list of nonempty path strings' in reply['error'] for reply in replies[:-2]))
+        self.assertTrue(all(reply['ok'] for reply in replies[-2:]))
+        self.assertEqual(load.call_count, 2)
+        self.assertEqual(load.call_args_list[0].args, ('fish_drama3', '', 'private', 0, True, ['legacy/models', 'current/hub'], None))
+        self.assertEqual(load.call_args_list[1].args, ('fish_drama3', '', '', 0, False, [], None))
+
+    def test_load_forwards_extra_caches_and_validates_before_acquisition(self):
+        worker._unload()
+        with self.fixture('fish_drama3_4bit') as (cache, snapshot, _, _):
+            with patch.object(worker, '_download_model', return_value=snapshot) as download, \
+                    patch.object(worker, '_physical_memory_bytes', return_value=137438953472), \
+                    patch('mlx_audio.tts.load', return_value=SimpleNamespace()), patch.object(worker, '_timing'):
+                result = worker._load('fish_drama3_4bit', '', str(cache), require_verified_model_assets=True,
+                                     model_cache_directories=['legacy/models', 'current/hub'])
+                self.assertTrue(result['modelAssetsVerified'])
+                download.assert_called_once_with('fish_drama3_4bit', str(cache), ['legacy/models', 'current/hub'])
+                for value in ['wrong', False, ['']]:
+                    with self.assertRaisesRegex(ValueError, 'list of nonempty path strings'):
+                        worker._load('fish_drama3_4bit', '', str(cache), model_cache_directories=value)
+                download.assert_called_once()
+        worker._unload()
 
 
 if __name__ == "__main__":

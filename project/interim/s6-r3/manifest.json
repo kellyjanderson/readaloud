@@ -1,0 +1,15 @@
+{
+  "schema_version": 1,
+  "package_revision": "S6 R3",
+  "publication": "https://github.com/kellyjanderson/readaloud/issues/137#issuecomment-6710591303",
+  "implementation_baseline": "41fa094",
+  "documents": [
+    {
+      "path": "publication-staging.md",
+      "revision": "S6 R3",
+      "source": "https://github.com/kellyjanderson/readaloud/blob/6e2c48af30ad7818c0e10307271b41e5606e92bf/project/interim/s6-r3/publication-staging.md",
+      "source_section_sha256": "b3b67b1778ef24a7199a50321942a1cc88e1b72ad77a1def96eeafe9797a6125",
+      "sha256": "b3b67b1778ef24a7199a50321942a1cc88e1b72ad77a1def96eeafe9797a6125"
+    }
+  ]
+}

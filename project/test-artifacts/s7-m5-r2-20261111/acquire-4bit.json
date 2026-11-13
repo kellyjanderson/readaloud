@@ -1,0 +1,7 @@
+{
+  "passed": true,
+  "model": "fish_drama3_4bit",
+  "snapshot": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/Library/Application Support/com.kellyjanderson.readAloud.mlxPlaybackTest/read_aloud/mlx-tts/models/models--mlx-community--fish-audio-drama-3-4bit/snapshots/2b0c8028998533972e77359cce56b8bf1c5d6d4a",
+  "elapsedSeconds": 450.0729169845581,
+  "files": 16
+}

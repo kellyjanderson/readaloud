@@ -1,0 +1,13 @@
+{
+  "observedAt": "2026-11-11T14:40:27-08:00",
+  "source": "bcbdf5ef4d4b3d9f83d347dfee9abb53a6fcbd9b",
+  "nativeChecksBlocked": true,
+  "onlineDisplays": 1,
+  "coreGraphicsStatus": 0,
+  "mainDisplay": 1,
+  "displayAsleep": true,
+  "screenLocked": true,
+  "method": "CoreGraphics online-display/session read-only query",
+  "failedControl": "s7-queue-packets-v29-20261111",
+  "scope": "Capture setup failed before Play; no product audio result. Unlock required for dependent native checks; source checks continue."
+}

@@ -1,0 +1,6 @@
+{
+  "blob": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/Library/Application Support/com.kellyjanderson.readAloud.mlxPlaybackTest/read_aloud/mlx-tts/models/models--mlx-community--fish-audio-drama-3-4bit/blobs/64b8fd24dd8cb2aca81f7688425b0cb03b9ff0cd",
+  "hold": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/Library/Application Support/com.kellyjanderson.readAloud.mlxPlaybackTest/read_aloud/mlx-tts/models/models--mlx-community--fish-audio-drama-3-4bit/blobs/64b8fd24dd8cb2aca81f7688425b0cb03b9ff0cd.s7-offline-hold",
+  "reason": "Temporarily unavailable isolated QA config; all weights preserved",
+  "restored": true
+}

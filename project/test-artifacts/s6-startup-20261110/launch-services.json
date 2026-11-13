@@ -1,0 +1,887 @@
+{
+  "schema": "readaloud-s6-startup-handoff-v1",
+  "accepted": false,
+  "sourceIssue": "https://github.com/kellyjanderson/readaloud/issues/137",
+  "retainedPriorEvidence": "https://github.com/kellyjanderson/readaloud/issues/137#issuecomment-6712009207",
+  "limitMs": 2000,
+  "host": {
+    "macOS": "27.0.1",
+    "architecture": "arm64"
+  },
+  "measurement": "Elapsed from immediately before LaunchServices open to callback receipt of the first signal-bearing app-only packet, matched to expected saved waveform. This upper bound includes opening and has no Play gate. These runs exercise saved-scene playback, not cold neural synthesis or physical speaker latency.",
+  "cases": [
+    {
+      "case": "baseline",
+      "revision": "37a8ef0492a7102533a89ce1afd0f64f5e649bfa",
+      "notes": "Fresh profile; the retained full R5 bundle was cloned and re-signed for a new QA identity.",
+      "directory": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.S6LaunchBaseline1110162119/Data/native",
+      "fixtureSha256": "c14f7adde57961774e5906e521105d8aab746cab991cbb3b9e790c79a6f5c7ab",
+      "executableSha256": "2c676780735f0f8000ec79c0edfa1d245ce73299d5f3be638bb9cf9ab9598bed",
+      "dartFrameworkSha256": "c255f46a16a032414394c31f308872f3b64755c09608f31aba9f533715828856",
+      "runner": {
+        "passed": false,
+        "launchMethod": "LaunchServices open -W -n",
+        "launchUtc": "2026-11-11T00:21:21.603037Z",
+        "launchMonotonicRawNanos": 2258406310291125,
+        "captureIntroducedPlayGate": false,
+        "normalQuit": true,
+        "appExitVerified": true,
+        "forcedCleanup": false,
+        "ownedPidsAfterNormalQuit": [],
+        "remainingOwnedPids": [],
+        "captureExitStatus": 0,
+        "launcherExitStatus": 0,
+        "errors": [
+          "Native playback failed: Bad state: UI heartbeat delayed 601 ms"
+        ]
+      },
+      "native": {
+        "passed": false,
+        "controlledCaptureGate": false,
+        "importCompleteMs": 762,
+        "playRequestedMs": 762,
+        "launchToNativePositionMs": 3053.425,
+        "dartEntryToNativePositionMs": 1144.6,
+        "expectedSourceEndWord": 42,
+        "observedSourceEndWord": 42,
+        "forbiddenModelCallCount": 0,
+        "cancelledPlayStayedStopped": true,
+        "restartAfterCancellation": true,
+        "resourceShutdownComplete": true,
+        "maxUiHeartbeatDelayMs": 601,
+        "error": "Bad state: UI heartbeat delayed 601 ms"
+      },
+      "launchToDartEntryMs": 1908.825,
+      "captureSha256": "a83deec36ff5c7bbc730c8992b77fcea214a26ffc3a3f69c388508c2e67954dd",
+      "matchedWaveform": true,
+      "minimumCorrelation": 0.9997682089268335,
+      "emitted": {
+        "passed": false,
+        "errors": [
+          "Native functional/cleanup check failed",
+          "Opening to captured speech exceeds two seconds"
+        ],
+        "launchToSpeechReceiptUpperBoundMs": 3296.125416,
+        "firstSignalExpectedSpeechAlignmentMs": 0.07291666666664476
+      }
+    },
+    {
+      "case": "isolation",
+      "revision": "37a8ef0492a7102533a89ce1afd0f64f5e649bfa",
+      "notes": "Fresh profile; both Python runtimes excluded solely to isolate launch cost. Incomplete and ineligible for acceptance.",
+      "directory": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.S6LaunchIsolation1110162309/Data/native",
+      "fixtureSha256": "c14f7adde57961774e5906e521105d8aab746cab991cbb3b9e790c79a6f5c7ab",
+      "executableSha256": "4847d4eae288122d8a36412c07abce16e8fe355a708bdf9076e8bdad2554543f",
+      "dartFrameworkSha256": "c255f46a16a032414394c31f308872f3b64755c09608f31aba9f533715828856",
+      "runner": {
+        "passed": false,
+        "launchMethod": "LaunchServices open -W -n",
+        "launchUtc": "2026-11-11T00:23:09.624524Z",
+        "launchMonotonicRawNanos": 2258514331782958,
+        "captureIntroducedPlayGate": false,
+        "normalQuit": true,
+        "appExitVerified": true,
+        "forcedCleanup": false,
+        "ownedPidsAfterNormalQuit": [],
+        "remainingOwnedPids": [],
+        "captureExitStatus": 0,
+        "launcherExitStatus": 0,
+        "errors": [
+          "Native playback failed: Bad state: UI heartbeat delayed 537 ms"
+        ]
+      },
+      "native": {
+        "passed": false,
+        "controlledCaptureGate": false,
+        "importCompleteMs": 616,
+        "playRequestedMs": 616,
+        "launchToNativePositionMs": 1501.391,
+        "dartEntryToNativePositionMs": 747.113,
+        "expectedSourceEndWord": 42,
+        "observedSourceEndWord": 42,
+        "forbiddenModelCallCount": 0,
+        "cancelledPlayStayedStopped": true,
+        "restartAfterCancellation": true,
+        "resourceShutdownComplete": true,
+        "maxUiHeartbeatDelayMs": 537,
+        "error": "Bad state: UI heartbeat delayed 537 ms"
+      },
+      "launchToDartEntryMs": 754.278,
+      "captureSha256": "8683b13a19484756e187c50055243568d8b3fb67085ce54c34582093f7c65b55",
+      "matchedWaveform": true,
+      "minimumCorrelation": 0.9997104743258374,
+      "emitted": {
+        "passed": false,
+        "errors": [
+          "Native functional/cleanup check failed"
+        ],
+        "launchToSpeechReceiptUpperBoundMs": 1713.216792,
+        "firstSignalExpectedSpeechAlignmentMs": 0.07291666666664476
+      }
+    },
+    {
+      "case": "nested",
+      "revision": "37a8ef0492a7102533a89ce1afd0f64f5e649bfa",
+      "notes": "Fresh profile; unchanged R5 runtime bytes moved into signed diagnostic helper apps. The production resolver was not changed; ineligible for acceptance. Build activity overlapped this diagnostic.",
+      "directory": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.S6LaunchNestedR51110162644/Data/native",
+      "fixtureSha256": "c14f7adde57961774e5906e521105d8aab746cab991cbb3b9e790c79a6f5c7ab",
+      "executableSha256": "1384bd07b3bb44207f8d16792253444d2a7d6af9e228a23a3dc51fce50b7bbeb",
+      "dartFrameworkSha256": "c255f46a16a032414394c31f308872f3b64755c09608f31aba9f533715828856",
+      "runner": {
+        "passed": false,
+        "launchMethod": "LaunchServices open -W -n",
+        "launchUtc": "2026-11-11T00:26:47.019610Z",
+        "launchMonotonicRawNanos": 2258731726897500,
+        "captureIntroducedPlayGate": false,
+        "normalQuit": true,
+        "appExitVerified": true,
+        "forcedCleanup": false,
+        "ownedPidsAfterNormalQuit": [],
+        "remainingOwnedPids": [],
+        "captureExitStatus": 0,
+        "launcherExitStatus": 0,
+        "errors": [
+          "Native playback failed: Bad state: UI heartbeat delayed 435 ms"
+        ]
+      },
+      "native": {
+        "passed": false,
+        "controlledCaptureGate": false,
+        "importCompleteMs": 553,
+        "playRequestedMs": 553,
+        "launchToNativePositionMs": 2435.998,
+        "dartEntryToNativePositionMs": 806.963,
+        "expectedSourceEndWord": 42,
+        "observedSourceEndWord": 42,
+        "forbiddenModelCallCount": 0,
+        "cancelledPlayStayedStopped": true,
+        "restartAfterCancellation": true,
+        "resourceShutdownComplete": true,
+        "maxUiHeartbeatDelayMs": 435,
+        "error": "Bad state: UI heartbeat delayed 435 ms"
+      },
+      "launchToDartEntryMs": 1629.035,
+      "captureSha256": "921a0b07c482a9b8581cbdb1096528d019689ff10c515c04c9e869c9d6643968",
+      "matchedWaveform": true,
+      "minimumCorrelation": 0.9998815546512518,
+      "emitted": {
+        "passed": false,
+        "errors": [
+          "Native functional/cleanup check failed",
+          "Opening to captured speech exceeds two seconds"
+        ],
+        "launchToSpeechReceiptUpperBoundMs": 2719.958583,
+        "firstSignalExpectedSpeechAlignmentMs": 0.07291666666675578
+      }
+    },
+    {
+      "case": "indexed",
+      "revision": "388565a933962fb6a9b90d4e724d9ab55fc4e001",
+      "notes": "Fresh profile; arm64 build of the combined S6 target with both R5 runtimes validated at their production paths.",
+      "directory": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.S6LaunchIndexed1110162810/Data/native",
+      "fixtureSha256": "c14f7adde57961774e5906e521105d8aab746cab991cbb3b9e790c79a6f5c7ab",
+      "executableSha256": "0102c61e22d3ad1bcee5a55802e19b1ced2908fe2278702dc484cf05c263eb58",
+      "dartFrameworkSha256": "a0ae7852838eed8cdcffce58cf257af4158c13772259f3010a6d9086643a53e1",
+      "runner": {
+        "passed": false,
+        "launchMethod": "LaunchServices open -W -n",
+        "launchUtc": "2026-11-11T00:28:21.697385Z",
+        "launchMonotonicRawNanos": 2258826401849791,
+        "captureIntroducedPlayGate": false,
+        "normalQuit": true,
+        "appExitVerified": true,
+        "forcedCleanup": false,
+        "ownedPidsAfterNormalQuit": [],
+        "remainingOwnedPids": [],
+        "captureExitStatus": 0,
+        "launcherExitStatus": 0,
+        "errors": [
+          "Native playback failed: Bad state: UI heartbeat delayed 711 ms"
+        ]
+      },
+      "native": {
+        "passed": false,
+        "controlledCaptureGate": false,
+        "importCompleteMs": 863,
+        "playRequestedMs": 863,
+        "launchToNativePositionMs": 2770.686,
+        "dartEntryToNativePositionMs": 1109.663,
+        "expectedSourceEndWord": 42,
+        "observedSourceEndWord": 42,
+        "forbiddenModelCallCount": 0,
+        "cancelledPlayStayedStopped": true,
+        "restartAfterCancellation": true,
+        "resourceShutdownComplete": true,
+        "maxUiHeartbeatDelayMs": 711,
+        "error": "Bad state: UI heartbeat delayed 711 ms"
+      },
+      "launchToDartEntryMs": 1661.023,
+      "captureSha256": "d104f0a276bbe51d8cf41b5ca39a3185b1c13eeeaa25c65c70e81bc232aeba26",
+      "matchedWaveform": true,
+      "minimumCorrelation": 0.999846855354069,
+      "emitted": {
+        "passed": false,
+        "errors": [
+          "Native functional/cleanup check failed",
+          "Opening to captured speech exceeds two seconds"
+        ],
+        "launchToSpeechReceiptUpperBoundMs": 2995.421334,
+        "firstSignalExpectedSpeechAlignmentMs": 0.08333333333343518
+      },
+      "validatedRuntimeResources": {
+        "mlx": {
+          "signed_tree_digest": "1aa333dd9c99219e488d160e46efc42ee7fa20c74983c0982bed2e79f1abf7c3",
+          "python": "Python 3.12.13",
+          "packages": [
+            {
+              "name": "Jinja2",
+              "version": "3.1.6"
+            },
+            {
+              "name": "MarkupSafe",
+              "version": "3.0.4"
+            },
+            {
+              "name": "PyYAML",
+              "version": "6.0.3"
+            },
+            {
+              "name": "Pygments",
+              "version": "2.21.0"
+            },
+            {
+              "name": "annotated-doc",
+              "version": "0.0.5"
+            },
+            {
+              "name": "annotated-types",
+              "version": "0.8.0"
+            },
+            {
+              "name": "anyio",
+              "version": "4.16.0"
+            },
+            {
+              "name": "attrs",
+              "version": "26.1.0"
+            },
+            {
+              "name": "certifi",
+              "version": "2026.10.23"
+            },
+            {
+              "name": "cffi",
+              "version": "2.1.1"
+            },
+            {
+              "name": "charset-normalizer",
+              "version": "3.5.2"
+            },
+            {
+              "name": "click",
+              "version": "8.5.0"
+            },
+            {
+              "name": "filelock",
+              "version": "4.2.6"
+            },
+            {
+              "name": "fsspec",
+              "version": "2026.9.0"
+            },
+            {
+              "name": "h11",
+              "version": "0.16.0"
+            },
+            {
+              "name": "hf-xet",
+              "version": "1.8.0"
+            },
+            {
+              "name": "httpcore2",
+              "version": "2.16.0"
+            },
+            {
+              "name": "httpx2",
+              "version": "2.16.0"
+            },
+            {
+              "name": "huggingface_hub",
+              "version": "2.4.0"
+            },
+            {
+              "name": "idna",
+              "version": "3.20"
+            },
+            {
+              "name": "jsonschema",
+              "version": "4.26.0"
+            },
+            {
+              "name": "jsonschema-specifications",
+              "version": "2025.9.1"
+            },
+            {
+              "name": "markdown-it-py",
+              "version": "4.2.0"
+            },
+            {
+              "name": "mdurl",
+              "version": "0.1.2"
+            },
+            {
+              "name": "miniaudio",
+              "version": "1.71"
+            },
+            {
+              "name": "mistral_common",
+              "version": "1.13.0"
+            },
+            {
+              "name": "mlx",
+              "version": "0.32.4"
+            },
+            {
+              "name": "mlx-audio",
+              "version": "0.6.3"
+            },
+            {
+              "name": "mlx-metal",
+              "version": "0.32.4"
+            },
+            {
+              "name": "numpy",
+              "version": "2.3.5"
+            },
+            {
+              "name": "packaging",
+              "version": "26.3"
+            },
+            {
+              "name": "pillow",
+              "version": "13.0.0"
+            },
+            {
+              "name": "pip",
+              "version": "26.2.1"
+            },
+            {
+              "name": "pycountry",
+              "version": "26.2.16"
+            },
+            {
+              "name": "pycparser",
+              "version": "3.12"
+            },
+            {
+              "name": "pydantic",
+              "version": "2.14.2"
+            },
+            {
+              "name": "pydantic-extra-types",
+              "version": "2.11.1"
+            },
+            {
+              "name": "pydantic_core",
+              "version": "2.50.2"
+            },
+            {
+              "name": "referencing",
+              "version": "0.37.0"
+            },
+            {
+              "name": "regex",
+              "version": "2026.9.29"
+            },
+            {
+              "name": "requests",
+              "version": "2.34.2"
+            },
+            {
+              "name": "rich",
+              "version": "15.0.0"
+            },
+            {
+              "name": "rpds-py",
+              "version": "2026.9.1"
+            },
+            {
+              "name": "safetensors",
+              "version": "0.8.0"
+            },
+            {
+              "name": "scipy",
+              "version": "1.18.1"
+            },
+            {
+              "name": "sentencepiece",
+              "version": "0.2.2"
+            },
+            {
+              "name": "shellingham",
+              "version": "1.5.4"
+            },
+            {
+              "name": "sounddevice",
+              "version": "0.5.6"
+            },
+            {
+              "name": "soundfile",
+              "version": "0.14.0"
+            },
+            {
+              "name": "soxr",
+              "version": "1.1.0"
+            },
+            {
+              "name": "tiktoken",
+              "version": "0.14.0"
+            },
+            {
+              "name": "tokenizers",
+              "version": "0.23.3"
+            },
+            {
+              "name": "tqdm",
+              "version": "4.70.1"
+            },
+            {
+              "name": "transformers",
+              "version": "5.22.1"
+            },
+            {
+              "name": "truststore",
+              "version": "0.10.5"
+            },
+            {
+              "name": "typer",
+              "version": "0.27.3"
+            },
+            {
+              "name": "typing-inspection",
+              "version": "0.4.4"
+            },
+            {
+              "name": "typing_extensions",
+              "version": "4.16.0"
+            },
+            {
+              "name": "urllib3",
+              "version": "2.8.0"
+            }
+          ],
+          "archive": {
+            "size": 59725572,
+            "sha256": "25f5773ace950ba3b2a9207de98881c765132787f449576f944f4c2c4d67b87b"
+          }
+        },
+        "modernbooknlp": {
+          "signed_tree_digest": "a5b4ec252392ac48627f88a2735912843e0d2f1c9c66b75e58f40fc2ebba097d",
+          "python": "Python 3.11.15",
+          "packages": [
+            {
+              "name": "Jinja2",
+              "version": "3.1.6"
+            },
+            {
+              "name": "MarkupSafe",
+              "version": "3.0.4"
+            },
+            {
+              "name": "ModernBookNLP",
+              "version": "1.0.0"
+            },
+            {
+              "name": "PyYAML",
+              "version": "6.0.3"
+            },
+            {
+              "name": "Pygments",
+              "version": "2.21.0"
+            },
+            {
+              "name": "aiohappyeyeballs",
+              "version": "2.7.1"
+            },
+            {
+              "name": "aiohttp",
+              "version": "3.14.5"
+            },
+            {
+              "name": "aiosignal",
+              "version": "1.4.0"
+            },
+            {
+              "name": "annotated-doc",
+              "version": "0.0.5"
+            },
+            {
+              "name": "annotated-types",
+              "version": "0.8.0"
+            },
+            {
+              "name": "anyio",
+              "version": "4.16.0"
+            },
+            {
+              "name": "attrs",
+              "version": "26.1.0"
+            },
+            {
+              "name": "blis",
+              "version": "1.3.4"
+            },
+            {
+              "name": "catalogue",
+              "version": "2.0.10"
+            },
+            {
+              "name": "certifi",
+              "version": "2026.10.23"
+            },
+            {
+              "name": "charset-normalizer",
+              "version": "3.5.2"
+            },
+            {
+              "name": "click",
+              "version": "8.5.0"
+            },
+            {
+              "name": "cloudpathlib",
+              "version": "0.26.0"
+            },
+            {
+              "name": "cloudpickle",
+              "version": "3.1.2"
+            },
+            {
+              "name": "confection",
+              "version": "1.3.4"
+            },
+            {
+              "name": "cymem",
+              "version": "2.0.16"
+            },
+            {
+              "name": "defusedxml",
+              "version": "0.7.1"
+            },
+            {
+              "name": "en_core_web_sm",
+              "version": "3.8.0"
+            },
+            {
+              "name": "filelock",
+              "version": "4.2.9"
+            },
+            {
+              "name": "frozenlist",
+              "version": "1.8.0"
+            },
+            {
+              "name": "fsspec",
+              "version": "2026.9.0"
+            },
+            {
+              "name": "h11",
+              "version": "0.16.0"
+            },
+            {
+              "name": "hf-xet",
+              "version": "1.8.0"
+            },
+            {
+              "name": "httpcore",
+              "version": "1.0.9"
+            },
+            {
+              "name": "httpx",
+              "version": "0.28.1"
+            },
+            {
+              "name": "huggingface_hub",
+              "version": "0.36.2"
+            },
+            {
+              "name": "idna",
+              "version": "3.20"
+            },
+            {
+              "name": "joblib",
+              "version": "1.6.0"
+            },
+            {
+              "name": "markdown-it-py",
+              "version": "4.2.0"
+            },
+            {
+              "name": "mdurl",
+              "version": "0.1.2"
+            },
+            {
+              "name": "mpmath",
+              "version": "1.3.0"
+            },
+            {
+              "name": "multidict",
+              "version": "7.2.1"
+            },
+            {
+              "name": "murmurhash",
+              "version": "1.0.16"
+            },
+            {
+              "name": "networkx",
+              "version": "3.6.1"
+            },
+            {
+              "name": "nltk",
+              "version": "3.10.4"
+            },
+            {
+              "name": "numpy",
+              "version": "2.4.6"
+            },
+            {
+              "name": "packaging",
+              "version": "26.3"
+            },
+            {
+              "name": "pandas",
+              "version": "3.1.1"
+            },
+            {
+              "name": "pip",
+              "version": "24.0"
+            },
+            {
+              "name": "pip",
+              "version": "26.2.1"
+            },
+            {
+              "name": "preshed",
+              "version": "3.0.15"
+            },
+            {
+              "name": "propcache",
+              "version": "0.5.4"
+            },
+            {
+              "name": "psutil",
+              "version": "7.2.2"
+            },
+            {
+              "name": "pydantic",
+              "version": "2.14.3"
+            },
+            {
+              "name": "pydantic_core",
+              "version": "2.50.4"
+            },
+            {
+              "name": "pyparsing",
+              "version": "3.3.3"
+            },
+            {
+              "name": "python-dateutil",
+              "version": "4.0.0"
+            },
+            {
+              "name": "regex",
+              "version": "2026.9.29"
+            },
+            {
+              "name": "requests",
+              "version": "2.34.2"
+            },
+            {
+              "name": "rich",
+              "version": "15.0.0"
+            },
+            {
+              "name": "safetensors",
+              "version": "0.8.0"
+            },
+            {
+              "name": "scipy",
+              "version": "1.17.1"
+            },
+            {
+              "name": "setuptools",
+              "version": "80.10.2"
+            },
+            {
+              "name": "setuptools",
+              "version": "82.0.1"
+            },
+            {
+              "name": "shellingham",
+              "version": "1.5.4"
+            },
+            {
+              "name": "smart_open",
+              "version": "9.0.2"
+            },
+            {
+              "name": "spacy",
+              "version": "3.8.14"
+            },
+            {
+              "name": "spacy-legacy",
+              "version": "3.0.12"
+            },
+            {
+              "name": "spacy-loggers",
+              "version": "1.0.5"
+            },
+            {
+              "name": "srsly",
+              "version": "2.5.6"
+            },
+            {
+              "name": "sympy",
+              "version": "1.13.1"
+            },
+            {
+              "name": "thinc",
+              "version": "8.3.14"
+            },
+            {
+              "name": "tokenizers",
+              "version": "0.22.2"
+            },
+            {
+              "name": "torch",
+              "version": "2.6.0"
+            },
+            {
+              "name": "torch-geometric",
+              "version": "2.8.0"
+            },
+            {
+              "name": "tqdm",
+              "version": "4.70.1"
+            },
+            {
+              "name": "transformers",
+              "version": "4.57.6"
+            },
+            {
+              "name": "typer",
+              "version": "0.27.3"
+            },
+            {
+              "name": "typing-inspection",
+              "version": "0.4.5"
+            },
+            {
+              "name": "typing_extensions",
+              "version": "4.16.0"
+            },
+            {
+              "name": "tzdata",
+              "version": "2026.6"
+            },
+            {
+              "name": "urllib3",
+              "version": "2.8.0"
+            },
+            {
+              "name": "wasabi",
+              "version": "1.1.3"
+            },
+            {
+              "name": "weasel",
+              "version": "1.0.1"
+            },
+            {
+              "name": "wrapt",
+              "version": "2.5.2"
+            },
+            {
+              "name": "xxhash",
+              "version": "4.0.2"
+            },
+            {
+              "name": "yarl",
+              "version": "1.25.1"
+            }
+          ],
+          "archive": {
+            "size": 97536355,
+            "sha256": "353722f1c4685ca3d53cfb706a83e65d3d5ba74824916d726bdcc4cef28cd417"
+          }
+        }
+      }
+    },
+    {
+      "case": "profile",
+      "revision": "388565a933962fb6a9b90d4e724d9ab55fc4e001",
+      "notes": "Repeat opening of the indexed bundle with a previously used QA identity and intrusive one-second sample after Dart entry. Ineligible as fresh timing evidence.",
+      "directory": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.S6LaunchIndexed1110162810/Data/native-profile-162916",
+      "fixtureSha256": "c14f7adde57961774e5906e521105d8aab746cab991cbb3b9e790c79a6f5c7ab",
+      "executableSha256": "0102c61e22d3ad1bcee5a55802e19b1ced2908fe2278702dc484cf05c263eb58",
+      "dartFrameworkSha256": "a0ae7852838eed8cdcffce58cf257af4158c13772259f3010a6d9086643a53e1",
+      "runner": {
+        "passed": false,
+        "launchMethod": "LaunchServices open -W -n",
+        "launchUtc": "2026-11-11T00:29:16.735131Z",
+        "launchMonotonicRawNanos": 2258881439530125,
+        "captureIntroducedPlayGate": false,
+        "normalQuit": true,
+        "appExitVerified": true,
+        "forcedCleanup": false,
+        "ownedPidsAfterNormalQuit": [],
+        "remainingOwnedPids": [],
+        "captureExitStatus": 0,
+        "launcherExitStatus": 0,
+        "errors": [
+          "Native playback failed: Bad state: UI heartbeat delayed 835 ms"
+        ]
+      },
+      "native": {
+        "passed": false,
+        "controlledCaptureGate": false,
+        "importCompleteMs": 1183,
+        "playRequestedMs": 1183,
+        "launchToNativePositionMs": 1748.354,
+        "dartEntryToNativePositionMs": 1486.845,
+        "expectedSourceEndWord": 42,
+        "observedSourceEndWord": 42,
+        "forbiddenModelCallCount": 0,
+        "cancelledPlayStayedStopped": true,
+        "restartAfterCancellation": true,
+        "resourceShutdownComplete": true,
+        "maxUiHeartbeatDelayMs": 835,
+        "error": "Bad state: UI heartbeat delayed 835 ms"
+      },
+      "launchToDartEntryMs": 261.509,
+      "captureSha256": "c0761cf257813c09ed58ef45f062a28f023f8f439e35e24ba598e81d3fff82ed",
+      "matchedWaveform": true,
+      "minimumCorrelation": 0.9998237863933817,
+      "emitted": {
+        "passed": false,
+        "errors": [
+          "Native functional/cleanup check failed",
+          "Opening to captured speech exceeds two seconds"
+        ],
+        "launchToSpeechReceiptUpperBoundMs": 2008.058,
+        "firstSignalExpectedSpeechAlignmentMs": 0.0729166666668668
+      }
+    }
+  ],
+  "interpretation": [
+    "Both the prior R5 checkpoint and fresh full-bundle reruns exceed the opening limit. The indexed build still fails timing and UI responsiveness; a single non-randomized comparison does not quantify the code change benefit.",
+    "Removing the runtime tree reduced observed pre-Dart time substantially, but the incomplete diagnostic is ineligible. The nested helper control still missed the emitted timing limit.",
+    "In the repeat-only sample, 422 of 632 main-thread samples were in the macOS accessibility load call stack; the profiler itself can perturb dyld. This is a lead, not proof of the cause of the unprofiled delays. No accessibility or security settings changed.",
+    "The earlier cold-uncached missing-scene gap, interactive Save heartbeat, listening and broader native gates remain open. No existing S3 gap is closed."
+  ],
+  "sourceChecks": {
+    "dartPassed": 856,
+    "dartOptionalSkipped": 4,
+    "focusedPackageAndReaderPassed": 37,
+    "scopedAnalysis": "No issues found",
+    "arm64ReleaseSmokeBuild": "Passed via Xcode arm64 destination after default universal Flutter build requested a missing x86_64 SDK slice"
+  }
+}

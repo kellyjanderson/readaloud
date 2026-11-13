@@ -1,3 +1,5 @@
+import 'native_speech_turn.dart';
+
 enum ReaderPlaybackPrimaryState {
   idle,
   bufferingFirstChunk,
@@ -9,6 +11,7 @@ enum ReaderPlaybackPrimaryState {
 
 class SpokenChunkRecord {
   const SpokenChunkRecord({
+    this.sceneTurns = const <NativeSpeechTurn>[],
     required this.chunkId,
     required this.documentId,
     required this.segmentIds,
@@ -25,6 +28,7 @@ class SpokenChunkRecord {
     this.dialogueSpanId,
   });
 
+  final List<NativeSpeechTurn> sceneTurns;
   final String chunkId;
   final String documentId;
   final List<String> segmentIds;
@@ -46,6 +50,7 @@ class SpokenChunkRecord {
     bool? completed,
   }) {
     return SpokenChunkRecord(
+      sceneTurns: sceneTurns,
       chunkId: chunkId,
       documentId: documentId,
       segmentIds: segmentIds,

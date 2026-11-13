@@ -5,12 +5,51 @@ import 'package:flutter/services.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:read_aloud/src/services/mlx_speech_worker_processor.dart';
+import 'package:read_aloud/src/services/runtime_memory_policy.dart';
 import 'package:read_aloud/src/services/mlx_voice_library.dart';
 import 'package:read_aloud/src/services/speech_runtime.dart';
 import 'package:read_aloud/src/models/engine_capability.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
+
+  test('model startup never downloads unrequested reference voices', () async {
+    var networkClients = 0;
+    final processor = MlxSpeechWorkerChunkProcessor(
+      engineId: 'fish_drama3',
+      modelPath: '',
+      pythonPath: '/missing-readaloud-python-for-reference-test',
+      runtimeMemorySampler: () async => RuntimeMemorySnapshot(
+        totalFootprintBytes: 1000000000,
+        physicalMemoryBytes: 137438953472,
+        availableMemoryBytes: 110000000000,
+        pressure: RuntimeMemoryPressure.normal,
+        complete: true,
+        sampledAt: DateTime.now(),
+      ),
+    );
+    try {
+      await HttpOverrides.runZoned(
+        () async {
+          // Reach the explicit missing interpreter without touching the reference
+          // network. A model does not need the whole voice catalog to initialize.
+          await expectLater(
+            processor.prepareModel(),
+            throwsA(isA<ProcessException>()),
+          );
+        },
+        createHttpClient: (_) {
+          networkClients++;
+          throw StateError(
+            'An unrequested reference tried to access the network',
+          );
+        },
+      );
+      expect(networkClients, 0);
+    } finally {
+      await processor.dispose();
+    }
+  });
 
   test(
     'all MLX configurations register native runtime and text capabilities',

@@ -1,0 +1,70 @@
+{
+  "schema": "readaloud-reviewed-memory-envelope-v1",
+  "source": "25c7773",
+  "deviceIdentity": "Apple M5 Max/137438953472",
+  "runtime": "mlx-audio-0.6.3-mlx-0.32.4-complete-v3",
+  "scope": "Bounded 60-second single-reference reading, capped incremental audio and one TTS child; complete app+child footprint with native enumeration and child self telemetry. Attribution was not active in these runs. Not physical M3, universal inputs, between-sample hard maximum, human listening, or final release acceptance.",
+  "variants": {
+    "bf16": {
+      "observedWholeTreePeakBytes": 75456795688,
+      "admissionAdditionalEnvelopeBytes": 95000000000,
+      "margin": "Observed whole-tree peak multiplied by 1.25 and rounded up to a decimal GB; charged conservatively as additional budget. Not an observed peak or an absolute guarantee.",
+      "completeSample": {
+        "totalFootprintBytes": 74756740256,
+        "physicalMemoryBytes": 137438953472,
+        "availableMemoryBytes": 34379038720,
+        "pressure": "normal",
+        "complete": true,
+        "sampledUnixMicros": 1794411426192474,
+        "processIds": [
+          55296,
+          55387
+        ]
+      },
+      "functional60Seconds": true,
+      "overallNativePassed": false,
+      "nativeMainMaxMs": 411
+    },
+    "8bit": {
+      "observedWholeTreePeakBytes": 44951846904,
+      "admissionAdditionalEnvelopeBytes": 57000000000,
+      "margin": "Observed whole-tree peak multiplied by 1.25 and rounded up to a decimal GB; charged conservatively as additional budget. Not an observed peak or an absolute guarantee.",
+      "completeSample": {
+        "totalFootprintBytes": 44418711568,
+        "physicalMemoryBytes": 137438953472,
+        "availableMemoryBytes": 63403638784,
+        "pressure": "normal",
+        "complete": true,
+        "sampledUnixMicros": 1794411271706568,
+        "processIds": [
+          52137,
+          52165
+        ]
+      },
+      "functional60Seconds": true,
+      "overallNativePassed": true,
+      "nativeMainMaxMs": 117
+    },
+    "4bit": {
+      "observedWholeTreePeakBytes": 26219171088,
+      "admissionAdditionalEnvelopeBytes": 33000000000,
+      "margin": "Observed whole-tree peak multiplied by 1.25 and rounded up to a decimal GB; charged conservatively as additional budget. Not an observed peak or an absolute guarantee.",
+      "completeSample": {
+        "totalFootprintBytes": 24767384776,
+        "physicalMemoryBytes": 137438953472,
+        "availableMemoryBytes": 82614829056,
+        "pressure": "normal",
+        "complete": true,
+        "sampledUnixMicros": 1794411348768833,
+        "processIds": [
+          53869,
+          53889
+        ]
+      },
+      "functional60Seconds": true,
+      "overallNativePassed": false,
+      "nativeMainMaxMs": 312
+    }
+  },
+  "limits": "Native 4bit/bf16 responsiveness overruns remain failed controls; memory evidence is separate from overall S7 acceptance. Native sampler complete-tree/pressure guards remain active; never add MLX allocator counters twice. M3 has no qualified record."
+}

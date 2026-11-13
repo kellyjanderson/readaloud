@@ -37,6 +37,50 @@ void main() {
     debugDefaultTargetPlatformOverride = null;
   });
 
+  testWidgets(
+    'Settings exposes Cancel while loading and Retry after cancellation',
+    (tester) async {
+      final loading = _FailedSessionEngine();
+      final controller = ReaderController(
+        preferencesService: _MemoryReaderPreferencesService(),
+        ttsEngine: _AccessibleTtsEngine(),
+        engineFactory: (_, _) => loading,
+        enablePlatformIntakeChannels: false,
+      );
+      addTearDown(controller.dispose);
+      await tester.pumpWidget(ReadAloudApp(controller: controller));
+      await tester.pump(const Duration(milliseconds: 300));
+      await tester.tap(find.byKey(const Key('reader-overflow-menu')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Settings').last);
+      await tester.pumpAndSettle();
+      final switching = controller.setTtsEngineId('fish_drama3');
+      await tester.pump();
+      await tester.pump();
+      expect(
+        tester
+            .widget<DropdownButtonFormField<String>>(
+              find.byKey(const Key('tts-engine-settings-dropdown')),
+            )
+            .initialValue,
+        'fish_drama3',
+      );
+      final cancel = find.text('Cancel speech engine preparation');
+      expect(cancel, findsOneWidget);
+      await tester.ensureVisible(cancel);
+      await tester.tap(cancel);
+      await tester.pump();
+      expect(find.text('Retry speech engine'), findsOneWidget);
+      expect(find.text('Cancel speech engine preparation'), findsNothing);
+      loading.release.complete();
+      await switching;
+      await tester.pumpAndSettle();
+      expect(controller.engineSession.active, isNull);
+      expect(controller.startupError, isNull);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
   testWidgets('transport exposes actions and state through semantics', (
     tester,
   ) async {
@@ -86,6 +130,44 @@ void main() {
     await tester.pump(const Duration(milliseconds: 500));
     expect(find.text('Voice Management'), findsOneWidget);
   });
+
+  testWidgets(
+    'unknown saved engine stays visible and unavailable in Settings',
+    (tester) async {
+      SharedPreferences.setMockInitialValues({
+        'reader.ttsEngineId': 'future_engine_variant',
+      });
+      final controller = ReaderController(
+        preferencesService: _MemoryReaderPreferencesService(
+          engineId: 'future_engine_variant',
+        ),
+        ttsEngine: _AccessibleTtsEngine(),
+        enablePlatformIntakeChannels: false,
+      );
+      addTearDown(controller.dispose);
+      await tester.pumpWidget(ReadAloudApp(controller: controller));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('reader-overflow-menu')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Settings').last);
+      await tester.pumpAndSettle();
+      expect(find.text('future_engine_variant (unavailable)'), findsOneWidget);
+      expect(
+        find.byWidgetPredicate(
+          (w) =>
+              w is SelectableText &&
+              (w.data?.contains(
+                    'Saved engine future_engine_variant is unavailable',
+                  ) ??
+                  false),
+        ),
+        findsOneWidget,
+      );
+      expect(controller.selectedTtsEngineId, 'future_engine_variant');
+      expect(controller.engineSession.active, isNull);
+      expect(tester.takeException(), isNull);
+    },
+  );
 
   testWidgets('Voxtral precision choice is saved and applies without restart', (
     tester,
@@ -149,6 +231,66 @@ void main() {
     expect(controller.ttsEngineRestartRequired, isFalse);
     expect(tester.takeException(), isNull);
   });
+
+  testWidgets(
+    'settings distinguishes selected, failed and last working engine',
+    (tester) async {
+      final loading = _FailedSessionEngine();
+      final controller = ReaderController(
+        preferencesService: _MemoryReaderPreferencesService(),
+        ttsEngine: _AccessibleTtsEngine(),
+        engineFactory: (_, _) => loading,
+        enablePlatformIntakeChannels: false,
+      );
+      addTearDown(controller.dispose);
+      await tester.pumpWidget(ReadAloudApp(controller: controller));
+      await tester.pump(const Duration(milliseconds: 300));
+      await tester.tap(find.byKey(const Key('reader-overflow-menu')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Settings').last);
+      await tester.pumpAndSettle();
+      final switching = controller.setTtsEngineId('fish_drama3');
+      await tester.pump();
+      await tester.pump();
+      expect(controller.selectedTtsEngineId, 'fish_drama3');
+      expect(
+        find.byWidgetPredicate(
+          (w) =>
+              w is SelectableText &&
+              (w.data?.contains('Selected: Fish Audio Drama 3') ?? false),
+        ),
+        findsOneWidget,
+      );
+      expect(
+        find.byWidgetPredicate(
+          (w) =>
+              w is SelectableText &&
+              (w.data?.contains('No active engine') ?? false),
+        ),
+        findsOneWidget,
+      );
+      expect(
+        find.byWidgetPredicate(
+          (w) =>
+              w is SelectableText &&
+              (w.data?.contains('reload required') ?? false),
+        ),
+        findsOneWidget,
+      );
+      loading.release.complete();
+      await switching;
+      await tester.pump();
+      expect(
+        find.byWidgetPredicate(
+          (w) => w is SelectableText && (w.data?.contains('failed.') ?? false),
+        ),
+        findsOneWidget,
+      );
+      expect(find.text('Retry speech engine'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+      await tester.pumpWidget(const SizedBox.shrink());
+    },
+  );
 
   testWidgets('transport supports keyboard focus and activation', (
     tester,
@@ -342,6 +484,8 @@ void main() {
     expect(find.text('Workspace'), findsNothing);
     expect(find.byType(PopupMenuDivider), findsAtLeastNWidgets(3));
     final document = controller.document;
+    await tester.ensureVisible(find.text('Open Source Notices'));
+    await tester.pumpAndSettle();
     await tester.tap(find.text('Open Source Notices'));
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 350));
@@ -638,6 +782,141 @@ void main() {
     );
   });
 
+  testWidgets('speech progress does not resend unchanged native menus', (
+    tester,
+  ) async {
+    debugDefaultTargetPlatformOverride = TargetPlatform.macOS;
+    try {
+      final menuUpdates = <MethodCall>[];
+      binding.defaultBinaryMessenger.setMockMethodCallHandler(menuChannel, (
+        call,
+      ) async {
+        if (call.method == 'Menu.setMenus') menuUpdates.add(call);
+        return null;
+      });
+      final engine = _AccessibleTtsEngine();
+      final controller = ReaderController(
+        preferencesService: _MemoryReaderPreferencesService(),
+        ttsEngine: engine,
+        enablePlatformIntakeChannels: false,
+      );
+      addTearDown(controller.dispose);
+      await tester.pumpWidget(
+        MaterialApp(home: ReadAloudScreen(controller: controller)),
+      );
+      await tester.pumpAndSettle();
+      controller.togglePlayback();
+      await _awaitSpeak(tester, engine);
+      expect(engine.speakCount, 1);
+      engine.start();
+      await tester.pump();
+
+      expect(menuUpdates, isNotEmpty);
+      final updatesBeforeProgress = menuUpdates.length;
+      var progressNotifications = 0;
+      controller.addListener(() => progressNotifications++);
+      for (var index = 0; index < 3; index++) {
+        final span = controller.document.wordSpans[index];
+        engine.progress(
+          TtsProgressUpdate(
+            startOffset: span.start,
+            endOffset: span.end,
+            word: controller.document.speakableText.substring(
+              span.start,
+              span.end,
+            ),
+            wordStartIndex: index,
+            wordEndIndex: index + 1,
+          ),
+        );
+        await tester.pump(const Duration(milliseconds: 300));
+        expect(controller.currentWordIndex, index + 1);
+      }
+      expect(progressNotifications, greaterThanOrEqualTo(3));
+      await tester.pump(const Duration(milliseconds: 500));
+      expect(menuUpdates, hasLength(updatesBeforeProgress));
+      expect(tester.takeException(), isNull);
+    } finally {
+      debugDefaultTargetPlatformOverride = null;
+    }
+  });
+
+  testWidgets(
+    'native menus update for document export and live input state changes',
+    (tester) async {
+      debugDefaultTargetPlatformOverride = TargetPlatform.macOS;
+      try {
+        final menuUpdates = <MethodCall>[];
+        binding.defaultBinaryMessenger.setMockMethodCallHandler(menuChannel, (
+          call,
+        ) async {
+          if (call.method == 'Menu.setMenus') menuUpdates.add(call);
+          return null;
+        });
+        final controller = _DesktopMenuController();
+        addTearDown(controller.dispose);
+        await tester.pumpWidget(
+          MaterialApp(home: ReadAloudScreen(controller: controller)),
+        );
+        await tester.pumpAndSettle();
+        expect(menuUpdates, isNotEmpty);
+
+        Map<Object?, Object?> item(String label) => _serializedMenuItems(
+          menuUpdates.last.arguments,
+        ).singleWhere((item) => item['label'] == label);
+
+        Future<void> expectMenuUpdate(VoidCallback change) async {
+          final previousUpdates = menuUpdates.length;
+          change();
+          await tester.pump();
+          expect(menuUpdates, hasLength(previousUpdates + 1));
+          // Repeating the same state still notifies listeners, but does not
+          // require another native menu update.
+          controller.updateMenuState();
+          await tester.pump();
+          expect(menuUpdates, hasLength(previousUpdates + 1));
+        }
+
+        expect(item('Save Audio Book...')['enabled'], isFalse);
+        expect(item('Save Audio...')['enabled'], isFalse);
+        await expectMenuUpdate(
+          () => controller.updateMenuState(completeDocument: true),
+        );
+        expect(item('Save Audio Book...')['enabled'], isTrue);
+        expect(item('Save Audio...')['enabled'], isFalse);
+        await expectMenuUpdate(
+          () => controller.updateMenuState(audioExport: true),
+        );
+        expect(item('Save Audio...')['enabled'], isTrue);
+        await expectMenuUpdate(
+          () => controller.updateMenuState(exporting: true),
+        );
+        expect(item('Save Audio Book...')['enabled'], isFalse);
+        expect(item('Saving Audio...')['enabled'], isFalse);
+        await expectMenuUpdate(
+          () => controller.updateMenuState(exporting: false),
+        );
+        expect(item('Save Audio Book...')['enabled'], isTrue);
+        expect(item('Save Audio...')['enabled'], isTrue);
+        await expectMenuUpdate(
+          () => controller.updateMenuState(completeDocument: false),
+        );
+        expect(item('Save Audio Book...')['enabled'], isFalse);
+        await expectMenuUpdate(
+          () => controller.updateMenuState(liveInput: true),
+        );
+        expect(item('Stop Live Feed')['enabled'], isTrue);
+        await expectMenuUpdate(
+          () => controller.updateMenuState(liveInput: false),
+        );
+        expect(item('Live Feed...')['enabled'], isTrue);
+        expect(tester.takeException(), isNull);
+      } finally {
+        debugDefaultTargetPlatformOverride = null;
+      }
+    },
+  );
+
   testWidgets(
     'desktop shell hides the overflow menu and registers native menus',
     (WidgetTester tester) async {
@@ -721,6 +1000,55 @@ Iterable<String> _collectMenuLabels(Iterable<PlatformMenuItem> items) sync* {
   }
 }
 
+Iterable<Map<Object?, Object?>> _serializedMenuItems(Object? value) sync* {
+  if (value is Map) {
+    yield value;
+    for (final child in value.values) {
+      yield* _serializedMenuItems(child);
+    }
+  } else if (value is Iterable) {
+    for (final child in value) {
+      yield* _serializedMenuItems(child);
+    }
+  }
+}
+
+class _DesktopMenuController extends ReaderController {
+  _DesktopMenuController()
+    : super(
+        preferencesService: _MemoryReaderPreferencesService(),
+        ttsEngine: _FakeTtsEngine(),
+        enablePlatformIntakeChannels: false,
+      );
+
+  bool _exporting = false;
+  bool _completeDocument = false;
+  bool _audioExport = false;
+  bool _liveInput = false;
+
+  @override
+  bool get isExporting => _exporting;
+  @override
+  bool get hasCompleteDocumentSnapshot => _completeDocument;
+  @override
+  bool get canExportAudio => _audioExport;
+  @override
+  bool get isLiveReadEnabled => _liveInput;
+
+  void updateMenuState({
+    bool? exporting,
+    bool? completeDocument,
+    bool? audioExport,
+    bool? liveInput,
+  }) {
+    _exporting = exporting ?? _exporting;
+    _completeDocument = completeDocument ?? _completeDocument;
+    _audioExport = audioExport ?? _audioExport;
+    _liveInput = liveInput ?? _liveInput;
+    notifyListeners();
+  }
+}
+
 class _TestAppearanceShell extends StatelessWidget {
   const _TestAppearanceShell({required this.controller});
 
@@ -743,20 +1071,24 @@ class _TestAppearanceShell extends StatelessWidget {
 }
 
 class _MemoryReaderPreferencesService extends ReaderPreferencesService {
-  ReaderPreferences _preferences = const ReaderPreferences(
-    fontFamily: ReaderPreferences.defaultFontFamily,
-    fontScale: ReaderPreferences.defaultFontScale,
-    appearanceMode: ReaderAppearanceMode.system,
-    multiVoiceEnabled: ReaderPreferences.defaultMultiVoiceEnabled,
-    voiceSpeeds: <String, double>{},
-    storedDocumentCastVoiceAssignments: <String, Map<String, String>>{},
-  );
+  _MemoryReaderPreferencesService({String engineId = ''})
+    : _preferences = ReaderPreferences(
+        ttsEngineId: engineId,
+        fontFamily: ReaderPreferences.defaultFontFamily,
+        fontScale: ReaderPreferences.defaultFontScale,
+        appearanceMode: ReaderAppearanceMode.system,
+        multiVoiceEnabled: ReaderPreferences.defaultMultiVoiceEnabled,
+        voiceSpeeds: <String, double>{},
+        storedDocumentCastVoiceAssignments: <String, Map<String, String>>{},
+      );
+  ReaderPreferences _preferences;
 
   @override
   Future<ReaderPreferences> load() async => _preferences;
 
   @override
   Future<void> save({
+    bool activityExpanded = false,
     String ttsEngineId = ReaderPreferences.defaultTtsEngineId,
     int voxtralQuantizationBits = 0,
     required String fontFamily,
@@ -770,15 +1102,18 @@ class _MemoryReaderPreferencesService extends ReaderPreferencesService {
     CharacterStoreSnapshot? characterSnapshot,
     ReaderResumeState? resumeState,
     String? selectedVoiceId,
+    Map<String, String> narratorVoiceIds = const {},
     String? lastOpenedDocumentPath,
     String? lastOpenedDocumentAccessToken,
     String? lastOpenedDirectoryPath,
     String? lastOpenedDirectoryAccessToken,
   }) async {
     _preferences = ReaderPreferences(
+      activityExpanded: activityExpanded,
       ttsEngineId: ttsEngineId,
       voxtralQuantizationBits: voxtralQuantizationBits,
       selectedVoiceId: selectedVoiceId,
+      narratorVoiceIds: Map.of(narratorVoiceIds),
       voiceSpeeds: Map<String, double>.from(voiceSpeeds),
       fontFamily: fontFamily,
       fontScale: fontScale,
@@ -876,6 +1211,7 @@ class _FakeTtsEngine implements TtsEngine {
 class _AccessibleTtsEngine extends _FakeTtsEngine {
   void Function()? _start;
   void Function(TtsPlaybackActivity)? _activity;
+  void Function(TtsProgressUpdate)? _progress;
   final firstSpeak = Completer<void>();
   int speakCount = 0;
   int pauseCount = 0;
@@ -886,6 +1222,12 @@ class _AccessibleTtsEngine extends _FakeTtsEngine {
   @override
   set onActivity(void Function(TtsPlaybackActivity)? callback) =>
       _activity = callback;
+
+  @override
+  set onProgress(void Function(TtsProgressUpdate)? callback) =>
+      _progress = callback;
+
+  void progress(TtsProgressUpdate update) => _progress?.call(update);
 
   @override
   Future<void> speak(TtsSpeakRequest request) async {
@@ -963,5 +1305,14 @@ class _AssignmentUiController extends ReaderController {
   @override
   Future<void> retryVoiceAssignments() async {
     retryCalls++;
+  }
+}
+
+class _FailedSessionEngine extends _FakeTtsEngine {
+  final release = Completer<void>();
+  @override
+  Future<void> initialize() async {
+    await release.future;
+    throw StateError('offline model unavailable');
   }
 }

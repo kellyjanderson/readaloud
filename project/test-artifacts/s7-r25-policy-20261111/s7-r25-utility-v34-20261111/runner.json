@@ -1,0 +1,30 @@
+{
+  "passed": false,
+  "mode": "load-after-startup",
+  "launchMethod": "LaunchServices open -W -n",
+  "deadlineSeconds": 300,
+  "normalQuit": true,
+  "forcedCleanup": false,
+  "captureIntroducedPlayGate": false,
+  "inferencePolicyDiagnostic": "utility",
+  "managedModelResolution": "existing service; offline pinned assets only",
+  "launchUtc": "2026-11-11T23:59:02.046092Z",
+  "launchMonotonicRawNanos": 2343466273000166,
+  "launcherPid": 74923,
+  "pid": 74925,
+  "capturePid": 74927,
+  "nativeReceipt": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-r25-utility-v34-20261111/receipt.json",
+  "nativePassed": false,
+  "launchToNativePositionMs": null,
+  "nativePositionWithinTwoSeconds": null,
+  "captureExitStatus": 0,
+  "ownedPidsAfterNormalQuit": [],
+  "remainingOwnedPids": [],
+  "appExitVerified": true,
+  "launcherExitStatus": 0,
+  "appExitStatus": null,
+  "errors": [
+    "QA-only child scheduling differential; production policy unchanged",
+    "Missing post-startup native timing boundaries"
+  ]
+}

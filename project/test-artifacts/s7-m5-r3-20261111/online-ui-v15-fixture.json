@@ -1,0 +1,15 @@
+{
+  "blob": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/Library/Application Support/com.kellyjanderson.readAloud.mlxPlaybackTest/read_aloud/mlx-tts/models/blobs/c4/c459d17d94bfbe9033cb507c7d0a77e58a020e2faa131496a3aad1b5d8979d5d",
+  "heldOriginal": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/Library/Application Support/com.kellyjanderson.readAloud.mlxPlaybackTest/read_aloud/mlx-tts/models/blobs/c4/c459d17d94bfbe9033cb507c7d0a77e58a020e2faa131496a3aad1b5d8979d5d.s7-ui-download-hold",
+  "expected": {
+    "size": 4324625361,
+    "algorithm": "sha256",
+    "digest": "b536cbc7a6da2d499e119d929063d60f8d11cf98bd5a823e9f9655b3aeee73cf"
+  },
+  "restored": true,
+  "runnerSucceeded": false,
+  "newDownloadBytes": 4324625361,
+  "newDownloadSha256": "b536cbc7a6da2d499e119d929063d60f8d11cf98bd5a823e9f9655b3aeee73cf",
+  "newDownloadExact": true,
+  "otherSnapshotIdentitiesUnchanged": true
+}

@@ -23,6 +23,16 @@ The native slot rechecks current effective playback lead before each admitted pl
 
 Kokoro constructs its native player with eager source preparation because the application already bounds the playlist. A pinned-backend native trace exposed duplicate `AVPlayerItem` insertion from lazy queue rebuilding during prefix removal. Eager preparation removes that lazy treadmill path; acceptance still requires the current running-bundle queue and audio evidence recorded in P3. Injected players used by probes must use the same preparation setting.
 
+The vendored just_audio 0.10.5 Darwin adapter preserves pointer-identical buffered
+queue prefixes during sequential append and pruning. It computes the desired
+queue with upstream order and per-source lazy preparation rules, then appends only
+missing items. Loading, seeking, looping, replacement and non-prefix changes retain
+the upstream rebuild. This removes repeated successor removal that coincided with
+short pauses inside current speech. No new scheduling owner is introduced; native
+callbacks, cancellation and disposal remain upstream-owned. See the [patch rationale
+and native regression checks](../../third_party/just_audio/README.local.md); running-app
+acoustic and transport qualification remains recorded in S6 [#137](https://github.com/kellyjanderson/readaloud/issues/137).
+
 Lease cancellation removes queued native admission even when the export lead gate is closed; already active native calls drain before their cancelled terminal. Pause signals admission after generation state settles. Natural document completion defers release while an export lease is active, then releases only if its resource and playback epochs remain current; pause, a replacement document and replay cannot inherit that release debt. The controller normalizes Kokoro intent into the supported 0.7–1.4 range before planning, and direct incompatible prepared plans are rejected. Cache plan identity, export and inference therefore use the same effective rate; independent player speed affects only playable wall-time lead.
 
 When synthesis fails with an unplanned suffix, the engine terminates that session with an error rather than rebuilding only admitted chunks and silently truncating the document. Existing bounded fallback recovery remains available only after the entire suffix has been materialized. Policy constants and transport traces are not perceptual continuity guarantees; measured evidence and limitations are recorded in [P3](https://github.com/kellyjanderson/readaloud/issues/52).
@@ -30,6 +40,35 @@ When synthesis fails with an unplanned suffix, the engine terminates that sessio
 Ordinary no-edit Play rebuilds the saved-word tail: the controller captures the current word offset and calls `engine.speak`, which stops the prior generation. This differs from applying pending choices at the retained chunk-start anchor. Native supplemental evidence retained word 293 while replacing the source/resetting player position. The [baseline source comparison](https://github.com/kellyjanderson/readaloud/issues/53#issuecomment-6396190387) found the same word-tail/stop behavior at `694e1c3`; this is not sample-continuous resume proof or a new native baseline comparison.
 
 The [assignment295 prefix](https://github.com/kellyjanderson/readaloud/issues/53#issuecomment-6395976458) observed unchanged current source/hash after editing, first replacement playback at word 8 before acknowledgment, latest-only initial A/B/C success and pause-retained/stop-cleared pins. Its later listening timeout failed the overall run, with final resource cleanup recorded separately. The [e18c81d supplement](https://github.com/kellyjanderson/readaloud/issues/53#issuecomment-6396165816) passed paused pending Play at anchor 292, injected pre-ack failure retaining effective Heart and pending Bella followed by successful retry, and obsolete startup failure leaving latest C effective. Held-export cancellation drained before replacement playback; final sessions/tensors/sources/pins/tasks were zero. These bounded automated cases do not establish human listening, sample continuity or input during active export; the latter had zero actual UI actions.
+
+## Packet traversal and native pruning
+
+Incremental Drama playback gives each immutable packet a native queue identity
+while retaining its complete scene's source identity. Its 300 ms startup lead is
+separate from the complete-chunk policies above; steady-state admission remains
+time/count bounded. See [runtime messaging](speech-runtime-messaging-boundary.md)
+and [artifact ownership](audio-artifact-identity-and-lifetime.md).
+
+The pinned Darwin player reindexes prefix removal against the actual surviving
+`AVQueuePlayer.currentItem`. Its fallback counts removals against one immutable
+old index when that current item itself was removed. Comparing removals against
+a repeatedly decremented index skipped a remaining item when several predecessors
+were pruned together. The native recording-queue regression covers batch removal,
+advancement during mutation, removed-current, shuffle, seek, load and loop paths.
+Append and removal explicitly request preservation of surviving playback. Their
+fast path derives both its head and future-prefix comparison from one native
+queue snapshot, then appends only the missing suffix. Natural advancement can
+remove a prefix of that snapshot without forcing a rebuild. Separate live reads
+previously raced and fell through to destructive queue reconstruction. Explicit
+seek, load, loop and incompatible reorder paths retain their existing behavior.
+The application retains one completed predecessor until a following source
+completes: the backend can report the next logical index before the native queue
+head has advanced. Immediate removal could therefore remove the native head and
+interrupt its transition. This one-source ownership fence is separate from the
+future-audio admission cap and playable lead. Retained pins release only after
+native removal acknowledgment; stop/reset drains the remaining queue ownership.
+This test does not prove actual emitted endings or continuity; current signed-app
+captures remain required. iOS shares the source but is not qualified here.
 
 ## Source and tests
 
@@ -82,3 +121,62 @@ These legacy contracts describe intended behavior and acceptance; `final` denote
 - [uninterrupted audio primary channel](../specifications/uninterrupted-audio-primary-channel.md)
 - [voice session realization envelope](../specifications/voice-session-realization-envelope.md)
 - [watched file session refresh](../specifications/watched-file-session-refresh.md)
+
+## Finite local speech queue ownership on macOS
+
+The internally owned `KokoroTtsEngine` player opts into the vendored player's
+immutable `readAloudFiniteLocalWavQueue` contract on macOS. Injected players keep
+their caller's choice; generic players and other platforms keep legacy behavior.
+The existing player-init request carries the choice before loading. Application
+artifact validation owns finite WAV provenance. Dart shape/URI preflight runs
+before logical playlist mutation; native admission independently checks plain
+local AVURLAsset identity and queue/source membership before changing its tree.
+Neither layer guesses media format from a suffix or reads contents on the UI
+thread. Unsupported sources are rejected; no new playback scheduler is added.
+
+For opted-in loop-off playback, the actual native current item owns the logical
+index. A future item's end notification cannot advance its predecessor. Final
+completion separately requires positive finite duration and exact numeric EOF;
+one weak final-item witness is rechecked by existing head/Pause callbacks. This
+also covers a notification just before the head's final sample. Seek, accepted
+load, loop-mode change and disposal clear the witness. Both loop modes retain
+upstream completion behavior. Full details, library rationale and native fixture
+limits are in the [local adaptation](../../third_party/just_audio/README.local.md).
+
+For that macOS finite-queue loop-off path, Play samples the existing real
+paused or pending-seek position before activating the native rate. This avoids
+the direct post-activation AVPlayerItem.currentTime query found in the matched
+native trace. Position and timestamp remain paired; no synthetic position,
+extra scheduler or GPU policy is introduced. Generic players, other platforms
+and both loop modes retain the prior ordering. Existing status/KVO callbacks
+can still read position, so this is not a universal AVFoundation latency claim.
+The [position verification](../test-artifacts/s7-play-position-20261111/README.md)
+retains real-reader native negative controls and exact-candidate running-app
+results, including their snapshot and capture limits.
+
+The environment-driven physical-head experiment remains a separate diagnostic
+override. Earlier flagged acoustic passes do not qualify this production opt-in.
+[S7](https://github.com/kellyjanderson/readaloud/issues/112) owns final-source
+emitted-audio, responsiveness and cancellation evidence; M3 and human listening
+remain separate gates. The dated natural-EOF and replay diagnostics preserve
+both passing component observations and capture failures.
+
+The production-policy v77/v78 book checks cover 197 words and all six
+complete saved scene waveforms, with maximum external joins of .01ms. First-load
+playback reached natural EOF, persisted the complete book and peaked at 30ms
+native response; its model-forbidden reopen, Save/reopen, cancellation and
+restart peaked at 66ms, with every native sample foreground in both runs. These
+bounded checks verify the opted-in production queue without its experimental
+override. First-load post-startup speech took 2099.705ms; reusable loading took
+525.851ms. Total launch took 6317.906ms and 801.514ms respectively: the first
+misses the 2s goal even though both load hard limits pass. See the
+[position verification](../test-artifacts/s7-play-position-20261111/README.md).
+Its earlier, mostly background v76 case retains colder startup and all waveform
+matches, but receives no foreground responsiveness credit. Installed assets and
+OS caches remain distinct from fresh private target raw-audio stores. Earlier
+274ms/349ms failures remain preserved in the
+[preceding controls](../test-artifacts/s7-final-native-20261111/README.md).
+The exact-candidate 4bit/8bit/A-B-A checks pass the unchanged 250ms gate; a separate
+180s run passes waveform and native components while retaining its diagnostic
+overall verdict. None establishes a universal AVFoundation cure, arbitrary-book
+performance, physical output, human listening or M3 qualification.

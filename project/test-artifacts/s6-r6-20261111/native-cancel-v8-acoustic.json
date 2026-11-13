@@ -1,0 +1,51 @@
+{
+  "passed": true,
+  "scope": "40ms active first-queued-packet prefix only; not whole-turn, transcript, voice identity or physical speaker onset acceptance.",
+  "clockScope": "Capture firstPacketReceivedUnixMicros maps callback receipt clocks to frames; post-Pause +250ms is a clock/output guard.",
+  "captureSampleRate": 48000,
+  "captureFrames": 790080,
+  "signalCallbackBeforePauseMs": 54.955,
+  "prefix": {
+    "durationMs": 40,
+    "correlation": 0.9971514800754271,
+    "rms": 0.008990121893282405,
+    "referencePath": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s6-r6-native-cancel-v8-20261110/s6-first-load-eEH24h/queued-0.wav",
+    "referenceSha256": "7c7571f152890bd0947507748970482a6415e7b53b7c9f20306b5fdb2451db13",
+    "referenceActiveStartSeconds": 0.04261458333333333,
+    "captureStartSeconds": 15.22309375
+  },
+  "silence": {
+    "peakThreshold": 0.001,
+    "preRetryPeak": 0.0,
+    "preRetryObservedMs": 9929.208333333334,
+    "postPauseGuardMs": 250,
+    "postPauseTailPeak": 0.0,
+    "postPauseTailObservedMs": 910.75
+  },
+  "native": {
+    "sampledPositionTotalMsBeforePause": 185,
+    "pauseDrainMs": 2,
+    "stateEvents": 9,
+    "queuedPackets": 4,
+    "activitiesStarted": 2,
+    "activitiesEnded": 2,
+    "remainingOwnedProcessCount": 0
+  },
+  "coldCancellation": {
+    "inputMode": "external-native-input",
+    "drainAfterIntentMs": 1483.864,
+    "rawColdCancelDrainMs": 8300,
+    "rawDrainScope": "Includes external input wait; not human input latency.",
+    "nativeInput": {
+      "schema": "readaloud-native-input-observation-v1",
+      "source": "CUA native accessibility control click",
+      "target": "Cancel pending Play",
+      "clickBeforeUnixMicros": 1794383278649000,
+      "clickReturnedUnixMicros": 1794383278684000,
+      "observedResult": "The same control became Play; model initialization remained active. No startup failure was visible.",
+      "clickBeforeToIntentObservedMs": 40.441,
+      "clickReturnedToIntentObservedMs": 5.441,
+      "scope": "External tool call boundary to observed intent; not physical input latency."
+    }
+  }
+}

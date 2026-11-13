@@ -1,0 +1,103 @@
+{
+  "schema": "readaloud-native-engine-session-v1",
+  "passed": false,
+  "runRoot": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/s7-session-native-v6-20261111/s7-session-ZZvnAi",
+  "modelSource": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/character-fish-standalone",
+  "ownedAlias": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.mlxPlaybackTest/Data/Library/Application Support/com.kellyjanderson.readAloud.mlxPlaybackTest/read_aloud/mlx-tts/fish_drama3",
+  "offline": true,
+  "unavailableEngineId": "fish_drama3_4bit",
+  "events": [
+    {
+      "event": "state",
+      "phase": "initialization",
+      "elapsedMs": 16,
+      "unixMicros": 1794410089977311,
+      "epoch": 0,
+      "selected": "fish_drama3",
+      "active": null,
+      "lastWorking": null,
+      "sessionPhase": "loading",
+      "startupError": null,
+      "pendingPlay": false,
+      "playing": false,
+      "word": 0,
+      "voice": null
+    },
+    {
+      "event": "state",
+      "phase": "initialization",
+      "elapsedMs": 1396,
+      "unixMicros": 1794410091357719,
+      "epoch": 0,
+      "selected": "fish_drama3",
+      "active": null,
+      "lastWorking": null,
+      "sessionPhase": "acquiring",
+      "startupError": null,
+      "pendingPlay": false,
+      "playing": false,
+      "word": 0,
+      "voice": null
+    },
+    {
+      "event": "state",
+      "phase": "initialization",
+      "elapsedMs": 1397,
+      "unixMicros": 1794410091358243,
+      "epoch": 0,
+      "selected": "fish_drama3",
+      "active": null,
+      "lastWorking": null,
+      "sessionPhase": "failed",
+      "startupError": "Speech startup failed: Bad state: Complete process-tree memory is unavailable.",
+      "pendingPlay": false,
+      "playing": false,
+      "word": 0,
+      "voice": null
+    }
+  ],
+  "factoryEvents": [
+    {
+      "phase": "initialization",
+      "engineId": "fish_drama3",
+      "elapsedMs": 0
+    }
+  ],
+  "limits": "M5 bf16 and offline unavailable-variant switch only; no 8/4-bit success, full-model transfer, M3, physical-speaker or human acceptance.",
+  "error": "Bad state: Speech startup failed: Bad state: Complete process-tree memory is unavailable.",
+  "stack": "#0      main.until (file:///Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/tools/s7_engine_session_smoke.dart:169)\n#1      main (file:///Users/k/.codex/worktrees/model-lifecycle-s7/readaloud/tools/s7_engine_session_smoke.dart:197)\n<asynchronous suspension>\n",
+  "functionalPassed": false,
+  "lastRuntimeMemorySnapshot": {
+    "totalFootprintBytes": 577995904,
+    "physicalMemoryBytes": 137438953472,
+    "availableMemoryBytes": 83482640384,
+    "pressure": "normal",
+    "complete": false,
+    "sampledUnixMicros": 1794410091357942,
+    "processIds": [
+      41355
+    ]
+  },
+  "nativeMainResponsiveness": {
+    "samples": 13,
+    "applicationActiveSamples": 12,
+    "maxRoundTripMs": 26,
+    "delayedRequests": [],
+    "error": null,
+    "passed": true,
+    "scope": "Monotonic UI-isolate roundtrip through the native main-thread channel; unchanged 250ms gate. Wall-clock request/native-entry/return stamps and active-app state diagnose delivery only and never replace the gate. No utility query or keyboard/mouse delivery claim."
+  },
+  "maxUiHeartbeatDelayMs": 5,
+  "speechWorkActivity": {
+    "started": 2,
+    "active": 0,
+    "ended": 2,
+    "peak": 2
+  },
+  "resourceShutdownComplete": true,
+  "shutdownErrors": [],
+  "synthesisCallbacks": 0,
+  "peakRuntimeBytesByEngine": [
+    0
+  ]
+}

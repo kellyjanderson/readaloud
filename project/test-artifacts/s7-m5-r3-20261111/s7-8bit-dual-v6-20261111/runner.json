@@ -1,0 +1,48 @@
+{
+  "schema": "readaloud-native-variant-runner-v1",
+  "mode": "cached-8bit",
+  "passed": false,
+  "nativePassed": false,
+  "normalQuit": true,
+  "appExitVerified": true,
+  "forcedCleanup": false,
+  "remainingOwnedPids": [],
+  "frameworkSha256": "0348ded75065eda462ab20987886c46ab4ff2a3ebe407113cb732bcf540fcdd1",
+  "executableSha256": "f3e675f245912c0478c4beb41ed7a4bf2157eb0542b73a4638273451d3fa326d",
+  "maxMlxChildren": 1,
+  "observedMlxSamples": 258,
+  "processEvents": [
+    {
+      "unixMicros": 1794416797295539,
+      "pids": []
+    },
+    {
+      "unixMicros": 1794416798984372,
+      "pids": [
+        86938
+      ]
+    },
+    {
+      "unixMicros": 1794416832153705,
+      "pids": []
+    }
+  ],
+  "errors": [
+    "Native failure: TimeoutException: App-only capture setup",
+    "Emitted audio: Missing capture signal"
+  ],
+  "limits": "100ms child/process observations and emitted signal per playback interval. Exact waveform matching, glitch/voice quality, total memory envelope, physical-speaker and M3 acceptance remain separate. Capture 300s; work deadline 270s.",
+  "pid": 86915,
+  "capturePid": 86916,
+  "secondaryCapture": {
+    "mechanism": "CoreAudio process tap",
+    "pid": 86917,
+    "executableSha256": "5c0d8167bc06529bac15e2df9d07abfb9f63d6e7e3296c90210dc5ac224ce909",
+    "scope": "Independent diagnostic recording; primary acceptance gates remain unchanged",
+    "exitStatus": 1
+  },
+  "applicationActivationRequested": true,
+  "captureExitStatus": 0,
+  "appExitStatus": 0,
+  "strictAcousticAcceptance": "NOT_RUN: compare copied queued WAVs with capture; listening remains separate"
+}

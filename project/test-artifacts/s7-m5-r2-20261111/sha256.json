@@ -1,0 +1,138 @@
+{
+  "4bit-v2-capture.wav.timing.json": {
+    "bytes": 521,
+    "sha256": "e40cab5fd372b652dfa1736b6031fd8d1145d061fde571d9fbc3068429e496b2"
+  },
+  "4bit-v2-receipt.json": {
+    "bytes": 738525,
+    "sha256": "a77daa9f31a3e28d499b730f7fc238e871c0802d3c006bd1115a4479f1552fa6"
+  },
+  "4bit-v2-runner.json": {
+    "bytes": 1589,
+    "sha256": "007ede3b1abeeca5d4f112f6a13d1babd7686e43251a2fd78af4958049747c37"
+  },
+  "8bit-interruption.json": {
+    "bytes": 6182,
+    "sha256": "0716308d75e68361a27195680cbc0e858b955fbd63536e247af4b5117eeaf9fe"
+  },
+  "8bit-native-v2-acoustic-corrected.json": {
+    "bytes": 277846,
+    "sha256": "efbb12247ff3202e8f690c47fd56097b1f742aa31290d98022cbd48e9f9079c7"
+  },
+  "8bit-v1-capture.wav.timing.json": {
+    "bytes": 382,
+    "sha256": "e2a4e9697ea5a5bf9336ef12a0a350561ea39e94614111ee0c5f4d0fc22859ac"
+  },
+  "8bit-v1-receipt.json": {
+    "bytes": 160687,
+    "sha256": "83af2d7a5959356dd97344fcea81ad4324557bd64915ffd3d3df07dc41c49917"
+  },
+  "8bit-v1-runner.json": {
+    "bytes": 1268,
+    "sha256": "2faba2fe492a2f7174f220d4bf4fb5ea00cd6e50d5b0451f9a4b0e565cc895bf"
+  },
+  "8bit-v2-capture.wav.timing.json": {
+    "bytes": 522,
+    "sha256": "4c5296945679fd7a2e946eff50f9701e6d18a5e5a869c274e19012e938b9319d"
+  },
+  "8bit-v2-receipt.json": {
+    "bytes": 782309,
+    "sha256": "de6bb3686a4fcf2af0acea150400a041261ef8751845daaf81465d98971ce5cd"
+  },
+  "8bit-v2-runner.json": {
+    "bytes": 1576,
+    "sha256": "9a5982b41e6046dc96c8f7ef43868a24b5202f2c7598f0095c6562144575b303"
+  },
+  "README.md": {
+    "bytes": 2717,
+    "sha256": "0bbb691c4a529be2b0654ab309954a2bdf2d9a90ba3553d92354a06c9892944f"
+  },
+  "acquire-4bit.json": {
+    "bytes": 397,
+    "sha256": "396660c7f60686689b800bb9e32632edac99f4b29532c7798f9605ef9e1e346f"
+  },
+  "acquire-8bit-resumed.json": {
+    "bytes": 397,
+    "sha256": "697387727dc76d3e554b0fc9b0e1894caa62dbe20f4d69a5647d4cd6c54bb6fd"
+  },
+  "bf16-v2-capture.wav.timing.json": {
+    "bytes": 521,
+    "sha256": "f7341d08ad8d8ec731a7bf5e004879ddbc83fa92c8750527bed3bb31c8f20bf0"
+  },
+  "bf16-v2-receipt.json": {
+    "bytes": 708438,
+    "sha256": "13db06a71e26d5117fa0700a2d053a52bfb27ebae7ff4f3307ade28b33fd6a0b"
+  },
+  "bf16-v2-runner.json": {
+    "bytes": 1597,
+    "sha256": "e0ab11a9874ea3a71ec94932a21b61dc66a3a12115b7f3ca90fb516302fd4a0b"
+  },
+  "memory-qualification.json": {
+    "bytes": 3052,
+    "sha256": "d0bf26b107454a37dc61e16d6f851aaeb732f62327158eb6d35b64aec5adefb5"
+  },
+  "native-v7-acoustic.json": {
+    "bytes": 536,
+    "sha256": "ee7d27764dd6052ab1f38fd9119195d972bdc195a0c6e74aa180a12bc37cd978"
+  },
+  "offline-missing-4bit-config.json": {
+    "bytes": 687,
+    "sha256": "014eba967dfe5c95798842360a497d4777770be6f6eaac16419218240e3717c0"
+  },
+  "private-artifacts.json": {
+    "bytes": 5522,
+    "sha256": "506be0127cda1e97ea5fe049f2c54c1e71c796aba07e3b9ff79113db5216d467"
+  },
+  "real-config-repair.json": {
+    "bytes": 4611,
+    "sha256": "20b63deb7150c480187255220c5ecd723404a664bccaa2d776292d8220a2c875"
+  },
+  "session-v4-capture.wav.timing.json": {
+    "bytes": 522,
+    "sha256": "c280890e7b81548a5cd926b8a08d2948a392ace8ea3db8477f10e0c72d7faafd"
+  },
+  "session-v4-receipt.json": {
+    "bytes": 29702,
+    "sha256": "16826f73a605ebfd452809e8ba1cf6dd8f54c60bce57fbc434f583483055348e"
+  },
+  "session-v4-runner.json": {
+    "bytes": 2237,
+    "sha256": "238aa7eba216c8b4c48f857e6e281b71f78819ca20cc5a252225c5a2e9070240"
+  },
+  "session-v5-capture.wav.timing.json": {
+    "bytes": 521,
+    "sha256": "e36c8e63a3f8ee01aa17ad8d33f2eeca0b02b27f813b2e433dc08c28cb9c9276"
+  },
+  "session-v5-receipt.json": {
+    "bytes": 28631,
+    "sha256": "ceb5e0be4cc6f79bc224dc37702bb2c99c3a19d1f655825f2421ac077135024e"
+  },
+  "session-v5-runner.json": {
+    "bytes": 2209,
+    "sha256": "5c81c9f93b0d2b8d81ea87a350b4368255d3b04e96de17ccbf8abdce2530c105"
+  },
+  "session-v6-capture.wav.timing.json": {
+    "bytes": 381,
+    "sha256": "72571660a33399e15536519c5ae5aed2f6ffc512e39afdd76368c15f5f34a683"
+  },
+  "session-v6-receipt.json": {
+    "bytes": 3540,
+    "sha256": "331a4660664f4a256784105c10c350b733a1a3f7c826f59c3d6803a4445d0777"
+  },
+  "session-v6-runner.json": {
+    "bytes": 1225,
+    "sha256": "ae002a6cd489387e591ce1681c88160aa8de92abebbf72e9c13c251feb997482"
+  },
+  "session-v7-capture.wav.timing.json": {
+    "bytes": 521,
+    "sha256": "2ed14b948d883fbd85dc4becc0dcb44223db38501fdd948ec9b3d83d95cd8cf3"
+  },
+  "session-v7-receipt.json": {
+    "bytes": 29450,
+    "sha256": "5af1fb1ad7669627ec2ccd7fd3f388a4172a9b733d3848e7122bc6a24d1cd3b0"
+  },
+  "session-v7-runner.json": {
+    "bytes": 2209,
+    "sha256": "f055ffb4f5ca30efab27b936124efdf98c5f271c5b8a5a910bc5871ef84fe93d"
+  }
+}

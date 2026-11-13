@@ -1,6 +1,6 @@
 # Read Aloud
 
-A local-first Flutter reader for long-form text-to-speech using Kokoro by default. Import documents, listen with narrator and character voices, follow the spoken text, and export audio.
+A local-first Flutter reader for long-form text-to-speech. Import documents, listen with narrator and character voices, follow the spoken text, and export audio.
 
 For local Apple Silicon evaluation of Fish Audio Drama 3, Qwen3-TTS, Voxtral TTS, or MOSS-TTS,
 see [MLX TTS engine setup](docs/mlx-tts-engines.md).
@@ -9,7 +9,7 @@ see [MLX TTS engine setup](docs/mlx-tts-engines.md).
 
 These are product requirements, not claims that the current build meets them:
 
-- **Sound within two seconds of opening the app:** when Play is requested promptly with a document available, smooth, uninterrupted speech must begin within two seconds, regardless of document size. Measure from opening, not from the end of preparation.
+- **Startup and loading:** with a document available and Play requested promptly, aim for smooth speech within two seconds of opening the app. App startup is reported separately and excluded from the brick-wall times: five seconds for a reusable `.radoc` load and ten seconds for a first load requiring preparation or synthesis, regardless of document size. Measure those hard limits from document loading after normal app startup; include all preparation and synthesis needed for that load.
 - **Always responsive:** controls and the reading surface remain responsive during every background operation. Pending playback remains cancellable; obsolete work must never start unexpected speech.
 - **Everything about reading is dynamic:** acquisition, parsing, normalization, display/position mapping, analysis, pronunciation and delivery planning, voice binding, synthesis, buffering and persistence advance incrementally as needed. Whole-document completion must not gate first speech. Character discovery is one example of this rule, not its scope.
 - **Truthful progress:** operations exceeding one or two seconds show dynamic progress based on actual completed work, with honest totals, stages and waiting/failure states. No fabricated percentages or 100% while the operation still blocks readiness.
@@ -21,7 +21,7 @@ The [product definition](project/product-definition.md) defines these standing e
 
 macOS on Apple Silicon is the current functional target. Other Flutter platform folders are retained but are not qualified. The cleanup baseline consolidates the RC2 reader, local MLX engines, full-document display and the visual acceptance runner. It is a development checkpoint, not a claim that all reading-experience requirements pass.
 
-Speaker attribution is heuristic. Current architecture records implementation and evidence limits. Sustained audio continuity, launch timing and human acceptance remain tracked in [RC2 qualification](https://github.com/kellyjanderson/readaloud/issues/91). [Drama 3 integration](https://github.com/kellyjanderson/readaloud/issues/111) adds application-owned model downloads, native-rate audio, 43 reference voice choices and live engine replacement after the cleanup tag. Real Drama audio qualification remains pending the model download; the cleanup tag contains the preserved earlier baseline.
+Speaker attribution is heuristic. Current architecture records implementation and evidence limits. Sustained audio continuity, launch timing and human acceptance remain tracked in [RC2 qualification](https://github.com/kellyjanderson/readaloud/issues/91). [Drama 3 integration](https://github.com/kellyjanderson/readaloud/issues/111) adds application-owned model downloads, native-rate audio, 43 reference voice choices and live engine replacement after the cleanup tag. Bounded native scene playback and export now have running-app evidence and human listening acceptance; sustained continuity, broader voice identity and startup requirements remain open in that issue. The cleanup tag contains the preserved earlier baseline.
 
 ## Features
 
@@ -40,7 +40,7 @@ cd readaloud
 tools/flutter pub get
 ```
 
-For the default Kokoro engine, place a compatible model at `assets/kokoro/model/kokoro-v1.0.onnx`; see [model setup](assets/kokoro/model/README.md). For MLX engines, install the [arm64 runtime](docs/mlx-tts-engines.md) and select the engine in Settings. Model weights download separately and are not in Git. The app uses a [vendored ONNX plugin override](third_party/flutter_onnxruntime/pubspec.yaml).
+For Kokoro, place a compatible model at `assets/kokoro/model/kokoro-v1.0.onnx`; see [model setup](assets/kokoro/model/README.md). For MLX engines, install the [arm64 runtime](docs/mlx-tts-engines.md) and select the engine in Settings. Model weights download separately and are not in Git. The app uses a [vendored ONNX plugin override](third_party/flutter_onnxruntime/pubspec.yaml).
 
 ```sh
 tools/flutter run -d macos

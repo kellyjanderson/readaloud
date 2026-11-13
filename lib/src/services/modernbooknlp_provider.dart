@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
+import 'runtime_memory_registry.dart';
 
 /// Single resident child, one admitted exchange, no hidden queue. The supervisor
 /// owns latest-window demand; cancellation invalidates and reaps out of band.
@@ -10,9 +11,11 @@ class ModernBookNlpProvider {
     required this.pythonPath,
     required this.helperPath,
     required this.runtimePath,
+    this.pythonHome,
     this.timeout = const Duration(minutes: 2),
   });
   final String pythonPath, helperPath, runtimePath;
+  final String? pythonHome;
   final Duration timeout;
   Process? _child;
   bool _busy = false, _closed = false;
@@ -24,6 +27,7 @@ class ModernBookNlpProvider {
   Future<void>? _retiring;
   StreamSubscription<List<int>>? _out, _err;
   String _stderr = '';
+  Object? _memoryToken;
   int? get processId => _child?.pid;
 
   Future<void> prepare({
@@ -117,12 +121,17 @@ class ModernBookNlpProvider {
       pythonPath,
       ['-u', '-B', helperPath, runtimePath, '--serve'],
       environment: {
+        'PYTHONHOME': ?pythonHome,
         'TOKENIZERS_PARALLELISM': 'false',
         'OMP_NUM_THREADS': '4',
         'HF_HUB_DISABLE_XET': '1',
+        'READALOUD_MEMORY_TELEMETRY': '1',
       },
     );
     _child = child;
+    final memoryToken = _memoryToken = RuntimeMemoryRegistry.shared.register(
+      child.pid,
+    );
     _stderr = '';
     final line = BytesBuilder(copy: false);
     void failed(Object error) {
@@ -148,6 +157,25 @@ class ModernBookNlpProvider {
           final message = Map<String, dynamic>.from(
             jsonDecode(utf8.decode(line.takeBytes())) as Map,
           );
+          if (message['type'] == 'memory') {
+            final bytes = message['footprintBytes'];
+            final sampled = message['sampledUnixMicros'];
+            if (bytes is! int ||
+                bytes <= 0 ||
+                sampled is! int ||
+                message['processId'] != child.pid) {
+              throw const FormatException(
+                'Invalid attribution memory telemetry',
+              );
+            }
+            RuntimeMemoryRegistry.shared.update(
+              child.pid,
+              memoryToken,
+              bytes,
+              sampledAt: DateTime.fromMicrosecondsSinceEpoch(sampled),
+            );
+            continue;
+          }
           if (message['requestId'] != _requestId) continue;
           if (message['type'] == 'progress') {
             _progress?.call(message);
@@ -200,7 +228,9 @@ class ModernBookNlpProvider {
       _retiring ??= _reap().whenComplete(() => _retiring = null);
   Future<void> _reap() async {
     final child = _child;
+    final memoryToken = _memoryToken;
     _child = null;
+    _memoryToken = null;
     if (child == null) return;
     child.kill(ProcessSignal.sigterm);
     try {
@@ -211,6 +241,9 @@ class ModernBookNlpProvider {
     }
     await _out?.cancel();
     await _err?.cancel();
+    if (memoryToken != null) {
+      RuntimeMemoryRegistry.shared.remove(child.pid, memoryToken);
+    }
     _out = _err = null;
   }
 }

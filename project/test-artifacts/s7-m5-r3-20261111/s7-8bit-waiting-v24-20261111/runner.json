@@ -1,0 +1,81 @@
+{
+  "schema": "readaloud-native-variant-runner-v1",
+  "mode": "cached-8bit",
+  "passed": false,
+  "nativePassed": true,
+  "normalQuit": true,
+  "appExitVerified": true,
+  "forcedCleanup": false,
+  "remainingOwnedPids": [],
+  "frameworkSha256": "76b623e2f42cbcfc9e108778bc43dd3e4670b7725d86ec9b00e009e471eb181e",
+  "executableSha256": "dce7b5d41f2ceeeb09f47beda67cd29d6dbc51462932a7e154855f86de0b6371",
+  "maxMlxChildren": 1,
+  "observedMlxSamples": 491,
+  "processEvents": [
+    {
+      "unixMicros": 1794421059283566,
+      "pids": []
+    },
+    {
+      "unixMicros": 1794421060904243,
+      "pids": [
+        21279
+      ]
+    },
+    {
+      "unixMicros": 1794421125761891,
+      "pids": []
+    }
+  ],
+  "errors": [
+    "Diagnostic native sampling enabled; timing is instrumented",
+    "QA-only native preparation comparison; production default unchanged"
+  ],
+  "limits": "100ms child/process observations and emitted signal per playback interval. Exact waveform matching, glitch/voice quality, total memory envelope, physical-speaker and M3 acceptance remain separate. Capture 300s; work deadline 270s.",
+  "diagnosticProfiling": true,
+  "lazyNativePreparationExperiment": true,
+  "pid": 21260,
+  "capturePid": 21261,
+  "secondaryCapture": {
+    "mechanism": "CoreAudio process tap",
+    "pid": 21262,
+    "executableSha256": "5c0d8167bc06529bac15e2df9d07abfb9f63d6e7e3296c90210dc5ac224ce909",
+    "scope": "Independent diagnostic recording; primary acceptance gates remain unchanged",
+    "exitStatus": 0
+  },
+  "nativeSamplingStartedUnixMicros": 1794421059512868,
+  "nativeRecordingOptions": {
+    "Hangs": {
+      "detectPriorityInversions": false,
+      "hangsThreshold": 250
+    },
+    "Points of Interest": {
+      "excludeOSLogs": false
+    },
+    "Time Profiler": {
+      "contextSwitchSampling": false,
+      "highFrequencySampling": false,
+      "recordKernelStacks": false,
+      "recordWaitingThreads": true
+    }
+  },
+  "captureReadyObservedUnixMicros": 1794421060745789,
+  "applicationActivationRequested": true,
+  "nativeProfilerExitStatuses": [
+    0
+  ],
+  "captureExitStatus": 0,
+  "appExitStatus": 0,
+  "emittedSignal": [
+    {
+      "label": "sustained-fish_drama3_8bit",
+      "durationSeconds": 60.019333333333336,
+      "activeWindowSeconds": 52.5,
+      "longestSilentWindowSeconds": 0.8,
+      "peak": 0.7709456086158752,
+      "passed": true,
+      "scope": "100ms app-only signal windows; not waveform identity or acoustic continuity acceptance"
+    }
+  ],
+  "strictAcousticAcceptance": "NOT_RUN: compare copied queued WAVs with capture; listening remains separate"
+}

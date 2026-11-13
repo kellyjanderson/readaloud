@@ -1,0 +1,20 @@
+{
+  "schema": "readaloud-ungated-startup-audio-v2",
+  "timingPolicy": "startup-r24",
+  "loadClass": "radoc",
+  "goalMs": 2000,
+  "hardLimitMs": 5000,
+  "goalMet": false,
+  "hardLimitMet": true,
+  "passed": true,
+  "errors": [],
+  "launchToSpeechReceiptUpperBoundMs": 2363.607958,
+  "firstSignalExpectedSpeechAlignmentMs": 0.07291666666664476,
+  "launchToNativePositionMs": 2115.763,
+  "waveformComparison": "/Users/k/Library/Containers/com.kellyjanderson.readAloud.s6R5LaunchServices/Data/s6-r5-launch-services-20261107/comparison.json",
+  "limits": "CLOCK_MONOTONIC_RAW from immediately before process spawn to receipt of the first signal-bearing app-only packet, aligned with the exact expected waveform. An upper bound on app-emitted speech, not physical speaker latency or human listening. Candidate completeness and fresh-profile provenance must be verified separately.",
+  "sourceEvidence": "https://github.com/kellyjanderson/readaloud/issues/137#issuecomment-6712009207",
+  "sourceAppCommit": "99fb512",
+  "classification": "Reusable rendered .radoc in a fresh process, verified by the original native receipt and exact waveform comparison.",
+  "assessment": "Re-evaluated retained emitted-audio evidence against startup R24. No app was launched for this reassessment. The original receipt and its former 2000 ms verdict remain unchanged."
+}

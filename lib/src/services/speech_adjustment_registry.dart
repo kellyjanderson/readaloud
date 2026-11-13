@@ -12,9 +12,43 @@ const kokoroForAdjustmentContext = SpeechAdjustmentContext.engineModel(
   '1',
 );
 
+const fishDrama3ModelContext = SpeechModelContext(
+  engineId: 'fish_drama3',
+  modelId: 'mlx-community/fish-audio-drama-3-bf16',
+  modelRevision: '8c5496f9af370bb9342ab98130b27b5389d1b1cb',
+  capabilityVersion: 'v1',
+);
+
 /// Engine recipes live here, separately from canonical document intent.
 /// A new model, precision, revision or policy gets no inherited permission.
 const speechAdjustments = <SpeechAdjustmentDefinition>[
+  SpeechAdjustmentDefinition(
+    id: 'fish-drama3.shouted',
+    revision: '1',
+    domain: SpeechAdjustmentDomain.delivery,
+    sourceReference:
+        'https://huggingface.co/spaces/fishaudio/Drama-3/blob/main/studio_content.json',
+    rationale:
+        'Explicit whole-turn shouting; native diagnostic accepted by human listening.',
+    origin: fishDrama3ModelContext,
+    targets: [fishDrama3ModelContext],
+    payloadType: 'inline_delivery_cue',
+    payloadValue: '[shouting]',
+  ),
+  SpeechAdjustmentDefinition(
+    id: 'fish-drama3.whispered',
+    revision: '1',
+    domain: SpeechAdjustmentDomain.delivery,
+    sourceReference:
+        'https://github.com/Blaizzy/mlx-audio/blob/v0.6.3/mlx_audio/tts/models/fish_drama3/drama3.py',
+    rationale:
+        'Lower explicit whole-turn whisper intent to the native inline cue. '
+        'Keep acoustic acceptance separate from adapter support.',
+    origin: fishDrama3ModelContext,
+    targets: [fishDrama3ModelContext],
+    payloadType: 'inline_delivery_cue',
+    payloadValue: '[whispers]',
+  ),
   SpeechAdjustmentDefinition(
     id: 'kokoro.for-respelling',
     revision: '1',

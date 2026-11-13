@@ -3,6 +3,22 @@
 Reconciled: October 26, 2026; RC2 implementation through feature head 2734b47
 Status: Current source architecture; bounded reader accessibility runtime check
 
+## macOS task runners
+
+The macOS runner sets `FLTEnableMergedPlatformUIThread=false` for the pinned
+Flutter engine. Flutter widget state remains owned by its main Dart isolate on
+the engine UI task runner. AppKit and native plugin callbacks remain on the
+platform main thread. Existing platform-channel replies return to the owning
+Dart isolate, and native utility work retains its explicit main-thread handoff.
+The setting prevents native accessibility or panel work from sharing Flutter's
+UI event loop.
+
+Native probes record both Dart heartbeat delay and a bounded single-flight
+platform-channel round trip. The latter uses the existing native footprint
+handler, including its utility query and main-thread reply. Their timing and
+actual menu/control interactions have separate evidence. Global heartbeat
+failures retain interval phases, including startup and operator waits.
+
 ## Implemented structure and limitations
 
 The Flutter screen exposes the Reader, transport, voice selection, character voice management, import/export and secondary options. Widgets consume controller state; theme tokens and bundled fonts define presentation. Existing UI guides retain design intent and are not proof of runtime behavior.
@@ -27,9 +43,51 @@ The reader reserves a fixed status line for current/pending/preparing/applying/f
 
 The output region uses Flutter `SelectionArea`; its Copy action sends the untruncated current message and all current stage counters/errors/wait reasons to the platform clipboard, independently of scrolling or Activity disclosure. Settings startup messages use `SelectableText`. The action follows existing cancel/retry/activity controls so it does not displace recovery actions. Narrow-layout, keyboard cancellation and full diagnostic copying have widget coverage under [#120](https://github.com/kellyjanderson/readaloud/issues/120); a bounded isolated native app check visibly selected error text and its full Copy result was observed in a native paste field. The user was concurrently using the desktop, so keyboard and resize interactions in that run are inconclusive. Native Command-C, synthesis retry and the user's original runtime failure remain separate verification gates; future interactive checks need a coordinated desktop window.
 
-The default reader status region shows one current summary and measured progress. Routine document/model preparation and startup errors use this region instead of a duplicate global toast. Activity is an explicit disclosure; only opening/closing it changes the reserved region height. Its bounded list contains one row per stage, with problems and active work first, waiting work next, and completed entries last. Completed entries remain for six seconds, fade over 600 ms, then leave the view; errors and active work never expire on a timer. Timers are main-isolate widget presentation state, cancelled on stage restart/removal and disposal. Reduced-motion settings disable the fade animation. They do not declare producer completion.
+The default reader status region shows one current summary and the measured progress of that same operation. A current failure takes precedence over unrelated resource work or completion. Routine document/model preparation and startup errors use this region instead of a duplicate global toast. Activity is an explicit disclosure, remembered through the existing preference save owner; only opening/closing it changes the reserved region height. Its bounded history presents active work before terminal attempts, with separate identities for retries and scoped passes. Successful entries remain for six seconds, fade over 600 ms, then leave the view; current errors and active work never expire on a presentation timer. Timers are main-isolate widget state, cancelled on removal and disposal. Reduced motion removes the fade and its extra delay. None of these timers declares producer completion.
 
-`MeasuredProgress` is shared by reader, Settings and voice-download feedback. It renders a bar only for a finite measured fraction below one. Unknown totals show text/counts; a fully counted but nonterminal operation says Finishing rather than presenting premature 100% or an indeterminate animation. Source preparation pauses all source stages at a full reading window; planning cancellation/failure publishes a terminal state through the existing revision gate. Startup completion/failure clears resource progress so failed startup cannot leave a live download indicator. [Feedback and download reuse](https://github.com/kellyjanderson/readaloud/issues/119) owns source/native evidence and remaining limitations.
+`MeasuredProgress` is shared by reader, Settings and voice-download feedback. It renders a bar only for valid completed work and a known positive denominator. Unknown, invalid or missing counters show text; a fully counted but nonterminal operation says Finishing rather than presenting premature 100%. A typed idle-demand state represents a full read-ahead window. Document cancellation does not retire an unrelated model operation.
+
+The existing controller admits immutable [`ReaderOperation`](../../lib/src/models/reader_operation.dart) projections with producer identity, owner epoch, attempt ordinal, scope, stage, real counts, timestamp, terminal state, error and recovery information. Terminal attempts cannot revive; retries and later package-member work receive new attempts. Owner retirement removes obsolete lane metadata while retaining a bounded recent history and current terminal latches. Document supervisor, reading-stage, MLX resource and book open/save/member callbacks enter this admission boundary. Model producers publish explicit success, failure or cancellation; a nullable clear is not proof of success. The projection is application state, not a task scheduler, second event bus or persistent task database.
+
+The summary names its selected operation while work is active, waiting on a real dependency or finalizing; completed document input cannot replace that heading with Ready. Unstarted downstream stages do not create placeholder operations. Failed reading-stage work exposes identity-guarded Clear error: its diagnostic and failed terminal latch remain in Activity, and an old control cannot dismiss a newer failure. A Save failure owns its inline status so it cannot also produce a duplicate toast. Retrying Save retires only that predecessor's owned status; unrelated messages, including identical text, retain their own visibility.
+
+Source tests establish independent pass scopes and stale/terminal ownership, not an upstream deep-analysis producer or its actual coverage. The [S8 native evidence](../test-artifacts/s8-feedback-20261111/README.md) verifies keyboard Activity disclosure, visible focus, unknown/known/finalizing counters from actual controlled file writes, and Copy/Clear/Save retry through the real controller. Final v6 completed all nine native gates with natural frames: 96ms native, 22ms UI, all 3418 native samples foreground, zero forced frames and zero speech. Local 2x text and reduced motion, the original 800 logical-pixel window and zoomed state were observed; attempted resize drags did not prove a smaller window, and these local overrides do not qualify OS settings. Scrolling exposed the complete failure content in bounded overflow; the Finishing state itself was not independently scrolled. Normal Quit and no-owned-process cleanup were verified. Earlier 434ms failure and confounded controls remain preserved; a passing UI session does not identify their cause or qualify simultaneous MLX/audio responsiveness. Shared integration acceptance remains open with [#144](https://github.com/kellyjanderson/readaloud/issues/144). Human usability cases are collected for S11.
+
+## Validated engine sessions
+
+The main-isolate controller publishes an immutable
+[`EngineSession`](../../lib/src/models/engine_session.dart): selected identity,
+validated active identity, last-working reload identity, transition epoch and
+phase. The existing single replacement future retains one latest desired
+selection. Its phases are stopping, unloading, acquiring, loading, validating,
+active, cancelled and failed. Active is cleared before retirement and published
+only after model and voice validation; last-working does not imply residency.
+Settings distinguishes these identities and offers retry after failure. A failed
+same-choice request can retry without pretending its released model stayed loaded.
+
+Every replacement invalidates captured callbacks before the first retirement
+await. Preview captures its engine/epoch and checks each asynchronous continuation;
+an obsolete preview cannot speak through the replacement or restore old voice
+state. Export and voice-library installation/refresh success and failure have
+the same ownership fence. Existing resource shutdown remains the out-of-band
+model/export cancellation owner and drains before constructing the next engine.
+No second switch queue or scheduler is introduced.
+
+Preferences retain narrator intent by engine identity alongside the readable
+legacy selected-voice field. An incompatible saved narrator remains unresolved
+instead of being silently replaced and persisted; returning to its engine restores
+that choice. Fish precision remains in its saved variant ID; the scalar runtime
+quantization option belongs to Voxtral. Document, reading anchor and Character
+intent survive replacement. Public settings replacement cancels pending Play;
+only an existing audio book's checked session/revision/intent may preserve its
+original Play through its private published-engine handoff.
+
+Barrier-controlled controller, preference, widget and book tests cover stale
+success/failure, retirement callbacks, preview/export, retry, narrator intent and
+book cancellation. These are source evidence, not native audio/overlap, memory
+or M3 certification. M3 hardware is currently unavailable. Worker diagnostics
+remain in the local app log; ordinary worker startup failures expose the actionable
+message, without appending the Python traceback to the reader's status text.
 
 ## Bounded integrated P4 observations
 
@@ -59,3 +117,30 @@ These legacy contracts describe intended behavior and acceptance; `final` denote
 - [desktop reader title chrome minimization](../specifications/desktop-reader-title-chrome-minimization.md)
 - [mobile overflow menu domain grouping](../specifications/mobile-overflow-menu-domain-grouping.md)
 - [studio workspace entry and reader isolation](../specifications/studio-workspace-entry-and-reader-isolation.md)
+
+## Model setup cancellation and capacity
+
+Settings exposes complete manifest file totals and a fresh timestamped volume
+measurement through [model_disk_capacity.dart](../../lib/src/widgets/model_disk_capacity.dart).
+Unavailable queries retain an explicit unknown/failure state. Each opening or
+manual refresh owns one bounded request; no polling queue exists.
+
+Model Cancel immediately invalidates engine/startup/preview/playback ownership,
+clears active identity and publishes cancelled while native retirement drains.
+The selected and last-working identities remain intent. Double Cancel shares the
+same drain. Retry rebuilds the closed owner; a later selection supersedes the
+cancelled target. A cancelled owner is disposed once at replacement or final
+controller disposal. No old success, error or progress can restore it, and Retry
+does not request speech. Barrier and Settings tests cover these boundaries;
+current running-app evidence and its limits are indexed by issue #112.
+
+The open Settings dialog observes the controller's current selection, so its
+model label, capacity descriptor and session status remain aligned when startup
+or another selection path changes the engine. Native menu objects remain stable
+through ordinary speech/download notifications. Only platform, export state,
+complete-document availability, audio-export eligibility or live-input state
+changes rebuild the native menu representation; actions and shortcuts retain
+their existing semantics. This avoids repeatedly rebuilding AppKit menus during
+background progress. It is not evidence that every native-main delay is fixed;
+[the timing research](../research/s7-native-response-timing.md) separates that
+measurement from Dart UI heartbeat and emitted audio.

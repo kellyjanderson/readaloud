@@ -161,4 +161,73 @@ void main() {
       },
     );
   }
+  test(
+    'runtime factory progress is owned before awaiting setup; Stop cancels and drains',
+    () async {
+      final cancellationSeen = Completer<void>();
+      final drained = Completer<void>();
+      final owner = ModernBookNlpAnalysis.withRuntime(({
+        required cancelled,
+        required consumerRevision,
+        required onProgress,
+      }) async {
+        onProgress({
+          'stage': 'runtimeExtract',
+          'message': 'Extracting',
+          'completed': null,
+          'total': null,
+        });
+        await cancelled;
+        cancellationSeen.complete();
+        await drained.future;
+        throw const ModernBookNlpCancelled();
+      });
+      owner.enable();
+      await until(() => owner.progress?['stage'] == 'runtimeExtract');
+      final stopped = owner.stop();
+      expect(owner.enabled, false);
+      expect(owner.progress, isNull);
+      await cancellationSeen.future;
+      expect(owner.busy, true); // lifetime still owns validation cleanup
+      drained.complete();
+      await stopped;
+      expect(owner.error, isNull);
+      expect(owner.busy, false);
+      await owner.shutdown();
+    },
+  );
+  test(
+    'replacement cancels creating runtime; obsolete setup cannot launch analysis',
+    () async {
+      final provider = _Provider();
+      var attempts = 0;
+      late void Function(Map<String, dynamic>) oldProgress;
+      final owner = ModernBookNlpAnalysis.withRuntime(({
+        required cancelled,
+        required consumerRevision,
+        required onProgress,
+      }) async {
+        if (++attempts == 1) {
+          oldProgress = onProgress;
+          onProgress({'stage': 'runtimeArchive'});
+          await cancelled;
+          throw const ModernBookNlpCancelled();
+        }
+        return provider;
+      });
+      addTearDown(owner.shutdown);
+      owner.offer(request(1));
+      owner.enable();
+      await until(() => owner.progress?['stage'] == 'runtimeArchive');
+      owner.offer(request(2));
+      await until(() => provider.started.length == 1);
+      oldProgress({'stage': 'obsolete'});
+      expect(owner.progress?['stage'], isNot('obsolete'));
+      expect(provider.started.single.sequence, 2);
+      provider.replies.single.complete({'quotes': [], 'window': 2});
+      await until(() => !owner.busy);
+      expect(owner.completedWindows, 1);
+      expect(owner.error, isNull);
+    },
+  );
 }

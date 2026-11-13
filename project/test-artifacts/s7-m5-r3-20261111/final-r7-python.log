@@ -1,0 +1,115 @@
+[readaloud-timing] {"requestId":"","stage":"synthesisFirstPacket","elapsedMilliseconds":4.275}
+[readaloud-timing] {"requestId":"","stage":"synthesisFirstPacket","elapsedMilliseconds":0.547}
+[readaloud-timing] {"requestId":"","stage":"synthesisFirstPacket","elapsedMilliseconds":0.465}
+[readaloud-timing] {"requestId":"","stage":"synthesisFirstPacket","elapsedMilliseconds":0.379}
+[readaloud-timing] {"requestId":"","stage":"synthesisFirstPacket","elapsedMilliseconds":0.402}
+[readaloud-timing] {"requestId":"","stage":"synthesisFirstPacket","elapsedMilliseconds":0.407}
+[readaloud-timing] {"requestId":"","stage":"synthesisFirstPacket","elapsedMilliseconds":0.347}
+.......[readaloud-timing] {"requestId":"","stage":"synthesisFirstPacket","elapsedMilliseconds":0.291}
+.......[readaloud-timing] {"requestId":"","stage":"referencePrepared","elapsedMilliseconds":0.001}
+[readaloud-timing] {"requestId":"","stage":"synthesisFirstPacket","elapsedMilliseconds":0.311}
+...[readaloud-timing] {"requestId":"","stage":"synthesisFirstPacket","elapsedMilliseconds":0.235}
+[readaloud-timing] {"requestId":"","stage":"synthesisFirstPacket","elapsedMilliseconds":0.158}
+...[readaloud-timing] {"requestId":"","stage":"synthesisFirstPacket","elapsedMilliseconds":0.221}
+.[readaloud-timing] {"requestId":"","stage":"synthesisFirstPacket","elapsedMilliseconds":0.309}
+..[readaloud-timing] {"requestId":"","stage":"synthesisFirstPacket","elapsedMilliseconds":0.402}
+.[readaloud-timing] {"requestId":"","stage":"synthesisFirstPacket","elapsedMilliseconds":0.249}
+..[readaloud-timing] {"requestId":"","stage":"modelBuildAndCodec","elapsedMilliseconds":0.016}
+[readaloud-timing] {"requestId":"","stage":"modelWeightsAndVerification","elapsedMilliseconds":0.001}
+[readaloud-timing] {"requestId":"","stage":"modelLoadTotal","elapsedMilliseconds":8.214}
+[readaloud-timing] {"requestId":"","stage":"modelBuildAndCodec","elapsedMilliseconds":0.015}
+[readaloud-timing] {"requestId":"","stage":"modelWeightsAndVerification","elapsedMilliseconds":0.015}
+[readaloud-timing] {"requestId":"","stage":"modelLoadTotal","elapsedMilliseconds":8.05}
+[readaloud-timing] {"requestId":"","stage":"modelBuildAndCodec","elapsedMilliseconds":0.012}
+[readaloud-timing] {"requestId":"","stage":"modelWeightsAndVerification","elapsedMilliseconds":0.0}
+[readaloud-timing] {"requestId":"","stage":"modelLoadTotal","elapsedMilliseconds":7.476}
+...[readaloud-timing] {"requestId":"","stage":"synthesisFirstPacket","elapsedMilliseconds":0.407}
+...........................[dry-run] Fetching 3 files:   0%|          | 0/3 [00:00<?, ?it/s][dry-run] Fetching 3 files: 100%|██████████| 3/3 [00:00<00:00, 4911.36it/s]
+Downloading bytes:           |  0.00B            
+Reconstructing (incomplete total...): |          |  0.00B /  0.00B            [A
+
+Fetching 3 files:   0%|          | 0/3 [00:00<?, ?it/s][A[AFetching 3 files:  67%|██████▋   | 2/3 [00:00<00:00, 1845.27it/s]
+
+
+[dry-run] Fetching 3 files:   0%|          | 0/3 [00:00<?, ?it/s][A[A[dry-run] Fetching 3 files: 100%|██████████| 3/3 [00:00<00:00, 4777.11it/s]
+
+
+Downloading bytes:           |  0.00B            [A[A
+
+
+Reconstructing (incomplete total...): |          |  0.00B /  0.00B            [A[A[A
+
+
+
+Fetching 3 files:   0%|          | 0/3 [00:00<?, ?it/s][A[A[A[AFetching 3 files:  67%|██████▋   | 2/3 [00:00<00:00, 2036.56it/s]
+.
+
+
+
+[dry-run] Fetching 3 files:   0%|          | 0/3 [00:00<?, ?it/s][A[A[A[A[dry-run] Fetching 3 files: 100%|██████████| 3/3 [00:00<00:00, 4195.70it/s]
+
+
+
+
+Downloading bytes:           |  0.00B            [A[A[A[A
+
+
+
+
+Reconstructing (incomplete total...): |          |  0.00B /  0.00B            [A[A[A[A[A
+
+
+
+
+
+Fetching 3 files:   0%|          | 0/3 [00:00<?, ?it/s][A[A[A[A[A[AFetching 3 files: 100%|██████████| 3/3 [00:00<00:00, 1415.08it/s]
+
+
+
+
+Download complete:           |  0.00B            [A[A[A[A
+
+
+
+
+Reconstruction complete: |          |  0.00B /  0.00B                         [A[A[A[A[ADownloading bytes:           |  0.00B            
+Reconstructing (incomplete total...): |          |  0.00B /  0.00B            
+Downloading bytes:           |  0.00B            
+Reconstructing (incomplete total...): |          |  0.00B /  0.00B            
+[dry-run] Fetching 3 files:   0%|          | 0/3 [00:00<?, ?it/s][dry-run] Fetching 3 files: 100%|██████████| 3/3 [00:00<00:00, 4340.43it/s]
+Downloading bytes:           |  0.00B            
+Reconstructing (incomplete total...): |          |  0.00B /  0.00B            [A
+
+Fetching 3 files:   0%|          | 0/3 [00:00<?, ?it/s][A[AFetching 3 files: 100%|██████████| 3/3 [00:00<00:00, 1798.84it/s]
+Download complete:           |  0.00B            
+Reconstruction complete: |          |  0.00B /  0.00B                         [A.
+
+[dry-run] Fetching 3 files:   0%|          | 0/3 [00:00<?, ?it/s][A[A[dry-run] Fetching 3 files: 100%|██████████| 3/3 [00:00<00:00, 4457.28it/s]
+
+
+Downloading bytes:           |  0.00B            [A[A
+
+
+Reconstructing (incomplete total...): |          |  0.00B /  0.00B            [A[A[A
+
+
+
+
+
+Fetching 3 files:   0%|          | 0/3 [00:00<?, ?it/s][A[A[A[A[A[AFetching 3 files: 100%|██████████| 3/3 [00:00<00:00, 1333.92it/s]
+
+
+Download complete:           |  0.00B            [A[A
+
+
+Reconstruction complete: |          |  0.00B /  0.00B                         [A[A[A................Download complete:           |  0.00B            
+Reconstruction complete: |          |  0.00B /  0.00B            
+Download complete:           |  0.00B            
+Reconstruction complete: |          |  0.00B /  0.00B            
+................................................
+----------------------------------------------------------------------
+Ran 122 tests in 12.278s
+
+OK
+Download complete:           |  0.00B            
+Reconstruction complete: |          |  0.00B /  0.00B            

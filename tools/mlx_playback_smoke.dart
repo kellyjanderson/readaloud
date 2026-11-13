@@ -11,8 +11,12 @@ import 'package:just_audio/just_audio.dart';
 import 'package:read_aloud/src/app.dart';
 import 'package:read_aloud/src/controllers/reader_controller.dart';
 import 'package:read_aloud/src/services/kokoro_tts_engine.dart';
+import 'package:read_aloud/src/services/playback_instrumentation_service.dart';
 import 'package:read_aloud/src/models/spoken_chunk_record.dart';
 import 'package:read_aloud/src/models/voice_profile.dart';
+import 'package:read_aloud/src/models/reader_document.dart';
+import 'package:read_aloud/src/models/speech_annotation.dart';
+import 'package:read_aloud/src/services/base_speech_annotation_inference_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 class SmokeController extends ReaderController {
@@ -31,6 +35,10 @@ Future<void> main(List<String> args) async {
   // ignore: invalid_use_of_visible_for_testing_member
   SharedPreferences.setMockInitialValues({});
   if (args.length != 2) exit(2);
+  final metrics = File('${args[1]}.metrics.jsonl').openWrite();
+  PlaybackInstrumentationService.instance.observer = (record) {
+    metrics.writeln(jsonEncode(record.toMap()));
+  };
   final player = AudioPlayer(useLazyPreparation: false);
   final bits =
       int.tryParse(
@@ -54,6 +62,13 @@ Future<void> main(List<String> args) async {
     }
   });
   final watch = Stopwatch()..start();
+  var lastUiTick = watch.elapsedMilliseconds;
+  var maxUiDelayMs = 0;
+  final uiHeartbeat = Timer.periodic(const Duration(milliseconds: 50), (_) {
+    final now = watch.elapsedMilliseconds;
+    maxUiDelayMs = math.max(maxUiDelayMs, now - lastUiTick - 50);
+    lastUiTick = now;
+  });
   final receipt = <String, Object?>{
     'engine': args[0],
     'bits': bits,
@@ -108,6 +123,74 @@ Future<void> main(List<String> args) async {
                 'Anna waved from the shore. "Come back soon," she called. '
                 '"I will," Ben replied. The sun shone on the water.',
       );
+    }
+    if (Platform.environment['READALOUD_SMOKE_CHARACTER_ANALYSIS'] == '1') {
+      // Exercise the same opt-in refinement as Settings, without making it a
+      // prerequisite for Play or changing the product activation policy.
+      controller.characterAnalysis.enable();
+    }
+    final whisperText = Platform.environment['READALOUD_SMOKE_WHISPER_TEXT'];
+    final shoutText = Platform.environment['READALOUD_SMOKE_SHOUT_TEXT'];
+    if (whisperText != null || shoutText != null) {
+      final source = controller.document;
+      final directions = <SpeechAnnotation>[];
+      for (final entry in {
+        whisperText: DeliveryIntent.whispered,
+        shoutText: DeliveryIntent.shouted,
+      }.entries) {
+        if (entry.key == null) continue;
+        final segment = source.speechDocument.segments.singleWhere(
+          (s) => s.normalizedText.contains(entry.key!),
+        );
+        directions.add(
+          SpeechAnnotation(
+            annotationId: 's3_explicit_${entry.value.name}',
+            segmentId: segment.segmentId,
+            kind: SpeechAnnotationKind.deliveryIntent,
+            startWord: 0,
+            endWord: segment.wordCount,
+            confidence: 1,
+            source: SpeechAnnotationSource.userOverride,
+            deliveryIntent: entry.value,
+          ),
+        );
+      }
+      final annotations = const BaseSpeechAnnotationInferenceService().infer(
+        speechDocument: source.speechDocument,
+        displayDocument: source.displayDocument,
+        explicitIntents: directions,
+      );
+      await controller.loadDocument(
+        ReaderDocument.fromNormalized(
+          title: source.title,
+          type: source.type,
+          normalizedImportResult: source.normalizedImportResult,
+          baseSpeechAnnotations: annotations,
+          dialogueAttributions: source.dialogueAttributions,
+          characterCastRegistry: source.characterCastRegistry,
+          documentVoiceAttribution: source.documentVoiceAttribution,
+          basePronunciationArtifacts: source.basePronunciationArtifacts,
+        ),
+      );
+      receipt['explicitDirections'] = directions
+          .map(
+            (d) => {
+              'segmentId': d.segmentId,
+              'delivery': d.deliveryIntent!.name,
+            },
+          )
+          .toList();
+    }
+    final castVoices = Platform.environment['READALOUD_SMOKE_CAST_VOICES'];
+    if (castVoices != null) {
+      for (final entry in (jsonDecode(castVoices) as Map).entries) {
+        final character = controller.characterCastRegistry.characterEntries
+            .singleWhere((c) => c.displayLabel == entry.key);
+        await controller.assignVoiceToCast(
+          character.castId,
+          entry.value as String,
+        );
+      }
     }
     receipt['documentWords'] = controller.document.wordCount;
     receipt['characters'] = controller.document.characterCastRegistry.entries
@@ -252,6 +335,20 @@ Future<void> main(List<String> args) async {
       // This one explicit user edit is expected; other characters remain stable.
       initialCast[contractCastId]!['voice'] = next;
     }
+    if (contractCastId != null) {
+      // Native end-of-document releases resources. Capture and validate the
+      // current binding at acknowledgment, while it actually owns playback.
+      final bindings = controller.resolvedResourceBindings
+          .where((b) => b.assignment.castId == contractCastId)
+          .toList();
+      receipt['characterBindings'] = bindings.map((b) => b.toMap()).toList();
+      if (bindings.isEmpty ||
+          bindings.any((b) => b.resource.voiceId != contractVoiceId)) {
+        throw StateError(
+          'Selected character did not bind at native acknowledgment',
+        );
+      }
+    }
     final soakSeconds =
         int.tryParse(
           Platform.environment['READALOUD_SMOKE_PLAY_SECONDS'] ?? '0',
@@ -262,8 +359,13 @@ Future<void> main(List<String> args) async {
     var lastIndex = player.currentIndex;
     var lastAdvance = watch.elapsedMilliseconds;
     var maxStallMs = 0;
+    var reachedEnd = false;
     while (watch.elapsedMilliseconds < soakEnd) {
       await Future<void>.delayed(const Duration(milliseconds: 50));
+      if (controller.playbackState.name == 'completed') {
+        reachedEnd = true;
+        break;
+      }
       if (player.position != lastPosition || player.currentIndex != lastIndex) {
         lastPosition = player.position;
         lastIndex = player.currentIndex;
@@ -279,6 +381,8 @@ Future<void> main(List<String> args) async {
       }
     }
     receipt['soakSeconds'] = soakSeconds;
+    receipt['maxNativeStallMs'] = maxStallMs;
+    receipt['reachedDocumentEnd'] = reachedEnd;
     receipt['playbackState'] = controller.playbackState.name;
     receipt['cast'] = controller.characterCastRegistry.characterEntries.map((
       entry,
@@ -300,6 +404,7 @@ Future<void> main(List<String> args) async {
     receipt['spokenChunks'] = controller.spokenChunkRecords
         .map(
           (chunk) => {
+            'sceneTurns': chunk.sceneTurns.map((t) => t.toMap()).toList(),
             'castId': chunk.castId,
             'voiceId': chunk.voiceId,
             'startWord': chunk.startWordIndex,
@@ -309,6 +414,48 @@ Future<void> main(List<String> args) async {
           },
         )
         .toList();
+    if (Platform.environment['READALOUD_SMOKE_REQUIRE_END'] == '1') {
+      final chunks = controller.spokenChunkRecords;
+      final finalSourceWord = controller.preparedRanges.isEmpty
+          ? controller.document.wordCount
+          : controller.preparedRanges
+                .map((r) => r.range.wordEnd)
+                .reduce(math.max);
+      receipt['finalSourceWord'] = finalSourceWord;
+      if (!reachedEnd ||
+          chunks.isEmpty ||
+          !chunks.last.completed ||
+          chunks.last.endWordIndex != finalSourceWord) {
+        throw StateError('Playback did not reach the final source word.');
+      }
+      var nextWord = 0;
+      for (final chunk in chunks) {
+        if (!chunk.completed || chunk.startWordIndex != nextWord) {
+          throw StateError('Missing, repeated or incomplete source span.');
+        }
+        nextWord = chunk.endWordIndex;
+      }
+    }
+    final expectedCast =
+        Platform.environment['READALOUD_SMOKE_EXPECT_CAST_SEQUENCE'];
+    if (expectedCast != null) {
+      final actual = controller.spokenChunkRecords
+          .expand(
+            (c) => c.sceneTurns.isEmpty
+                ? [c.castId]
+                : c.sceneTurns.map((t) => t.castId),
+          )
+          .where((id) => id != null && id != 'cast_narrator')
+          .map(
+            (id) =>
+                controller.characterCastRegistry.forCastId(id!)!.displayLabel,
+          )
+          .toList();
+      if (jsonEncode(actual) != jsonEncode(expectedCast.split(','))) {
+        throw StateError('Dialogue cast order differs: $actual');
+      }
+      receipt['dialogueCastOrder'] = actual;
+    }
     if (multiVoice) {
       final mismatches = (receipt['cast']! as List).where(
         (entry) =>
@@ -332,23 +479,35 @@ Future<void> main(List<String> args) async {
       }
     }
     if (contractCastId != null) {
-      final bindings = controller.resolvedResourceBindings
-          .where((b) => b.assignment.castId == contractCastId)
-          .toList();
-      receipt['characterBindings'] = bindings.map((b) => b.toMap()).toList();
-      if (bindings.isEmpty ||
-          bindings.any((b) => b.resource.voiceId != contractVoiceId)) {
-        throw StateError(
-          'Selected character did not bind to the selected native reference',
-        );
-      }
       final turns = controller.spokenChunkRecords
-          .where((c) => c.castId == contractCastId)
+          .expand(
+            (c) => c.sceneTurns.isEmpty
+                ? [
+                    {
+                      'castId': c.castId,
+                      'voiceId': c.voiceId,
+                      'completed': c.completed,
+                    },
+                  ]
+                : c.sceneTurns.map(
+                    (t) => {
+                      'castId': t.castId,
+                      'voiceId': t.voiceId,
+                      'completed':
+                          c.completed &&
+                          t.startWord >= c.startWordIndex &&
+                          t.endWord <= c.endWordIndex,
+                    },
+                  ),
+          )
+          .where((c) => c['castId'] == contractCastId)
           .toList();
       receipt['characterSpokenTurns'] = turns.length;
-      if (!turns.any((c) => c.voiceId == contractVoiceId && c.completed) ||
+      if (!turns.any(
+            (c) => c['voiceId'] == contractVoiceId && c['completed'] == true,
+          ) ||
           (Platform.environment['READALOUD_SMOKE_AUTO_VOICE_CHANGE'] != '1' &&
-              turns.any((c) => c.voiceId != contractVoiceId))) {
+              turns.any((c) => c['voiceId'] != contractVoiceId))) {
         throw StateError(
           'No correctly selected character turn reached playback',
         );
@@ -419,10 +578,81 @@ Future<void> main(List<String> args) async {
     if (soakSeconds > 0 && maxStallMs > 1000) {
       throw StateError('Native playback stalled for $maxStallMs ms');
     }
+    if (Platform.environment['READALOUD_SMOKE_TRANSPORT'] == '1') {
+      final transport = <String, Object?>{};
+      receipt['transport'] = transport;
+      Future<int> waitForNativeAudio() async {
+        final began = watch.elapsedMilliseconds;
+        while (!player.playing || player.position.inMilliseconds < 500) {
+          if (watch.elapsedMilliseconds - began > 120000 ||
+              controller.playbackState == ReaderPlaybackPrimaryState.failed) {
+            throw StateError(
+              'Transport did not reach native audio: ${controller.statusMessage}',
+            );
+          }
+          await Future<void>.delayed(const Duration(milliseconds: 25));
+        }
+        return watch.elapsedMilliseconds - began;
+      }
+
+      await controller.jumpBySeconds(-10000);
+      await controller.startPlayback().timeout(const Duration(minutes: 2));
+      transport['restartToNativeMs'] = await waitForNativeAudio();
+      final pauseStarted = watch.elapsedMilliseconds;
+      await controller.pausePlayback();
+      transport['pauseMs'] = watch.elapsedMilliseconds - pauseStarted;
+      final pausedPosition = player.position;
+      await Future<void>.delayed(const Duration(milliseconds: 500));
+      if (player.playing || player.position != pausedPosition) {
+        throw StateError('Native playback advanced after Pause completed');
+      }
+      await controller.jumpBySeconds(5);
+      transport['seekWord'] = controller.currentWordIndex;
+      await controller.startPlayback().timeout(const Duration(minutes: 2));
+      transport['seekToNativeMs'] = await waitForNativeAudio();
+      await controller.pausePlayback();
+      // A pending Play immediately superseded by Pause must not start later.
+      final pending = controller.startPlayback();
+      await controller.pausePlayback();
+      await pending.timeout(const Duration(seconds: 20));
+      await Future<void>.delayed(const Duration(seconds: 1));
+      if (player.playing || controller.isPlaying) {
+        throw StateError('Cancelled pending Play triggered stale speech');
+      }
+      transport['cancelledPlayStayedSilent'] = true;
+    }
+    final exportPath = Platform.environment['READALOUD_SMOKE_EXPORT_PATH'];
+    if (exportPath != null) {
+      final result = await controller.exportAudioToPath(exportPath);
+      if (result == null || !await File(exportPath).exists()) {
+        throw StateError(
+          'Integrated scene export failed: ${controller.statusMessage}',
+        );
+      }
+      receipt['sceneExportPath'] = exportPath;
+    }
+    if (Platform.environment['READALOUD_SMOKE_CHARACTER_ANALYSIS'] == '1' &&
+        (controller.characterAnalysis.error != null ||
+            controller.characterAnalysis.completedWindows == 0)) {
+      throw StateError(
+        'Requested character refinement did not complete: '
+        '${controller.characterAnalysis.error}',
+      );
+    }
     passed = true;
   } catch (error, stack) {
     receipt.addAll({'passed': false, 'error': '$error', 'stack': '$stack'});
   } finally {
+    receipt['characterAnalysis'] = {
+      'enabled': controller.characterAnalysis.enabled,
+      'completedWindows': controller.characterAnalysis.completedWindows,
+      'error': controller.characterAnalysis.error,
+      'busyAtProbeEnd': controller.characterAnalysis.busy,
+    };
+    receipt['engineVersion'] = engine.engineVersion;
+    receipt['peakAppAndWorkerFootprintBytes'] = engine.debugPeakMlxRuntimeBytes;
+    receipt['maxUiEventLoopDelayMs'] = maxUiDelayMs;
+    receipt['totalProbeMs'] = watch.elapsedMilliseconds;
     receipt['audioPaths'] = paths.toList();
     receipt['tracePath'] = controller.ttsDebugTraceLogPath;
     await controller.pausePlayback();
@@ -431,6 +661,9 @@ Future<void> main(List<String> args) async {
     await subscription.cancel();
     controller.removeListener(observePreparation);
     controller.dispose();
+    uiHeartbeat.cancel();
+    PlaybackInstrumentationService.instance.observer = null;
+    await metrics.close();
     final file = File(args[1]);
     await file.parent.create(recursive: true);
     await file.writeAsString(
