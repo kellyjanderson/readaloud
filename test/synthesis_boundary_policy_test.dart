@@ -8,7 +8,7 @@ import 'package:read_aloud/src/models/speech_annotation.dart';
 import 'package:read_aloud/src/services/synthesis_boundary_policy.dart';
 
 void main() {
-  for (final rate in [44100, 48000, 96000]) {
+  for (final rate in [24000, 44100, 48000, 96000]) {
     test(
       'boundary trimming uses native $rate Hz timing and preserves retained PCM',
       () async {
