@@ -9,7 +9,6 @@ import 'package:crypto/crypto.dart' as crypto;
 import 'package:html/parser.dart' as html_parser;
 import 'package:html/dom.dart' as html_dom;
 import 'package:pdfrx/pdfrx.dart';
-import 'package:xml/xml.dart';
 import 'package:xml/xml_events.dart';
 
 import '../models/character_cast_registry.dart';
@@ -56,19 +55,26 @@ class PdfTextExtractionPage {
   final PdfPageRawText? rawText;
 }
 
-/// Bounded importer output before normalization/analysis. Container locators
-/// identify the member/page; offsets within it are decoded UTF-16 coordinates.
+/// Bounded adapter output before analysis. Locators identify source members and
+/// blocks; publication offsets concatenate adapter text in UTF-16 coordinates,
+/// including a newline for structural-only units, rather than raw byte offsets.
 class DocumentImportUnit {
   const DocumentImportUnit({
     required this.text,
     this.html,
     this.locator,
     this.type = ReaderDocumentType.plainText,
+    this.title,
+    this.attachments = const [],
+    this.diagnostics = const [],
   });
   final String text;
   final String? html;
   final String? locator;
   final ReaderDocumentType type;
+  final String? title;
+  final List<ReaderAttachment> attachments;
+  final List<ImportDiagnostic> diagnostics;
 }
 
 class PdfrxPdfTextExtractor implements PdfTextExtractor {
@@ -235,7 +241,7 @@ class DocumentImportService {
     if (followingUnit != null) {
       final next = _recoverPlainTextStructure(followingUnit.text);
       _followingSegments = _NormalizedDocumentFactory(
-        title: title,
+        title: followingUnit.title ?? title,
         type: followingUnit.type,
         sourceUri: null,
         identityNamespace: 'r${sourceStart + text.length}_',
@@ -252,7 +258,7 @@ class DocumentImportService {
     _onCharacterDiscovery = onCharacterDiscovery;
     try {
       return _buildReaderDocument(
-        title: title,
+        title: unit?.title ?? title,
         type: unit?.type ?? ReaderDocumentType.plainText,
         displayHtml: unit?.html ?? recovered.displayHtml,
         speakableText: recovered.speakableText,
@@ -263,6 +269,8 @@ class DocumentImportService {
               : '${completeSourceFingerprint ?? sessionId}:range:$sourceStart',
         ),
         sourceDescription: 'Incremental source range at $sourceStart',
+        attachments: unit?.attachments ?? const [],
+        diagnostics: unit?.diagnostics ?? const [],
       );
     } finally {
       _buildingFragment = false;
@@ -303,7 +311,17 @@ class DocumentImportService {
       onEof: onAcquiredEof,
     ).transform(const Utf8Decoder(allowMalformed: true));
     if (extension == 'html' || extension == 'htm') {
-      yield* _htmlUnits(decoded(), locator: fileName);
+      try {
+        yield* _htmlUnits(decoded(), locator: fileName);
+      } catch (error) {
+        throw DocumentImportException(
+          code: 'html_parse_failed',
+          message:
+              'Read Aloud could not parse this HTML into a bounded document.',
+          fileName: fileName,
+          cause: error,
+        );
+      }
       return;
     }
     if (extension == 'rtf') {
@@ -322,7 +340,7 @@ class DocumentImportService {
     }
     if (extension != 'docx' && extension != 'epub') {
       await for (final part in boundedProseUnits(decoded())) {
-        yield DocumentImportUnit(text: part, locator: fileName);
+        yield _plainTextUnit(part, locator: fileName);
       }
       return;
     }
@@ -338,56 +356,43 @@ class DocumentImportService {
       if (extension == 'docx') {
         final entry = entries['word/document.xml'];
         if (entry == null) {
-          throw StateError('DOCX word/document.xml is missing.');
+          throw DocumentImportException(
+            code: 'docx_missing_document_xml',
+            message: 'DOCX word/document.xml is missing.',
+            fileName: fileName,
+          );
         }
-        yield* _docxUnits(_archiveText(entry), locator: entry.name);
+        final title = await _docxTitle(entries) ?? fileName;
+        var published = false;
+        await for (final unit in _docxUnits(
+          _archiveText(entry),
+          locator: entry.name,
+        )) {
+          published = true;
+          yield _copyImportUnit(unit, title: title);
+        }
+        if (!published) {
+          yield DocumentImportUnit(
+            text: '\n',
+            html: '',
+            title: title,
+            locator: entry.name,
+            type: ReaderDocumentType.html,
+          );
+        }
       } else {
-        final container = entries['META-INF/container.xml'];
-        if (container == null) {
-          throw StateError('EPUB container.xml is missing.');
-        }
-        final containerXml = XmlDocument.parse(
-          await _archiveText(container).join(),
-        );
-        final root = containerXml.descendants
-            .whereType<XmlElement>()
-            .firstWhere((element) => element.name.local == 'rootfile');
-        final packagePath = root.getAttribute('full-path');
-        final package = entries[packagePath];
-        if (packagePath == null || package == null) {
-          throw StateError('EPUB package document is missing.');
-        }
-        final assets = <String, _EpubAsset>{};
-        // Stream package metadata too: first spine item can be read before the
-        // remainder of an unusually large package metadata document is parsed.
-        await for (final events in _archiveText(package).toXmlEvents()) {
-          for (final event in events) {
-            if (event is! XmlStartElementEvent) continue;
-            final attributes = {
-              for (final a in event.attributes) a.name: a.value,
-            };
-            if (event.localName == 'item') {
-              final id = attributes['id'];
-              final href = attributes['href'];
-              if (id != null && href != null) {
-                assets[id] = _EpubAsset(
-                  href: _resolveArchivePath(packagePath, href),
-                  mediaType: attributes['media-type'] ?? '',
-                  properties: attributes['properties'] ?? '',
-                );
-              }
-            } else if (event.localName == 'itemref') {
-              final asset = assets[attributes['idref']];
-              if (asset == null || asset.isNavigationDocument) continue;
-              final chapter = entries[asset.href];
-              if (chapter == null) {
-                throw StateError('EPUB member ${asset.href} is missing.');
-              }
-              yield* _htmlUnits(_archiveText(chapter), locator: asset.href);
-            }
-          }
-        }
+        yield* _epubUnits(entries, fileName: fileName);
       }
+    } on DocumentImportException {
+      rethrow;
+    } catch (error) {
+      throw DocumentImportException(
+        code: '${extension}_parse_failed',
+        message:
+            'Read Aloud could not parse this ${extension.toUpperCase()} into a valid document.',
+        fileName: fileName,
+        cause: error,
+      );
     } finally {
       await input.close();
     }
@@ -436,16 +441,16 @@ class DocumentImportService {
       case 'text':
       case 'md':
       case 'markdown':
-        return _importPlainText(fileName, bytes, sourceDescriptor);
+        return _collectImport(fileName, bytes, sourceDescriptor);
       case 'html':
       case 'htm':
-        return _importHtml(fileName, bytes, sourceDescriptor);
+        return _collectImport(fileName, bytes, sourceDescriptor);
       case 'epub':
-        return _importEpub(fileName, bytes, sourceDescriptor);
+        return _collectImport(fileName, bytes, sourceDescriptor);
       case 'pdf':
         return _importPdf(fileName, bytes, sourceDescriptor);
       case 'docx':
-        return _importDocx(fileName, bytes, sourceDescriptor);
+        return _collectImport(fileName, bytes, sourceDescriptor);
       case 'rtf':
         return _importRtf(fileName, bytes, sourceDescriptor);
       default:
@@ -453,104 +458,39 @@ class DocumentImportService {
     }
   }
 
-  ReaderDocument importPastedText(String text) {
-    final sourceDescriptor = _sourceDescriptorForText(
-      title: 'Pasted Text',
-      text: text,
-      mode: 'pasted-text',
-    );
-    final recovered = _recoverPlainTextStructure(text);
-    return _buildReaderDocument(
-      title: 'Pasted Text',
-      type: ReaderDocumentType.plainText,
-      displayHtml: recovered.displayHtml,
-      speakableText: recovered.speakableText,
-      sourceDescriptor: sourceDescriptor,
-      sourceDescription: 'Pasted into Read Aloud',
-      diagnostics: const [
-        ImportDiagnostic(
-          severity: ImportDiagnosticSeverity.info,
-          code: 'fallback_paragraph_grouping',
-          message:
-              'Pasted text paragraph grouping used lightweight line-wrap recovery heuristics.',
-        ),
-      ],
-    );
-  }
+  ReaderDocument importPastedText(String text) => _importTextEntry(
+    text,
+    title: 'Pasted Text',
+    mode: 'pasted-text',
+    description: 'Pasted into Read Aloud',
+  );
 
-  ReaderDocument importSharedText(String text) {
-    final sourceDescriptor = _sourceDescriptorForText(
-      title: 'Shared Text',
-      text: text,
-      mode: 'shared-text',
-    );
-    final recovered = _recoverPlainTextStructure(text);
-    return _buildReaderDocument(
-      title: 'Shared Text',
-      type: ReaderDocumentType.plainText,
-      displayHtml: recovered.displayHtml,
-      speakableText: recovered.speakableText,
-      sourceDescriptor: sourceDescriptor,
-      sourceDescription: 'Shared into Read Aloud',
-      diagnostics: const [
-        ImportDiagnostic(
-          severity: ImportDiagnosticSeverity.info,
-          code: 'fallback_paragraph_grouping',
-          message:
-              'Shared text paragraph grouping used lightweight line-wrap recovery heuristics.',
-        ),
-      ],
-    );
-  }
+  ReaderDocument importSharedText(String text) => _importTextEntry(
+    text,
+    title: 'Shared Text',
+    mode: 'shared-text',
+    description: 'Shared into Read Aloud',
+  );
 
-  ReaderDocument _importPlainText(
-    String fileName,
-    Uint8List bytes,
-    _ImportSourceDescriptor sourceDescriptor,
-  ) {
-    final recovered = _recoverPlainTextStructure(
-      utf8.decode(bytes, allowMalformed: true),
-    );
+  ReaderDocument _importTextEntry(
+    String text, {
+    required String title,
+    required String mode,
+    required String description,
+  }) {
+    final unit = _plainTextUnit(text);
     return _buildReaderDocument(
-      title: fileName,
-      type: ReaderDocumentType.plainText,
-      displayHtml: recovered.displayHtml,
-      speakableText: recovered.speakableText,
-      sourceDescriptor: sourceDescriptor,
-      sourceDescription: 'Plain text import',
-      diagnostics: const [
-        ImportDiagnostic(
-          severity: ImportDiagnosticSeverity.info,
-          code: 'fallback_paragraph_grouping',
-          message:
-              'Plain text paragraph grouping used lightweight line-wrap recovery heuristics.',
-        ),
-      ],
-    );
-  }
-
-  ReaderDocument _importHtml(
-    String fileName,
-    Uint8List bytes,
-    _ImportSourceDescriptor sourceDescriptor,
-  ) {
-    final rawHtml = utf8.decode(bytes, allowMalformed: true);
-    final document = html_parser.parse(rawHtml);
-    final diagnostics = <ImportDiagnostic>[];
-    final body = document.body;
-    if (body != null) {
-      _pruneHtmlForNormalization(body, diagnostics: diagnostics);
-    }
-    final bodyHtml = body?.innerHtml ?? rawHtml;
-    final speakableText = _normalizeReadableText(body?.text.trim() ?? '');
-    return _buildReaderDocument(
-      title: fileName,
-      type: ReaderDocumentType.html,
-      displayHtml: '<article>$bodyHtml</article>',
-      speakableText: speakableText,
-      sourceDescriptor: sourceDescriptor,
-      sourceDescription: 'HTML import',
-      diagnostics: diagnostics,
+      title: title,
+      type: unit.type,
+      displayHtml: unit.html!,
+      speakableText: _recoverPlainTextStructure(text).speakableText,
+      sourceDescriptor: _sourceDescriptorForText(
+        title: title,
+        text: text,
+        mode: mode,
+      ),
+      sourceDescription: description,
+      diagnostics: unit.diagnostics,
     );
   }
 
@@ -654,114 +594,6 @@ class DocumentImportService {
     }
   }
 
-  ReaderDocument _importDocx(
-    String fileName,
-    Uint8List bytes,
-    _ImportSourceDescriptor sourceDescriptor,
-  ) {
-    try {
-      final archive = ZipDecoder().decodeBytes(bytes);
-      final entries = <String, ArchiveFile>{};
-      for (final entry in archive.files) {
-        entries[_normalizeArchivePath(entry.name)] = entry;
-      }
-
-      final documentEntry = entries['word/document.xml'];
-      if (documentEntry == null) {
-        throw DocumentImportException(
-          code: 'docx_missing_document_xml',
-          message:
-              'Read Aloud could not import this DOCX because word/document.xml is missing.',
-          fileName: fileName,
-        );
-      }
-
-      final documentXml = XmlDocument.parse(
-        utf8.decode(_entryBytes(documentEntry), allowMalformed: true),
-      );
-      final blocks = <String>[];
-      final speakableText = StringBuffer();
-      final attachments = <ReaderAttachment>[];
-      final diagnostics = <ImportDiagnostic>[];
-
-      for (final paragraph
-          in documentXml.descendants.whereType<XmlElement>().where(
-            (element) => element.name.local == 'p',
-          )) {
-        final paragraphContent = _extractDocxParagraph(paragraph);
-        if (paragraphContent == null) {
-          continue;
-        }
-
-        if (paragraphContent.hasImage) {
-          attachments.add(
-            const ReaderAttachment(
-              label: 'Inline DOCX media',
-              type: ReaderAttachmentType.image,
-            ),
-          );
-          diagnostics.add(
-            const ImportDiagnostic(
-              severity: ImportDiagnosticSeverity.info,
-              code: 'lossy_conversion',
-              message:
-                  'DOCX inline media is preserved as an attachment placeholder in v1.',
-            ),
-          );
-          blocks.add(
-            '<div data-read-aloud-kind="attachment-placeholder" '
-            'data-attachment-type="image" '
-            'data-label="Inline DOCX media"></div>',
-          );
-        }
-
-        if (paragraphContent.speakableText.isEmpty) {
-          continue;
-        }
-
-        blocks.add(
-          '<${paragraphContent.htmlTag}>${paragraphContent.htmlText}</${paragraphContent.htmlTag}>',
-        );
-
-        if (speakableText.isNotEmpty) {
-          speakableText.writeln();
-          speakableText.writeln();
-        }
-        speakableText.write(paragraphContent.speakableText);
-      }
-
-      final title = _docxTitle(entries) ?? fileName;
-      final displayHtml = blocks.isEmpty
-          ? '''
-<article>
-  <h1>${const HtmlEscape().convert(title)}</h1>
-  <p>No readable text was extracted from this DOCX document yet.</p>
-</article>
-'''
-          : '<article>${blocks.join('\n')}</article>';
-
-      return _buildReaderDocument(
-        title: title,
-        type: ReaderDocumentType.html,
-        displayHtml: displayHtml,
-        speakableText: speakableText.toString().trim(),
-        sourceDescriptor: sourceDescriptor,
-        sourceDescription: 'DOCX import',
-        attachments: attachments,
-        diagnostics: diagnostics,
-      );
-    } on DocumentImportException {
-      rethrow;
-    } catch (error) {
-      throw DocumentImportException(
-        code: 'docx_parse_failed',
-        message: 'Read Aloud could not parse this DOCX into a valid document.',
-        fileName: fileName,
-        cause: error,
-      );
-    }
-  }
-
   ReaderDocument _importRtf(
     String fileName,
     Uint8List bytes,
@@ -820,196 +652,51 @@ class DocumentImportService {
     );
   }
 
-  ReaderDocument _importEpub(
+  /// Explicit whole-file compatibility API. Interactive preparation consumes
+  /// these same events directly and never enters this accumulating collector.
+  Future<ReaderDocument> _collectImport(
     String fileName,
     Uint8List bytes,
     _ImportSourceDescriptor sourceDescriptor,
-  ) {
-    try {
-      final archive = ZipDecoder().decodeBytes(bytes);
-      final entries = <String, ArchiveFile>{};
-      for (final entry in archive.files) {
-        entries[_normalizeArchivePath(entry.name)] = entry;
-      }
-
-      final containerEntry = entries['META-INF/container.xml'];
-      if (containerEntry == null) {
-        throw DocumentImportException(
-          code: 'epub_missing_container',
-          message:
-              'Read Aloud could not import this EPUB because META-INF/container.xml is missing.',
-          fileName: fileName,
+  ) async {
+    final units = await streamUnits(fileName: fileName, bytes: bytes).toList();
+    final extension = _extensionOf(fileName);
+    final type = extension == 'epub'
+        ? ReaderDocumentType.epub
+        : const {'docx', 'html', 'htm'}.contains(extension)
+        ? ReaderDocumentType.html
+        : ReaderDocumentType.plainText;
+    final title =
+        units.map((unit) => unit.title).whereType<String>().firstOrNull ??
+        fileName;
+    final html = StringBuffer('<article>');
+    final text = <String>[];
+    final attachments = <ReaderAttachment>[];
+    final diagnostics = <ImportDiagnostic>[];
+    for (final unit in units) {
+      final recovered = _recoverPlainTextStructure(unit.text);
+      html.write(unit.html ?? recovered.displayHtml);
+      if (unit.text.trim().isNotEmpty) {
+        text.add(
+          unit.type == ReaderDocumentType.plainText
+              ? recovered.speakableText
+              : unit.text,
         );
       }
-
-      final containerXml = XmlDocument.parse(
-        utf8.decode(_entryBytes(containerEntry), allowMalformed: true),
-      );
-      final rootfile = containerXml.descendants
-          .whereType<XmlElement>()
-          .firstWhere(
-            (element) => element.name.local == 'rootfile',
-            orElse: () => XmlElement(XmlName('rootfile')),
-          );
-      final packagePath = rootfile.getAttribute('full-path');
-      if (packagePath == null || packagePath.isEmpty) {
-        throw DocumentImportException(
-          code: 'epub_missing_package_path',
-          message:
-              'Read Aloud could not import this EPUB because the package document path is missing.',
-          fileName: fileName,
-        );
-      }
-
-      final packageEntry = entries[_normalizeArchivePath(packagePath)];
-      if (packageEntry == null) {
-        throw DocumentImportException(
-          code: 'epub_missing_package_document',
-          message:
-              'Read Aloud could not import this EPUB because the package document is missing.',
-          fileName: fileName,
-        );
-      }
-
-      final packageXml = XmlDocument.parse(
-        utf8.decode(_entryBytes(packageEntry), allowMalformed: true),
-      );
-      final manifest = <String, _EpubAsset>{};
-      for (final item in packageXml.descendants.whereType<XmlElement>().where(
-        (e) => e.name.local == 'item',
-      )) {
-        final id = item.getAttribute('id');
-        final href = item.getAttribute('href');
-        if (id == null || href == null) continue;
-        manifest[id] = _EpubAsset(
-          href: _resolveArchivePath(packagePath, href),
-          mediaType: item.getAttribute('media-type') ?? '',
-          properties: item.getAttribute('properties') ?? '',
-        );
-      }
-
-      final sections = <String>[];
-      final speakableText = StringBuffer();
-      final attachments = <ReaderAttachment>[];
-      final diagnostics = <ImportDiagnostic>[];
-      final metadataTitle = packageXml.descendants
-          .whereType<XmlElement>()
-          .firstWhere(
-            (element) => element.name.local == 'title',
-            orElse: () => XmlElement(XmlName('title')),
-          )
-          .innerText
-          .trim();
-
-      for (final itemref
-          in packageXml.descendants.whereType<XmlElement>().where(
-            (e) => e.name.local == 'itemref',
-          )) {
-        final idref = itemref.getAttribute('idref');
-        final asset = idref == null ? null : manifest[idref];
-        if (asset == null) continue;
-        if (asset.isNavigationDocument) {
-          diagnostics.add(
-            ImportDiagnostic(
-              severity: ImportDiagnosticSeverity.info,
-              code: 'navigation_content_skipped',
-              message:
-                  'An EPUB navigation document was excluded from body content.',
-              sourceLocator: asset.href,
-            ),
-          );
-          continue;
-        }
-        final chapterEntry = entries[asset.href];
-        if (chapterEntry == null) continue;
-
-        final chapterHtml = utf8.decode(
-          _entryBytes(chapterEntry),
-          allowMalformed: true,
-        );
-        final parsed = html_parser.parse(chapterHtml);
-        final body = parsed.body;
-        if (body == null) continue;
-        _pruneHtmlForNormalization(body, diagnostics: diagnostics);
-
-        for (final image in body.querySelectorAll('img')) {
-          final src = image.attributes['src'];
-          if (src == null ||
-              src.isEmpty ||
-              src.startsWith('data:') ||
-              src.startsWith('http')) {
-            if (src == null || src.isEmpty) {
-              diagnostics.add(
-                const ImportDiagnostic(
-                  severity: ImportDiagnosticSeverity.warning,
-                  code: 'missing_asset',
-                  message: 'An EPUB image reference was missing a source.',
-                ),
-              );
-            }
-            continue;
-          }
-          final resolved = _resolveArchivePath(asset.href, src);
-          final imageEntry = entries[resolved];
-          if (imageEntry == null) {
-            diagnostics.add(
-              ImportDiagnostic(
-                severity: ImportDiagnosticSeverity.warning,
-                code: 'missing_asset',
-                message: 'An EPUB image resource could not be resolved.',
-                sourceLocator: resolved,
-              ),
-            );
-            continue;
-          }
-          final imageBytes = _entryBytes(imageEntry);
-          final mimeType = _guessMimeType(resolved);
-          image.attributes['src'] =
-              'data:$mimeType;base64,${base64Encode(imageBytes)}';
-          attachments.add(
-            ReaderAttachment(
-              label: image.attributes['alt'] ?? resolved.split('/').last,
-              type: ReaderAttachmentType.image,
-              source: resolved,
-            ),
-          );
-        }
-
-        sections.add('<section>${body.innerHtml}</section>');
-        final bodyText = body.text.trim();
-        if (bodyText.isNotEmpty) {
-          if (speakableText.isNotEmpty) {
-            speakableText.writeln();
-            speakableText.writeln();
-          }
-          speakableText.write(bodyText);
-        }
-      }
-
-      return _buildReaderDocument(
-        title: metadataTitle.isEmpty ? fileName : metadataTitle,
-        type: ReaderDocumentType.epub,
-        displayHtml: '<article>${sections.join('\n')}</article>',
-        speakableText: speakableText.toString().trim(),
-        sourceDescriptor: sourceDescriptor,
-        sourceDescription: 'EPUB import',
-        attachments: attachments,
-        diagnostics: diagnostics,
-      );
-    } on DocumentImportException {
-      rethrow;
-    } catch (error) {
-      throw DocumentImportException(
-        code: 'epub_parse_failed',
-        message: 'Read Aloud could not parse this EPUB into a valid document.',
-        fileName: fileName,
-        cause: error,
-      );
+      attachments.addAll(unit.attachments);
+      diagnostics.addAll(unit.diagnostics);
     }
-  }
-
-  Uint8List _entryBytes(ArchiveFile file) {
-    return file.readBytes() ?? Uint8List(0);
+    html.write('</article>');
+    return _buildReaderDocument(
+      title: title,
+      type: type,
+      displayHtml: html.toString(),
+      speakableText: text.join('\n\n'),
+      sourceDescriptor: sourceDescriptor,
+      sourceDescription: '${extension.toUpperCase()} import',
+      attachments: attachments,
+      diagnostics: diagnostics,
+    );
   }
 
   ReaderDocument _buildReaderDocument({
@@ -1224,20 +911,6 @@ class _ImportSourceDescriptor {
   final Uri? sourceUri;
 }
 
-class _DocxParagraphContent {
-  const _DocxParagraphContent({
-    required this.htmlTag,
-    required this.htmlText,
-    required this.speakableText,
-    required this.hasImage,
-  });
-
-  final String htmlTag;
-  final String htmlText;
-  final String speakableText;
-  final bool hasImage;
-}
-
 String _extensionOf(String fileName) {
   final dotIndex = fileName.lastIndexOf('.');
   if (dotIndex == -1) return '';
@@ -1304,96 +977,35 @@ String _guessMimeType(String path) {
   }
 }
 
-String? _docxTitle(Map<String, ArchiveFile> entries) {
-  final coreEntry = entries['docProps/core.xml'];
-  if (coreEntry == null) {
-    return null;
-  }
-
+Future<String?> _docxTitle(Map<String, ArchiveFile> entries) async {
+  final entry = entries['docProps/core.xml'];
+  if (entry == null) return null;
+  // Optional malformed metadata never invalidates otherwise usable body text.
   try {
-    final coreXml = XmlDocument.parse(
-      utf8.decode(coreEntry.content, allowMalformed: true),
-    );
-    final title = coreXml.descendants
-        .whereType<XmlElement>()
-        .firstWhere(
-          (element) => element.name.local == 'title',
-          orElse: () => XmlElement(XmlName('title')),
-        )
-        .innerText
-        .trim();
-    return title.isEmpty ? null : title;
+    final title = StringBuffer();
+    var seenTitle = false;
+    var inTitle = false;
+    await for (final events in _archiveText(
+      entry,
+    ).toXmlEvents(validateNesting: true, validateDocument: true)) {
+      for (final event in events) {
+        if (event is XmlStartElementEvent &&
+            event.localName == 'title' &&
+            !seenTitle) {
+          seenTitle = true;
+          inTitle = !event.isSelfClosing;
+        } else if (event is XmlEndElementEvent && event.localName == 'title') {
+          inTitle = false;
+        } else if (event is XmlTextEvent && inTitle) {
+          title.write(event.value);
+        }
+      }
+    }
+    final value = title.toString().trim();
+    return value.isEmpty ? null : value;
   } catch (_) {
     return null;
   }
-}
-
-_DocxParagraphContent? _extractDocxParagraph(XmlElement paragraph) {
-  final styleElement = paragraph.descendants.whereType<XmlElement>().firstWhere(
-    (element) => element.name.local == 'pStyle',
-    orElse: () => XmlElement(XmlName('pStyle')),
-  );
-  final styleValue = styleElement.attributes
-      .firstWhere(
-        (attribute) => attribute.name.local == 'val',
-        orElse: () => XmlAttribute(XmlName('val'), ''),
-      )
-      .value;
-  final htmlTag = switch (styleValue) {
-    'Heading1' => 'h1',
-    'Heading2' => 'h2',
-    'Heading3' => 'h3',
-    _ => 'p',
-  };
-
-  final htmlBuffer = StringBuffer();
-  final speakableBuffer = StringBuffer();
-  var hasImage = false;
-
-  for (final node in paragraph.descendants) {
-    if (node is! XmlElement) {
-      continue;
-    }
-
-    switch (node.name.local) {
-      case 't':
-        final text = node.innerText;
-        if (text.isEmpty) {
-          break;
-        }
-        htmlBuffer.write(const HtmlEscape().convert(text));
-        speakableBuffer.write(text);
-        break;
-      case 'tab':
-        htmlBuffer.write(' ');
-        speakableBuffer.write(' ');
-        break;
-      case 'br':
-      case 'cr':
-        htmlBuffer.write('<br />');
-        speakableBuffer.write('\n');
-        break;
-      case 'drawing':
-      case 'pict':
-        hasImage = true;
-        break;
-      default:
-        break;
-    }
-  }
-
-  final speakableText = _normalizeImportedText(speakableBuffer.toString());
-  final htmlText = htmlBuffer.toString().trim();
-  if (speakableText.isEmpty && htmlText.isEmpty && !hasImage) {
-    return null;
-  }
-
-  return _DocxParagraphContent(
-    htmlTag: htmlTag,
-    htmlText: htmlText.isEmpty ? '&nbsp;' : htmlText,
-    speakableText: speakableText,
-    hasImage: hasImage,
-  );
 }
 
 String _decodeRtf(String raw, {String? fileName}) => _normalizeRtfDecodedText(
@@ -1776,8 +1388,18 @@ class _NormalizedDocumentFactory {
           final words = RegExp(
             r'\S+',
           ).allMatches(fragment.text).toList(growable: false);
-          final displayStart = sentenceDisplayStart + fragment.startOffset;
-          final displayEnd = sentenceDisplayStart + fragment.endOffset;
+          final requestedStart = sentenceDisplayStart + fragment.startOffset;
+          final requestedEnd = sentenceDisplayStart + fragment.endOffset;
+          // Heuristic paragraph recovery can disagree with source structure.
+          // Keep its recovery anchor/uncertainty without emitting invalid
+          // inline offsets or failing a later sentence's lookup.
+          final displayLimit = block?.plainText.length ?? requestedEnd;
+          final displayStart = requestedStart.clamp(0, displayLimit);
+          final displayEnd = requestedEnd.clamp(displayStart, displayLimit);
+          final confidence =
+              displayStart == requestedStart && displayEnd == requestedEnd
+              ? sentenceConfidence
+              : math.min(sentenceConfidence, 0.55);
 
           speechSegments.add(
             SpeechSegment(
@@ -1819,7 +1441,7 @@ class _NormalizedDocumentFactory {
               displayEnd: math.max(0, displayEnd),
               speechStartWord: 0,
               speechEndWord: words.length,
-              confidence: sentenceConfidence,
+              confidence: confidence,
               recoveryAnchor: RecoveryAnchor(
                 exact: fragment.text,
                 prefix: _prefixFor(fragment.text),
@@ -2254,13 +1876,17 @@ void _pruneHtmlForNormalization(
 
   final navigationNodes = root.querySelectorAll('nav');
   if (navigationNodes.isNotEmpty) {
-    diagnostics.add(
-      const ImportDiagnostic(
-        severity: ImportDiagnosticSeverity.info,
-        code: 'navigation_content_skipped',
-        message: 'Navigation scaffolding was excluded from body content.',
-      ),
-    );
+    if (!diagnostics.any(
+      (diagnostic) => diagnostic.code == 'navigation_content_skipped',
+    )) {
+      diagnostics.add(
+        const ImportDiagnostic(
+          severity: ImportDiagnosticSeverity.info,
+          code: 'navigation_content_skipped',
+          message: 'Navigation scaffolding was excluded from body content.',
+        ),
+      );
+    }
     for (final node in navigationNodes) {
       node.remove();
     }
@@ -2774,7 +2400,10 @@ class _SpeechFragment {
 
 int _matchOffset(String blockText, String sentence, int startAt) {
   final normalizedBlock = _normalizeImportedText(blockText);
-  final index = normalizedBlock.indexOf(sentence, startAt);
+  final index = normalizedBlock.indexOf(
+    sentence,
+    startAt.clamp(0, normalizedBlock.length),
+  );
   return index >= 0 ? index : 0;
 }
 
@@ -2858,7 +2487,20 @@ Stream<String> _archiveText(ArchiveFile entry) async* {
     }
   }
 
-  yield* verified().transform(const Utf8Decoder(allowMalformed: true));
+  await for (final text in verified().transform(
+    const Utf8Decoder(allowMalformed: true),
+  )) {
+    for (var start = 0; start < text.length;) {
+      var end = math.min(start + 4096, text.length);
+      if (end < text.length &&
+          text.codeUnitAt(end - 1) >= 0xd800 &&
+          text.codeUnitAt(end - 1) <= 0xdbff) {
+        end--;
+      }
+      yield text.substring(start, end);
+      start = end;
+    }
+  }
 }
 
 /// Application range policy on top of the platform decoder. Prefer a complete
@@ -2890,6 +2532,215 @@ Stream<String> boundedProseUnits(Stream<String> source) async* {
   if (pending.trim().isNotEmpty) yield pending;
 }
 
+DocumentImportUnit _plainTextUnit(String text, {String? locator}) {
+  final recovered = _recoverPlainTextStructure(text);
+  return DocumentImportUnit(
+    text: text,
+    html: recovered.displayHtml,
+    locator: locator,
+    diagnostics: const [
+      ImportDiagnostic(
+        severity: ImportDiagnosticSeverity.info,
+        code: 'fallback_paragraph_grouping',
+        message:
+            'Text paragraph grouping used lightweight line-wrap recovery heuristics.',
+      ),
+    ],
+  );
+}
+
+DocumentImportUnit _copyImportUnit(
+  DocumentImportUnit unit, {
+  String? title,
+  ReaderDocumentType? type,
+  String? html,
+  List<ReaderAttachment>? attachments,
+  List<ImportDiagnostic>? diagnostics,
+}) => DocumentImportUnit(
+  text: unit.text,
+  html: html ?? unit.html,
+  locator: unit.locator,
+  type: type ?? unit.type,
+  title: title ?? unit.title,
+  attachments: List.unmodifiable(attachments ?? unit.attachments),
+  diagnostics: List.unmodifiable(diagnostics ?? unit.diagnostics),
+);
+
+Stream<DocumentImportUnit> _epubUnits(
+  Map<String, ArchiveFile> entries, {
+  required String fileName,
+}) async* {
+  DocumentImportException missing(String code, String message) =>
+      DocumentImportException(code: code, message: message, fileName: fileName);
+  final container = entries['META-INF/container.xml'];
+  if (container == null) {
+    throw missing(
+      'epub_missing_container',
+      'EPUB container metadata is missing.',
+    );
+  }
+  String? path;
+  await for (final events in _archiveText(
+    container,
+  ).toXmlEvents(validateNesting: true, validateDocument: true)) {
+    for (final event in events) {
+      if (event is XmlStartElementEvent &&
+          event.localName == 'rootfile' &&
+          path == null) {
+        path = event.attributes
+            .where((a) => a.name == 'full-path')
+            .firstOrNull
+            ?.value;
+      }
+    }
+  }
+  if (path == null || path.isEmpty) {
+    throw missing('epub_missing_package_path', 'EPUB package path is missing.');
+  }
+  final package = entries[_normalizeArchivePath(path)];
+  if (package == null) {
+    throw missing(
+      'epub_missing_package_document',
+      'EPUB package document is missing.',
+    );
+  }
+  final assets = <String, _EpubAsset>{};
+  final diagnostics = <ImportDiagnostic>[];
+  var title = '';
+  var inTitle = false;
+  var seenTitle = false;
+  DocumentImportUnit? pending;
+  // OPF metadata/manifest precede the spine in the maintained EPUB format.
+  // No chapter DOM or complete package/spine is retained before publication.
+  await for (final events in _archiveText(
+    package,
+  ).toXmlEvents(validateNesting: true, validateDocument: true)) {
+    for (final event in events) {
+      if (event is XmlTextEvent && inTitle) title += event.value;
+      if (event is XmlEndElementEvent && event.localName == 'title') {
+        inTitle = false;
+      }
+      if (event is! XmlStartElementEvent) continue;
+      final attributes = {for (final a in event.attributes) a.name: a.value};
+      if (event.localName == 'title' && !seenTitle) {
+        seenTitle = true;
+        inTitle = !event.isSelfClosing;
+      }
+      if (event.localName == 'item') {
+        final id = attributes['id'];
+        final href = attributes['href'];
+        if (id != null && href != null) {
+          assets[id] = _EpubAsset(
+            href: _resolveArchivePath(path, href),
+            mediaType: attributes['media-type'] ?? '',
+            properties: attributes['properties'] ?? '',
+          );
+        }
+      } else if (event.localName == 'itemref') {
+        final asset = assets[attributes['idref']];
+        if (asset == null) {
+          diagnostics.add(
+            ImportDiagnostic(
+              severity: ImportDiagnosticSeverity.warning,
+              code: 'missing_asset',
+              message: 'An EPUB spine reference could not be resolved.',
+              sourceLocator: attributes['idref'],
+            ),
+          );
+          continue;
+        }
+        if (asset.isNavigationDocument) {
+          diagnostics.add(
+            ImportDiagnostic(
+              severity: ImportDiagnosticSeverity.info,
+              code: 'navigation_content_skipped',
+              message:
+                  'An EPUB navigation document was excluded from body content.',
+              sourceLocator: asset.href,
+            ),
+          );
+          continue;
+        }
+        final chapter = entries[asset.href];
+        if (chapter == null) {
+          diagnostics.add(
+            ImportDiagnostic(
+              severity: ImportDiagnosticSeverity.warning,
+              code: 'missing_asset',
+              message: 'An EPUB spine member could not be resolved.',
+              sourceLocator: asset.href,
+            ),
+          );
+          continue;
+        }
+        await for (final unit in _htmlUnits(
+          _archiveText(chapter),
+          locator: asset.href,
+        )) {
+          if (pending != null) yield pending;
+          final root = html_parser.parseFragment(unit.html!);
+          final attachments = <ReaderAttachment>[];
+          final localDiagnostics = [...diagnostics, ...unit.diagnostics];
+          diagnostics.clear();
+          for (final image in root.querySelectorAll('img')) {
+            final src = image.attributes['src'];
+            if (src == null ||
+                src.isEmpty ||
+                src.startsWith('data:') ||
+                src.startsWith('http')) {
+              continue;
+            }
+            final resolved = _resolveArchivePath(asset.href, src);
+            final entry = entries[resolved];
+            if (entry == null) {
+              localDiagnostics.add(
+                ImportDiagnostic(
+                  severity: ImportDiagnosticSeverity.warning,
+                  code: 'missing_asset',
+                  message: 'An EPUB image resource could not be resolved.',
+                  sourceLocator: resolved,
+                ),
+              );
+              continue;
+            }
+            final bytes = entry.readBytes() ?? Uint8List(0);
+            image.attributes['src'] =
+                'data:${_guessMimeType(resolved)};base64,${base64Encode(bytes)}';
+            attachments.add(
+              ReaderAttachment(
+                label: image.attributes['alt'] ?? resolved.split('/').last,
+                type: ReaderAttachmentType.image,
+                source: resolved,
+              ),
+            );
+          }
+          pending = _copyImportUnit(
+            unit,
+            title: title.trim().isEmpty ? fileName : title.trim(),
+            type: ReaderDocumentType.epub,
+            html: root.outerHtml,
+            attachments: attachments,
+            diagnostics: localDiagnostics,
+          );
+        }
+      }
+    }
+  }
+  if (pending != null) {
+    yield _copyImportUnit(
+      pending,
+      diagnostics: [...pending.diagnostics, ...diagnostics],
+    );
+  } else {
+    yield DocumentImportUnit(
+      text: '\n',
+      title: title.trim().isEmpty ? fileName : title.trim(),
+      type: ReaderDocumentType.epub,
+      diagnostics: List.unmodifiable(diagnostics),
+    );
+  }
+}
+
 Stream<DocumentImportUnit> _docxUnits(
   Stream<String> source, {
   required String locator,
@@ -2897,13 +2748,60 @@ Stream<DocumentImportUnit> _docxUnits(
   var inText = false;
   var paragraph = StringBuffer();
   var paragraphNumber = 0;
-  String tag = 'p';
-  await for (final events in source.toXmlEvents(validateNesting: true)) {
+  var partNumber = 0;
+  var hasImage = false;
+  var tag = 'p';
+  DocumentImportUnit? flush() {
+    final text = _normalizeImportedText(paragraph.toString());
+    paragraph = StringBuffer();
+    if (text.isEmpty && !hasImage) return null;
+    final media = hasImage;
+    hasImage = false;
+    final unit = DocumentImportUnit(
+      text: text.isEmpty ? '\n' : text,
+      html:
+          '${media ? '<div data-read-aloud-kind="attachment-placeholder" data-attachment-type="image" data-label="Inline DOCX media"></div>' : ''}'
+          '${text.isEmpty ? '' : '<$tag>${const HtmlEscape().convert(text)}</$tag>'}',
+      locator: '$locator:p$paragraphNumber:part${partNumber++}',
+      type: ReaderDocumentType.html,
+      attachments: media
+          ? const [
+              ReaderAttachment(
+                label: 'Inline DOCX media',
+                type: ReaderAttachmentType.image,
+              ),
+            ]
+          : const [],
+      diagnostics: media
+          ? [
+              ImportDiagnostic(
+                severity: ImportDiagnosticSeverity.info,
+                code: 'lossy_conversion',
+                message:
+                    'DOCX inline media is preserved as an attachment placeholder in v1.',
+                sourceLocator: '$locator:p$paragraphNumber',
+              ),
+            ]
+          : const [],
+    );
+    return unit;
+  }
+
+  await for (final events in source.toXmlEvents(
+    validateNesting: true,
+    validateDocument: true,
+  )) {
     for (final event in events) {
       if (event is XmlStartElementEvent) {
         if (event.localName == 't') inText = !event.isSelfClosing;
-        if (event.localName == 'tab') paragraph.write('\t');
-        if (event.localName == 'br') paragraph.write('\n');
+        if (event.localName == 'tab') paragraph.write(' ');
+        if (event.localName == 'br' || event.localName == 'cr') {
+          paragraph.write('\n');
+        }
+        if (event.localName == 'drawing' || event.localName == 'pict') {
+          hasImage = true;
+        }
+        if (event.localName == 'numPr') tag = 'li';
         if (event.localName == 'pStyle') {
           final style =
               event.attributes
@@ -2918,37 +2816,40 @@ Stream<DocumentImportUnit> _docxUnits(
           if (heading != null) tag = 'h${heading.group(1)}';
         }
       } else if (event is XmlTextEvent && inText) {
-        paragraph.write(event.value);
+        var remaining = event.value;
+        while (remaining.isNotEmpty) {
+          var end = math.min(8192 - paragraph.length, remaining.length);
+          if (end < remaining.length &&
+              end > 0 &&
+              remaining.codeUnitAt(end - 1) >= 0xd800 &&
+              remaining.codeUnitAt(end - 1) <= 0xdbff) {
+            end--;
+          }
+          if (end == 0) {
+            final unit = flush();
+            if (unit != null) yield unit;
+            continue;
+          }
+          paragraph.write(remaining.substring(0, end));
+          remaining = remaining.substring(end);
+          if (paragraph.length >= 8191) {
+            final unit = flush();
+            if (unit != null) yield unit;
+          }
+        }
       } else if (event is XmlEndElementEvent) {
         if (event.localName == 't') inText = false;
         if (event.localName == 'p') {
-          final text = paragraph.toString();
-          if (text.trim().isNotEmpty) {
-            await for (final part in boundedProseUnits(Stream.value(text))) {
-              yield DocumentImportUnit(
-                text: part,
-                html: '<$tag>${const HtmlEscape().convert(part)}</$tag>',
-                locator: '$locator:p${paragraphNumber++}',
-                type: ReaderDocumentType.html,
-              );
-            }
-          }
-          paragraph = StringBuffer();
+          final unit = flush();
+          if (unit != null) yield unit;
+          paragraphNumber++;
+          partNumber = 0;
           tag = 'p';
         }
       }
-      // An unusually long paragraph is split under the same bounded policy.
       if (paragraph.length >= 8192) {
-        final text = paragraph.toString();
-        paragraph = StringBuffer();
-        await for (final part in boundedProseUnits(Stream.value(text))) {
-          yield DocumentImportUnit(
-            text: part,
-            html: '<$tag>${const HtmlEscape().convert(part)}</$tag>',
-            locator: '$locator:p${paragraphNumber++}',
-            type: ReaderDocumentType.html,
-          );
-        }
+        final unit = flush();
+        if (unit != null) yield unit;
       }
     }
   }
@@ -2968,6 +2869,14 @@ Stream<DocumentImportUnit> _htmlUnits(
   final tagNames = <String>[];
   String? suppressed;
   var ordinal = 0;
+  final diagnostics = <ImportDiagnostic>[];
+  DocumentImportUnit? pendingUnit;
+  DocumentImportUnit? enqueue(DocumentImportUnit unit) {
+    final previous = pendingUnit;
+    pendingUnit = unit;
+    return previous;
+  }
+
   const voidTags = {
     'area',
     'base',
@@ -3006,12 +2915,31 @@ Stream<DocumentImportUnit> _htmlUnits(
     final parsed = html_parser.parseFragment(raw);
     final wrapper = html_dom.Element.tag('article')
       ..nodes.addAll(parsed.nodes.toList());
-    _pruneHtmlForNormalization(wrapper, diagnostics: <ImportDiagnostic>[]);
-    final text = _normalizeReadableText(wrapper.text);
+    _pruneHtmlForNormalization(wrapper, diagnostics: diagnostics);
+    // Reuse display block policy rather than DOM .text concatenation, which
+    // loses boundaries around captions, list items and nested structures.
+    final display = _DisplayDocumentBuilder(
+      documentId: '',
+      sourceType: ReaderDocumentType.html.name,
+      title: '',
+      normalizationVersion: DocumentImportService._normalizationVersion,
+      diagnostics: [],
+    )..addNode(wrapper);
+    final text = display.blocks
+        .where((block) => block.plainText.trim().isNotEmpty)
+        .map((block) => _normalizeReadableText(block.plainText))
+        .join('\n\n');
     block = StringBuffer()..writeAll(open);
-    if (text.isEmpty) return null;
+    if (text.isEmpty &&
+        wrapper.querySelector('img,audio,video,hr,[data-read-aloud-kind]') ==
+            null) {
+      return null;
+    }
+    final unitDiagnostics = List<ImportDiagnostic>.unmodifiable(diagnostics);
+    diagnostics.clear();
     return DocumentImportUnit(
-      text: text,
+      text: text.isEmpty ? '\n' : text,
+      diagnostics: unitDiagnostics,
       html: wrapper.outerHtml,
       locator: '$locator:block${ordinal++}',
       type: ReaderDocumentType.html,
@@ -3060,8 +2988,7 @@ Stream<DocumentImportUnit> _htmlUnits(
         if (match == null) continue;
         final tag = match.group(2)!.toLowerCase();
         final closing = match.group(1) == '/';
-        if (!closing &&
-            const {'head', 'script', 'style', 'nav'}.contains(tag)) {
+        if (!closing && const {'head', 'script', 'style'}.contains(tag)) {
           suppressed = tag;
           continue;
         }
@@ -3081,9 +3008,13 @@ Stream<DocumentImportUnit> _htmlUnits(
             open.add(raw);
           }
         }
-        if (closing && boundaries.contains(tag) && block.length >= 1024) {
+        if ((closing && boundaries.contains(tag) && block.length >= 1024) ||
+            block.length >= 4096) {
           final unit = flush();
-          if (unit != null) yield unit;
+          if (unit != null) {
+            final previous = enqueue(unit);
+            if (previous != null) yield previous;
+          }
         }
       } else {
         var end = pending.indexOf('<');
@@ -3095,12 +3026,21 @@ Stream<DocumentImportUnit> _htmlUnits(
           if (amp == 0 && pending.length < 64) break;
           if (amp > 0) end = amp;
         }
+        if (end > 0 &&
+            end < pending.length &&
+            pending.codeUnitAt(end - 1) >= 0xd800 &&
+            pending.codeUnitAt(end - 1) <= 0xdbff) {
+          end--;
+        }
         if (end == 0) break;
         block.write(pending.substring(0, end));
         pending = pending.substring(end);
         if (block.length >= 4096) {
           final unit = flush();
-          if (unit != null) yield unit;
+          if (unit != null) {
+            final previous = enqueue(unit);
+            if (previous != null) yield previous;
+          }
         }
       }
     }
@@ -3112,7 +3052,24 @@ Stream<DocumentImportUnit> _htmlUnits(
   }
   if (pending.isNotEmpty && suppressed == null) block.write(pending);
   final unit = flush();
-  if (unit != null) yield unit;
+  if (unit != null) {
+    final previous = enqueue(unit);
+    if (previous != null) yield previous;
+  }
+  if (pendingUnit != null) {
+    yield _copyImportUnit(
+      pendingUnit!,
+      diagnostics: [...pendingUnit!.diagnostics, ...diagnostics],
+    );
+  } else if (diagnostics.isNotEmpty) {
+    yield DocumentImportUnit(
+      text: '\n',
+      html: '',
+      locator: locator,
+      type: ReaderDocumentType.html,
+      diagnostics: List.unmodifiable(diagnostics),
+    );
+  }
 }
 
 class _IncrementalRtfDecoder {

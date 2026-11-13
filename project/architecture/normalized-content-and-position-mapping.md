@@ -1,6 +1,6 @@
 # Normalized Content and Position Mapping
 
-Reconciled: October 26, 2026; RC2 implementation through feature head 2734b47
+Reconciled: November 13, 2026; shared import adapters, [S9.3 #149](https://github.com/kellyjanderson/readaloud/issues/149)
 Status: Current source architecture with incremental range publication and automatic checkpoints
 
 ## Implemented structure and limitations
@@ -10,6 +10,44 @@ Import produces a normalized result envelope, `DisplayDocument`, `SpeechDocument
 `ReaderDocument` also exposes HTML/plain-text compatibility views used by current consumers. They coexist with the structured model; they are not evidence that every caller operates exclusively on normalized DTOs. Imported diagnostics retain parsing and recovery limitations. Quote segmentation separates mixed narration/dialogue before document voice ranges are materialized.
 
 Source-native mapping quality varies by importer. PDF text extraction and line-wrap/paragraph recovery are heuristic. A successful import or a mapping fixture does not prove perfect reading order for arbitrary documents. Source bytes are acquired separately from these normalized representations.
+
+Text/Markdown, HTML, DOCX and EPUB use the same `DocumentImportUnit` adapters for interactive
+preparation and the explicit whole-file collector in `importBytes`. Units carry
+source member/block locators, title, structural HTML, attachment records and
+diagnostics. DOCX paragraphs preserve headings, exposed list markers and inline
+media placeholders. EPUB reads package events and chapters in spine order,
+retains metadata titles and embedded images, and reports skipped navigation and
+missing members/assets. Missing required container/package/document metadata and
+invalid member XML or CRC are typed failures; a missing optional spine member is
+degraded success with `missing_asset`, rather than silent omission. A late parse
+failure can follow earlier bounded publications and never establishes complete
+source readiness. Optional invalid DOCX title metadata still falls back to the
+filename. The collector accumulates the entire document only when explicitly
+requested; the interactive path does not use it.
+
+HTML normalizes bounded fragments with the maintained parser and reuses display
+block policy for speech boundaries around lists, captions and nested structures.
+It preserves split tags/entities and UTF-16 surrogate pairs, excluded-navigation
+diagnostics and trailing media/separators, including sources containing only
+structure. Structural-only units advance a single newline in the normalized
+source coordinate space so successive range-local IDs cannot alias; they add no
+speech. Locators remain member/block coordinates, not raw archive byte offsets.
+Text file, pasted and shared entry points share recovery policy while retaining
+their distinct source identities and descriptions. Heuristic mapping fallback
+clamps inline offsets to the actual display block and retains low confidence and
+exact recovery evidence. RTF keeps its existing shared decoder, and PDF keeps its
+separate native extraction/formatting ownership.
+
+The existing preparation worker owns each adapter instance and source handle.
+Its revision/session identity, eight-credit publication window, stale-result
+rejection and cancellation/worker shutdown remain the concurrency boundary.
+Adapters add no background producer or shared parser state. ZIP directory and
+EPUB manifest metadata remain resident; chapter bodies and DOCX text are read
+incrementally with bounded text units. Embedded image decoding still requires
+one image's bytes and base64 display representation; this is not a constant
+memory claim for arbitrarily large media. The existing `archive`, `xml`, `html`
+and `pdfrx` packages remain in use; the shared adapter is application-specific
+structure/provenance policy, not a replacement ZIP/XML/HTML parser.
 
 Interactive preparation freezes each normalized range on the worker before transfer. Display blocks/inlines/assets/metadata, speech segments/index/word spans, position entries, diagnostics, pronunciation artifacts and cast alias/id arrays are unmodifiable. Existing immutable annotation/attribution/identity objects retain their evidence and uncertainty. PDF data uses an unmodifiable owned byte snapshot. HTML, flat text and document word spans cross with each fragment without rebuilding on the UI isolate. The controller publishes contiguous ranges under one document revision and bounds unconsumed reading-ahead; downstream consumption and later preparation can overlap. This does not establish universal source-format incrementality or whole-book readiness at first publication.
 
@@ -25,6 +63,7 @@ V2 preserves ordered annotations/attributions and uncertainty, explicit assignme
 - [position_map.dart](../../lib/src/models/position_map.dart)
 - [document_import_service.dart](../../lib/src/services/document_import_service.dart)
 - [document_ingestion_smoke_test.dart](../../test/document_ingestion_smoke_test.dart)
+- [document_import_adapter_test.dart](../../test/document_import_adapter_test.dart)
 - [spoken_selection_mapper_service_test.dart](../../test/spoken_selection_mapper_service_test.dart)
 
 Worker/direct-import artifact equality and mutation rejection are covered by [preparation tests](../../test/document_preparation_supervisor_test.dart). Current exact execution evidence lives in [P1](https://github.com/kellyjanderson/readaloud/issues/50); mapping fidelity on fixtures is not universal source-layout correctness.
