@@ -62,4 +62,40 @@ window.HUMAN_ACCEPTANCE_SCENARIOS = [
     steps: ['Open the provided audio book with File → Open and listen to the marked exchange.', 'Use the Character voice control to change the named character to the suggested voice. Listen to the same exchange again.', 'Choose File → Save Audio Book and give the copy a new name. Open your copy and listen to the exchange.'],
     expected: 'Only the chosen character sounds different. Your saved copy keeps the new voice, and the exchange is comfortable to follow.'
   }
+  ,{
+    id: 'reading-controls-and-voice-reset',
+    issue: 111,
+    title: 'Read along, navigate, and restore an automatic voice',
+    passageId: 'quick-three-speaker',
+    question: 'Does the reading position follow what you hear after Pause, seek and speed changes? Can you choose a character voice and return it to Automatic?',
+    steps: ['Paste the passage and start reading. Pause, move to another sentence, resume and change speed using the supported control.', 'Open Characters, choose a different voice for one character, then return that character to Automatic. Listen to the relevant exchange after each change.', 'Record any mismatch between highlighted text, spoken words, the displayed voice choice and the voice you hear.'],
+    expected: 'Reading position remains understandable and navigation causes no stale or unexpected speech. An explicit voice choice is retained until you change it, and Automatic is clearly distinguished.'
+  },
+  {
+    id: 'import-layout-and-ending',
+    issue: 149,
+    title: 'Open the same document in different formats',
+    fixtureId: 'import-workflow',
+    question: 'Are the title, headings, lists and ending understandable in each supplied format? Can you start reading and move through the book while preparation continues?',
+    steps: ['Open each supplied DOCX, EPUB, HTML and text fixture in turn. Compare the marked title, heading, list and final paragraph against the supplied reference.', 'Start reading promptly. Scroll forward and check progress and the ending. Do not wait for the whole document to finish preparing before requesting Play.', 'Record lost text, unexpected repetition, confusing image placeholders or differences from the supplied reference.'],
+    expected: 'Each format preserves its intended readable content and structure. Preparation remains understandable and cancellable, the window responds, and the marked final words are present.'
+  },
+  {
+    id: 'exported-audio-listening',
+    issue: 114,
+    title: 'Compare playback with exported audio',
+    fixtureId: 'export-workflow',
+    question: 'Does the supplied WAV contain the same voices, order, delivery and complete ending as the app reading?',
+    steps: ['Open the supplied book and listen to its marked scenes in Read Aloud.', 'Use Export Audio to save a new WAV as instructed. Play it using the supplied player instructions and compare the same marked scenes.', 'Record gaps, clicks, changes of voice, unexpected speed, skipped/repeated words or an incomplete ending. Keep the original fixtures unchanged.'],
+    expected: 'The exported reading preserves the audible content, voices and ending. Technical PCM/rate checks are performed separately by the coordinator; this test records what you hear.'
+  },
+  {
+    id: 'long-book-final-pass',
+    issue: 122,
+    title: 'Finish the long-book listening pass',
+    fixtureId: 'long-book',
+    question: 'Is sustained reading comfortable to follow, and does the book reach its actual ending with consistent characters?',
+    steps: ['Use the local book and marked listening route in the fixture instructions. Private manuscript text stays on this Mac and must not be pasted into the report.', 'Listen through the sustained interval and final chapter specified there. Check the marked narrator and recurring characters before and after reopening the saved book.', 'Record the location and a description of any problem, without copying private prose. A skipped interval remains untested.'],
+    expected: 'No audible holes, repetitions, lost character identity or cut-off ending occur in the listened intervals. Unheard material is not counted as a listening pass.'
+  }
 ];
