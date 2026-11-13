@@ -11,6 +11,31 @@ Import produces a normalized result envelope, `DisplayDocument`, `SpeechDocument
 
 Source-native mapping quality varies by importer. PDF text extraction and line-wrap/paragraph recovery are heuristic. A successful import or a mapping fixture does not prove perfect reading order for arbitrary documents. Source bytes are acquired separately from these normalized representations.
 
+DOCX and EPUB use the same `DocumentImportUnit` adapters for interactive
+preparation and the explicit whole-file collector in `importBytes`. Units carry
+source member/block locators, title, structural HTML, attachment records and
+diagnostics. DOCX paragraphs preserve headings, exposed list markers and inline
+media placeholders. EPUB reads package events and chapters in spine order,
+retains metadata titles and embedded images, and reports skipped navigation and
+missing members/assets. Missing required container/package/document metadata and
+invalid member XML or CRC are typed failures; a missing optional spine member is
+degraded success with `missing_asset`, rather than silent omission. A late parse
+failure can follow earlier bounded publications and never establishes complete
+source readiness. Optional invalid DOCX title metadata still falls back to the
+filename. The collector accumulates the entire document only when explicitly
+requested; the interactive path does not use it.
+
+The existing preparation worker owns each adapter instance and source handle.
+Its revision/session identity, eight-credit publication window, stale-result
+rejection and cancellation/worker shutdown remain the concurrency boundary.
+Adapters add no background producer or shared parser state. ZIP directory and
+EPUB manifest metadata remain resident; chapter bodies and DOCX text are read
+incrementally with bounded text units. Embedded image decoding still requires
+one image's bytes and base64 display representation; this is not a constant
+memory claim for arbitrarily large media. The existing `archive`, `xml`, `html`
+and `pdfrx` packages remain in use; the shared adapter is application-specific
+structure/provenance policy, not a replacement ZIP/XML/HTML parser.
+
 Interactive preparation freezes each normalized range on the worker before transfer. Display blocks/inlines/assets/metadata, speech segments/index/word spans, position entries, diagnostics, pronunciation artifacts and cast alias/id arrays are unmodifiable. Existing immutable annotation/attribution/identity objects retain their evidence and uncertainty. PDF data uses an unmodifiable owned byte snapshot. HTML, flat text and document word spans cross with each fragment without rebuilding on the UI isolate. The controller publishes contiguous ranges under one document revision and bounds unconsumed reading-ahead; downstream consumption and later preparation can overlap. This does not establish universal source-format incrementality or whole-book readiness at first publication.
 
 Automatic repository checkpoints persist immutable fragments with source/word/segment coverage and checksums. Complete-manifest replay skips source acquisition and analysis for a matching content revision or trusted local macOS file-generation receipt. File identity uses canonical target, device/inode/generation, size, nanosecond mtime/ctime and mode; it requires no whole-source startup hash, and is checked around acquisition/replay/EOF. Unsupported metadata and callback-acquired bytes miss conservatively. Captured text/bytes retain their full-input hash before lookup. The [pipeline](document-speech-pipeline.md) documents probe ownership and metadata trust limits. Corruption invalidates the generation; retry rebuilds from the untouched source rather than continuing a partial prefix. Partial checkpoints cannot export a full book. Explicit complete-checkpoint export validates all ranges and merges their existing derived graphs on a worker, preserving segment IDs and evidence while qualifying local counter IDs and adjusting global ordering/word offsets. The result is regular v2 `.radoc` data, including optional explicit cast choices; the normal picker restores it without reanalysis. Malformed assignments fail before preferences/document mutation. The instrumented `.radoc-v2` inspection codec remains separate and does not restore an application document or native resources. See [#83](https://github.com/kellyjanderson/readaloud/issues/83), [#90](https://github.com/kellyjanderson/readaloud/issues/90), and [#101](https://github.com/kellyjanderson/readaloud/issues/101).
@@ -25,6 +50,7 @@ V2 preserves ordered annotations/attributions and uncertainty, explicit assignme
 - [position_map.dart](../../lib/src/models/position_map.dart)
 - [document_import_service.dart](../../lib/src/services/document_import_service.dart)
 - [document_ingestion_smoke_test.dart](../../test/document_ingestion_smoke_test.dart)
+- [document_import_adapter_test.dart](../../test/document_import_adapter_test.dart)
 - [spoken_selection_mapper_service_test.dart](../../test/spoken_selection_mapper_service_test.dart)
 
 Worker/direct-import artifact equality and mutation rejection are covered by [preparation tests](../../test/document_preparation_supervisor_test.dart). Current exact execution evidence lives in [P1](https://github.com/kellyjanderson/readaloud/issues/50); mapping fidelity on fixtures is not universal source-layout correctness.
