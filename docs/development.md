@@ -8,7 +8,7 @@ The `tools/flutter` launcher bootstraps Flutter 3.41.5 / Dart 3.11.3 from the [o
 
 Installation happens in a unique staging directory; a failed download or checksum never publishes a partial SDK. An incompatible installed tree is preserved beside its replacement. Read-only permissions are repaired only within the managed tool directory. An OS file lock serializes installation/repair; shared leases allow concurrent healthy invocations and prevent replacing an SDK while Flutter is running. The lease is released on process exit, including crashes. The first SDK download needs network access; subsequent launches reuse the verified installation. Package resolution remains Flutter's responsibility and uses the writable project-local cache.
 
-Install Xcode and CocoaPods for macOS development, run `tools/flutter pub get`, and supply the compatible model described in [model setup](../assets/kokoro/model/README.md). Model weights are not committed. Voices and pronunciation resources are bundled; ONNX uses the [vendored override](../third_party/flutter_onnxruntime/pubspec.yaml).
+Install Xcode and CocoaPods for macOS development and run `tools/flutter pub get`. For Kokoro supply the compatible model described in [model setup](../assets/kokoro/model/README.md); for Fish or another MLX engine install the [arm64 runtime before building](mlx-tts-engines.md#local-macos-release-packaging). The optional embed phase can succeed with a warning and omit MLX entirely; build success alone does not qualify an MLX-capable package. Model weights are not committed. Voices and pronunciation resources are bundled; ONNX uses the [vendored override](../third_party/flutter_onnxruntime/pubspec.yaml).
 
 ```sh
 tools/flutter analyze
@@ -18,7 +18,7 @@ tools/flutter build macos
 ruby tools/check_docs.rb
 ```
 
-Run focused tests first when changing one subsystem. Native session lifetime, actual audio output and visible UI responsiveness require running-app/native checks. Pure Dart or widget tests do not establish these. Generated outputs remain ignored under `project/test-artifacts/` and `tmp/`.
+Run focused tests first when changing one subsystem. Native session lifetime, actual audio output and visible UI responsiveness require running-app/native checks. Pure Dart or widget tests do not establish these. Generated outputs are normally ignored under `project/test-artifacts/` and `tmp/`; deliberately tracked evidence receipts are retained. Use synthetic examples in public output; keep private manuscripts/audio local.
 
 The expandable voice-selection contract uses stable `VS` case IDs. Run:
 

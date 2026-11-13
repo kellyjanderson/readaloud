@@ -1,6 +1,6 @@
 # Architecture
 
-Current source structure, ownership and known limitations. Proposed changes belong in [GitHub design issues](../../docs/project-management.md), not in descriptions of implemented behavior. Reconciled against source `e18c81d` on October 25, 2026: P4 lineage `295677e`, optional export-assembler injection at `843f6b5` with unchanged default, and probe-only release/timeout repair at `e18c81d`. Source implementation, bounded native evidence and final acceptance are separate; this index does not qualify an installed release.
+Current source structure, ownership and known limitations. Proposed changes belong in [GitHub design issues](../../docs/project-management.md); draft/fixed revisions follow [interim design storage](../interim/README.md). The [system overview](system-overview.md) and [engine support matrix](../../docs/mlx-tts-engines.md#support-and-evidence) describe current development integration with exact qualification limits. Individual component pages record their own source/evidence lineage. A source test, bounded native run and distributed release are different claims.
 
 - [System Overview](system-overview.md)
 - [Document and Speech Pipeline](document-speech-pipeline.md)
@@ -21,6 +21,12 @@ The [legacy contract index](../specifications/README.md) links retained children
 
 ## Evidence and acceptance limits
 
+The [S7/S8 final receipt](https://github.com/kellyjanderson/readaloud/issues/112#issuecomment-6816503511) records bounded M5 Max/128 GiB software-output, memory, switching, EOF/save/replay and UI evidence; the [integration receipt](https://github.com/kellyjanderson/readaloud/issues/112#issuecomment-6827533847) verifies the unchanged qualified S8 tree. Physical M3 and current human listening/usability remain open. First/reusable post-startup loads pass their ten-/five-second limits on the measured fixture; the first two-second launch goal remains unmet. Final candidate onboarding, applicable post-consolidation checks and distribution remain with [release #122](https://github.com/kellyjanderson/readaloud/issues/122).
+
+### Retained P0–P4 evidence
+
+The following receipts retain their original source/fixture limits. They are not new checks of the current candidate.
+
 - [P0 baseline](https://github.com/kellyjanderson/readaloud/issues/49#issuecomment-6393427541): native arm64 toolchain and separated source/bundle/runtime asset provenance; cached runs do not attest fresh inference.
 - [P1 preparation](https://github.com/kellyjanderson/readaloud/issues/50#issuecomment-6393533201): worker/revision tests and native input during a large preparation, replacement, publication and scrolling on bounded fixtures. Observation times are not frame-time bounds.
 - [P2 resources](https://github.com/kellyjanderson/readaloud/issues/51): resident A/B/A resource/cleanup, failure and normal-app replay evidence. Retained handles, memory, emitted PCM and listening answer different questions.
@@ -31,4 +37,4 @@ The [legacy contract index](../specifications/README.md) links retained children
 - [Saved-word resume interpretation](https://github.com/kellyjanderson/readaloud/issues/53#issuecomment-6396190387): native no-edit resume retained word 293 but replaced the source and reset player position. Baseline `694e1c3` already rebuilt the saved-word tail through `engine.speak`, which stops the previous generation. No new source-level regression is identified; neither sample-continuous resume nor a fresh native baseline comparison is established.
 - [Bounded P4 modal/status smoke](https://github.com/kellyjanderson/readaloud/issues/53#issuecomment-6395513249): real app/control layering and named Close/status dismissal, with an identified status-only probe and API seam. It does not establish final assignment behavior; native Escape remains unproven.
 
-Input during active export remains blocked and human listening remains unverified. P0–P3 have reached the working integration branch. This P4 source description is not a main merge or feature-completion claim. [FINAL](https://github.com/kellyjanderson/readaloud/issues/54) must reconcile required evidence and delivery before the [parent design](https://github.com/kellyjanderson/readaloud/issues/48) closes. RC2 `.radoc` restore, incremental checkpoints, local file-generation reuse and complete-range export are described in the [current pipeline](document-speech-pipeline.md); current-candidate native qualification remains separate.
+The retained P4 input-under-export case was blocked and its human listening was unverified; later bounded S7/S8 evidence above does not silently close every inherited case. P0–P3 have reached the working integration branch. This P4 source description is not a main merge or feature-completion claim. [FINAL](https://github.com/kellyjanderson/readaloud/issues/54) must reconcile required evidence and delivery before the [parent design](https://github.com/kellyjanderson/readaloud/issues/48) closes. RC2 `.radoc` restore, incremental checkpoints, local file-generation reuse and complete-range export are described in the [current pipeline](document-speech-pipeline.md); current-candidate native qualification remains separate.
