@@ -1288,9 +1288,9 @@
     },
     {
       "path": "assets/mlx_tts_worker.py",
-      "size": 52970,
-      "sha256": "f7a5cbc9145cd719ea3f901401b96a14cce098a12b8a55385c554a25fca75d4e",
-      "identity_source": "Git source snapshot at b6046a7688ac39e15910be9bd2c5508d3513e1c5:assets/mlx_tts_worker.py",
+      "size": 55296,
+      "sha256": "668b67bf97fb51cbfbee57c4bbca2c484b3e2258f7e31c4d996b0363c85085e9",
+      "identity_source": "Git source snapshot at dd7a50738b43ba5f5e0ffad55eb38b63cdb5a180:assets/mlx_tts_worker.py",
       "qualification": "Tracked Read Aloud adapter source identity only; not MLX/Python/model/reference-voice distribution clearance. Reconcile this hash again after any protocol-worker integration."
     },
     {
