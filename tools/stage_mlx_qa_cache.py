@@ -21,6 +21,16 @@ def cache_paths(metadata):
     return sorted(set(result), key=str)
 
 
+def _validate_independent_links(root):
+    for entry in chain((root,), root.rglob('*')):
+        if entry.is_symlink():
+            if entry.readlink().is_absolute():
+                raise ValueError(f'Cache symlink escapes independent copying through an absolute target: {entry}')
+            resolved = entry.resolve(strict=True)
+            if root.resolve() not in resolved.parents:
+                raise ValueError(f'Cache symlink escapes its independent copy: {entry}')
+
+
 def stage_cache(source, destination, metadata, *, clone=None):
     source, destination = Path(source).expanduser().resolve(), Path(destination).expanduser().absolute()
     if destination.exists() or destination.is_symlink():
@@ -39,17 +49,16 @@ def stage_cache(source, destination, metadata, *, clone=None):
                 continue
             # Hub uses relative links into its own blobs. Reject any link that
             # would alias the user's files after cloning into the QA sandbox.
-            for entry in chain((origin,), origin.rglob('*')):
-                if entry.is_symlink():
-                    resolved = entry.resolve(strict=True)
-                    if origin.resolve() not in resolved.parents:
-                        raise ValueError(f'Cache symlink escapes its independent copy: {entry}')
+            _validate_independent_links(origin)
             target = stage / relative
             target.parent.mkdir(parents=True, exist_ok=True)
             if clone is None:
                 subprocess.run(['cp', '-cR', str(origin), str(target)], check=True)
             else:
                 clone(origin, target)
+            # Inspect the actual preserved links too: the source may change
+            # between preflight and copying, while this staging tree is ours.
+            _validate_independent_links(target)
             copied.append(str(relative))
         # Reserve the destination exclusively before moving our staged entries.
         destination.mkdir(exist_ok=False)
