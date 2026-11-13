@@ -5,10 +5,9 @@ import 'dart:io';
 
 import 'package:path/path.dart' as p;
 
-import '../controllers/reader_controller.dart';
 import 'app_launch_options.dart';
-import 'document_import_service.dart';
 import 'headless_session_result.dart';
+import 'headless_reader_session.dart';
 import 'project_test_artifact_store.dart';
 import 'wav_analysis_service.dart';
 
@@ -16,10 +15,7 @@ const _probeManifestFileName = 'pronunciation-probe-run.json';
 const _probeComparisonFileName = 'pronunciation-probe-comparison.json';
 
 class PronunciationProbeCase {
-  const PronunciationProbeCase({
-    required this.id,
-    required this.text,
-  });
+  const PronunciationProbeCase({required this.id, required this.text});
 
   final String id;
   final String text;
@@ -36,36 +32,18 @@ Future<HeadlessSessionResult> runPronunciationProbeSession(
   print('Mode: pronunciation probe');
   print('Cases: ${probeCases.length}');
 
-  final importer = DocumentImportService();
-  final controller = ReaderController(
-    importer: importer,
-    enablePlatformIntakeChannels: false,
-  );
+  final session = HeadlessReaderSession();
+  final importer = session.importer;
+  final controller = session.controller;
   final wavAnalysisService = const WavAnalysisService();
 
   var succeeded = 0;
   var failed = 0;
 
   try {
-    await controller.initialize();
-
-    if (options.voiceId != null) {
-      final requestedVoice = controller.voices
-          .where((voice) => voice.id == options.voiceId)
-          .firstOrNull;
-      if (requestedVoice == null) {
-        print('Voice not found: ${options.voiceId}');
-        return const HeadlessSessionResult(
-          exitCode: 1,
-          succeeded: 0,
-          failed: 1,
-        );
-      }
-      await controller.selectVoiceById(requestedVoice.id);
-    }
-
-    if (options.speed != null) {
-      await controller.setVoiceSpeed(options.speed!.clamp(0.7, 1.4).toDouble());
+    if (!await session.initialize(options)) {
+      print('Voice not found: ${options.voiceId}');
+      return const HeadlessSessionResult(exitCode: 1, succeeded: 0, failed: 1);
     }
 
     final outputDirectory = await _resolveProbeOutputDirectory(options);
@@ -79,11 +57,15 @@ Future<HeadlessSessionResult> runPronunciationProbeSession(
 
       try {
         print('Probe ${index + 1}/${probeCases.length}: ${probeCase.id}');
-        await controller.loadDocument(importer.importPastedText(probeCase.text));
+        await controller.loadDocument(
+          importer.importPastedText(probeCase.text),
+        );
         final exportResult = await controller.exportAudioToPath(outputPath);
         if (exportResult == null) {
           failed += 1;
-          print('  FAIL ${controller.statusMessage ?? 'Unknown export failure.'}');
+          print(
+            '  FAIL ${controller.statusMessage ?? 'Unknown export failure.'}',
+          );
           continue;
         }
 
@@ -116,7 +98,9 @@ Future<HeadlessSessionResult> runPronunciationProbeSession(
       'failed': failed,
       'entries': manifestEntries,
     };
-    final manifestFile = File(p.join(outputDirectory.path, _probeManifestFileName));
+    final manifestFile = File(
+      p.join(outputDirectory.path, _probeManifestFileName),
+    );
     await manifestFile.writeAsString(
       const JsonEncoder.withIndent('  ').convert(manifest),
       flush: true,
@@ -140,7 +124,7 @@ Future<HeadlessSessionResult> runPronunciationProbeSession(
       failed: failed,
     );
   } finally {
-    controller.dispose();
+    session.close();
   }
 }
 
@@ -208,7 +192,8 @@ List<PronunciationProbeCase> parsePronunciationProbeCases(String rawText) {
 
 Future<Directory> _resolveProbeOutputDirectory(AppLaunchOptions options) async {
   final explicitOutputDirectory = options.outputDirectory;
-  if (explicitOutputDirectory != null && explicitOutputDirectory.trim().isNotEmpty) {
+  if (explicitOutputDirectory != null &&
+      explicitOutputDirectory.trim().isNotEmpty) {
     final requestedDirectory = Directory(explicitOutputDirectory.trim());
     try {
       await requestedDirectory.create(recursive: true);

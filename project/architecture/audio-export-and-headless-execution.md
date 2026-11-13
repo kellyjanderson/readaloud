@@ -7,6 +7,16 @@ Status: Bounded P4 native export/cancellation evidence; active-export input and 
 
 Launch options select interactive reading or headless execution. The headless runner imports inputs and uses the TTS engine instead of a separate synthesis implementation. Export assembles finalized chunk WAVs and metadata. Pronunciation and sentence probes exercise speech generation and emit diagnostic artifacts.
 
+The export, pronunciation and sentence runners share `HeadlessReaderSession`
+for controller/importer construction, initialization, exact requested-voice
+resolution and bounded speed options. Each runner keeps its workload and reports,
+and closes its one session in `finally`, including missing voice and initialization
+failure. Close is idempotent and delegates to the existing controller disposal;
+this extraction adds no worker, queue, cancellation policy or stronger native
+shutdown claim. `headless_reader_session_test.dart` covers option ordering,
+missing-voice refusal and failure cleanup. Native process exit remains separate
+acceptance under #151/#114.
+
 `ExportedAudioAssembler` is a stateful main-isolate supervisor with one active request and no waiting queue. Overlap is rejected. Each accepted request has a monotonic owner-local identity and a dedicated pure Dart isolate; only DTOs, file paths, progress and the terminal result cross the port. The worker scans RIFF sections, verifies matching PCM formats, copies audio in at most 64 KiB blocks and streams one chunk's JSON metadata at a time. It retains the request graph and per-chunk format descriptors, not whole-document PCM. WAV encoding, metadata traversal, file I/O and publication are worker-owned. Source chunks remain read-only.
 
 Cancellation is cooperative between bounded reads/writes and at an explicit staged/commit handshake. `cancel()` suppresses publication before commit authorization; after authorization, the short synchronous publication step completes and returns its result. `shutdown()` closes intake, cancels staging and awaits worker exit and file/temp cleanup. The default five-minute deadline requests cancellation and reports a timeout after drain; it does not pretend an unresponsive filesystem operation was forcibly cancelled. Worker errors/exit become terminal failures; a previous request's callbacks cannot clear a newer request. The engine owns document/session invalidation and must call these lifecycle seams. Progress callbacks are short main-isolate notifications, never assembly work.
