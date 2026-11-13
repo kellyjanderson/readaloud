@@ -307,8 +307,89 @@ class CatalogAndStagingTest(unittest.TestCase):
             cloned.write_text('QA write')
             self.assertEqual((cache / 'config.json').read_text(), 'source fixture')
 
+    def test_staging_refuses_absolute_internal_symlinks_before_copy(self):
+        for clone in (None, lambda source, target: shutil.copytree(source, target, symlinks=True)):
+            with self.subTest(platform_clone=clone is None), tempfile.TemporaryDirectory() as root:
+                source, target = Path(root) / 'source', Path(root) / 'qa'
+                cache = source / MLX_SUFFIX / 'fish_drama3_4bit'
+                cache.mkdir(parents=True)
+                blob = cache / 'blob'
+                blob.write_text('source fixture')
+                (cache / 'config.json').symlink_to(blob)
+                with self.assertRaisesRegex(ValueError, 'absolute'):
+                    stage_cache(source, target, self.metadata, clone=clone)
+                self.assertFalse(target.exists())
+                self.assertEqual(blob.read_text(), 'source fixture')
+
+    def test_relative_internal_symlinks_preserve_independent_qa_writes(self):
+        for clone in (None, lambda source, target: shutil.copytree(source, target, symlinks=True)):
+            with self.subTest(platform_clone=clone is None), tempfile.TemporaryDirectory() as root:
+                source, target = Path(root) / 'source', Path(root) / 'qa'
+                cache = source / MLX_SUFFIX / 'hub'
+                (cache / 'blobs').mkdir(parents=True)
+                (cache / 'snapshots').mkdir()
+                blob = cache / 'blobs' / 'fixture'
+                blob.write_text('source fixture')
+                (cache / 'snapshots' / 'reference').symlink_to('../blobs/fixture')
+                stage_cache(source, target, self.metadata, clone=clone)
+                staged = target / MLX_SUFFIX / 'hub' / 'snapshots' / 'reference'
+                self.assertTrue(staged.is_symlink())
+                self.assertEqual(staged.readlink(), Path('../blobs/fixture'))
+                self.assertTrue(staged.resolve().is_relative_to(target.resolve()))
+                staged.write_text('QA write through preserved relative link')
+                self.assertEqual(blob.read_text(), 'source fixture')
+
+    def test_staging_refuses_relative_symlink_escape(self):
+        import os
+        for clone in (None, lambda source, target: shutil.copytree(source, target, symlinks=True)):
+            with self.subTest(platform_clone=clone is None), tempfile.TemporaryDirectory() as root:
+                source, target = Path(root) / 'source', Path(root) / 'qa'
+                cache = source / MLX_SUFFIX / 'fish_drama3_4bit'
+                cache.mkdir(parents=True)
+                private = source / 'private'
+                private.write_text('source fixture')
+                (cache / 'escape').symlink_to(os.path.relpath(private, cache))
+                with self.assertRaisesRegex(ValueError, 'symlink escapes'):
+                    stage_cache(source, target, self.metadata, clone=clone)
+                self.assertFalse(target.exists())
+                self.assertEqual(private.read_text(), 'source fixture')
+
+    def test_staging_rechecks_preserved_links_before_publication(self):
+        with tempfile.TemporaryDirectory() as root:
+            source, target = Path(root) / 'source', Path(root) / 'qa'
+            cache = source / MLX_SUFFIX / 'fish_drama3_4bit'
+            cache.mkdir(parents=True)
+            blob = cache / 'blob'
+            blob.write_text('source fixture')
+            (cache / 'reference').symlink_to('blob')
+            def changed_copy(origin, staged):
+                shutil.copytree(origin, staged, symlinks=True)
+                (staged / 'reference').unlink()
+                (staged / 'reference').symlink_to(blob)
+            with self.assertRaisesRegex(ValueError, 'absolute'):
+                stage_cache(source, target, self.metadata, clone=changed_copy)
+            self.assertFalse(target.exists())
+            self.assertEqual(blob.read_text(), 'source fixture')
+
 
 class ToolReceiptTest(unittest.TestCase):
+    def test_qa_script_accepts_fresh_identity_and_refuses_unsafe_ids_before_staging(self):
+        import subprocess
+        prefix = 'com.kellyjanderson.readAloud.mlxPlaybackTest'
+        with tempfile.TemporaryDirectory() as root:
+            for identity in ('com.kellyjanderson.readAloud', prefix + '.bad/../path',
+                             prefix + '..bad', prefix + '.', prefix + '.run-20261113-02'):
+                with self.subTest(identity=identity):
+                    result = subprocess.run(['sh', str(ROOT / 'tools/prepare_mlx_playback_test_app.sh'),
+                                             str(Path(root) / 'missing.app'), str(Path(root) / 'qa.app'), identity],
+                                            capture_output=True, text=True, check=False)
+                    self.assertEqual(result.returncode, 2)
+                    if identity.endswith('.run-20261113-02'):
+                        self.assertIn('Source app must contain', result.stderr)
+                    else:
+                        self.assertIn('QA bundle ID', result.stderr)
+                    self.assertFalse((Path(root) / 'qa.app').exists())
+
     def test_tools_only_complete_receipts_after_verified_shutdown(self):
         metadata = {'models': {'fixture': {'modelId': 'fixture', 'voiceKind': 'preset',
                     'voices': [{'id': 'voice'}], 'repo': 'fixture', 'revision': None}},
