@@ -2,7 +2,7 @@
 
 The working authority is [#55](https://github.com/kellyjanderson/readaloud/issues/55),
 under the [RC2 release contract](https://github.com/kellyjanderson/readaloud/issues/83).
-This guide describes implemented tooling and its limits, not release approval.
+This guide describes implemented tooling and its limits, not release approval. [Release #122](https://github.com/kellyjanderson/readaloud/issues/122) owns the final candidate and artifacts; the [engine support matrix](mlx-tts-engines.md#support-and-evidence) separates source/native evidence from distribution.
 
 The reviewed [inventory](../third_party/licenses/inventory.json) covers every
 non-SDK entry in the pinned Pub lockfile, with development and other-platform
@@ -34,6 +34,8 @@ commit, Flutter/Dart/engine/Xcode/Pods versions, command and build log, model/vo
 hashes, and architecture of all embedded native frameworks in #91. Use the
 existing application version/signing configuration unless separately authorized;
 this tooling does not select identities, alter entitlements, install or publish.
+
+Before staging an MLX-capable app, verify its declared [packaged runtimes](mlx-tts-engines.md#local-macos-release-packaging), exact manifests/native roots and model reuse. A build that omitted the optional MLX runtime is Kokoro-only; staging cannot turn it into a Drama-capable app. Full candidate setup also includes the independent [ModernBookNLP prerequisites](modernbooknlp-provider.md).
 
 From a clean committed checkout, provide an existing app and a new output folder:
 

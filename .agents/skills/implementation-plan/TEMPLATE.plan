@@ -2,11 +2,12 @@
 
 Use in GitHub; do not instantiate in the repository.
 
-Parent design / decision revision:
+Owning issue / decision revision; parent when present:
 Objective and exclusions:
 Dependencies (also use native relationships):
-Owner/chat and file/module scope:
-Base commit, branch/worktree and integration target:
+Directed owner and file/module scope; worker/chat identity if delegated:
+Actual base commit, named branch and integration target; worktree if used:
+Agent model/effort when applicable; delegation follows docs/project-management.md#conditional-orchestration:
 Validation and acceptance:
 Return contract: result, changed paths, commit/PR, exact checks/evidence, blockers and remaining work.
 

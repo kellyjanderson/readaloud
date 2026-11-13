@@ -9,7 +9,7 @@ body:
       value: |
         Thanks for proposing a feature.
 
-        This issue is the working design authority. Use native sub-issues for implementation slices; do not create local planning files.
+        This issue can hold the working design; small fixes may remain one issue. Use native sub-issues only when slices are needed. Draft/fixed design revisions may live in project/interim under its lifecycle; live progress stays in GitHub. Visitor reports need no worker, model or worktree fields.
   - type: textarea
     id: problem
     attributes:

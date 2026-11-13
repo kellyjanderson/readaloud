@@ -9,7 +9,7 @@ body:
       value: |
         Thanks for filing a bug.
 
-        Bug-fix work in this repository is expected to link back to an issue like this one.
+        Bug-fix work links back to an issue like this one; a small fix needs no synthetic parent or child issues. Visitor reports need no worker, model or worktree fields.
   - type: textarea
     id: summary
     attributes:
@@ -57,4 +57,4 @@ body:
     id: diagnostics
     attributes:
       label: Logs, traces, or screenshots
-      description: Include any useful traces, audio notes, or screenshots.
+      description: Include app build/commit, macOS chip/RAM, engine/model/runtime when relevant, and useful traces or audio observations. Use synthetic text and cleared screenshots; keep private manuscripts local.
