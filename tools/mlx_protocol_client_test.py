@@ -15,7 +15,8 @@ import qualify_voice_library
 from build_voice_library import complete_voice_design
 from mlx_probe_support import ROOT, descriptor, resolve_voice, sha256, audio_evidence, synthesize
 from mlx_protocol_client import MlxClient, ProtocolError, RequestCancelled
-from stage_mlx_qa_cache import MLX_SUFFIX, cache_paths, stage_cache
+from stage_mlx_qa_cache import (MLX_SUFFIX, SOURCE_BUNDLE_ID, QA_BUNDLE_ID,
+                                bundle_mlx_suffix, cache_paths, stage_cache)
 
 
 FAKE = r'''
@@ -275,6 +276,112 @@ class CatalogAndStagingTest(unittest.TestCase):
                 stage_cache(source, target, self.metadata, clone=shutil.copytree)
             self.assertEqual((source / 'private-document.txt').read_text(), 'never stage user documents')
 
+    def test_default_staging_maps_actual_bundle_layout_and_omits_runtime_and_user_state(self):
+        with tempfile.TemporaryDirectory() as root:
+            source, target = Path(root) / 'source', Path(root) / 'qa'
+            source_root = source / bundle_mlx_suffix(SOURCE_BUNDLE_ID)
+            target_root = target / bundle_mlx_suffix(QA_BUNDLE_ID)
+            included = []
+            # Production descriptors include all three Fish variants. Preserve
+            # the complete Hub directory, including qualification input bytes.
+            for model in self.metadata['models'].values():
+                included.extend((Path(model['cacheDirectory']) / 'config.json',
+                                 Path('models') / ('models--' + model['repo'].replace('/', '--')) / 'blobs/weights'))
+            included.extend((Path('runtime-cache/hub/models--fixture/blobs/weights'),
+                             Path('voice-library/reference.mp3')))
+            omitted = (Path('runtime/venv/bin/python'), Path('catalog-helpers/worker.py'),
+                       Path('runtime-cache/model-qualification/receipt.json'),
+                       Path('runtime-cache/metal/kernel.bin'))
+            for relative in (*included, *omitted):
+                path = source_root / relative
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_text(str(relative))
+            preferences = source / 'Library/Preferences/preferences.plist'
+            preferences.parent.mkdir(parents=True)
+            preferences.write_text('private choices')
+            audio = source_root.parent.parent / 'generated-audio/old.wav'
+            audio.parent.mkdir(parents=True)
+            audio.write_text('private audio')
+            stage_cache(source, target, self.metadata, clone=shutil.copytree)
+            for relative in included:
+                self.assertEqual((target_root / relative).read_text(), str(relative))
+                (target_root / relative).write_text('QA write')
+                self.assertEqual((source_root / relative).read_text(), str(relative))
+            for relative in omitted:
+                self.assertFalse((target_root / relative).exists())
+            self.assertFalse((target / 'Library/Preferences').exists())
+            self.assertFalse((target_root.parent.parent / 'generated-audio').exists())
+            self.assertFalse((target / bundle_mlx_suffix(SOURCE_BUNDLE_ID)).exists())
+
+    def test_actual_hub_relative_links_survive_distinct_bundle_mapping_and_platform_clone(self):
+        source_id, target_id = QA_BUNDLE_ID + '.old', QA_BUNDLE_ID + '.fresh'
+        for clone in (None, lambda source, target: shutil.copytree(source, target, symlinks=True)):
+            with self.subTest(platform_clone=clone is None), tempfile.TemporaryDirectory() as root:
+                source, target = Path(root) / 'source', Path(root) / 'qa'
+                source_root = source / bundle_mlx_suffix(source_id)
+                for hub in ('models', 'runtime-cache/hub'):
+                    cache = source_root / hub / 'models--mlx-community--fish-audio-drama-3-8bit'
+                    (cache / 'blobs').mkdir(parents=True)
+                    (cache / 'snapshots/pinned').mkdir(parents=True)
+                    (cache / 'blobs/weights').write_text('source weights')
+                    (cache / 'snapshots/pinned/config.json').symlink_to('../../blobs/weights')
+                stage_cache(source, target, self.metadata, source_bundle_id=source_id,
+                            destination_bundle_id=target_id, clone=clone)
+                for hub in ('models', 'runtime-cache/hub'):
+                    relative = Path(hub) / 'models--mlx-community--fish-audio-drama-3-8bit/snapshots/pinned/config.json'
+                    staged = target / bundle_mlx_suffix(target_id) / relative
+                    self.assertEqual(staged.readlink(), Path('../../blobs/weights'))
+                    self.assertTrue(staged.resolve().is_relative_to(target.resolve()))
+                    staged.write_text('QA weights')
+                    self.assertEqual((source_root / relative).read_text(), 'source weights')
+
+    def test_actual_layout_refuses_invalid_ids_and_ancestor_or_dangling_links(self):
+        for identity in ('../escape', '/absolute', '', 'com.example..bad', 'com.example.bad/'):
+            with self.subTest(identity=identity), self.assertRaisesRegex(ValueError, 'bundle ID'):
+                cache_paths(self.metadata, identity)
+        for leaf in ('Library', 'models', 'voice-library'):
+            with self.subTest(leaf=leaf), tempfile.TemporaryDirectory() as root:
+                source, target = Path(root) / 'source', Path(root) / 'qa'
+                source.mkdir()
+                external = Path(root) / 'outside'
+                external.mkdir()
+                (external / 'config.json').write_text('private')
+                if leaf == 'Library':
+                    link = source / leaf
+                else:
+                    link = source / bundle_mlx_suffix(SOURCE_BUNDLE_ID) / leaf
+                    link.parent.mkdir(parents=True)
+                # Relative links escaping Data and dangling cache roots must
+                # fail rather than silently producing an empty QA profile.
+                import os
+                link.symlink_to(os.path.relpath(external if leaf != 'voice-library' else external / 'missing', link.parent))
+                with self.assertRaises((ValueError, FileNotFoundError)):
+                    stage_cache(source, target, self.metadata, clone=shutil.copytree)
+                self.assertFalse(target.exists())
+                self.assertEqual((external / 'config.json').read_text(), 'private')
+
+    def test_staging_cli_retains_two_argument_defaults_and_explicit_bundle_ids(self):
+        import subprocess
+        for explicit in (False, True):
+            with self.subTest(explicit=explicit), tempfile.TemporaryDirectory() as root:
+                source, target = Path(root) / 'source', Path(root) / 'qa'
+                source_id = QA_BUNDLE_ID + '.prior' if explicit else SOURCE_BUNDLE_ID
+                target_id = QA_BUNDLE_ID + '.next' if explicit else QA_BUNDLE_ID
+                relative = Path('models/models--mlx-community--fish-audio-drama-3-4bit/config.json')
+                original = source / bundle_mlx_suffix(source_id) / relative
+                original.parent.mkdir(parents=True)
+                original.write_text('model fixture')
+                command = [sys.executable, str(ROOT / 'tools/stage_mlx_qa_cache.py'), str(source), str(target)]
+                if explicit:
+                    command.extend(('--source-bundle-id', source_id, '--destination-bundle-id', target_id))
+                result = subprocess.run(command, capture_output=True, text=True, check=False)
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertIn(str(bundle_mlx_suffix(target_id) / 'models'), result.stdout.splitlines())
+                staged = target / bundle_mlx_suffix(target_id) / relative
+                self.assertEqual(staged.read_text(), 'model fixture')
+                staged.write_text('QA write')
+                self.assertEqual(original.read_text(), 'model fixture')
+
     def test_staging_refuses_paths_or_symlinks_that_alias_user_data(self):
         with tempfile.TemporaryDirectory() as root:
             source = Path(root) / 'user'
@@ -373,6 +480,34 @@ class CatalogAndStagingTest(unittest.TestCase):
 
 
 class ToolReceiptTest(unittest.TestCase):
+    def test_qa_script_passes_actual_source_and_destination_bundle_mapping(self):
+        import os
+        import plistlib
+        import subprocess
+        source_id, target_id = QA_BUNDLE_ID + '.prior', QA_BUNDLE_ID + '.fresh'
+        with tempfile.TemporaryDirectory() as root:
+            root = Path(root)
+            source_app, target_app = root / 'source.app', root / 'qa.app'
+            (source_app / 'Contents').mkdir(parents=True)
+            with (source_app / 'Contents/Info.plist').open('wb') as output:
+                plistlib.dump({'CFBundleIdentifier': source_id}, output)
+            capture, interpreter = root / 'arguments', root / 'capture-python'
+            interpreter.write_text('#!/bin/sh\nprintf "%s\\n" "$@" > "$CAPTURE_ARGUMENTS"\nexit 71\n')
+            interpreter.chmod(0o755)
+            result = subprocess.run(['sh', str(ROOT / 'tools/prepare_mlx_playback_test_app.sh'),
+                                     str(source_app), str(target_app), target_id],
+                                    env=dict(os.environ, HOME=str(root), READALOUD_MLX_PYTHON=str(interpreter),
+                                             CAPTURE_ARGUMENTS=str(capture)),
+                                    capture_output=True, text=True, check=False)
+            self.assertEqual(result.returncode, 71, result.stderr)
+            self.assertEqual(capture.read_text().splitlines(), [
+                str(ROOT / 'tools/stage_mlx_qa_cache.py'),
+                str(root / 'Library/Containers' / source_id / 'Data'),
+                str(root / 'Library/Containers' / target_id / 'Data'),
+                '--source-bundle-id', source_id, '--destination-bundle-id', target_id])
+            self.assertFalse(target_app.exists())
+            self.assertFalse((root / 'Library').exists())
+
     def test_qa_script_accepts_fresh_identity_and_refuses_unsafe_ids_before_staging(self):
         import subprocess
         prefix = 'com.kellyjanderson.readAloud.mlxPlaybackTest'

@@ -2,6 +2,7 @@
 import argparse
 from itertools import chain
 from pathlib import Path
+import re
 import shutil
 import subprocess
 import tempfile
@@ -9,15 +10,27 @@ import tempfile
 from mlx_protocol_client import MlxClient
 
 MLX_SUFFIX = Path('Library/Application Support/read_aloud/mlx-tts')
+SOURCE_BUNDLE_ID = 'com.kellyjanderson.readAloud'
+QA_BUNDLE_ID = SOURCE_BUNDLE_ID + '.mlxPlaybackTest'
 
 
-def cache_paths(metadata):
-    result = [MLX_SUFFIX / model['cacheDirectory'] for model in metadata['models'].values()]
-    result.extend((MLX_SUFFIX / 'voice-library', Path('.cache/huggingface/hub'),
-                   MLX_SUFFIX / 'hub'))
-    for path in result:
-        if path.is_absolute() or '..' in path.parts:
+def bundle_mlx_suffix(bundle_id):
+    if not isinstance(bundle_id, str) or not re.fullmatch(r'[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)+', bundle_id):
+        raise ValueError('Invalid bundle ID')
+    return MLX_SUFFIX.parent.parent / bundle_id / 'read_aloud/mlx-tts'
+
+
+def cache_paths(metadata, bundle_id=SOURCE_BUNDLE_ID):
+    # Match _prepareModel: path_provider adds the bundle ID, while the
+    # installer/older apps used the containing Application Support directory.
+    # Deliberately omit runtime, catalog helpers, preferences and generated audio.
+    leaves = [Path(model['cacheDirectory']) for model in metadata['models'].values()]
+    for path in leaves:
+        if path.is_absolute() or '..' in path.parts or path == Path('.'):
             raise ValueError('Catalog cache directory escapes QA root')
+    leaves.extend((Path('models'), Path('voice-library'), Path('hub'), Path('runtime-cache/hub')))
+    result = [root / leaf for root in (MLX_SUFFIX, bundle_mlx_suffix(bundle_id)) for leaf in leaves]
+    result.append(Path('.cache/huggingface/hub'))
     return sorted(set(result), key=str)
 
 
@@ -31,7 +44,11 @@ def _validate_independent_links(root):
                 raise ValueError(f'Cache symlink escapes its independent copy: {entry}')
 
 
-def stage_cache(source, destination, metadata, *, clone=None):
+def stage_cache(source, destination, metadata, *, source_bundle_id=SOURCE_BUNDLE_ID,
+                destination_bundle_id=QA_BUNDLE_ID, clone=None):
+    source_suffix = bundle_mlx_suffix(source_bundle_id)
+    destination_suffix = bundle_mlx_suffix(destination_bundle_id)
+    paths = cache_paths(metadata, source_bundle_id)
     source, destination = Path(source).expanduser().resolve(), Path(destination).expanduser().absolute()
     if destination.exists() or destination.is_symlink():
         raise FileExistsError('QA data root already exists; refusing to overwrite user or prior QA data')
@@ -43,14 +60,23 @@ def stage_cache(source, destination, metadata, *, clone=None):
     stage = Path(tempfile.mkdtemp(prefix='.mlx-qa-', dir=destination.parent))
     copied = []
     try:
-        for relative in cache_paths(metadata):
+        for relative in paths:
             origin = source / relative
-            if not origin.exists():
+            # An ancestor link could hide an external cache even when its
+            # contents contain no links. Never discover caches outside Data.
+            ancestor = source
+            for part in relative.parts[:-1]:
+                ancestor /= part
+                if ancestor.is_symlink():
+                    raise ValueError(f'Cache symlink escapes its independent data root: {ancestor}')
+            if not origin.exists() and not origin.is_symlink():
                 continue
             # Hub uses relative links into its own blobs. Reject any link that
             # would alias the user's files after cloning into the QA sandbox.
             _validate_independent_links(origin)
-            target = stage / relative
+            mapped = (destination_suffix / relative.relative_to(source_suffix)
+                      if relative.is_relative_to(source_suffix) else relative)
+            target = stage / mapped
             target.parent.mkdir(parents=True, exist_ok=True)
             if clone is None:
                 subprocess.run(['cp', '-cR', str(origin), str(target)], check=True)
@@ -59,7 +85,7 @@ def stage_cache(source, destination, metadata, *, clone=None):
             # Inspect the actual preserved links too: the source may change
             # between preflight and copying, while this staging tree is ours.
             _validate_independent_links(target)
-            copied.append(str(relative))
+            copied.append(str(mapped))
         # Reserve the destination exclusively before moving our staged entries.
         destination.mkdir(exist_ok=False)
         try:
@@ -77,10 +103,17 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('source_data')
     parser.add_argument('new_qa_data')
+    parser.add_argument('--source-bundle-id', default=SOURCE_BUNDLE_ID)
+    parser.add_argument('--destination-bundle-id', default=QA_BUNDLE_ID)
     args = parser.parse_args()
+    # Validate identities before starting the metadata child or staging work.
+    bundle_mlx_suffix(args.source_bundle_id)
+    bundle_mlx_suffix(args.destination_bundle_id)
     with MlxClient() as client:
         metadata = client.metadata()
-    for path in stage_cache(args.source_data, args.new_qa_data, metadata):
+    for path in stage_cache(args.source_data, args.new_qa_data, metadata,
+                           source_bundle_id=args.source_bundle_id,
+                           destination_bundle_id=args.destination_bundle_id):
         print(path)
 
 
