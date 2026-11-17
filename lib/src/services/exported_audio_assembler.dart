@@ -5,8 +5,12 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
 
+import 'package:flutter/foundation.dart'
+    show TargetPlatform, defaultTargetPlatform, kIsWeb;
+
 import 'pcm_wav.dart';
 import 'pcm_wav_io.dart';
+import 'radoc_export_staging.dart';
 import 'tts_engine.dart';
 
 class ExportedPronunciationArtifact {
@@ -145,7 +149,13 @@ class ExportedAudioAssembler {
   ExportedAudioAssembler({
     this.onProgress,
     this.timeout = const Duration(minutes: 5),
-  });
+    RadocExportStaging? platformStaging,
+  }) : _platformStaging =
+           platformStaging ??
+           (!kIsWeb && defaultTargetPlatform == TargetPlatform.macOS
+               ? const RadocExportStaging()
+               : null);
+  final RadocExportStaging? _platformStaging;
   final void Function(ExportAssemblyProgress progress)? onProgress;
   final Duration timeout;
   _AssemblyJob? _active;
@@ -188,6 +198,9 @@ class ExportedAudioAssembler {
     final port = ReceivePort();
     Object? error;
     TtsExportResult? result;
+    AudioExportStage? platformStage;
+    Future<void>? publication;
+    Object? publicationFailure;
     var terminal = false;
     final subscription = port.listen((message) {
       if (message == null) {
@@ -237,7 +250,22 @@ class ExportedAudioAssembler {
             job.commands!.send('cancel');
           } else {
             job.committing = true;
-            job.commands!.send('commit');
+            final nativeStage = platformStage;
+            if (nativeStage == null) {
+              job.commands!.send('commit');
+            } else {
+              // Admission is final at this staged/current-owner handshake.
+              // Join native coordination before releasing this request's lane.
+              publication = () async {
+                try {
+                  await _platformStaging!.publishAudioPair(nativeStage);
+                  job.commands!.send('published');
+                } catch (failure) {
+                  publicationFailure = failure;
+                  job.commands!.send(['publicationFailed', '$failure']);
+                }
+              }();
+            }
           }
         }
       }
@@ -253,22 +281,39 @@ class ExportedAudioAssembler {
       }
     });
     try {
+      platformStage = await _platformStaging?.createAudioStage(
+        File(request.outputPath),
+      );
+      if (job.cancelled) throw const ExportAssemblyCancelled();
       await Isolate.spawn(
         _assemblyWorker,
-        _AssemblyInput(job.id, request, port.sendPort),
+        _AssemblyInput(
+          job.id,
+          request,
+          port.sendPort,
+          platformStage?.directory.path,
+        ),
         onError: port.sendPort,
         onExit: port.sendPort,
         debugName: 'audio-export-${job.id}',
       );
       await job.exited.future;
-      if (error != null) throw error!;
+      await publication;
+      if (error != null) throw publicationFailure ?? error!;
       return result ?? (throw StateError('Audio assembly produced no result.'));
     } finally {
-      deadline.cancel();
-      await subscription.cancel();
-      port.close();
-      if (identical(_active, job)) _active = null;
-      job.drained.complete();
+      try {
+        await publication;
+        if (platformStage != null) {
+          await _platformStaging!.releaseAudioStage(platformStage);
+        }
+      } finally {
+        deadline.cancel();
+        await subscription.cancel();
+        port.close();
+        if (identical(_active, job)) _active = null;
+        job.drained.complete();
+      }
     }
   }
 }
@@ -284,21 +329,37 @@ class _AssemblyJob {
 }
 
 class _AssemblyInput {
-  const _AssemblyInput(this.id, this.request, this.reply);
+  const _AssemblyInput(
+    this.id,
+    this.request,
+    this.reply,
+    this.platformStagePath,
+  );
   final int id;
   final ExportedAudioAssemblyRequest request;
   final SendPort reply;
+  final String? platformStagePath;
 }
 
 Future<void> _assemblyWorker(_AssemblyInput input) async {
   final commands = ReceivePort();
   var cancelled = false;
+  var publishedExternally = false;
+  String? publicationError;
   final commit = Completer<void>();
   final subscription = commands.listen((message) {
     if (message == 'cancel') {
       cancelled = true;
       if (!commit.isCompleted) commit.complete();
     } else if (message == 'commit' && !commit.isCompleted) {
+      commit.complete();
+    } else if (message == 'published' && !commit.isCompleted) {
+      publishedExternally = true;
+      commit.complete();
+    } else if (message is List &&
+        message.first == 'publicationFailed' &&
+        !commit.isCompleted) {
+      publicationError = message[1] as String;
       commit.complete();
     }
   });
@@ -332,7 +393,9 @@ Future<void> _assemblyWorker(_AssemblyInput input) async {
     final sidecar = File(
       '${output.path.substring(0, output.path.length - 4)}.json',
     );
-    await output.parent.create(recursive: true);
+    if (input.platformStagePath == null) {
+      await output.parent.create(recursive: true);
+    }
     Future<String> canonicalPath(File file) async {
       if (await FileSystemEntity.type(file.path) !=
           FileSystemEntityType.notFound) {
@@ -353,7 +416,9 @@ Future<void> _assemblyWorker(_AssemblyInput input) async {
         throw ArgumentError('Audio export cannot replace an input chunk.');
       }
     }
-    staging = await output.parent.createTemp('.readaloud-export-');
+    staging = input.platformStagePath == null
+        ? await output.parent.createTemp('.readaloud-export-')
+        : Directory(input.platformStagePath!);
     final stagedAudio = File('${staging.path}/audio.wav');
     final stagedJson = File('${staging.path}/metadata.json');
     final writer = await stagedAudio.open(mode: FileMode.write);
@@ -449,40 +514,43 @@ Future<void> _assemblyWorker(_AssemblyInput input) async {
     send('staged');
     await commit.future;
     checkCancelled();
-    // Synchronous, short publication transaction: no cancellation between renames.
-    // Each rename is atomic; two independent paths cannot be crash-atomic as a pair.
-    final oldAudio = File('${staging.path}/previous.wav');
-    final oldJson = File('${staging.path}/previous.json');
-    var audioBackedUp = false;
-    var jsonBackedUp = false;
-    var audioPublished = false;
-    var jsonPublished = false;
-    try {
-      if (output.existsSync()) {
-        output.renameSync(oldAudio.path);
-        audioBackedUp = true;
-      }
-      if (sidecar.existsSync()) {
-        sidecar.renameSync(oldJson.path);
-        jsonBackedUp = true;
-      }
-      stagedAudio.renameSync(output.path);
-      audioPublished = true;
-      stagedJson.renameSync(sidecar.path);
-      jsonPublished = true;
-    } catch (_) {
+    if (publicationError != null) throw StateError(publicationError!);
+    if (!publishedExternally) {
+      // Synchronous, short publication transaction: no cancellation between renames.
+      // Each rename is atomic; two independent paths cannot be crash-atomic as a pair.
+      final oldAudio = File('${staging.path}/previous.wav');
+      final oldJson = File('${staging.path}/previous.json');
+      var audioBackedUp = false;
+      var jsonBackedUp = false;
+      var audioPublished = false;
+      var jsonPublished = false;
       try {
-        if (jsonPublished) sidecar.deleteSync();
-        if (audioPublished) output.deleteSync();
-        if (audioBackedUp) oldAudio.renameSync(output.path);
-        if (jsonBackedUp) oldJson.renameSync(sidecar.path);
+        if (output.existsSync()) {
+          output.renameSync(oldAudio.path);
+          audioBackedUp = true;
+        }
+        if (sidecar.existsSync()) {
+          sidecar.renameSync(oldJson.path);
+          jsonBackedUp = true;
+        }
+        stagedAudio.renameSync(output.path);
+        audioPublished = true;
+        stagedJson.renameSync(sidecar.path);
+        jsonPublished = true;
       } catch (_) {
-        preserveStaging = true;
-        throw StateError(
-          'Export rollback failed; recovery files retained at ${staging.path}.',
-        );
+        try {
+          if (jsonPublished) sidecar.deleteSync();
+          if (audioPublished) output.deleteSync();
+          if (audioBackedUp) oldAudio.renameSync(output.path);
+          if (jsonBackedUp) oldJson.renameSync(sidecar.path);
+        } catch (_) {
+          preserveStaging = true;
+          throw StateError(
+            'Export rollback failed; recovery files retained at ${staging.path}.',
+          );
+        }
+        rethrow;
       }
-      rethrow;
     }
     result = TtsExportResult(
       outputPath: output.path,
@@ -497,7 +565,9 @@ Future<void> _assemblyWorker(_AssemblyInput input) async {
   } catch (error) {
     failure = error;
   } finally {
-    if (staging != null && !preserveStaging) {
+    if (staging != null &&
+        !preserveStaging &&
+        input.platformStagePath == null) {
       try {
         await staging.delete(recursive: true);
       } catch (error) {

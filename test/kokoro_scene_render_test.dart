@@ -4,12 +4,18 @@ import 'dart:typed_data';
 
 import 'package:crypto/crypto.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:flutter/foundation.dart'
+    show TargetPlatform, debugDefaultTargetPlatformOverride;
+import 'package:flutter/services.dart';
 import 'package:just_audio/just_audio.dart';
 import 'package:read_aloud/src/models/chunk_plan.dart';
 import 'package:read_aloud/src/models/engine_capability.dart';
 import 'package:read_aloud/src/models/prepared_voice_binding.dart';
 import 'package:read_aloud/src/models/speech_annotation.dart';
 import 'package:read_aloud/src/models/tts_artifact.dart';
+import 'package:read_aloud/src/models/voice_profile.dart';
+import 'package:read_aloud/src/controllers/reader_controller.dart';
+import 'package:read_aloud/src/services/reader_document_repository.dart';
 import 'package:read_aloud/src/services/audio_artifact_store.dart';
 import 'package:read_aloud/src/services/exported_audio_assembler.dart';
 import 'package:read_aloud/src/services/kokoro_pronunciation_translation_service.dart';
@@ -18,12 +24,91 @@ import 'package:read_aloud/src/services/kokoro_tts_engine.dart';
 import 'package:read_aloud/src/services/speech_worker_pipeline.dart';
 import 'package:read_aloud/src/services/tts_engine.dart';
 import 'package:read_aloud/src/services/speech_audio_packet.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
   late _Fixture fixture;
   setUp(() async => fixture = await _Fixture.create());
   tearDown(() => fixture.close());
+
+  test(
+    'Fish opening export without Play reaches controlled processor',
+    () async {
+      await fixture.close();
+      fixture = await _Fixture.create(engineId: 'fish_drama3_8bit');
+      final assets = await Future.wait([
+        rootBundle.loadString('assets/tokenizer_vocab.json'),
+        rootBundle.loadString('assets/lexicon.json'),
+        rootBundle.loadString('assets/us_gold.json'),
+        rootBundle.loadString('assets/us_silver.json'),
+        rootBundle.loadString('assets/cmudict.dict'),
+      ]);
+      fixture.tokenizer.delegate = KokoroTokenizationWorker(
+        assets: KokoroTokenizerAssets(
+          vocabularyJson: assets[0],
+          lexiconJson: assets[1],
+          goldJson: assets[2],
+          silverJson: assets[3],
+        ),
+        rawDictionary: assets[4],
+        capabilityProfile: const EngineCapabilityRegistry().lookup(
+          engineId: 'fish_drama3_8bit',
+        ),
+        ownerId: 'fish-export-regression',
+      );
+      debugDefaultTargetPlatformOverride = TargetPlatform.macOS;
+      addTearDown(() => debugDefaultTargetPlatformOverride = null);
+      SharedPreferences.setMockInitialValues({
+        'reader.ttsEngineId': 'fish_drama3_8bit',
+      });
+      fixture.processor.allowPreparation = true;
+      final controller = ReaderController(
+        ttsEngine: _ControllerFishEngine(fixture.engine),
+        enablePlatformIntakeChannels: false,
+        documentRepository: ReaderDocumentRepository(
+          '${fixture.directory.path}/prepared',
+        ),
+      );
+      addTearDown(() async {
+        await controller.shutdownPreparation();
+        controller.dispose();
+      });
+      await controller.initialize();
+      final source = File('${fixture.directory.path}/opening-export.md');
+      // Synthetic prose retains the regression's paragraph/quoted-turn word
+      // counts; authored native-test text must not enter tracked unit fixtures.
+      await source.writeAsString('''# A GUIDE TO THE LITTLE WORKSHOP
+
+Chapter One — Friday
+
+First Draft
+
+Several green bicycles waited beside reception.
+
+Riley checked the schedule beside the yellow notice board. Fresh labels covered three crates, and someone had stacked spare lamps near the window. Noon arrived. Bells rang. Everyone quietly gathered outside.
+
+Across the room, Morgan carefully sorted twelve postcards into two neat piles.
+
+"Ready," they said.
+
+"The labels look correct."
+''');
+      await controller.importFilePaths([source.path]);
+      final deadline = DateTime.now().add(const Duration(seconds: 5));
+      while (!controller.hasCompleteDocumentSnapshot &&
+          DateTime.now().isBefore(deadline)) {
+        await Future<void>.delayed(const Duration(milliseconds: 10));
+      }
+      expect(controller.document.wordCount, 68);
+      final result = await controller.exportAudioToPath(
+        '${fixture.directory.path}/opening-export.wav',
+      );
+      expect(result, isNotNull, reason: controller.statusMessage);
+      expect(fixture.processor.requests, isNotEmpty);
+      expect(fixture.assembler.requests, hasLength(1));
+    },
+  );
 
   test(
     'playable export packets precede held scene completion and durable publication',
@@ -363,7 +448,10 @@ class _Fixture {
   final List<PreparedVoiceBinding> bindings;
   final KokoroTtsEngine engine;
 
-  static Future<_Fixture> create({Future<void>? initialization}) async {
+  static Future<_Fixture> create({
+    Future<void>? initialization,
+    String engineId = 'kokoro',
+  }) async {
     final directory = await Directory.systemTemp.createTemp(
       'scene-render-test-',
     );
@@ -395,6 +483,7 @@ class _Fixture {
       artifactPins: pins,
       exportAssembler: assembler,
       initialization: initialization,
+      engineId: engineId,
     );
     return _Fixture(
       directory,
@@ -501,6 +590,70 @@ ChunkSpec _spec(
   ],
 );
 
+// Only startup/library metadata are replaced. Controller planning and the real
+// engine export/resource lifecycle still use the controlled native owner.
+class _ControllerFishEngine
+    implements
+        TtsEngine,
+        TtsEngineIdentityCapable,
+        AudioExportCapable,
+        ResourcePreparationCapable {
+  _ControllerFishEngine(this.engine);
+  final KokoroTtsEngine engine;
+  @override
+  String get engineId => engine.engineId;
+  @override
+  String get engineVersion => engine.engineVersion;
+  @override
+  Future<void> initialize() => engine.initialize();
+  @override
+  Future<List<VoiceProfile>> loadVoices() async => const [
+    VoiceProfile(
+      id: 'library_fishadrian',
+      label: 'Adrian (Fish)',
+      locale: 'en-US',
+      rawValue: {},
+    ),
+  ];
+  @override
+  Future<void> selectVoice(VoiceProfile voice) => engine.selectVoice(voice);
+  @override
+  Future<void> setSpeechRate(double rate) => engine.setSpeechRate(rate);
+  @override
+  Future<void> setVolume(double volume) => engine.setVolume(volume);
+  @override
+  Future<void> stop() => engine.stop();
+  @override
+  Future<void> pause() => engine.pause();
+  @override
+  Future<void> speak(TtsSpeakRequest request) => engine.speak(request);
+  @override
+  bool get resourcesReady => engine.resourcesReady;
+  @override
+  Future<List<PreparedVoiceBinding>> prepareDocumentResources({
+    required String documentId,
+    required int revision,
+    required Set<String> voiceIds,
+    required String pronunciationProfileId,
+  }) => engine.prepareDocumentResources(
+    documentId: documentId,
+    revision: revision,
+    voiceIds: voiceIds,
+    pronunciationProfileId: pronunciationProfileId,
+  );
+  @override
+  Future<void> releaseDocumentResources() => engine.releaseDocumentResources();
+  @override
+  Future<void> shutdownResources() => engine.shutdownResources();
+  @override
+  Future<TtsExportResult> exportAudio(TtsExportRequest request) =>
+      engine.exportAudio(request);
+  @override
+  void dispose() {}
+  @override
+  dynamic noSuchMethod(Invocation invocation) => null;
+}
+
 class _Tokenizer extends KokoroTokenizationWorker {
   _Tokenizer()
     : super(
@@ -515,6 +668,7 @@ class _Tokenizer extends KokoroTokenizationWorker {
         ),
       );
   Completer<void>? block;
+  KokoroTokenizationWorker? delegate;
   final entered = Completer<void>();
   var cancelCalls = 0;
   @override
@@ -526,6 +680,17 @@ class _Tokenizer extends KokoroTokenizationWorker {
     int documentRevision = 0,
     int bindingRevision = 0,
   }) async {
+    final actual = delegate;
+    if (actual != null) {
+      return actual.prepare(
+        spec,
+        languageTag,
+        capabilityOverride: capabilityOverride,
+        requestId: requestId,
+        documentRevision: documentRevision,
+        bindingRevision: bindingRevision,
+      );
+    }
     if (!entered.isCompleted) entered.complete();
     await block?.future;
     return KokoroTokenizationResult(
@@ -554,10 +719,17 @@ class _Tokenizer extends KokoroTokenizationWorker {
 
   @override
   void cancel() {
+    delegate?.cancel();
     cancelCalls++;
     if (block?.isCompleted == false) {
       block!.completeError(StateError('Tokenization cancelled.'));
     }
+  }
+
+  @override
+  Future<void> shutdown() async {
+    await delegate?.shutdown();
+    await super.shutdown();
   }
 }
 

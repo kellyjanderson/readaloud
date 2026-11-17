@@ -91,11 +91,13 @@ class KokoroTtsEngine
     required AudioArtifactPins artifactPins,
     required ExportedAudioAssembler exportAssembler,
     Future<void>? initialization,
+    String engineId = 'kokoro',
   }) {
     final engine = KokoroTtsEngine(
       player: player,
       artifactPins: artifactPins,
       exportAssembler: exportAssembler,
+      engineId: engineId,
     );
     engine._resourceProcessor = processor;
     engine._exportTokenizer = tokenizer;

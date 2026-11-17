@@ -3454,12 +3454,14 @@ class ReaderController extends ChangeNotifier {
     _statusMessage = 'Saving audio with ${voice.displayName}...';
     notifyListeners();
 
+    var exportStage = 'destination';
     try {
       await requirePreservedDocumentExportPath(
         normalizedPath,
         sourcePath: _currentDocumentPath,
       );
       requireCurrent();
+      exportStage = 'document';
       final document = await _completeExportDocument(exportRevision);
       requireCurrent();
       if (exportAssignmentRevision != voiceAssignmentState.requestedRevision) {
@@ -3468,6 +3470,7 @@ class ReaderController extends ChangeNotifier {
       if (!isResourcesReady ||
           _preparedAssignmentRevision != exportAssignmentRevision ||
           !_hasCompleteDocumentSnapshot) {
+        exportStage = 'resources';
         await _prepareResourceBindings(
           exportRevision,
           document: document,
@@ -3484,22 +3487,46 @@ class ReaderController extends ChangeNotifier {
           'Voice choices changed before export preparation completed.',
         );
       }
+      exportStage = 'planning';
       final exportRequest = await _buildExportRequest(
         normalizedPath,
         document: document,
       );
       requireCurrent();
+      exportStage = 'rendering-and-assembly';
       final result = await exporter.exportAudio(exportRequest);
       requireCurrent();
       if (current()) {
         _statusMessage = 'Saved audio to ${result.outputPath}.';
       }
       return result;
-    } catch (error) {
+    } catch (error, stack) {
       if (current()) {
+        _instrumentation.recordMetric(
+          metric: 'audioExportFailed',
+          documentId: _document.displayDocument.documentId,
+          sessionId: 'export-$exportEpoch-$exportRevision',
+          voiceId: voice.id,
+          engineId: _engineId(),
+          value: <String, Object?>{
+            'stage': exportStage,
+            'error': '$error',
+            'stack': '$stack',
+          },
+        );
+        developer.log(
+          'Audio export failed during $exportStage.',
+          name: 'read_aloud.reader',
+          error: error,
+          stackTrace: stack,
+        );
         _recordCheckpointExportFailure(error);
         _statusMessage = _preparationFailed
             ? 'The prepared checkpoint is damaged. Retry document preparation before saving.'
+            : error is PlatformException &&
+                  error.code.startsWith('audio_export_')
+            ? error.message ??
+                  'Could not save audio at this location. Choose another location and try again.'
             : 'Could not save audio right now. Try again.';
       }
       return null;

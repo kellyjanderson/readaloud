@@ -28,6 +28,20 @@
 	<array>
 		<dict>
 			<key>CFBundleTypeName</key>
+			<string>Read Aloud Audio Export Metadata</string>
+			<key>CFBundleTypeRole</key>
+			<string>Editor</string>
+			<key>LSHandlerRank</key>
+			<string>None</string>
+			<key>NSIsRelatedItemType</key>
+			<true/>
+			<key>CFBundleTypeExtensions</key>
+			<array><string>json</string></array>
+			<key>LSItemContentTypes</key>
+			<array><string>public.json</string></array>
+		</dict>
+		<dict>
+			<key>CFBundleTypeName</key>
 			<string>Read Aloud Audio Book</string>
 			<key>CFBundleTypeRole</key>
 			<string>Editor</string>

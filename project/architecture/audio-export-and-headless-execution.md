@@ -1,6 +1,6 @@
 # Audio Export and Headless Execution
 
-Reconciled: November 12, 2026; S9.1 shared RIFF/PCM export and analysis core (#146), RC2 #90 complete-range export source; retained P4 native evidence e18c81d
+Reconciled: November 16, 2026; S11 sandboxed WAV/JSON publication source repair (#152), S9.1 shared RIFF/PCM core (#146), RC2 #90 complete-range export; retained P4 native evidence e18c81d
 Status: Bounded P4 native export/cancellation evidence; active-export input and human listening unverified
 
 ## Implemented structure and limitations
@@ -36,7 +36,75 @@ contracts; actual model/app, native timing and listening are separate #151 gates
 
 Cancellation is cooperative between bounded reads/writes and at an explicit staged/commit handshake. `cancel()` suppresses publication before commit authorization; after authorization, the short synchronous publication step completes and returns its result. `shutdown()` closes intake, cancels staging and awaits worker exit and file/temp cleanup. The default five-minute deadline requests cancellation and reports a timeout after drain; it does not pretend an unresponsive filesystem operation was forcibly cancelled. Worker errors/exit become terminal failures; a previous request's callbacks cannot clear a newer request. The engine owns document/session invalidation and must call these lifecycle seams. Progress callbacks are short main-isolate notifications, never assembly work.
 
-Audio and sidecar are flushed to a unique staging directory beside the destination. Publication renames the complete WAV first and sidecar last as its commit marker. Existing outputs are backed up and restored on ordinary publication errors; if rollback itself fails, the error names the retained recovery directory. Each rename is atomic, but two filesystem paths are not crash-atomic as a pair. Cancellation before commit leaves prior outputs intact. No cache chunk may be used as the output path.
+Audio and sidecar are flushed to a unique staging directory. On macOS, the
+existing Foundation replacement-directory facility allocates a same-volume
+stage without requiring write access to the destination's parent. One native
+owner retains the exact selected WAV URL and allocated stage; publication and
+release accept only that owner ID. The assembly worker performs PCM/metadata
+work there. After the existing staged/current-owner commit handshake, the one
+native owner spans two utility-queue coordination phases. The first write scope
+atomically installs the complete staged WAV and returns. Only then does the
+owner construct/register a fresh `NSFilePresenter` and `NSFileCoordinator` for
+the exact same-basename adjacent JSON. Sidecar inspection, backup, publication
+and ordinary sidecar rollback stay inside that related-only write scope; WAV
+rollback reacquires a primary write scope. A device/inode fence checks that the
+WAV is still the installed file before JSON mutation or WAV rollback. A foreign
+replacement is preserved and recovery backups retained, rather than overwritten.
+`Info.plist` declares JSON as a related supporting type with handler rank None;
+it does not claim the default JSON handler. This follows Apple's
+[related-item access](https://developer.apple.com/documentation/foundation/nsfilepresenter/primarypresenteditemurl)
+and [sidecar declaration guidance](https://developer.apple.com/videos/play/wwdc2019/701/?time=1601).
+No broader directory grant or private-metadata relocation is used. Other
+platforms retain beside-destination staging; CLI output still includes adjacent
+JSON.
+
+Publication renames the complete WAV first and sidecar last as its commit
+marker. Existing outputs are backed up and restored on ordinary publication
+errors; if rollback itself fails, the error names the retained recovery
+directory. POSIX rename refuses cross-volume moves rather than falling back to
+copying. Each rename is atomic, but two filesystem paths are not crash-atomic
+as a pair. There is no pair-wide coordination lock across the phases, no claim
+of excluding external writers between them, and the inode fence is not content
+attestation against in-place changes. Cancellation before commit leaves prior outputs intact. Once native
+publication is admitted it drains before stage release and the next request;
+shutdown joins the same operation. Replies and native owner state return to the
+main thread, while coordination, rename/rollback and stage cleanup remain on a
+utility queue. Normal Quit also joins the exact active native stage's release;
+publication requested after termination starts is refused and cleaned through
+the same worker/owner drain. Quit also cancels pending primary/JSON coordination;
+an already admitted filesystem body drains, and rollback keeps its own cleanup
+scope. The existing twelve-second native termination fallback defers while the
+exact export owner remains active, then resumes after release. A blocked
+filesystem operation can therefore delay Quit; the deadline is not proof of
+completed cleanup or an unconditional bound on process exit. No cache chunk may be used as the output
+path. Native destination
+failures retain their diagnostic cause and expose a retry/location action.
+Each coordination wait has a ten-second cooperative cancellation budget before
+its accessor is admitted; running filesystem I/O still drains rather than being
+reported as forcibly interrupted.
+
+The S11 ordinary signed-app Save Audio failure was diagnosed as forbidden
+parent-directory temporary creation; a separate in-container Fish export
+succeeded. The first repair safely staged and rolled back, but registering the
+related presenter before a new WAV existed failed with ENOENT. A fresh bundle
+identity reproduced that failure; a SavePanel overwrite of an existing WAV
+successfully created its previously absent JSON. Denied-parent staging,
+capability refusal, commit cancellation/drain, authority-entry ordering and
+Foundation pair rollback, foreign-inode refusal and pending coordination
+cancellation now have bounded source coverage. Registering late
+inside the first coordination block also failed natively, as did fresh/computed
+URL and retained-SavePanel-URL variants. The isolated signed Cocoa two-phase
+probe then created a new WAV/JSON pair with exact fixture hashes and removed its
+stage. That proves the filesystem route on its fixture, not the ordinary
+Flutter/Fish export. The production two-phase implementation still requires
+signed-app external new-file and existing-pair rechecks in #152.
+Existing long-playback evidence belongs to its original candidate,
+independently of this export repair.
+
+The filesystem replay tools carry a helper-only immutable baseline under
+`tools/fixtures/`, with origin commit and verified helper SHA-256. They do not
+require that historical commit to exist in a public clone. Tracked unit prose is
+synthetic; authored chapter inputs and native WAV/JSON fixtures remain local.
 
 Durations come from decoded frame counts rather than the caller's possibly stale duration hints: the result carries microsecond-rounded duration, sidecar milliseconds round to the nearest millisecond, and exact frame counts/sample rate remain recorded. Ancillary RIFF sections and odd chunk padding are parsed; malformed lengths, unsupported/non-PCM formats, incompatible chunk formats and output exceeding the RIFF size limit fail before publication.
 
