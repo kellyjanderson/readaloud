@@ -302,6 +302,49 @@ void main() {
     },
   );
   testWidgets(
+    'saved-book Settings names deferred loading and explicitly loads without Play',
+    (tester) async {
+      await tester.runAsync(() async {
+        await controller.importFilePaths([(await fixture()).path]);
+        await controller.completeInitialIntake();
+        // Finish the tiny fixture's real package read before fake-clock UI work.
+        await controller.readPreparedRange(2);
+      });
+      expect(controller.engineSession.phase.name, 'deferred');
+      expect(controller.isInitializing, isFalse);
+      expect(controller.engineSession.active, isNull);
+      expect(engine.modelCalls, 0);
+      engine.renderAvailable = true;
+      await tester.pumpWidget(ReadAloudApp(controller: controller));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('reader-overflow-menu')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Settings').last);
+      await tester.pumpAndSettle();
+      expect(
+        find.textContaining('Speech model is not loaded yet.'),
+        findsOneWidget,
+      );
+      expect(find.text('Cancel speech engine preparation'), findsNothing);
+      final load = find.text('Load selected speech engine');
+      expect(load, findsOneWidget);
+      await tester.ensureVisible(load);
+      await tester.tap(load);
+      await tester.pumpAndSettle();
+      expect(engine.modelCalls, 1);
+      expect(controller.engineSession.phase.name, 'active');
+      expect(controller.engineSession.active, isNotNull);
+      expect(controller.hasPublishedAudio, isTrue);
+      expect(controller.document.speakableText, 'Stay close.');
+      expect(engine.requests, isEmpty);
+      expect(engine.exports, isEmpty);
+      expect(find.text('Load selected speech engine'), findsNothing);
+      expect(tester.takeException(), isNull);
+      await tester.pumpWidget(const SizedBox());
+      await tester.runAsync(controller.shutdownPreparation);
+    },
+  );
+  testWidgets(
     'failed Save has inline Clear, retains diagnostics and retries by identity',
     (tester) async {
       await tester.runAsync(() async {

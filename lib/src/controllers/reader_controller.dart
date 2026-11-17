@@ -1726,6 +1726,8 @@ class ReaderController extends ChangeNotifier {
     _publishEnginePhase(
       _modelPreparationCancelled
           ? EngineSessionPhase.cancelled
+          : deferInitialSynthesis
+          ? EngineSessionPhase.deferred
           : EngineSessionPhase.loading,
     );
     if (!_modelPreparationCancelled) _bindEngineCallbacks();

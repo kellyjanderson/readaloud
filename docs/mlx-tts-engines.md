@@ -15,6 +15,9 @@ measurement with its timestamp. The total is not the remaining download size or
 a guarantee of future space. Cancel retains resumable data; Retry resumes
 preparation without changing the selected model. Switching away cancels preparation, drains the old inference process,
 and prepares the latest selection without restarting or rebuilding the app.
+When a saved audio-only book opens, its prepared audio can play without loading
+a speech model. Settings shows that loading is deferred and offers **Load
+selected speech engine**; creating new speech also loads the required model.
 The document and reading position remain available; resume playback explicitly.
 Settings shows the selected engine separately from a validated active engine
 and the last working choice. A last working choice may need to reload. Changing
@@ -91,7 +94,7 @@ inside those clocks; no warmup shift or guessed startup subtraction is allowed.
 
 ## Model downloads and cache
 
-At launch with an MLX selection, or when selecting one in Settings, Read Aloud checks for a compatible local
+For new speech after launch, or when selecting an MLX engine in Settings, Read Aloud checks for a compatible local
 checkpoint and then downloads it automatically if needed. Downloads use the
 standard Hugging Face Hub cache, shared with other tools and applications when
 the app can access it. If macOS sandbox permissions prevent access, Read Aloud
