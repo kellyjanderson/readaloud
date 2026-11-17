@@ -95,9 +95,16 @@ cancellation now have bounded source coverage. Registering late
 inside the first coordination block also failed natively, as did fresh/computed
 URL and retained-SavePanel-URL variants. The isolated signed Cocoa two-phase
 probe then created a new WAV/JSON pair with exact fixture hashes and removed its
-stage. That proves the filesystem route on its fixture, not the ordinary
-Flutter/Fish export. The production two-phase implementation still requires
-signed-app external new-file and existing-pair rechecks in #152.
+stage. The production implementation at `a6fa96e` subsequently passed signed
+Flutter/Fish 8-bit export through the ordinary reader/controller/SavePanel route
+(with a diagnostic observer): both a new external pair and an explicitly accepted
+overwrite produced five chunks / 1,173,271 frames of 44.1 kHz mono PCM16 exactly
+matching ordered synthesis sources. Normal Quit while the JSON coordination
+claim was held cancelled the pending operation, rolled back the WAV and released
+the stage before the holder was released; app and synthesis worker exit were
+verified. This establishes these bounded native cases, not arbitrary filesystem
+behavior, human audio quality or final packaged-candidate acceptance. See the
+[native receipt](../test-artifacts/s11-fish-native-20261116/README.md).
 Existing long-playback evidence belongs to its original candidate,
 independently of this export repair.
 

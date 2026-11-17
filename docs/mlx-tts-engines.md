@@ -73,6 +73,14 @@ Subsequent consolidation requires applicable candidate checks. Physical output,
 physical M3, current human listening/usability and final distribution remain
 separate gates. Earlier accepted scene samples do not certify this candidate.
 
+On November 16, an ordinary signed QA build at `9f69510` emitted a matched
+30-minute, 41-second contiguous Fish 8-bit interval from the latest local
+Chapter 1 and Chapter 2. This is warm partial-book software-output evidence;
+startup, the uncredited prefix/tail, human listening and physical M3 remain
+unqualified. Subsequent sandbox export repair has its own signed-app evidence.
+Exact source identities, acoustic measurements and limits are in the
+[S11 native receipt](../project/test-artifacts/s11-fish-native-20261116/README.md).
+
 The same receipt records first/reusable post-startup loads of
 2,099.705/525.851 ms, within the ten-/five-second hard limits. Separately measured
 startup is 4,218.100/275.554 ms and total launch-to-emission is
