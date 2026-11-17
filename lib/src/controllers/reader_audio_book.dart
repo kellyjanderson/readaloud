@@ -363,7 +363,11 @@ extension ReaderAudioBookSupport on ReaderController {
   /// Match only effective choices used by this scene. An unrelated Character
   /// edit cannot invalidate this scene. Native resource identities remain in
   /// dependencies; replay itself does not need the corresponding model.
-  bool _bookSceneMatches(_ReaderAudioBook book, RadocAudioScene scene) {
+  Future<bool> _bookSceneMatches(
+    _ReaderAudioBook book,
+    RadocAudioScene scene,
+    bool Function() current,
+  ) async {
     if (artifactIdentity(scene.dependencies) != scene.dependencyDigest) {
       return false;
     }
@@ -381,10 +385,15 @@ extension ReaderAudioBookSupport on ReaderController {
         intent['multiVoice'] != _isMultiVoiceEnabled) {
       return false;
     }
-    final turns =
+    var turns =
         (scene.provenance['sceneTurns'] as List?) ??
         (scene.dependencies['sceneTurns'] as List?) ??
         const [];
+    final raw = scene.dependencies['raw'] as Map?;
+    if (turns.isEmpty && isDramaEngine(raw?['engineId'] as String? ?? '')) {
+      turns = await _legacyFishBookOwnership(book, scene, current);
+      if (!current()) throw const PlanningCancelled();
+    }
     if (turns.isEmpty &&
         intent['defaultVoiceId'] != null &&
         intent['defaultVoiceId'] != _selectedVoiceId) {
@@ -407,6 +416,69 @@ extension ReaderAudioBookSupport on ReaderController {
     return true;
   }
 
+  /// Historical separate-turn Fish publications omitted turns from their raw
+  /// dependencies, but retained the one actual resource in provenance. Recover
+  /// only canonical ownership from the saved prepared source; never infer a
+  /// speaker from prose, a current automatic choice or another Fish variant.
+  /// The original dependency digest remains unchanged and is checked above.
+  Future<List<Map<String, Object?>>> _legacyFishBookOwnership(
+    _ReaderAudioBook book,
+    RadocAudioScene scene,
+    bool Function() current,
+  ) async {
+    const missing = FormatException(
+      'This saved Fish passage lacks unambiguous voice ownership. '
+      'Open the original document and prepare a new audio book.',
+    );
+    final raw = scene.dependencies['raw'] as Map;
+    final capturedIntent = scene.provenance['intent'] as Map?;
+    final engineId = raw['engineId'] as String;
+    if (capturedIntent?['engineId'] != engineId ||
+        !(raw['capabilityProfileId'] as String? ?? '').startsWith(
+          '$engineId:',
+        )) {
+      throw missing;
+    }
+    final bindings = scene.provenance['bindings'] as List?;
+    if (bindings == null || bindings.length != 1) throw missing;
+    final binding = PreparedVoiceBinding.fromMap(bindings.single as Map);
+    if (binding.engineVersion != raw['engineVersion'] ||
+        binding.voiceId.isEmpty ||
+        binding.voiceDigest.isEmpty ||
+        binding.modelDigest.isEmpty) {
+      throw missing;
+    }
+    final index = book.book.manifest.preparedRanges.indexWhere(
+      (r) => r.startWord <= scene.startWord && scene.endWord <= r.endWord,
+    );
+    if (index < 0) throw missing;
+    final prepared = await readPreparedRange(index + 1);
+    if (!current() || prepared == null) throw const PlanningCancelled();
+    if (binding.documentId != prepared.fragment.displayDocument.documentId) {
+      throw missing;
+    }
+    final offset = prepared.range.wordStart;
+    final ownership = prepared.fragment.documentVoiceAttribution.ranges.where(
+      (r) =>
+          r.startWordIndex + offset < scene.endWord &&
+          scene.startWord < r.endWordIndex + offset,
+    );
+    var covered = scene.startWord;
+    final result = <Map<String, Object?>>[];
+    for (final range in ownership) {
+      final start = math.max(scene.startWord, range.startWordIndex + offset);
+      final end = math.min(scene.endWord, range.endWordIndex + offset);
+      if (start != covered || end <= start) throw missing;
+      result.add({
+        'castId': capturedIntent?['multiVoice'] == false ? null : range.castId,
+        'voice': binding.voiceId,
+      });
+      covered = end;
+    }
+    if (covered != scene.endWord || result.isEmpty) throw missing;
+    return result;
+  }
+
   Future<_BookScene?> _findBookScene(
     _ReaderAudioBook session,
     int word,
@@ -427,7 +499,7 @@ extension ReaderAudioBookSupport on ReaderController {
         );
         if (saved != null) {
           final scene = _publishedScene(saved);
-          if (_bookSceneMatches(session, scene) &&
+          if (await _bookSceneMatches(session, scene, current) &&
               await _bookSceneSourceMatches(session, scene, current)) {
             return _BookScene(
               scene,
@@ -441,7 +513,7 @@ extension ReaderAudioBookSupport on ReaderController {
       }
     }
     if (descriptor == null ||
-        !_bookSceneMatches(session, descriptor) ||
+        !await _bookSceneMatches(session, descriptor, current) ||
         !await _bookSceneSourceMatches(session, descriptor, current)) {
       return null;
     }

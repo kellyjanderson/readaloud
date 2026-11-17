@@ -2814,6 +2814,40 @@ class KokoroTtsEngine
     required Future<void> cancelled,
     required bool Function() isCurrent,
   }) {
+    // Quantized Fish synthesizes separate turns, so its worker request must
+    // remain a single-voice request. Final publication still needs the actual
+    // canonical owner and binding: an empty native-scene envelope is not
+    // evidence that the resulting audio belongs to the narrator.
+    final publishedTurns = chunk.sceneTurns.isEmpty && isDramaEngine(_engineId)
+        ? <NativeSpeechTurn>[
+            NativeSpeechTurn(
+              voiceId: chunk.voiceId,
+              text: chunk.engineSpeakText,
+              segmentIds: chunk.segmentIds,
+              startWord: chunk.startWordIndex,
+              endWord: chunk.endWordIndex,
+              bindingFingerprint: chunk.expectedBinding.fingerprint,
+              bindingRevision: chunk.expectedBinding.bindingRevision,
+              castId: chunk.castId,
+              routeId: chunk.routeId,
+              dialogueSpanId: chunk.dialogueSpanId,
+              directions: [
+                for (final segment in chunk.ttsSegments)
+                  for (final intent in segment.performanceIntents)
+                    {
+                      'annotationId': intent.annotation.annotationId,
+                      'segmentId': intent.annotation.segmentId,
+                      'startWord': intent.annotation.startWord,
+                      'endWord': intent.annotation.endWord,
+                      'source': intent.annotation.source.name,
+                      'confidence': intent.annotation.confidence,
+                      'delivery': intent.annotation.deliveryIntent?.name,
+                      'control': intent.engineControl,
+                    },
+              ],
+            ),
+          ]
+        : chunk.sceneTurns;
     return TtsFinalizedAudioScene(
       documentId: chunk.documentId,
       generationId: generationId,
@@ -2823,7 +2857,7 @@ class KokoroTtsEngine
       startWordIndex: chunk.startWordIndex,
       endWordIndex: chunk.endWordIndex,
       startOffset: chunk.startOffset,
-      sceneTurns: chunk.sceneTurns,
+      sceneTurns: publishedTurns,
       preparedBindings: bindings
           .where(
             (binding) =>

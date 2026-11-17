@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
@@ -8,6 +9,7 @@ import 'package:read_aloud/src/models/character.dart';
 import 'package:read_aloud/src/models/reader_operation.dart';
 import 'package:read_aloud/src/models/character_cast_registry.dart';
 import 'package:read_aloud/src/models/voice_profile.dart';
+import 'package:read_aloud/src/models/native_speech_turn.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -957,12 +959,184 @@ void main() {
     expect(engine.modelCalls, 1);
     expect(engine.requests, isEmpty);
   });
+
+  Future<File> legacyFishFixture({String? defect}) async {
+    const path = 'test/fixtures/s11_fish_legacy';
+    final json =
+        jsonDecode(await File('$path/manifest.json').readAsString())
+            as Map<String, dynamic>;
+    final members = <String, File>{
+      'prepared/1.json': File('$path/prepared.json'),
+    };
+    if (defect == 'attribution') {
+      final prepared =
+          jsonDecode(await members['prepared/1.json']!.readAsString()) as Map;
+      (prepared['documentVoiceAttribution'] as Map)['ranges'] = [];
+      members['prepared/1.json'] = await File(
+        '${temp.path}/no-attribution.json',
+      ).writeAsString(jsonEncode(prepared));
+    }
+    for (final (i, value) in (json['scenes'] as List).indexed) {
+      final scene = value as Map<String, dynamic>;
+      // These samples prove admission/reuse, never speech or acoustic quality.
+      (scene['format'] as Map)['sampleRate'] = 24000;
+      (scene['format'] as Map)['frameCount'] = 240;
+      final audio = await File(
+        '${temp.path}/legacy-$i.wav',
+      ).writeAsBytes(_wav(sample: i + 1));
+      members[scene['audioMember'] as String] = audio;
+      members[scene['rawAudioMember'] as String] = audio;
+      if (i == 0) {
+        final provenance = scene['provenance'] as Map;
+        if (defect == 'binding') provenance['bindings'] = [];
+        if (defect == 'precision') {
+          (provenance['intent'] as Map)['engineId'] = 'fish_drama3_4bit';
+        }
+      }
+    }
+    final package = RadocAudioPackage();
+    try {
+      final output = File('${temp.path}/legacy-fish.radoc');
+      await package.export(
+        destination: output,
+        manifest: RadocAudioManifest.fromJson(json),
+        members: members,
+      );
+      return output;
+    } finally {
+      await package.dispose();
+    }
+  }
+
+  Future<ReaderController> fishController(_OfflineEngine owner) async {
+    SharedPreferences.setMockInitialValues({
+      'reader.ttsEngineId': 'fish_drama3_8bit',
+    });
+    final c = ReaderController(
+      ttsEngine: owner,
+      deferInitialSynthesis: true,
+      enablePlatformIntakeChannels: false,
+      renderedSceneRepository: RenderedSceneRepository(
+        Directory('${temp.path}/fish-scenes'),
+      ),
+    );
+    addTearDown(() async {
+      await c.shutdownPreparation();
+      c.dispose();
+    });
+    await c.initialize();
+    return c;
+  }
+
+  test(
+    'legacy Fish character edit regenerates only Mara and survives save/reopen',
+    () async {
+      final owner = _OfflineEngine()
+        ..renderAvailable = true
+        ..fishPublication = true;
+      final c = await fishController(owner);
+      await c.importFilePaths([(await legacyFishFixture()).path]);
+      await c.assignVoiceToCast('cast_character_mara', 'library_fishadrian');
+      await c.startPlayback();
+      expect(owner.requests, hasLength(1), reason: c.statusMessage);
+      var request = owner.requests.single;
+      var sequence = 0;
+      final admitted = <int>[];
+      while (true) {
+        admitted.add(request.startWordIndex);
+        final next = await request.continuation!.next(
+          sequence++,
+          Completer<void>().future,
+        );
+        if (next == null) break;
+        request = next;
+      }
+      expect(admitted, [0, 8, 15, 17, 24, 26, 30]);
+      expect(
+        owner.exports.map(
+          (r) => (
+            r.chunkPlan!.chunks.single.startWordIndex,
+            r.chunkPlan!.chunks.single.endWordIndex,
+          ),
+        ),
+        [(8, 15), (26, 30)],
+      );
+      expect(
+        owner.exports.every(
+          (r) => r.chunkPlan!.chunks.single.voiceId == 'library_fishadrian',
+        ),
+        true,
+      );
+      await c.pausePlayback();
+      final output = await c.exportDocumentToPath(
+        '${temp.path}/edited-fish.radoc',
+        audioBook: true,
+      );
+      expect(output, isNotNull, reason: c.statusMessage);
+      final package = RadocAudioPackage();
+      try {
+        final book = await package.open(output!);
+        expect(
+          (book.manifest.intent['characterSelections']
+              as Map)['cast_character_mara'],
+          'library_fishadrian',
+        );
+        expect(book.manifest.scenes, hasLength(7));
+        for (final (i, scene) in book.manifest.scenes.indexed) {
+          final file = await package.materializeMember(book, scene.audioMember);
+          expect(
+            await file.readAsBytes(),
+            _wav(sample: [1, 5].contains(i) ? 77 : i + 1),
+          );
+        }
+      } finally {
+        await package.dispose();
+      }
+      await c.importFilePaths([output.path]);
+      await c.startPlayback();
+      request = owner.requests.last;
+      sequence = 0;
+      while (true) {
+        final next = await request.continuation!.next(
+          sequence++,
+          Completer<void>().future,
+        );
+        if (next == null) break;
+        request = next;
+      }
+      expect(
+        owner.exports,
+        hasLength(2),
+        reason: 'Saved edited scenes must be reusable.',
+      );
+    },
+  );
+
+  for (final defect in ['binding', 'precision', 'attribution']) {
+    test(
+      'legacy Fish refuses missing or mismatched $defect ownership evidence',
+      () async {
+        final owner = _OfflineEngine()
+          ..renderAvailable = true
+          ..fishPublication = true;
+        final c = await fishController(owner);
+        await c.importFilePaths([
+          (await legacyFishFixture(defect: defect)).path,
+        ]);
+        await c.startPlayback();
+        expect(c.statusMessage, contains('lacks unambiguous voice ownership'));
+        expect(owner.exports, isEmpty);
+        expect(owner.requests, isEmpty);
+      },
+    );
+  }
 }
 
 class _OfflineEngine
     implements TtsEngine, RenderedAudioPlaybackCapable, AudioExportCapable {
   int modelCalls = 0;
   bool renderAvailable = false;
+  bool fishPublication = false;
   Completer<void>? packetGate;
   bool failAfterPacket = false;
   final exports = <TtsExportRequest>[];
@@ -989,7 +1163,13 @@ class _OfflineEngine
 
   @override
   Future<List<VoiceProfile>> loadVoices() async => [
-    for (final id in ['published', 'other'])
+    for (final id in [
+      'published',
+      'other',
+      'library_fishadrian',
+      'library_fishfreya',
+      'library_fishhannah',
+    ])
       VoiceProfile(id: id, label: id, locale: 'en-US', rawValue: const {}),
   ];
   @override
@@ -1002,7 +1182,9 @@ class _OfflineEngine
   Future<TtsExportResult> exportAudio(TtsExportRequest request) async {
     exports.add(request);
     final chunk = request.chunkPlan!.chunks.single;
-    await File(request.outputPath).writeAsBytes(_wav());
+    await File(
+      request.outputPath,
+    ).writeAsBytes(_wav(sample: fishPublication ? 77 : 0));
     Completer<TtsRenderedSceneCompletion>? packetCompletion;
     if (packetGate != null) {
       packetCompletion = Completer<TtsRenderedSceneCompletion>();
@@ -1050,7 +1232,20 @@ class _OfflineEngine
         startWordIndex: request.sourceWordOffset + chunk.startWordIndex,
         endWordIndex: request.sourceWordOffset + chunk.endWordIndex,
         startOffset: 0,
-        sceneTurns: [],
+        sceneTurns: fishPublication
+            ? [
+                NativeSpeechTurn(
+                  voiceId: chunk.voiceId,
+                  text: chunk.speakText,
+                  segmentIds: chunk.segmentIds,
+                  startWord: request.sourceWordOffset + chunk.startWordIndex,
+                  endWord: request.sourceWordOffset + chunk.endWordIndex,
+                  bindingFingerprint: 'fixture-binding',
+                  bindingRevision: 1,
+                  castId: chunk.castId,
+                ),
+              ]
+            : [],
         preparedBindings: [],
         audioPath: request.outputPath,
         duration: const Duration(milliseconds: 10),
@@ -1064,6 +1259,7 @@ class _OfflineEngine
         assignmentRevision: request.assignmentRevision,
         cancelled: request.cancelled!,
         isCurrent: request.isCurrent!,
+        predecessorRawArtifactIdentity: request.predecessorRawArtifactIdentity,
       ),
     );
     packetCompletion?.complete(
@@ -1115,7 +1311,7 @@ class _OfflineEngine
   }
 }
 
-Uint8List _wav() {
+Uint8List _wav({int sample = 0}) {
   final b = ByteData(44 + 480);
   void tag(int i, String s) {
     for (var k = 0; k < s.length; k++) {
@@ -1136,6 +1332,9 @@ Uint8List _wav() {
   b.setUint16(34, 16, Endian.little);
   tag(36, 'data');
   b.setUint32(40, 480, Endian.little);
+  for (var i = 44; i < b.lengthInBytes; i += 2) {
+    b.setInt16(i, sample, Endian.little);
+  }
   return b.buffer.asUint8List();
 }
 

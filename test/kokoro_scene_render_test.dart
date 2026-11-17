@@ -16,6 +16,7 @@ import 'package:read_aloud/src/models/tts_artifact.dart';
 import 'package:read_aloud/src/models/voice_profile.dart';
 import 'package:read_aloud/src/controllers/reader_controller.dart';
 import 'package:read_aloud/src/services/reader_document_repository.dart';
+import 'package:read_aloud/src/services/rendered_scene_repository.dart';
 import 'package:read_aloud/src/services/audio_artifact_store.dart';
 import 'package:read_aloud/src/services/exported_audio_assembler.dart';
 import 'package:read_aloud/src/services/kokoro_pronunciation_translation_service.dart';
@@ -31,6 +32,85 @@ void main() {
   late _Fixture fixture;
   setUp(() async => fixture = await _Fixture.create());
   tearDown(() => fixture.close());
+
+  for (final engineId in ['fish_drama3_8bit', 'fish_drama3_4bit']) {
+    test(
+      '$engineId separate-turn publication retains canonical owner and binding',
+      () async {
+        debugDefaultTargetPlatformOverride = TargetPlatform.macOS;
+        addTearDown(() => debugDefaultTargetPlatformOverride = null);
+        await fixture.close();
+        fixture = await _Fixture.create(engineId: engineId);
+        final repository = RenderedSceneRepository(
+          Directory('${fixture.directory.path}/published'),
+        );
+        addTearDown(repository.dispose);
+        TtsFinalizedAudioScene? published;
+        await fixture.engine.selectVoice(
+          const VoiceProfile(
+            id: 'af_bella',
+            label: 'fixture',
+            locale: 'en',
+            rawValue: {},
+          ),
+        );
+        await fixture.engine.exportAudio(
+          TtsExportRequest(
+            text: 'Before now. One two',
+            outputPath: '${fixture.directory.path}/single.wav',
+            documentId: 'book',
+            normalizationVersion: 'normalization-r1',
+            sourceWordOffset: 100,
+            preparedResources: fixture.bindings,
+            chunkPlan: ChunkPlan(
+              planId: 'separate-turn',
+              chunks: [
+                _spec(
+                  'mara-turn',
+                  'One two',
+                  'af_bella',
+                  2,
+                  4,
+                  directed: true,
+                  castId: 'cast_character_mara',
+                ),
+              ],
+            ),
+            onRenderedScene: (scene) async {
+              published = scene;
+              await repository.publish(
+                scene,
+                sourceId: 'source',
+                intent: {'engineId': engineId, 'canonicalDirections': const []},
+              );
+            },
+          ),
+        );
+        final request = fixture.processor.requests.single;
+        expect(
+          request.sceneTurns,
+          isEmpty,
+          reason:
+              'Publication metadata must not enable native scene synthesis.',
+        );
+        expect(request.voiceId, 'af_bella');
+        expect(published!.sceneTurns, hasLength(1));
+        final turn = published!.sceneTurns.single;
+        expect(turn.castId, 'cast_character_mara');
+        expect(turn.voiceId, 'af_bella');
+        expect((turn.startWord, turn.endWord), (102, 104));
+        expect(turn.bindingFingerprint, fixture.bindings[1].fingerprint);
+        expect(turn.bindingRevision, 7);
+        expect(turn.directions.single['delivery'], 'whispered');
+        final saved = (await repository.scenesForSource('source')).single;
+        final raw = saved.dependencies['raw'] as Map;
+        expect((raw['turns'] as List).single['castId'], 'cast_character_mara');
+        expect((raw['bindings'] as List).single['voiceId'], 'af_bella');
+        expect((raw['bindings'] as List).single['modelDigest'], 'model');
+        expect(saved.sceneTurns.single.toMap(), turn.toMap());
+      },
+    );
+  }
 
   test(
     'Fish opening export without Play reaches controlled processor',
@@ -552,6 +632,7 @@ ChunkSpec _spec(
   int end, {
   List<ChunkSpec> turns = const [],
   bool directed = false,
+  String? castId,
 }) => ChunkSpec(
   chunkId: id,
   segmentIds: [id],
@@ -565,6 +646,7 @@ ChunkSpec _spec(
   startWordIndex: start,
   endWordIndex: end,
   sceneTurns: turns,
+  castId: castId,
   ttsSegments: [
     TtsArtifactSegment(
       segmentId: id,

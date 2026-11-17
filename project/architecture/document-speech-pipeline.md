@@ -229,6 +229,23 @@ rather than expanded silently. Basic source spans remain approximate highlightin
 not advanced alignment. The S6 acceptance/evidence authority is [#137](https://github.com/kellyjanderson/readaloud/issues/137);
 source implementation does not waive launch, emitted-audio or human gates.
 
+Finalized Fish separate-turn publications retain a canonical single-turn envelope
+with the actual cast, voice and prepared binding, independently of the native
+worker's scene envelope. This does not enable multi-speaker inference on a
+checkpoint or alter synthesis requests. Character edits compare only owners used
+by each saved scene. Historical Fish books with empty turn metadata recover
+ownership from complete saved prepared attribution plus the one captured
+provenance binding, retaining its model/resource digests and requiring matching
+document, engine, engine version and capability scope. They do not borrow another
+precision's resolutions or infer speakers from text. Missing or ambiguous evidence
+fails visibly and asks for renewed preparation from the original document;
+unrelated scenes are not broadly rerendered. Dependency digest, source text and
+canonical-direction validation still apply. This recovery uses the existing
+bounded prepared-range reader and playback revision checks; it adds no producer
+or queue. Source regression covers the historical seven-scene synthetic book,
+selective Mara edits and save/reopen; native emitted-audio and listening evidence
+remain separate acceptance gates owned by [S11 #152](https://github.com/kellyjanderson/readaloud/issues/152).
+
 The macOS Save Audio Book path obtains only the chosen destination through the
 native Save panel. A utility-queue Foundation `itemReplacementDirectory` request
 allocates private staging on the destination volume; it does not require access
