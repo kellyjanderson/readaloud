@@ -4,15 +4,23 @@ const previous = byId('previous'), next = byId('next'), position = byId('positio
 const preview = byId('preview'), quotes = byId('quotes'), entities = byId('entities');
 const status = byId('status'), progress = byId('progress'), save = byId('save');
 const legend = byId('legend'), layers = byId('layers'), key = byId('speaker-key');
-const palette = ['#a8d8b2', '#a9caee', '#edc58b', '#d8b5e4', '#edb7bd', '#a0d8d4', '#d4cf91', '#dbbfb0'];
+const speakerColors = [
+  { fill: '#b6d8ff', line: '#175ba0' }, // Blue
+  { fill: '#ffd0a0', line: '#994400' }, // Orange
+  { fill: '#d9c3f5', line: '#633397' }, // Purple
+  { fill: '#b0e5d0', line: '#006f58' }, // Teal
+  { fill: '#f6b8c3', line: '#ac2547' }, // Rose
+  { fill: '#f6e28f', line: '#756000' }, // Gold
+];
+const neutralSpeaker = { fill: '#d8dde5', line: '#4c5769' };
 const limits = { window: 6500, fileBytes: 8 * 1024 * 1024 };
 let passages = [''], index = 0, name = '', revision = 0, request = null, result = null;
 let highlighted = [], selected = null;
-const layerColors = { dialogue: '#a8d8b2', mention: '#d8b5e4', evidence: '#edc58b', baseline: '#cfd2d7' };
+const baselineFill = '#e0e2e5';
 const activeLayers = new Set(['dialogue', 'mention', 'evidence']);
 for (const [type, label] of Object.entries({
-  dialogue: 'Model dialogue', mention: 'Person mentions',
-  evidence: 'Model speaker evidence', baseline: 'Baseline quotes',
+  dialogue: 'Dialogue fill', mention: 'Person mentions (dotted)',
+  evidence: 'Speaker evidence (underline)', baseline: 'Baseline quotes (gray)',
 })) {
   const control = document.createElement('input');
   control.type = 'checkbox';
@@ -141,11 +149,12 @@ function rows(tsv) {
   return data.map((line) => Object.fromEntries(line.split('\t').map((value, i) => [keys[i], value])));
 }
 
-function swatch(color, label) {
+function swatch(style, label) {
   const item = document.createElement('span');
   const sample = document.createElement('span');
   sample.className = 'swatch';
-  sample.style.background = color;
+  sample.style.background = style.fill;
+  sample.style.borderBottomColor = style.line;
   sample.setAttribute('aria-hidden', 'true');
   item.append(sample, label);
   return item;
@@ -181,24 +190,37 @@ function renderHighlight(scroll = false) {
       unique.add(span.label);
     }
     mark.title = [...unique].join(' · ');
-    const colors = [...new Set([...active].map((span) => span.color))];
-    const mixed = [1, 3, 5].map((start) => Math.round(
-      colors.reduce((sum, color) => sum + parseInt(color.slice(start, start + 2), 16), 0) / colors.length,
-    ).toString(16).padStart(2, '0'));
-    mark.style.background = '#' + mixed.join('');
+    const fills = [...new Set([...active].map((span) => span.fill).filter(Boolean))];
+    if (fills.length) {
+      const mixed = [1, 3, 5].map((offset) => Math.round(
+        fills.reduce((sum, color) => sum + parseInt(color.slice(offset, offset + 2), 16), 0) / fills.length,
+      ).toString(16).padStart(2, '0'));
+      mark.style.backgroundColor = '#' + mixed.join('');
+    }
+    const underlines = [...new Set([...active].map((span) => span.line).filter(Boolean))];
+    if (underlines.length > 1) {
+      const stops = underlines.map((line, i) =>
+        line + ' ' + 100 * i / underlines.length + '% ' + 100 * (i + 1) / underlines.length + '%');
+      mark.style.backgroundImage = 'linear-gradient(to right, ' + stops.join(', ') + ')';
+      mark.dataset.multiEvidence = '';
+    } else if (underlines.length === 1) {
+      mark.style.textDecorationColor = underlines[0];
+    }
     mark.textContent = value;
     fragment.append(mark);
   }
   preview.replaceChildren(fragment);
-  if (scroll) preview.querySelector('.selected')?.scrollIntoView({ block: 'nearest' });
+  if (scroll) preview.querySelector('.selected[data-dialogue]')?.scrollIntoView({ block: 'nearest' });
 }
 
 function renderResult() {
   const { text, model } = result;
-  const people = new Map(model.entities.map((entity, i) => {
+  const speakers = new Set(model.quotes.map((turn) => turn.entityId).filter((id) => id != null));
+  const styles = new Map([...speakers].map((id, i) => [id, speakerColors[i] ?? neutralSpeaker]));
+  const people = new Map(model.entities.map((entity) => {
     const names = [...new Set(entity.mentions.filter((mention) => mention.proper).map((mention) => mention.text))];
     return [entity.entityId, { ...entity, label: names.slice(0, 3).join(' / ') || entity.mentions[0]?.text || 'Unnamed person',
-      color: palette[i % palette.length] }];
+      style: styles.get(entity.entityId) }];
   }));
   const files = model.linguisticArtifacts.files;
   const rawQuotes = rows(files.quotes);
@@ -207,13 +229,13 @@ function renderResult() {
   for (const character of text) codepoints.push(codepoints.at(-1) + character.length);
   const simple = baseline(text);
   result.baseline = simple;
-  const band = (type, start, end, label, color, quoteIndex) =>
-    highlighted.push({ type, start, end, label, color, quoteIndex });
-  for (const item of simple) band('baseline', item.start, item.end, `Baseline quote · ${item.speaker || 'unknown'}`, layerColors.baseline);
-  key.replaceChildren(swatch(layerColors.evidence, 'Speaker evidence'), swatch(layerColors.baseline, 'Baseline quote'));
+  const band = (type, start, end, label, style = {}, quoteIndex) =>
+    highlighted.push({ type, start, end, label, ...style, quoteIndex });
+  for (const item of simple) band('baseline', item.start, item.end, `Baseline quote · ${item.speaker || 'unknown'}`, { fill: baselineFill });
+  key.replaceChildren();
   for (const person of people.values()) {
     const label = `${person.label} (#${person.entityId})`;
-    key.append(swatch(person.color, label));
+    if (person.style) key.append(swatch(person.style, label));
     const card = document.createElement('article');
     const heading = document.createElement('strong');
     heading.textContent = label;
@@ -222,7 +244,7 @@ function renderResult() {
     card.append(heading, mentions);
     entities.append(card);
     for (const m of person.mentions) band('mention', m.startUtf16, m.endUtf16,
-      `Person mention · ${label}`, person.color);
+      `Person mention · ${label}`);
   }
   model.quotes.forEach((turn, i) => {
     const person = people.get(turn.entityId);
@@ -230,9 +252,10 @@ function renderResult() {
     const raw = rawQuotes[i];
     const evidenceStart = codepoints[Number(tokens.get(raw?.mention_start)?.byte_onset)];
     const evidenceEnd = codepoints[Number(tokens.get(raw?.mention_end)?.byte_offset)];
-    band('dialogue', turn.startUtf16, turn.endUtf16, `Dialogue · ${label}`, person?.color ?? palette[0], i);
+    const style = person?.style ?? neutralSpeaker;
+    band('dialogue', turn.startUtf16, turn.endUtf16, `Dialogue · ${label}`, { fill: style.fill }, i);
     if (Number.isInteger(evidenceStart) && Number.isInteger(evidenceEnd) && evidenceEnd > evidenceStart) {
-      band('evidence', evidenceStart, evidenceEnd, `Speaker evidence for quote ${i + 1} · ${label}`, layerColors.evidence, i);
+      band('evidence', evidenceStart, evidenceEnd, `Speaker evidence for quote ${i + 1} · ${label}`, { line: style.line }, i);
     }
     const baselineMatches = simple.filter((item) => item.start < turn.endUtf16 && item.end > turn.startUtf16);
     const baselineLabel = baselineMatches.length === 1 ? baselineMatches[0].speaker || 'Quote found, speaker unknown'
@@ -267,7 +290,9 @@ function renderResult() {
     card.textContent = `Baseline only · ${text.slice(item.start, item.end)} · ${item.speaker || 'Unknown speaker'} · ${item.start}–${item.end}`;
     quotes.append(card);
   }
-  const speakers = new Set(model.quotes.map((turn) => turn.entityId).filter((id) => id != null));
+  if (model.quotes.some((turn) => !people.has(turn.entityId))) {
+    key.append(swatch(neutralSpeaker, 'Unknown speaker'));
+  }
   byId('summary').textContent = model.quotes.length
     ? `${speakers.size} model speaker IDs across ${people.size} person clusters. Colors blend where highlights overlap.`
     : 'The model found no dialogue in this passage.';

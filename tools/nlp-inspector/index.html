@@ -30,14 +30,15 @@
   .panel { height: clamp(360px, 65vh, 780px); overflow: auto; overflow-wrap: anywhere; }
   textarea { display: block; width: 100%; min-height: 190px; resize: vertical; padding: 10px; border: 1px solid #8b9e92; border-radius: 6px; font: 16px/1.5 ui-monospace, monospace; color: inherit; }
   #preview { white-space: pre-wrap; font: 17px/1.7 Georgia, serif; padding: 10px; }
-  mark { color: #173b2a; background: #d5ebda; padding: 1px 0; }
+  mark { color: inherit; background: transparent; padding: 1px 0; }
   mark.selected { outline: 2px solid #185641; }
   fieldset { border: 1px solid #b9c7be; border-radius: 6px; margin: 10px 0; padding: 8px 10px; }
   #layers label { display: inline-flex; align-items: center; gap: 5px; min-height: 30px; }
   #speaker-key { display: flex; flex-wrap: wrap; gap: 6px 12px; font-size: 14px; }
-  .swatch { display: inline-block; width: 13px; height: 13px; border-radius: 3px; border: 1px solid #657c70; margin-right: 4px; }
-  mark[data-mention] { border-bottom: 1px solid #6b426e; }
-  mark[data-evidence] { text-decoration: underline 2px #854918; text-underline-offset: 3px; }
+  .swatch { display: inline-block; width: 15px; height: 13px; border-radius: 2px; border: 1px solid #657c70; border-bottom-width: 3px; margin-right: 4px; }
+  mark[data-mention] { border-bottom: 1px dotted #64717e; }
+  mark[data-evidence] { text-decoration: underline 2px; text-underline-offset: 3px; }
+  mark[data-multi-evidence] { text-decoration: none; background-size: 100% 2px; background-position: bottom; background-repeat: no-repeat; box-decoration-break: clone; }
   mark.selected { outline-offset: 2px; }
   article { padding: 10px 0; border-bottom: 1px solid #d9e1dc; }
   article button { width: 100%; text-align: left; overflow-wrap: anywhere; }
