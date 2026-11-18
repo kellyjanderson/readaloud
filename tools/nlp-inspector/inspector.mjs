@@ -1,3 +1,5 @@
+import { createComposer } from '/composer.mjs';
+
 const byId = (id) => document.getElementById(id);
 const file = byId('file'), source = byId('source'), run = byId('run'), stop = byId('stop');
 const previous = byId('previous'), next = byId('next'), position = byId('position');
@@ -15,7 +17,8 @@ const speakerColors = [
 const neutralSpeaker = { fill: '#d8dde5', line: '#4c5769' };
 const limits = { window: 6500, fileBytes: 8 * 1024 * 1024 };
 let passages = [''], index = 0, name = '', revision = 0, request = null, result = null;
-let highlighted = [], selected = null;
+let highlighted = [], selected = null, selectedBlock = null;
+const composer = createComposer({ revealBlock });
 const baselineFill = '#e0e2e5';
 const activeLayers = new Set(['dialogue', 'mention', 'evidence']);
 for (const [type, label] of Object.entries({
@@ -59,6 +62,8 @@ function clearResult() {
   request = null;
   result = null;
   selected = null;
+  selectedBlock = null;
+  composer.showAnalysis(null);
   highlighted = [];
   legend.hidden = true;
   preview.replaceChildren();
@@ -171,19 +176,25 @@ function renderHighlight(scroll = false) {
       map.get(offset).push(span);
     }
   }
-  const offsets = [...new Set([0, text.length, ...startMap.keys(), ...endMap.keys()])].sort((a, b) => a - b);
+  const blockOffsets = selectedBlock ? [selectedBlock.start, selectedBlock.end] : [];
+  const offsets = [...new Set([0, text.length, ...startMap.keys(), ...endMap.keys(), ...blockOffsets])].sort((a, b) => a - b);
   const fragment = document.createDocumentFragment(), active = new Set();
   for (let i = 0; i + 1 < offsets.length; i++) {
     const start = offsets[i];
     for (const span of endMap.get(start) ?? []) active.delete(span);
     for (const span of startMap.get(start) ?? []) active.add(span);
     const value = text.slice(start, offsets[i + 1]);
-    if (!active.size) {
+    const inBlock = selectedBlock && start >= selectedBlock.start && start < selectedBlock.end;
+    if (!active.size && !inBlock) {
       fragment.append(value);
       continue;
     }
     const mark = document.createElement('mark');
     const unique = new Set();
+    if (inBlock) {
+      mark.dataset.compositionBlock = '';
+      unique.add(`Source block ${selectedBlock.number}`);
+    }
     for (const span of active) {
       mark.dataset[span.type] = '';
       if (span.quoteIndex === selected) mark.classList.add('selected');
@@ -211,7 +222,7 @@ function renderHighlight(scroll = false) {
   }
   preview.replaceChildren(fragment);
   if (scroll) {
-    const target = preview.querySelector('.selected[data-dialogue]');
+    const target = preview.querySelector(selectedBlock ? '[data-composition-block]' : '.selected[data-dialogue]');
     if (!target) return;
     const panel = byId('source-panel');
     const viewport = panel.getBoundingClientRect();
@@ -220,6 +231,16 @@ function renderHighlight(scroll = false) {
       panel.scrollTop += quote.top - viewport.top - 8;
     }
   }
+}
+
+function revealBlock(block) {
+  if (!result || block.start < 0 || block.end > result.text.length || block.start >= block.end) return;
+  selected = null;
+  selectedBlock = block;
+  renderHighlight(true);
+  const panel = byId('source-panel');
+  panel.focus({ preventScroll: true });
+  panel.scrollIntoView({ block: 'nearest' });
 }
 
 function renderResult() {
@@ -275,6 +296,7 @@ function renderResult() {
     button.setAttribute('aria-label', `Quote ${i + 1}, ${label}. ${button.textContent}`);
     button.addEventListener('click', () => {
       selected = i;
+      selectedBlock = null;
       activeLayers.add('dialogue');
       layers.querySelector('input').checked = true;
       renderHighlight(true);
@@ -347,6 +369,9 @@ run.addEventListener('click', async () => {
     result = { fileName: name, passage: index + 1, selectionOffset: start === end ? 0 : start,
       text, model };
     renderResult();
+    if (typeof model.sourceId === 'string' && Array.isArray(model.blocks)) {
+      composer.showAnalysis({ sourceId: model.sourceId, blocks: model.blocks });
+    }
     byId('editor').open = false;
     report(`Analysis complete · ${model.tokenCount} tokens · ${model.inferenceSeconds.toFixed(1)} s inference.`);
   } catch (error) {

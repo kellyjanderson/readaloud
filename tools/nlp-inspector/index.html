@@ -3,6 +3,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>NLP Inspector</title>
+<link rel="stylesheet" href="/composer.css">
 <style>
   :root { color-scheme: light; font: 16px/1.45 system-ui, sans-serif; color: #182421; background: #eef2ef; }
   * { box-sizing: border-box; }
@@ -89,6 +90,59 @@
       </div>
     </section>
   </div>
+  <div class="workspace composer" aria-label="Block handoff">
+    <section aria-labelledby="blocks-title">
+      <div class="heading">
+        <h2 id="blocks-title">Source blocks</h2>
+        <span class="count" id="block-count">0 blocks</span>
+      </div>
+      <p class="guide" id="block-guide">Use Show in source to locate a block. Use Add or drag to compose.</p>
+      <p class="empty" id="blocks-empty">Analyze a passage to see its blocks.</p>
+      <ol class="block-list" id="blocks" aria-label="Analyzed source blocks"></ol>
+    </section>
+
+    <section aria-labelledby="composition-title">
+      <div class="heading">
+        <h2 id="composition-title">Composition</h2>
+        <span class="count" id="item-count">0 items</span>
+      </div>
+      <div class="guide voice-guide">
+        <p id="voice-status" role="status"></p>
+        <button id="retry-voices" type="button" hidden>Retry voices</button>
+      </div>
+      <div id="drop-target">
+        <p class="empty" id="composition-empty">Drop a source block here or use Add next to a block.</p>
+        <ol class="block-list" id="composition" aria-label="Ordered composition"></ol>
+        <div class="drop-tail" id="drop-tail" hidden>Drop at end</div>
+      </div>
+      <p id="composition-status" class="sr-only" role="status"></p>
+    </section>
+  </div>
+
+  <section class="composer render-panel" aria-labelledby="audition-title">
+    <div class="heading">
+      <h2 id="audition-title">Audition</h2>
+    </div>
+    <div class="actions">
+      <button class="primary" id="render" type="button" disabled>Render audio</button>
+      <button id="cancel-render" type="button" disabled>Cancel</button>
+      <p class="composer-status" id="render-status" role="status">Add blocks to prepare an audition.</p>
+    </div>
+    <div class="progress-slot">
+      <progress id="render-progress" aria-label="Waiting for Fish render" hidden></progress>
+    </div>
+    <audio id="audio" controls preload="metadata" aria-label="Rendered audition" hidden></audio>
+    <div class="audit">
+      <details>
+        <summary>Render request JSON</summary>
+        <pre id="request-preview" tabindex="0">Analyze a passage to start a render request.</pre>
+      </details>
+      <details>
+        <summary>Render receipt JSON</summary>
+        <pre id="receipt" tabindex="0">A completed render will appear here.</pre>
+      </details>
+    </div>
+  </section>
 </main>
 <script type="module" src="/inspector.mjs"></script>
 </html>

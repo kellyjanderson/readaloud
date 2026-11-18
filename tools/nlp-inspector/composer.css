@@ -1,0 +1,128 @@
+[hidden] { display: none !important; }
+
+.composer { margin-top: 16px; }
+.composer section { display: flex; flex-direction: column; min-width: 0; }
+.composer .heading,
+.composer .actions,
+.composer .controls,
+.composer .block-header,
+.composer .voice-guide {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 12px;
+}
+
+.composer .heading, .composer .block-header { justify-content: space-between; }
+.composer .actions { margin-top: 12px; }
+.composer :is(button, select) { min-height: 44px; max-width: 100%; }
+.composer button:enabled:hover { background: #e1ebe4; }
+.composer button.primary:enabled:hover { background: #134633; }
+
+.composer select {
+  border: 1px solid #657c70;
+  border-radius: 7px;
+  padding: 6px 10px;
+  color: inherit;
+  background: white;
+  font: inherit;
+}
+
+.composer-status {
+  flex: 1 1 14rem;
+  min-width: 0;
+  min-height: 1.5em;
+  color: #455951;
+  overflow-wrap: anywhere;
+}
+
+.composer [data-state="error"] { color: #791c13; }
+.composer .progress-slot { height: 10px; margin-top: 6px; }
+.composer progress { display: block; width: 100%; height: 8px; margin: 0; }
+.composer :is(.count, .guide, .empty, .provenance) { color: #455951; font-size: .95rem; }
+.composer .count { font-variant-numeric: tabular-nums; }
+
+.composer .guide {
+  margin-block: 10px 12px;
+  min-height: 1.5em;
+  overflow-wrap: anywhere;
+}
+
+.composer .voice-guide p { margin: 0; }
+.composer .empty {
+  margin: 0;
+  padding: 12px;
+  min-height: 4rem;
+  border: 1px dashed #657c70;
+  border-radius: 6px;
+}
+
+.composer .block-list {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+  margin: 0;
+  padding: 4px;
+  list-style: none;
+}
+
+#blocks {
+  overflow: auto;
+  max-block-size: 26rem;
+}
+
+#drop-target {
+  flex: 1;
+  min-height: 4rem;
+  border-radius: 6px;
+}
+
+.composer .block {
+  min-width: 0;
+  padding: 10px;
+  border: 1px solid #b9c7be;
+  border-radius: 6px;
+  background: #f1f6f2;
+  overflow-wrap: anywhere;
+}
+
+.composer .block[draggable="true"] { cursor: grab; }
+.composer .block-header { font-weight: 650; }
+.composer .provenance { margin: 2px 0; }
+.composer .excerpt { margin-block: 6px; white-space: pre-wrap; }
+.composer .controls label { flex: 2 1 10rem; min-width: 0; display: flex; align-items: center; gap: 8px; }
+.composer .controls select { min-width: 0; flex: 1; }
+.composer .drop-active { outline: 2px solid #185641; outline-offset: 2px; }
+.composer .drop-tail { margin-top: 8px; padding: 8px; border: 1px dashed #657c70; border-radius: 6px; color: #455951; }
+#preview mark[data-composition-block] { outline: 2px solid #185641; outline-offset: 2px; }
+
+.composer audio { display: block; width: min(100%, 450px); margin-top: 12px; }
+.composer .audit { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin-top: 12px; }
+.composer details { min-width: 0; border-top: 1px solid #b9c7be; }
+.composer summary { min-height: 44px; padding-block: 10px; margin-top: 0; }
+.composer pre {
+  overflow: auto;
+  max-height: 22rem;
+  padding: 12px;
+  margin: 0;
+  border-radius: 6px;
+  background: #f1f6f2;
+  font: .875rem/1.5 ui-monospace, monospace;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.composer .sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+@media (max-width: 780px) {
+  .composer .audit { grid-template-columns: minmax(0, 1fr); }
+}
