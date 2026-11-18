@@ -1,0 +1,57 @@
+{
+  "schema": 1,
+  "issues": [
+    155,
+    156,
+    152
+  ],
+  "productSource": "824380ca61d864b4cbbcb96937269c1a42e107fc",
+  "productBuildId": "14178ced-36ed-4fdf-ac2e-9b591c2ea64f",
+  "productBundleSha256": "ae33e13a3c816aad2e24581fd10d958e183bb911a722dc646191bf567afe6121",
+  "productPackageSha256": "5899cff3ab996e4fd85e6636b41de6576a97b3c4cf156e1214c0c795ba105c0c",
+  "runnerSwiftSource": "78ebb61",
+  "runnerBinarySha256": "e2ca9b9450a2e5a549555f8a87f6febca71bbdab99bd0dd64574fa482ba0e414",
+  "localHandoff": "tmp/native-user-tests-2026-11-17",
+  "automated": {
+    "nativeSession": "All593bundle entries and11case plans verified",
+    "nativeFocused": "candidate/launcher/resource/mode/symlink/source/bundle/unsafe-env/fixture/recovery/report provenance refusal and persistence checks passed",
+    "menu": "1run/3assertions passed, including native AppKit Command-V event dispatch",
+    "docs": "passed",
+    "diff": "passed"
+  },
+  "native": {
+    "menuPaste": "Actual Open search, GoToFolder and Save path accepted native Edit > Paste",
+    "input": "NSWorkspace launch of fixedQAapp automatically opened declared complete42wordbook from container-scoped verified input",
+    "synthesis": {
+      "engine": "fish_drama3_8bit",
+      "chunks": 7,
+      "canonicalWords": 42,
+      "frameCount": 649458,
+      "sampleRate": 44100,
+      "durationSeconds": 14.726938775510204
+    },
+    "playback": {
+      "pid": 45338,
+      "wholeWaveformCorrelation": 0.9978381337982399,
+      "integrity": "exact-PID finalized unmuted process tap; all shared validator loss counters zero"
+    },
+    "notices": "Exact single NSWorkspace-launched app displayed actual notices heading and cmudict content",
+    "quit": "Native runner observed exact app exit, persisted appClosed:true/closureEvidence:observed-exit; human result remained incomplete"
+  },
+  "profile": "NewOScreatedQAprofile independently attested empty before first menu-only launch; model/voice leaves staged afterward for warm functional run. No normal profile cleared. Launch copies are inside qualified container; originals preserved.",
+  "excluded": [
+    "Initial pending probe manifest omitted schema; corrected before native launch",
+    "Initial offline menu-only probe lacked models; not functional smoke evidence",
+    "Two overlapping direct-launch probes were normally closed before sole native launcher proof",
+    "CUA native keyboard delivery inconclusive; menu action and AppKit event dispatch do not replace physical shortcut check"
+  ],
+  "remaining": [
+    "Physical Command-V in packaged dialogs",
+    "Human listening/usability judgments",
+    "Physical M3 hardware",
+    "Two-second launch goal and prior unconfirmed warm memory-snapshot refusal",
+    "Seven legal/distribution blocker records",
+    "Feature/release integration and publication authorization"
+  ],
+  "limits": "Only bounded local native functionality; no new whole40minute playback, physical output, human pass, main merge, Actions or distribution clearance."
+}
