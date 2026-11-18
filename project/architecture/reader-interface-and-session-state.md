@@ -19,6 +19,18 @@ handler, including its utility query and main-thread reply. Their timing and
 actual menu/control interactions have separate evidence. Global heartbeat
 failures retain interval phases, including startup and operator waits.
 
+## macOS text editing commands
+
+Flutter's desktop menu plugin replaces the AppKit main menu when reader menu
+inputs change. The app delegate observes that property on the AppKit main
+thread and coalesces the notifications into at most one queued refresh of
+the current menu. On Quit it removes the observer and any queued refresh
+exits without touching the menu. AppKit validates Edit commands and routes
+their actions to the current responder, including editors in native file
+panels. File's **Paste Text…** action still imports clipboard text as a
+document. The [native editing issue](https://github.com/kellyjanderson/readaloud/issues/156)
+owns verification of editing within the packaged app's actual dialogs.
+
 ## Implemented structure and limitations
 
 The Flutter screen exposes the Reader, transport, voice selection, character voice management, import/export and secondary options. Widgets consume controller state; theme tokens and bundled fonts define presentation. Existing UI guides retain design intent and are not proof of runtime behavior.
