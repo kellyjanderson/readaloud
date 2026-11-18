@@ -25,6 +25,20 @@ Preparation exposes controller APIs for cancellation and retry (`cancelDocumentP
 
 Residual limits are explicit: the controller constructs the small fixed bundled sample synchronously at startup; later sample requests use the worker. `loadDocument` accepts an already constructed complete graph. Headless export/probe runners still call the importer directly and do not host the interactive range/checkpoint lifecycle. An injected importer is a controllable test/legacy adapter on the caller isolate, not production-worker proof. Runtime realization and cast-aware chunk planning run in the resident planning worker, with separate playback/export owners and bounded returned windows. Framework HTML layout remains on Flutter. RC2 has bounded local implementation evidence, but current integrated native build/app behavior, launch timing, emitted-audio continuity and human listening remain unqualified; no native, release or audio acceptance is claimed. See #83 and #90 for current gates.
 
+## Shared document encoding (S9 C05)
+
+`ReaderDocumentSerializationService.encodeEnvelope` creates a fresh data-only
+current-schema envelope. Normal `.radoc` encoding, explicit range assembly and
+inspection encoding use this mapping. Inspection passes `includePdfData: false`
+so no PDF base64 bytes are allocated and no JSON encode/decode round trip is
+needed. Canonical directions, analysis records and character identity remain in
+the mapping. The normal format/version and separate `.radoc-v2` inspection
+format do not change; decoder validation, worker snapshots, repository generations
+and stale-write/atomic-publication ownership remain distinct. Large encodes stay
+on their existing admitted workers. This is encoding/parity evidence, not native
+reopen or listening acceptance. Source and tests: `reader_document_serialization_service.dart`,
+`instrumented_document_artifact_codec.dart` and their tests; #151 / #114 ACD-D1 R1.
+
 ## Incremental whole-document display
 
 The transport's `ReaderController.document` remains the active audio fragment;
@@ -214,6 +228,46 @@ are reused. Historical boundaries incompatible with prepared segments are refuse
 rather than expanded silently. Basic source spans remain approximate highlighting,
 not advanced alignment. The S6 acceptance/evidence authority is [#137](https://github.com/kellyjanderson/readaloud/issues/137);
 source implementation does not waive launch, emitted-audio or human gates.
+
+Finalized Fish separate-turn publications retain a canonical single-turn envelope
+with the actual cast, voice and prepared binding, independently of the native
+worker's scene envelope. This does not enable multi-speaker inference on a
+checkpoint or alter synthesis requests. Character edits compare only owners used
+by each saved scene. Historical Fish books with empty turn metadata recover
+ownership from complete saved prepared attribution plus the one captured
+provenance binding, retaining its model/resource digests and requiring matching
+document, engine, engine version and capability scope. They do not borrow another
+precision's resolutions or infer speakers from text. Missing or ambiguous evidence
+fails visibly and asks for renewed preparation from the original document;
+unrelated scenes are not broadly rerendered. Dependency digest, source text and
+canonical-direction validation still apply. This recovery uses the existing
+bounded prepared-range reader and playback revision checks; it adds no producer
+or queue. Source regression covers the historical seven-scene synthetic book,
+selective Mara edits and save/reopen; native emitted-audio and listening evidence
+remain separate acceptance gates owned by [S11 #152](https://github.com/kellyjanderson/readaloud/issues/152).
+
+A later missing scene uses the opening-gap policy for the published engine when
+the app's selection has not changed since opening the book. The continuation
+retires its playback intent and queues the existing Play driver at that exact
+gap; it does not await engine shutdown from inside the old engine's consumer.
+The player invokes `TtsRenderedAudioContinuation.demandNext` with a consumption
+barrier owned by that exact preceding request and playback generation. Both
+production rendered-demand sites use this route. Ordinary prefetch does not
+wait. Before retiring an engine, the controller awaits actual native completed
+state at the final queued chunk with the same scene identity, then rechecks
+cancellation and playback/document identity. Final synthesis publication,
+readiness, estimated word position and duration are not consumption evidence.
+Existing player events and buffer signals own the wait, bounded by queued audio
+duration at player speed plus thirty seconds; Pause/shutdown invalidate it.
+The legacy two-argument `next` remains usable for ordinary demand, but a
+controller handoff through it fails explicitly without consumption evidence.
+One session-owned predecessor descriptor retains boundary context through this
+handoff. Pause, document replacement and newer selections fence its replacement
+and resume. An explicit engine change after opening keeps precedence.
+Changed predecessors may republish the immediate following scene's finalized
+boundary derivative from retained raw PCM, without another inference. This
+publication preserves the source scene's captured intent, engine and resource
+identity, rather than labeling old raw audio with current synthesis choices.
 
 The macOS Save Audio Book path obtains only the chosen destination through the
 native Save panel. A utility-queue Foundation `itemReplacementDirectory` request

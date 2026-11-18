@@ -44,7 +44,7 @@ app = File.join(bundle, 'Contents/MacOS/read_aloud')
 abort 'Missing app/capture or existing output' unless File.executable?(app) && File.executable?(capture) && !File.exist?(output)
 abort 'Signature failure' unless system(RbConfig.ruby, File.join(__dir__, 'verify_macos_release_entitlements.rb'), bundle)
 identity = IO.popen(['/usr/libexec/PlistBuddy', '-c', 'Print :CFBundleIdentifier', File.join(bundle, 'Contents/Info.plist')], &:read).strip
-abort 'Requires isolated mlxPlaybackTest identity' unless identity == 'com.kellyjanderson.readAloud.mlxPlaybackTest'
+abort 'Requires isolated mlxPlaybackTest identity' unless identity.match?(/\Acom\.kellyjanderson\.readAloud\.mlxPlaybackTest(?:\.[A-Za-z0-9-]+)*\z/)
 abort 'QA app already running' unless IO.popen(['/usr/bin/pgrep', '-f', '^' + Regexp.escape(app) + '( |$)'], &:read).split.empty?
 FileUtils.mkdir_p(output)
 receipt = File.join(output, 'receipt.json')

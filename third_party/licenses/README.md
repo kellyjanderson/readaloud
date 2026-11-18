@@ -6,7 +6,8 @@ of every collected text are recorded in [inventory.json](inventory.json).
 Imported files preserve upstream bytes, including line endings and whitespace;
 the combined display text normalizes line endings and trailing whitespace only.
 [NOTICES.txt](NOTICES.txt) combines those texts for candidate packaging and
-the future in-app notice viewer. It includes development and other-platform
+the implemented in-app notice viewer. Exact-candidate native access/content
+evidence remains required. It includes development and other-platform
 packages conservatively; it is not an exact linked-binary bill of materials.
 
 The hosted Dart texts were copied from the local Pub cache for each exact locked
@@ -14,7 +15,14 @@ version. The inventory records Pub archive URLs and lockfile archive digests;
 the offline checker does not authenticate those cache files against archives.
 The `malsami` and `kokoro_tts_flutter` texts were additionally checked against
 downloaded archives with digests equal to their lockfile archive digests.
-The vendored ONNX wrapper text comes from this repository. Its native runtime is
+The vendored ONNX wrapper text comes from this repository. `just_audio` 0.10.5
+is now also a path override, with local player changes documented in its
+`README.local.md`. Its license byte-matches both the retained text and the exact
+upstream Pub archive verified against SHA-256
+`9694e4734f515f2a052493d1d7e0d6de219ee0427c7c29492e246ff32a219908`.
+The checker binds each vendored path description and current license bytes;
+it does not treat an absent path-package archive hash as an upstream identity.
+The ONNX native runtime is
 covered separately by upstream v1.22.0 `LICENSE` and `ThirdPartyNotices.txt`.
 The wrapper has local changes, including macOS resource ownership/tracing;
 its MIT grant is preserved. No upstream copyright text was edited.
@@ -36,6 +44,16 @@ to that SDK remains to be verified. See the
 [release compliance guide](../../docs/release-compliance.md) for exact limits.
 The reference Apache 2.0 text is not proof of the origin or permission of any
 particular model or voice asset. No top-level Read Aloud license is inferred.
+
+ModernBookNLP's source MIT text is extracted from the cached pinned upstream
+archive after its SHA-256 matched the source catalog and installer. The LLVM
+OpenMP 22.1.6 text is copied from the adjacent local license after the library
+matched the build's qualified pre-signing hash. Exact sources and hashes are in
+the inventory; neither text closes the optional Python/native runtime graphs or
+the model/data grant review. Fish catalog/checksum and ModernBookNLP adapter/
+catalog entries record tracked source identity only. Model revision/checksum
+pins, public source visibility and generated-reference provenance do not
+establish distribution permission. All seven existing blocker records remain.
 
 Run `ruby tools/release_notices.rb` to check the reviewed snapshot and aggregate.
 After an intentional inventory/text reconciliation, regenerate the aggregate

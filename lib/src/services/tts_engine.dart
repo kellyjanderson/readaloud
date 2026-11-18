@@ -104,12 +104,35 @@ class RenderedAudioPlaybackAcknowledgment {
 
 /// A single pull consumer; null means verified source EOF, never an audio gap.
 class TtsRenderedAudioContinuation {
-  const TtsRenderedAudioContinuation({required this.next});
+  const TtsRenderedAudioContinuation({
+    required this.next,
+    this.nextWithConsumption,
+  });
   final Future<TtsRenderedAudioRequest?> Function(
     int previousSequence,
     Future<void> cancelled,
   )
   next;
+
+  // Legacy two-argument consumers retain ordinary prefetch. A controller that
+  // needs a destructive handoff must reject that route without consumed proof.
+
+  /// Player-owned barrier, bound to the preceding request and generation. Only
+  /// a destructive engine handoff needs to await it; ordinary demand prefetches.
+  final Future<TtsRenderedAudioRequest?> Function(
+    int previousSequence,
+    Future<void> cancelled,
+    Future<void> Function() awaitConsumed,
+  )?
+  nextWithConsumption;
+
+  Future<TtsRenderedAudioRequest?> demandNext(
+    int previousSequence,
+    Future<void> cancelled, {
+    required Future<void> Function() awaitConsumed,
+  }) =>
+      nextWithConsumption?.call(previousSequence, cancelled, awaitConsumed) ??
+      next(previousSequence, cancelled);
 }
 
 class TtsRenderedAudioFormat {

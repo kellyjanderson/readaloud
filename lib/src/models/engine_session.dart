@@ -1,6 +1,7 @@
 /// Main-isolate publication of desired and validated resource identity.
 /// A released last-working identity describes a reload target, never residency.
 enum EngineSessionPhase {
+  deferred,
   active,
   stopping,
   unloading,
@@ -27,7 +28,7 @@ class EngineSession {
     this.selected = const EngineSessionIdentity('kokoro', 0),
     this.active,
     this.lastWorking,
-    this.phase = EngineSessionPhase.loading,
+    this.phase = EngineSessionPhase.deferred,
   });
   final int epoch;
   final EngineSessionIdentity selected;

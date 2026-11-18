@@ -6,8 +6,317 @@ import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:read_aloud/src/services/exported_audio_assembler.dart';
+import 'package:read_aloud/src/services/radoc_export_staging.dart';
+
+import 'pcm_wav_test.dart' show buildPcmWavFixture, malformedPcmWavFixtures;
+
+// Exercises Dart ownership and the worker's alternate staging route. The
+// permission switch models the native file-only publication capability, not an
+// actual sandbox/NSFileCoordinator grant; that requires the signed UI run.
+class _TestPlatformStaging extends RadocExportStaging {
+  _TestPlatformStaging(this.root, this.outputPath);
+  final Directory root;
+  final String outputPath;
+  final events = <String>[];
+  final publicationStarted = Completer<void>();
+  Completer<void>? publicationGate;
+  Object? allocationFailure;
+  Object? publicationFailure;
+  AudioExportStage? allocated;
+  @override
+  Future<AudioExportStage> createAudioStage(File destination) async {
+    events.add('allocate');
+    expect(destination.path, outputPath);
+    if (allocationFailure != null) throw allocationFailure!;
+    return allocated = AudioExportStage(
+      ownerId: 'test-owner',
+      directory: await root.createTemp('platform-stage-'),
+    );
+  }
+
+  @override
+  Future<void> publishAudioPair(AudioExportStage stage) async {
+    expect(identical(stage, allocated), isTrue);
+    events.add('publish');
+    if (!publicationStarted.isCompleted) publicationStarted.complete();
+    await publicationGate?.future;
+    if (publicationFailure != null) throw publicationFailure!;
+    final output = File(outputPath);
+    final result = await Process.run('/bin/chmod', ['700', output.parent.path]);
+    expect(result.exitCode, 0);
+    try {
+      await File('${stage.directory.path}/audio.wav').rename(outputPath);
+      await File(
+        '${stage.directory.path}/metadata.json',
+      ).rename('${outputPath.substring(0, outputPath.length - 4)}.json');
+    } finally {
+      await Process.run('/bin/chmod', ['500', output.parent.path]);
+    }
+  }
+
+  @override
+  Future<void> releaseAudioStage(AudioExportStage stage) async {
+    events.add('release');
+    await Process.run('/bin/chmod', ['700', File(outputPath).parent.path]);
+    await stage.directory.delete(recursive: true);
+  }
+}
 
 void main() {
+  test(
+    'file-only destination uses supplied stage without parent temp creation',
+    () async {
+      final root = await Directory.systemTemp.createTemp('export-file-grant-');
+      final destination = await Directory('${root.path}/selected').create();
+      addTearDown(() async {
+        await Process.run('/bin/chmod', ['700', destination.path]);
+        await root.delete(recursive: true);
+      });
+      final input = await File(
+        '${root.path}/input.wav',
+      ).writeAsBytes(_buildWav([7, 8, 9]));
+      final request = _request(destination, [input.path]);
+      final capability = _TestPlatformStaging(root, request.outputPath);
+      await Process.run('/bin/chmod', ['500', destination.path]);
+      // This real denied-parent control models the observed sandbox prohibition;
+      // the publication adapter alone simulates a selected-file grant.
+      await expectLater(
+        destination.createTemp('.readaloud-export-'),
+        throwsA(isA<FileSystemException>()),
+      );
+      final assembler = ExportedAudioAssembler(platformStaging: capability);
+      addTearDown(assembler.shutdown);
+      final result = await assembler.assemble(request);
+      expect(capability.events, ['allocate', 'publish', 'release']);
+      expect(await File(result.outputPath).readAsBytes(), _buildWav([7, 8, 9]));
+      expect(result.sidecarPath, '${destination.path}/out.json');
+      expect(await File(result.sidecarPath).exists(), isTrue);
+      expect(await _stagingDirectories(destination), isEmpty);
+      expect(await capability.allocated!.directory.exists(), isFalse);
+    },
+  );
+
+  test(
+    'platform allocation failure drains admission without parent fallback',
+    () async {
+      final root = await Directory.systemTemp.createTemp(
+        'export-stage-refusal-',
+      );
+      addTearDown(() => root.delete(recursive: true));
+      final input = await File(
+        '${root.path}/in.wav',
+      ).writeAsBytes(_buildWav([3]));
+      final request = _request(root, [input.path]);
+      final capability = _TestPlatformStaging(root, request.outputPath)
+        ..allocationFailure = StateError('native capability denied');
+      final assembler = ExportedAudioAssembler(platformStaging: capability);
+      addTearDown(assembler.shutdown);
+      await expectLater(assembler.assemble(request), throwsStateError);
+      expect(capability.events, ['allocate']);
+      expect(await File(request.outputPath).exists(), isFalse);
+      expect(await _stagingDirectories(root), isEmpty);
+      capability.allocationFailure = null;
+      expect(await assembler.assemble(request), isNotNull);
+    },
+  );
+
+  test(
+    'cancellation before platform commit releases stage without publication',
+    () async {
+      final root = await Directory.systemTemp.createTemp(
+        'export-platform-cancel-',
+      );
+      addTearDown(() => root.delete(recursive: true));
+      final input = await File(
+        '${root.path}/in.wav',
+      ).writeAsBytes(_buildWav([3]));
+      final request = _request(root, [input.path]);
+      final capability = _TestPlatformStaging(root, request.outputPath);
+      late ExportedAudioAssembler assembler;
+      assembler = ExportedAudioAssembler(
+        platformStaging: capability,
+        onProgress: (progress) {
+          if (progress.stage == 'staged') assembler.cancel();
+        },
+      );
+      addTearDown(assembler.shutdown);
+      await expectLater(
+        assembler.assemble(request),
+        throwsA(isA<ExportAssemblyCancelled>()),
+      );
+      expect(capability.events, ['allocate', 'release']);
+      expect(await capability.allocated!.directory.exists(), isFalse);
+      expect(await File(request.outputPath).exists(), isFalse);
+    },
+  );
+
+  test(
+    'platform publication refusal preserves originals and releases stage',
+    () async {
+      final root = await Directory.systemTemp.createTemp(
+        'export-platform-refusal-',
+      );
+      addTearDown(() => root.delete(recursive: true));
+      final input = await File(
+        '${root.path}/in.wav',
+      ).writeAsBytes(_buildWav([3]));
+      final request = _request(root, [input.path]);
+      await File(request.outputPath).writeAsString('old audio');
+      await File('${root.path}/out.json').writeAsString('old json');
+      final failure = StateError('native related-file capability refused');
+      final capability = _TestPlatformStaging(root, request.outputPath)
+        ..publicationFailure = failure;
+      final assembler = ExportedAudioAssembler(platformStaging: capability);
+      addTearDown(assembler.shutdown);
+      await expectLater(assembler.assemble(request), throwsA(same(failure)));
+      expect(await File(request.outputPath).readAsString(), 'old audio');
+      expect(await File('${root.path}/out.json').readAsString(), 'old json');
+      expect(capability.events, ['allocate', 'publish', 'release']);
+      expect(await capability.allocated!.directory.exists(), isFalse);
+    },
+  );
+
+  test('shutdown joins admitted platform publication and cleanup', () async {
+    final root = await Directory.systemTemp.createTemp(
+      'export-platform-drain-',
+    );
+    addTearDown(() => root.delete(recursive: true));
+    final input = await File(
+      '${root.path}/in.wav',
+    ).writeAsBytes(_buildWav([3]));
+    final request = _request(root, [input.path]);
+    final capability = _TestPlatformStaging(root, request.outputPath)
+      ..publicationGate = Completer<void>();
+    final assembler = ExportedAudioAssembler(platformStaging: capability);
+    final exporting = assembler.assemble(request);
+    await capability.publicationStarted.future;
+    var closed = false;
+    final shutdown = assembler.shutdown().then((_) => closed = true);
+    await Future<void>.delayed(Duration.zero);
+    expect(closed, isFalse);
+    expect(capability.events, ['allocate', 'publish']);
+    capability.publicationGate!.complete();
+    expect(await exporting, isNotNull);
+    await shutdown;
+    expect(capability.events, ['allocate', 'publish', 'release']);
+    expect(await capability.allocated!.directory.exists(), isFalse);
+  });
+  for (final rate in [24000, 44100, 48000]) {
+    for (final bits in [8, 16, 24, 32]) {
+      for (final channels in [1, 2]) {
+        test(
+          'export preserves PCM$bits/$channels at $rate including padding',
+          () async {
+            final dir = await Directory.systemTemp.createTemp('export-pcm-');
+            addTearDown(() => dir.delete(recursive: true));
+            final payload = List<int>.generate(
+              3 * channels * (bits ~/ 8),
+              (i) => (i * 73 + 19) % 256,
+            );
+            final source = await File('${dir.path}/input.wav').writeAsBytes(
+              buildPcmWavFixture(
+                payload: payload,
+                bits: bits,
+                channels: channels,
+                rate: rate,
+                junk: true,
+                extended: true,
+                dataFirst: true,
+              ),
+            );
+            final assembler = ExportedAudioAssembler();
+            addTearDown(assembler.shutdown);
+            // Three odd mono PCM8 chunks produce an odd final payload: each
+            // source pad must be removed and only one final output pad added.
+            final result = await assembler.assemble(
+              _request(dir, List.filled(3, source.path)),
+            );
+            final bytes = await File(result.outputPath).readAsBytes();
+            final data = ByteData.sublistView(bytes);
+            final expectedPayload = [...payload, ...payload, ...payload];
+            expect(data.getUint32(24, Endian.little), rate);
+            expect(data.getUint16(22, Endian.little), channels);
+            expect(data.getUint16(34, Endian.little), bits);
+            expect(data.getUint32(40, Endian.little), expectedPayload.length);
+            expect(data.getUint32(4, Endian.little), bytes.length - 8);
+            expect(
+              bytes.sublist(44, 44 + expectedPayload.length),
+              expectedPayload,
+            );
+            expect(
+              bytes.length,
+              44 + expectedPayload.length + expectedPayload.length % 2,
+            );
+            if (expectedPayload.length.isOdd) expect(bytes.last, 0);
+            expect(
+              result.duration,
+              Duration(microseconds: (9000000 / rate).round()),
+            );
+            final metadata =
+                jsonDecode(await File(result.sidecarPath).readAsString())
+                    as Map;
+            expect(metadata['frameCount'], 9);
+            expect(
+              (metadata['chunks'] as List).map((chunk) => chunk['frameCount']),
+              [3, 3, 3],
+            );
+          },
+        );
+      }
+    }
+  }
+  test(
+    'malformed structural inputs fail without output or staging leaks',
+    () async {
+      final dir = await Directory.systemTemp.createTemp('export-refusal-');
+      addTearDown(() => dir.delete(recursive: true));
+      final source = File('${dir.path}/input.wav');
+      final assembler = ExportedAudioAssembler();
+      addTearDown(assembler.shutdown);
+      for (final entry in malformedPcmWavFixtures().entries) {
+        await source.writeAsBytes(entry.value);
+        await expectLater(
+          assembler.assemble(_request(dir, [source.path])),
+          throwsStateError,
+          reason: entry.key,
+        );
+        expect(
+          await File('${dir.path}/out.wav').exists(),
+          isFalse,
+          reason: entry.key,
+        );
+        expect(
+          await File('${dir.path}/out.json').exists(),
+          isFalse,
+          reason: entry.key,
+        );
+        expect(await _stagingDirectories(dir), isEmpty, reason: entry.key);
+      }
+    },
+  );
+  for (final changed in ['channels', 'bits']) {
+    test('whole-export matching includes $changed', () async {
+      final dir = await Directory.systemTemp.createTemp('export-matching-');
+      addTearDown(() => dir.delete(recursive: true));
+      final a = await File(
+        '${dir.path}/a.wav',
+      ).writeAsBytes(buildPcmWavFixture());
+      final b = await File('${dir.path}/b.wav').writeAsBytes(
+        buildPcmWavFixture(
+          channels: changed == 'channels' ? 2 : 1,
+          bits: changed == 'bits' ? 8 : 16,
+        ),
+      );
+      final assembler = ExportedAudioAssembler();
+      addTearDown(assembler.shutdown);
+      await expectLater(
+        assembler.assemble(_request(dir, [a.path, b.path])),
+        throwsStateError,
+      );
+      expect(await File('${dir.path}/out.wav').exists(), isFalse);
+      expect(await _stagingDirectories(dir), isEmpty);
+    });
+  }
   test('44.1 kHz export preserves source PCM without resampling', () async {
     final root = await Directory.systemTemp.createTemp('native-export-');
     addTearDown(() => root.delete(recursive: true));

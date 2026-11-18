@@ -33,7 +33,7 @@ class ReaderDocumentSerializationService {
     List<DocumentAnalysisRecord>? analysisRecords,
   }) {
     const encoder = JsonEncoder.withIndent('  ');
-    final envelope = _toEnvelope(document);
+    final envelope = encodeEnvelope(document);
     if (analysisRecords != null) {
       envelope['analysisRecords'] = analysisRecords
           .map((r) => r.toJson())
@@ -101,8 +101,8 @@ class ReaderDocumentSerializationService {
       throw const FormatException('A complete checkpoint is required');
     }
     final first = ranges.first.fragment;
-    final output = _toEnvelope(first);
-    final maps = ranges.map((p) => _toEnvelope(p.fragment)).toList();
+    final output = encodeEnvelope(first);
+    final maps = ranges.map((p) => encodeEnvelope(p.fragment)).toList();
     var sourceEnd = 0;
     var wordEnd = 0;
     var segmentEnd = 0;
@@ -256,7 +256,14 @@ class ReaderDocumentSerializationService {
     return decodeReaderDocument(jsonEncode(output));
   }
 
-  Map<String, Object?> _toEnvelope(ReaderDocument document) {
+  /// Data-only encoding for the current [formatVersion]. Call on the existing
+  /// preparation/persistence worker for large documents. Each call returns a
+  /// fresh envelope; restoration validation and publication remain separate.
+  /// Inspection artifacts omit PDF data before any base64 allocation occurs.
+  Map<String, Object?> encodeEnvelope(
+    ReaderDocument document, {
+    bool includePdfData = true,
+  }) {
     return <String, Object?>{
       'formatId': formatId,
       'formatVersion': formatVersion,
@@ -266,9 +273,10 @@ class ReaderDocumentSerializationService {
       'title': document.title,
       'documentType': document.type.name,
       'presentation': document.presentation.name,
-      'pdfDataBase64': document.pdfData == null
-          ? null
-          : base64Encode(document.pdfData!),
+      if (includePdfData)
+        'pdfDataBase64': document.pdfData == null
+            ? null
+            : base64Encode(document.pdfData!),
       'sourceDescription': document.sourceDescription,
       'displayHtml': document.displayHtml,
       'speakableText': document.speakableText,

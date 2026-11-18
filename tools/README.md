@@ -134,6 +134,8 @@ the receipt records the launcher's exit separately and never invents an app exit
 code. Use the same waveform comparison/startup summarizer as the direct runner.
 Both launch methods report the two-second goal and the five-second reusable-`.radoc` hard limit. The startup summarizer accepts an optional final `first-load` argument for a first load requiring preparation or synthesis, applying its ten-second hard limit. Its default class is `radoc` for these offline saved-book probes. Classification depends on the document reuse state, independently of cold/warm process state. The report records goal and hard-limit outcomes separately. `rc2_timing_report.rb` accepts `load_class: radoc|first-load` per case, independently of its process condition. Legacy `condition: radoc` selects the reusable-book limit; other legacy conditions select the first-load limit. Set `load_class` explicitly when cold/warm process state and document reuse differ.
 
+The [engine support matrix](../docs/mlx-tts-engines.md#support-and-evidence) indexes the later S7/S8 M5 qualification and its limits. The R5 receipt below is retained historical evidence, not current-candidate certification.
+
 Runtime packaging accepts empty Python package markers as data. Universal native
 dependencies are thinned to arm64 in the build-owned staging copy before signing
 and manifest hashing; the original managed runtimes are preserved. Current R5
@@ -161,3 +163,12 @@ offline reopening and failed-refresh retention without model loading.
 isolated QA cache, restores it on failure, and requires every non-config file
 identity to stay unchanged after actual repair. Model weights and captured WAVs
 remain private; checked-in receipts identify them by exact paths and hashes.
+
+The [final S7/S8 receipt](https://github.com/kellyjanderson/readaloud/issues/112#issuecomment-6816503511)
+records bounded M5 software results and failed/diagnostic controls separately;
+[integration](https://github.com/kellyjanderson/readaloud/issues/112#issuecomment-6827533847)
+preserved the exact qualified S8 tree. This does not qualify subsequent source,
+physical M3, current human listening or distribution. Use the explicit post-startup
+load boundary for five-/ten-second hard limits; retain separate startup and total
+launch-to-emission fields for the two-second goal. The measured first launch still
+misses that goal. Final candidate onboarding/package checks remain open.

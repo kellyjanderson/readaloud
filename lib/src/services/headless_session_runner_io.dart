@@ -4,11 +4,11 @@ import 'dart:io';
 
 import 'package:path/path.dart' as p;
 
-import '../controllers/reader_controller.dart';
 import '../models/reader_document.dart';
 import 'app_launch_options.dart';
 import 'document_import_service.dart';
 import 'headless_session_result.dart';
+import 'headless_reader_session.dart';
 import 'pronunciation_probe_runner_io.dart';
 import 'sentence_probe_runner_io.dart';
 
@@ -24,35 +24,17 @@ Future<HeadlessSessionResult> runHeadlessSessionInternal(
 
   print('Mode: headless export');
 
-  final importer = DocumentImportService();
-  final controller = ReaderController(
-    importer: importer,
-    enablePlatformIntakeChannels: false,
-  );
+  final session = HeadlessReaderSession();
+  final importer = session.importer;
+  final controller = session.controller;
 
   var succeeded = 0;
   var failed = 0;
 
   try {
-    await controller.initialize();
-
-    if (options.voiceId != null) {
-      final requestedVoice = controller.voices
-          .where((voice) => voice.id == options.voiceId)
-          .firstOrNull;
-      if (requestedVoice == null) {
-        print('Voice not found: ${options.voiceId}');
-        return const HeadlessSessionResult(
-          exitCode: 1,
-          succeeded: 0,
-          failed: 1,
-        );
-      }
-      await controller.selectVoiceById(requestedVoice.id);
-    }
-
-    if (options.speed != null) {
-      await controller.setVoiceSpeed(options.speed!.clamp(0.7, 1.4).toDouble());
+    if (!await session.initialize(options)) {
+      print('Voice not found: ${options.voiceId}');
+      return const HeadlessSessionResult(exitCode: 1, succeeded: 0, failed: 1);
     }
 
     for (final inputPath in options.inputPaths) {
@@ -99,7 +81,7 @@ Future<HeadlessSessionResult> runHeadlessSessionInternal(
       }
     }
   } finally {
-    controller.dispose();
+    session.close();
   }
 
   print('Summary: $succeeded succeeded, $failed failed.');
@@ -115,10 +97,7 @@ Future<ReaderDocument> _importDocument(
   File file,
 ) async {
   final bytes = await file.readAsBytes();
-  return importer.importBytes(
-    fileName: p.basename(file.path),
-    bytes: bytes,
-  );
+  return importer.importBytes(fileName: p.basename(file.path), bytes: bytes);
 }
 
 String _resolveOutputPath({
@@ -141,7 +120,9 @@ String _resolveOutputPath({
 
 String _defaultExportFileName(String title, String? voiceId) {
   final withoutExtension = p.basenameWithoutExtension(title.trim());
-  final base = withoutExtension.isEmpty ? 'Read Aloud Export' : withoutExtension;
+  final base = withoutExtension.isEmpty
+      ? 'Read Aloud Export'
+      : withoutExtension;
   final sanitized = base.replaceAll(RegExp(r'[\\/:*?"<>|]+'), '_');
   final suffix = (voiceId == null || voiceId.trim().isEmpty)
       ? ''

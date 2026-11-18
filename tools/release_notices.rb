@@ -23,6 +23,17 @@ module ReleaseNotices
     actual.each do |item|
       package = expected.fetch(item['id'].delete_prefix('dart:'))
       raise "Dependency identity changed: #{item['id']}" unless item['version'] == package['version'] && item['package_source'] == package['source'] && item['archive_sha256'] == package.dig('description', 'sha256')
+      next unless package['source'] == 'path'
+
+      # A path override has no Pub archive identity. Bind the exact lockfile
+      # description and retained vendored grant instead of treating nil hashes
+      # as proof that the same local dependency is still selected.
+      raise "Dependency path changed: #{item['id']}" unless item.fetch('package_description') == package.fetch('description')
+      relative = item.fetch('vendored_notice')
+      path = File.expand_path(relative, root)
+      package_root = File.expand_path(package.fetch('description').fetch('path'), root)
+      raise "Unsafe vendored notice path: #{relative}" unless package_root.start_with?(root + '/') && path.start_with?(package_root + '/')
+      raise "Vendored notice changed: #{relative}" unless Digest::SHA256.file(path).hexdigest == item.fetch('sha256')
     end
     inventory.fetch('packages').each do |item|
       relative = item.fetch('notice')

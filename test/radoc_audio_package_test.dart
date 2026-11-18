@@ -540,6 +540,95 @@ void main() {
   });
 
   test(
+    'package validation preserves native rates and manifest channel widths',
+    () async {
+      for (final rate in [24000, 44100, 48000]) {
+        for (final channels in [1, 2, 8]) {
+          manifest = _manifest(rate: rate, channels: channels);
+          final audio = _wav(rate: rate, channels: channels);
+          await files['audio/0.wav']!.writeAsBytes(audio);
+          final output = await exportBook();
+          final book = await service.open(output);
+          final scene = book.manifest.scenes.single;
+          expect(scene.sampleRate, rate);
+          expect(scene.channels, channels);
+          expect(scene.frameCount, 16);
+          expect(
+            await (await service.materializeMember(
+              book,
+              'audio/0.wav',
+            )).readAsBytes(),
+            audio,
+          );
+        }
+      }
+    },
+  );
+
+  test(
+    'package canonical policy rejects metadata, ordering and corrupt fields',
+    () async {
+      final canonical = _wav();
+      Uint8List resized(List<int> bytes) {
+        final result = Uint8List.fromList(bytes);
+        ByteData.sublistView(
+          result,
+        ).setUint32(4, result.length - 8, Endian.little);
+        return result;
+      }
+
+      final variants = <Uint8List>[
+        // Odd metadata chunk and its pad are structurally valid, but not canonical.
+        resized([
+          ...canonical.take(12),
+          ...'JUNK'.codeUnits,
+          3,
+          0,
+          0,
+          0,
+          7,
+          8,
+          9,
+          0,
+          ...canonical.skip(12),
+        ]),
+        resized([
+          ...canonical.take(12),
+          ...canonical.skip(36),
+          ...canonical.sublist(12, 36),
+        ]),
+        resized([...canonical.take(36), 0, 0, ...canonical.skip(36)])
+          ..buffer.asByteData().setUint32(16, 18, Endian.little),
+        resized([...canonical, ...'data'.codeUnits, 2, 0, 0, 0, 0, 0]),
+        _wav(frames: 0),
+        for (final (offset, value) in [(4, 1), (28, 1), (40, 31), (40, 999)])
+          Uint8List.fromList(canonical)
+            ..buffer.asByteData().setUint32(offset, value, Endian.little),
+        Uint8List.fromList(canonical)
+          ..buffer.asByteData().setUint16(32, 1, Endian.little),
+        Uint8List.fromList(canonical)
+          ..buffer.asByteData().setUint16(20, 3, Endian.little),
+      ];
+      final destination = await File(
+        '${temp.path}/prior.radoc',
+      ).writeAsString('prior');
+      for (final bytes in variants) {
+        await files['audio/0.wav']!.writeAsBytes(bytes);
+        await expectLater(
+          service.export(
+            destination: destination,
+            manifest: manifest,
+            members: files,
+          ),
+          throwsA(isA<RadocPackageException>()),
+        );
+        expect(await destination.readAsString(), 'prior');
+        expect(await files['audio/0.wav']!.readAsBytes(), bytes);
+      }
+    },
+  );
+
+  test(
     'progress reports actual stage counts and cancellation during copying drains',
     () async {
       await files['prepared/0.json']!.writeAsString(
@@ -817,6 +906,8 @@ void main() {
 RadocAudioManifest _manifest({
   bool preparationComplete = true,
   bool secondRange = true,
+  int rate = 24000,
+  int channels = 1,
 }) => RadocAudioManifest(
   documentId: 'document-1',
   sourceId: 'source-1',
@@ -836,11 +927,11 @@ RadocAudioManifest _manifest({
       ),
   ],
   analysisMembers: ['analysis/0.json'],
-  scenes: [_scene()],
+  scenes: [_scene(rate: rate, channels: channels)],
   intent: {'narratorVoice': 'explicit-choice'},
 );
 
-RadocAudioScene _scene() => RadocAudioScene(
+RadocAudioScene _scene({int rate = 24000, int channels = 1}) => RadocAudioScene(
   sceneId: 'scene-0',
   startWord: 0,
   endWord: 2,
@@ -856,8 +947,8 @@ RadocAudioScene _scene() => RadocAudioScene(
       {'characterId': 'c1', 'startWord': 0, 'endWord': 2},
     ],
   },
-  sampleRate: 24000,
-  channels: 1,
+  sampleRate: rate,
+  channels: channels,
   frameCount: 16,
 );
 
@@ -901,8 +992,9 @@ Future<File> _writeZip(
   return File('${temp.path}/hostile.radoc').writeAsBytes(output.getBytes());
 }
 
-Uint8List _wav({int frames = 16}) {
-  final bytes = Uint8List(44 + frames * 2);
+Uint8List _wav({int frames = 16, int rate = 24000, int channels = 1}) {
+  final align = channels * 2;
+  final bytes = Uint8List(44 + frames * align);
   final b = ByteData.sublistView(bytes);
   void tag(int offset, String value) =>
       bytes.setRange(offset, offset + 4, ascii.encode(value));
@@ -913,12 +1005,15 @@ Uint8List _wav({int frames = 16}) {
   b.setUint32(4, bytes.length - 8, Endian.little);
   b.setUint32(16, 16, Endian.little);
   b.setUint16(20, 1, Endian.little);
-  b.setUint16(22, 1, Endian.little);
-  b.setUint32(24, 24000, Endian.little);
-  b.setUint32(28, 48000, Endian.little);
-  b.setUint16(32, 2, Endian.little);
+  b.setUint16(22, channels, Endian.little);
+  b.setUint32(24, rate, Endian.little);
+  b.setUint32(28, rate * align, Endian.little);
+  b.setUint16(32, align, Endian.little);
   b.setUint16(34, 16, Endian.little);
-  b.setUint32(40, frames * 2, Endian.little);
+  b.setUint32(40, frames * align, Endian.little);
+  for (var i = 0; i < frames * channels; i++) {
+    b.setInt16(44 + i * 2, i.isEven ? i + 1 : -i, Endian.little);
+  }
   return bytes;
 }
 

@@ -1,4 +1,6 @@
 import 'dart:convert';
+import 'dart:typed_data';
+import 'package:read_aloud/src/models/reader_document.dart';
 import 'package:read_aloud/src/models/character.dart';
 import 'package:read_aloud/src/services/work_character_store.dart';
 import 'dart:io';
@@ -12,6 +14,42 @@ void main() {
   group('ReaderDocumentSerializationService', () {
     const serializationService = ReaderDocumentSerializationService();
 
+    test(
+      'data envelope preserves current schema and omits PDF before encoding',
+      () {
+        final imported = DocumentImportService().importPastedText(
+          'A clear record.',
+        );
+        final document = ReaderDocument.preparedSnapshot(
+          source: imported,
+          normalizedImportResult: imported.normalizedImportResult,
+          basePronunciationArtifacts: imported.basePronunciationArtifacts,
+          pdfData: Uint8List.fromList([0, 1, 255]),
+        );
+        final full = serializationService.encodeEnvelope(document);
+        expect(
+          full,
+          jsonDecode(serializationService.serializeToJsonString(document)),
+        );
+        expect(
+          full['formatVersion'],
+          ReaderDocumentSerializationService.formatVersion,
+        );
+        expect(full['pdfDataBase64'], 'AAH/');
+        final omitted = serializationService.encodeEnvelope(
+          document,
+          includePdfData: false,
+        );
+        expect(omitted.containsKey('pdfDataBase64'), isFalse);
+        full.remove('pdfDataBase64');
+        expect(omitted, full);
+        omitted['title'] = 'Inspection only';
+        expect(
+          serializationService.encodeEnvelope(document)['title'],
+          document.title,
+        );
+      },
+    );
     test(
       'VS15 radoc v3 retains authoritative choice and Reset independently of legacy overrides',
       () {

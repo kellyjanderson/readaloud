@@ -6,6 +6,7 @@ import 'package:crypto/crypto.dart';
 
 import '../models/speech_annotation.dart';
 import 'audio_artifact_store.dart';
+import 'pcm_wav.dart';
 
 class BoundaryCandidateMetadata {
   const BoundaryCandidateMetadata({
@@ -256,7 +257,6 @@ class SynthesisBoundaryPolicy {
     }
 
     final sampleRate = AudioArtifactStore.validateWav(wavBytes).sampleRate;
-    final header = Uint8List.fromList(wavBytes.sublist(0, 44));
     final pcm = Int16List.sublistView(wavBytes, 44);
     final leadingBefore = _silenceDuration(
       _leadingSilentSamples(pcm),
@@ -299,13 +299,17 @@ class SynthesisBoundaryPolicy {
       ).clamp(0, pcm.length);
       final trimmedPcm = Int16List.fromList(pcm.sublist(samplesToTrim));
       retainedSampleCount = trimmedPcm.length;
-      // These internally generated WAVs use a canonical 44-byte PCM header.
-      // Both RIFF and data sizes must describe the retained payload.
-      final headerData = ByteData.sublistView(header);
-      headerData.setUint32(4, 36 + trimmedPcm.lengthInBytes, Endian.little);
-      headerData.setUint32(40, trimmedPcm.lengthInBytes, Endian.little);
       final rebuilt = BytesBuilder(copy: false)
-        ..add(header)
+        ..add(
+          encodePcmWavHeader(
+            PcmFormat(
+              sampleRate: sampleRate,
+              channelCount: 1,
+              bitsPerSample: 16,
+            ),
+            trimmedPcm.lengthInBytes,
+          ),
+        )
         ..add(trimmedPcm.buffer.asUint8List());
       wavFile.writeAsBytesSync(rebuilt.takeBytes(), flush: true);
     }

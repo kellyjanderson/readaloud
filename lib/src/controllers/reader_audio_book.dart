@@ -19,6 +19,7 @@ class _ReaderAudioBook {
   Completer<void>? renderCancellation;
   Future<void>? renderWork;
   _BookRenderStream? renderStream;
+  ({int word, _BookScene? scene})? demandedPredecessor;
   void cancelRender() {
     final cancellation = renderCancellation;
     if (cancellation != null && !cancellation.isCompleted) {
@@ -363,7 +364,11 @@ extension ReaderAudioBookSupport on ReaderController {
   /// Match only effective choices used by this scene. An unrelated Character
   /// edit cannot invalidate this scene. Native resource identities remain in
   /// dependencies; replay itself does not need the corresponding model.
-  bool _bookSceneMatches(_ReaderAudioBook book, RadocAudioScene scene) {
+  Future<bool> _bookSceneMatches(
+    _ReaderAudioBook book,
+    RadocAudioScene scene,
+    bool Function() current,
+  ) async {
     if (artifactIdentity(scene.dependencies) != scene.dependencyDigest) {
       return false;
     }
@@ -381,10 +386,15 @@ extension ReaderAudioBookSupport on ReaderController {
         intent['multiVoice'] != _isMultiVoiceEnabled) {
       return false;
     }
-    final turns =
+    var turns =
         (scene.provenance['sceneTurns'] as List?) ??
         (scene.dependencies['sceneTurns'] as List?) ??
         const [];
+    final raw = scene.dependencies['raw'] as Map?;
+    if (turns.isEmpty && isDramaEngine(raw?['engineId'] as String? ?? '')) {
+      turns = await _legacyFishBookOwnership(book, scene, current);
+      if (!current()) throw const PlanningCancelled();
+    }
     if (turns.isEmpty &&
         intent['defaultVoiceId'] != null &&
         intent['defaultVoiceId'] != _selectedVoiceId) {
@@ -407,6 +417,69 @@ extension ReaderAudioBookSupport on ReaderController {
     return true;
   }
 
+  /// Historical separate-turn Fish publications omitted turns from their raw
+  /// dependencies, but retained the one actual resource in provenance. Recover
+  /// only canonical ownership from the saved prepared source; never infer a
+  /// speaker from prose, a current automatic choice or another Fish variant.
+  /// The original dependency digest remains unchanged and is checked above.
+  Future<List<Map<String, Object?>>> _legacyFishBookOwnership(
+    _ReaderAudioBook book,
+    RadocAudioScene scene,
+    bool Function() current,
+  ) async {
+    const missing = FormatException(
+      'This saved Fish passage lacks unambiguous voice ownership. '
+      'Open the original document and prepare a new audio book.',
+    );
+    final raw = scene.dependencies['raw'] as Map;
+    final capturedIntent = scene.provenance['intent'] as Map?;
+    final engineId = raw['engineId'] as String;
+    if (capturedIntent?['engineId'] != engineId ||
+        !(raw['capabilityProfileId'] as String? ?? '').startsWith(
+          '$engineId:',
+        )) {
+      throw missing;
+    }
+    final bindings = scene.provenance['bindings'] as List?;
+    if (bindings == null || bindings.length != 1) throw missing;
+    final binding = PreparedVoiceBinding.fromMap(bindings.single as Map);
+    if (binding.engineVersion != raw['engineVersion'] ||
+        binding.voiceId.isEmpty ||
+        binding.voiceDigest.isEmpty ||
+        binding.modelDigest.isEmpty) {
+      throw missing;
+    }
+    final index = book.book.manifest.preparedRanges.indexWhere(
+      (r) => r.startWord <= scene.startWord && scene.endWord <= r.endWord,
+    );
+    if (index < 0) throw missing;
+    final prepared = await readPreparedRange(index + 1);
+    if (!current() || prepared == null) throw const PlanningCancelled();
+    if (binding.documentId != prepared.fragment.displayDocument.documentId) {
+      throw missing;
+    }
+    final offset = prepared.range.wordStart;
+    final ownership = prepared.fragment.documentVoiceAttribution.ranges.where(
+      (r) =>
+          r.startWordIndex + offset < scene.endWord &&
+          scene.startWord < r.endWordIndex + offset,
+    );
+    var covered = scene.startWord;
+    final result = <Map<String, Object?>>[];
+    for (final range in ownership) {
+      final start = math.max(scene.startWord, range.startWordIndex + offset);
+      final end = math.min(scene.endWord, range.endWordIndex + offset);
+      if (start != covered || end <= start) throw missing;
+      result.add({
+        'castId': capturedIntent?['multiVoice'] == false ? null : range.castId,
+        'voice': binding.voiceId,
+      });
+      covered = end;
+    }
+    if (covered != scene.endWord || result.isEmpty) throw missing;
+    return result;
+  }
+
   Future<_BookScene?> _findBookScene(
     _ReaderAudioBook session,
     int word,
@@ -427,7 +500,7 @@ extension ReaderAudioBookSupport on ReaderController {
         );
         if (saved != null) {
           final scene = _publishedScene(saved);
-          if (_bookSceneMatches(session, scene) &&
+          if (await _bookSceneMatches(session, scene, current) &&
               await _bookSceneSourceMatches(session, scene, current)) {
             return _BookScene(
               scene,
@@ -441,7 +514,7 @@ extension ReaderAudioBookSupport on ReaderController {
       }
     }
     if (descriptor == null ||
-        !_bookSceneMatches(session, descriptor) ||
+        !await _bookSceneMatches(session, descriptor, current) ||
         !await _bookSceneSourceMatches(session, descriptor, current)) {
       return null;
     }
@@ -685,11 +758,8 @@ extension ReaderAudioBookSupport on ReaderController {
     _BookPlaybackPart? firstPart;
     if (!current()) return true;
     if (firstScene == null) {
-      final publishedEngine = manifest.intent['engineId'] as String?;
-      if (publishedEngine != null &&
-          ReaderController._knownTtsEngineIds.contains(publishedEngine) &&
-          _selectedTtsEngineId == session.engineAtOpen &&
-          _selectedTtsEngineId != publishedEngine) {
+      final publishedEngine = _demandedBookEngine(session);
+      if (publishedEngine != null) {
         // Engine replacement advances intent. Requeue exactly this user's Play
         // after its owned replacement; a later Pause/open/selection wins.
         final oldEngine = _ttsEngine;
@@ -707,7 +777,15 @@ extension ReaderAudioBookSupport on ReaderController {
         }
         return true;
       }
-      rendering = await _beginRenderBookScene(session, word, current);
+      rendering = await _beginRenderBookScene(
+        session,
+        word,
+        current,
+        previous: session.demandedPredecessor?.word == word
+            ? session.demandedPredecessor?.scene
+            : null,
+      );
+      session.demandedPredecessor = null;
       firstPart = await rendering.take();
       if (firstPart == null) throw StateError('Rendering produced no audio.');
       if (!current()) return true;
@@ -906,71 +984,110 @@ extension ReaderAudioBookSupport on ReaderController {
       );
     }
 
-    continuation = TtsRenderedAudioContinuation(
-      next: (previous, cancelled) async {
-        if (previous != sequence) {
-          throw StateError('Out-of-order audio scene demand.');
-        }
-        var canceled = false;
-        unawaited(
-          cancelled.then((_) {
-            canceled = true;
-          }),
-        );
-        if (rendering case final active?) {
-          final nextPacket = await active.take();
+    Future<TtsRenderedAudioRequest?> nextScene(
+      int previous,
+      Future<void> cancelled, [
+      Future<void> Function()? awaitConsumed,
+    ]) async {
+      if (previous != sequence) {
+        throw StateError('Out-of-order audio scene demand.');
+      }
+      var canceled = false;
+      unawaited(
+        cancelled.then((_) {
+          canceled = true;
+        }),
+      );
+      if (rendering case final active?) {
+        final nextPacket = await active.take();
+        if (canceled || !current()) throw const PlanningCancelled();
+        if (nextPacket != null) {
+          final result = await request(nextPacket, sequence + 1);
           if (canceled || !current()) throw const PlanningCancelled();
-          if (nextPacket != null) {
-            final result = await request(nextPacket, sequence + 1);
-            if (canceled || !current()) throw const PlanningCancelled();
-            ++sequence;
-            return result;
+          ++sequence;
+          return result;
+        }
+        previousScene = await active.result;
+        wordEnd = previousScene!.scene.endWord;
+        rendering = null;
+      }
+      if (wordEnd == manifest.totalWords && manifest.preparationComplete) {
+        return null;
+      }
+      final next = await _findBookScene(
+        session,
+        wordEnd,
+        () => !canceled && current(),
+      );
+      _BookPlaybackPart part;
+      if (next == null) {
+        if (canceled || !current()) throw const PlanningCancelled();
+        if (_demandedBookEngine(session) != null) {
+          if (awaitConsumed == null) {
+            throw StateError(
+              'The player must confirm consumed audio before an engine handoff.',
+            );
           }
-          previousScene = await active.result;
-          wordEnd = previousScene!.scene.endWord;
-          rendering = null;
+          await Future.any<void>([
+            awaitConsumed(),
+            cancelled.then((_) => throw const PlanningCancelled()),
+          ]);
+          if (canceled || !current()) throw const PlanningCancelled();
+          // The old player's consumer must settle before engine shutdown
+          // joins it. Retire this continuation, then let the existing Play
+          // driver perform the same fenced handoff as an opening gap.
+          _audioGapWord = wordEnd;
+          session.demandedPredecessor = (word: wordEnd, scene: previousScene);
+          ++_playbackIntent;
+          _playbackStartPending = true;
+          unawaited(_drivePlaybackStarts());
+          throw const PlanningCancelled();
         }
-        if (wordEnd == manifest.totalWords && manifest.preparationComplete) {
-          return null;
-        }
-        final next = await _findBookScene(
+        rendering = await _beginRenderBookScene(
           session,
           wordEnd,
           () => !canceled && current(),
+          cancelled: cancelled,
+          previous: previousScene,
         );
-        _BookPlaybackPart part;
-        if (next == null) {
-          rendering = await _beginRenderBookScene(
-            session,
-            wordEnd,
-            () => !canceled && current(),
-            cancelled: cancelled,
-            previous: previousScene,
-          );
-          final first = await rendering!.take();
-          if (first == null) throw StateError('Rendering produced no audio.');
-          part = first;
-        } else {
-          part = _BookPlaybackPart.complete(next);
-        }
-        if (canceled || !current()) throw const PlanningCancelled();
-        if (part.startWord != wordEnd) {
-          _audioGapWord = wordEnd;
-          throw StateError(
-            'Audio ends at word $wordEnd. Press Play to render the next passage with its speech model.',
-          );
-        }
-        final result = await request(part, sequence + 1);
-        if (canceled || !current()) throw const PlanningCancelled();
-        ++sequence;
-        wordEnd = part.endWord;
-        return result;
-      },
+        final first = await rendering!.take();
+        if (first == null) throw StateError('Rendering produced no audio.');
+        part = first;
+      } else {
+        part = _BookPlaybackPart.complete(next);
+      }
+      if (canceled || !current()) throw const PlanningCancelled();
+      if (part.startWord != wordEnd) {
+        _audioGapWord = wordEnd;
+        throw StateError(
+          'Audio ends at word $wordEnd. Press Play to render the next passage with its speech model.',
+        );
+      }
+      final result = await request(part, sequence + 1);
+      if (canceled || !current()) throw const PlanningCancelled();
+      ++sequence;
+      wordEnd = part.endWord;
+      return result;
+    }
+
+    continuation = TtsRenderedAudioContinuation(
+      next: (previous, cancelled) => nextScene(previous, cancelled),
+      nextWithConsumption: nextScene,
     );
     final first = await request(firstPart, 0);
     if (!current()) return true;
     await (engine as RenderedAudioPlaybackCapable).playRendered(first);
     return true;
+  }
+
+  String? _demandedBookEngine(_ReaderAudioBook session) {
+    final published = session.book.manifest.intent['engineId'] as String?;
+    return published != null &&
+            ReaderController._knownTtsEngineIds.contains(published) &&
+            _selectedTtsEngineId == session.engineAtOpen &&
+            _selectedTtsEngineId != published
+        ? published
+        : null;
   }
 }
 
@@ -1183,6 +1300,10 @@ extension ReaderAudioBookBoundaries on ReaderController {
     await _renderedSceneWriter(
       document: document,
       sourceWordOffset: sourceWordOffset,
+      preservedIntent: Map<String, dynamic>.from(
+        _capturedBookSceneIntent(scene, session.book.manifest.intent) ??
+            session.book.manifest.intent,
+      ),
     )(
       TtsFinalizedAudioScene(
         documentId: session.book.manifest.documentId,

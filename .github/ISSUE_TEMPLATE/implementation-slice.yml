@@ -1,13 +1,13 @@
 name: Implementation slice
-description: A bounded work order for an orchestrator or worker.
+description: A bounded execution record for one directed owner or an authorized worker.
 title: "[Slice]: "
 labels: ["kind:slice"]
 body:
   - type: textarea
     id: authority
     attributes:
-      label: Parent and design revision
-      description: Link the parent design and accepted decision revision. Add native parent/dependency relationships after creation.
+      label: Authority and design revision
+      description: Link the owning issue/accepted revision and parent when one exists. A small fix can use one issue; add native dependencies only when applicable.
     validations:
       required: true
   - type: textarea
@@ -21,15 +21,15 @@ body:
     id: dispatch
     attributes:
       label: Current task
-      description: Maintain this block at dispatch/handoff. Include exact model/effort and evidence links; follow docs/project-management.md. Move the block to the top after creation.
+      description: Maintain this block at meaningful handoff/decision changes; follow docs/project-management.md. Move it to the top after creation. Worker/model/worktree details are conditional on agent execution or delegation; actual base/target and evidence limits always remain.
       value: |
         <!-- readaloud:current:start -->
         ## Current task
-        Authority: parent and accepted revision link
-        Owner: unassigned; no dispatch authorized by this template
-        Delivery: base, branch/worktree and integration target pending
-        Readiness / next action: orchestrator must verify native dependencies
-        Execution: model/effort and exclusive paths/lane pending
+        Authority: owning issue/revision; parent when applicable
+        Owner: directed owner; delegated worker identity only when applicable
+        Delivery: actual base commit, named branch and integration target; worktree if applicable
+        Readiness / next action: verify applicable dependencies and scope
+        Execution: agent model/effort when applicable; exclusive scope, delegated lane/worktree if used
         Acceptance / evidence: link checks, blockers and latest result
         <!-- readaloud:current:end -->
   - type: textarea

@@ -11,6 +11,7 @@ import 'package:archive/archive_io.dart';
 import 'package:crypto/crypto.dart';
 
 import '../models/radoc_audio_manifest.dart';
+import 'pcm_wav_io.dart';
 
 /// Finite limits also bound one synchronous archive-encoder step. Larger books
 /// need an explicit policy change; ZIP64 and multi-volume archives are refused.
@@ -965,8 +966,8 @@ class _DigestSink implements Sink<Digest> {
   void close() {}
 }
 
-/// Native scene WAVs use the existing canonical PCM16 layout. Read only its
-/// fixed header, matching AudioArtifactStore.validateWav without loading PCM.
+/// Native scenes retain canonical PCM16 and manifest channel/rate/frame policy.
+/// The shared scanner reads bounded structural ranges without loading PCM.
 Future<void> _validateAudio(
   File file,
   RadocAudioScene scene,
@@ -977,33 +978,20 @@ Future<void> _validateAudio(
   final handle = await file.open();
   try {
     final size = await handle.length();
-    final bytes = await handle.read(44);
-    if (bytes.length != 44) {
-      throw const RadocPackageException('Truncated scene WAV.');
-    }
-    final b = ByteData.sublistView(bytes);
-    String tag(int offset) => ascii.decode(bytes.sublist(offset, offset + 4));
-    final align = scene.channels * 2;
-    if (tag(0) != 'RIFF' ||
-        tag(8) != 'WAVE' ||
-        tag(12) != 'fmt ' ||
-        tag(36) != 'data' ||
-        b.getUint32(4, Endian.little) != size - 8 ||
-        b.getUint32(16, Endian.little) != 16 ||
-        b.getUint16(20, Endian.little) != 1 ||
-        b.getUint16(22, Endian.little) != scene.channels ||
-        b.getUint32(24, Endian.little) != scene.sampleRate ||
-        b.getUint32(28, Endian.little) != scene.sampleRate * align ||
-        b.getUint16(32, Endian.little) != align ||
-        b.getUint16(34, Endian.little) != 16 ||
-        b.getUint32(40, Endian.little) != size - 44 ||
-        size <= 44 ||
-        (size - 44) % align != 0 ||
-        compareFrames && size - 44 != scene.frameCount * align) {
+    final layout = await scanPcmWavFile(handle, checkpoint: owner.check);
+    if (layout.dataOffset != 44 ||
+        layout.dataOffset + layout.dataLength != size ||
+        layout.dataLength == 0 ||
+        layout.format.channelCount != scene.channels ||
+        layout.format.sampleRate != scene.sampleRate ||
+        layout.format.bitsPerSample != 16 ||
+        compareFrames && layout.frameCount != scene.frameCount) {
       throw const RadocPackageException(
         'Scene WAV format/frame count differs from manifest.',
       );
     }
+  } on FormatException catch (error) {
+    throw RadocPackageException('Invalid scene WAV: ${error.message}');
   } finally {
     await handle.close();
   }

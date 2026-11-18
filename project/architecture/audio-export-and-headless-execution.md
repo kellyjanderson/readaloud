@@ -1,17 +1,117 @@
 # Audio Export and Headless Execution
 
-Reconciled: October 26, 2026; RC2 #90 complete-range export source, retained P4 native evidence e18c81d
+Reconciled: November 17, 2026; S11 whole-source finalized-scene registration and sandboxed WAV/JSON publication source repairs (#152), S9.1 shared RIFF/PCM core (#146), RC2 #90 complete-range export; retained P4 native evidence e18c81d
 Status: Bounded P4 native export/cancellation evidence; active-export input and human listening unverified
 
 ## Implemented structure and limitations
 
 Launch options select interactive reading or headless execution. The headless runner imports inputs and uses the TTS engine instead of a separate synthesis implementation. Export assembles finalized chunk WAVs and metadata. Pronunciation and sentence probes exercise speech generation and emit diagnostic artifacts.
 
+The export, pronunciation and sentence runners share `HeadlessReaderSession`
+for controller/importer construction, initialization, exact requested-voice
+resolution and bounded speed options. Each runner keeps its workload and reports,
+and closes its one session in `finally`, including missing voice and initialization
+failure. Close is idempotent and delegates to the existing controller disposal;
+this extraction adds no worker, queue, cancellation policy or stronger native
+shutdown claim. `headless_reader_session_test.dart` covers option ordering,
+missing-voice refusal and failure cleanup. Native process exit remains separate
+acceptance under #151/#114.
+
+Offline model probes use `tools/mlx_protocol_client.py` to own one production
+JSON-lines child and one request at a time through standard `subprocess` and
+`selectors`. Metadata is a data-only worker command derived from adapter lists
+and bundled model/reference catalogs. Protocol buffers/events are bounded and
+identity checked; packetized completed PCM must equal ordered packet PCM.
+Timeout, cancellation and protocol failure retire/reap the owned child, and
+complete receipts require acknowledged shutdown and successful process exit.
+Benchmark/voice-bank workload and acoustic policy remain separate. No production
+seed override exists, so those receipts report null rather than inventing a seed.
+VoiceDesign authoring drains its generator before publishing a reference; this
+change regenerated no assets. Descriptor-based QA staging creates an independent
+root, includes current Fish variants/reference caches and refuses overwrite and
+escaping symlinks. Fake-process/catalog/generator tests establish these tool
+contracts; actual model/app, native timing and listening are separate #151 gates.
+
 `ExportedAudioAssembler` is a stateful main-isolate supervisor with one active request and no waiting queue. Overlap is rejected. Each accepted request has a monotonic owner-local identity and a dedicated pure Dart isolate; only DTOs, file paths, progress and the terminal result cross the port. The worker scans RIFF sections, verifies matching PCM formats, copies audio in at most 64 KiB blocks and streams one chunk's JSON metadata at a time. It retains the request graph and per-chunk format descriptors, not whole-document PCM. WAV encoding, metadata traversal, file I/O and publication are worker-owned. Source chunks remain read-only.
 
 Cancellation is cooperative between bounded reads/writes and at an explicit staged/commit handshake. `cancel()` suppresses publication before commit authorization; after authorization, the short synchronous publication step completes and returns its result. `shutdown()` closes intake, cancels staging and awaits worker exit and file/temp cleanup. The default five-minute deadline requests cancellation and reports a timeout after drain; it does not pretend an unresponsive filesystem operation was forcibly cancelled. Worker errors/exit become terminal failures; a previous request's callbacks cannot clear a newer request. The engine owns document/session invalidation and must call these lifecycle seams. Progress callbacks are short main-isolate notifications, never assembly work.
 
-Audio and sidecar are flushed to a unique staging directory beside the destination. Publication renames the complete WAV first and sidecar last as its commit marker. Existing outputs are backed up and restored on ordinary publication errors; if rollback itself fails, the error names the retained recovery directory. Each rename is atomic, but two filesystem paths are not crash-atomic as a pair. Cancellation before commit leaves prior outputs intact. No cache chunk may be used as the output path.
+Audio and sidecar are flushed to a unique staging directory. On macOS, the
+existing Foundation replacement-directory facility allocates a same-volume
+stage without requiring write access to the destination's parent. One native
+owner retains the exact selected WAV URL and allocated stage; publication and
+release accept only that owner ID. The assembly worker performs PCM/metadata
+work there. After the existing staged/current-owner commit handshake, the one
+native owner spans two utility-queue coordination phases. The first write scope
+atomically installs the complete staged WAV and returns. Only then does the
+owner construct/register a fresh `NSFilePresenter` and `NSFileCoordinator` for
+the exact same-basename adjacent JSON. Sidecar inspection, backup, publication
+and ordinary sidecar rollback stay inside that related-only write scope; WAV
+rollback reacquires a primary write scope. A device/inode fence checks that the
+WAV is still the installed file before JSON mutation or WAV rollback. A foreign
+replacement is preserved and recovery backups retained, rather than overwritten.
+`Info.plist` declares JSON as a related supporting type with handler rank None;
+it does not claim the default JSON handler. This follows Apple's
+[related-item access](https://developer.apple.com/documentation/foundation/nsfilepresenter/primarypresenteditemurl)
+and [sidecar declaration guidance](https://developer.apple.com/videos/play/wwdc2019/701/?time=1601).
+No broader directory grant or private-metadata relocation is used. Other
+platforms retain beside-destination staging; CLI output still includes adjacent
+JSON.
+
+Publication renames the complete WAV first and sidecar last as its commit
+marker. Existing outputs are backed up and restored on ordinary publication
+errors; if rollback itself fails, the error names the retained recovery
+directory. POSIX rename refuses cross-volume moves rather than falling back to
+copying. Each rename is atomic, but two filesystem paths are not crash-atomic
+as a pair. There is no pair-wide coordination lock across the phases, no claim
+of excluding external writers between them, and the inode fence is not content
+attestation against in-place changes. Cancellation before commit leaves prior outputs intact. Once native
+publication is admitted it drains before stage release and the next request;
+shutdown joins the same operation. Replies and native owner state return to the
+main thread, while coordination, rename/rollback and stage cleanup remain on a
+utility queue. Normal Quit also joins the exact active native stage's release;
+publication requested after termination starts is refused and cleaned through
+the same worker/owner drain. Quit also cancels pending primary/JSON coordination;
+an already admitted filesystem body drains, and rollback keeps its own cleanup
+scope. The existing twelve-second native termination fallback defers while the
+exact export owner remains active, then resumes after release. A blocked
+filesystem operation can therefore delay Quit; the deadline is not proof of
+completed cleanup or an unconditional bound on process exit. No cache chunk may be used as the output
+path. Native destination
+failures retain their diagnostic cause and expose a retry/location action.
+Each coordination wait has a ten-second cooperative cancellation budget before
+its accessor is admitted; running filesystem I/O still drains rather than being
+reported as forcibly interrupted.
+
+The S11 ordinary signed-app Save Audio failure was diagnosed as forbidden
+parent-directory temporary creation; a separate in-container Fish export
+succeeded. The first repair safely staged and rolled back, but registering the
+related presenter before a new WAV existed failed with ENOENT. A fresh bundle
+identity reproduced that failure; a SavePanel overwrite of an existing WAV
+successfully created its previously absent JSON. Denied-parent staging,
+capability refusal, commit cancellation/drain, authority-entry ordering and
+Foundation pair rollback, foreign-inode refusal and pending coordination
+cancellation now have bounded source coverage. Registering late
+inside the first coordination block also failed natively, as did fresh/computed
+URL and retained-SavePanel-URL variants. The isolated signed Cocoa two-phase
+probe then created a new WAV/JSON pair with exact fixture hashes and removed its
+stage. The production implementation at `a6fa96e` subsequently passed signed
+Flutter/Fish 8-bit export through the ordinary reader/controller/SavePanel route
+(with a diagnostic observer): both a new external pair and an explicitly accepted
+overwrite produced five chunks / 1,173,271 frames of 44.1 kHz mono PCM16 exactly
+matching ordered synthesis sources. Normal Quit while the JSON coordination
+claim was held cancelled the pending operation, rolled back the WAV and released
+the stage before the holder was released; app and synthesis worker exit were
+verified. This establishes these bounded native cases, not arbitrary filesystem
+behavior, human audio quality or final packaged-candidate acceptance. See the
+[native receipt](../test-artifacts/s11-fish-native-20261116/README.md).
+Existing long-playback evidence belongs to its original candidate,
+independently of this export repair.
+
+The filesystem replay tools carry a helper-only immutable baseline under
+`tools/fixtures/`, with origin commit and verified helper SHA-256. They do not
+require that historical commit to exist in a public clone. Tracked unit prose is
+synthetic; authored chapter inputs and native WAV/JSON fixtures remain local.
 
 Durations come from decoded frame counts rather than the caller's possibly stale duration hints: the result carries microsecond-rounded duration, sidecar milliseconds round to the nearest millisecond, and exact frame counts/sample rate remain recorded. Ancillary RIFF sections and odd chunk padding are parsed; malformed lengths, unsupported/non-PCM formats, incompatible chunk formats and output exceeding the RIFF size limit fail before publication.
 
@@ -20,6 +120,67 @@ Export/probe outputs are local artifacts and are excluded from normal source con
 A new controller export is refused while voice choices are pending, with an apply-first message. Accepted export work snapshots document, planning context, exact realization/resource identity and assignment revision before planning, and guards document/assignment ownership at preparation and dispatch. Already dispatched work uses its captured references rather than borrowing later requested choices. Export owns a separate resident planner/tokenizer/runtime, shares the single native synthesis admission owner with playback, and yields inference admission below playback's low-water lead. It does not stop playback or create a second native model session. Native resource replacement cancels and drains the export owner from initialization onward; direct headless callers prepare their own revision-zero context, while controller requests validate supplied resident bindings. Accepted corrected artifacts remain pinned through assembly and runtime/planner drain, including cancellation/failure. Assembly receives ordered per-chunk metadata after bounded synthesis windows; metadata grows with document length, but whole PCM is never accumulated on the UI isolate.
 
 RC2 #90 also accepts a complete committed multi-range checkpoint. The controller reads all its ranges, validates their contiguous coverage/totals and merges existing derived data on a worker before planning export from the beginning. Global word offsets and source ordering cover the full book, even when playback currently displays its last fragment. Required cast resources are prepared against the complete graph while retaining the resident playback document identity. Partial, cancelled or corrupt checkpoints cannot dispatch an audio export. Whole-document graph metadata is materialized for explicit export; ordinary opening/replay remains incremental. Source tests with a recording engine establish request coverage and failure boundaries, not synthesized or live audio. Current-candidate native export/playback/resource competition remains an acceptance requirement.
+
+## Shared RIFF/PCM structure
+
+The first [C03 consumer group](https://github.com/kellyjanderson/readaloud/issues/146)
+uses `pcm_wav.dart` for immutable `PcmFormat`/`PcmWavLayout`, structural scanning
+and canonical PCM headers. The byte-buffer adapter and `pcm_wav_io.dart` file
+adapter drive the same scan state machine. It retains one fmt/data descriptor,
+never a chunk list; requests are only the 12-byte RIFF header, 8-byte chunk headers
+and 16-byte PCM fmt prefix. Ancillary payloads and fmt extensions are skipped by
+offset, including odd-byte padding. Exactly one fmt and data chunk are required,
+in either order. RIFF signature/declared extent, chunk bounds/padding, integer PCM
+format code, nonzero rate/channels, supported bit depth, byte rate/block alignment
+and whole-frame data length are validated before consumers receive a layout.
+
+Export keeps its integer PCM8/16/24/32 subset, native sample rates/channels and
+whole-export format matching. The shared header includes final odd padding in
+RIFF size but excludes it from data size. Assembly copies source sample bytes
+unchanged in the existing 64 KiB blocks, discards source pad bytes and writes one
+final pad when needed. Existing worker admission, request identity, staging,
+commit handshake, timeout, cancellation, publication and scene-turn metadata
+remain with `ExportedAudioAssembler`. The file adapter introduces no owner,
+queue, task or file lifetime: the caller serializes its handle, selects the worker
+execution context and closes it in `finally`. Checkpoints bracket every bounded
+structural read; worker cancellation discards both stale success and failure,
+drains cleanup and preserves the established terminal-result route.
+
+Analysis keeps a separate PCM16-only policy and its existing sample normalization
+(including `abs(-32768) / 32767`), PCM/WAV hashes, envelope, frame accounting and
+microsecond-rounded duration for valid inputs. It now finds fmt by structure
+rather than assuming fixed offsets, so metadata, extended PCM fmt and
+data-before-fmt layouts are supported. This deliberately tightens invalid-input
+behavior: malformed extents, duplicate/missing fmt/data, truncated headers,
+payloads or padding, non-PCM codes (including float/extensible), zero fields,
+inconsistent byte rate/alignment and partial frames raise `FormatException`.
+Earlier analysis could accept some of these or fail incidentally; invalid-input
+parity is not claimed. Valid integer PCM8/24/32 still fails analysis's explicit
+PCM16 policy with `StateError`.
+
+The maintained [wav 1.5.0 package](https://pub.dev/packages/wav) was evaluated for
+this extraction. Its public `Wav.readFile`/`read` API materializes complete bytes
+and decoded `Float64List` channels; its upstream
+[file adapter](https://github.com/liamappelbe/wav/blob/master/lib/wav_io.dart)
+uses `File.readAsBytes`, and its
+[byte reader](https://github.com/liamappelbe/wav/blob/master/lib/bytes_reader.dart)
+walks an already resident buffer. This does not meet the concrete requirements
+for bounded random-access structural reads and byte-preserving streamed assembly.
+No dependency was installed or adopted; this is a candidate-specific evaluation,
+not a claim that every WAV library was surveyed.
+
+Independent source fixtures cover 24/44.1/48 kHz, supported integer depths and
+mono/stereo, exact payload preservation, odd metadata/data padding, fmt ordering,
+extensions, malformed/refusal cases and PCM16 analysis arithmetic. A caller-owned
+handle instrumented against a sparse file with 512 MiB PCM and 256 MiB metadata
+records just `[12, 8, 8, 16, 8]` bytes requested (52 bytes total), establishing
+bounded structural scanning rather than whole-payload loading. Existing
+cancellation/drain/deadline, previous-output restoration, alias protection and
+request isolation tests remain applicable. These are source-level results;
+current-candidate native emitted-audio/export comparison and human listening
+remain required before final S9 acceptance. Artifact validation, boundary
+correction, Kokoro encoding and package validation retain their own adapters;
+this group does not complete [C03/#114](https://github.com/kellyjanderson/readaloud/issues/114).
 
 ## Bounded P4 native evidence
 
@@ -34,10 +195,15 @@ Actual UI action count was zero after CUA binding timeouts. The blocker was reco
 
 - [app_launch_options.dart](../../lib/src/services/app_launch_options.dart)
 - [headless_session_runner_io.dart](../../lib/src/services/headless_session_runner_io.dart)
+- [pcm_wav.dart](../../lib/src/services/pcm_wav.dart)
+- [pcm_wav_io.dart](../../lib/src/services/pcm_wav_io.dart)
+- [wav_analysis_service.dart](../../lib/src/services/wav_analysis_service.dart)
 - [exported_audio_assembler.dart](../../lib/src/services/exported_audio_assembler.dart)
 - [pronunciation_probe_runner_io.dart](../../lib/src/services/pronunciation_probe_runner_io.dart)
 - [sentence_probe_runner_io.dart](../../lib/src/services/sentence_probe_runner_io.dart)
 - [app_launch_options_test.dart](../../test/app_launch_options_test.dart)
+- [pcm_wav_test.dart](../../test/pcm_wav_test.dart)
+- [pcm_wav_io_test.dart](../../test/pcm_wav_io_test.dart)
 - [exported_audio_assembler_test.dart](../../test/exported_audio_assembler_test.dart)
 - [pronunciation_probe_runner_io_test.dart](../../test/pronunciation_probe_runner_io_test.dart)
 - [sentence_probe_runner_io_test.dart](../../test/sentence_probe_runner_io_test.dart)
@@ -86,9 +252,76 @@ isolate. The signed macOS target grants only user-selected read/write file acces
 for NSSavePanel, retaining sandboxing and app-scoped bookmarks; see the published
 [S6 R2 amendment](../interim/s6-r2/publishing-access.md).
 
+Book publishing discovers the durable scene repository even in a cold plain-text
+session, using an independent read owner; no new playback/export is required to
+find previously committed scenes. The 2 MiB manifest bound remains unchanged.
+The root intent retains the published voice catalogue. Scene intent omits only
+a byte-identical catalogue when its captured engine, raw dependency engine and
+root engine match exactly; directions, choices, bindings, model/capability
+dependencies and raw/final audio remain captured unchanged. Before republishing
+a compacted scene under another catalogue or engine, or persisting its boundary
+derivative, the original catalogue is restored only from its matching original
+root. Different or ambiguous scope retains scene metadata without inheriting a
+new engine's catalogue. These changes and synthetic 395-scene/6,661-word scale,
+offline reopen, cold-save and cross-engine republish checks are tracked in
+[#152](https://github.com/kellyjanderson/readaloud/issues/152#issuecomment-6968002561).
+Source checks do not establish native full-book Save Audio Book or listening
+acceptance.
+
 The existing exporter additionally accepts an awaited per-scene publication
-callback, cancellation/current predicate and source-word offset. Selective book
-regeneration sends one bounded plan with no continuation to this exporter. Its
+callback, cancellation/current predicate and source-word offset. Ordinary Save
+Audio connects that callback to the same durable scene repository as playback,
+so immediately saving an audio book includes finalized export scenes and their
+raw audio, dependencies, bindings and captured intent. The controller captures
+the complete export document and zero source-word offset before planning;
+displaying a later prepared fragment cannot shift canonical directions again.
+Before dispatch, engine/document identity, voice assignment, rate and captured
+resource-binding intent fence preparation. Once dispatched, the WAV keeps its
+accepted voice/resource snapshot while playback choices may change; document or
+engine replacement, export lifetime and actual engine cancellation still own
+its completion. Scene publication and reader-status updates retain the stricter
+captured-intent predicate. A scene whose intent retires is skipped without
+failing the captured WAV, and the repository's final commit checks that same
+strict predicate. The engine's existing export cancellation
+future owns in-flight repository cancellation; committed scenes survive a later
+cancelled or obsolete attempt. Failures from a superseded export cannot replace
+the current owner's status. This source repair is tracked in
+[#152](https://github.com/kellyjanderson/readaloud/issues/152#issuecomment-6966658951);
+fresh controller export-to-book, complete-range direction coordinates, copied
+WAV/metadata reuse and stale callback tests establish the wiring. Current-candidate
+native export-to-book and human listening remain separate acceptance gates.
+
+One export-owned **Save audio** reading stage reports the number of successfully
+persisted finalized scenes. Its total stays unknown while rendering and assembly
+run, including after the last scene callback; only the exporter's return after
+WAV/JSON publication completes the operation. Current failures retain the count
+and expose failure; actual cancellation settles the old ticket as cancelled.
+Playback edits alone preserve a dispatched WAV operation. Counts advance only
+after confirmed repository commits, including when a callback safely skips
+old-intent registration. Document and stage-generation admission suppress late reports, and a
+retired export's cancellation signal cannot settle a successor attempt. Held
+final-publication tests establish these boundaries in source; the native
+count-advancement gate remains in the
+[#152 clarification](https://github.com/kellyjanderson/readaloud/issues/152#issuecomment-6966891216).
+
+Playback's scene-ready tail and export's publication tail are independent of
+native inference admission. Their callbacks share one controller publication
+owner over `RenderedSceneRepository`: one active callback and at most one other
+producer waiting, because each existing producer awaits its callback before
+admitting the next. The existing pinned `synchronized` 3.4.0 package owns active
+publication. Its built-in wait queue has no cancellation removal, so waiting
+stays outside that queue and races the active owner's normalized drain against
+the scene cancellation signal. Waiting cancellation detaches promptly; current
+document/engine/scene ownership is checked again before synchronous lock
+acquisition. A failed publisher releases the lock without failing another
+producer's drain future. Shutdown invalidates old callbacks, cancels repository
+work and joins the active publication owner. No new scheduler or inference queue
+is introduced. Held playback/export tests cover serialization, failure isolation,
+cancelled-waiter rejection and shutdown join; the
+[bounded repair work order](https://github.com/kellyjanderson/readaloud/issues/152#issuecomment-6966983684)
+records the original overlap finding and native acceptance limit.
+
+Selective book regeneration sends one bounded plan with no continuation to this exporter. Its
 existing runtime, tokenizer, resource admission and assembly lifecycle retain
 ownership; export cancellation does not tear down concurrently playing saved
 audio. Saved-audio generations do not compete for inference, so their bounded

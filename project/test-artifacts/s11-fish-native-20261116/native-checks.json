@@ -1,0 +1,117 @@
+{
+  "schema": 1,
+  "recorded_on": "2026-11-16 Pacific",
+  "playback": {
+    "source_commit": "9f69510d9d0d4536004e331aed89b4a005d394c3",
+    "audit_commit": "98d7f19f89f5cf1d5499482e4dc5227f8eb10c01",
+    "source_sha256": "80e89a213cb5c62af2b6dcaa239ec85a67057e7ec359b989bb3310c28f4b3b73",
+    "capture_sha256": "b48f1658f6592a5625ddbbbda9be59487f0a46d170a6443f994432b515ccfb75",
+    "audit_sha256": "a4cf549236182ea45304c4ad3d4ad626f8642fea2cf983d313f0ea4dd5a4b6c7",
+    "passed": true,
+    "contiguous_matched_seconds": 1841.2868541666667,
+    "matched_scenes": 351,
+    "first_word": 124,
+    "last_word": 5733,
+    "minimum_active_correlation": 0.9910020989457756,
+    "maximum_absolute_join_ms": 0.020833333333333332,
+    "limits": [
+      "Warm partial source coverage only; no queue or native playback receipt.",
+      "No semantic, voice-quality, startup, UI, physical-output or listening claim.",
+      "Scene publication is not evidence that a scene was played."
+    ]
+  },
+  "exports": [
+    {
+      "name": "fish8-app-two-phase-new",
+      "passed": true,
+      "engine": "fish_drama3_8bit",
+      "chunks": 5,
+      "frames": 1173271,
+      "sample_rate": 44100,
+      "pcm_exactly_matches_ordered_sources": true,
+      "wav_sha256": "58d48076f54b9cd9fce9b22954049a85fae331f76685b0c47b0fe4bfa38256ae",
+      "json_sha256": "55a910302091856270884a2eb595dbeb4aa71b1dab5f508daf9f68aa4eb7f417"
+    },
+    {
+      "name": "fish8-existing-pair",
+      "passed": true,
+      "engine": "fish_drama3_8bit",
+      "chunks": 5,
+      "frames": 1173271,
+      "sample_rate": 44100,
+      "pcm_exactly_matches_ordered_sources": true,
+      "wav_sha256": "58d48076f54b9cd9fce9b22954049a85fae331f76685b0c47b0fe4bfa38256ae",
+      "json_sha256": "53607f8d52f0ef5bb30fe1416ddb91ea7e84a53e17cd6224379fca335ca31520"
+    }
+  ],
+  "held_quit": {
+    "wave_witness": {
+      "wave_exists": true,
+      "json_exists": false,
+      "bytes": 2346586,
+      "observed_unix_ms": 1794878713704,
+      "observed_at": "2026-11-17T01:25:13.704141Z"
+    },
+    "quit_unix_ms": 1794878715837,
+    "app_exit_observed_at": "2026-11-17T01:25:34.429742Z",
+    "holder_pid": 72691,
+    "holder_alive": true,
+    "stop_absent": true,
+    "wave_exists": false,
+    "json_exists": false,
+    "stage_exists": false,
+    "app_pid": 72536,
+    "app_exited": true,
+    "remaining_specific_python_workers": [],
+    "native_release_unix_ms": 1794878716215,
+    "quit_to_stage_release_ms": 378,
+    "passed": true
+  },
+  "evidence": {
+    "fish8-chapters-sustained-acoustic-final.json": {
+      "sha256": "a4cf549236182ea45304c4ad3d4ad626f8642fea2cf983d313f0ea4dd5a4b6c7",
+      "bytes": 829348
+    },
+    "fish8-chapters-sustained.wav.timing.json": {
+      "sha256": "1ef30059cac59f07dc499abb76ba5474e1ca5146cc1397317a81b5d54f635fcb",
+      "bytes": 1960
+    },
+    "a6-ui-new-overwrite-pcm.json": {
+      "sha256": "8a5ca73042219fce58a67a5d8f172538f11d1e5f6b03608bb892c4d96c2890d7",
+      "bytes": 776
+    },
+    "held-quit3-result.json": {
+      "sha256": "e0936fe654326eebdb760ca25760f110d731e8a0970b9560572d3a3db4f60ee2",
+      "bytes": 603
+    },
+    "final-integrated-flutter.log": {
+      "sha256": "607cd3fed9b9b1ab497c85ff222f5945c57d0b68fd729956f2e9670fe9dfce3e",
+      "bytes": 278034
+    },
+    "final-integrated-analyze.log": {
+      "sha256": "f90adc1dc521bfbca6aef1b909762e5efe4fc085c1cb330dd8e09306c4513c4d",
+      "bytes": 2592
+    },
+    "final-cache-tests.log": {
+      "sha256": "63ef9580f11a9a3391acf3c80e1702810829ab32d4c1a9c32729233d6f15fc1f",
+      "bytes": 130
+    },
+    "final-acoustic-tests.log": {
+      "sha256": "93fb66ce222b6ad87b3bc7a6d7e4fbd6445c09a86a7c61a679e03b3ac300e6ba",
+      "bytes": 135
+    },
+    "final-native-helper-tests.log": {
+      "sha256": "2df82d9e964aaea336c211144e860115e1452f95beb5896f7b06d18088634896",
+      "bytes": 157
+    },
+    "final-filesystem-replay-tests.log": {
+      "sha256": "26b976e8504cb90166200e8527305b1251d461ebb133dac634e8ee0fb6d83c9e",
+      "bytes": 157
+    }
+  },
+  "limits": [
+    "Playback evidence belongs to ordinary source 9f69510 only.",
+    "Native export evidence belongs to a6fa96e with observer only.",
+    "No human listening, physical output, M3, startup or later candidate acceptance."
+  ]
+}
