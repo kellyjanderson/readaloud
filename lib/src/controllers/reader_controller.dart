@@ -3445,9 +3445,14 @@ class ReaderController extends ChangeNotifier {
     final exportEngine = _ttsEngine;
     final exportRevision = _documentRevision;
     final exportAssignmentRevision = voiceAssignmentState.requestedRevision;
+    final exportRate = currentSpeed;
+    var exportActive = true;
     bool current() =>
+        exportActive &&
         _ownsEngine(exportEngine, exportEpoch) &&
-        exportRevision == _documentRevision;
+        exportRevision == _documentRevision &&
+        exportAssignmentRevision == voiceAssignmentState.requestedRevision &&
+        exportRate == currentSpeed;
     void requireCurrent() {
       if (!current()) throw const PlanningCancelled();
     }
@@ -3493,6 +3498,8 @@ class ReaderController extends ChangeNotifier {
       final exportRequest = await _buildExportRequest(
         normalizedPath,
         document: document,
+        assignmentRevision: exportAssignmentRevision,
+        isCurrent: current,
       );
       requireCurrent();
       exportStage = 'rendering-and-assembly';
@@ -3533,6 +3540,7 @@ class ReaderController extends ChangeNotifier {
       }
       return null;
     } finally {
+      exportActive = false;
       _isExporting = false;
       if (!_disposed) notifyListeners();
     }
@@ -5109,17 +5117,27 @@ class ReaderController extends ChangeNotifier {
   Future<TtsExportRequest> _buildExportRequest(
     String outputPath, {
     required ReaderDocument document,
+    required int assignmentRevision,
+    required bool Function() isCurrent,
   }) async {
     final revision = _documentRevision;
     final intent = _resourceBindingIntent;
     final bindings = resourceBindings;
     final context = _planningContext(fromStart: true, document: document);
+    // Export plans the complete source, even when the reader displays a later
+    // prepared range. Capture intent now and keep its coordinates at zero.
+    final writeScene = _renderedSceneWriter(
+      document: document,
+      sourceWordOffset: 0,
+    );
     final planner = SpeechPlanningSupervisor();
     _exportPlanner = planner;
     try {
       final window = context == null ? null : await planner.plan(context);
       _requireRevision(revision);
-      if (intent != _resourceBindingIntent) throw const PlanningCancelled();
+      if (!isCurrent() || intent != _resourceBindingIntent) {
+        throw const PlanningCancelled();
+      }
       return TtsExportRequest(
         text: document.speakableText,
         outputPath: outputPath,
@@ -5132,6 +5150,9 @@ class ReaderController extends ChangeNotifier {
         speechDocument: document.speechDocument,
         ttsArtifactSet: window?.realization.ttsArtifactSet,
         planningContext: context,
+        onRenderedScene: writeScene,
+        assignmentRevision: assignmentRevision,
+        isCurrent: isCurrent,
         preparedResources: _ttsEngine is ResourcePreparationCapable
             ? bindings
             : null,

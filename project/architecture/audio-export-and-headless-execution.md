@@ -1,6 +1,6 @@
 # Audio Export and Headless Execution
 
-Reconciled: November 16, 2026; S11 sandboxed WAV/JSON publication source repair (#152), S9.1 shared RIFF/PCM core (#146), RC2 #90 complete-range export; retained P4 native evidence e18c81d
+Reconciled: November 17, 2026; S11 whole-source finalized-scene registration and sandboxed WAV/JSON publication source repairs (#152), S9.1 shared RIFF/PCM core (#146), RC2 #90 complete-range export; retained P4 native evidence e18c81d
 Status: Bounded P4 native export/cancellation evidence; active-export input and human listening unverified
 
 ## Implemented structure and limitations
@@ -253,8 +253,23 @@ for NSSavePanel, retaining sandboxing and app-scoped bookmarks; see the publishe
 [S6 R2 amendment](../interim/s6-r2/publishing-access.md).
 
 The existing exporter additionally accepts an awaited per-scene publication
-callback, cancellation/current predicate and source-word offset. Selective book
-regeneration sends one bounded plan with no continuation to this exporter. Its
+callback, cancellation/current predicate and source-word offset. Ordinary Save
+Audio connects that callback to the same durable scene repository as playback,
+so immediately saving an audio book includes finalized export scenes and their
+raw audio, dependencies, bindings and captured intent. The controller captures
+the complete export document and zero source-word offset before planning;
+displaying a later prepared fragment cannot shift canonical directions again.
+Engine epoch, document revision, voice-assignment revision, rate and active
+export lifetime fence admission. The engine's existing export cancellation
+future owns in-flight repository cancellation; committed scenes survive a later
+cancelled or obsolete attempt. Failures from a superseded export cannot replace
+the current owner's status. This source repair is tracked in
+[#152](https://github.com/kellyjanderson/readaloud/issues/152#issuecomment-6966658951);
+fresh controller export-to-book, complete-range direction coordinates, copied
+WAV/metadata reuse and stale callback tests establish the wiring. Current-candidate
+native export-to-book and human listening remain separate acceptance gates.
+
+Selective book regeneration sends one bounded plan with no continuation to this exporter. Its
 existing runtime, tokenizer, resource admission and assembly lifecycle retain
 ownership; export cancellation does not tear down concurrently playing saved
 audio. Saved-audio generations do not compete for inference, so their bounded

@@ -12,6 +12,13 @@ import 'package:read_aloud/src/models/character_cast_registry.dart';
 import 'package:read_aloud/src/models/voice_profile.dart';
 import 'package:read_aloud/src/models/native_speech_turn.dart';
 import 'package:read_aloud/src/models/prepared_voice_binding.dart';
+import 'package:read_aloud/src/models/chunk_plan.dart';
+import 'package:read_aloud/src/models/reader_document.dart';
+import 'package:read_aloud/src/models/speech_annotation.dart';
+import 'package:read_aloud/src/services/base_speech_annotation_inference_service.dart';
+import 'package:read_aloud/src/services/document_preparation_supervisor.dart';
+import 'package:read_aloud/src/services/reader_document_repository.dart';
+import 'package:read_aloud/src/services/playback_instrumentation_service.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -1028,12 +1035,15 @@ void main() {
     _OfflineEngine owner, {
     String preference = 'fish_drama3_8bit',
     TtsEngine Function(String, int)? engineFactory,
+    bool deferInitialSynthesis = true,
+    DocumentPreparationSupervisor? preparationSupervisor,
   }) async {
     SharedPreferences.setMockInitialValues({'reader.ttsEngineId': preference});
     final c = ReaderController(
       ttsEngine: owner,
       engineFactory: engineFactory,
-      deferInitialSynthesis: true,
+      preparationSupervisor: preparationSupervisor,
+      deferInitialSynthesis: deferInitialSynthesis,
       enablePlatformIntakeChannels: false,
       renderedSceneRepository: RenderedSceneRepository(
         Directory('${temp.path}/fish-scenes'),
@@ -1045,6 +1055,290 @@ void main() {
     });
     await c.initialize();
     return c;
+  }
+
+  Future<void> loadFreshExportSource(ReaderController c) async {
+    // Only the public fixture's source text is imported: no saved audio or
+    // prepared book metadata supplies the scenes under test.
+    final fixture =
+        jsonDecode(
+              await File(
+                'test/fixtures/s11_fish_legacy/prepared.json',
+              ).readAsString(),
+            )
+            as Map;
+    await c.loadDocument(
+      DocumentImportService().importPastedText(
+        fixture['speakableText'] as String,
+      ),
+    );
+  }
+
+  test(
+    'fresh whole-source export persists every window into a reusable book',
+    () async {
+      final owner = _WholeSourceExportEngine();
+      final c = await fishController(owner, deferInitialSynthesis: false);
+      await loadFreshExportSource(c);
+      final words = c.document.wordCount;
+      final result = await c.exportAudioToPath('${temp.path}/fresh.wav');
+      expect(result, isNotNull, reason: c.statusMessage);
+      expect(
+        owner.exports.length,
+        greaterThan(3),
+        reason: 'Exercise later planning windows.',
+      );
+      expect(owner.requests, isEmpty, reason: 'Saving must not start speech.');
+      expect(owner.synthesisRequests, isEmpty);
+      final request = owner.wholeRequests.single;
+      expect(request.sourceWordOffset, 0);
+      final output = await c.exportDocumentToPath(
+        '${temp.path}/fresh.radoc',
+        audioBook: true,
+      );
+      expect(output, isNotNull, reason: c.statusMessage);
+      final package = RadocAudioPackage();
+      try {
+        final book = await package.open(output!);
+        expect(book.manifest.renderingComplete, true);
+        expect(book.manifest.scenes, hasLength(owner.exports.length));
+        var end = 0;
+        for (final (i, scene) in book.manifest.scenes.indexed) {
+          final rendered = owner.exports[i];
+          final chunk = rendered.chunkPlan!.chunks.single;
+          expect(scene.startWord, end);
+          expect(scene.endWord, chunk.endWordIndex);
+          end = scene.endWord;
+          expect(scene.rawAudioMember, isNotNull);
+          final raw = await package.materializeMember(
+            book,
+            scene.rawAudioMember!,
+          );
+          final finalAudio = await package.materializeMember(
+            book,
+            scene.audioMember,
+          );
+          expect(
+            await raw.readAsBytes(),
+            await File('${rendered.outputPath}.raw.wav').readAsBytes(),
+          );
+          expect(
+            await finalAudio.readAsBytes(),
+            await File(rendered.outputPath).readAsBytes(),
+          );
+          expect(
+            (scene.dependencies['raw'] as Map)['engineId'],
+            'fish_drama3_8bit',
+          );
+          expect(
+            scene.provenance['rawArtifactIdentity'],
+            startsWith('wav-sha256:'),
+          );
+          expect(scene.provenance['bindings'], isNotEmpty);
+          expect(
+            (scene.provenance['intent'] as Map)['engineId'],
+            'fish_drama3_8bit',
+          );
+          expect(
+            (scene.provenance['sceneTurns'] as List).single['startWord'],
+            scene.startWord,
+          );
+        }
+        expect(end, words);
+      } finally {
+        await package.dispose();
+      }
+      final renderedCount = owner.exports.length;
+      expect(
+        request.assignmentRevision,
+        c.voiceAssignmentState.requestedRevision,
+      );
+      expect(
+        request.isCurrent!(),
+        false,
+        reason: 'A returned export has retired.',
+      );
+      await c.importFilePaths([output.path]);
+      await c.startPlayback();
+      var playing = owner.requests.last;
+      var sequence = 0;
+      while (true) {
+        final next = await playing.continuation!.next(
+          sequence++,
+          Completer<void>().future,
+        );
+        if (next == null) break;
+        playing = next;
+      }
+      expect(
+        owner.exports,
+        hasLength(renderedCount),
+        reason: 'Reopen reuses every export scene.',
+      );
+      await c.pausePlayback();
+      await c.assignVoiceToCast('cast_character_mara', 'other');
+      await c.startPlayback();
+      playing = owner.requests.last;
+      sequence = 0;
+      while (true) {
+        final next = await playing.continuation!.next(
+          sequence++,
+          Completer<void>().future,
+        );
+        if (next == null) break;
+        playing = next;
+      }
+      final regenerated = owner.exports.skip(renderedCount).toList();
+      expect(
+        regenerated.map(
+          (r) => (
+            r.chunkPlan!.chunks.single.startWordIndex,
+            r.chunkPlan!.chunks.single.endWordIndex,
+          ),
+        ),
+        [(8, 15), (26, 30)],
+        reason: 'Fresh export metadata retains exact Character ownership.',
+      );
+      expect(
+        regenerated.every((r) => r.chunkPlan!.chunks.single.voiceId == 'other'),
+        true,
+      );
+      await c.pausePlayback();
+      final edited = await c.exportDocumentToPath(
+        '${temp.path}/fresh-edited.radoc',
+        audioBook: true,
+      );
+      expect(edited, isNotNull, reason: c.statusMessage);
+      final afterEdit = owner.exports.length;
+      await c.importFilePaths([edited!.path]);
+      await c.startPlayback();
+      playing = owner.requests.last;
+      sequence = 0;
+      while (true) {
+        final next = await playing.continuation!.next(
+          sequence++,
+          Completer<void>().future,
+        );
+        if (next == null) break;
+        playing = next;
+      }
+      expect(
+        owner.exports,
+        hasLength(afterEdit),
+        reason: 'Edited export scenes also survive save/reopen.',
+      );
+      await c.pausePlayback();
+    },
+  );
+
+  test(
+    'whole-source export from a later range keeps complete canonical coordinates',
+    () async {
+      final failures = <Object?>[];
+      PlaybackInstrumentationService.instance.observer = (m) {
+        if (m.metric == 'audioExportFailed') failures.add(m.value);
+      };
+      addTearDown(
+        () => PlaybackInstrumentationService.instance.observer = null,
+      );
+      final owner = _WholeSourceExportEngine();
+      final source = _DirectedRangeSource(
+        ReaderDocumentRepository('${temp.path}/ranges'),
+      );
+      final c = await fishController(
+        owner,
+        preparationSupervisor: source,
+        deferInitialSynthesis: false,
+      );
+      await c.importPastedText('Stay close. Wait here.');
+      await c.startPlayback();
+      final first = owner.synthesisRequests.single;
+      final next = await first.continuation!.next(
+        first.rangeSequence,
+        Completer<void>().future,
+      );
+      next!.onRangeActive!();
+      await next.continuation!.next(
+        next.rangeSequence,
+        Completer<void>().future,
+      );
+      await _until(() => c.hasCompleteDocumentSnapshot);
+      expect(c.document.speakableText, 'Wait here.');
+      await c.pausePlayback();
+      expect(
+        await c.exportAudioToPath('${temp.path}/all-ranges.wav'),
+        isNotNull,
+        reason: '${c.statusMessage} $failures',
+      );
+      expect(owner.wholeRequests.single.text, contains('Stay close.'));
+      expect(owner.wholeRequests.single.text, contains('Wait here.'));
+      expect(owner.wholeRequests.single.sourceWordOffset, 0);
+      final reader = RenderedSceneRepository(
+        Directory('${temp.path}/fish-scenes'),
+      );
+      try {
+        final scenes = await reader.scenesForSource(
+          source.request.effectiveSourceRevision,
+        );
+        expect(scenes.first.startWordIndex, 0);
+        expect(scenes.last.endWordIndex, 4);
+        final directions = scenes
+            .expand(
+              (s) => (s.intent['canonicalDirections'] as List).cast<Map>(),
+            )
+            .toList();
+        expect(
+          directions.map((d) => (d['startWord'], d['endWord'], d['delivery'])),
+          [(0, 2, 'whispered'), (2, 4, 'shouted')],
+        );
+      } finally {
+        await reader.dispose();
+      }
+    },
+  );
+
+  for (final terminal in ['document', 'voice', 'rate', 'cancel']) {
+    test(
+      'whole-source export rejects late $terminal scene and keeps committed prefix',
+      () async {
+        final owner = _WholeSourceExportEngine()..holdAfterFirst = true;
+        final c = await fishController(owner, deferInitialSynthesis: false);
+        await loadFreshExportSource(c);
+        final source = c.document.normalizedImportResult.sourceFingerprint;
+        final exporting = c.exportAudioToPath('${temp.path}/obsolete.wav');
+        await owner.held.future;
+        expect(owner.exports, hasLength(1));
+        switch (terminal) {
+          case 'document':
+            await c.loadDocument(
+              DocumentImportService().importPastedText('New owner.'),
+            );
+          case 'voice':
+            await c.selectVoiceById('other');
+          case 'rate':
+            await c.setVoiceSpeed(1.2);
+          case 'cancel':
+            owner.cancelled.complete();
+        }
+        c.showStatusMessage('New owner status');
+        owner.release.complete();
+        expect(await exporting, isNull);
+        if (terminal != 'cancel') expect(c.statusMessage, 'New owner status');
+        expect(owner.requests, isEmpty);
+        // The fake deliberately delivers an obsolete callback. The controller
+        // writer and repository must independently reject it before admission.
+        final reader = RenderedSceneRepository(
+          Directory('${temp.path}/fish-scenes'),
+        );
+        try {
+          final scenes = await reader.scenesForSource(source);
+          expect(scenes, hasLength(1));
+          expect(scenes.single.startWordIndex, 0);
+        } finally {
+          await reader.dispose();
+        }
+      },
+    );
   }
 
   test(
@@ -1608,7 +1902,7 @@ class _OfflineEngine
         throw error;
       }
     }
-    await request.onRenderedScene!(
+    await request.onRenderedScene?.call(
       TtsFinalizedAudioScene(
         documentId: request.documentId!,
         generationId: 'export-test',
@@ -1784,5 +2078,189 @@ class _HeldScopedBookEngine extends _ScopedOfflineEngine {
     started.complete();
     await release.future;
     await super.initialize();
+  }
+}
+
+// Controller/repository plumbing evidence, not acoustic or native inference
+// evidence. Reuse the existing per-scene WAV fixture and real bounded planner.
+class _WholeSourceExportEngine extends _ScopedOfflineEngine {
+  _WholeSourceExportEngine() : super('fish_drama3_8bit') {
+    renderAvailable = true;
+  }
+  final wholeRequests = <TtsExportRequest>[];
+  final synthesisRequests = <TtsSpeakRequest>[];
+  final cancelled = Completer<void>();
+  final held = Completer<void>();
+  final release = Completer<void>();
+  bool holdAfterFirst = false;
+  @override
+  Future<void> speak(TtsSpeakRequest request) async {
+    synthesisRequests.add(request);
+    request.onPlaybackReady?.call(
+      TtsPlaybackAcknowledgment(
+        documentId: request.documentId!,
+        assignmentRevision: request.assignmentRevision,
+        generationId: 'controller-test',
+        bindingFingerprints: const {},
+      ),
+    );
+  }
+
+  @override
+  Future<TtsExportResult> exportAudio(TtsExportRequest request) async {
+    wholeRequests.add(request);
+    final planner = SpeechPlanningSupervisor();
+    var plan = request.chunkPlan!;
+    TtsExportResult? result;
+    try {
+      while (true) {
+        for (final chunk in plan.chunks) {
+          if (holdAfterFirst && exports.length == 1 && !held.isCompleted) {
+            held.complete();
+            await release.future;
+          }
+          result = await super.exportAudio(
+            TtsExportRequest(
+              text: chunk.speakText,
+              outputPath: '${request.outputPath}.${exports.length}.wav',
+              documentId: request.documentId,
+              sessionId: request.sessionId,
+              normalizationVersion: request.normalizationVersion,
+              chunkPlan: ChunkPlan(planId: plan.planId, chunks: [chunk]),
+              onRenderedScene: request.onRenderedScene,
+              assignmentRevision: request.assignmentRevision,
+              sourceWordOffset: request.sourceWordOffset,
+              cancelled: cancelled.future,
+              isCurrent: () =>
+                  !cancelled.isCompleted && (request.isCurrent?.call() ?? true),
+            ),
+          );
+          if (cancelled.isCompleted || request.isCurrent?.call() == false) {
+            throw StateError('Export cancelled or superseded.');
+          }
+        }
+        final next = plan.nextSegmentId;
+        if (next == null) break;
+        plan = (await planner.plan(
+          request.planningContext!,
+          startSegmentId: next,
+        )).plan;
+      }
+      return result!;
+    } finally {
+      await planner.shutdown();
+    }
+  }
+}
+
+// A two-range source seam with real immutable checkpoint commits. This keeps
+// the offset regression small while exercising the production complete merge.
+class _DirectedRangeSource extends DocumentPreparationSupervisor {
+  _DirectedRangeSource(ReaderDocumentRepository repository)
+    : super(repository: repository);
+  late DocumentPreparationRequest request;
+  @override
+  Future<DocumentPreparationResult> prepareRanges(
+    DocumentPreparationRequest request, {
+    Future<Uint8List> Function()? acquireBytes,
+    String? cacheKey,
+    Future<void> Function(DocumentIdentityMigration)? onIdentityMigration,
+    required Future<void> Function(DocumentPreparationPublication)
+    onPublication,
+    void Function(PreparationProgress)? onProgress,
+    void Function(CharacterDiscoveryPublication)? onCharacterDiscovery,
+    Future<void> Function()? acquireSource,
+    Future<void> Function()? onDrained,
+  }) async {
+    this.request = request.identityOnly;
+    final checkpoint = await repository!.begin(
+      sourceKey: cacheKey!,
+      request: request,
+    );
+    ReaderDocument? last;
+    var sourceOffset = 0;
+    for (final (i, text) in ['Stay close.', 'Wait here.'].indexed) {
+      final doc = DocumentImportService().importPastedText(text);
+      final segment = doc.speechDocument.segments.first;
+      last = ReaderDocument.fromNormalized(
+        title: doc.title,
+        type: doc.type,
+        normalizedImportResult: doc.normalizedImportResult,
+        dialogueAttributions: doc.dialogueAttributions,
+        characterCastRegistry: doc.characterCastRegistry,
+        documentVoiceAttribution: doc.documentVoiceAttribution,
+        basePronunciationArtifacts: doc.basePronunciationArtifacts,
+        baseSpeechAnnotations: const BaseSpeechAnnotationInferenceService()
+            .infer(
+              speechDocument: doc.speechDocument,
+              displayDocument: doc.displayDocument,
+              explicitIntents: [
+                SpeechAnnotation(
+                  annotationId: 'direction-$i',
+                  segmentId: segment.segmentId,
+                  kind: SpeechAnnotationKind.deliveryIntent,
+                  startWord: 0,
+                  endWord: 2,
+                  confidence: 1,
+                  source: SpeechAnnotationSource.userOverride,
+                  deliveryIntent: i == 0
+                      ? DeliveryIntent.whispered
+                      : DeliveryIntent.shouted,
+                ),
+              ],
+            ),
+      );
+      const codec = ReaderDocumentSerializationService();
+      var encoded = codec.serializeToJsonString(last);
+      for (final segment in last.speechDocument.segments) {
+        encoded = encoded.replaceAll(
+          '"${segment.segmentId}"',
+          '"range${i}_${segment.segmentId}"',
+        );
+      }
+      for (final block in last.displayDocument.blocks) {
+        encoded = encoded.replaceAll(
+          '"${block.blockId}"',
+          '"range${i}_${block.blockId}"',
+        );
+      }
+      for (final range in last.documentVoiceAttribution.ranges) {
+        encoded = encoded.replaceAll(
+          '"${range.rangeId}"',
+          '"range${i}_${range.rangeId}"',
+        );
+      }
+      last = codec.deserializeFromJsonString(encoded);
+      final publication = DocumentPreparationPublication(
+        request: request.identityOnly,
+        sequence: i + 1,
+        fragment: last,
+        range: PreparedDocumentRange(
+          sourceStart: sourceOffset,
+          sourceEnd: sourceOffset + text.length,
+          wordStart: i * 2,
+          wordEnd: i * 2 + 2,
+          segmentStart: i,
+          segmentEnd: i + 1,
+        ),
+        coverage: const {
+          PreparationStage.normalization,
+          PreparationStage.mapping,
+          PreparationStage.analysis,
+          PreparationStage.pronunciation,
+        },
+        progress: const [],
+        isLast: false,
+      );
+      sourceOffset += text.length;
+      await checkpoint.commit(publication);
+      await onPublication(publication);
+    }
+    await checkpoint.complete();
+    return DocumentPreparationResult(
+      request: request.identityOnly,
+      outcome: DocumentPreparationOutcome.ready,
+      document: last,
+    );
   }
 }
