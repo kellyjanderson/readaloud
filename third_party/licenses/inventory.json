@@ -2,7 +2,7 @@
   "schema": 1,
   "scope": "Conservative pubspec.lock superset, source grants and native notices; not release clearance",
   "lockfiles": {
-    "pubspec.lock": "7b567b91ed1938088fa3df42715c30b71c71d7295114434885e07c9f81a1301b",
+    "pubspec.lock": "acc75e241d0eb4d05837f4cbb274f8f1b7986cef4472b75701c082811660c6f3",
     "macos/Podfile.lock": "68d9ee161c6509ca3c2162fdbde53d02cf2e70f29d9ade7846e270e4d24645fe"
   },
   "packages": [
@@ -823,7 +823,7 @@
       "sha256": "6d07c6bb60afb906049d507e19fcc4c6b59e35c0dd0f8a7302e87b3fb0576900",
       "source": "https://pub.dev/api/archives/synchronized-3.4.0.tar.gz",
       "version": "3.4.0",
-      "dependency": "transitive",
+      "dependency": "direct main",
       "package_source": "hosted",
       "archive_sha256": "c254ade258ec8282947a0acbbc90b9575b4f19673533ee46f2f6e9b3aeefd7c0"
     },
