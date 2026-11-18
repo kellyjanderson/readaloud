@@ -1,0 +1,93 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>NLP Inspector</title>
+<style>
+  :root { color-scheme: light; font: 16px/1.45 system-ui, sans-serif; color: #182421; background: #eef2ef; }
+  * { box-sizing: border-box; }
+  body { margin: 0; }
+  main { max-width: 1460px; margin: auto; padding: clamp(16px, 3vw, 40px); }
+  header { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 20px; }
+  h1, h2 { margin: 0; line-height: 1.15; }
+  h1 { font-size: clamp(28px, 4vw, 40px); letter-spacing: -.035em; }
+  h2 { font-size: 20px; }
+  p { margin: 7px 0; }
+  .muted { color: #455951; }
+  .toolbar { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+  button, .open { font: inherit; min-height: 42px; border: 1px solid #657c70; border-radius: 7px; padding: 8px 13px; background: white; color: #182421; cursor: pointer; }
+  button.primary { background: #185641; border-color: #185641; color: white; }
+  button:disabled { opacity: .52; cursor: default; }
+  :focus-visible, .open:focus-within { outline: 3px solid #1e7053; outline-offset: 3px; }
+  .open { position: relative; }
+  .open input { position: absolute; inset: 0; opacity: 0; width: 100%; cursor: pointer; }
+  .status { min-height: 52px; margin: 14px 0; padding: 10px 13px; border-left: 4px solid #5b806c; background: #e1ebe4; overflow-wrap: anywhere; }
+  .status.error { border-color: #a1362a; color: #791c13; background: #fbeae6; }
+  progress { width: min(220px, 100%); margin-left: 8px; vertical-align: middle; accent-color: #185641; }
+  .workspace { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr); gap: 16px; }
+  section { min-width: 0; border: 1px solid #b9c7be; border-radius: 10px; padding: 16px; background: #fafcfb; }
+  section > .toolbar { margin: 12px 0 8px; }
+  .panel { height: clamp(360px, 65vh, 780px); overflow: auto; overflow-wrap: anywhere; }
+  textarea { display: block; width: 100%; min-height: 190px; resize: vertical; padding: 10px; border: 1px solid #8b9e92; border-radius: 6px; font: 16px/1.5 ui-monospace, monospace; color: inherit; }
+  #preview { white-space: pre-wrap; font: 17px/1.7 Georgia, serif; padding: 10px; }
+  mark { color: #173b2a; background: #d5ebda; padding: 1px 0; }
+  mark.selected { outline: 2px solid #185641; }
+  fieldset { border: 1px solid #b9c7be; border-radius: 6px; margin: 10px 0; padding: 8px 10px; }
+  #layers label { display: inline-flex; align-items: center; gap: 5px; min-height: 30px; }
+  #speaker-key { display: flex; flex-wrap: wrap; gap: 6px 12px; font-size: 14px; }
+  .swatch { display: inline-block; width: 13px; height: 13px; border-radius: 3px; border: 1px solid #657c70; margin-right: 4px; }
+  mark[data-mention] { border-bottom: 1px solid #6b426e; }
+  mark[data-evidence] { text-decoration: underline 2px #854918; text-underline-offset: 3px; }
+  mark.selected { outline-offset: 2px; }
+  article { padding: 10px 0; border-bottom: 1px solid #d9e1dc; }
+  article button { width: 100%; text-align: left; overflow-wrap: anywhere; }
+  article dl { display: grid; grid-template-columns: minmax(90px, 120px) 1fr; gap: 3px 8px; margin: 7px 0 0; }
+  dt { font-weight: 600; }
+  dd { margin: 0; }
+  summary { cursor: pointer; margin-top: 12px; font-weight: 600; }
+  @media (max-width: 780px) { .workspace { grid-template-columns: 1fr; } }
+</style>
+<main>
+  <header>
+    <div><h1>NLP Inspector</h1><p class="muted">ModernBookNLP quote and speaker output</p></div>
+    <div class="toolbar">
+      <label class="open">Open text file<input id="file" type="file" accept=".txt,.md,.markdown,text/plain,text/markdown"></label>
+      <button id="run" class="primary" disabled>Analyze passage</button>
+      <button id="stop" disabled>Cancel</button>
+    </div>
+  </header>
+  <div class="status" role="status"><span id="status">Open a UTF-8 text file or paste a passage.</span><progress id="progress" hidden aria-label="Analysis progress"></progress></div>
+  <div class="workspace">
+    <section aria-labelledby="source-title">
+      <h2 id="source-title">Source</h2>
+      <div class="toolbar">
+        <button id="previous" disabled>Previous passage</button>
+        <button id="next" disabled>Next passage</button>
+        <span id="position" class="muted"></span>
+      </div>
+      <div class="panel" id="source-panel">
+        <details id="editor" open><summary>Edit or select passage</summary>
+        <label for="source">Passage text</label>
+        <textarea id="source" spellcheck="false" placeholder="Paste text here."></textarea>
+        <p class="muted">Select part of the passage to analyze only that text.</p>
+        </details>
+        <fieldset id="legend" hidden><legend>Highlight key</legend><div id="layers" class="toolbar"></div><div id="speaker-key"></div></fieldset>
+        <div id="preview"></div>
+      </div>
+    </section>
+    <section aria-labelledby="result-title">
+      <h2 id="result-title">Dialogue and speakers</h2>
+      <div class="toolbar">
+        <button id="save" disabled>Save output JSON</button>
+        <span id="coverage" class="muted"></span>
+      </div>
+      <div class="panel" id="output">
+        <p id="summary" class="muted">Quote ranges and proposed speakers will appear here.</p>
+        <div id="quotes"></div>
+        <details><summary>Person clusters</summary><div id="entities"></div></details>
+      </div>
+    </section>
+  </div>
+</main>
+<script type="module" src="/inspector.mjs"></script>
+</html>
