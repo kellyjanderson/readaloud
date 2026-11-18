@@ -35,14 +35,39 @@ function owns(lane, request) {
   return requests.get(lane) === request;
 }
 
-async function api(path, signal, data) {
+async function readRenderStream(response, onProgress) {
+  let buffer = "";
+  let result;
+  function readRecord(line) {
+    if (!line.trim()) return;
+    const {type, ...record} = JSON.parse(line);
+    if (record.error) throw new Error(record.error);
+    if (type === "progress") onProgress(record);
+    if (type === "result") result = record;
+  }
+  for await (const chunk of response.body.pipeThrough(new TextDecoderStream())) {
+    const lines = (buffer + chunk).split("\n");
+    buffer = lines.pop();
+    for (const line of lines) readRecord(line);
+  }
+  readRecord(buffer);
+  if (!result) throw new Error("The render ended before returning a result.");
+  return result;
+}
+
+async function api(path, signal, data, onProgress) {
   const options = {signal};
   if (data !== undefined) {
     options.method = "POST";
     options.headers = {"Content-Type": "application/json"};
     options.body = JSON.stringify(data);
+    if (onProgress) options.headers.Accept = "application/x-ndjson";
   }
   const response = await fetch(path, options);
+  if (onProgress && response.ok &&
+      response.headers.get("Content-Type")?.split(";", 1)[0].trim() === "application/x-ndjson") {
+    return readRenderStream(response, onProgress);
+  }
   const value = await response.json().catch(() => null);
   if (!response.ok) {
     throw new Error(typeof value?.error === "string" ? value.error : "Request failed (HTTP " + response.status + ").");
@@ -72,6 +97,22 @@ function syncRenderControls() {
   ui["request-preview"].textContent = source
     ? JSON.stringify(renderRequest(), null, 2)
     : "Analyze a passage to start a render request.";
+}
+
+function reportRenderProgress({message, completed, total, unit}) {
+  const progress = ui["render-progress"];
+  const measured = Number.isFinite(total) && total > 0 && Number.isFinite(completed) &&
+    completed >= 0 && completed <= total;
+  if (measured && completed < total) {
+    progress.max = total;
+    progress.value = completed;
+  } else {
+    // A completed stage can still have a downstream stage or final receipt pending.
+    progress.removeAttribute("value");
+  }
+  const count = measured ? `${completed} of ${total}` : Number.isFinite(completed) ? String(completed) : "";
+  const detail = count ? ` · ${count}${unit ? " " + unit : ""}` : "";
+  status("render-status", (message || "Rendering with Fish Drama 3…") + detail);
 }
 
 function discardAudio() {
@@ -313,10 +354,13 @@ ui.render.addEventListener("click", async () => {
   if (ui.render.disabled) return;
   const request = begin("render");
   discardAudio();
+  ui["render-progress"].removeAttribute("value");
   status("render-status", "Waiting for Fish Drama 3 to render " + items.length + (items.length === 1 ? " item…" : " items…"));
   syncRenderControls();
   try {
-    const result = await api("/api/render", request.signal, renderRequest());
+    const result = await api("/api/render", request.signal, renderRequest(), (event) => {
+      if (owns("render", request)) reportRenderProgress(event);
+    });
     if (!owns("render", request)) return;
     if (typeof result.audioUrl !== "string" || !result.audioUrl) throw new Error("The render returned no audio URL.");
     const audioUrl = new URL(result.audioUrl, window.location.href);

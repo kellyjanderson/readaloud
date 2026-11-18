@@ -64,6 +64,7 @@ test("browser composes ordered voiced blocks and discards superseded work", {tim
   let analysisPending;
   let renderPending;
   let lastRequest;
+  let renderAccept;
   let lastAnalysis;
   const blocks = [
     {id: "a", start: 0, end: 13, text: "Once in town.", kind: "Narration"},
@@ -116,6 +117,7 @@ test("browser composes ordered voiced blocks and discards superseded work", {tim
     const payload = JSON.parse(body);
     if (request.url === "/api/render") {
       lastRequest = payload;
+      renderAccept = request.headers.accept;
       renderCount++;
       const result = {
         audioUrl: "/test.wav",
@@ -124,12 +126,19 @@ test("browser composes ordered voiced blocks and discards superseded work", {tim
           voiceId,
         })),
       };
+      if (renderCount === 2) return json({error: "Fish budget refused the render."}, 422);
+      if (renderCount === 4) return json(result);
+      response.writeHead(200, {"Content-Type": "application/x-ndjson; charset=utf-8"});
+      const record = (event) => JSON.stringify(event) + "\n";
+      const finish = () => response.end(record({type: "result", ...result}));
+      response.write(record({type: "progress", stage: "synthesis", message: "Synthesizing",
+        completed: 1, total: 2, unit: "turns"}));
       if (renderCount === 1) {
-        renderPending = () => json(result);
+        renderPending = finish;
         return;
       }
-      if (renderCount === 2) return json({error: "Fish budget refused the render."}, 422);
-      return json(result);
+      response.write(record({type: "progress", stage: "encoding", message: "Encoding WAV"}));
+      return finish();
     }
     return json({error: "Unknown route"}, 404);
   });
@@ -194,6 +203,9 @@ test("browser composes ordered voiced blocks and discards superseded work", {tim
     document.querySelector("#render").click();
   `);
   await waitFor(() => renderPending, "first render request");
+  assert.equal(renderAccept, "application/x-ndjson");
+  await wait('document.querySelector("#render-status").textContent === "Synthesizing · 1 of 2 turns"');
+  assert.equal(await evaluate('document.querySelector("#render-progress").position'), 0.5);
   assert.deepEqual(lastRequest.items, [{blockId: "b", voiceId: "v2"}, {blockId: "a", voiceId: "v1"}]);
   assert.equal(await evaluate('document.querySelector("#render-progress").hidden'), false);
   await evaluate('document.querySelector("[aria-label=\'Move item 1 down\']").click()');
@@ -215,6 +227,10 @@ test("browser composes ordered voiced blocks and discards superseded work", {tim
     {text: "«Hello»", voiceId: "v2"},
   ]);
   assert.equal(await evaluate('document.querySelector("#composition li:last-child select").value'), "v2");
+  await evaluate('document.querySelector("#render").click()');
+  await wait('document.querySelector("#audio").readyState >= 1');
+  assert.equal(renderCount, 4);
+  assert.equal(JSON.parse(await evaluate('document.querySelector("#receipt").textContent')).audioUrl, "/test.wav");
   await send("Emulation.setDeviceMetricsOverride", {width: 320, height: 680, deviceScaleFactor: 1, mobile: true});
   assert.equal(await evaluate('document.documentElement.scrollWidth === document.documentElement.clientWidth'), true);
   await evaluate('document.querySelector("[aria-label=\'Remove item 2\']").click()');
