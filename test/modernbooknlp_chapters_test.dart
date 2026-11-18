@@ -180,6 +180,26 @@ void main() {
       );
       expect(analysis.error, isNull);
       expect(provider.requests, [first, second, edited]);
+
+      final published = await Directory.systemTemp.createTemp(
+        'chapter-analysis-portable-',
+      );
+      addTearDown(() => published.delete(recursive: true));
+      final file = await controller.exportDocumentToPath(
+        '${published.path}/book.radoc',
+      );
+      expect(file, isNotNull, reason: controller.statusMessage);
+      final restored = ModernBookNlpAnalysis(
+        () async => throw StateError('Book analysis must restore offline'),
+      );
+      final offline = await _controller(analysis: restored);
+      await offline.importFilePaths([file!.path]);
+      restored.enable();
+      await _until(
+        () => restored.completedWindows == 2 || restored.error != null,
+      );
+      expect(restored.error, isNull);
+      expect(restored.restoredFromBook, isTrue);
     },
   );
 
