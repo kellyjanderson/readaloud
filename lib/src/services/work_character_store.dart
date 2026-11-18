@@ -409,9 +409,13 @@ class WorkCharacterStore {
     CharacterCastRegistry? evidence,
     Map<String, String>? capturedChoices,
     Set<String> editedCastIds = const {},
+    Set<String>? speakingCastIds,
   }) {
     final work = this.workId(workId);
-    final graph = registry(work, documentId: evidence?.documentId ?? work);
+    final fullGraph = registry(work, documentId: evidence?.documentId ?? work);
+    final graph = speakingCastIds == null
+        ? fullGraph
+        : fullGraph.forSpeakingCast(speakingCastIds);
     final available = {for (final v in voices) v.id: v};
     final automatic = <String, String>{};
     final explicit = <String, String>{};

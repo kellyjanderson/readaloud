@@ -288,6 +288,21 @@ class CharacterCastRegistry {
   Iterable<CastEntry> get characterEntries =>
       entries.where((entry) => entry.roleKind == CastEntryRoleKind.character);
 
+  CharacterCastRegistry forSpeakingCast(Set<String> castIds) {
+    final canonical = {for (final id in castIds) castIdRedirects[id] ?? id};
+    return CharacterCastRegistry(
+      documentId: documentId,
+      registryVersion: registryVersion,
+      entries: [
+        for (final entry in entries)
+          if (entry.roleKind == CastEntryRoleKind.narrator ||
+              canonical.contains(entry.castId))
+            entry,
+      ],
+      castIdRedirects: castIdRedirects,
+    );
+  }
+
   CastEntry? forCastId(String castId) {
     for (final entry in entries) {
       if (entry.castId == (castIdRedirects[castId] ?? castId)) {

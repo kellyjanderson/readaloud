@@ -34,6 +34,7 @@ import 'package:path_provider/path_provider.dart';
 
 import '../models/document_import_exception.dart';
 import '../models/document_preparation.dart';
+import '../models/document_voice_attribution.dart';
 import '../models/prepared_voice_binding.dart';
 import '../models/cast_voice_assignment.dart';
 import '../models/character_cast_registry.dart';
@@ -171,6 +172,8 @@ class ReaderController extends ChangeNotifier {
   final _chapterSegments = <String>{};
   final _readyChapterSegments = <String>{};
   final _chapterQuoteRoutes = <String, List<CharacterDialogueReference>>{};
+  final _pendingChapterSpeakers = <String>{};
+  final _chapterSpeakers = <String>{};
   final _chapterProtectedSpans = <String>{};
   final _fishSceneBoundaries = <String, FishSceneBoundary>{};
   final _chapterPreferenceWrites = Lock();
@@ -593,6 +596,13 @@ class ReaderController extends ChangeNotifier {
           entries: _discoveredCast.values.toList(growable: false),
           castIdRedirects: _castRedirects,
         );
+  CharacterCastRegistry get voiceCastRegistry =>
+      _usesChapterVoiceRoutes && _audioBook == null
+      ? characterCastRegistry.forSpeakingCast(_chapterSpeakers)
+      : characterCastRegistry;
+  bool get isVoiceCastComplete => _usesChapterVoiceRoutes && _audioBook == null
+      ? _chapterScanComplete
+      : _preparationComplete;
   Map<String, String> get castIdRedirects => Map.unmodifiable(_castRedirects);
   String get sessionDocumentId =>
       _sessionDocumentId ?? _document.displayDocument.documentId;
@@ -5038,8 +5048,8 @@ class ReaderController extends ChangeNotifier {
         : document.segmentForWordIndex(_currentWordIndex);
     if (voiceId == null || start == null) return null;
     final profile = _selectedPronunciationProfile(voiceId: voiceId);
-    final useChapterAnalysis =
-        characterAnalysis.enabled && isDramaEngine(_engineId());
+    final useChapterAnalysis = _usesChapterVoiceRoutes;
+    final attribution = _voiceAttributionFor(document);
     final assignments =
         (multiVoice ?? _isMultiVoiceEnabled) && _voices.isNotEmpty
         ? _characters.resolve(
@@ -5048,6 +5058,9 @@ class ReaderController extends ChangeNotifier {
             voices: _voices,
             narratorVoiceId: voiceId,
             evidence: _castingRegistryFor(document),
+            speakingCastIds: useChapterAnalysis
+                ? _speakingCastIds(attribution)
+                : null,
             editedCastIds: overrides?.keys.toSet() ?? _editedCastIds,
             capturedChoices: overrides == null && stored == null
                 ? null
@@ -5076,18 +5089,7 @@ class ReaderController extends ChangeNotifier {
       routes: assignments == null
           ? null
           : CastAwareSpeechRouteInput(
-              documentVoiceAttribution: refineCharacterRoutes(
-                document.documentVoiceAttribution,
-                [
-                  if (useChapterAnalysis)
-                    for (final segment in document.speechDocument.segments)
-                      ...?_chapterQuoteRoutes[segment.segmentId],
-                ],
-                speechDocument: useChapterAnalysis
-                    ? document.speechDocument
-                    : null,
-                protectedSpanIds: _chapterProtectedSpans,
-              ),
+              documentVoiceAttribution: attribution,
               castVoiceAssignments: assignments,
             ),
     );
@@ -5268,8 +5270,38 @@ class ReaderController extends ChangeNotifier {
       evidence: document == null
           ? characterCastRegistry
           : _castingRegistryFor(document),
+      speakingCastIds: !_usesChapterVoiceRoutes
+          ? null
+          : document != null
+          ? _speakingCastIds(_voiceAttributionFor(document))
+          : _audioBook == null
+          ? _chapterSpeakers
+          : null,
     );
   }
+
+  bool get _usesChapterVoiceRoutes =>
+      characterAnalysis.enabled && isDramaEngine(_engineId());
+
+  DocumentVoiceAttributionSet _voiceAttributionFor(ReaderDocument document) {
+    if (!_usesChapterVoiceRoutes) return document.documentVoiceAttribution;
+    return refineCharacterRoutes(
+      document.documentVoiceAttribution,
+      [
+        for (final segment in document.speechDocument.segments)
+          ...?_chapterQuoteRoutes[segment.segmentId],
+      ],
+      speechDocument: document.speechDocument,
+      protectedSpanIds: _chapterProtectedSpans,
+      checkedSegmentIds: _readyChapterSegments,
+    );
+  }
+
+  Set<String> _speakingCastIds(DocumentVoiceAttributionSet attribution) => {
+    for (final range in attribution.ranges)
+      if (range.kind == DocumentVoiceAttributionKind.attributedDialogue)
+        range.castId,
+  };
 
   Map<String, String> _currentStoredCastVoiceAssignments() {
     return Map<String, String>.unmodifiable(

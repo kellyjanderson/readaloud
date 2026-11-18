@@ -87,6 +87,96 @@ void main() {
   });
 
   test(
+    'speaker list and reading track reject narration labeled as a quote',
+    () async {
+      final document = DocumentImportService().importPastedText(
+        'Mara watched Lee. She said, ‘Tell Lee,’ then waved at Jules.',
+      );
+      final original = ModernBookNlpWindow.at(document, wordIndex: 0)!;
+      final window = ModernBookNlpWindow.chapter(
+        original.text,
+        original.slices,
+        original.targetSegmentIds,
+        [document],
+      );
+      final request = _request(window);
+      final (delta, speakers) = await projectChapterCharacters(
+        request,
+        _result(
+          request,
+          mentions: {
+            'mara': [('Mara', true), ('She', false)],
+            'lee': [('Lee', true)],
+            'jules': [('Jules', true)],
+          },
+          quotes: [
+            ('Mara watched Lee', 'lee'),
+            ('She said', 'mara'),
+            ("'Tell Lee,'", 'mara'),
+            ('Jules', 'jules'),
+          ],
+        ),
+        document.characterCastRegistry,
+        window,
+      );
+      final speaker = delta.registry
+          .forSpeakingCast(speakers)
+          .characterEntries
+          .single;
+      expect(speaker.displayLabel, 'Mara');
+      expect(
+        delta.registry.characterEntries.map((entry) => entry.displayLabel),
+        containsAll(['Mara', 'Lee', 'Jules']),
+      );
+      final ranges = refineCharacterRoutes(
+        document.documentVoiceAttribution,
+        delta.dialogues,
+        speechDocument: document.speechDocument,
+        checkedSegmentIds: window.targetSegmentIds,
+      ).ranges;
+      _expectExactCover(document, ranges);
+      expect(ranges.map((r) => (r.startWordIndex, r.endWordIndex, r.castId)), [
+        (0, 5, 'cast_narrator'),
+        (5, 7, speaker.castId),
+        (7, 11, 'cast_narrator'),
+      ]);
+      final segments = document.speechDocument.segments
+          .map((segment) => segment.segmentId)
+          .toList();
+      final lee = delta.registry.characterEntries.singleWhere(
+        (entry) => entry.displayLabel == 'Lee',
+      );
+      final staleHeuristic = DocumentVoiceAttributionSet(
+        documentId: document.speechDocument.documentId,
+        attributionVersion: 'test',
+        ranges: [
+          DocumentVoiceAttributionRange(
+            rangeId: 'stale',
+            segmentIds: segments,
+            startSegmentId: segments.first,
+            endSegmentId: segments.last,
+            startWordIndex: 0,
+            endWordIndex: document.wordCount,
+            castId: lee.castId,
+            kind: DocumentVoiceAttributionKind.attributedDialogue,
+            dialogueSpanId: 'stale-quote',
+          ),
+        ],
+      );
+      final corrected = refineCharacterRoutes(
+        staleHeuristic,
+        delta.dialogues,
+        speechDocument: document.speechDocument,
+        checkedSegmentIds: window.targetSegmentIds,
+      ).ranges;
+      expect(
+        corrected.map((r) => (r.startWordIndex, r.endWordIndex, r.castId)),
+        ranges.map((r) => (r.startWordIndex, r.endWordIndex, r.castId)),
+      );
+    },
+  );
+
+  test(
     'authored routes survive even a provider quote crossing their boundary',
     () {
       final document = DocumentImportService().importPastedText(

@@ -28,6 +28,43 @@ Future<CharacterAnalysisDelta> projectModernBookNlpCharacters(
   ),
 );
 
+Future<(CharacterAnalysisDelta, Set<String>)> projectChapterCharacters(
+  ModernBookNlpRequest request,
+  Map<String, dynamic> result,
+  CharacterCastRegistry registry,
+  ModernBookNlpWindow window,
+) => Isolate.run(() {
+  final delta = modernBookNlpCharacterDelta(
+    request: request,
+    result: result,
+    registry: registry,
+    turns: window.turns,
+    sourceSlices: window.slices,
+    authoritativeQuotes: true,
+    targetSegmentIds: window.targetSegmentIds,
+    protectedSpanIds: window.protectedSpanIds,
+  );
+  final blockedQuotes = <String>{};
+  for (final ref in delta.dialogues) {
+    if (ref.quoteAuthority &&
+        (window.authoredWords[ref.segmentId]?.any(
+              (words) => words.$1 < ref.endWord && ref.startWord < words.$2,
+            ) ??
+            false)) {
+      blockedQuotes.add(ref.dialogueSpanId);
+    }
+  }
+  final speakers = {
+    ...window.authoredSpeakers,
+    for (final ref in delta.dialogues)
+      if (ref.quoteAuthority &&
+          ref.castId != null &&
+          !blockedQuotes.contains(ref.dialogueSpanId))
+        ref.castId!,
+  };
+  return (delta, speakers);
+});
+
 /// An existing dialogue bound to exact preparation coordinates.
 class ModernBookNlpTurnBinding {
   const ModernBookNlpTurnBinding({
@@ -405,9 +442,18 @@ List<CharacterDialogueReference> _projectQuotes(
     previousEnd = end;
   }
   final entitiesById = {for (final entity in entities) entity.id: entity};
+  final sourceQuotations = _sourceQuotationContents(request.text);
   final quotes = <(int, int), Set<String?>>{};
   for (final quote in result['quotes'] as List) {
     final bounds = (quote['startUtf16'] as int, quote['endUtf16'] as int);
+    // A provider label by itself cannot move narration to a character voice.
+    // Match the complete source quotation, even when token coordinates leave
+    // off its surrounding punctuation.
+    if (!sourceQuotations.contains(
+      _quotationContentBounds(request.text, bounds.$1, bounds.$2),
+    )) {
+      continue;
+    }
     (quotes[bounds] ??= {}).add(quote['entityId'] as String?);
   }
   final locations = quotes.keys.toList()..sort((a, b) => a.$1.compareTo(b.$1));
@@ -476,6 +522,54 @@ List<CharacterDialogueReference> _projectQuotes(
 
 final _nonPunctuation = RegExp(r'[^\p{P}\s]', unicode: true);
 final _nonWhitespace = RegExp(r'\S');
+final _quotationMark = RegExp('["\'“”‘’«»]');
+final _wordBeforeMark = RegExp(r'[\p{L}\p{N}]$', unicode: true);
+final _wordAfterMark = RegExp(r'^[\p{L}\p{N}]', unicode: true);
+
+(int, int)? _quotationContentBounds(String text, int start, int end) {
+  final content = _nonPunctuation.allMatches(text.substring(start, end));
+  final first = content.firstOrNull;
+  return first == null ? null : (start + first.start, start + content.last.end);
+}
+
+Set<(int, int)> _sourceQuotationContents(String text) {
+  final spans = <(int, int)>{};
+  const closing = {'"': '"', "'": "'", '“': '”', '‘': '’', '«': '»'};
+  const singles = {"'", '‘', '’'};
+  String? expected;
+  int? contentStart;
+  for (final match in _quotationMark.allMatches(text)) {
+    final mark = match.group(0)!;
+    final at = match.start;
+    if (singles.contains(mark)) {
+      final before = text.substring(at > 2 ? at - 2 : 0, at);
+      final after = text.substring(at + 1, (at + 3).clamp(0, text.length));
+      if (_wordBeforeMark.hasMatch(before) &&
+          (_wordAfterMark.hasMatch(after) || expected == null)) {
+        continue;
+      }
+    }
+    if (expected == null) {
+      expected = closing[mark];
+      if (expected != null) contentStart = at + 1;
+      continue;
+    }
+    if (mark != expected) continue;
+    // A new paragraph may repeat an opening mark during continued speech.
+    var before = at - 1;
+    while (before >= 0 && ' \t\r'.contains(text[before])) {
+      before--;
+    }
+    if (before >= 0 && text[before] == '\n' && closing[mark] == mark) {
+      continue;
+    }
+    final span = _quotationContentBounds(text, contentStart!, at);
+    if (span != null) spans.add(span);
+    expected = null;
+    contentStart = null;
+  }
+  return spans;
+}
 
 List<(ModernBookNlpSourceSlice, int, int)> _quoteWords(
   String text,

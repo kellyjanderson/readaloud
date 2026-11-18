@@ -10,6 +10,7 @@ DocumentVoiceAttributionSet refineCharacterRoutes(
   Iterable<CharacterDialogueReference> evidence, {
   SpeechDocument? speechDocument,
   Set<String> protectedSpanIds = const {},
+  Set<String> checkedSegmentIds = const {},
 }) {
   final bySpan = <String, List<CharacterDialogueReference>>{};
   final completeBindings = <String, Set<String>>{};
@@ -25,7 +26,24 @@ DocumentVoiceAttributionSet refineCharacterRoutes(
     (bySpan[e.dialogueSpanId] ??= []).add(e);
   }
   final base = speechDocument != null
-      ? original.ranges
+      ? [
+          for (final range in original.ranges)
+            if (range.kind == DocumentVoiceAttributionKind.attributedDialogue &&
+                !protectedSpanIds.contains(range.dialogueSpanId) &&
+                range.segmentIds.every(checkedSegmentIds.contains))
+              DocumentVoiceAttributionRange(
+                rangeId: range.rangeId,
+                segmentIds: range.segmentIds,
+                startSegmentId: range.startSegmentId,
+                endSegmentId: range.endSegmentId,
+                startWordIndex: range.startWordIndex,
+                endWordIndex: range.endWordIndex,
+                castId: 'cast_narrator',
+                kind: DocumentVoiceAttributionKind.narration,
+              )
+            else
+              range,
+        ]
       : [
           for (final range in original.ranges)
             (() {
@@ -75,7 +93,7 @@ DocumentVoiceAttributionSet refineCharacterRoutes(
         original.attributionVersion +
         (authoritative == null
             ? '+modernbooknlp-v1'
-            : '+modernbooknlp-quote-v1'),
+            : '+modernbooknlp-quote-v2'),
     ranges: authoritative ?? base,
   );
 }

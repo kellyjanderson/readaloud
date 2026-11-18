@@ -237,6 +237,11 @@ inside a heuristic narration range or trim reporting words out of a heuristic
 turn. Authored speaker metadata is protected. Unresolved speakers use the
 unknown-dialogue route. Entity mentions help reconcile Characters. The
 performing voice follows the quote route and the existing casting selections.
+Chapter mode requires a complete quotation in the mapped source before adding
+a model-directed voice. Outside accepted speech and authored turns, analyzed
+words use the narrator. Only admitted speakers appear in the chapter-mode
+voice list and receive automatic assignments. The character store retains the
+other mentions and any saved user choices.
 
 Once a chapter passes admission, Fish plans from the resulting ranges and
 mapped sentence and paragraph boundaries. The qualified bf16 path can group

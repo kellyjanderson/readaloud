@@ -39,6 +39,8 @@ extension _ReaderChapterAnalysis on ReaderController {
     _chapterSegments.clear();
     _readyChapterSegments.clear();
     _chapterQuoteRoutes.clear();
+    _pendingChapterSpeakers.clear();
+    _chapterSpeakers.clear();
     _chapterProtectedSpans.clear();
     _fishSceneBoundaries.clear();
     _signalChapterAnalysis();
@@ -269,16 +271,16 @@ extension _ReaderChapterAnalysis on ReaderController {
         _voicePreferenceDocumentId,
         documentId: _document.displayDocument.documentId,
       );
-      final delta = await projectModernBookNlpCharacters(
+      final (delta, speakers) = await projectChapterCharacters(
         request,
         result,
         registry,
         window,
-        authoritativeQuotes: true,
       );
       if (!owns()) return;
       apply = _characters.apply(delta);
       if (!apply) continue;
+      _pendingChapterSpeakers.addAll(speakers);
       for (final ref in delta.dialogues) {
         if (ref.sourceMatched &&
             !window.protectedSpanIds.contains(ref.dialogueSpanId)) {
@@ -296,6 +298,8 @@ extension _ReaderChapterAnalysis on ReaderController {
     if (pending.endsChapter) {
       _readyChapterSegments.addAll(_chapterSegments);
       _chapterSegments.clear();
+      _chapterSpeakers.addAll(_pendingChapterSpeakers);
+      _pendingChapterSpeakers.clear();
       ++_completedChapterCount;
       _refreshCharacterProjection();
       _instrumentation.recordMetric(

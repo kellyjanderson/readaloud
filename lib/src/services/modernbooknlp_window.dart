@@ -25,12 +25,16 @@ class ModernBookNlpWindow {
     this.targetSegmentIds,
     this.turns,
     this.protectedSpanIds,
+    this.authoredWords,
+    this.authoredSpeakers,
   );
   final String text;
   final List<ModernBookNlpSourceSlice> slices;
   final Set<String> targetSegmentIds;
   final List<ModernBookNlpTurnBinding> turns;
   final Set<String> protectedSpanIds;
+  final Map<String, List<(int, int)>> authoredWords;
+  final Set<String> authoredSpeakers;
   String get identity =>
       slices.map((s) => '${s.segment.segmentId}:${s.start}:${s.end}').join('/');
 
@@ -162,7 +166,10 @@ class ModernBookNlpWindow {
     final bySegment = {for (final s in slices) s.segment.segmentId: s};
     final bindings = <ModernBookNlpTurnBinding>[];
     final protected = <String>{};
+    final authoredWords = <String, List<(int, int)>>{};
+    final authoredSpeakers = <String>{};
     for (final document in documents) {
+      final authoredAttributions = <String>{};
       // Visit only spans touching this chapter window.
       final spans = <String>{
         for (final id in targetIds)
@@ -184,6 +191,17 @@ class ModernBookNlpWindow {
                       a.source == SpeechAnnotationSource.explicitSourceMetadata,
                 )) {
           protected.add(span);
+          authoredAttributions.add(outcome.attributionId);
+          for (final annotation
+              in document.baseSpeechAnnotations.forDialogueSpan(span)) {
+            if (annotation.kind == SpeechAnnotationKind.dialogueSpan &&
+                targetIds.contains(annotation.segmentId)) {
+              (authoredWords[annotation.segmentId] ??= []).add((
+                annotation.startWord,
+                annotation.endWord,
+              ));
+            }
+          }
         }
         final annotations = document.baseSpeechAnnotations
             .forDialogueSpan(span)
@@ -240,6 +258,16 @@ class ModernBookNlpWindow {
           );
         }
       }
+      if (authoredAttributions.isNotEmpty) {
+        authoredSpeakers.addAll(
+          document.characterCastRegistry.characterEntries
+              .where(
+                (entry) =>
+                    entry.attributionIds.any(authoredAttributions.contains),
+              )
+              .map((entry) => entry.castId),
+        );
+      }
     }
     return ModernBookNlpWindow._(
       text,
@@ -247,6 +275,11 @@ class ModernBookNlpWindow {
       Set.unmodifiable(targetIds),
       List.unmodifiable(bindings),
       Set.unmodifiable(protected),
+      Map.unmodifiable({
+        for (final entry in authoredWords.entries)
+          entry.key: List<(int, int)>.unmodifiable(entry.value),
+      }),
+      Set.unmodifiable(authoredSpeakers),
     );
   }
 }

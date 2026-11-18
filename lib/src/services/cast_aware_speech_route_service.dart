@@ -37,12 +37,17 @@ class CastAwareSpeechRouteService {
             segmentIds: range.segmentIds,
             startWordIndex: range.startWordIndex,
             endWordIndex: range.endWordIndex,
-            castId: range.castId,
+            castId:
+                range.kind == DocumentVoiceAttributionKind.attributedDialogue
+                ? range.castId
+                : narratorAssignment.castId,
             voiceId:
-                input.castVoiceAssignments
-                    .forCastId(range.castId)
-                    ?.effectiveVoiceId ??
-                narratorVoiceId,
+                range.kind != DocumentVoiceAttributionKind.attributedDialogue
+                ? narratorVoiceId
+                : input.castVoiceAssignments
+                          .forCastId(range.castId)
+                          ?.effectiveVoiceId ??
+                      narratorVoiceId,
             dialogueSpanId: range.dialogueSpanId,
           ),
         )
