@@ -35,6 +35,7 @@ final class RunnerModel: ObservableObject {
     var sessionLocked: Bool { busy || activeID != nil }
     var canManageSession: Bool { !sessionLocked && !saving && !promptOpen }
     var canOpenSession: Bool { canManageSession && saveError == nil }
+    var canRevealResults: Bool { resultsURL != nil && !busy && !promptOpen }
     var currentCase: TestCase? { session?.cases.first { $0.id == selectedID } }
 
     func result(for test: TestCase) -> CaseResult { results[test.id] ?? CaseResult(test) }
@@ -87,11 +88,11 @@ final class RunnerModel: ObservableObject {
         activeID = test.id
         run("Verifying Read Aloud and the prepared files…", work: {
             let deadline: DispatchTime = .now() + 45
-            try session.candidate.verify(deadline: deadline)
+            let verified = try session.candidate.verify(deadline: deadline)
             try test.verifyFiles(deadline: deadline)
-            return session.candidate.url
-        }, onFailure: { [weak self] in self?.activeID = nil }) { [weak self] appURL in
-            self?.launch(test, appURL: appURL, bundleIdentifier: session.candidate.bundleIdentifier)
+            return verified
+        }, onFailure: { [weak self] in self?.activeID = nil }) { [weak self] verified in
+            self?.launch(test, verified: verified, bundleIdentifier: session.candidate.bundleIdentifier)
         }
     }
 
@@ -102,7 +103,7 @@ final class RunnerModel: ObservableObject {
         }
     }
 
-    private func launch(_ test: TestCase, appURL: URL, bundleIdentifier: String) {
+    private func launch(_ test: TestCase, verified: Candidate.VerifiedApplication, bundleIdentifier: String) {
         do {
             try requireClosed(bundleIdentifier: bundleIdentifier)
         } catch {
@@ -122,36 +123,69 @@ final class RunnerModel: ObservableObject {
             guard let self, operation == request else { return }
             errorMessage = "Read Aloud is taking too long to open. The runner is waiting for macOS to report what happened."
         }
-        NSWorkspace.shared.openApplication(at: appURL, configuration: configuration) { [weak self] launched, error in
+        NSWorkspace.shared.openApplication(at: verified.applicationURL, configuration: configuration) { [weak self] launched, error in
             DispatchQueue.main.async {
                 guard let self, self.operation == request else { return }
-                self.operation = nil
-                self.progress = nil
-                guard error == nil, let launched,
-                      launched.bundleIdentifier == bundleIdentifier,
-                      launched.bundleURL?.standardizedFileURL.path == appURL.path else {
+                guard let launched else {
+                    self.operation = nil
+                    self.progress = nil
                     self.activeID = nil
                     self.errorMessage = error?.localizedDescription ?? "macOS did not open the verified Read Aloud candidate."
                     return
                 }
-                self.app = launched
-                self.owningApp = true
-                self.startedRunningAt = .now()
-                self.errorMessage = nil
-                var entry = self.result(for: test)
-                entry.result = .incomplete
-                entry.judgment = nil
-                entry.startedAt = timestamp()
-                entry.closedAt = nil
-                entry.appClosed = false
-                self.results[test.id] = entry
-                self.save()
-                self.processObservation = launched.observe(\.isTerminated, options: [.initial, .new]) { [weak self] observed, change in
-                    guard change.newValue == true else { return }
-                    DispatchQueue.main.async { self?.confirmExit(observed) }
+                let bundleURL = launched.bundleURL
+                let executableURL = launched.executableURL
+                self.checks.async {
+                    let sameBundle = bundleURL.map { fileURL($0.path).path } == verified.applicationURL.path
+                    let sameExecutable = executableURL.map { fileURL($0.path).path } == verified.executableURL.path
+                    DispatchQueue.main.async {
+                        guard self.operation == request else { return }
+                        self.operation = nil
+                        self.progress = nil
+                        guard sameBundle || sameExecutable else {
+                            self.activeID = nil
+                            self.errorMessage = "macOS reported a different application instead of the verified Read Aloud candidate."
+                            return
+                        }
+                        let exactMatch = sameBundle && launched.bundleIdentifier == bundleIdentifier
+                            && (executableURL == nil || sameExecutable)
+                        let failure = error?.localizedDescription
+                            ?? (exactMatch ? nil : "Read Aloud opened with a different identity than the one verified.")
+                        self.track(launched, for: test, launchFailure: failure)
+                    }
                 }
-                if launched.isTerminated { self.confirmExit(launched) }
             }
+        }
+    }
+
+    private func track(_ launched: NSRunningApplication, for test: TestCase, launchFailure: String?) {
+        app = launched
+        owningApp = true
+        errorMessage = launchFailure
+        if launchFailure == nil {
+            startedRunningAt = .now()
+            var entry = result(for: test)
+            entry.result = .incomplete
+            entry.judgment = nil
+            entry.startedAt = timestamp()
+            entry.closedAt = nil
+            entry.appClosed = false
+            entry.origin = .native
+            entry.closureEvidence = .pending
+            results[test.id] = entry
+            save()
+        }
+        processObservation = launched.observe(\.isTerminated, options: [.initial, .new]) { [weak self] observed, change in
+            guard change.newValue == true else { return }
+            DispatchQueue.main.async { self?.confirmExit(observed) }
+        }
+        if launched.isTerminated {
+            confirmExit(launched)
+        } else if let launchFailure {
+            // The callback points to our application even though launch failed
+            // verification. Keep ownership until its normal Quit completes.
+            quitTestApp()
+            errorMessage = [launchFailure, errorMessage].compactMap { $0 }.joined(separator: " ")
         }
     }
 
@@ -184,7 +218,8 @@ final class RunnerModel: ObservableObject {
 
     private func confirmExit(_ observed: NSRunningApplication) {
         guard app?.processIdentifier == observed.processIdentifier, observed.isTerminated,
-              let activeID, var entry = results[activeID] else { return }
+              let activeID else { return }
+        let recordedLaunch = startedRunningAt != nil
         let mayHaveExitedEarly = !quittingApp && startedRunningAt.map { $0 + 2 > .now() } == true
         processObservation = nil
         app = nil
@@ -192,14 +227,19 @@ final class RunnerModel: ObservableObject {
         quittingApp = false
         self.activeID = nil
         startedRunningAt = nil
-        entry.appClosed = true
-        entry.closedAt = timestamp()
-        results[activeID] = entry
         if mayHaveExitedEarly {
             errorMessage = "Read Aloud closed just after opening. You can start this test again or record what happened."
         }
         notice = "Read Aloud is closed."
-        save()
+        if recordedLaunch, var entry = results[activeID] {
+            entry.appClosed = true
+            entry.closedAt = timestamp()
+            entry.closureEvidence = .observedExit
+            results[activeID] = entry
+            save()
+        } else {
+            exitIfReady()
+        }
     }
 
     func updateTester(_ value: String) {
@@ -209,6 +249,7 @@ final class RunnerModel: ObservableObject {
 
     func update(_ test: TestCase, notes: String? = nil, outcome: Outcome? = nil) {
         var entry = result(for: test)
+        if entry.origin == nil { entry.origin = .native }
         if let notes { entry.notes = notes }
         if let outcome {
             entry.result = .incomplete
@@ -228,7 +269,7 @@ final class RunnerModel: ObservableObject {
     }
 
     func revealResults() {
-        guard let resultsURL, canManageSession else { return }
+        guard let resultsURL, canRevealResults else { return }
         let folder = resultsURL.deletingLastPathComponent()
         run("Opening results folder…", work: {
             try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)

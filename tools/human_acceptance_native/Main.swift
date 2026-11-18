@@ -28,10 +28,13 @@ private struct RunnerView: View {
                 .disabled(!model.canOpenSession)
             Menu("Results") {
                 Button("Import Results…", action: model.importResults)
+                    .disabled(!model.canManageSession)
                 Button("Export Results…", action: model.exportResults)
+                    .disabled(!model.canManageSession)
                 Button("Show Results Folder", action: model.revealResults)
+                    .disabled(!model.canRevealResults)
             }
-            .disabled(model.session == nil || !model.canManageSession)
+            .disabled(model.session == nil)
         }
         .padding(.horizontal, 18).padding(.vertical, 12)
     }

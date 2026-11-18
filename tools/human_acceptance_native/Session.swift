@@ -1,4 +1,5 @@
 import CryptoKit
+import Darwin
 import Foundation
 
 struct RunnerError: LocalizedError {
@@ -8,6 +9,11 @@ struct RunnerError: LocalizedError {
 }
 
 struct Candidate: Codable {
+    struct VerifiedApplication {
+        let applicationURL: URL
+        let executableURL: URL
+    }
+
     let appPath: String
     let bundleIdentifier: String
     let sourceRevision: String
@@ -21,21 +27,137 @@ struct Candidate: Codable {
         .init(path: appPath, sourceRevision: sourceRevision, packageSha256: packageSha256)
     }
 
-    func verify(deadline: DispatchTime) throws {
+    @discardableResult
+    func verify(deadline: DispatchTime) throws -> VerifiedApplication {
         let prefix = "com.kellyjanderson.readAloud.qa."
+        let app = url
         guard bundleIdentifier.hasPrefix(prefix), isHex(String(bundleIdentifier.dropFirst(prefix.count)), 32),
-              isHex(sourceRevision, 40), absoluteFilePath(appPath), url.pathExtension == "app",
-              Bundle(url: url)?.bundleIdentifier == bundleIdentifier else {
+              isHex(sourceRevision, 40), absoluteFilePath(appPath), app.pathExtension == "app" else {
             throw RunnerError("The Read Aloud app does not match the QA profile specified by this session.")
         }
-        let framework = url.appendingPathComponent("Contents/Frameworks/App.framework")
+        let framework = app.appendingPathComponent("Contents/Frameworks/App.framework")
         let expectedBinary = fileURL(framework.appendingPathComponent("App").path)
         guard fileURL(binaryPath) == expectedBinary, expectedBinary.path.hasPrefix(framework.path + "/") else {
             throw RunnerError("The session points to a binary outside the expected App.framework.")
         }
-        try verifyHash(packageManifestPath, packageSha256, label: "Candidate manifest", deadline: deadline)
-        try verifyHash(binaryPath, binarySha256, label: "Read Aloud binary", deadline: deadline)
+        guard DispatchTime.now() < deadline else { throw RunnerError("Candidate verification took too long.") }
+        try requireRegularFile(packageManifestPath)
+        let manifest = try readSmallFile(fileURL(packageManifestPath))
+        guard hexDigest(SHA256.hash(data: manifest)) == packageSha256 else {
+            throw RunnerError("Candidate manifest changed. Its SHA-256 differs from this session.")
+        }
+        let receipt = try JSONDecoder().decode(PackageReceipt.self, from: manifest)
+        let bundle = receipt.build.bundle
+        guard receipt.schema == 3, receipt.build.inputs.source.commit == sourceRevision,
+              bundle.bundleIdentifier == bundleIdentifier else {
+            throw RunnerError("The candidate manifest's source revision or QA profile does not match this session.")
+        }
+        try bundle.verify(in: app, binary: expectedBinary, binarySha256: binarySha256, deadline: deadline)
+        return VerifiedApplication(applicationURL: app, executableURL: app.appendingPathComponent(bundle.executable))
     }
+}
+
+private struct PackageReceipt: Decodable {
+    struct Build: Decodable {
+        struct Inputs: Decodable {
+            struct Source: Decodable { let commit: String }
+            let source: Source
+        }
+        let inputs: Inputs
+        let bundle: AppBundle
+    }
+
+    struct AppBundle: Decodable {
+        struct Entry: Decodable {
+            let path: String
+            let symlink: String?
+            let sha256: String?
+            let size: Int64?
+            let mode: Int?
+
+            func verify(_ url: URL, in app: URL, deadline: DispatchTime) throws {
+                let failure = RunnerError("Read Aloud package changed at \(path).")
+                if let symlink {
+                    let target = try? FileManager.default.destinationOfSymbolicLink(atPath: url.path)
+                    let resolved = url.resolvingSymlinksInPath()
+                    guard sha256 == nil, size == nil, mode == nil, target == symlink,
+                          resolved.path != url.path, resolved.path.hasPrefix(app.path + "/"),
+                          FileManager.default.fileExists(atPath: resolved.path) else { throw failure }
+                } else {
+                    // Read and inspect the same descriptor, with symlink following disabled.
+                    let descriptor = Darwin.open(url.path, O_RDONLY | O_NOFOLLOW | O_NONBLOCK | O_CLOEXEC)
+                    guard descriptor >= 0 else { throw failure }
+                    let file = FileHandle(fileDescriptor: descriptor, closeOnDealloc: true)
+                    defer { try? file.close() }
+                    var info = stat()
+                    guard fstat(descriptor, &info) == 0, info.st_mode & S_IFMT == S_IFREG,
+                          Int(info.st_mode) & 0o777 == mode, info.st_size == size,
+                          try streamDigest(file, label: path, deadline: deadline) == sha256 else { throw failure }
+                }
+            }
+        }
+
+        let bundleIdentifier: String
+        let executable: String
+        let files: [Entry]
+
+        enum CodingKeys: String, CodingKey {
+            case bundleIdentifier = "bundle_identifier"
+            case executable, files
+        }
+
+        func verify(in app: URL, binary: URL, binarySha256: String, deadline: DispatchTime) throws {
+            var expected: [String: Entry] = [:]
+            for file in files {
+                guard expected.updateValue(file, forKey: file.path) == nil else {
+                    throw RunnerError("The candidate manifest contains duplicate package files.")
+                }
+            }
+            let binaryRelativePath = String(binary.path.dropFirst(app.path.count + 1))
+            let executableName = String(executable.dropFirst("Contents/MacOS/".count))
+            guard let binaryEntry = expected[binaryRelativePath], binaryEntry.symlink == nil,
+                  isHex(binarySha256, 64), binaryEntry.sha256 == binarySha256,
+                  executable.hasPrefix("Contents/MacOS/"), !executableName.isEmpty, !executableName.contains("/"),
+                  let launcher = expected[executable], launcher.symlink == nil,
+                  let infoEntry = expected["Contents/Info.plist"], infoEntry.symlink == nil else {
+                throw RunnerError("The candidate manifest does not match the session's Read Aloud binaries.")
+            }
+
+            let traversalKeys: Set<URLResourceKey> = [.isDirectoryKey, .isSymbolicLinkKey]
+            var directories = [""]
+            while let directory = directories.popLast() {
+                let url = directory.isEmpty ? app : app.appendingPathComponent(directory)
+                for item in try FileManager.default.contentsOfDirectory(
+                    at: url, includingPropertiesForKeys: Array(traversalKeys)
+                ) {
+                    guard DispatchTime.now() < deadline else { throw RunnerError("Candidate verification took too long.") }
+                    let path = directory.isEmpty ? item.lastPathComponent : directory + "/" + item.lastPathComponent
+                    let values = try item.resourceValues(forKeys: traversalKeys)
+                    if values.isDirectory == true, values.isSymbolicLink != true {
+                        directories.append(path)
+                        continue
+                    }
+                    guard let entry = expected.removeValue(forKey: path) else {
+                        throw RunnerError("Read Aloud package contains an unexpected file at \(path).")
+                    }
+                    try entry.verify(app.appendingPathComponent(path), in: app, deadline: deadline)
+                }
+            }
+            if let missing = expected.keys.sorted().first {
+                throw RunnerError("Read Aloud package is missing \(missing).")
+            }
+
+            let plist = try readSmallFile(app.appendingPathComponent("Contents/Info.plist"))
+            let info = try PropertyListSerialization.propertyList(from: plist, options: [], format: nil) as? [String: Any]
+            guard info?["CFBundleIdentifier"] as? String == bundleIdentifier,
+                  info?["CFBundleExecutable"] as? String == executableName else {
+                throw RunnerError("Read Aloud's launch metadata differs from the candidate manifest.")
+            }
+        }
+    }
+
+    let schema: Int
+    let build: Build
 }
 
 struct Fixture: Codable, Equatable {
@@ -154,7 +276,7 @@ struct Session: Codable {
     var resultsURL: URL { fileURL(resultsPath) }
 
     static func read(_ url: URL, deadline: DispatchTime) throws -> Session {
-        let session = try JSONDecoder().decode(Self.self, from: readJSON(url))
+        let session = try JSONDecoder().decode(Self.self, from: readSmallFile(url))
         guard session.schema == 1, !session.cases.isEmpty,
               session.cases.allSatisfy({ !$0.id.isEmpty }),
               Set(session.cases.map(\.id)).count == session.cases.count else {
@@ -203,6 +325,16 @@ enum Outcome: String, Codable, CaseIterable, Identifiable {
 }
 
 struct CaseResult: Codable, Equatable {
+    enum Origin: String, Codable {
+        case native, browser
+    }
+
+    enum ClosureEvidence: String, Codable {
+        case pending
+        case observedExit = "observed-exit"
+        case testerAttestation = "tester-attestation"
+    }
+
     let id: String
     let title: String
     let issue: Int
@@ -212,6 +344,8 @@ struct CaseResult: Codable, Equatable {
     var appClosed: Bool
     var startedAt: String?
     var closedAt: String?
+    var origin: Origin?
+    var closureEvidence: ClosureEvidence?
     // Keep a tester's judgment through relaunch or interrupted cleanup. Export
     // the outcome as incomplete until the launch's process has really exited.
     var judgment: Outcome?
@@ -234,6 +368,8 @@ struct CaseResult: Codable, Equatable {
         entry.notes = notes
         entry.startedAt = startedAt
         entry.closedAt = closedAt
+        entry.origin = origin
+        entry.closureEvidence = closureEvidence
         entry.appClosed = appClosed
         entry.judgment = outcome == .incomplete ? nil : outcome
         if appClosed || (outcome == .skip && startedAt == nil) { entry.result = outcome }
@@ -268,13 +404,14 @@ struct Report: Codable {
     }
 
     static func read(_ url: URL, session: Session, nativeOnly: Bool) throws -> Report {
-        var report = try JSONDecoder().decode(Self.self, from: readJSON(url))
+        var report = try JSONDecoder().decode(Self.self, from: readSmallFile(url))
         let candidate = session.candidate
         guard report.schema == 3, report.app.sourceRevision == candidate.sourceRevision,
               report.app.packageSha256 == candidate.packageSha256 else {
             throw RunnerError("These results belong to a different Read Aloud candidate.")
         }
-        guard !nativeOnly || report.runner == "readaloud-native" else {
+        let nativeReport = report.runner == "readaloud-native"
+        guard !nativeOnly || nativeReport else {
             throw RunnerError("The session's results file already exists. Move it aside or use a separate native results path before importing it.")
         }
         let cases = Dictionary(uniqueKeysWithValues: session.cases.map { ($0.id, $0) })
@@ -285,7 +422,12 @@ struct Report: Codable {
             guard let test = cases[entry.id], test.issue == entry.issue, test.fixture == entry.fixture else {
                 throw RunnerError("The saved result for \(entry.id) does not match this session's test and fixture.")
             }
-            return entry.canonical(for: test)
+            var result = entry.canonical(for: test)
+            if !nativeReport, result.hasEntry {
+                result.origin = .browser
+                result.closureEvidence = result.appClosed ? .testerAttestation : nil
+            }
+            return result
         }
         return report
     }
@@ -322,12 +464,12 @@ func requireRegularFile(_ path: String) throws {
 
 private let maxJSONSize = 4 * 1024 * 1024
 
-func readJSON(_ url: URL) throws -> Data {
+private func readSmallFile(_ url: URL) throws -> Data {
     try requireRegularFile(url.path)
     let file = try FileHandle(forReadingFrom: url)
     defer { try? file.close() }
     let data = try file.read(upToCount: maxJSONSize + 1) ?? Data()
-    guard data.count <= maxJSONSize else { throw RunnerError("The JSON file exceeds 4 MB.") }
+    guard data.count <= maxJSONSize else { throw RunnerError("\(url.lastPathComponent) exceeds 4 MB.") }
     return data
 }
 
@@ -336,6 +478,11 @@ func verifyHash(_ path: String, _ sha256: String, label: String, deadline: Dispa
     try requireRegularFile(path)
     let file = try FileHandle(forReadingFrom: fileURL(path))
     defer { try? file.close() }
+    let actual = try streamDigest(file, label: label, deadline: deadline)
+    guard actual == sha256 else { throw RunnerError("\(label) changed. Its SHA-256 differs from this session.") }
+}
+
+private func streamDigest(_ file: FileHandle, label: String, deadline: DispatchTime) throws -> String {
     var digest = SHA256()
     while true {
         guard DispatchTime.now() < deadline else {
@@ -344,8 +491,7 @@ func verifyHash(_ path: String, _ sha256: String, label: String, deadline: Dispa
         guard let chunk = try file.read(upToCount: 1024 * 1024), !chunk.isEmpty else { break }
         digest.update(data: chunk)
     }
-    let actual = hexDigest(digest.finalize())
-    guard actual == sha256 else { throw RunnerError("\(label) changed. Its SHA-256 differs from this session.") }
+    return hexDigest(digest.finalize())
 }
 
 private func hexDigest(_ digest: SHA256.Digest) -> String {

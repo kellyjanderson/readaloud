@@ -28,9 +28,9 @@ tools/human_acceptance_native/test.sh
   --validate "/absolute/handoff/native-session.json"
 ```
 
-Validation checks session structure, the QA bundle identifier, the candidate
-manifest and App.framework SHA-256 values, and provided files. It does not open
-Read Aloud. For a native smoke run, start the runner with
+Validation checks session structure, the candidate manifest SHA-256 and declared
+revision, the QA bundle identity and launch metadata, the complete bundle file
+inventory, and provided files. It does not open Read Aloud. For a native smoke run, start the runner with
 `--session /absolute/handoff/native-smoke-session.json` and specify a disposable
 results path in that session. Keep the alternate session beside the fixtures so
 its DOCX recovery actions can find the working sample.
@@ -39,6 +39,8 @@ The session grants access to the exact QA bundle, declared local document
 arguments, and the `READALOUD_TTS_ENGINE` and `HF_HUB_OFFLINE` launch settings.
 Read Aloud uses its QA bundle container. Start refuses any already-running copy
 with the same bundle identifier so every case starts with its own arguments.
+Reports preserve a browser tester's checkbox attestation as browser evidence.
+New native launches record closure when macOS reports the process exit.
 Recovery actions verify the provided DOCX bytes and atomically replace only
 `fixtures/imports/recovery-working.docx` in the handoff.
 
