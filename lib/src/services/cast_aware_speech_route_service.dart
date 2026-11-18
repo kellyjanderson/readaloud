@@ -18,12 +18,13 @@ class CastAwareSpeechRouteService {
   static const routingVersion = 'read-aloud-cast-aware-routes-v1';
 
   CastAwareSpeechRouteSet build(CastAwareSpeechRouteInput input) {
-    final narratorAssignment = input.castVoiceAssignments.assignments.firstWhere(
-      (assignment) => assignment.castId == 'cast_narrator',
-      orElse: () => throw StateError(
-        'Cast-aware routing requires a narrator voice assignment.',
-      ),
-    );
+    final narratorAssignment = input.castVoiceAssignments.assignments
+        .firstWhere(
+          (assignment) => assignment.castId == 'cast_narrator',
+          orElse: () => throw StateError(
+            'Cast-aware routing requires a narrator voice assignment.',
+          ),
+        );
     final narratorVoiceId = narratorAssignment.effectiveVoiceId;
     if (narratorVoiceId.isEmpty) {
       throw StateError(
@@ -37,7 +38,8 @@ class CastAwareSpeechRouteService {
             startWordIndex: range.startWordIndex,
             endWordIndex: range.endWordIndex,
             castId: range.castId,
-            voiceId: input.castVoiceAssignments
+            voiceId:
+                input.castVoiceAssignments
                     .forCastId(range.castId)
                     ?.effectiveVoiceId ??
                 narratorVoiceId,
@@ -47,6 +49,7 @@ class CastAwareSpeechRouteService {
         .toList(growable: false);
 
     final mergedRanges = <CastAwareSpeechRange>[];
+    final usedRouteIds = <String>{};
     _RouteSegment? active;
     for (final segment in routeSegments) {
       if (active == null) {
@@ -55,17 +58,20 @@ class CastAwareSpeechRouteService {
       }
       if (_canMerge(active, segment)) {
         active = active.copyWith(
-          segmentIds: <String>[...active.segmentIds, ...segment.segmentIds],
+          segmentIds: <String>{
+            ...active.segmentIds,
+            ...segment.segmentIds,
+          }.toList(),
           endWordIndex: segment.endWordIndex,
           endSegmentId: segment.endSegmentId,
         );
         continue;
       }
-      mergedRanges.add(_toRoute(active));
+      mergedRanges.add(_toRoute(active, usedRouteIds));
       active = segment;
     }
     if (active != null) {
-      mergedRanges.add(_toRoute(active));
+      mergedRanges.add(_toRoute(active, usedRouteIds));
     }
 
     return CastAwareSpeechRouteSet(
@@ -82,9 +88,17 @@ class CastAwareSpeechRouteService {
         left.dialogueSpanId == right.dialogueSpanId;
   }
 
-  CastAwareSpeechRange _toRoute(_RouteSegment routeSegment) {
+  CastAwareSpeechRange _toRoute(
+    _RouteSegment routeSegment,
+    Set<String> usedRouteIds,
+  ) {
+    final baseId = 'route_${routeSegment.segmentIds.first}';
+    var id = baseId;
+    while (!usedRouteIds.add(id)) {
+      id = '${id}_${routeSegment.startWordIndex}';
+    }
     return CastAwareSpeechRange(
-      routeId: 'route_${routeSegment.segmentIds.first}',
+      routeId: id,
       segmentIds: routeSegment.segmentIds,
       startSegmentId: routeSegment.segmentIds.first,
       endSegmentId: routeSegment.endSegmentId,
