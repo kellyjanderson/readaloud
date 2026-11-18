@@ -176,7 +176,7 @@ private struct RunnerView: View {
                 if model.progress != nil || model.quittingApp {
                     ProgressView().controlSize(.small).padding(.trailing, 2)
                 }
-                if let error = model.errorMessage {
+                if let error = model.statusError {
                     Label(error, systemImage: "exclamationmark.circle")
                         .foregroundColor(.primary)
                 } else {

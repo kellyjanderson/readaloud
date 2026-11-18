@@ -10,11 +10,12 @@ final class RunnerModel: ObservableObject {
     @Published private(set) var results: [String: CaseResult] = [:]
     @Published private(set) var progress: String?
     @Published private(set) var notice: String?
-    @Published private(set) var errorMessage: String?
+    @Published private var errorMessage: String?
+    @Published private var quitWarning: String?
     @Published private(set) var saving = false
     @Published private(set) var saveError: String?
     @Published private(set) var owningApp = false
-    @Published private(set) var quittingApp = false
+    @Published private var quitRequest: UUID?
     @Published private(set) var activeID: String?
 
     private let checks = DispatchQueue(label: "readaloud.runner.checks", qos: .userInitiated)
@@ -32,6 +33,11 @@ final class RunnerModel: ObservableObject {
     weak var window: NSWindow?
 
     var busy: Bool { operation != nil }
+    var quittingApp: Bool { quitRequest != nil }
+    var statusError: String? {
+        if let errorMessage, let quitWarning { return "\(errorMessage) \(quitWarning)" }
+        return errorMessage ?? quitWarning
+    }
     var sessionLocked: Bool { busy || activeID != nil }
     var canManageSession: Bool { !sessionLocked && !saving && !promptOpen }
     var canOpenSession: Bool { canManageSession && saveError == nil }
@@ -181,11 +187,10 @@ final class RunnerModel: ObservableObject {
         }
         if launched.isTerminated {
             confirmExit(launched)
-        } else if let launchFailure {
+        } else if launchFailure != nil {
             // The callback points to our application even though launch failed
             // verification. Keep ownership until its normal Quit completes.
             quitTestApp()
-            errorMessage = [launchFailure, errorMessage].compactMap { $0 }.joined(separator: " ")
         }
     }
 
@@ -195,36 +200,41 @@ final class RunnerModel: ObservableObject {
             confirmExit(app)
             return
         }
-        quittingApp = true
-        errorMessage = nil
-        let pid = app.processIdentifier
-        if !app.terminate() {
-            quittingApp = false
-            errorMessage = "Could not request Quit. Switch to Read Aloud and use Command-Q."
-            shouldExit = false
-            return
-        }
-        DispatchQueue.main.asyncAfter(deadline: .now() + 12) { [weak self] in
-            guard let self, let app = self.app, app.processIdentifier == pid, quittingApp else { return }
+        let request = UUID()
+        quitRequest = request
+        quitWarning = nil
+        guard app.terminate() else {
             if app.isTerminated {
                 confirmExit(app)
                 return
             }
-            quittingApp = false
+            quitRequest = nil
+            quitWarning = "Could not request Quit. Switch to Read Aloud and use Command-Q."
             shouldExit = false
-            errorMessage = "Read Aloud is still open. Check its window for a message, then quit it to continue."
+            return
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 12) { [weak self] in
+            guard let self, quitRequest == request, let app = self.app else { return }
+            if app.isTerminated {
+                confirmExit(app)
+                return
+            }
+            quitRequest = nil
+            shouldExit = false
+            quitWarning = "Read Aloud is still open. Check its window for a message, then quit it to continue."
         }
     }
 
     private func confirmExit(_ observed: NSRunningApplication) {
-        guard app?.processIdentifier == observed.processIdentifier, observed.isTerminated,
+        guard app === observed, observed.isTerminated,
               let activeID else { return }
         let recordedLaunch = startedRunningAt != nil
         let mayHaveExitedEarly = !quittingApp && startedRunningAt.map { $0 + 2 > .now() } == true
         processObservation = nil
         app = nil
         owningApp = false
-        quittingApp = false
+        quitRequest = nil
+        quitWarning = nil
         self.activeID = nil
         startedRunningAt = nil
         if mayHaveExitedEarly {
