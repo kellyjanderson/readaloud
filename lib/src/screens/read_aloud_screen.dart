@@ -72,7 +72,7 @@ class _ReadAloudScreenState extends State<ReadAloudScreen> {
       call,
     ) async {
       if (call.method == 'shutdown') {
-        await _controller.characterAnalysis.shutdown();
+        await _controller.shutdownChapterAnalysis();
       }
     });
     super.initState();
@@ -705,6 +705,7 @@ class _ReadAloudScreenState extends State<ReadAloudScreen> {
                       const SizedBox(height: 16),
                       ModernBookNlpSettings(
                         analysis: _controller.characterAnalysis,
+                        setEnabled: _controller.setChapterAnalysisEnabled,
                       ),
                       const SizedBox(height: 12),
                       SizedBox(

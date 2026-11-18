@@ -59,6 +59,7 @@ class ModernBookNlpAnalysis extends ChangeNotifier {
   ModernBookNlpRequest? _pending, _desired, _active;
   Future<void>? _work;
   bool enabled = false, ready = false, _closed = false;
+  bool prepareWhenIdle = true;
   int _windowEpoch = 0, _session = 0, completedWindows = 0;
   String? error;
   Map<String, dynamic>? progress, result;
@@ -87,11 +88,17 @@ class ModernBookNlpAnalysis extends ChangeNotifier {
     enabled = true;
     error = null;
     _pending = _desired;
+    if (!prepareWhenIdle && _pending == null) notifyListeners();
     _kick();
   }
 
   void _kick() {
-    if (_work != null || !enabled || _closed) return;
+    if (_work != null ||
+        !enabled ||
+        _closed ||
+        (!prepareWhenIdle && _pending == null)) {
+      return;
+    }
     _work = _run().whenComplete(() {
       _work = null;
       if (!_closed) notifyListeners();
@@ -186,17 +193,25 @@ class ModernBookNlpAnalysis extends ChangeNotifier {
           if (saved != null && saved.reusable) {
             next = await saved.restoreForRequest(request);
           } else {
-            await _prepare(windowCurrent);
+            final reusable = request.windowPolicy == 'chapter-context-v1'
+                ? await repository?.readReusableContext(request)
+                : null;
             if (!windowCurrent()) continue;
-            next = await _provider!.analyze(
-              request,
-              onProgress: (p) {
-                if (windowCurrent()) {
-                  progress = p;
-                  notifyListeners();
-                }
-              },
-            );
+            if (reusable != null) {
+              next = await reusable.restoreForEditedContext(request);
+            } else {
+              await _prepare(windowCurrent);
+              if (!windowCurrent()) continue;
+              next = await _provider!.analyze(
+                request,
+                onProgress: (p) {
+                  if (windowCurrent()) {
+                    progress = p;
+                    notifyListeners();
+                  }
+                },
+              );
+            }
             if (!windowCurrent()) continue;
             if (repository != null) {
               progress = {
@@ -244,10 +259,17 @@ class ModernBookNlpAnalysis extends ChangeNotifier {
     _windowEpoch++;
     _pending = _desired = null;
     _completedKey = null;
+    error = null;
+    progress = null;
     result = null;
     restoredFromBook = false;
     _embedded.clear();
     if (_work != null) unawaited(_provider?.cancel());
+  }
+
+  /// Chapter scheduling supplies fresh source ownership after a settings stop.
+  void clearDemand() {
+    _pending = _desired = null;
   }
 
   Future<void> stop() async {

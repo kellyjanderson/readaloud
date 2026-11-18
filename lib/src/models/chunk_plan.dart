@@ -4,7 +4,13 @@ import 'tts_artifact.dart';
 import 'cast_aware_speech_route.dart';
 
 /// Chapter analysis can refine the boundary before a source segment.
-enum FishSceneBoundary { continuation, sentence, paragraph, chapter }
+enum FishSceneBoundary {
+  continuation,
+  sentence,
+  paragraph,
+  chapter,
+  sourceRange,
+}
 
 class ChunkPlannerInput {
   const ChunkPlannerInput({

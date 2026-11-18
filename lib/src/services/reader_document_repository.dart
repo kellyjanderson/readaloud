@@ -23,7 +23,7 @@ class ReaderDocumentRepository {
   final String rootPath;
   late final analysis = DocumentAnalysisRepository('$rootPath/analysis');
   static const schemaVersion = 1;
-  static const dependencyVersion = 'rc2-prepared-ranges-character-discovery-v3';
+  static const dependencyVersion = 'prepared-ranges-chapter-joins-v4';
   final Map<String, Object> _writers = {};
   int _generation = 0;
   final Map<String, Future<void>> _manifestRenames = {};
@@ -278,6 +278,8 @@ class ReaderDocumentCache {
           segmentEnd: r['segmentEnd'],
           sourceUnit: r['sourceUnit'],
           sourceLocator: r['sourceLocator'],
+          continuesParagraph: r['continuesParagraph'] == true,
+          continuesWord: r['continuesWord'] == true,
         );
         if (range.sourceStart < 0 ||
             range.sourceEnd < range.sourceStart ||
@@ -381,6 +383,8 @@ class ReaderDocumentCheckpoint {
             'segmentEnd': r.segmentEnd,
             'sourceUnit': r.sourceUnit,
             'sourceLocator': r.sourceLocator,
+            'continuesParagraph': r.continuesParagraph,
+            'continuesWord': r.continuesWord,
           },
           'coverage': publication.coverage.map((v) => v.name).toList(),
           'document': const ReaderDocumentSerializationService()

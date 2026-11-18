@@ -1,15 +1,11 @@
 # Local ModernBookNLP provider qualification
 
-The experimental provider runs the pinned upstream ModernBookNLP joint pipeline
-locally on CPU. Settings → **ModernBookNLP evaluation → Prepare and evaluate**
-opts into background character refinement. Completed, source-matched quotations
-can refine newly built future reading routes. Existing heuristic rules and turn
-boundaries stay intact, explicit voice choices win, and already captured speech
-keeps its original routing. The current work and
-promotion decision belong to [#127](https://github.com/kellyjanderson/readaloud/issues/127),
-under the [Character contract](https://github.com/kellyjanderson/readaloud/issues/124).
-The user reported a significant attribution regression in the preceding slice;
-passing storage/voice tests does not invalidate that report.
+Read Aloud runs the pinned upstream ModernBookNLP joint pipeline locally on
+CPU. **Chapter analysis with ModernBookNLP** in Settings is an opt-in
+preference. Source open begins the pass, and the Fish renderer waits for the
+chapter's admitted evidence before requesting new speech. Explicit cast
+choices and authored speaker metadata retain priority. The release tracks
+startup and listening qualification in [#158](https://github.com/kellyjanderson/readaloud/issues/158).
 
 ## Isolated setup
 
@@ -97,13 +93,11 @@ No character IDs are inferred from model-local integer IDs across windows.
 `ModernBookNlpProvider` uses `dart:io` Process ownership, one admitted request, no
 transport queue, a two-minute analysis deadline (30-minute cancellable setup deadline)
 and bounded stdout/stderr. `ModernBookNlpAnalysis` owns one active window and one
-replaceable latest demand. The controller offers the current prepared range without
-waiting for setup or inference; duplicate range demand is ignored. Document replacement
-revokes old publication before cancellation; Stop and shutdown drain the child.
-The native Quit path waits for both NLP and MLX cleanup. Cancel revokes
-publication before TERM/KILL and exit verification. Close waits for startup/inference
-cleanup. The caller must validate its current work revision before applying a result;
-the provider independently checks the echoed request identity and pinned model.
+replaceable latest demand. The reader walks available chapters with a bounded
+source cursor and submits one analysis input at a time. A seek can prioritize a
+known chapter anchor. Document replacement revokes publication before
+cancellation. Stop and native Quit drain the provider, including pending
+preparation and inference.
 
 The Character adapter consumes the preserved typed entity/alias/coreference,
 pronoun, syntax and quotation outputs. Proper and nominal people, including
@@ -114,86 +108,22 @@ collisions abstain. Linked pronouns provide an implied voice hint. Upstream
 referential estimates (including name priors) remain evidence, not explicit or
 presented gender. Explicit selections, Reset and user corrections are preserved.
 
-The controller builds paragraph-preserving windows at the listening position,
-including imported `.radoc` books. Bounds are 12,288 target UTF-16 units plus at
-most 4,096 preceding units, 32 context segments, and the provider's 4,096-token
-admission limit. Short documents keep one bounded window; long documents use
-positional segment groups, with safe slices for oversized segments. A jump demands
-the new position directly. No neural completion gates first speech.
-Annotation and attribution indexes are built during existing immutable snapshot
-construction. Window binding queries target segments and their spans instead of
-rescanning every dialogue and annotation in a complete book.
-
-The new `paragraph-context-v2` policy distinguishes these requests from S1's
-speech-segment newline layout. Existing v1 candidates survive export/import, but
-changed layout or text requires fresh inference; exact v2 windows reuse saved
-results before provider creation. Single newlines cannot substitute for upstream
-paragraph boundaries: the qualification caught actual City/Rosalina errors when
-paragraphs were collapsed. Multi-token mention projection now takes exact text
-from verified token coordinates, preserving punctuation and source whitespace.
+The chapter policy retains paragraphs and quotations through prepared range
+joins and prefers an intact chapter. Larger inputs split at closed, complete
+units and include bounded neighboring context where available. The working
+repository checks checksummed chapter records before it creates the provider.
+The pinned 16,384 UTF-16 unit and 4,096-token admission limits still apply.
+Legacy positional policy records retain their separate cache identity.
 
 Raw evidence parsing and Character projection run on an isolate within the
 existing supervisor's bounded lifetime. The main-isolate store rejects obsolete
 source/analysis/correction revisions and preserves later selections/Reset. Each
 Character retains complete record/entity references and at most eight recent
 summaries, with up to 64 observations each; full upstream evidence stays in book
-records. New planning contexts can consume up to 128 recently refined dialogue
-spans. Unmatched source boundaries retain fallback routes; matched unknowns stay
-unknown. Source-authored attribution metadata is protected. Captured active
-requests are never restarted or rewritten: refinement becomes effective at the
-next ordinary planning boundary, range, jump or subsequent Play.
-
-Run the fixed **synthetic smoke cases**, not a held-out literary benchmark:
-
-```sh
-.venv/bin/python tools/evaluate_modernbooknlp.py MODEL_ASSET_DIRECTORY --output RECEIPT.json
-.venv/bin/python tools/modernbooknlp_worker_test.py
-READALOUD_MODERNBOOKNLP_ROOT=MODEL_ASSET_DIRECTORY \
-  tools/flutter test test/modernbooknlp_local_inference_test.dart
-```
-
-The last test defaults to this checkout's `.venv`; set
-`READALOUD_MODERNBOOKNLP_PYTHON` to use another isolated runtime interpreter.
-normal Flutter tests skip it when the environment variable is absent. The evaluator
-can use the installed runtime interpreter instead. No model download occurs in tests.
-
-For the native diagnostic probe, build with
-`sh tools/build_macos_release.sh tools/modernbooknlp_app_smoke.dart`, copy the
-resulting bundle into a disposable QA directory, change the copy's bundle ID to
-`com.kellyjanderson.readAloud.residentNlpTest`, then re-sign it with
-`macos/Runner/Release.entitlements` and verify with
-`ruby tools/verify_macos_release_entitlements.rb APP_PATH`.
-Launch the copy's executable with one new sandbox-writable JSON receipt path.
-The probe rejects a production Application Support path. Its QA model cache may
-be populated from existing verified assets; keep every symlink inside that copy.
-It uses the real controller and reading screen with silent speech, evaluates two
-windows, verifies process reuse, then Stops and restarts analysis. After the receipt,
-send normal Quit to that exact app path and verify both app and reported child PIDs
-have exited, including on failure. This is not an audible playback test.
-
-The November 5 sandbox probe passed resident reuse, Stop/restart, unchanged
-attribution and normal-Quit child cleanup. Its first setup rendered hundreds of
-scheduled frames; that establishes continued rendering, not full keyboard/pointer
-responsiveness or launch-to-audio timing. Short synthetic windows took about
-0.6–0.7 seconds with approximately 4.60 GB peak child RSS. The initial bundled
-OpenMP crash and successful replacement are retained separately in #127 evidence.
-
-The first actual Mac run loaded in 11.34 seconds and inferred a short two-speaker
-passage in 0.75 seconds, with approximately 4.61 GB peak process RSS. Cached loading
-was about 5.5 seconds; six subsequent tiny windows took 0.66–0.75 seconds each. The first run passed five of six smoke cases; the unidentified-speaker case raised
-an upstream `IndexError`. After the output-list shape correction, all six passed,
-including explicit unknown preservation. Both receipts remain in the issue evidence.
-Do not equate these measurements with the two-second app startup goal, physical process-tree
-memory, a held-out quality score, or smooth Fish playback.
-
-Remaining promotion gates: independent literary and private City labels, fair
-fallback comparison, explicit correction precedence, bounded rolling entities/context,
-shared memory admission, startup/audio and M3 measurements. Background windows currently
-were diagnostic-only evidence for S1. S2's source-matched future-route integration
-is described above; these early smoke results do not qualify literary accuracy.
-Provider processes are resident, but rolling book-level coreference is not implemented.
-Native UI/storage/quit evidence is recorded in #127 separately from audible acceptance. Initial playback must continue
-through fast discovery while deeper analysis becomes available. Neural refinement remains opt-in in Settings.
+records. Source-matched quotation spans can create or adjust spoken turns.
+Unknown speakers remain unresolved. Source-authored attribution metadata
+retains authority. Future Fish contexts enter synthesis after chapter
+publication, while already captured contexts keep their reading decisions.
 
 ## Saved book analysis
 

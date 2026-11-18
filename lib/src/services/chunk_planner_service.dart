@@ -200,6 +200,7 @@ class ChunkPlannerGraph {
             input.fishSceneBoundaries[segment.segmentId] ??
             _sourceBoundary(parts.last.segment, segment);
         if (boundary == FishSceneBoundary.chapter ||
+            boundary == FishSceneBoundary.sourceRange ||
             (boundary == FishSceneBoundary.paragraph &&
                 wordCount * 2 >= softTarget) ||
             (boundary == FishSceneBoundary.sentence &&

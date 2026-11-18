@@ -241,6 +241,7 @@ class DocumentPreparationSupervisor {
           watchSession: request.watchSession,
           sourcePath: request.sourcePath,
           sourceRevision: request.sourceRevision,
+          alignChapterBoundaries: request.alignChapterBoundaries,
         );
       }
 
@@ -693,6 +694,7 @@ bool _sameRequest(DocumentPreparationRequest a, DocumentPreparationRequest b) =>
     a.revision == b.revision &&
     a.kind == b.kind &&
     a.watchSession == b.watchSession &&
+    a.alignChapterBoundaries == b.alignChapterBoundaries &&
     a.effectiveSourceRevision == b.effectiveSourceRevision;
 
 bool _isSupportedRangeFormat(String? name) => const {
@@ -732,6 +734,7 @@ Future<void> _publishTextRanges(
   var wordStart = 0;
   var segmentStart = 0;
   ReaderDocument? last;
+  DocumentImportUnit? previous;
   String? firstDocumentId;
   final acquisition = _AcquisitionHasher(request);
   var effectiveInput = input;
@@ -766,6 +769,7 @@ Future<void> _publishTextRanges(
             bytes: completeBytes,
             sourceRevision: request.sourceRevision,
             watchSession: request.watchSession,
+            alignChapterBoundaries: request.alignChapterBoundaries,
           ),
           input.pdf,
           input.reply,
@@ -803,6 +807,12 @@ Future<void> _publishTextRanges(
           completeSourceFingerprint: completeSourceFingerprint,
         ),
       );
+      final followsProse =
+          previous != null &&
+          previous.locator == unit.locator &&
+          (unit.type == ReaderDocumentType.plainText ||
+              unit.type == ReaderDocumentType.pdf);
+      final previousText = previous?.text ?? '';
       final publication = _publication(
         request,
         document,
@@ -813,6 +823,13 @@ Future<void> _publishTextRanges(
         sourceStart + text.length,
         context.isLast,
         sourceLocator: unit.locator,
+        continuesParagraph:
+            followsProse &&
+            !RegExp(r'\n[ \t]*\n[ \t]*$').hasMatch(previousText),
+        continuesWord:
+            followsProse &&
+            !RegExp(r'\s$').hasMatch(previousText) &&
+            !RegExp(r'^\s').hasMatch(text),
       );
       input.reply.send(publication);
       if (!await creditIterator.moveNext() ||
@@ -824,6 +841,7 @@ Future<void> _publishTextRanges(
       segmentStart += document.speechDocument.segments.length;
       firstDocumentId ??= document.displayDocument.documentId;
       last = document;
+      previous = unit;
     }
     if (last == null) {
       throw StateError('No readable text was found in the source.');
@@ -865,6 +883,8 @@ DocumentPreparationPublication _publication(
   int sourceEnd,
   bool isLast, {
   String? sourceLocator,
+  bool continuesParagraph = false,
+  bool continuesWord = false,
 }) {
   const coverage = {
     PreparationStage.acquisition,
@@ -881,6 +901,8 @@ DocumentPreparationPublication _publication(
       sourceStart: sourceStart,
       sourceEnd: sourceEnd,
       sourceLocator: sourceLocator,
+      continuesParagraph: continuesParagraph,
+      continuesWord: continuesWord,
       wordStart: wordStart,
       wordEnd: wordStart + document.wordCount,
       segmentStart: segmentStart,
@@ -961,6 +983,7 @@ Stream<DocumentImportUnit> _importUnits(
   } else if (request.kind == DocumentPreparationKind.bytes) {
     yield* importer.streamUnits(
       fileName: request.fileName!,
+      alignChapterBoundaries: request.alignChapterBoundaries,
       sourcePath: request.bytes == null ? request.sourcePath : null,
       bytes: request.bytes,
       onAcquiredBytes: acquisition.addBytes,
@@ -971,6 +994,7 @@ Stream<DocumentImportUnit> _importUnits(
   } else {
     await for (final text in boundedProseUnits(
       _sourceText(request, acquisition),
+      alignChapterBoundaries: request.alignChapterBoundaries,
     )) {
       yield DocumentImportUnit(text: text);
     }

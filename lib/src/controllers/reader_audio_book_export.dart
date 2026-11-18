@@ -295,7 +295,14 @@ extension ReaderAudioBookPersistence on ReaderController {
               );
           members[member] = file;
           ranges.add(
-            RadocPreparedRange(member: member, startWord: start, endWord: end),
+            RadocPreparedRange(
+              member: member,
+              startWord: start,
+              endWord: end,
+              sourceLocator: range?.range.sourceLocator,
+              continuesParagraph: range?.range.continuesParagraph ?? false,
+              continuesWord: range?.range.continuesWord ?? false,
+            ),
           );
           totalWords = end;
         }

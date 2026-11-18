@@ -33,6 +33,7 @@ class DocumentPreparationRequest {
     this.watchSession,
     this.sourcePath,
     this.sourceRevision,
+    this.alignChapterBoundaries = false,
   }) : bytes = bytes == null
            ? null
            : Uint8List.fromList(bytes).asUnmodifiableView();
@@ -46,9 +47,13 @@ class DocumentPreparationRequest {
   final int? watchSession;
   final String? sourcePath;
   final String? sourceRevision;
+  final bool alignChapterBoundaries;
 
   String get operationId => "$ownerId:$revision";
   String get effectiveSourceRevision => sourceRevision ?? operationId;
+  String get preparedCacheKey => alignChapterBoundaries
+      ? '$effectiveSourceRevision:chapters'
+      : effectiveSourceRevision;
 
   /// Publications echo identity, never the book-sized intake payload.
   DocumentPreparationRequest get identityOnly => DocumentPreparationRequest(
@@ -59,6 +64,7 @@ class DocumentPreparationRequest {
     sourcePath: sourcePath,
     sourceRevision: sourceRevision,
     watchSession: watchSession,
+    alignChapterBoundaries: alignChapterBoundaries,
   );
 }
 
@@ -318,11 +324,14 @@ class PreparedDocumentRange {
     required this.segmentEnd,
     this.sourceUnit = 'utf16',
     this.sourceLocator,
+    this.continuesParagraph = false,
+    this.continuesWord = false,
   });
   final int sourceStart;
   final int sourceEnd;
   final String sourceUnit;
   final String? sourceLocator;
+  final bool continuesParagraph, continuesWord;
   final int wordStart;
   final int wordEnd;
   final int segmentStart;

@@ -2,6 +2,7 @@ import '../models/engine_session.dart';
 import '../models/reader_operation.dart';
 import '../models/character.dart';
 import '../services/modernbooknlp_character_adapter.dart';
+import '../services/modernbooknlp_chapters.dart';
 import '../services/modernbooknlp_window.dart';
 import '../services/character_route_refinement.dart';
 import '../services/document_analysis_record.dart';
@@ -80,6 +81,7 @@ import '../models/speech_annotation.dart';
 
 part 'reader_audio_book.dart';
 part 'reader_audio_book_export.dart';
+part 'reader_chapter_analysis.dart';
 
 class ReaderController extends ChangeNotifier {
   static const int preparedRangeCapacity = 8;
@@ -135,7 +137,9 @@ class ReaderController extends ChangeNotifier {
        _enablePlatformIntakeChannels = enablePlatformIntakeChannels,
        _document = ReaderDocument.sample(),
        _renderedScenes = renderedSceneRepository {
-    this.characterAnalysis.onResult = _acceptCharacterAnalysis;
+    this.characterAnalysis.prepareWhenIdle = false;
+    this.characterAnalysis.onResult = _acceptChapterAnalysis;
+    this.characterAnalysis.addListener(_onChapterAnalysisChanged);
   }
 
   final ModernBookNlpAnalysis characterAnalysis;
@@ -149,111 +153,48 @@ class ReaderController extends ChangeNotifier {
   final Lock _renderedScenePublicationLock = Lock();
   Future<void>? _renderedScenePublication;
   void _notifyAudioBookChanged() => notifyListeners();
-  ModernBookNlpWindow? _offeredAnalysisWindow;
-  ModernBookNlpRequest? _offeredAnalysisRequest;
+  void _notifyChapterAnalysisChanged() => notifyListeners();
+  ModernBookNlpChapters? _chapterCursor;
+  ModernBookNlpChapters? _priorityChapterCursor;
+  (int, int)? _nextChapterPriority;
+  ModernBookNlpChapterWindow? _chapterPending;
+  ModernBookNlpRequest? _chapterRequest;
+  Future<void>? _chapterDriver;
+  Completer<void> _chapterCancellation = Completer<void>();
+  Completer<void> _chapterSourceCancellation = Completer<void>();
+  Completer<void> _chapterAnalysisChanged = Completer<void>();
+  String? _chapterScanFailure;
+  bool _chapterScanComplete = false;
+  bool _useLegacyPortableAnalysis = false;
+  String? _legacyAnalysisWindowId;
+  int _completedChapterCount = 0;
+  final _chapterSegments = <String>{};
+  final _readyChapterSegments = <String>{};
+  final _chapterQuoteRoutes = <String, List<CharacterDialogueReference>>{};
+  final _chapterProtectedSpans = <String>{};
+  final _fishSceneBoundaries = <String, FishSceneBoundary>{};
+  final _chapterPreferenceWrites = Lock();
   String? _analysisContentSource;
-  int? _analysisRangeSequence;
-  List<SpeechSegment> _analysisTail = const [], _analysisLeading = const [];
-  final Map<String, List<CharacterDialogueReference>> _futureCharacterRoutes =
-      {};
   String get _characterSourceRevision =>
       _analysisContentSource ??
       _activeSourceRevision ??
       _voicePreferenceDocumentId;
 
-  void _offerCharacterAnalysis() {
-    characterAnalysis.repository ??= _preparation.repository?.analysis;
-    final active = _activePreparedRange;
-    final range = active != null && active.request.revision == _documentRevision
-        ? active
-        : _preparedRanges.firstOrNull;
-    final document = range?.fragment ?? _document;
-    final position = range == null || identical(range, active)
-        ? _currentWordIndex
-        : 0;
-    if (_offeredAnalysisRequest?.analysisRevision == _documentRevision &&
-        _analysisRangeSequence == range?.sequence &&
-        _offeredAnalysisWindow?.coversPosition(document, position) == true) {
-      return;
+  Future<void> setChapterAnalysisEnabled(bool enabled) async {
+    if (enabled) {
+      characterAnalysis.enable();
+    } else {
+      unawaited(characterAnalysis.stop());
     }
-    if (_analysisRangeSequence != range?.sequence) {
-      _analysisLeading =
-          range != null && range.sequence == (_analysisRangeSequence ?? -2) + 1
-          ? _analysisTail
-          : const [];
-      _analysisRangeSequence = range?.sequence;
-      var units = 0;
-      final tail = <SpeechSegment>[];
-      for (final s in document.speechDocument.segments.reversed.take(32)) {
-        if (units + s.normalizedText.length + 1 > 4096) break;
-        tail.insert(0, s);
-        units += s.normalizedText.length + 1;
-      }
-      _analysisTail = List.unmodifiable(tail);
+    try {
+      await _chapterPreferenceWrites.synchronized(
+        () => _preferencesService.saveChapterAnalysisEnabled(enabled),
+      );
+    } catch (error) {
+      if (_disposed) return;
+      _statusMessage = 'Could not save the chapter analysis preference: $error';
+      notifyListeners();
     }
-    final window = ModernBookNlpWindow.at(
-      document,
-      wordIndex: position,
-      previous: _analysisLeading,
-    );
-    if (window == null) return;
-    final sequence = ++_characterDeltaSequence;
-    final request = ModernBookNlpRequest(
-      requestId: '$_preparationOwner-$_documentRevision-$sequence',
-      ownerId: _preparationOwner,
-      workId: _voicePreferenceDocumentId,
-      sourceRevision: _characterSourceRevision,
-      analysisRevision: _documentRevision,
-      sequence: sequence,
-      text: window.text,
-      windowPolicy: 'paragraph-context-v2',
-    );
-    _offeredAnalysisWindow = window;
-    _offeredAnalysisRequest = request;
-    characterAnalysis.offer(request);
-  }
-
-  Future<void> _acceptCharacterAnalysis(
-    ModernBookNlpRequest request,
-    Map<String, dynamic> result,
-    bool Function() current,
-  ) async {
-    bool owned() =>
-        current() &&
-        !_disposed &&
-        request.analysisRevision == _documentRevision &&
-        request.requestId == _offeredAnalysisRequest?.requestId;
-    if (!owned()) return;
-    final window = _offeredAnalysisWindow!;
-    final registry = _characters.registry(
-      _voicePreferenceDocumentId,
-      documentId: _document.displayDocument.documentId,
-    );
-    // Parsing raw TSV/JSON, hashing and reconciliation stay off the UI isolate.
-    // This awaited consumer shares the supervisor's one-active/latest-pending
-    // lifetime. User selections/corrections are re-read by the store at apply.
-    final delta = await projectModernBookNlpCharacters(
-      request,
-      result,
-      registry,
-      window,
-    );
-    if (!owned() || !_characters.apply(delta)) return;
-    _refreshCharacterProjection();
-    for (final ref in delta.dialogues) {
-      _futureCharacterRoutes.remove(ref.dialogueSpanId);
-    }
-    for (final ref in delta.dialogues) {
-      if (window.protectedSpanIds.contains(ref.dialogueSpanId)) continue;
-      (_futureCharacterRoutes[ref.dialogueSpanId] ??= []).add(ref);
-    }
-    while (_futureCharacterRoutes.length > 128) {
-      _futureCharacterRoutes.remove(_futureCharacterRoutes.keys.first);
-    }
-    // Do not restart, revoice or replace a captured active planning context.
-    // The next ordinary planning request resolves newly admitted future routes.
-    unawaited(_persistPreferences());
-    notifyListeners();
   }
 
   DocumentPreparationSupervisor _preparation;
@@ -490,7 +431,7 @@ class ReaderController extends ChangeNotifier {
   Future<void> cancelDocumentPreparation() async {
     if (_disposed || (!_isImporting && _preparationComplete)) return;
     ++_documentRevision;
-    ++_playbackIntent;
+    _advancePlaybackIntent();
     _preparation.cancel();
     _planning.cancel();
     _operations.cancelOwner(OperationOwnerKind.document);
@@ -602,7 +543,7 @@ class ReaderController extends ChangeNotifier {
       if (sequence <= _publicationSequence) {
         final repository = _preparation.repository;
         final cache = await repository?.open(
-          sourceKey: request.effectiveSourceRevision,
+          sourceKey: request.preparedCacheKey,
           sourceRevision: request.effectiveSourceRevision,
         );
         if (!current()) return null;
@@ -786,6 +727,13 @@ class ReaderController extends ChangeNotifier {
   int? _assignmentReplayWord;
   bool _applyingVoiceAssignments = false;
   int _playbackIntent = 0;
+  Completer<void> _playbackCancellation = Completer<void>();
+  int _advancePlaybackIntent() {
+    _playbackCancellation.complete();
+    _playbackCancellation = Completer<void>();
+    return ++_playbackIntent;
+  }
+
   bool _playbackStartPending = false;
   Future<void>? _playbackStartDriver;
   Future<void>? _startupStop;
@@ -826,7 +774,7 @@ class ReaderController extends ChangeNotifier {
     }
     _applyingVoiceAssignments = true;
     _explicitVoiceRebuffer = true;
-    final applyIntent = ++_playbackIntent;
+    final applyIntent = _advancePlaybackIntent();
     final documentRevision = _documentRevision;
     _resumeAfterPreparation = true;
     _currentWordIndex = _assignmentReplayWord!;
@@ -905,7 +853,7 @@ class ReaderController extends ChangeNotifier {
         _currentWordIndex = _assignmentReplayWord!;
         _explicitVoiceRebuffer = true;
       }
-      ++_playbackIntent;
+      _advancePlaybackIntent();
       _invalidateResourceBindings();
       _playbackStartPending = true;
       unawaited(_stopSupersededStartup());
@@ -963,14 +911,9 @@ class ReaderController extends ChangeNotifier {
             await retiredBook.dispose();
           });
     }
-    characterAnalysis.invalidateWindow();
-    _offeredAnalysisWindow = null;
-    _offeredAnalysisRequest = null;
+    _resetChapterAnalysis();
     _analysisContentSource = null;
-    _analysisRangeSequence = null;
-    _analysisTail = _analysisLeading = const [];
-    _futureCharacterRoutes.clear();
-    ++_playbackIntent;
+    _advancePlaybackIntent();
     _playbackStartPending = false;
     _invalidateResourceBindings();
     _preparation.cancel();
@@ -1093,13 +1036,14 @@ class ReaderController extends ChangeNotifier {
       sourcePath: streamedPath,
       sourceRevision: sourceRevision,
       watchSession: watchSession,
+      alignChapterBoundaries: characterAnalysis.enabled,
     );
     _activePreparationRequest = request.identityOnly;
     final repository = _preparation.repository;
     final cache = repository == null || sourceRevision == null
         ? null
         : await repository.open(
-            sourceKey: sourceRevision,
+            sourceKey: request.preparedCacheKey,
             sourceRevision: sourceRevision,
           );
     _requireRevision(revision);
@@ -1128,7 +1072,7 @@ class ReaderController extends ChangeNotifier {
     _recordPreparationOutcome(request, OperationState.queued);
     final completion = _preparation.prepareRanges(
       request,
-      cacheKey: sourceRevision,
+      cacheKey: sourceRevision == null ? null : request.preparedCacheKey,
       onIdentityMigration: (migration) async {
         if (!current()) return;
         await reconcileDocumentIdentity(migration);
@@ -1217,7 +1161,6 @@ class ReaderController extends ChangeNotifier {
         _recordPreparationOutcome(request, OperationState.running);
         _preparedWordCount = publication.range.wordEnd;
         _preparedRanges.add(publication);
-        _offerCharacterAnalysis();
         _signalRanges();
         for (final progress in publication.progress) {
           if (publication.coverage.contains(progress.stage) ||
@@ -1691,6 +1634,7 @@ class ReaderController extends ChangeNotifier {
     _voxtralQuantizationBits = preferences.voxtralQuantizationBits;
     _runningVoxtralQuantizationBits = _voxtralQuantizationBits;
     if (_disposed) return;
+    if (preferences.chapterAnalysisEnabled) characterAnalysis.enable();
     _hasExplicitEngineChoice = preferences.hasExplicitTtsEngineChoice;
     _selectedTtsEngineId = _hasExplicitEngineChoice
         ? preferences.ttsEngineId
@@ -1907,7 +1851,7 @@ class ReaderController extends ChangeNotifier {
       _statusMessage = message;
       // A terminal error ends this intent, including late preparation/ready
       // callbacks. Play must create a new attempt, not toggle stale buffering.
-      ++_playbackIntent;
+      _advancePlaybackIntent();
       _resumeAfterPreparation = false;
       _pendingPlayUntilReady = false;
       _playbackStartPending = false;
@@ -2528,7 +2472,7 @@ class ReaderController extends ChangeNotifier {
     if (_audioBook != null && isDocumentPrepared) {
       _audioBook?.cancelRender();
       _resumeAfterPreparation = true;
-      ++_playbackIntent;
+      _advancePlaybackIntent();
       _playbackStartPending = true;
       await _drivePlaybackStarts();
       return;
@@ -2567,7 +2511,7 @@ class ReaderController extends ChangeNotifier {
     if (voiceAssignmentState.requestedDefaultVoiceId == null) {
       _captureRequestedVoiceChoices(initialBuffering: true);
     }
-    ++_playbackIntent;
+    _advancePlaybackIntent();
     _playbackStartPending = true;
     await _drivePlaybackStarts();
   }
@@ -2635,6 +2579,11 @@ class ReaderController extends ChangeNotifier {
       notifyListeners();
       return;
     }
+    await _awaitChapterAnalysis(
+      _document,
+      current: current,
+      cancelled: _playbackCancellation.future,
+    );
     if (_preparedAssignmentRevision != assignmentRevision ||
         _resourceBindings.any(
           (binding) =>
@@ -2802,6 +2751,11 @@ class ReaderController extends ChangeNotifier {
               'Prepared range has missing or stale source coverage.',
             );
           }
+          await _awaitChapterAnalysis(
+            range.fragment,
+            current: current,
+            cancelled: cancelled,
+          );
           final context = _planningContext(
             fromStart: true,
             document: range.fragment,
@@ -2875,7 +2829,6 @@ class ReaderController extends ChangeNotifier {
               _document = range.fragment;
               _activePreparedRange = range;
               _currentWordIndex = 0;
-              _offerCharacterAnalysis();
               _utteranceStartOffset = 0;
               _currentPlanningContext = context;
               _currentChunkPlan = window.plan;
@@ -2904,7 +2857,7 @@ class ReaderController extends ChangeNotifier {
         _pausedVoiceReplayAnchor = anchor;
       }
     }
-    ++_playbackIntent;
+    _advancePlaybackIntent();
     _planning.cancel();
     _playbackStartPending = false;
     _resumeAfterPreparation = false;
@@ -2937,8 +2890,8 @@ class ReaderController extends ChangeNotifier {
     );
     final snappedTarget = _snapWordIndexToSegmentStart(targetWord.toInt());
     _currentWordIndex = snappedTarget;
-    _offeredAnalysisWindow = null;
-    _offerCharacterAnalysis();
+    _offerLegacyPortableAnalysis();
+    _prioritizeChapterAtCurrentPosition();
     _playbackEndedAtDocumentEnd = false;
     _activeSpokenChunkId = null;
     _resetFollowerProgressSynchronization();
@@ -3114,7 +3067,7 @@ class ReaderController extends ChangeNotifier {
         _playbackActivity.isBuffering ||
         _playbackState == ReaderPlaybackPrimaryState.bufferingFirstChunk;
     if (restart) {
-      ++_playbackIntent;
+      _advancePlaybackIntent();
       await _ttsEngine.stop();
       _isPlaying = false;
     }
@@ -3226,7 +3179,7 @@ class ReaderController extends ChangeNotifier {
     ++_engineEpoch;
     ++_startupRevision;
     ++_previewRevision;
-    ++_playbackIntent;
+    _advancePlaybackIntent();
     _pendingPlayUntilReady = false;
     if (!preserveBookPlay) _resumeAfterPreparation = false;
     _playbackStartPending = false;
@@ -3518,6 +3471,12 @@ class ReaderController extends ChangeNotifier {
       if (exportAssignmentRevision != voiceAssignmentState.requestedRevision) {
         throw const PlanningCancelled();
       }
+      exportStage = 'chapter analysis';
+      await _awaitChapterAnalysis(
+        document,
+        current: () => current() && ownsPublicationIntent(),
+        completeBook: true,
+      );
       if (!isResourcesReady ||
           _preparedAssignmentRevision != exportAssignmentRevision ||
           !_hasCompleteDocumentSnapshot) {
@@ -3739,7 +3698,7 @@ class ReaderController extends ChangeNotifier {
           request != null &&
           repository != null) {
         final cache = await repository.open(
-          sourceKey: request.effectiveSourceRevision,
+          sourceKey: request.preparedCacheKey,
           sourceRevision: request.effectiveSourceRevision,
         );
         requireCurrent();
@@ -3806,7 +3765,7 @@ class ReaderController extends ChangeNotifier {
       throw StateError('A complete prepared checkpoint is required');
     }
     final cache = await repository.open(
-      sourceKey: request.effectiveSourceRevision,
+      sourceKey: request.preparedCacheKey,
       sourceRevision: request.effectiveSourceRevision,
     );
     _requireRevision(revision);
@@ -4155,17 +4114,21 @@ class ReaderController extends ChangeNotifier {
     _finalizeActiveSpokenChunk();
     _document = document;
     characterAnalysis.restoreRecords(document.analysisRecords);
+    _useLegacyPortableAnalysis =
+        restoreCharacters &&
+        !isDramaEngine(_engineId()) &&
+        document.analysisRecords.any(
+          (r) => r.windowPolicy == 'paragraph-context-v2',
+        ) &&
+        !document.analysisRecords.any(
+          (r) => r.windowPolicy == 'chapter-context-v1',
+        );
     _analysisContentSource = restoreCharacters
         ? document.analysisRecords
               .where((r) => r.reusable)
               .firstOrNull
               ?.sourceRevision
         : null;
-    if (restoreCharacters ||
-        _offeredAnalysisRequest?.sourceRevision != _characterSourceRevision) {
-      _offeredAnalysisWindow = null;
-      _offeredAnalysisRequest = null;
-    }
     _activePreparedRange = _preparedRanges
         .where((range) => identical(range.fragment, document))
         .firstOrNull;
@@ -4226,8 +4189,9 @@ class ReaderController extends ChangeNotifier {
       _statusMessage =
           'Loaded ${document.title}, but no readable text was extracted yet.';
     }
-    _offerCharacterAnalysis();
     notifyListeners();
+    _startChapterAnalysis();
+    _offerLegacyPortableAnalysis();
     _resumePendingPlay();
   }
 
@@ -4348,13 +4312,15 @@ class ReaderController extends ChangeNotifier {
       currentSectionMode: _sectionModeForCurrentPosition(),
       discourseMode: _discourseModeForCurrentPosition(),
     );
-    _offerCharacterAnalysis();
     _scheduleResumePersistence();
     _queueFollowerProgressUpdate(update);
   }
 
   @override
   void dispose() {
+    characterAnalysis.removeListener(_onChapterAnalysisChanged);
+    _resetChapterAnalysis();
+    _advancePlaybackIntent();
     characterAnalysis.dispose();
     unawaited(_planning.shutdown());
     unawaited(_exportPlanner?.shutdown());
@@ -4965,12 +4931,18 @@ class ReaderController extends ChangeNotifier {
     ++_watchSession;
     await _cancelLiveReadWatch();
     await _preparation.shutdown();
-    await characterAnalysis.shutdown();
+    await shutdownChapterAnalysis();
     await _sourceRevisionWork;
     await _documentExportWork;
     await _audioBookRetirement;
     await _renderedScenes?.cancelAndDrain();
     await _renderedScenePublication;
+  }
+
+  Future<void> shutdownChapterAnalysis() async {
+    _resetChapterAnalysis();
+    await characterAnalysis.shutdown();
+    await _chapterDriver;
   }
 
   void _clearDocumentLoadStage() {
@@ -5066,6 +5038,8 @@ class ReaderController extends ChangeNotifier {
         : document.segmentForWordIndex(_currentWordIndex);
     if (voiceId == null || start == null) return null;
     final profile = _selectedPronunciationProfile(voiceId: voiceId);
+    final useChapterAnalysis =
+        characterAnalysis.enabled && isDramaEngine(_engineId());
     final assignments =
         (multiVoice ?? _isMultiVoiceEnabled) && _voices.isNotEmpty
         ? _characters.resolve(
@@ -5094,12 +5068,25 @@ class ReaderController extends ChangeNotifier {
         mergedPronunciationResources: _mergedPronunciationResources(profile),
       ),
       engineVersion: _engineVersion(),
+      fishSceneBoundaries: {
+        if (useChapterAnalysis)
+          for (final segment in document.speechDocument.segments)
+            segment.segmentId: ?_fishSceneBoundaries[segment.segmentId],
+      },
       routes: assignments == null
           ? null
           : CastAwareSpeechRouteInput(
               documentVoiceAttribution: refineCharacterRoutes(
                 document.documentVoiceAttribution,
-                _futureCharacterRoutes.values.expand((refs) => refs),
+                [
+                  if (useChapterAnalysis)
+                    for (final segment in document.speechDocument.segments)
+                      ...?_chapterQuoteRoutes[segment.segmentId],
+                ],
+                speechDocument: useChapterAnalysis
+                    ? document.speechDocument
+                    : null,
+                protectedSpanIds: _chapterProtectedSpans,
               ),
               castVoiceAssignments: assignments,
             ),
