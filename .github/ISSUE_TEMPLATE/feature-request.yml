@@ -3,11 +3,12 @@ description: Propose a new capability or enhancement.
 title: "[Feature]: "
 labels:
   - enhancement
+  - 'kind:design'
 body:
   - type: markdown
     attributes:
       value: |
-        Thanks for proposing a feature.
+        New feature and architecture proposals enter the unassigned ACD pool. Leave the milestone empty until version planning or explicit release assignment.
 
         This issue is the working design authority. Use native sub-issues for implementation slices; do not create local planning files.
   - type: textarea

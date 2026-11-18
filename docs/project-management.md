@@ -9,6 +9,12 @@ Working design and planning live in [GitHub Issues](https://github.com/kellyjand
 - [Existing MLX/full-document implementation](https://github.com/kellyjanderson/readaloud/issues/109), [RC2 product requirements](https://github.com/kellyjanderson/readaloud/issues/83), and [outstanding integrated acceptance](https://github.com/kellyjanderson/readaloud/issues/91).
 - [Release compliance](https://github.com/kellyjanderson/readaloud/issues/55).
 
+## Unassigned design pool
+
+During a feature or architecture discussion, capture each distinct proposal as a GitHub ACD with its outcome, boundaries, alternatives or open questions, and acceptance evidence. Search existing ACDs first. Label it `kind:design`, use Proposed on the Project and leave its milestone empty. This query is the [unassigned ACD pool](https://github.com/kellyjanderson/readaloud/issues?q=is%3Aissue%20is%3Aopen%20label%3Akind%3Adesign%20no%3Amilestone). A release-independent spike or test tool can have a worker while its version remains unassigned.
+
+During version planning, assign selected ACDs to that release's milestone and link its release issue. When the user explicitly selects the current release, do that directly and reconcile the release scope. Keep related proposals in the pool until selected. A milestone records version membership. Dispatch and acceptance use their separate ownership and evidence records.
+
 ## Earlier implementation evidence
 
 - [Prepared-document runtime design](https://github.com/kellyjanderson/readaloud/issues/48); accepted direction R1 is linked in its decision comment.
