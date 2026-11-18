@@ -10,6 +10,21 @@ class NativeEditMenuTest < Minitest::Test
     refute_nil helper
 
     harness = <<~'SWIFT'
+      final class PasteResponder: NSResponder {
+        var pasteInvocations = 0
+
+        @objc func paste(_ sender: Any?) {
+          pasteInvocations += 1
+        }
+      }
+
+      final class ProbeApplication: NSApplication {
+        // AppKit can resolve the first responder in a window that never orders on screen.
+        var probeWindow: NSWindow?
+        override var keyWindow: NSWindow? { probeWindow }
+        override var mainWindow: NSWindow? { probeWindow }
+      }
+
       @MainActor
       func readerMenu() -> NSMenu {
         let menu = NSMenu()
@@ -31,8 +46,9 @@ class NativeEditMenuTest < Minitest::Test
       }
 
       MainActor.assumeIsolated {
-        let app = NSApplication.shared
+        let app = ProbeApplication.shared as! ProbeApplication
         app.setActivationPolicy(.prohibited)
+        app.finishLaunching()
         let initial = readerMenu()
         let existingEdit = NSMenuItem(title: "Edit", action: nil, keyEquivalent: "")
         existingEdit.submenu = NSMenu(title: "Edit")
@@ -61,6 +77,16 @@ class NativeEditMenuTest < Minitest::Test
           precondition(command.keyEquivalentModifierMask ==
             (command.title == "Redo" ? [.command, .shift] : [.command]))
         }
+
+        let window = NSWindow(contentRect: .zero, styleMask: .borderless, backing: .buffered, defer: true)
+        let responder = PasteResponder()
+        app.probeWindow = window
+        precondition(window.makeFirstResponder(responder))
+        let commandV = NSEvent.keyEvent(with: .keyDown, location: .zero, modifierFlags: .command,
+          timestamp: ProcessInfo.processInfo.systemUptime, windowNumber: 0, context: nil,
+          characters: "v", charactersIgnoringModifiers: "v", isARepeat: false, keyCode: 9)!
+        precondition(current.performKeyEquivalent(with: commandV))
+        precondition(responder.pasteInvocations == 1)
 
         let another = readerMenu()
         app.mainMenu = another
