@@ -210,7 +210,16 @@ function renderHighlight(scroll = false) {
     fragment.append(mark);
   }
   preview.replaceChildren(fragment);
-  if (scroll) preview.querySelector('.selected[data-dialogue]')?.scrollIntoView({ block: 'nearest' });
+  if (scroll) {
+    const target = preview.querySelector('.selected[data-dialogue]');
+    if (!target) return;
+    const panel = byId('source-panel');
+    const viewport = panel.getBoundingClientRect();
+    const quote = target.getBoundingClientRect();
+    if (quote.top < viewport.top || quote.bottom > viewport.bottom) {
+      panel.scrollTop += quote.top - viewport.top - 8;
+    }
+  }
 }
 
 function renderResult() {

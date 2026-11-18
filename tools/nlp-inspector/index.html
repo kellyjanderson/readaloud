@@ -32,7 +32,7 @@
   #preview { white-space: pre-wrap; font: 17px/1.7 Georgia, serif; padding: 10px; }
   mark { color: inherit; background: transparent; padding: 1px 0; }
   mark.selected { outline: 2px solid #185641; }
-  fieldset { border: 1px solid #b9c7be; border-radius: 6px; margin: 10px 0; padding: 8px 10px; }
+  fieldset { min-inline-size: 0; overflow-wrap: anywhere; border: 1px solid #b9c7be; border-radius: 6px; margin: 10px 0; padding: 8px 10px; }
   #layers label { display: inline-flex; align-items: center; gap: 5px; min-height: 30px; }
   #speaker-key { display: flex; flex-wrap: wrap; gap: 6px 12px; font-size: 14px; }
   .swatch { display: inline-block; width: 15px; height: 13px; border-radius: 2px; border: 1px solid #657c70; border-bottom-width: 3px; margin-right: 4px; }
@@ -66,13 +66,13 @@
         <button id="next" disabled>Next passage</button>
         <span id="position" class="muted"></span>
       </div>
-      <div class="panel" id="source-panel">
+      <fieldset id="legend" hidden><legend>Highlight key</legend><div id="layers" class="toolbar"></div><div id="speaker-key"></div></fieldset>
+      <div class="panel" id="source-panel" tabindex="0" aria-label="Source passage">
         <details id="editor" open><summary>Edit or select passage</summary>
         <label for="source">Passage text</label>
         <textarea id="source" spellcheck="false" placeholder="Paste text here."></textarea>
         <p class="muted">Select part of the passage to analyze only that text.</p>
         </details>
-        <fieldset id="legend" hidden><legend>Highlight key</legend><div id="layers" class="toolbar"></div><div id="speaker-key"></div></fieldset>
         <div id="preview"></div>
       </div>
     </section>
