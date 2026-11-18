@@ -49,6 +49,11 @@ signal, while the document revision owns analysis. Cancelling Play releases
 the transport wait and leaves the analysis pass eligible to continue. Source
 replacement revokes publication for both owners.
 
+Before a model load and at its readiness check, MLX can resample an incomplete
+process tree for up to 2.5 seconds while a starting child reports its first
+footprint. The existing policy still requires a complete, fresh snapshot.
+Active-runtime monitoring continues to use the immediate sample.
+
 The planner uses one admitted quote and boundary projection for ordinary
 playback and WAV export. It keeps chapter and prepared-range edges hard so
 export does not combine requests across boundaries the range reader cannot
