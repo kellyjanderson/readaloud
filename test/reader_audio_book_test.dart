@@ -1141,7 +1141,7 @@ void main() {
               .whenComplete(() => secondDone = true);
           final secondResult = expectLater(
             second,
-            ['cancel', 'shutdown'].contains(outcome)
+            outcome == 'shutdown'
                 ? throwsA(isA<PlanningCancelled>())
                 : completes,
           );
@@ -1187,10 +1187,7 @@ void main() {
             initialCalls + (['cancel', 'shutdown'].contains(outcome) ? 1 : 2),
           );
           owner.release.complete();
-          expect(
-            await exporting,
-            ['cancel', 'shutdown'].contains(outcome) ? isNull : isNotNull,
-          );
+          expect(await exporting, outcome == 'shutdown' ? isNull : isNotNull);
           await c.pausePlayback();
         } finally {
           if (!barrier.release.isCompleted) barrier.release.complete();
@@ -1565,13 +1562,24 @@ void main() {
         }
         c.showStatusMessage('New owner status');
         owner.release.complete();
-        expect(await exporting, isNull);
+        final capturedWavContinues = ['voice', 'rate'].contains(terminal);
+        expect(await exporting, capturedWavContinues ? isNotNull : isNull);
         expect(
           c.feedbackOperations
               .where((op) => op.scope == 'Save audio')
               .last
               .state,
-          OperationState.cancelled,
+          capturedWavContinues
+              ? OperationState.succeeded
+              : OperationState.cancelled,
+        );
+        expect(
+          c.feedbackOperations
+              .where((op) => op.scope == 'Save audio')
+              .last
+              .completedUnits,
+          1,
+          reason: 'Skipped old-intent callbacks are not persisted scenes.',
         );
         if (terminal != 'cancel') expect(c.statusMessage, 'New owner status');
         expect(owner.requests, isEmpty);

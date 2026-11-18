@@ -259,9 +259,14 @@ so immediately saving an audio book includes finalized export scenes and their
 raw audio, dependencies, bindings and captured intent. The controller captures
 the complete export document and zero source-word offset before planning;
 displaying a later prepared fragment cannot shift canonical directions again.
-Engine epoch, document revision, voice-assignment revision, rate and active
-export lifetime fence admission. Captured resource-binding intent also retires
-an export when a voice preview replaces resources before its first scene. The engine's existing export cancellation
+Before dispatch, engine/document identity, voice assignment, rate and captured
+resource-binding intent fence preparation. Once dispatched, the WAV keeps its
+accepted voice/resource snapshot while playback choices may change; document or
+engine replacement, export lifetime and actual engine cancellation still own
+its completion. Scene publication and reader-status updates retain the stricter
+captured-intent predicate. A scene whose intent retires is skipped without
+failing the captured WAV, and the repository's final commit checks that same
+strict predicate. The engine's existing export cancellation
 future owns in-flight repository cancellation; committed scenes survive a later
 cancelled or obsolete attempt. Failures from a superseded export cannot replace
 the current owner's status. This source repair is tracked in
@@ -274,8 +279,10 @@ One export-owned **Save audio** reading stage reports the number of successfully
 persisted finalized scenes. Its total stays unknown while rendering and assembly
 run, including after the last scene callback; only the exporter's return after
 WAV/JSON publication completes the operation. Current failures retain the count
-and expose failure; cancellation or obsolete intent settles the old ticket as
-cancelled. Document and stage-generation admission suppress late reports, and a
+and expose failure; actual cancellation settles the old ticket as cancelled.
+Playback edits alone preserve a dispatched WAV operation. Counts advance only
+after confirmed repository commits, including when a callback safely skips
+old-intent registration. Document and stage-generation admission suppress late reports, and a
 retired export's cancellation signal cannot settle a successor attempt. Held
 final-publication tests establish these boundaries in source; the native
 count-advancement gate remains in the

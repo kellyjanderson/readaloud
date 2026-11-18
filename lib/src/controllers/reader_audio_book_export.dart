@@ -69,6 +69,8 @@ extension ReaderAudioBookPersistence on ReaderController {
     ReaderDocument? document,
     int? sourceWordOffset,
     Map<String, dynamic>? preservedIntent,
+    bool Function()? isCurrent,
+    void Function()? onPersisted,
   }) {
     final capturedDocument = document ?? _document;
     final capturedOffset =
@@ -84,7 +86,8 @@ extension ReaderAudioBookPersistence on ReaderController {
           !_disposed &&
           epoch == _engineEpoch &&
           revision == _documentRevision &&
-          scene.isCurrent();
+          scene.isCurrent() &&
+          (isCurrent?.call() ?? true);
       return _admitRenderedScene(
         scene,
         isCurrent: current,
@@ -93,10 +96,7 @@ extension ReaderAudioBookPersistence on ReaderController {
           if (repository == null) {
             try {
               final support = await getApplicationSupportDirectory();
-              if (_disposed ||
-                  epoch != _engineEpoch ||
-                  revision != _documentRevision ||
-                  !scene.isCurrent()) {
+              if (!current()) {
                 return;
               }
               repository = _renderedScenes ??= RenderedSceneRepository(
@@ -126,7 +126,9 @@ extension ReaderAudioBookPersistence on ReaderController {
           );
           try {
             await repository.publish(
-              scene,
+              isCurrent == null
+                  ? scene
+                  : _sceneWithPublicationOwner(scene, current),
               sourceId: source,
               intent: {
                 ...intent,
@@ -138,10 +140,8 @@ extension ReaderAudioBookPersistence on ReaderController {
                 ),
               },
             );
-            if (_disposed ||
-                epoch != _engineEpoch ||
-                revision != _documentRevision ||
-                !scene.isCurrent()) {
+            onPersisted?.call();
+            if (!current()) {
               return;
             }
             publishReadingStage(
@@ -155,10 +155,7 @@ extension ReaderAudioBookPersistence on ReaderController {
               ),
             );
           } catch (error) {
-            if (_disposed ||
-                epoch != _engineEpoch ||
-                revision != _documentRevision ||
-                !scene.isCurrent()) {
+            if (!current()) {
               return;
             }
             publishReadingStage(
@@ -414,4 +411,40 @@ Future<void> _writeBookAnalysisFile(
   DocumentAnalysisRecord record,
 ) => Isolate.run(
   () => File(path).writeAsStringSync(jsonEncode(record.toJson()), flush: true),
+);
+
+// Preserve the accepted engine evidence byte-for-byte while narrowing durable
+// admission independently of the already-captured WAV export's lifetime.
+TtsFinalizedAudioScene _sceneWithPublicationOwner(
+  TtsFinalizedAudioScene scene,
+  bool Function() isCurrent,
+) => TtsFinalizedAudioScene(
+  documentId: scene.documentId,
+  generationId: scene.generationId,
+  sceneId: scene.sceneId,
+  text: scene.text,
+  engineSpeakText: scene.engineSpeakText,
+  startWordIndex: scene.startWordIndex,
+  endWordIndex: scene.endWordIndex,
+  startOffset: scene.startOffset,
+  sceneTurns: scene.sceneTurns,
+  preparedBindings: scene.preparedBindings,
+  audioPath: scene.audioPath,
+  duration: scene.duration,
+  engineId: scene.engineId,
+  engineVersion: scene.engineVersion,
+  normalizationVersion: scene.normalizationVersion,
+  capabilityProfileId: scene.capabilityProfileId,
+  synthesisIdentity: scene.synthesisIdentity,
+  translationSignature: scene.translationSignature,
+  synthesisRate: scene.synthesisRate,
+  assignmentRevision: scene.assignmentRevision,
+  cancelled: scene.cancelled,
+  isCurrent: isCurrent,
+  rawAudioPath: scene.rawAudioPath,
+  rawArtifactIdentity: scene.rawArtifactIdentity,
+  predecessorRawArtifactIdentity: scene.predecessorRawArtifactIdentity,
+  boundaryPolicyVersion: scene.boundaryPolicyVersion,
+  boundaryClass: scene.boundaryClass,
+  trailingSilenceMicros: scene.trailingSilenceMicros,
 );

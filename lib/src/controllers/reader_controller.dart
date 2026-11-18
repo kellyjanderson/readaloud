@@ -3454,13 +3454,20 @@ class ReaderController extends ChangeNotifier {
     var exportCancelled = false;
     bool ownsContext() =>
         _ownsEngine(exportEngine, exportEpoch) &&
-        exportRevision == _documentRevision &&
+        exportRevision == _documentRevision;
+    bool ownsPublicationIntent() =>
+        ownsContext() &&
         exportAssignmentRevision == voiceAssignmentState.requestedRevision &&
         exportRate == currentSpeed &&
         exportBindingIntent == _resourceBindingIntent;
     bool current() => exportActive && !exportCancelled && ownsContext();
     void requireCurrent() {
       if (!current()) throw const PlanningCancelled();
+    }
+
+    void requireCapturedIntent() {
+      requireCurrent();
+      if (!ownsPublicationIntent()) throw const PlanningCancelled();
     }
 
     _isExporting = true;
@@ -3504,10 +3511,10 @@ class ReaderController extends ChangeNotifier {
         normalizedPath,
         sourcePath: _currentDocumentPath,
       );
-      requireCurrent();
+      requireCapturedIntent();
       exportStage = 'document';
       final document = await _completeExportDocument(exportRevision);
-      requireCurrent();
+      requireCapturedIntent();
       if (exportAssignmentRevision != voiceAssignmentState.requestedRevision) {
         throw const PlanningCancelled();
       }
@@ -3520,12 +3527,13 @@ class ReaderController extends ChangeNotifier {
           document: document,
           isCurrent: () =>
               current() &&
+              ownsPublicationIntent() &&
               exportRevision == _documentRevision &&
               _voiceAssignments.isCurrent(exportAssignmentRevision),
         );
       }
 
-      requireCurrent();
+      requireCapturedIntent();
       if (exportAssignmentRevision != voiceAssignmentState.requestedRevision) {
         throw StateError(
           'Voice choices changed before export preparation completed.',
@@ -3537,6 +3545,11 @@ class ReaderController extends ChangeNotifier {
       final writeScene = _renderedSceneWriter(
         document: document,
         sourceWordOffset: 0,
+        isCurrent: ownsPublicationIntent,
+        onPersisted: () {
+          ++completedScenes;
+          reportExport(PreparationWorkState.working);
+        },
       );
       var observingCancellation = false;
       final exportRequest = await _buildExportRequest(
@@ -3544,6 +3557,7 @@ class ReaderController extends ChangeNotifier {
         document: document,
         assignmentRevision: exportAssignmentRevision,
         isCurrent: current,
+        isPreparationCurrent: ownsPublicationIntent,
         onRenderedScene: (scene) async {
           requireCurrent();
           if (!observingCancellation) {
@@ -3556,20 +3570,21 @@ class ReaderController extends ChangeNotifier {
               }),
             );
           }
+          // The WAV retains its accepted snapshot after a playback edit. Its
+          // old-intent scenes must not supersede the reader's newer choices.
+          if (!ownsPublicationIntent()) return;
           await writeScene(scene);
           requireCurrent();
           if (!scene.isCurrent()) throw const PlanningCancelled();
-          ++completedScenes;
-          reportExport(PreparationWorkState.working);
         },
       );
-      requireCurrent();
+      requireCapturedIntent();
       exportStage = 'rendering-and-assembly';
       final result = await exporter.exportAudio(exportRequest);
       requireCurrent();
       // Finalized scene callbacks precede assembly and atomic WAV/JSON commit.
       reportExport(PreparationWorkState.complete);
-      if (current()) {
+      if (ownsPublicationIntent()) {
         _statusMessage = 'Saved audio to ${result.outputPath}.';
       }
       return result;
@@ -3578,17 +3593,20 @@ class ReaderController extends ChangeNotifier {
           !current() ||
           error is PlanningCancelled ||
           error is _SupersededPreparation ||
-          error is RenderedSceneCancelled;
+          error is RenderedSceneCancelled ||
+          (error is StateError &&
+              (error.message == 'Export cancelled.' ||
+                  error.message == 'Export cancelled or superseded.'));
       reportExport(
         cancelled
             ? PreparationWorkState.cancelled
             : PreparationWorkState.failed,
         error: cancelled ? null : '$error',
       );
-      if (cancelled && exportActive && ownsContext()) {
+      if (cancelled && exportActive && ownsPublicationIntent()) {
         _statusMessage = 'Audio export cancelled.';
       }
-      if (current() && !cancelled) {
+      if (current() && !cancelled && ownsPublicationIntent()) {
         _instrumentation.recordMetric(
           metric: 'audioExportFailed',
           documentId: _document.displayDocument.documentId,
@@ -3618,8 +3636,8 @@ class ReaderController extends ChangeNotifier {
       }
       return null;
     } finally {
-      // Same-document intent edits retire this owner too. Ticket generation
-      // admission prevents its cancellation from settling a successor attempt.
+      // Ticket generation admission prevents late cleanup from settling a
+      // successor. Playback edits alone do not retire a dispatched WAV export.
       reportExport(PreparationWorkState.cancelled);
       exportActive = false;
       _isExporting = false;
@@ -5204,6 +5222,7 @@ class ReaderController extends ChangeNotifier {
     required ReaderDocument document,
     required int assignmentRevision,
     required bool Function() isCurrent,
+    required bool Function() isPreparationCurrent,
     required Future<void> Function(TtsFinalizedAudioScene) onRenderedScene,
   }) async {
     final revision = _documentRevision;
@@ -5215,7 +5234,9 @@ class ReaderController extends ChangeNotifier {
     try {
       final window = context == null ? null : await planner.plan(context);
       _requireRevision(revision);
-      if (!isCurrent() || intent != _resourceBindingIntent) {
+      if (!isCurrent() ||
+          !isPreparationCurrent() ||
+          intent != _resourceBindingIntent) {
         throw const PlanningCancelled();
       }
       return TtsExportRequest(
