@@ -1,0 +1,17 @@
+{
+  "passed": true,
+  "tapIntegrityPassed": true,
+  "sourceCommit": "18df8cc3dfbfd6361b91639df4047a480abe93f1",
+  "appPid": 58696,
+  "bookSha256": "c7ec9ea1e10cfa3e80d39b87df6336bbb73efee7b8081792672cc6fa001b677a",
+  "captureSha256": "702d1a9483ed627788ff047f23a2bbf391adaab90920b4a5baa9801c06baee49",
+  "totalWords": 42,
+  "completeSceneCount": 7,
+  "fullReferenceSeconds": 15.1721875,
+  "fullReferenceCorrelation": 0.9983019932355207,
+  "activeCorrelation": 0.9983020096840928,
+  "startSeconds": 0.07120833333333333,
+  "noSpeechWorkerObservedBeforeDuringAfter": true,
+  "normalQuitAndExitVerified": true,
+  "limits": "Software-output full-book replay; no model inference; no human listening, physical output, startup timing or M3 claim."
+}
