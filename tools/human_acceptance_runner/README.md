@@ -1,5 +1,12 @@
 # Read Aloud final user test session
 
+For a macOS session that launches the prepared app and document automatically,
+use the [native runner](../human_acceptance_native/README.md). Browser links to
+`.app` directories browse the package instead of reliably launching it. This
+browser runner remains a manual fallback and retains existing browser results.
+Download its JSON report to import those results into the native runner; no
+browser data is erased or transferred implicitly.
+
 The release coordinator collects the user judgments for S11 under [release #122](https://github.com/kellyjanderson/readaloud/issues/122). The cases cover cancellation during initial speech preparation, installed-model switching in S7, preparation recovery and keyboard use in S8, quick dialogue in S3, and saved audio books in S6, including complete endings. Run the cancellation case first so other tests have not already warmed the speech model. Each case names its source issue so the coordinator can route the findings.
 
 ## Prepare the session
