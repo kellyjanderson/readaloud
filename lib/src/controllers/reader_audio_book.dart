@@ -1301,7 +1301,8 @@ extension ReaderAudioBookBoundaries on ReaderController {
       document: document,
       sourceWordOffset: sourceWordOffset,
       preservedIntent: Map<String, dynamic>.from(
-        (scene.provenance['intent'] as Map?) ?? session.book.manifest.intent,
+        _capturedBookSceneIntent(scene, session.book.manifest.intent) ??
+            session.book.manifest.intent,
       ),
     )(
       TtsFinalizedAudioScene(

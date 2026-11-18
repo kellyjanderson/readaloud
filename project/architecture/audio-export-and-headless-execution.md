@@ -252,6 +252,22 @@ isolate. The signed macOS target grants only user-selected read/write file acces
 for NSSavePanel, retaining sandboxing and app-scoped bookmarks; see the published
 [S6 R2 amendment](../interim/s6-r2/publishing-access.md).
 
+Book publishing discovers the durable scene repository even in a cold plain-text
+session, using an independent read owner; no new playback/export is required to
+find previously committed scenes. The 2 MiB manifest bound remains unchanged.
+The root intent retains the published voice catalogue. Scene intent omits only
+a byte-identical catalogue when its captured engine, raw dependency engine and
+root engine match exactly; directions, choices, bindings, model/capability
+dependencies and raw/final audio remain captured unchanged. Before republishing
+a compacted scene under another catalogue or engine, or persisting its boundary
+derivative, the original catalogue is restored only from its matching original
+root. Different or ambiguous scope retains scene metadata without inheriting a
+new engine's catalogue. These changes and synthetic 395-scene/6,661-word scale,
+offline reopen, cold-save and cross-engine republish checks are tracked in
+[#152](https://github.com/kellyjanderson/readaloud/issues/152#issuecomment-6968002561).
+Source checks do not establish native full-book Save Audio Book or listening
+acceptance.
+
 The existing exporter additionally accepts an awaited per-scene publication
 callback, cancellation/current predicate and source-word offset. Ordinary Save
 Audio connects that callback to the same durable scene repository as playback,

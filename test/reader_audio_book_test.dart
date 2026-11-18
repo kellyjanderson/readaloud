@@ -22,6 +22,7 @@ import 'package:read_aloud/src/services/playback_instrumentation_service.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:path_provider/path_provider.dart';
 import 'package:read_aloud/src/controllers/reader_controller.dart';
 import 'package:read_aloud/src/models/radoc_audio_manifest.dart';
 import 'package:read_aloud/src/services/audio_artifact_store.dart';
@@ -1015,6 +1016,15 @@ void main() {
         if (defect == 'precision') {
           (provenance['intent'] as Map)['engineId'] = 'fish_drama3_4bit';
         }
+        if (defect == 'catalogue') {
+          ((provenance['intent'] as Map)['voices'] as List).first['label'] =
+              'Historical published voice';
+        }
+        if (defect == 'raw-engine') {
+          ((scene['dependencies'] as Map)['raw'] as Map)['engineId'] =
+              'fish_drama3_4bit';
+          scene['dependencyDigest'] = artifactIdentity(scene['dependencies']);
+        }
       }
     }
     final package = RadocAudioPackage();
@@ -1074,6 +1084,244 @@ void main() {
       ),
     );
   }
+
+  test(
+    '395-scene 6661-word book shares its 43-voice catalogue under 2 MiB and reopens offline',
+    () async {
+      final catalogue = <VoiceProfile>[];
+      for (final path in [
+        'assets/voice_library/library.json',
+        'assets/fish_voice_library.json',
+      ]) {
+        final json = jsonDecode(await File(path).readAsString()) as Map;
+        for (final value in json['voices'] as List) {
+          final voice = value as Map;
+          catalogue.add(
+            VoiceProfile(
+              id: voice['id'] as String,
+              label: voice['label'] as String,
+              locale: voice['locale'] as String,
+              gender: VoiceGender.values.byName(voice['gender'] as String),
+              rawValue: const {},
+            ),
+          );
+        }
+      }
+      expect(catalogue, hasLength(43));
+      final texts = [
+        for (var i = 0; i < 395; i++)
+          'The ${i < 54 ? '' : 'patient '}reader watched morning sunlight '
+              'cross the garden while a gentle breeze moved the old branches.',
+      ];
+      final owner = _ManifestScaleEngine(catalogue, texts);
+      final c = await fishController(owner, deferInitialSynthesis: false);
+      await c.loadDocument(
+        DocumentImportService().importPastedText(texts.join('\n\n')),
+      );
+      owner.document = c.document;
+      expect(c.document.wordCount, 6661);
+      final exported = await c.exportAudioToPath('${temp.path}/whole.wav');
+      expect(
+        exported,
+        isNotNull,
+        reason:
+            '${c.statusMessage} ${PlaybackInstrumentationService.instance.snapshot().where((m) => m.metric == 'audioExportFailed').lastOrNull?.value}',
+      );
+      final source = c.document.normalizedImportResult.sourceFingerprint;
+      final store = RenderedSceneRepository(
+        Directory('${temp.path}/fish-scenes'),
+      );
+      final stored = await store.scenesForSource(source);
+      await store.dispose();
+      expect(stored, hasLength(395));
+      final output = await c.exportDocumentToPath(
+        '${temp.path}/whole.radoc',
+        audioBook: true,
+      );
+      expect(
+        output,
+        isNotNull,
+        reason:
+            '${c.statusMessage} ${c.feedbackOperations.map((op) => op.error).whereType<String>().join('; ')}',
+      );
+      final package = RadocAudioPackage();
+      try {
+        final book = await package.open(output!);
+        final manifest = book.manifest;
+        expect(manifest.renderingComplete, true);
+        expect(manifest.scenes, hasLength(395));
+        expect(manifest.intent['voices'], hasLength(43));
+        final bytes = utf8.encode(jsonEncode(manifest.toJson())).length;
+        expect(
+          bytes,
+          lessThanOrEqualTo(const RadocPackageLimits().maxManifestBytes),
+        );
+        // Reconstruct the prior writer's representation. This fixture must
+        // actually trip the unchanged bound without catalogue deduplication.
+        final previous = manifest.toJson();
+        for (final value in previous['scenes'] as List) {
+          final scene = value as Map;
+          scene['provenance'] = {
+            ...scene['provenance'] as Map,
+            'intent': {
+              ...(scene['provenance'] as Map)['intent'] as Map,
+              'voices': manifest.intent['voices'],
+            },
+          };
+        }
+        expect(
+          utf8.encode(jsonEncode(previous)).length,
+          greaterThan(const RadocPackageLimits().maxManifestBytes),
+        );
+        for (final (i, scene) in manifest.scenes.indexed) {
+          final saved = stored[i];
+          expect(scene.dependencies, saved.dependencies);
+          expect(scene.dependencyDigest, saved.dependencyDigest);
+          expect(scene.provenance['bindings'], saved.provenance['bindings']);
+          final expectedIntent = Map<String, dynamic>.from(saved.intent)
+            ..remove('voices');
+          expect(scene.provenance['intent'], expectedIntent);
+          for (final member in [scene.audioMember, scene.rawAudioMember!]) {
+            expect(
+              manifest.members.singleWhere((m) => m.name == member).sha256,
+              sha256.convert(_wav(sample: i + 1)).toString(),
+            );
+            if (i == 0 || i == 394) {
+              final audio = await package.materializeMember(book, member);
+              expect(await audio.readAsBytes(), _wav(sample: i + 1));
+            }
+          }
+        }
+      } finally {
+        await package.dispose();
+      }
+      // A distinct repository and unavailable model force package-only replay.
+      final offline = _ScopedOfflineEngine('fish_drama3_8bit');
+      final reopened = await fishController(
+        offline,
+        renderedSceneRepository: RenderedSceneRepository(
+          Directory('${temp.path}/offline-scenes'),
+        ),
+      );
+      await reopened.importFilePaths([output.path]);
+      expect(reopened.voices.map((v) => v.id), catalogue.map((v) => v.id));
+      await reopened.startPlayback();
+      expect(offline.requests, hasLength(1), reason: reopened.statusMessage);
+      var playing = offline.requests.single;
+      var count = 1;
+      while (true) {
+        final next = await playing.continuation!.next(
+          count - 1,
+          Completer<void>().future,
+        );
+        if (next == null) break;
+        expect(next.startWordIndex, playing.endWordIndex);
+        playing = next;
+        count++;
+      }
+      expect(count, 395);
+      expect(playing.endWordIndex, 6661);
+      expect(offline.modelCalls, 0);
+      expect(offline.exports, isEmpty);
+      await reopened.pausePlayback();
+    },
+    timeout: const Timeout(Duration(minutes: 2)),
+  );
+
+  for (final difference in ['catalogue', 'precision', 'raw-engine']) {
+    test(
+      'republishing retains the scene catalogue for $difference mismatch',
+      () async {
+        final input = await legacyFishFixture(defect: difference);
+        final package = RadocAudioPackage();
+        try {
+          final original = await package.open(input);
+          final captured = original.manifest.scenes.first;
+          final c = await fishController(
+            _ScopedOfflineEngine('fish_drama3_8bit'),
+          );
+          await c.importFilePaths([input.path]);
+          final output = await c.exportDocumentToPath(
+            '${temp.path}/different-$difference.radoc',
+            audioBook: true,
+          );
+          expect(output, isNotNull, reason: c.statusMessage);
+          final book = await package.open(output!);
+          expect(book.manifest.scenes.first.toJson(), captured.toJson());
+          expect(
+            (book.manifest.scenes[1].provenance['intent'] as Map).containsKey(
+              'voices',
+            ),
+            false,
+            reason: 'Identical, exactly scoped imported catalogues are shared.',
+          );
+        } finally {
+          await package.dispose();
+        }
+      },
+    );
+  }
+
+  test(
+    'cold plain-document Save Book discovers previously committed scenes',
+    () async {
+      SharedPreferences.setMockInitialValues({
+        'reader.ttsEngineId': 'fish_drama3_8bit',
+      });
+      final owner = _WholeSourceExportEngine();
+      final support = await getApplicationSupportDirectory();
+      final first = ReaderController(
+        ttsEngine: owner,
+        enablePlatformIntakeChannels: false,
+        renderedSceneRepository: RenderedSceneRepository(
+          Directory('${support.path}/rendered-scenes'),
+        ),
+      );
+      late ReaderDocument document;
+      try {
+        await first.initialize();
+        await loadFreshExportSource(first);
+        document = first.document;
+        expect(
+          await first.exportAudioToPath('${temp.path}/before-restart.wav'),
+          isNotNull,
+        );
+      } finally {
+        await first.shutdownPreparation();
+        first.dispose();
+      }
+      final unavailable = _ScopedOfflineEngine('fish_drama3_8bit');
+      final cold = ReaderController(
+        ttsEngine: unavailable,
+        deferInitialSynthesis: true,
+        enablePlatformIntakeChannels: false,
+      );
+      addTearDown(() async {
+        await cold.shutdownPreparation();
+        cold.dispose();
+      });
+      await cold.initialize();
+      await cold.loadDocument(document);
+      final output = await cold.exportDocumentToPath(
+        '${temp.path}/after-restart.radoc',
+        audioBook: true,
+      );
+      expect(output, isNotNull, reason: cold.statusMessage);
+      final package = RadocAudioPackage();
+      try {
+        final book = await package.open(output!);
+        expect(book.manifest.renderingComplete, true);
+        expect(book.manifest.scenes, hasLength(owner.exports.length));
+        expect(book.manifest.scenes, isNotEmpty);
+        expect(book.manifest.totalWords, document.wordCount);
+        expect(unavailable.modelCalls, 0);
+        expect(unavailable.exports, isEmpty);
+        expect(unavailable.requests, isEmpty);
+      } finally {
+        await package.dispose();
+      }
+    },
+  );
 
   for (final outcome in ['success', 'failure', 'cancel', 'shutdown']) {
     test(
@@ -1604,8 +1852,18 @@ void main() {
     () async {
       final owner = _ScopedOfflineEngine('fish_drama3_8bit')
         ..renderAvailable = true;
-      final c = await fishController(owner);
+      final c = await fishController(
+        owner,
+        engineFactory: (id, _) =>
+            _ScopedOfflineEngine(id)..renderAvailable = true,
+      );
       await c.importFilePaths([(await legacyFishFixture()).path]);
+      final compacted = await c.exportDocumentToPath(
+        '${temp.path}/compacted-fish.radoc',
+        audioBook: true,
+      );
+      expect(compacted, isNotNull, reason: c.statusMessage);
+      await c.importFilePaths([compacted!.path]);
       await c.assignVoiceToCast('cast_character_mara', 'library_fishadrian');
       await c.startPlayback();
       expect(owner.requests, hasLength(1), reason: c.statusMessage);
@@ -1730,6 +1988,16 @@ void main() {
           reason:
               'Only two syntheses and their two immediate boundary dependents are republished.',
         );
+        for (final scene in scenes.where(
+          (s) => [15, 30].contains(s.startWordIndex),
+        )) {
+          expect(
+            scene.intent['voices'],
+            hasLength(3),
+            reason:
+                'Boundary-only repair retains the original compacted catalogue.',
+          );
+        }
         expect(
           Directory('${temp.path}/fish-scenes/scenes')
               .listSync(recursive: true)
@@ -1740,6 +2008,43 @@ void main() {
         );
       } finally {
         await store.dispose();
+      }
+      // Moving a compacted 8-bit scene under a new 4-bit root must preserve
+      // its original catalogue, exact bindings and dependency scope.
+      await c.setTtsEngineId('fish_drama3_4bit');
+      final moved = await c.exportDocumentToPath(
+        '${temp.path}/moved-fish.radoc',
+        audioBook: true,
+      );
+      expect(moved, isNotNull, reason: c.statusMessage);
+      final movedPackage = RadocAudioPackage();
+      try {
+        final before = await movedPackage.open(output);
+        final after = await movedPackage.open(moved!);
+        expect(after.manifest.intent['engineId'], 'fish_drama3_4bit');
+        expect(after.manifest.intent['voices'], hasLength(5));
+        for (final (i, scene) in after.manifest.scenes.indexed) {
+          final prior = before.manifest.scenes[i];
+          expect(scene.dependencies, prior.dependencies);
+          expect(scene.provenance['bindings'], prior.provenance['bindings']);
+          final captured = scene.provenance['intent'] as Map;
+          expect(captured['engineId'], 'fish_drama3_8bit');
+          expect(captured['voices'], hasLength([1, 5].contains(i) ? 5 : 3));
+        }
+        await c.importFilePaths([moved.path]);
+        final repeated = await c.exportDocumentToPath(
+          '${temp.path}/moved-again.radoc',
+          audioBook: true,
+        );
+        expect(repeated, isNotNull, reason: c.statusMessage);
+        final roundTrip = await movedPackage.open(repeated!);
+        expect(
+          roundTrip.manifest.scenes.map((s) => s.toJson()),
+          after.manifest.scenes.map((s) => s.toJson()),
+          reason: 'A subsequent save must not borrow the new root catalogue.',
+        );
+      } finally {
+        await movedPackage.dispose();
       }
     },
   );
@@ -2416,6 +2721,102 @@ class _WholeSourceExportEngine extends _ScopedOfflineEngine {
     } finally {
       await planner.shutdown();
     }
+  }
+}
+
+// Scale the real publication/package path with small deterministic WAVs. This
+// tests full-book metadata bounds, not generation quality or emitted audio.
+class _ManifestScaleEngine extends _ScopedOfflineEngine {
+  _ManifestScaleEngine(this.catalogue, this.texts) : super('fish_drama3_8bit') {
+    renderAvailable = true;
+  }
+  final List<VoiceProfile> catalogue;
+  final List<String> texts;
+  late ReaderDocument document;
+  @override
+  Future<List<VoiceProfile>> loadVoices() async => catalogue;
+
+  @override
+  Future<TtsExportResult> exportAudio(TtsExportRequest request) async {
+    exports.add(request);
+    final voice = request.chunkPlan!.chunks.first.voiceId;
+    final binding = PreparedVoiceBinding(
+      voiceId: voice,
+      voiceDigest: artifactIdentity('voice-$voice'),
+      modelDigest: artifactIdentity('fish-8bit-model-content'),
+      engineVersion: engineVersion,
+      pronunciationProfileId: 'en-us-core',
+      bindingRevision: 1,
+      documentId: request.documentId!,
+    );
+    var word = 0;
+    String? predecessor;
+    for (final (i, text) in texts.indexed) {
+      final end = word + text.split(' ').length;
+      final bytes = _wav(sample: i + 1);
+      final audio = await File(
+        '${request.outputPath}.$i.wav',
+      ).writeAsBytes(bytes);
+      final rawIdentity = 'wav-sha256:${sha256.convert(bytes)}';
+      await request.onRenderedScene!(
+        TtsFinalizedAudioScene(
+          documentId: request.documentId!,
+          generationId: 'full-book-export',
+          sceneId: 'public-scene-$i',
+          text: text,
+          engineSpeakText: text,
+          startWordIndex: word,
+          endWordIndex: end,
+          startOffset: document.charOffsetForWord(word),
+          sceneTurns: [
+            NativeSpeechTurn(
+              voiceId: voice,
+              text: text,
+              segmentIds: [document.segmentForWordIndex(word)!.segmentId],
+              startWord: word,
+              endWord: end,
+              bindingFingerprint: binding.fingerprint,
+              bindingRevision: 1,
+              directions: const [
+                {'delivery': 'whispered'},
+              ],
+            ),
+          ],
+          preparedBindings: [binding],
+          audioPath: audio.path,
+          rawAudioPath: audio.path,
+          duration: const Duration(milliseconds: 10),
+          engineId: engineId,
+          engineVersion: engineVersion,
+          normalizationVersion: request.normalizationVersion!,
+          capabilityProfileId: '$engineId:macos:v1',
+          synthesisIdentity: artifactIdentity('full-book-synthesis-$i'),
+          translationSignature: artifactIdentity('canonical-translator-v1'),
+          synthesisRate: 1,
+          assignmentRevision: request.assignmentRevision,
+          cancelled: request.cancelled ?? Completer<void>().future,
+          isCurrent: request.isCurrent!,
+          rawArtifactIdentity: rawIdentity,
+          predecessorRawArtifactIdentity: predecessor,
+          boundaryPolicyVersion: SynthesisBoundaryPolicy.version,
+          boundaryClass: 'paragraph',
+          trailingSilenceMicros: 0,
+        ),
+      );
+      predecessor = rawIdentity;
+      word = end;
+    }
+    await File(request.outputPath).writeAsBytes(_wav());
+    return TtsExportResult(
+      outputPath: request.outputPath,
+      sidecarPath: '${request.outputPath}.json',
+      duration: Duration(milliseconds: 10 * texts.length),
+      chunkCount: texts.length,
+      voiceId: voice,
+      rate: 1,
+      engineId: engineId,
+      engineVersion: engineVersion,
+    );
   }
 }
 

@@ -204,6 +204,10 @@ extension ReaderAudioBookPersistence on ReaderController {
         _activeSourceRevision ??
         _document.normalizedImportResult.sourceFingerprint;
     final imported = _audioBook;
+    // A cold plain-document session may already have committed scenes from an
+    // earlier run, without opening a v5 book or producing new audio this run.
+    await _ensureSceneRepository();
+    requireCurrent();
     var repository = _renderedScenes;
     // A separate read owner never competes with the serialized publication
     // callback. Both observe immutable, atomically committed generations.
@@ -320,7 +324,13 @@ extension ReaderAudioBookPersistence on ReaderController {
                 isCurrent: current,
               );
             }
-            scenes.add(scene);
+            scenes.add(
+              _bookSceneForPublication(
+                scene,
+                intent,
+                sourceBookIntent: importedHandle.manifest.intent,
+              ),
+            );
           }
         }
         for (final s in stored) {
@@ -331,24 +341,10 @@ extension ReaderAudioBookPersistence on ReaderController {
           members[audio] = File(s.audioPath);
           if (raw != null) members[raw] = File(s.rawAudioPath!);
           scenes.add(
-            RadocAudioScene(
-              sceneId: s.sceneId,
-              startWord: s.startWordIndex,
-              endWord: s.endWordIndex,
-              audioMember: audio,
-              rawAudioMember: raw,
-              dependencyDigest: s.dependencyDigest,
-              dependencies: s.dependencies,
-              provenance: {
-                ...s.provenance,
-                'intent': s.intent,
-                'text': s.text,
-                'startOffset': s.startOffset,
-                'sceneTurns': s.sceneTurns.map((t) => t.toMap()).toList(),
-              },
-              sampleRate: s.sampleRate,
-              channels: s.channels,
-              frameCount: s.frameCount,
+            _bookSceneForPublication(
+              _publishedScene(s),
+              intent,
+              sourceBookIntent: importedHandle?.manifest.intent,
             ),
           );
         }
@@ -404,6 +400,75 @@ extension ReaderAudioBookPersistence on ReaderController {
       }
     }, onOperation: onOperation);
   }
+}
+
+RadocAudioScene _bookSceneForPublication(
+  RadocAudioScene scene,
+  Map<String, dynamic> bookIntent, {
+  Map<String, dynamic>? sourceBookIntent,
+}) {
+  final captured = _capturedBookSceneIntent(scene, sourceBookIntent);
+  if (captured == null) return scene;
+  // Published VoiceProfiles are read only from manifest.intent. Keep their
+  // identical descriptions once, rather than once per native scene. All
+  // scene-specific intent and exact raw model/capability/binding dependencies
+  // remain captured; a different engine or catalogue never shares this copy.
+  final intent = Map<String, dynamic>.from(captured);
+  if (_bookSceneSharesEngine(scene, captured, bookIntent) &&
+      captured['voices'] is List &&
+      bookIntent['voices'] is List &&
+      jsonEncode(captured['voices']) == jsonEncode(bookIntent['voices'])) {
+    intent.remove('voices');
+  }
+  if (jsonEncode(intent) == jsonEncode(scene.provenance['intent'])) {
+    return scene;
+  }
+  return RadocAudioScene(
+    sceneId: scene.sceneId,
+    startWord: scene.startWord,
+    endWord: scene.endWord,
+    audioMember: scene.audioMember,
+    rawAudioMember: scene.rawAudioMember,
+    dependencyDigest: scene.dependencyDigest,
+    dependencies: scene.dependencies,
+    provenance: {...scene.provenance, 'intent': intent},
+    sampleRate: scene.sampleRate,
+    channels: scene.channels,
+    frameCount: scene.frameCount,
+  );
+}
+
+// A compacted scene shares only its original root's descriptive catalogue.
+// Restore that copy before moving the scene to another root or committing a
+// new boundary derivative. Never borrow catalogue metadata across engines.
+Map<String, dynamic>? _capturedBookSceneIntent(
+  RadocAudioScene scene,
+  Map<String, dynamic>? bookIntent,
+) {
+  final captured = scene.provenance['intent'];
+  if (captured is! Map) return null;
+  final intent = Map<String, dynamic>.from(captured);
+  if (!intent.containsKey('voices') &&
+      bookIntent != null &&
+      bookIntent['voices'] is List &&
+      _bookSceneSharesEngine(scene, intent, bookIntent)) {
+    intent['voices'] = bookIntent['voices'];
+  }
+  return intent;
+}
+
+bool _bookSceneSharesEngine(
+  RadocAudioScene scene,
+  Map captured,
+  Map bookIntent,
+) {
+  final engine = captured['engineId'];
+  final raw = scene.dependencies['raw'];
+  return engine is String &&
+      engine.isNotEmpty &&
+      engine == bookIntent['engineId'] &&
+      raw is Map &&
+      raw['engineId'] == engine;
 }
 
 Future<void> _writeBookAnalysisFile(
