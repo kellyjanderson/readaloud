@@ -1,0 +1,15 @@
+{
+  "schema_version": 1,
+  "package_revision": "Chapter-Fish R1",
+  "publication": "https://github.com/kellyjanderson/readaloud/issues/158#issuecomment-6990898700",
+  "implementation_baseline": "fd1df4c58c09870258a84e2975a7f6b51402d4f9",
+  "documents": [
+    {
+      "path": "design.md",
+      "revision": "R1",
+      "source": "https://github.com/kellyjanderson/readaloud/blob/fe552e4681592c2d2bd0a37c7aad66a6784cad38/project/interim/chapter-fish-r1/design.md",
+      "source_section_sha256": "61cb1c2b527c57d5f9163fb4e6727558dba7520804fb9a52da3eef50eed20a91",
+      "sha256": "61cb1c2b527c57d5f9163fb4e6727558dba7520804fb9a52da3eef50eed20a91"
+    }
+  ]
+}
