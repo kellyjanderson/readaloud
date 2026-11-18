@@ -23,6 +23,7 @@ Read README.md, project/README.md and docs/project-management.md. Start issue re
 
 - `project/architecture/`: implemented structure, intent, invariants, durable rationale and honest evidence limits. Update with implementation; never promote a proposal to current fact.
 - GitHub design issue: working ACD, scope, alternatives, decisions, acceptance and architecture targets.
+- Capture newly discussed features and architecture changes as Proposed ACD issues labelled `kind:design`. Reuse an existing design when it covers the same decision. Leave the milestone empty by default. Version planning assigns selected ACDs to the release milestone and links the release issue. An explicit request to include a design in the current release assigns it directly. Release assignment and implementation ownership are independent.
 - Native sub-issues/dependencies: implementation slices and readiness. Small fixes may use a single issue.
 - GitHub Project: authoritative status and priority. Marked issue-body blocks: current coordination/work orders and exact evidence pointers. Issue comments: durable decision, handoff and evidence receipts; historical claims do not supersede a reconciled current block without new evidence.
 - GitHub milestone: release scope, tentative version, intended outcomes and exclusions. One release issue owns release-wide readiness and publication; link feature evidence instead of copying plans.
