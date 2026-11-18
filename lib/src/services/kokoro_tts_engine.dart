@@ -535,6 +535,7 @@ class KokoroTtsEngine
         return;
       }
       if (state.processingState == ProcessingState.completed) {
+        _signalBuffer();
         _emitFinalProgress();
         final queueSnapshot = _playbackQueueSnapshot();
         if (kokoroShouldEnterUnderrunRecovery(queueSnapshot)) {
@@ -1104,7 +1105,11 @@ class KokoroTtsEngine
           break;
         }
         final following = await Future.any<TtsRenderedAudioRequest?>([
-          next.next(consumed.rangeSequence, _continuationCancelled.future),
+          next.demandNext(
+            consumed.rangeSequence,
+            _continuationCancelled.future,
+            awaitConsumed: () => _awaitRenderedConsumption(consumed, current),
+          ),
           _continuationCancelled.future.then((_) => null),
         ]);
         if (!current()) return;
@@ -1231,9 +1236,10 @@ class KokoroTtsEngine
       await _awaitPlaybackCredit(policy, current);
       if (!current()) return;
       final following = await Future.any([
-        continuation.next(
+        continuation.demandNext(
           previous.rangeSequence,
           _continuationCancelled.future,
+          awaitConsumed: () => _awaitRenderedConsumption(previous, current),
         ),
         _continuationCancelled.future.then<TtsRenderedAudioRequest?>(
           (_) => null,
@@ -1311,6 +1317,52 @@ class KokoroTtsEngine
         _onComplete?.call();
       }
     }
+  }
+
+  Future<void> _awaitRenderedConsumption(
+    TtsRenderedAudioRequest request,
+    bool Function() current,
+  ) async {
+    // Final publication and native playback consumption are separate receipts.
+    // Finish any packet publication before checking the final queued source.
+    await _awaitRenderedCompletion(request, current);
+    if (!current()) throw const PlanningCancelled();
+    if (_activePlaybackToken == null || _activeChunks.isEmpty) {
+      throw StateError(
+        'No native consumption evidence for this saved passage.',
+      );
+    }
+    final queuedMicros = _activeChunks.fold<int>(
+      0,
+      (sum, chunk) => sum + chunk.duration.inMicroseconds,
+    );
+    final speed = _player.speed > 0 ? _player.speed : 1.0;
+    final allowance =
+        Duration(microseconds: (queuedMicros / speed).ceil()) +
+        const Duration(seconds: 30);
+    Future<void> drain() async {
+      while (current()) {
+        final changed = _bufferChanged.future;
+        if (_player.processingState == ProcessingState.completed &&
+            _activeChunks.isNotEmpty &&
+            _currentChunkIndex == _activeChunks.length - 1 &&
+            _activeChunks.last.sourceSceneId == request.sceneId) {
+          return;
+        }
+        await Future.any([changed, _continuationCancelled.future]);
+      }
+      throw const PlanningCancelled();
+    }
+
+    await drain().timeout(
+      allowance,
+      onTimeout: () {
+        throw StateError(
+          'Timed out waiting for saved audio playback to drain.',
+        );
+      },
+    );
+    if (!current()) throw const PlanningCancelled();
   }
 
   @override

@@ -10,8 +10,12 @@ dependencies/provenance and prepared document remain structurally unchanged:
 raw turns/bindings and published scene turns are empty, but provenance retains
 each actual binding and prepared attribution retains canonical cast ownership.
 
-Tests replace audio with distinct short deterministic PCM payloads, update WAV
-format/frame metadata, and let the package writer rebuild member checksums.
-They prove selective admission, regeneration, preservation and save/reopen;
-they do not prove speech, boundaries, emitted-audio continuity or listening.
+Tests replace audio with distinct deterministic PCM payloads containing a 300 ms
+silent onset, a 100 ms audible plateau and a 100 ms silent tail. They update WAV
+format/frame metadata, raw/predecessor identities and corresponding dependency
+digests, and let the package writer rebuild member checksums. The fixture proves
+selective synthesis, bounded immediate boundary reprocessing, raw preservation,
+captured engine/resource ownership and reusable save/reopen. Finalized dependent
+derivatives can change when their predecessor changes; their raw PCM is retained.
+This is not speech, native emitted-audio continuity or listening evidence.
 No model weights, native speech audio or private manuscript text is included.

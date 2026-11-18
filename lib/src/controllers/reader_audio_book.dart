@@ -19,6 +19,7 @@ class _ReaderAudioBook {
   Completer<void>? renderCancellation;
   Future<void>? renderWork;
   _BookRenderStream? renderStream;
+  ({int word, _BookScene? scene})? demandedPredecessor;
   void cancelRender() {
     final cancellation = renderCancellation;
     if (cancellation != null && !cancellation.isCompleted) {
@@ -757,11 +758,8 @@ extension ReaderAudioBookSupport on ReaderController {
     _BookPlaybackPart? firstPart;
     if (!current()) return true;
     if (firstScene == null) {
-      final publishedEngine = manifest.intent['engineId'] as String?;
-      if (publishedEngine != null &&
-          ReaderController._knownTtsEngineIds.contains(publishedEngine) &&
-          _selectedTtsEngineId == session.engineAtOpen &&
-          _selectedTtsEngineId != publishedEngine) {
+      final publishedEngine = _demandedBookEngine(session);
+      if (publishedEngine != null) {
         // Engine replacement advances intent. Requeue exactly this user's Play
         // after its owned replacement; a later Pause/open/selection wins.
         final oldEngine = _ttsEngine;
@@ -779,7 +777,15 @@ extension ReaderAudioBookSupport on ReaderController {
         }
         return true;
       }
-      rendering = await _beginRenderBookScene(session, word, current);
+      rendering = await _beginRenderBookScene(
+        session,
+        word,
+        current,
+        previous: session.demandedPredecessor?.word == word
+            ? session.demandedPredecessor?.scene
+            : null,
+      );
+      session.demandedPredecessor = null;
       firstPart = await rendering.take();
       if (firstPart == null) throw StateError('Rendering produced no audio.');
       if (!current()) return true;
@@ -978,71 +984,110 @@ extension ReaderAudioBookSupport on ReaderController {
       );
     }
 
-    continuation = TtsRenderedAudioContinuation(
-      next: (previous, cancelled) async {
-        if (previous != sequence) {
-          throw StateError('Out-of-order audio scene demand.');
-        }
-        var canceled = false;
-        unawaited(
-          cancelled.then((_) {
-            canceled = true;
-          }),
-        );
-        if (rendering case final active?) {
-          final nextPacket = await active.take();
+    Future<TtsRenderedAudioRequest?> nextScene(
+      int previous,
+      Future<void> cancelled, [
+      Future<void> Function()? awaitConsumed,
+    ]) async {
+      if (previous != sequence) {
+        throw StateError('Out-of-order audio scene demand.');
+      }
+      var canceled = false;
+      unawaited(
+        cancelled.then((_) {
+          canceled = true;
+        }),
+      );
+      if (rendering case final active?) {
+        final nextPacket = await active.take();
+        if (canceled || !current()) throw const PlanningCancelled();
+        if (nextPacket != null) {
+          final result = await request(nextPacket, sequence + 1);
           if (canceled || !current()) throw const PlanningCancelled();
-          if (nextPacket != null) {
-            final result = await request(nextPacket, sequence + 1);
-            if (canceled || !current()) throw const PlanningCancelled();
-            ++sequence;
-            return result;
+          ++sequence;
+          return result;
+        }
+        previousScene = await active.result;
+        wordEnd = previousScene!.scene.endWord;
+        rendering = null;
+      }
+      if (wordEnd == manifest.totalWords && manifest.preparationComplete) {
+        return null;
+      }
+      final next = await _findBookScene(
+        session,
+        wordEnd,
+        () => !canceled && current(),
+      );
+      _BookPlaybackPart part;
+      if (next == null) {
+        if (canceled || !current()) throw const PlanningCancelled();
+        if (_demandedBookEngine(session) != null) {
+          if (awaitConsumed == null) {
+            throw StateError(
+              'The player must confirm consumed audio before an engine handoff.',
+            );
           }
-          previousScene = await active.result;
-          wordEnd = previousScene!.scene.endWord;
-          rendering = null;
+          await Future.any<void>([
+            awaitConsumed(),
+            cancelled.then((_) => throw const PlanningCancelled()),
+          ]);
+          if (canceled || !current()) throw const PlanningCancelled();
+          // The old player's consumer must settle before engine shutdown
+          // joins it. Retire this continuation, then let the existing Play
+          // driver perform the same fenced handoff as an opening gap.
+          _audioGapWord = wordEnd;
+          session.demandedPredecessor = (word: wordEnd, scene: previousScene);
+          ++_playbackIntent;
+          _playbackStartPending = true;
+          unawaited(_drivePlaybackStarts());
+          throw const PlanningCancelled();
         }
-        if (wordEnd == manifest.totalWords && manifest.preparationComplete) {
-          return null;
-        }
-        final next = await _findBookScene(
+        rendering = await _beginRenderBookScene(
           session,
           wordEnd,
           () => !canceled && current(),
+          cancelled: cancelled,
+          previous: previousScene,
         );
-        _BookPlaybackPart part;
-        if (next == null) {
-          rendering = await _beginRenderBookScene(
-            session,
-            wordEnd,
-            () => !canceled && current(),
-            cancelled: cancelled,
-            previous: previousScene,
-          );
-          final first = await rendering!.take();
-          if (first == null) throw StateError('Rendering produced no audio.');
-          part = first;
-        } else {
-          part = _BookPlaybackPart.complete(next);
-        }
-        if (canceled || !current()) throw const PlanningCancelled();
-        if (part.startWord != wordEnd) {
-          _audioGapWord = wordEnd;
-          throw StateError(
-            'Audio ends at word $wordEnd. Press Play to render the next passage with its speech model.',
-          );
-        }
-        final result = await request(part, sequence + 1);
-        if (canceled || !current()) throw const PlanningCancelled();
-        ++sequence;
-        wordEnd = part.endWord;
-        return result;
-      },
+        final first = await rendering!.take();
+        if (first == null) throw StateError('Rendering produced no audio.');
+        part = first;
+      } else {
+        part = _BookPlaybackPart.complete(next);
+      }
+      if (canceled || !current()) throw const PlanningCancelled();
+      if (part.startWord != wordEnd) {
+        _audioGapWord = wordEnd;
+        throw StateError(
+          'Audio ends at word $wordEnd. Press Play to render the next passage with its speech model.',
+        );
+      }
+      final result = await request(part, sequence + 1);
+      if (canceled || !current()) throw const PlanningCancelled();
+      ++sequence;
+      wordEnd = part.endWord;
+      return result;
+    }
+
+    continuation = TtsRenderedAudioContinuation(
+      next: (previous, cancelled) => nextScene(previous, cancelled),
+      nextWithConsumption: nextScene,
     );
     final first = await request(firstPart, 0);
     if (!current()) return true;
     await (engine as RenderedAudioPlaybackCapable).playRendered(first);
     return true;
+  }
+
+  String? _demandedBookEngine(_ReaderAudioBook session) {
+    final published = session.book.manifest.intent['engineId'] as String?;
+    return published != null &&
+            ReaderController._knownTtsEngineIds.contains(published) &&
+            _selectedTtsEngineId == session.engineAtOpen &&
+            _selectedTtsEngineId != published
+        ? published
+        : null;
   }
 }
 
@@ -1255,6 +1300,9 @@ extension ReaderAudioBookBoundaries on ReaderController {
     await _renderedSceneWriter(
       document: document,
       sourceWordOffset: sourceWordOffset,
+      preservedIntent: Map<String, dynamic>.from(
+        (scene.provenance['intent'] as Map?) ?? session.book.manifest.intent,
+      ),
     )(
       TtsFinalizedAudioScene(
         documentId: session.book.manifest.documentId,

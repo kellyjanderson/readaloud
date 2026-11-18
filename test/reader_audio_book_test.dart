@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
+import 'package:crypto/crypto.dart';
 import 'package:flutter/material.dart';
 import 'package:read_aloud/src/app.dart';
 import 'package:read_aloud/src/models/document_preparation.dart';
@@ -10,6 +11,7 @@ import 'package:read_aloud/src/models/reader_operation.dart';
 import 'package:read_aloud/src/models/character_cast_registry.dart';
 import 'package:read_aloud/src/models/voice_profile.dart';
 import 'package:read_aloud/src/models/native_speech_turn.dart';
+import 'package:read_aloud/src/models/prepared_voice_binding.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -22,6 +24,8 @@ import 'package:read_aloud/src/services/reader_document_serialization_service.da
 import 'package:read_aloud/src/services/tts_engine.dart';
 import 'package:read_aloud/src/services/speech_audio_packet.dart';
 import 'package:read_aloud/src/services/rendered_scene_repository.dart';
+import 'package:read_aloud/src/services/synthesis_boundary_policy.dart';
+import 'package:read_aloud/src/services/speech_planning_supervisor.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -976,14 +980,26 @@ void main() {
         '${temp.path}/no-attribution.json',
       ).writeAsString(jsonEncode(prepared));
     }
+    String? predecessor;
     for (final (i, value) in (json['scenes'] as List).indexed) {
       final scene = value as Map<String, dynamic>;
-      // These samples prove admission/reuse, never speech or acoustic quality.
+      final bytes = _boundaryWav(sample: 1000 + i);
+      // Long leading silence and an audible plateau exercise actual boundary
+      // trimming after a changed predecessor, independently of speech quality.
       (scene['format'] as Map)['sampleRate'] = 24000;
-      (scene['format'] as Map)['frameCount'] = 240;
+      (scene['format'] as Map)['frameCount'] = (bytes.length - 44) ~/ 2;
+      final rawId = 'wav-sha256:${sha256.convert(bytes)}';
+      final provenance = scene['provenance'] as Map;
+      provenance['rawArtifactIdentity'] = rawId;
+      provenance['predecessorRawArtifactIdentity'] = predecessor;
+      provenance['trailingSilenceMicros'] = 100000;
+      (scene['dependencies'] as Map)['predecessorRawArtifactIdentity'] =
+          predecessor;
+      scene['dependencyDigest'] = artifactIdentity(scene['dependencies']);
+      predecessor = rawId;
       final audio = await File(
         '${temp.path}/legacy-$i.wav',
-      ).writeAsBytes(_wav(sample: i + 1));
+      ).writeAsBytes(bytes);
       members[scene['audioMember'] as String] = audio;
       members[scene['rawAudioMember'] as String] = audio;
       if (i == 0) {
@@ -1008,12 +1024,15 @@ void main() {
     }
   }
 
-  Future<ReaderController> fishController(_OfflineEngine owner) async {
-    SharedPreferences.setMockInitialValues({
-      'reader.ttsEngineId': 'fish_drama3_8bit',
-    });
+  Future<ReaderController> fishController(
+    _OfflineEngine owner, {
+    String preference = 'fish_drama3_8bit',
+    TtsEngine Function(String, int)? engineFactory,
+  }) async {
+    SharedPreferences.setMockInitialValues({'reader.ttsEngineId': preference});
     final c = ReaderController(
       ttsEngine: owner,
+      engineFactory: engineFactory,
       deferInitialSynthesis: true,
       enablePlatformIntakeChannels: false,
       renderedSceneRepository: RenderedSceneRepository(
@@ -1031,9 +1050,8 @@ void main() {
   test(
     'legacy Fish character edit regenerates only Mara and survives save/reopen',
     () async {
-      final owner = _OfflineEngine()
-        ..renderAvailable = true
-        ..fishPublication = true;
+      final owner = _ScopedOfflineEngine('fish_drama3_8bit')
+        ..renderAvailable = true;
       final c = await fishController(owner);
       await c.importFilePaths([(await legacyFishFixture()).path]);
       await c.assignVoiceToCast('cast_character_mara', 'library_fishadrian');
@@ -1082,12 +1100,52 @@ void main() {
           'library_fishadrian',
         );
         expect(book.manifest.scenes, hasLength(7));
+        final original =
+            jsonDecode(
+                  await File(
+                    'test/fixtures/s11_fish_legacy/manifest.json',
+                  ).readAsString(),
+                )
+                as Map;
         for (final (i, scene) in book.manifest.scenes.indexed) {
           final file = await package.materializeMember(book, scene.audioMember);
-          expect(
-            await file.readAsBytes(),
-            _wav(sample: [1, 5].contains(i) ? 77 : i + 1),
+          final raw = await package.materializeMember(
+            book,
+            scene.rawAudioMember!,
           );
+          final rawBytes = _boundaryWav(
+            sample: [1, 5].contains(i) ? 777 : 1000 + i,
+          );
+          expect(await raw.readAsBytes(), rawBytes);
+          if ([0, 3, 4].contains(i)) {
+            expect(await file.readAsBytes(), rawBytes);
+          } else {
+            expect(
+              (await file.length()),
+              lessThan(rawBytes.length),
+              reason:
+                  'Native boundary policy must trim the fixture\'s long onset.',
+            );
+          }
+          if ([2, 6].contains(i)) {
+            final historical = (original['scenes'] as List)[i] as Map;
+            expect(
+              scene.dependencies['raw'],
+              (historical['dependencies'] as Map)['raw'],
+            );
+            expect(
+              scene.provenance['bindings'],
+              (historical['provenance'] as Map)['bindings'],
+            );
+            expect(
+              scene.provenance['intent'],
+              (historical['provenance'] as Map)['intent'],
+            );
+            expect(
+              scene.provenance['predecessorRawArtifactIdentity'],
+              'wav-sha256:${sha256.convert(_boundaryWav(sample: 777))}',
+            );
+          }
         }
       } finally {
         await package.dispose();
@@ -1109,6 +1167,28 @@ void main() {
         hasLength(2),
         reason: 'Saved edited scenes must be reusable.',
       );
+      final store = RenderedSceneRepository(
+        Directory('${temp.path}/fish-scenes'),
+      );
+      try {
+        final scenes = await store.scenesForSource('synthetic-s3-dialogue');
+        expect(
+          scenes.map((s) => s.startWordIndex),
+          [8, 15, 26, 30],
+          reason:
+              'Only two syntheses and their two immediate boundary dependents are republished.',
+        );
+        expect(
+          Directory('${temp.path}/fish-scenes/scenes')
+              .listSync(recursive: true)
+              .whereType<File>()
+              .where((f) => f.path.endsWith('.json')),
+          hasLength(4),
+          reason: 'Reopen must not publish another derivative or synthesis.',
+        );
+      } finally {
+        await store.dispose();
+      }
     },
   );
 
@@ -1116,9 +1196,8 @@ void main() {
     test(
       'legacy Fish refuses missing or mismatched $defect ownership evidence',
       () async {
-        final owner = _OfflineEngine()
-          ..renderAvailable = true
-          ..fishPublication = true;
+        final owner = _ScopedOfflineEngine('fish_drama3_8bit')
+          ..renderAvailable = true;
         final c = await fishController(owner);
         await c.importFilePaths([
           (await legacyFishFixture(defect: defect)).path,
@@ -1130,6 +1209,283 @@ void main() {
       },
     );
   }
+
+  for (final preference in ['kokoro', 'fish_drama3_4bit']) {
+    test(
+      'later legacy Fish demand hands $preference to published Fish8 with one Play',
+      () async {
+        final old = _ScopedOfflineEngine(preference)..renderAvailable = true;
+        final replacement = _ScopedOfflineEngine('fish_drama3_8bit')
+          ..renderAvailable = true;
+        final c = await fishController(
+          old,
+          preference: preference,
+          engineFactory: (id, _) {
+            expect(id, 'fish_drama3_8bit');
+            return replacement;
+          },
+        );
+        await c.importFilePaths([(await legacyFishFixture()).path]);
+        await c.assignVoiceToCast('cast_character_mara', 'library_fishadrian');
+        await c.startPlayback();
+        expect(old.requests.single.startWordIndex, 0);
+        expect(old.modelCalls, 0);
+        final consumerExited = Completer<void>();
+        final consumptionRequested = Completer<void>();
+        final consumed = Completer<void>();
+        old.consumerDrain = consumerExited.future;
+        // Real engine shutdown joins its owned continuation. A handoff that
+        // awaits replacement from inside that same continuation would deadlock.
+        final demand = old.requests.single.continuation!
+            .demandNext(
+              0,
+              Completer<void>().future,
+              awaitConsumed: () {
+                consumptionRequested.complete();
+                return consumed.future;
+              },
+            )
+            .whenComplete(() {
+              if (!consumerExited.isCompleted) consumerExited.complete();
+            });
+        try {
+          await consumptionRequested.future;
+          expect(replacement.modelCalls, 0);
+          expect(
+            old.requests.single.isCurrent!(),
+            isTrue,
+            reason: 'Prefetch must not retire an inaudible prefix.',
+          );
+          consumed.complete();
+          await expectLater(
+            demand.timeout(const Duration(seconds: 3)),
+            throwsA(isA<PlanningCancelled>()),
+          );
+        } finally {
+          if (!consumerExited.isCompleted) consumerExited.complete();
+        }
+        await _until(() => replacement.requests.isNotEmpty);
+        expect(replacement.requests.single.startWordIndex, 8);
+        var request = replacement.requests.single;
+        var sequence = 0;
+        while (true) {
+          final next = await request.continuation!.next(
+            sequence++,
+            Completer<void>().future,
+          );
+          if (next == null) break;
+          request = next;
+        }
+        expect(old.exports, isEmpty);
+        expect(
+          replacement.exports.map(
+            (r) => r.chunkPlan!.chunks.single.startWordIndex,
+          ),
+          [8, 26],
+        );
+        expect(
+          replacement.exports.first.predecessorRawArtifactIdentity,
+          'wav-sha256:${sha256.convert(_boundaryWav(sample: 1000))}',
+        );
+        expect(
+          replacement.exports.first.predecessorTrailingSilence,
+          const Duration(milliseconds: 100),
+        );
+        expect(c.runningTtsEngineId, 'fish_drama3_8bit');
+        await c.pausePlayback();
+        final output = await c.exportDocumentToPath(
+          '${temp.path}/handoff-edited.radoc',
+          audioBook: true,
+        );
+        expect(output, isNotNull, reason: c.statusMessage);
+        await c.importFilePaths([output!.path]);
+        await c.startPlayback();
+        request = replacement.requests.last;
+        sequence = 0;
+        while (true) {
+          final next = await request.continuation!.next(
+            sequence++,
+            Completer<void>().future,
+          );
+          if (next == null) break;
+          request = next;
+        }
+        expect(
+          replacement.exports,
+          hasLength(2),
+          reason: 'Handoff output must survive saving and reopening.',
+        );
+      },
+    );
+  }
+
+  test(
+    'explicit engine change after book open is not replaced by published engine',
+    () async {
+      final old = _ScopedOfflineEngine('kokoro');
+      final explicit = _ScopedOfflineEngine('fish_drama3_4bit')
+        ..renderAvailable = true;
+      final selected = <String>[];
+      final c = await fishController(
+        old,
+        preference: 'kokoro',
+        engineFactory: (id, _) {
+          selected.add(id);
+          return explicit;
+        },
+      );
+      await c.importFilePaths([(await legacyFishFixture()).path]);
+      await c.assignVoiceToCast('cast_character_mara', 'library_fishadrian');
+      await c.setTtsEngineId('fish_drama3_4bit');
+      await c.startPlayback();
+      expect(selected, ['fish_drama3_4bit']);
+      expect(
+        explicit.exports.single.chunkPlan!.chunks.single.startWordIndex,
+        0,
+      );
+      expect(c.runningTtsEngineId, 'fish_drama3_4bit');
+    },
+  );
+
+  for (final terminal in ['pause', 'document', 'selection']) {
+    test(
+      'prefetched handoff rejects $terminal before prefix consumption',
+      () async {
+        final old = _ScopedOfflineEngine('kokoro');
+        final target = _ScopedOfflineEngine('fish_drama3_8bit')
+          ..renderAvailable = true;
+        final explicit = _ScopedOfflineEngine('fish_drama3_4bit')
+          ..renderAvailable = true;
+        final selections = <String>[];
+        final c = await fishController(
+          old,
+          preference: 'kokoro',
+          engineFactory: (id, _) {
+            selections.add(id);
+            return id == 'fish_drama3_8bit' ? target : explicit;
+          },
+        );
+        await c.importFilePaths([(await legacyFishFixture()).path]);
+        await c.assignVoiceToCast('cast_character_mara', 'library_fishadrian');
+        await c.startPlayback();
+        final entered = Completer<void>();
+        final consumed = Completer<void>();
+        final cancelled = Completer<void>();
+        final demand = old.requests.single.continuation!.demandNext(
+          0,
+          cancelled.future,
+          awaitConsumed: () {
+            entered.complete();
+            return consumed.future;
+          },
+        );
+        final failure = expectLater(demand, throwsA(isA<PlanningCancelled>()));
+        await entered.future;
+        expect(selections, isEmpty);
+        switch (terminal) {
+          case 'pause':
+            await c.pausePlayback();
+          case 'document':
+            await c.importPastedText('Replacement document.');
+          case 'selection':
+            await c.setTtsEngineId('fish_drama3_4bit');
+        }
+        if (terminal == 'pause') {
+          cancelled.complete();
+        } else {
+          consumed.complete();
+        }
+        await failure;
+        expect(
+          selections,
+          terminal == 'selection' ? ['fish_drama3_4bit'] : isEmpty,
+        );
+        expect(target.requests, isEmpty);
+        expect(target.exports, isEmpty);
+        expect(explicit.requests, isEmpty);
+        expect(explicit.exports, isEmpty);
+      },
+    );
+
+    test(
+      'later published-engine handoff rejects $terminal during preparation',
+      () async {
+        final old = _ScopedOfflineEngine('kokoro');
+        final held = _HeldScopedBookEngine()..renderAvailable = true;
+        final last = _ScopedOfflineEngine('fish_drama3_4bit')
+          ..renderAvailable = true;
+        final c = await fishController(
+          old,
+          preference: 'kokoro',
+          engineFactory: (id, _) => id == 'fish_drama3_8bit' ? held : last,
+        );
+        await c.importFilePaths([(await legacyFishFixture()).path]);
+        await c.assignVoiceToCast('cast_character_mara', 'library_fishadrian');
+        await c.startPlayback();
+        await expectLater(
+          old.requests.single.continuation!.demandNext(
+            0,
+            Completer<void>().future,
+            awaitConsumed: () async {},
+          ),
+          throwsA(isA<PlanningCancelled>()),
+        );
+        await held.started.future;
+        final cancellation = switch (terminal) {
+          'pause' => c.pausePlayback(),
+          'document' => c.importPastedText('Replacement document.'),
+          _ => c.setTtsEngineId('fish_drama3_4bit'),
+        };
+        held.release.complete();
+        await cancellation;
+        await _until(() => !c.isInitializing && !c.hasPendingPlaybackIntent);
+        expect(held.exports, isEmpty);
+        expect(held.requests, isEmpty);
+        expect(last.exports, isEmpty);
+        expect(last.requests, isEmpty);
+      },
+    );
+  }
+
+  test(
+    'legacy two-argument consumer cannot hand off without playback evidence',
+    () async {
+      final old = _ScopedOfflineEngine('kokoro');
+      final target = _ScopedOfflineEngine('fish_drama3_8bit')
+        ..renderAvailable = true;
+      final c = await fishController(
+        old,
+        preference: 'kokoro',
+        engineFactory: (_, _) => target,
+      );
+      await c.importFilePaths([(await legacyFishFixture()).path]);
+      await c.assignVoiceToCast('cast_character_mara', 'library_fishadrian');
+      await c.startPlayback();
+      await expectLater(
+        old.requests.single.continuation!.next(0, Completer<void>().future),
+        throwsA(
+          isA<StateError>().having(
+            (e) => e.message,
+            'message',
+            contains('confirm consumed audio'),
+          ),
+        ),
+      );
+      expect(old.requests.single.isCurrent!(), true);
+      expect(target.exports, isEmpty);
+      expect(target.modelCalls, 0);
+    },
+  );
+}
+
+Future<void> _until(bool Function() ready) async {
+  final deadline = DateTime.now().add(const Duration(seconds: 5));
+  while (!ready()) {
+    if (DateTime.now().isAfter(deadline)) {
+      throw StateError('Timed out awaiting book owner');
+    }
+    await Future<void>.delayed(const Duration(milliseconds: 5));
+  }
 }
 
 class _OfflineEngine
@@ -1137,6 +1493,7 @@ class _OfflineEngine
   int modelCalls = 0;
   bool renderAvailable = false;
   bool fishPublication = false;
+  String fishEngineId = 'fish_drama3_8bit';
   Completer<void>? packetGate;
   bool failAfterPacket = false;
   final exports = <TtsExportRequest>[];
@@ -1182,9 +1539,38 @@ class _OfflineEngine
   Future<TtsExportResult> exportAudio(TtsExportRequest request) async {
     exports.add(request);
     final chunk = request.chunkPlan!.chunks.single;
-    await File(
-      request.outputPath,
-    ).writeAsBytes(_wav(sample: fishPublication ? 77 : 0));
+    final binding = PreparedVoiceBinding(
+      voiceId: chunk.voiceId,
+      voiceDigest: 'fixture-${chunk.voiceId}',
+      modelDigest: 'fixture-$fishEngineId-model',
+      engineVersion: _fishFixtureEngineVersion,
+      pronunciationProfileId: 'en-us-core',
+      bindingRevision: 1,
+      documentId: request.documentId!,
+    );
+    File? rawFile;
+    String? rawIdentity;
+    Duration duration = const Duration(milliseconds: 10);
+    if (fishPublication) {
+      final bytes = _boundaryWav(sample: 777);
+      rawFile = await File('${request.outputPath}.raw.wav').writeAsBytes(bytes);
+      rawIdentity = 'wav-sha256:${sha256.convert(bytes)}';
+      final correction = const SynthesisBoundaryPolicy().correctWavFileSync(
+        chunkId: chunk.chunkId,
+        wavFilePath: rawFile.path,
+        boundaryClass: chunk.boundaryClass,
+        isInitialChunk: request.predecessorRawArtifactIdentity == null,
+        isResumedChunk: false,
+        previousArtifactIdentity: request.predecessorRawArtifactIdentity,
+        previousTrailingSilence: request.predecessorTrailingSilence,
+      );
+      duration = correction.duration;
+      await File(request.outputPath).writeAsBytes(
+        await File(correction.audioPath ?? rawFile.path).readAsBytes(),
+      );
+    } else {
+      await File(request.outputPath).writeAsBytes(_wav());
+    }
     Completer<TtsRenderedSceneCompletion>? packetCompletion;
     if (packetGate != null) {
       packetCompletion = Completer<TtsRenderedSceneCompletion>();
@@ -1240,26 +1626,35 @@ class _OfflineEngine
                   segmentIds: chunk.segmentIds,
                   startWord: request.sourceWordOffset + chunk.startWordIndex,
                   endWord: request.sourceWordOffset + chunk.endWordIndex,
-                  bindingFingerprint: 'fixture-binding',
+                  bindingFingerprint: binding.fingerprint,
                   bindingRevision: 1,
                   castId: chunk.castId,
                 ),
               ]
             : [],
-        preparedBindings: [],
+        preparedBindings: fishPublication ? [binding] : [],
         audioPath: request.outputPath,
-        duration: const Duration(milliseconds: 10),
-        engineId: 'kokoro',
-        engineVersion: '2',
+        duration: duration,
+        engineId: fishPublication ? fishEngineId : 'kokoro',
+        engineVersion: fishPublication ? _fishFixtureEngineVersion : '2',
         normalizationVersion: request.normalizationVersion!,
-        capabilityProfileId: 'test',
+        capabilityProfileId: fishPublication
+            ? '$fishEngineId:macos:v1'
+            : 'test',
         synthesisIdentity: 'test',
         translationSignature: 'test',
         synthesisRate: 1,
         assignmentRevision: request.assignmentRevision,
         cancelled: request.cancelled!,
         isCurrent: request.isCurrent!,
+        rawAudioPath: rawFile?.path,
+        rawArtifactIdentity: rawIdentity,
         predecessorRawArtifactIdentity: request.predecessorRawArtifactIdentity,
+        boundaryPolicyVersion: fishPublication
+            ? SynthesisBoundaryPolicy.version
+            : null,
+        boundaryClass: fishPublication ? chunk.boundaryClass.name : null,
+        trailingSilenceMicros: fishPublication ? 100000 : null,
       ),
     );
     packetCompletion?.complete(
@@ -1311,8 +1706,19 @@ class _OfflineEngine
   }
 }
 
-Uint8List _wav({int sample = 0}) {
-  final b = ByteData(44 + 480);
+const _fishFixtureEngineVersion =
+    'mlx-audio-0.6.3-mlx-0.32.4-complete-v3-q0-native-cast-v1';
+
+Uint8List _boundaryWav({required int sample}) =>
+    _wav(sample: sample, frames: 12000, leading: 7200, trailing: 2400);
+
+Uint8List _wav({
+  int sample = 0,
+  int frames = 240,
+  int leading = 0,
+  int trailing = 0,
+}) {
+  final b = ByteData(44 + frames * 2);
   void tag(int i, String s) {
     for (var k = 0; k < s.length; k++) {
       b.setUint8(i + k, s.codeUnitAt(k));
@@ -1331,14 +1737,46 @@ Uint8List _wav({int sample = 0}) {
   b.setUint16(32, 2, Endian.little);
   b.setUint16(34, 16, Endian.little);
   tag(36, 'data');
-  b.setUint32(40, 480, Endian.little);
+  b.setUint32(40, frames * 2, Endian.little);
   for (var i = 44; i < b.lengthInBytes; i += 2) {
-    b.setInt16(i, sample, Endian.little);
+    final frame = (i - 44) ~/ 2;
+    b.setInt16(
+      i,
+      frame >= leading && frame < frames - trailing ? sample : 0,
+      Endian.little,
+    );
   }
   return b.buffer.asUint8List();
 }
 
 class _HeldBookEngine extends _OfflineEngine {
+  final started = Completer<void>();
+  final release = Completer<void>();
+  @override
+  Future<void> initialize() async {
+    started.complete();
+    await release.future;
+    await super.initialize();
+  }
+}
+
+class _ScopedOfflineEngine extends _OfflineEngine
+    implements TtsEngineIdentityCapable {
+  _ScopedOfflineEngine(String id) {
+    fishEngineId = id;
+    fishPublication = id.startsWith('fish_drama3');
+  }
+  @override
+  String get engineId => fishEngineId;
+  @override
+  String get engineVersion => fishPublication ? _fishFixtureEngineVersion : '2';
+  Future<void>? consumerDrain;
+  @override
+  Future<void> stop() async => await consumerDrain;
+}
+
+class _HeldScopedBookEngine extends _ScopedOfflineEngine {
+  _HeldScopedBookEngine() : super('fish_drama3_8bit');
   final started = Completer<void>();
   final release = Completer<void>();
   @override

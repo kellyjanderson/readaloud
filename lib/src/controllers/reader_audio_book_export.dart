@@ -38,6 +38,7 @@ extension ReaderAudioBookPersistence on ReaderController {
   Future<void> Function(TtsFinalizedAudioScene) _renderedSceneWriter({
     ReaderDocument? document,
     int? sourceWordOffset,
+    Map<String, dynamic>? preservedIntent,
   }) {
     final capturedDocument = document ?? _document;
     final capturedOffset =
@@ -45,7 +46,7 @@ extension ReaderAudioBookPersistence on ReaderController {
     final source =
         _activeSourceRevision ??
         _document.normalizedImportResult.sourceFingerprint;
-    final intent = _bookIntent();
+    final intent = Map<String, dynamic>.from(preservedIntent ?? _bookIntent());
     final revision = _documentRevision;
     final epoch = _engineEpoch;
     return (scene) async {

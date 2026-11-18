@@ -246,6 +246,29 @@ or queue. Source regression covers the historical seven-scene synthetic book,
 selective Mara edits and save/reopen; native emitted-audio and listening evidence
 remain separate acceptance gates owned by [S11 #152](https://github.com/kellyjanderson/readaloud/issues/152).
 
+A later missing scene uses the opening-gap policy for the published engine when
+the app's selection has not changed since opening the book. The continuation
+retires its playback intent and queues the existing Play driver at that exact
+gap; it does not await engine shutdown from inside the old engine's consumer.
+The player invokes `TtsRenderedAudioContinuation.demandNext` with a consumption
+barrier owned by that exact preceding request and playback generation. Both
+production rendered-demand sites use this route. Ordinary prefetch does not
+wait. Before retiring an engine, the controller awaits actual native completed
+state at the final queued chunk with the same scene identity, then rechecks
+cancellation and playback/document identity. Final synthesis publication,
+readiness, estimated word position and duration are not consumption evidence.
+Existing player events and buffer signals own the wait, bounded by queued audio
+duration at player speed plus thirty seconds; Pause/shutdown invalidate it.
+The legacy two-argument `next` remains usable for ordinary demand, but a
+controller handoff through it fails explicitly without consumption evidence.
+One session-owned predecessor descriptor retains boundary context through this
+handoff. Pause, document replacement and newer selections fence its replacement
+and resume. An explicit engine change after opening keeps precedence.
+Changed predecessors may republish the immediate following scene's finalized
+boundary derivative from retained raw PCM, without another inference. This
+publication preserves the source scene's captured intent, engine and resource
+identity, rather than labeling old raw audio with current synthesis choices.
+
 The macOS Save Audio Book path obtains only the chosen destination through the
 native Save panel. A utility-queue Foundation `itemReplacementDirectory` request
 allocates private staging on the destination volume; it does not require access
