@@ -1037,6 +1037,7 @@ void main() {
     TtsEngine Function(String, int)? engineFactory,
     bool deferInitialSynthesis = true,
     DocumentPreparationSupervisor? preparationSupervisor,
+    RenderedSceneRepository? renderedSceneRepository,
   }) async {
     SharedPreferences.setMockInitialValues({'reader.ttsEngineId': preference});
     final c = ReaderController(
@@ -1045,9 +1046,9 @@ void main() {
       preparationSupervisor: preparationSupervisor,
       deferInitialSynthesis: deferInitialSynthesis,
       enablePlatformIntakeChannels: false,
-      renderedSceneRepository: RenderedSceneRepository(
-        Directory('${temp.path}/fish-scenes'),
-      ),
+      renderedSceneRepository:
+          renderedSceneRepository ??
+          RenderedSceneRepository(Directory('${temp.path}/fish-scenes')),
     );
     addTearDown(() async {
       await c.shutdownPreparation();
@@ -1071,6 +1072,132 @@ void main() {
       DocumentImportService().importPastedText(
         fixture['speakableText'] as String,
       ),
+    );
+  }
+
+  for (final outcome in ['success', 'failure', 'cancel', 'shutdown']) {
+    test(
+      'playback and export share publication admission across $outcome',
+      () async {
+        final store = _HeldPublicationRepository(
+          Directory('${temp.path}/overlap-scenes'),
+        );
+        final owner = _WholeSourceExportEngine()..holdAfterFirst = true;
+        final c = await fishController(
+          owner,
+          deferInitialSynthesis: false,
+          renderedSceneRepository: store,
+        );
+        await loadFreshExportSource(c);
+        await c.startPlayback();
+        final exporting = c.exportAudioToPath('${temp.path}/overlap.wav');
+        await owner.held.future;
+        final playback = owner.synthesisRequests.single;
+        final export = owner.wholeRequests.single;
+        final rendered = owner.exports.first;
+        final chunk = rendered.chunkPlan!.chunks.single;
+        final cancellation = Completer<void>();
+        TtsFinalizedAudioScene scene(bool Function() current) =>
+            TtsFinalizedAudioScene(
+              documentId: export.documentId!,
+              generationId: 'overlap',
+              sceneId: 'overlap',
+              text: chunk.speakText,
+              engineSpeakText: chunk.speakText,
+              startWordIndex: chunk.startWordIndex,
+              endWordIndex: chunk.endWordIndex,
+              startOffset: 0,
+              sceneTurns: const [],
+              preparedBindings: const [],
+              audioPath: rendered.outputPath,
+              duration: const Duration(milliseconds: 10),
+              engineId: 'fish_drama3_8bit',
+              engineVersion: 'test',
+              normalizationVersion: export.normalizationVersion!,
+              capabilityProfileId: 'test',
+              synthesisIdentity: 'test',
+              translationSignature: 'test',
+              synthesisRate: 1,
+              assignmentRevision: export.assignmentRevision,
+              cancelled: cancellation.future,
+              isCurrent: current,
+            );
+        final barrier = _PublicationBarrier();
+        addTearDown(() {
+          if (!barrier.release.isCompleted) barrier.release.complete();
+          if (!owner.release.isCompleted) owner.release.complete();
+        });
+        store.next = barrier;
+        try {
+          final initialCalls = store.calls;
+          final first = playback.onRenderedScene!(scene(playback.isCurrent!));
+          final firstResult = expectLater(
+            first,
+            outcome == 'failure' ? throwsStateError : completes,
+          );
+          await barrier.entered.future;
+          var secondDone = false;
+          final second = export.onRenderedScene!(scene(export.isCurrent!))
+              .whenComplete(() => secondDone = true);
+          final secondResult = expectLater(
+            second,
+            ['cancel', 'shutdown'].contains(outcome)
+                ? throwsA(isA<PlanningCancelled>())
+                : completes,
+          );
+          await Future<void>.delayed(Duration.zero);
+          expect(secondDone, false);
+          expect(store.calls, initialCalls + 1);
+          expect(store.peakCalls, 1);
+          Future<void>? shuttingDown;
+          var shutdownDone = false;
+          if (['cancel', 'shutdown'].contains(outcome)) {
+            if (outcome == 'shutdown') {
+              shuttingDown = c.shutdownPreparation().whenComplete(
+                () => shutdownDone = true,
+              );
+            } else {
+              await c.selectVoiceById('other');
+            }
+            cancellation.complete();
+            await secondResult.timeout(const Duration(seconds: 2));
+            expect(
+              secondDone,
+              true,
+              reason:
+                  'Cancelled waiting work detaches before active disk work drains.',
+            );
+            expect(store.calls, initialCalls + 1);
+            if (outcome == 'shutdown') expect(shutdownDone, false);
+          }
+          if (outcome == 'failure') {
+            barrier.release.completeError(
+              StateError('first producer write failed'),
+            );
+          } else {
+            barrier.release.complete();
+          }
+          await firstResult;
+          await secondResult;
+          await shuttingDown;
+          if (outcome == 'shutdown') expect(shutdownDone, true);
+          expect(store.peakCalls, 1);
+          expect(
+            store.calls,
+            initialCalls + (['cancel', 'shutdown'].contains(outcome) ? 1 : 2),
+          );
+          owner.release.complete();
+          expect(
+            await exporting,
+            ['cancel', 'shutdown'].contains(outcome) ? isNull : isNotNull,
+          );
+          await c.pausePlayback();
+        } finally {
+          if (!barrier.release.isCompleted) barrier.release.complete();
+          if (!owner.release.isCompleted) owner.release.complete();
+          await exporting;
+        }
+      },
     );
   }
 
@@ -2280,6 +2407,40 @@ class _WholeSourceExportEngine extends _ScopedOfflineEngine {
       return result!;
     } finally {
       await planner.shutdown();
+    }
+  }
+}
+
+class _PublicationBarrier {
+  final entered = Completer<void>();
+  final release = Completer<void>();
+}
+
+class _HeldPublicationRepository extends RenderedSceneRepository {
+  _HeldPublicationRepository(super.root);
+  _PublicationBarrier? next;
+  int calls = 0;
+  int activeCalls = 0;
+  int peakCalls = 0;
+  @override
+  Future<StoredRenderedScene> publish(
+    TtsFinalizedAudioScene scene, {
+    required String sourceId,
+    required Map<String, dynamic> intent,
+  }) async {
+    ++calls;
+    ++activeCalls;
+    if (activeCalls > peakCalls) peakCalls = activeCalls;
+    final barrier = next;
+    next = null;
+    try {
+      if (barrier != null) {
+        barrier.entered.complete();
+        await barrier.release.future;
+      }
+      return await super.publish(scene, sourceId: sourceId, intent: intent);
+    } finally {
+      --activeCalls;
     }
   }
 }

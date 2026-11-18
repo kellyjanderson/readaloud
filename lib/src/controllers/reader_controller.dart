@@ -74,6 +74,7 @@ import '../services/radoc_audio_package.dart';
 import '../services/radoc_export_staging.dart';
 import '../services/audio_artifact_store.dart';
 import '../services/rendered_scene_repository.dart';
+import 'package:synchronized/synchronized.dart';
 import '../services/synthesis_boundary_policy.dart';
 import '../models/speech_annotation.dart';
 
@@ -145,6 +146,8 @@ class ReaderController extends ChangeNotifier {
   int? _audioGapWord;
   bool get hasPublishedAudio => _audioBook != null;
   RenderedSceneRepository? _renderedScenes;
+  final Lock _renderedScenePublicationLock = Lock();
+  Future<void>? _renderedScenePublication;
   void _notifyAudioBookChanged() => notifyListeners();
   ModernBookNlpWindow? _offeredAnalysisWindow;
   ModernBookNlpRequest? _offeredAnalysisRequest;
@@ -3446,13 +3449,15 @@ class ReaderController extends ChangeNotifier {
     final exportRevision = _documentRevision;
     final exportAssignmentRevision = voiceAssignmentState.requestedRevision;
     final exportRate = currentSpeed;
+    final exportBindingIntent = _resourceBindingIntent;
     var exportActive = true;
     var exportCancelled = false;
     bool ownsContext() =>
         _ownsEngine(exportEngine, exportEpoch) &&
         exportRevision == _documentRevision &&
         exportAssignmentRevision == voiceAssignmentState.requestedRevision &&
-        exportRate == currentSpeed;
+        exportRate == currentSpeed &&
+        exportBindingIntent == _resourceBindingIntent;
     bool current() => exportActive && !exportCancelled && ownsContext();
     void requireCurrent() {
       if (!current()) throw const PlanningCancelled();
@@ -4345,7 +4350,10 @@ class ReaderController extends ChangeNotifier {
       book.current = false;
       unawaited(_ttsEngine.stop().then((_) => book.dispose()));
     }
-    unawaited(_renderedScenes?.dispose());
+    unawaited(() async {
+      await _renderedScenes?.dispose();
+      await _renderedScenePublication;
+    }());
     releasePreparedRange(_publicationSequence);
     ++_documentRevision;
     ++_watchSession;
@@ -4944,6 +4952,7 @@ class ReaderController extends ChangeNotifier {
     await _documentExportWork;
     await _audioBookRetirement;
     await _renderedScenes?.cancelAndDrain();
+    await _renderedScenePublication;
   }
 
   void _clearDocumentLoadStage() {

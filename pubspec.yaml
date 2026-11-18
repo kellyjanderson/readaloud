@@ -49,6 +49,7 @@ dependencies:
   path_provider: ^2.1.5
   path: ^1.9.1
   shared_preferences: ^2.5.5
+  synchronized: 3.4.0
   kokoro_tts_flutter: ^0.2.0+1
   malsami: 0.0.3
   flutter_onnxruntime: ^1.6.3

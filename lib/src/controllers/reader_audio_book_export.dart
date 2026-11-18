@@ -1,6 +1,36 @@
 part of 'reader_controller.dart';
 
 extension ReaderAudioBookPersistence on ReaderController {
+  /// Playback and export each await one callback on their own producer tail:
+  /// one can publish while the other waits. Keep cancellable waiting outside
+  /// Lock's non-removable queue so retired callers detach without queued I/O.
+  Future<void> _admitRenderedScene(
+    TtsFinalizedAudioScene scene, {
+    required bool Function() isCurrent,
+    required Future<void> Function() publish,
+  }) async {
+    if (!isCurrent()) return;
+    while (_renderedScenePublicationLock.locked) {
+      final previous = _renderedScenePublication!;
+      final ready = await Future.any([
+        previous.then((_) => true),
+        scene.cancelled.then((_) => false),
+      ]);
+      if (!ready || !isCurrent()) return;
+    }
+    if (!isCurrent()) return;
+    final completed = Completer<void>();
+    _renderedScenePublication = completed.future;
+    try {
+      // No await separates the unlocked check from lock acquisition on the
+      // controller isolate. The maintained lock owns active work, never waits.
+      await _renderedScenePublicationLock.synchronized(publish);
+    } finally {
+      // Failure belongs to this producer; another caller waits only for drain.
+      completed.complete();
+    }
+  }
+
   Future<void> _ensureSceneRepository() async {
     if (_renderedScenes != null) return;
     try {
@@ -49,98 +79,103 @@ extension ReaderAudioBookPersistence on ReaderController {
     final intent = Map<String, dynamic>.from(preservedIntent ?? _bookIntent());
     final revision = _documentRevision;
     final epoch = _engineEpoch;
-    return (scene) async {
-      if (_disposed ||
-          epoch != _engineEpoch ||
-          revision != _documentRevision ||
-          !scene.isCurrent()) {
-        return;
-      }
-      var repository = _renderedScenes;
-      if (repository == null) {
-        try {
-          final support = await getApplicationSupportDirectory();
-          if (_disposed ||
-              epoch != _engineEpoch ||
-              revision != _documentRevision ||
-              !scene.isCurrent()) {
-            return;
+    return (scene) {
+      bool current() =>
+          !_disposed &&
+          epoch == _engineEpoch &&
+          revision == _documentRevision &&
+          scene.isCurrent();
+      return _admitRenderedScene(
+        scene,
+        isCurrent: current,
+        publish: () async {
+          var repository = _renderedScenes;
+          if (repository == null) {
+            try {
+              final support = await getApplicationSupportDirectory();
+              if (_disposed ||
+                  epoch != _engineEpoch ||
+                  revision != _documentRevision ||
+                  !scene.isCurrent()) {
+                return;
+              }
+              repository = _renderedScenes ??= RenderedSceneRepository(
+                Directory(p.join(support.path, 'rendered-scenes')),
+              );
+            } on MissingPluginException {
+              // Platform-free legacy fakes have no support directory. Native app
+              // persistence failures propagate through the engine's error boundary.
+              if (!kDebugMode) rethrow;
+              return;
+            }
           }
-          repository = _renderedScenes ??= RenderedSceneRepository(
-            Directory(p.join(support.path, 'rendered-scenes')),
+          final ticket = beginReadingStage(
+            PreparationStage.persistence,
+            producerId: 'rendered-scene-store',
+            scope: 'Saved scene output',
           );
-        } on MissingPluginException {
-          // Platform-free legacy fakes have no support directory. Native app
-          // persistence failures propagate through the engine's error boundary.
-          if (!kDebugMode) rethrow;
-          return;
-        }
-      }
-      final ticket = beginReadingStage(
-        PreparationStage.persistence,
-        producerId: 'rendered-scene-store',
-        scope: 'Saved scene output',
-      );
-      publishReadingStage(
-        ticket,
-        const PreparationProgress(
-          stage: PreparationStage.persistence,
-          state: PreparationWorkState.working,
-          completed: 0,
-          total: 1,
-          unit: 'scenes',
-        ),
-      );
-      try {
-        await repository.publish(
-          scene,
-          sourceId: source,
-          intent: {
-            ...intent,
-            'canonicalDirections': _canonicalSceneDirections(
-              capturedDocument,
-              capturedOffset,
-              scene.startWordIndex,
-              scene.endWordIndex,
+          publishReadingStage(
+            ticket,
+            const PreparationProgress(
+              stage: PreparationStage.persistence,
+              state: PreparationWorkState.working,
+              completed: 0,
+              total: 1,
+              unit: 'scenes',
             ),
-          },
-        );
-        if (_disposed ||
-            epoch != _engineEpoch ||
-            revision != _documentRevision ||
-            !scene.isCurrent()) {
-          return;
-        }
-        publishReadingStage(
-          ticket,
-          const PreparationProgress(
-            stage: PreparationStage.persistence,
-            state: PreparationWorkState.complete,
-            completed: 1,
-            total: 1,
-            unit: 'scenes',
-          ),
-        );
-      } catch (error) {
-        if (_disposed ||
-            epoch != _engineEpoch ||
-            revision != _documentRevision ||
-            !scene.isCurrent()) {
-          return;
-        }
-        publishReadingStage(
-          ticket,
-          PreparationProgress(
-            stage: PreparationStage.persistence,
-            state: PreparationWorkState.failed,
-            completed: 0,
-            total: 1,
-            unit: 'scenes',
-            error: '$error',
-          ),
-        );
-        rethrow;
-      }
+          );
+          try {
+            await repository.publish(
+              scene,
+              sourceId: source,
+              intent: {
+                ...intent,
+                'canonicalDirections': _canonicalSceneDirections(
+                  capturedDocument,
+                  capturedOffset,
+                  scene.startWordIndex,
+                  scene.endWordIndex,
+                ),
+              },
+            );
+            if (_disposed ||
+                epoch != _engineEpoch ||
+                revision != _documentRevision ||
+                !scene.isCurrent()) {
+              return;
+            }
+            publishReadingStage(
+              ticket,
+              const PreparationProgress(
+                stage: PreparationStage.persistence,
+                state: PreparationWorkState.complete,
+                completed: 1,
+                total: 1,
+                unit: 'scenes',
+              ),
+            );
+          } catch (error) {
+            if (_disposed ||
+                epoch != _engineEpoch ||
+                revision != _documentRevision ||
+                !scene.isCurrent()) {
+              return;
+            }
+            publishReadingStage(
+              ticket,
+              PreparationProgress(
+                stage: PreparationStage.persistence,
+                state: PreparationWorkState.failed,
+                completed: 0,
+                total: 1,
+                unit: 'scenes',
+                error: '$error',
+              ),
+            );
+            rethrow;
+          }
+        },
+      );
     };
   }
 

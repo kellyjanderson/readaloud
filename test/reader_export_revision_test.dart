@@ -4,6 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter/services.dart';
 import 'package:read_aloud/src/controllers/reader_controller.dart';
 import 'package:read_aloud/src/models/prepared_voice_binding.dart';
+import 'package:read_aloud/src/models/reader_operation.dart';
 import 'package:read_aloud/src/models/voice_profile.dart';
 import 'package:read_aloud/src/services/document_import_service.dart';
 import 'package:read_aloud/src/services/playback_instrumentation_service.dart';
@@ -82,6 +83,39 @@ void main() {
       isNot(contains('private native diagnosis')),
     );
   });
+
+  test(
+    'preview resource replacement cancels export progress before its first scene',
+    () async {
+      final engine = _ExportEngine();
+      final controller = ReaderController(
+        ttsEngine: engine,
+        enablePlatformIntakeChannels: false,
+      );
+      addTearDown(controller.dispose);
+      await controller.initialize();
+      await controller.loadDocument(
+        DocumentImportService().importPastedText('Amber document.'),
+      );
+      final barrier = _Barrier();
+      engine.nextExport = barrier;
+      final exporting = controller.exportAudioToPath('/tmp/preview-cancel.wav');
+      await barrier.started.future;
+      await controller.previewVoice(_ExportEngine.voice.id);
+      controller.showStatusMessage('Preview owns status');
+      barrier.release.completeError(
+        StateError('Export cancelled or superseded.'),
+      );
+      expect(await exporting, isNull);
+      expect(controller.statusMessage, 'Preview owns status');
+      final progress = controller.feedbackOperations.singleWhere(
+        (op) => op.scope == 'Save audio',
+      );
+      expect(progress.state, OperationState.cancelled);
+      expect(progress.completedUnits, 0);
+      expect(progress.totalUnits, isNull);
+    },
+  );
 
   for (final fail in [false, true]) {
     test(

@@ -260,7 +260,8 @@ raw audio, dependencies, bindings and captured intent. The controller captures
 the complete export document and zero source-word offset before planning;
 displaying a later prepared fragment cannot shift canonical directions again.
 Engine epoch, document revision, voice-assignment revision, rate and active
-export lifetime fence admission. The engine's existing export cancellation
+export lifetime fence admission. Captured resource-binding intent also retires
+an export when a voice preview replaces resources before its first scene. The engine's existing export cancellation
 future owns in-flight repository cancellation; committed scenes survive a later
 cancelled or obsolete attempt. Failures from a superseded export cannot replace
 the current owner's status. This source repair is tracked in
@@ -279,6 +280,23 @@ retired export's cancellation signal cannot settle a successor attempt. Held
 final-publication tests establish these boundaries in source; the native
 count-advancement gate remains in the
 [#152 clarification](https://github.com/kellyjanderson/readaloud/issues/152#issuecomment-6966891216).
+
+Playback's scene-ready tail and export's publication tail are independent of
+native inference admission. Their callbacks share one controller publication
+owner over `RenderedSceneRepository`: one active callback and at most one other
+producer waiting, because each existing producer awaits its callback before
+admitting the next. The existing pinned `synchronized` 3.4.0 package owns active
+publication. Its built-in wait queue has no cancellation removal, so waiting
+stays outside that queue and races the active owner's normalized drain against
+the scene cancellation signal. Waiting cancellation detaches promptly; current
+document/engine/scene ownership is checked again before synchronous lock
+acquisition. A failed publisher releases the lock without failing another
+producer's drain future. Shutdown invalidates old callbacks, cancels repository
+work and joins the active publication owner. No new scheduler or inference queue
+is introduced. Held playback/export tests cover serialization, failure isolation,
+cancelled-waiter rejection and shutdown join; the
+[bounded repair work order](https://github.com/kellyjanderson/readaloud/issues/152#issuecomment-6966983684)
+records the original overlap finding and native acceptance limit.
 
 Selective book regeneration sends one bounded plan with no continuation to this exporter. Its
 existing runtime, tokenizer, resource admission and assembly lifecycle retain
