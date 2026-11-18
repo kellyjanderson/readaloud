@@ -3447,19 +3447,51 @@ class ReaderController extends ChangeNotifier {
     final exportAssignmentRevision = voiceAssignmentState.requestedRevision;
     final exportRate = currentSpeed;
     var exportActive = true;
-    bool current() =>
-        exportActive &&
+    var exportCancelled = false;
+    bool ownsContext() =>
         _ownsEngine(exportEngine, exportEpoch) &&
         exportRevision == _documentRevision &&
         exportAssignmentRevision == voiceAssignmentState.requestedRevision &&
         exportRate == currentSpeed;
+    bool current() => exportActive && !exportCancelled && ownsContext();
     void requireCurrent() {
       if (!current()) throw const PlanningCancelled();
     }
 
     _isExporting = true;
     _statusMessage = 'Saving audio with ${voice.displayName}...';
-    notifyListeners();
+    final exportTicket = beginReadingStage(
+      PreparationStage.persistence,
+      producerId: 'audio-export',
+      scope: 'Save audio',
+    );
+    var completedScenes = 0;
+    var progressSettled = false;
+    void reportExport(PreparationWorkState state, {String? error}) {
+      if (progressSettled) return;
+      progressSettled =
+          state == PreparationWorkState.complete ||
+          state == PreparationWorkState.failed ||
+          state == PreparationWorkState.cancelled;
+      publishReadingStage(
+        exportTicket,
+        PreparationProgress(
+          stage: PreparationStage.persistence,
+          state: state,
+          completed: completedScenes,
+          total: state == PreparationWorkState.complete && completedScenes > 0
+              ? completedScenes
+              : null,
+          unit: 'scenes',
+          waitingReason: progressSettled
+              ? null
+              : 'Saving audio; total scene count unknown',
+          error: error,
+        ),
+      );
+    }
+
+    reportExport(PreparationWorkState.working);
 
     var exportStage = 'destination';
     try {
@@ -3495,22 +3527,63 @@ class ReaderController extends ChangeNotifier {
         );
       }
       exportStage = 'planning';
+      // Export plans the complete source, even when the reader displays a later
+      // prepared range. Capture intent now and keep its coordinates at zero.
+      final writeScene = _renderedSceneWriter(
+        document: document,
+        sourceWordOffset: 0,
+      );
+      var observingCancellation = false;
       final exportRequest = await _buildExportRequest(
         normalizedPath,
         document: document,
         assignmentRevision: exportAssignmentRevision,
         isCurrent: current,
+        onRenderedScene: (scene) async {
+          requireCurrent();
+          if (!observingCancellation) {
+            observingCancellation = true;
+            unawaited(
+              scene.cancelled.then((_) {
+                if (!exportActive) return;
+                exportCancelled = true;
+                reportExport(PreparationWorkState.cancelled);
+              }),
+            );
+          }
+          await writeScene(scene);
+          requireCurrent();
+          if (!scene.isCurrent()) throw const PlanningCancelled();
+          ++completedScenes;
+          reportExport(PreparationWorkState.working);
+        },
       );
       requireCurrent();
       exportStage = 'rendering-and-assembly';
       final result = await exporter.exportAudio(exportRequest);
       requireCurrent();
+      // Finalized scene callbacks precede assembly and atomic WAV/JSON commit.
+      reportExport(PreparationWorkState.complete);
       if (current()) {
         _statusMessage = 'Saved audio to ${result.outputPath}.';
       }
       return result;
     } catch (error, stack) {
-      if (current()) {
+      final cancelled =
+          !current() ||
+          error is PlanningCancelled ||
+          error is _SupersededPreparation ||
+          error is RenderedSceneCancelled;
+      reportExport(
+        cancelled
+            ? PreparationWorkState.cancelled
+            : PreparationWorkState.failed,
+        error: cancelled ? null : '$error',
+      );
+      if (cancelled && exportActive && ownsContext()) {
+        _statusMessage = 'Audio export cancelled.';
+      }
+      if (current() && !cancelled) {
         _instrumentation.recordMetric(
           metric: 'audioExportFailed',
           documentId: _document.displayDocument.documentId,
@@ -3540,6 +3613,9 @@ class ReaderController extends ChangeNotifier {
       }
       return null;
     } finally {
+      // Same-document intent edits retire this owner too. Ticket generation
+      // admission prevents its cancellation from settling a successor attempt.
+      reportExport(PreparationWorkState.cancelled);
       exportActive = false;
       _isExporting = false;
       if (!_disposed) notifyListeners();
@@ -5119,17 +5195,12 @@ class ReaderController extends ChangeNotifier {
     required ReaderDocument document,
     required int assignmentRevision,
     required bool Function() isCurrent,
+    required Future<void> Function(TtsFinalizedAudioScene) onRenderedScene,
   }) async {
     final revision = _documentRevision;
     final intent = _resourceBindingIntent;
     final bindings = resourceBindings;
     final context = _planningContext(fromStart: true, document: document);
-    // Export plans the complete source, even when the reader displays a later
-    // prepared range. Capture intent now and keep its coordinates at zero.
-    final writeScene = _renderedSceneWriter(
-      document: document,
-      sourceWordOffset: 0,
-    );
     final planner = SpeechPlanningSupervisor();
     _exportPlanner = planner;
     try {
@@ -5150,7 +5221,7 @@ class ReaderController extends ChangeNotifier {
         speechDocument: document.speechDocument,
         ttsArtifactSet: window?.realization.ttsArtifactSet,
         planningContext: context,
-        onRenderedScene: writeScene,
+        onRenderedScene: onRenderedScene,
         assignmentRevision: assignmentRevision,
         isCurrent: isCurrent,
         preparedResources: _ttsEngine is ResourcePreparationCapable

@@ -269,6 +269,17 @@ fresh controller export-to-book, complete-range direction coordinates, copied
 WAV/metadata reuse and stale callback tests establish the wiring. Current-candidate
 native export-to-book and human listening remain separate acceptance gates.
 
+One export-owned **Save audio** reading stage reports the number of successfully
+persisted finalized scenes. Its total stays unknown while rendering and assembly
+run, including after the last scene callback; only the exporter's return after
+WAV/JSON publication completes the operation. Current failures retain the count
+and expose failure; cancellation or obsolete intent settles the old ticket as
+cancelled. Document and stage-generation admission suppress late reports, and a
+retired export's cancellation signal cannot settle a successor attempt. Held
+final-publication tests establish these boundaries in source; the native
+count-advancement gate remains in the
+[#152 clarification](https://github.com/kellyjanderson/readaloud/issues/152#issuecomment-6966891216).
+
 Selective book regeneration sends one bounded plan with no continuation to this exporter. Its
 existing runtime, tokenizer, resource admission and assembly lifecycle retain
 ownership; export cancellation does not tear down concurrently playing saved

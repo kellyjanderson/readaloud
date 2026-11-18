@@ -1297,6 +1297,116 @@ void main() {
     },
   );
 
+  for (final fail in [false, true]) {
+    test(
+      'export scene count stays active until final publication ${fail ? 'fails' : 'succeeds'}',
+      () async {
+        final publication = Completer<void>();
+        final owner = _WholeSourceExportEngine()
+          ..finalCommitWait = publication.future;
+        final c = await fishController(owner, deferInitialSynthesis: false);
+        await loadFreshExportSource(c);
+        final exporting = c.exportAudioToPath('${temp.path}/held-commit.wav');
+        await owner.finalCommitEntered.future;
+        final active = c.feedbackOperations.singleWhere(
+          (op) => op.scope == 'Save audio',
+        );
+        expect(active.state, OperationState.running);
+        expect(active.completedUnits, owner.exports.length);
+        expect(active.completedUnits, greaterThan(3));
+        expect(active.unit, 'scenes');
+        expect(active.totalUnits, isNull);
+        expect(active.fraction, isNull);
+        expect(c.isExporting, true);
+        if (fail) {
+          publication.completeError(StateError('final WAV/JSON commit failed'));
+        } else {
+          publication.complete();
+        }
+        expect(await exporting, fail ? isNull : isNotNull);
+        final terminal = c.feedbackOperations.singleWhere(
+          (op) => op.key == active.key,
+        );
+        expect(
+          terminal.state,
+          fail ? OperationState.failed : OperationState.succeeded,
+        );
+        expect(terminal.completedUnits, active.completedUnits);
+        expect(terminal.totalUnits, fail ? isNull : active.completedUnits);
+      },
+    );
+  }
+
+  test(
+    'retired export cancellation cannot settle a successor progress generation',
+    () async {
+      final owner = _WholeSourceExportEngine();
+      final c = await fishController(owner, deferInitialSynthesis: false);
+      await loadFreshExportSource(c);
+      expect(await c.exportAudioToPath('${temp.path}/first.wav'), isNotNull);
+      final old = c.feedbackOperations.singleWhere(
+        (op) => op.scope == 'Save audio',
+      );
+      final oldCancellation = owner.cancelled;
+      owner.cancelled = Completer<void>();
+      final commit = Completer<void>();
+      owner.finalCommitWait = commit.future;
+      final exporting = c.exportAudioToPath('${temp.path}/second.wav');
+      await owner.finalCommitEntered.future;
+      final active = c.feedbackOperations.singleWhere(
+        (op) => op.scope == 'Save audio' && !op.state.isTerminal,
+      );
+      expect(active.key, isNot(old.key));
+      oldCancellation.complete();
+      await Future<void>.delayed(Duration.zero);
+      expect(
+        c.feedbackOperations.singleWhere((op) => op.key == active.key).state,
+        OperationState.running,
+      );
+      commit.complete();
+      expect(await exporting, isNotNull);
+      expect(
+        c.feedbackOperations.singleWhere((op) => op.key == active.key).state,
+        OperationState.succeeded,
+      );
+    },
+  );
+
+  test(
+    'same-document export cancellation keeps saved scene count when late assembly fails',
+    () async {
+      final publication = Completer<void>();
+      final owner = _WholeSourceExportEngine()
+        ..finalCommitWait = publication.future;
+      final c = await fishController(owner, deferInitialSynthesis: false);
+      await loadFreshExportSource(c);
+      final exporting = c.exportAudioToPath(
+        '${temp.path}/cancelled-commit.wav',
+      );
+      await owner.finalCommitEntered.future;
+      final active = c.feedbackOperations.singleWhere(
+        (op) => op.scope == 'Save audio',
+      );
+      owner.cancelled.complete();
+      await Future<void>.delayed(Duration.zero);
+      expect(
+        c.feedbackOperations.singleWhere((op) => op.key == active.key).state,
+        OperationState.cancelled,
+      );
+      await c.selectVoiceById('other');
+      c.showStatusMessage('New voice owns status');
+      publication.completeError(StateError('obsolete final commit failed'));
+      expect(await exporting, isNull);
+      final terminal = c.feedbackOperations.singleWhere(
+        (op) => op.key == active.key,
+      );
+      expect(terminal.state, OperationState.cancelled);
+      expect(terminal.completedUnits, active.completedUnits);
+      expect(terminal.totalUnits, isNull);
+      expect(c.statusMessage, 'New voice owns status');
+    },
+  );
+
   for (final terminal in ['document', 'voice', 'rate', 'cancel']) {
     test(
       'whole-source export rejects late $terminal scene and keeps committed prefix',
@@ -1308,6 +1418,12 @@ void main() {
         final exporting = c.exportAudioToPath('${temp.path}/obsolete.wav');
         await owner.held.future;
         expect(owner.exports, hasLength(1));
+        final progress = c.feedbackOperations.singleWhere(
+          (op) => op.scope == 'Save audio',
+        );
+        expect(progress.state, OperationState.running);
+        expect(progress.completedUnits, 1);
+        expect(progress.totalUnits, isNull);
         switch (terminal) {
           case 'document':
             await c.loadDocument(
@@ -1323,6 +1439,13 @@ void main() {
         c.showStatusMessage('New owner status');
         owner.release.complete();
         expect(await exporting, isNull);
+        expect(
+          c.feedbackOperations
+              .where((op) => op.scope == 'Save audio')
+              .last
+              .state,
+          OperationState.cancelled,
+        );
         if (terminal != 'cancel') expect(c.statusMessage, 'New owner status');
         expect(owner.requests, isEmpty);
         // The fake deliberately delivers an obsolete callback. The controller
@@ -2089,7 +2212,9 @@ class _WholeSourceExportEngine extends _ScopedOfflineEngine {
   }
   final wholeRequests = <TtsExportRequest>[];
   final synthesisRequests = <TtsSpeakRequest>[];
-  final cancelled = Completer<void>();
+  var cancelled = Completer<void>();
+  Future<void>? finalCommitWait;
+  final finalCommitEntered = Completer<void>();
   final held = Completer<void>();
   final release = Completer<void>();
   bool holdAfterFirst = false;
@@ -2109,6 +2234,7 @@ class _WholeSourceExportEngine extends _ScopedOfflineEngine {
   @override
   Future<TtsExportResult> exportAudio(TtsExportRequest request) async {
     wholeRequests.add(request);
+    final cancellation = cancelled;
     final planner = SpeechPlanningSupervisor();
     var plan = request.chunkPlan!;
     TtsExportResult? result;
@@ -2130,12 +2256,13 @@ class _WholeSourceExportEngine extends _ScopedOfflineEngine {
               onRenderedScene: request.onRenderedScene,
               assignmentRevision: request.assignmentRevision,
               sourceWordOffset: request.sourceWordOffset,
-              cancelled: cancelled.future,
+              cancelled: cancellation.future,
               isCurrent: () =>
-                  !cancelled.isCompleted && (request.isCurrent?.call() ?? true),
+                  !cancellation.isCompleted &&
+                  (request.isCurrent?.call() ?? true),
             ),
           );
-          if (cancelled.isCompleted || request.isCurrent?.call() == false) {
+          if (cancellation.isCompleted || request.isCurrent?.call() == false) {
             throw StateError('Export cancelled or superseded.');
           }
         }
@@ -2145,6 +2272,10 @@ class _WholeSourceExportEngine extends _ScopedOfflineEngine {
           request.planningContext!,
           startSegmentId: next,
         )).plan;
+      }
+      if (finalCommitWait case final wait?) {
+        if (!finalCommitEntered.isCompleted) finalCommitEntered.complete();
+        await wait;
       }
       return result!;
     } finally {
