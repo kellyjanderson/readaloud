@@ -10,6 +10,7 @@ class AppDelegate: FlutterAppDelegate {
   private var documentAccessChannel: FlutterMethodChannel?
   private var mlxLifecycleChannel: FlutterMethodChannel?
   private var bookNlpLifecycleChannel: FlutterMethodChannel?
+  private var nativeEditMenu: NativeEditMenu?
   // Main-thread owned; a request may end only its own activity.
   private var speechWorkActivities: [String: NSObjectProtocol] = [:]
   private var speechWorkStarted = 0
@@ -28,6 +29,9 @@ class AppDelegate: FlutterAppDelegate {
     signal(SIGPIPE, SIG_IGN)
     // FlutterAppDelegate implements will-finish-launching, but not this optional
     // NSApplicationDelegate callback. Dispatching it to super raises an exception.
+    let nativeEditMenu = NativeEditMenu()
+    nativeEditMenu.start()
+    self.nativeEditMenu = nativeEditMenu
     configureDocumentAccessChannel()
     if ProcessInfo.processInfo.environment["READALOUD_TRACE_STARTUP"] == "1" {
       NSLog("[read_aloud.startup] Did finish launching; document access channel configured: \(documentAccessChannel != nil)")
@@ -39,6 +43,7 @@ class AppDelegate: FlutterAppDelegate {
   }
 
   override func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
+    nativeEditMenu?.stop()
     guard mlxLifecycleChannel != nil || audioExportStage != nil else { return .terminateNow }
     guard !terminationCleanupStarted else { return .terminateLater }
     terminationCleanupStarted = true
@@ -892,6 +897,61 @@ class AppDelegate: FlutterAppDelegate {
     }
 
     result(nil)
+  }
+}
+
+@MainActor
+private final class NativeEditMenu {
+  private var observation: NSKeyValueObservation?
+  private var refreshPending = false
+
+  func start() {
+    let application = NSApplication.shared
+    // Flutter's menu plugin assigns a new main menu on the AppKit thread.
+    observation = application.observe(\.mainMenu) { [weak self] application, _ in
+      MainActor.assumeIsolated {
+        self?.scheduleRefresh(for: application)
+      }
+    }
+    install(in: application.mainMenu)
+  }
+
+  func stop() {
+    observation?.invalidate()
+    observation = nil
+  }
+
+  private func scheduleRefresh(for application: NSApplication) {
+    guard !refreshPending else { return }
+    refreshPending = true
+    // Wait until AppKit finishes the replacement. Rapid assignments share one
+    // refresh of the current menu, and stopping makes queued work a no-op.
+    DispatchQueue.main.async { [weak self] in
+      guard let self else { return }
+      self.refreshPending = false
+      guard self.observation != nil else { return }
+      self.install(in: application.mainMenu)
+    }
+  }
+
+  private func install(in menu: NSMenu?) {
+    guard let menu, menu.numberOfItems > 0, menu.item(withTitle: "Edit") == nil else { return }
+
+    let edit = NSMenu(title: "Edit")
+    edit.addItem(withTitle: "Undo", action: NSSelectorFromString("undo:"), keyEquivalent: "z")
+    let redo = edit.addItem(withTitle: "Redo", action: NSSelectorFromString("redo:"), keyEquivalent: "z")
+    redo.keyEquivalentModifierMask = [.command, .shift]
+    edit.addItem(.separator())
+    edit.addItem(withTitle: "Cut", action: #selector(NSText.cut(_:)), keyEquivalent: "x")
+    edit.addItem(withTitle: "Copy", action: #selector(NSText.copy(_:)), keyEquivalent: "c")
+    edit.addItem(withTitle: "Paste", action: #selector(NSText.paste(_:)), keyEquivalent: "v")
+    edit.addItem(withTitle: "Select All", action: #selector(NSText.selectAll(_:)), keyEquivalent: "a")
+
+    // Nil targets let AppKit choose and validate the focused editor's responder.
+    let item = NSMenuItem(title: edit.title, action: nil, keyEquivalent: "")
+    item.submenu = edit
+    let fileIndex = menu.indexOfItem(withTitle: "File")
+    menu.insertItem(item, at: fileIndex >= 0 ? fileIndex + 1 : 1)
   }
 }
 
