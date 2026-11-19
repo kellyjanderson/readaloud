@@ -4,9 +4,11 @@ import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:read_aloud/src/models/cast_voice_assignment.dart';
 import 'package:read_aloud/src/models/character.dart';
+import 'package:read_aloud/src/models/character_cast_registry.dart';
 import 'package:read_aloud/src/models/character_linguistic_evidence.dart';
 import 'package:read_aloud/src/models/document_voice_attribution.dart';
 import 'package:read_aloud/src/models/reader_document.dart';
+import 'package:read_aloud/src/models/voice_profile.dart';
 import 'package:read_aloud/src/services/cast_aware_speech_route_service.dart';
 import 'package:read_aloud/src/services/character_route_refinement.dart';
 import 'package:read_aloud/src/services/document_analysis_record.dart';
@@ -16,6 +18,39 @@ import 'package:read_aloud/src/services/modernbooknlp_provider.dart';
 import 'package:read_aloud/src/services/modernbooknlp_window.dart';
 
 void main() {
+  test(
+    'source identity and an approach followed by compliance repair the speaking voice',
+    () {
+      final document = DocumentImportService().importPastedText(
+        'Rowan, an elderly woman in a dark coat, waited by the steps. '
+        'He waved.\n\nShe put her bag down and went down to Rowan.\n\n'
+        '“Come with me.”\n\nThe arch was dark. Darcy followed up the lane.',
+      );
+      final window = ModernBookNlpWindow.at(document, wordIndex: 0)!;
+      final result = _result(
+        _request(window),
+        mentions: {
+          'rowan': [('Rowan', true), ('He', false), ('Rowan', true)],
+          'darcy': [('She', false), ('Darcy', true)],
+        },
+        quotes: [('"Come with me."', 'darcy')],
+      );
+      final delta = _project(document, window, result);
+      final rowan = delta.registry.characterEntries.singleWhere(
+        (entry) => entry.displayLabel == 'Rowan',
+      );
+      expect(rowan.implicitGender.value, CharacterGenderIdentityLabel.male);
+      expect(rowan.inferredGender, VoiceGender.female);
+      expect(
+        delta.dialogues
+            .where((reference) => reference.quoteAuthority)
+            .single
+            .castId,
+        rowan.castId,
+      );
+    },
+  );
+
   test('missed dialogue routes exact words to the reported speaker', () async {
     final document = DocumentImportService().importPastedText(
       'Mara watched Lee. She said, ‘Tell Lee,’ then waved.',
@@ -446,10 +481,22 @@ Map<String, dynamic> _result(
   required Map<String, List<(String, bool)>> mentions,
   required List<(String, String?)> quotes,
 }) {
-  Map<String, int> bounds(String value) {
-    final start = request.text.indexOf(value);
+  Map<String, int> bounds(String value, [int from = 0]) {
+    final start = request.text.indexOf(value, from);
     expect(start, greaterThanOrEqualTo(0));
     return {'startUtf16': start, 'endUtf16': start + value.length};
+  }
+
+  List<Map<String, Object>> typedMentions(List<(String, bool)> mentions) {
+    final next = <String, int>{};
+    return [
+      for (final (name, proper) in mentions)
+        (() {
+          final location = bounds(name, next[name] ?? 0);
+          next[name] = location['endUtf16']!;
+          return {...location, 'text': name, 'proper': proper};
+        })(),
+    ];
   }
 
   return {
@@ -460,13 +507,7 @@ Map<String, dynamic> _result(
     'adapterVersion': modernBookNlpAdapterVersion,
     'entities': [
       for (final entry in mentions.entries)
-        {
-          'entityId': entry.key,
-          'mentions': [
-            for (final (text, proper) in entry.value)
-              {...bounds(text), 'text': text, 'proper': proper},
-          ],
-        },
+        {'entityId': entry.key, 'mentions': typedMentions(entry.value)},
     ],
     'quotes': [
       for (final (text, entity) in quotes)

@@ -96,7 +96,7 @@
     {
       "id": "library_fishsheila",
       "label": "Sheila (Fish)",
-      "locale": "en",
+      "locale": "en-US",
       "gender": "female",
       "description": "A young American English woman's voice.",
       "url": "https://platform.r2.fish.audio/tasks/2026-08-24/9bb9e1a1cf3f47f38700da1c5c0a678a.mp3",
@@ -122,7 +122,7 @@
     {
       "id": "library_fishfreya",
       "label": "Freya (Fish)",
-      "locale": "en",
+      "locale": "en-GB",
       "gender": "female",
       "description": "A natural, professional British English voice with a brisk, conversational pace. Clear and easy to follow, suited to voice assistants, customer support and everyday narration.",
       "url": "https://platform.r2.fish.audio/tasks/2026-08-25/07918705a56b42daaab149f65392cea7.mp3",
@@ -135,7 +135,7 @@
     {
       "id": "library_fishrichard",
       "label": "Richard (Fish)",
-      "locale": "en",
+      "locale": "en-GB",
       "gender": "male",
       "description": "A British English man's voice for storytelling and narration.",
       "url": "https://platform.r2.fish.audio/tasks/2026-08-24/edcd8b0f98e442c781df2a7c53af2ca1.mp3",
@@ -161,7 +161,7 @@
     {
       "id": "library_fishsophia",
       "label": "Sophia (Fish)",
-      "locale": "en",
+      "locale": "en-GB",
       "gender": "female",
       "description": "A professional British English woman's voice.",
       "url": "https://platform.r2.fish.audio/tasks/2026-08-24/f6e16d5be93d4f2cb9b11459c12aa66b.mp3",

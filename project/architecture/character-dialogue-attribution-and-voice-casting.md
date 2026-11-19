@@ -243,6 +243,15 @@ words use the narrator. Only admitted speakers appear in the chapter-mode
 voice list and receive automatic assignments. The character store retains the
 other mentions and any saved user choices.
 
+Direct narrative identity statements and appositions linked to a named
+mention take precedence over model-linked pronouns for automatic casting.
+An isolated invitation can transfer attribution when exact character
+mentions identify who was approached and who then followed. An ordinary
+reporting clause retains its own speaker evidence. Automatic casting prefers
+the narrator's regional English where known and uses US English as the default
+regional preference. Labeled British references remain available for explicit
+selection and when the installed voices offer no compatible alternative.
+
 Once a chapter passes admission, Fish plans from the resulting ranges and
 mapped sentence and paragraph boundaries. The qualified bf16 path can group
 character, narrator and character turns in one native request. The 4-bit and

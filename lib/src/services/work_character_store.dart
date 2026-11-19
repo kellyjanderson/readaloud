@@ -417,6 +417,8 @@ class WorkCharacterStore {
         ? fullGraph
         : fullGraph.forSpeakingCast(speakingCastIds);
     final available = {for (final v in voices) v.id: v};
+    const assignmentService = CastVoiceAssignmentService();
+    final narrator = available[narratorVoiceId];
     final automatic = <String, String>{};
     final explicit = <String, String>{};
     for (final e in graph.entries) {
@@ -426,16 +428,28 @@ class WorkCharacterStore {
       if (selected != null) explicit[e.castId] = selected;
       final previous = e.characterState.automaticVoices[engineId];
       final voice = available[previous];
+      final gender = e.inferredGender;
       if (e.roleKind != CastEntryRoleKind.narrator &&
           voice != null &&
-          (e.inferredGender == null ||
-              e.identityProfile?.conflictFlag == true ||
-              e.inferredGender == VoiceGender.neutral ||
-              voice.gender == e.inferredGender)) {
+          (gender == null ||
+              gender == VoiceGender.neutral ||
+              voice.gender == gender) &&
+          (assignmentService.matchesAutomaticRegion(voice, narrator) ||
+              !voices.any(
+                (candidate) =>
+                    candidate.id != narratorVoiceId &&
+                    (gender == null ||
+                        gender == VoiceGender.neutral ||
+                        candidate.gender == gender) &&
+                    assignmentService.matchesAutomaticRegion(
+                      candidate,
+                      narrator,
+                    ),
+              ))) {
         automatic[e.castId] = previous!;
       }
     }
-    final assigned = const CastVoiceAssignmentService().resolve(
+    final assigned = assignmentService.resolve(
       CastVoiceAssignmentInput(
         characterCastRegistry: graph,
         availableVoices: voices,

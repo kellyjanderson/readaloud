@@ -214,6 +214,9 @@ class CastVoiceAssignmentService {
         final rightMatches = right.gender == preferredGender;
         if (leftMatches != rightMatches) return leftMatches ? -1 : 1;
       }
+      final leftRegion = matchesAutomaticRegion(left, narratorVoice);
+      final rightRegion = matchesAutomaticRegion(right, narratorVoice);
+      if (leftRegion != rightRegion) return leftRegion ? -1 : 1;
       final priority = right.automaticSelectionPriority.compareTo(
         left.automaticSelectionPriority,
       );
@@ -337,6 +340,12 @@ class CastVoiceAssignmentService {
 
   int _usEnglishPreferenceBonus(VoiceProfile voice) {
     return _englishLocaleFamily(voice.locale) == 'en-us' ? 110 : 0;
+  }
+
+  bool matchesAutomaticRegion(VoiceProfile voice, VoiceProfile? narrator) {
+    final region = _englishLocaleFamily(voice.locale);
+    final preferred = _englishLocaleFamily(narrator?.locale ?? '') ?? 'en-us';
+    return region == null || region == preferred;
   }
 
   bool _regionalEnglishContrastSuppressed(

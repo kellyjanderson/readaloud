@@ -3,6 +3,7 @@ import 'dart:isolate';
 import '../models/character_linguistic_evidence.dart';
 import '../models/character.dart';
 import '../models/character_cast_registry.dart';
+import 'character_cast_registry_service.dart';
 import 'document_analysis_record.dart';
 import 'modernbooknlp_provider.dart';
 import 'modernbooknlp_window.dart';
@@ -183,6 +184,10 @@ CharacterAnalysisDelta modernBookNlpCharacterDelta({
   }
 
   final mapped = <String, String?>{};
+  final slicesBySegment = {
+    for (final slice in sourceSlices) slice.segment.segmentId: slice,
+  };
+  final quotedSource = _sourceQuotationContents(request.text);
   final entries = {for (final e in registry.entries) e.castId: e};
   for (final entity in projected) {
     final candidates = <String>{};
@@ -315,6 +320,25 @@ CharacterAnalysisDelta modernBookNlpCharacterDelta({
       conflict: female > 0 && male > 0,
       observations: spans,
     );
+    var explicitGender = const GenderEvidence.empty();
+    for (final mention in entity.mentions) {
+      if (mention.kind != CharacterObservationKind.proper ||
+          quotedSource.any(
+            (span) => span.$1 <= mention.start && mention.end <= span.$2,
+          )) {
+        continue;
+      }
+      final at = observation(mention);
+      final slice = slicesBySegment[at.segmentId];
+      if (slice == null) continue;
+      explicitGender = explicitGender.merge(
+        const CharacterCastRegistryService().explicitIdentityForMention(
+          slice.segment,
+          at.startUtf16,
+          at.text,
+        ),
+      );
+    }
     final profile = CharacterIdentityProfile(
       genderIdentityLabel: gender,
       // Evidence agreement, not calibrated model probability.
@@ -335,7 +359,14 @@ CharacterAnalysisDelta modernBookNlpCharacterDelta({
       identityProfile: profile,
       characterState:
           (old?.characterState ?? CharacterState(workId: request.workId))
-              .copyWith(implicitGender: implicit, linguisticEvidence: history),
+              .copyWith(
+                explicitGender:
+                    (old?.explicitGender ?? const GenderEvidence.empty()).merge(
+                      explicitGender,
+                    ),
+                implicitGender: implicit,
+                linguisticEvidence: history,
+              ),
     );
     mapped[entity.id] = id;
   }
@@ -497,6 +528,18 @@ List<CharacterDialogueReference> _projectQuotes(
         speakerMention = observation(linked);
       }
     }
+    final handoff = _leadingSpeakerAfterApproach(
+      request.text,
+      start,
+      end,
+      entities,
+      castByEntity,
+      currentCastId: castId,
+    );
+    if (handoff != null) {
+      castId = handoff.$1;
+      speakerMention = observation(handoff.$2);
+    }
     final spanId =
         'nlp_quote_${DocumentAnalysisRecord.digest(jsonEncode([
           request.sourceRevision,
@@ -525,6 +568,90 @@ final _nonWhitespace = RegExp(r'\S');
 final _quotationMark = RegExp('["\'“”‘’«»]');
 final _wordBeforeMark = RegExp(r'[\p{L}\p{N}]$', unicode: true);
 final _wordAfterMark = RegExp(r'^[\p{L}\p{N}]', unicode: true);
+final _invitationToFollow = RegExp(
+  r'''^\s*["'“‘«]?\s*(?:come(?=\s+with\s+me\b|\s*[,!.?])|follow\s+me\b|this\s+way\b)''',
+  caseSensitive: false,
+);
+final _paragraphBeforeSpeech = RegExp(r'\n[ \t\r]*\n[ \t\r]*$');
+final _paragraphAfterSpeech = RegExp(r'^[ \t\r]*\n[ \t\r]*\n');
+final _approachBeforeSpeech = RegExp(
+  r'(?:^|[.!?]\s+)([\p{L}]+)\s+[^.!?\n]{0,100}\b'
+  r'(?:went|walked|stepped|crossed|hurried|moved)'
+  r'(?:\s+(?:down|up|over|back)){0,2}\s+to\s+([\p{L}\p{M}’-]+)[.!]\s*$',
+  unicode: true,
+  caseSensitive: false,
+);
+final _followerAfterSpeech = RegExp(
+  r'(?:^|[.!?]\s+)([\p{L}\p{M}’-]+)\s+followed\b',
+  unicode: true,
+  caseSensitive: false,
+);
+
+/// An invitation between an approach and a follow action belongs to the
+/// person approached. Require the same source-linked mover on both sides.
+(String, _Mention)? _leadingSpeakerAfterApproach(
+  String text,
+  int start,
+  int end,
+  List<_Entity> entities,
+  Map<String, String?> castByEntity, {
+  required String? currentCastId,
+}) {
+  if (!_invitationToFollow.hasMatch(text.substring(start, end))) return null;
+  final prefixStart = (start - 220).clamp(0, start);
+  final prefix = text.substring(prefixStart, start);
+  if (!_paragraphBeforeSpeech.hasMatch(prefix)) return null;
+  final approach = _approachBeforeSpeech.firstMatch(prefix);
+  if (approach == null) return null;
+  final suffix = text.substring(end, (end + 200).clamp(end, text.length));
+  if (!_paragraphAfterSpeech.hasMatch(suffix)) return null;
+  final nextQuote = _quotationMark.firstMatch(suffix);
+  final observedAction = suffix.substring(0, nextQuote?.start ?? suffix.length);
+  final follow = _followerAfterSpeech.firstMatch(observedAction.trimLeft());
+  if (follow == null) return null;
+
+  (String, _Mention)? linkedAt(int offset, String name) {
+    final matches = [
+      for (final entity in entities)
+        for (final mention in entity.mentions)
+          if (mention.start == offset &&
+              mention.end == offset + name.length &&
+              castByEntity[entity.id] != null)
+            (castByEntity[entity.id]!, mention),
+    ];
+    return matches.length == 1 ? matches.single : null;
+  }
+
+  final moverName = approach[1]!;
+  final recipientName = approach[2]!;
+  final qualifier = approach[0]!;
+  final mover = linkedAt(
+    prefixStart + approach.start + qualifier.indexOf(moverName),
+    moverName,
+  );
+  final recipient = linkedAt(
+    prefixStart + approach.start + qualifier.lastIndexOf(recipientName),
+    recipientName,
+  );
+  final followerName = follow[1]!;
+  final actionStart =
+      end + observedAction.length - observedAction.trimLeft().length;
+  final follower = linkedAt(
+    actionStart + follow.start + follow[0]!.indexOf(followerName),
+    followerName,
+  );
+  if (mover == null ||
+      recipient == null ||
+      recipient.$2.kind != CharacterObservationKind.proper ||
+      mover.$1 != follower?.$1 ||
+      mover.$1 == recipient.$1 ||
+      (currentCastId != null &&
+          currentCastId != mover.$1 &&
+          currentCastId != recipient.$1)) {
+    return null;
+  }
+  return recipient;
+}
 
 (int, int)? _quotationContentBounds(String text, int start, int end) {
   final content = _nonPunctuation.allMatches(text.substring(start, end));
