@@ -262,11 +262,19 @@ ReaderDocument _decodeReaderDocument(Map<String, dynamic> m) {
       priorBlock = segment.blockId;
     }
     final paragraphSource = paragraphText.toString();
+    final flattenedChapterSource = paragraphSource.replaceAll(
+      RegExp(r'\s+'),
+      ' ',
+    );
     for (final record in records) {
-      final sourceText = record.windowPolicy == 'paragraph-context-v2'
-          ? paragraphSource
-          : bookText;
-      if (!sourceText.contains(record.text) || !seenRecords.add(record.key)) {
+      final sourceContainsRecord = switch (record.windowPolicy) {
+        'chapter-context-v1' => flattenedChapterSource.contains(
+          record.text.replaceAll(RegExp(r'\s+'), ' '),
+        ),
+        'paragraph-context-v2' => paragraphSource.contains(record.text),
+        _ => bookText.contains(record.text),
+      };
+      if (!sourceContainsRecord || !seenRecords.add(record.key)) {
         throw const FormatException(
           'Analysis window is not part of this book or is duplicated',
         );

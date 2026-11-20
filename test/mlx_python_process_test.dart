@@ -15,12 +15,13 @@ import 'package:read_aloud/src/services/qualified_engine_selection_service.dart'
 RuntimeMemorySnapshot memorySnapshot({
   RuntimeMemoryPressure pressure = RuntimeMemoryPressure.normal,
   int available = 110000000000,
+  bool complete = true,
 }) => RuntimeMemorySnapshot(
   totalFootprintBytes: 1000000000,
   physicalMemoryBytes: 128000000000,
   availableMemoryBytes: available,
   pressure: pressure,
-  complete: true,
+  complete: complete,
   sampledAt: DateTime.now(),
 );
 
@@ -702,6 +703,37 @@ end
       expect(await File('${root.path}/cache/load.pid').exists(), false);
     },
   );
+  test(
+    'model admission waits for a starting child to report complete memory',
+    () async {
+      var samples = 0;
+      await useNativeSampler(
+        () async => memorySnapshot(complete: ++samples > 1),
+      );
+      await load();
+      expect(samples, 3);
+      expect(await File('${root.path}/cache/load.pid').exists(), isTrue);
+    },
+  );
+
+  test(
+    'a sustained incomplete process tree still refuses model admission',
+    () async {
+      await useNativeSampler(() async => memorySnapshot(complete: false));
+      await expectLater(
+        load(),
+        throwsA(
+          isA<StateError>().having(
+            (e) => e.message,
+            'reason',
+            contains('Complete process-tree memory is unavailable'),
+          ),
+        ),
+      );
+      expect(await File('${root.path}/cache/load.pid').exists(), isFalse);
+    },
+  );
+
   test(
     'end-of-load pressure prevents validation and retires rejected child',
     () async {

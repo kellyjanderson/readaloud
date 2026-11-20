@@ -128,7 +128,7 @@ class _DocumentSurfaceState extends State<DocumentSurface> {
           primary: false,
           physics: widget.inline ? const NeverScrollableScrollPhysics() : null,
           padding: const EdgeInsets.only(right: 8),
-          child: SelectionArea(
+          child: _selectionScope(
             child: Html(
               data: renderedHtml,
               shrinkWrap: true,
@@ -247,6 +247,19 @@ class _DocumentSurfaceState extends State<DocumentSurface> {
           ),
         ),
       ),
+    );
+  }
+
+  Widget _selectionScope({required Widget child}) {
+    if (widget.inline) return child;
+    return SelectionArea(
+      key: ValueKey(widget.document.displayDocument.documentId),
+      onSelectionChanged: (selection) {
+        if (selection != null && widget.autoFollowActive) {
+          widget.onManualScrollWhileFollowing?.call();
+        }
+      },
+      child: child,
     );
   }
 

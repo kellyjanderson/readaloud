@@ -13,10 +13,12 @@ class SpeechPlanningContext {
     required this.realization,
     required this.engineVersion,
     this.routes,
+    this.fishSceneBoundaries = const {},
   });
   final VoiceSessionRealizationInput realization;
   final String engineVersion;
   final CastAwareSpeechRouteInput? routes;
+  final Map<String, FishSceneBoundary> fishSceneBoundaries;
 }
 
 class SpeechPlanningWindow {
@@ -307,6 +309,7 @@ SpeechPlanningWindow _planWindow(
       rate: input.rate,
       engineId: input.engineId,
       engineVersion: context.engineVersion,
+      fishSceneBoundaries: context.fishSceneBoundaries,
       maxChunks: maximum,
     ),
   );
@@ -339,6 +342,7 @@ SpeechPlanningWindow _planWindow(
         rate: input.rate,
         engineId: input.engineId,
         engineVersion: context.engineVersion,
+        fishSceneBoundaries: context.fishSceneBoundaries,
         maxChunks: maximum,
       ),
       endSegmentIndex: input

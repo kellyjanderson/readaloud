@@ -44,21 +44,32 @@ class RadocPreparedRange {
     required this.member,
     required this.startWord,
     required this.endWord,
+    this.sourceLocator,
+    this.continuesParagraph = false,
+    this.continuesWord = false,
   });
   final String member;
   final int startWord;
   final int endWord;
+  final String? sourceLocator;
+  final bool continuesParagraph, continuesWord;
 
   Map<String, dynamic> toJson() => {
     'member': member,
     'startWord': startWord,
     'endWord': endWord,
+    if (sourceLocator != null) 'sourceLocator': sourceLocator,
+    if (continuesParagraph) 'continuesParagraph': true,
+    if (continuesWord) 'continuesWord': true,
   };
   factory RadocPreparedRange.fromJson(Map<String, dynamic> json) =>
       RadocPreparedRange(
         member: json['member'] as String,
         startWord: json['startWord'] as int,
         endWord: json['endWord'] as int,
+        sourceLocator: json['sourceLocator'] as String?,
+        continuesParagraph: json['continuesParagraph'] == true,
+        continuesWord: json['continuesWord'] == true,
       );
 }
 

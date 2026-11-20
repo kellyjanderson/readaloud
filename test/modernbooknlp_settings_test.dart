@@ -27,7 +27,7 @@ void main() {
           ),
         ),
       );
-      expect(find.text('Prepare and evaluate'), findsOneWidget);
+      expect(find.text('Enable chapter analysis'), findsOneWidget);
       owner.publish({
         'message': 'Downloading model',
         'completed': 25,

@@ -380,9 +380,13 @@ class CharacterDialogueReference {
     required this.endWord,
     this.castId,
     this.sourceMatched = true,
+    this.quoteAuthority = false,
+    this.speakerMention,
   });
   final String attributionId, dialogueSpanId, segmentId;
   final int startWord, endWord;
   final String? castId;
   final bool sourceMatched;
+  final bool quoteAuthority;
+  final CharacterObservation? speakerMention;
 }

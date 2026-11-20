@@ -3854,7 +3854,7 @@ class KokoroTtsEngine
         expectedBinding: binding,
         synthesisIdentity: synthesisIdentity,
         synthesisRate: synthesisRate,
-        generationOrder: spec.startSegmentIndex + request.sourceWordOffset,
+        generationOrder: spec.startWordIndex + request.sourceWordOffset,
         segmentIds: spec.segmentIds,
         cacheKey: spec.cacheKey,
         voiceId: spec.voiceId,
@@ -5025,6 +5025,16 @@ List<_ChunkSegmentRange> _segmentRangesForChunk(
   ChunkSpec spec,
   SpeechDocument? speechDocument,
 ) {
+  if (spec.segmentWordRanges.isNotEmpty) {
+    return [
+      for (final range in spec.segmentWordRanges)
+        _ChunkSegmentRange(
+          segmentId: range.segmentId,
+          startWordIndex: range.startWord,
+          endWordIndex: range.endWord,
+        ),
+    ];
+  }
   if (speechDocument == null) {
     return <_ChunkSegmentRange>[
       _ChunkSegmentRange(

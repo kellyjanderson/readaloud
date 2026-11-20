@@ -3,10 +3,49 @@ import 'package:read_aloud/src/models/cast_voice_assignment.dart';
 import 'package:read_aloud/src/models/character_cast_registry.dart';
 import 'package:read_aloud/src/models/voice_profile.dart';
 import 'package:read_aloud/src/services/cast_voice_assignment_service.dart';
+import 'package:read_aloud/src/services/work_character_store.dart';
 
 void main() {
   group('CastVoiceAssignmentService', () {
     const service = CastVoiceAssignmentService();
+
+    test(
+      'revisits a cached region mismatch and preserves explicit choices',
+      () {
+        final store = WorkCharacterStore();
+        const role = 'cast_character_jennifer';
+        const engine = 'fish_drama3_8bit';
+        store.mergeEvidence('work', _registry());
+        final voices = [
+          _voice(
+            id: 'narrator',
+            label: 'Narrator',
+            locale: 'en',
+            gender: VoiceGender.male,
+          ),
+          _voice(
+            id: 'british',
+            label: 'British',
+            locale: 'en-GB',
+            gender: VoiceGender.female,
+          ),
+          _voice(id: 'american', label: 'American', gender: VoiceGender.female),
+        ];
+        CastVoiceAssignment? resolve(List<VoiceProfile> available) => store
+            .resolve(
+              workId: 'work',
+              engineId: engine,
+              voices: available,
+              narratorVoiceId: 'narrator',
+              speakingCastIds: {role},
+            )
+            .forCastId(role);
+        expect(resolve(voices.take(2).toList())?.effectiveVoiceId, 'british');
+        expect(resolve(voices)?.effectiveVoiceId, 'american');
+        store.select('work', role, 'british');
+        expect(resolve(voices)?.effectiveVoiceId, 'british');
+      },
+    );
 
     test(
       'assigns narrator and characters deterministically from available voices',

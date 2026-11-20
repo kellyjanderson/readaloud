@@ -13,6 +13,7 @@ class ReaderPreferences {
   const ReaderPreferences({
     this.ttsEngineId = '',
     this.activityExpanded = false,
+    this.chapterAnalysisEnabled = false,
     this.voxtralQuantizationBits = 0,
     required this.fontFamily,
     required this.fontScale,
@@ -38,6 +39,7 @@ class ReaderPreferences {
 
   final String ttsEngineId;
   final bool activityExpanded;
+  final bool chapterAnalysisEnabled;
 
   /// Empty means no user selection; an automatic effective default is not intent.
   bool get hasExplicitTtsEngineChoice => ttsEngineId.isNotEmpty;
@@ -113,6 +115,7 @@ class ReaderPreferencesService {
   static const String _voiceSpeedsKey = 'reader.voiceSpeeds';
   static const String _fontFamilyKey = 'reader.fontFamily';
   static const _activityExpandedKey = 'reader.activityExpanded';
+  static const _chapterAnalysisEnabledKey = 'reader.chapterAnalysisEnabled';
   static const String _fontScaleKey = 'reader.fontScale';
   static const String _appearanceModeKey = 'reader.appearanceMode';
   static const String _multiVoiceEnabledKey = 'reader.multiVoiceEnabled';
@@ -139,6 +142,8 @@ class ReaderPreferencesService {
     final characters = snapshot.restore();
     return ReaderPreferences(
       activityExpanded: preferences.getBool(_activityExpandedKey) ?? false,
+      chapterAnalysisEnabled:
+          preferences.getBool(_chapterAnalysisEnabledKey) ?? false,
       voxtralQuantizationBits: preferences.getInt(_voxtralBitsKey) == 4 ? 4 : 0,
       ttsEngineId: preferences.getString(_ttsEngineIdKey) ?? '',
       selectedVoiceId: preferences.getString(_selectedVoiceIdKey),
@@ -173,6 +178,13 @@ class ReaderPreferencesService {
         _lastOpenedDirectoryAccessTokenKey,
       ),
     );
+  }
+
+  Future<void> saveChapterAnalysisEnabled(bool enabled) async {
+    final preferences = await SharedPreferences.getInstance();
+    if (!await preferences.setBool(_chapterAnalysisEnabledKey, enabled)) {
+      throw StateError('Chapter analysis preference was not written.');
+    }
   }
 
   Future<void> save({

@@ -36,12 +36,22 @@ class DocumentAnalysisRecord {
   static const supportedPolicies = {
     'normalized-segments-newline-v1',
     'paragraph-context-v2',
+    'chapter-context-v1',
   };
   static String digest(String value) =>
       sha256.convert(utf8.encode(value)).toString();
   static String requestKey(ModernBookNlpRequest request) => digest(
     jsonEncode([
       request.sourceRevision,
+      request.text,
+      modernBookNlpRevision,
+      modernBookNlpModelIdentity,
+      adapter,
+      request.windowPolicy,
+    ]),
+  );
+  static String contextKey(ModernBookNlpRequest request) => digest(
+    jsonEncode([
       request.text,
       modernBookNlpRevision,
       modernBookNlpModelIdentity,
@@ -174,19 +184,33 @@ class DocumentAnalysisRecord {
     ModernBookNlpRequest request,
   ) => Isolate.run(() => forRequest(request));
 
+  Future<Map<String, dynamic>> restoreForEditedContext(
+    ModernBookNlpRequest request,
+  ) => Isolate.run(() {
+    if (request.windowPolicy != 'chapter-context-v1' ||
+        windowPolicy != request.windowPolicy ||
+        !reusable ||
+        text != request.text) {
+      throw const FormatException('Stale saved chapter context');
+    }
+    return {..._outputFor(request), 'reusedEditedContext': true};
+  });
+
   Map<String, dynamic> forRequest(ModernBookNlpRequest request) {
     if (!reusable || key != requestKey(request)) {
       throw const FormatException('Stale saved analysis');
     }
-    return {
-      ...request.toJson(),
-      'ok': true,
-      'providerId': 'modernbooknlp-joint',
-      'providerVersion': providerVersion,
-      'modelIdentity': modelIdentity,
-      'adapterVersion': adapterVersion,
-      ...jsonDecode(outputJson) as Map<String, dynamic>,
-      'restoredFromBook': true,
-    };
+    return _outputFor(request);
   }
+
+  Map<String, dynamic> _outputFor(ModernBookNlpRequest request) => {
+    ...request.toJson(),
+    'ok': true,
+    'providerId': 'modernbooknlp-joint',
+    'providerVersion': providerVersion,
+    'modelIdentity': modelIdentity,
+    'adapterVersion': adapterVersion,
+    ...jsonDecode(outputJson) as Map<String, dynamic>,
+    'restoredFromBook': true,
+  };
 }

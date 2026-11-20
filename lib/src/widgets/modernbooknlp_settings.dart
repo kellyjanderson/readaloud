@@ -3,8 +3,13 @@ import '../services/modernbooknlp_analysis.dart';
 import 'preparation_status.dart';
 
 class ModernBookNlpSettings extends StatelessWidget {
-  const ModernBookNlpSettings({super.key, required this.analysis});
+  const ModernBookNlpSettings({
+    super.key,
+    required this.analysis,
+    this.setEnabled,
+  });
   final ModernBookNlpAnalysis analysis;
+  final Future<void> Function(bool)? setEnabled;
   @override
   Widget build(BuildContext context) => ListenableBuilder(
     listenable: analysis,
@@ -18,17 +23,17 @@ class ModernBookNlpSettings extends StatelessWidget {
           analysis.error ??
           progress?['message'] as String? ??
           (analysis.result != null
-              ? '${analysis.restoredFromBook ? 'Restored saved book analysis. ' : ''}${analysis.completedWindows} windows evaluated; ${(analysis.result!['quotes'] as List).length} quotations in the latest window.'
+              ? '${analysis.restoredFromBook ? 'Restored saved book analysis. ' : ''}${analysis.completedWindows} analysis inputs completed; ${(analysis.result!['quotes'] as List).length} quotations in the latest input.'
               : analysis.ready
-              ? 'Ready for a reading window.'
+              ? 'Ready to analyze the next chapter.'
               : 'Not running.');
       return Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           const Divider(),
-          const Text('ModernBookNLP evaluation'),
+          const Text('Chapter analysis with ModernBookNLP'),
           const Text(
-            'Experimental character refinement for future reading. Your selected voices and current speech are preserved.',
+            'Analyze chapters when a document opens. Fish waits for the chapter’s analysis before generating new speech.',
           ),
           const SizedBox(height: 8),
           SizedBox(
@@ -55,16 +60,22 @@ class ModernBookNlpSettings extends StatelessWidget {
                 key: const Key('modernbooknlp-prepare'),
                 onPressed: analysis.enabled && analysis.error == null
                     ? null
-                    : analysis.enable,
+                    : setEnabled == null
+                    ? analysis.enable
+                    : () => setEnabled!(true),
                 child: Text(
                   analysis.error == null
-                      ? 'Prepare and evaluate'
+                      ? 'Enable chapter analysis'
                       : 'Retry analysis',
                 ),
               ),
               TextButton(
                 key: const Key('modernbooknlp-stop'),
-                onPressed: analysis.enabled ? analysis.stop : null,
+                onPressed: !analysis.enabled
+                    ? null
+                    : setEnabled == null
+                    ? analysis.stop
+                    : () => setEnabled!(false),
                 child: const Text('Stop'),
               ),
             ],

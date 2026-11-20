@@ -1,11 +1,42 @@
 import 'dart:math' as math;
 
 import '../models/character_cast_registry.dart';
+import '../models/character.dart';
 import '../models/dialogue_attribution.dart';
 import '../models/speech_document.dart';
 
 class CharacterCastRegistryService {
   const CharacterCastRegistryService();
+
+  /// A source-linked name can carry direct identity evidence independently of
+  /// the pronouns a model attaches to that name.
+  GenderEvidence explicitIdentityForMention(
+    SpeechSegment segment,
+    int start,
+    String name,
+  ) {
+    final text = segment.normalizedText;
+    final candidates = [
+      ..._extractExplicitIdentityCandidates(
+        segment: segment,
+        text: text,
+        alias: name,
+      ),
+      ..._extractExplicitAppositionCandidates(
+        segment: segment,
+        text: text,
+        alias: name,
+      ),
+    ].where((candidate) => candidate.evidenceSpan.startUtf16 == start);
+    return candidates.fold(const GenderEvidence.empty(), (evidence, candidate) {
+      return evidence.merge(
+        GenderEvidence(
+          value: candidate.label,
+          observations: [candidate.evidenceSpan],
+        ),
+      );
+    });
+  }
 
   static const registryVersion = 'read-aloud-character-cast-registry-v4';
 
@@ -622,7 +653,8 @@ class CharacterCastRegistryService {
     final candidates = <_IdentityCandidate>[];
     for (final entry in _explicitIdentityPhraseMap.entries) {
       final pattern = RegExp(
-        '\\b${RegExp.escape(alias)}\\b,\\s+(?:a|an)\\s+${entry.key}\\b',
+        '\\b${RegExp.escape(alias)}\\b,\\s+(?:a|an)\\s+'
+        '(?:(?:young|elderly|old|older|middle-aged)\\s+)?${entry.key}\\b',
         caseSensitive: false,
       );
       for (final match in pattern.allMatches(text)) {

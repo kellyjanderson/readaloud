@@ -99,34 +99,41 @@ class _RangeDocumentSurfaceState extends State<RangeDocumentSurface> {
         }
         return false;
       },
-      child: Scrollbar(
-        controller: _scroll,
-        thumbVisibility: true,
-        child: SuperListView.builder(
-          key: const Key('whole-document-scroll'),
+      child: SelectionArea(
+        onSelectionChanged: (selection) {
+          if (selection != null && reader.readingFocusState.shouldAutoFollow) {
+            reader.suspendReaderFollow();
+          }
+        },
+        child: Scrollbar(
           controller: _scroll,
-          listController: _list,
-          cacheExtent: 400,
-          itemCount: reader.preparedRangeCount + 1,
-          itemBuilder: (context, index) {
-            if (index == reader.preparedRangeCount &&
-                reader.isPreparationComplete) {
-              return Padding(
-                key: const Key('document-end'),
-                padding: const EdgeInsets.symmetric(vertical: 24),
-                child: Text(
-                  'End of document · ${reader.preparedWordCount} words',
-                ),
+          thumbVisibility: true,
+          child: SuperListView.builder(
+            key: const Key('whole-document-scroll'),
+            controller: _scroll,
+            listController: _list,
+            cacheExtent: 400,
+            itemCount: reader.preparedRangeCount + 1,
+            itemBuilder: (context, index) {
+              if (index == reader.preparedRangeCount &&
+                  reader.isPreparationComplete) {
+                return Padding(
+                  key: const Key('document-end'),
+                  padding: const EdgeInsets.symmetric(vertical: 24),
+                  child: Text(
+                    'End of document · ${reader.preparedWordCount} words',
+                  ),
+                );
+              }
+              final sequence = index + 1;
+              return _RangeCell(
+                key: _keys.putIfAbsent(sequence, GlobalKey.new),
+                sequence: sequence,
+                reader: reader,
+                onFocus: (fraction) => _follow(sequence, fraction),
               );
-            }
-            final sequence = index + 1;
-            return _RangeCell(
-              key: _keys.putIfAbsent(sequence, GlobalKey.new),
-              sequence: sequence,
-              reader: reader,
-              onFocus: (fraction) => _follow(sequence, fraction),
-            );
-          },
+            },
+          ),
         ),
       ),
     );

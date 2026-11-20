@@ -335,6 +335,9 @@ extension ReaderAudioBookSupport on ReaderController {
       range: PreparedDocumentRange(
         sourceStart: 0,
         sourceEnd: document.speakableText.length,
+        sourceLocator: descriptor.sourceLocator,
+        continuesParagraph: descriptor.continuesParagraph,
+        continuesWord: descriptor.continuesWord,
         wordStart: descriptor.startWord,
         wordEnd: descriptor.endWord,
         segmentStart: 0,
@@ -594,6 +597,11 @@ extension ReaderAudioBookSupport on ReaderController {
     if (index < 0) throw StateError('No prepared text for this passage.');
     final range = await readPreparedRange(index + 1);
     if (!current() || range == null) throw const PlanningCancelled();
+    await _awaitChapterAnalysis(
+      range.fragment,
+      current: current,
+      cancelled: cancelled,
+    );
     final original = manifest.scenes
         .where((s) => s.startWord <= word && word < s.endWord)
         .firstOrNull;
@@ -615,6 +623,7 @@ extension ReaderAudioBookSupport on ReaderController {
     final context = SpeechPlanningContext(
       engineVersion: base.engineVersion,
       routes: base.routes,
+      fishSceneBoundaries: base.fishSceneBoundaries,
       realization: VoiceSessionRealizationInput(
         speechDocument: bounded,
         baseAnnotations: source.baseAnnotations,

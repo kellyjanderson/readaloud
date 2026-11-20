@@ -3,6 +3,15 @@ import 'speech_document.dart';
 import 'tts_artifact.dart';
 import 'cast_aware_speech_route.dart';
 
+/// Chapter analysis can refine the boundary before a source segment.
+enum FishSceneBoundary {
+  continuation,
+  sentence,
+  paragraph,
+  chapter,
+  sourceRange,
+}
+
 class ChunkPlannerInput {
   const ChunkPlannerInput({
     required this.speechDocument,
@@ -14,6 +23,7 @@ class ChunkPlannerInput {
     required this.engineId,
     required this.engineVersion,
     this.castAwareSpeechRoutes,
+    this.fishSceneBoundaries = const {},
     this.maxChunks,
   });
 
@@ -26,6 +36,7 @@ class ChunkPlannerInput {
   final String engineId;
   final String engineVersion;
   final CastAwareSpeechRouteSet? castAwareSpeechRoutes;
+  final Map<String, FishSceneBoundary> fishSceneBoundaries;
   final int? maxChunks;
 }
 
@@ -57,12 +68,14 @@ class ChunkSpec {
     required this.endWordIndex,
     required this.ttsSegments,
     this.sceneTurns = const <ChunkSpec>[],
+    this.segmentWordRanges = const <ChunkSegmentWordRange>[],
     this.routeId,
     this.castId,
     this.dialogueSpanId,
   });
 
   final List<ChunkSpec> sceneTurns;
+  final List<ChunkSegmentWordRange> segmentWordRanges;
   final String chunkId;
   final List<String> segmentIds;
   final String speakText;
@@ -78,4 +91,13 @@ class ChunkSpec {
   final String? routeId;
   final String? castId;
   final String? dialogueSpanId;
+}
+
+/// Half-open word interval in the planning document, for a partial segment.
+class ChunkSegmentWordRange {
+  const ChunkSegmentWordRange(this.segmentId, this.startWord, this.endWord);
+
+  final String segmentId;
+  final int startWord;
+  final int endWord;
 }
