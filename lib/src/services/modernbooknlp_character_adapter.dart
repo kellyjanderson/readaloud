@@ -540,6 +540,21 @@ List<CharacterDialogueReference> _projectQuotes(
       castId = handoff.$1;
       speakerMention = observation(handoff.$2);
     }
+    if (handoff == null && i + 1 < locations.length) {
+      final resumedSpeaker = _resumedFirstPersonSpeaker(
+        request.text,
+        location,
+        locations[i + 1],
+        entitiesById[speakerId],
+        quotes[locations[i + 1]]!,
+        entitiesById,
+      );
+      final resumedCast = castByEntity[resumedSpeaker?.$1];
+      if (resumedSpeaker != null && resumedCast != null) {
+        castId = resumedCast;
+        speakerMention = observation(resumedSpeaker.$2);
+      }
+    }
     final spanId =
         'nlp_quote_${DocumentAnalysisRecord.digest(jsonEncode([
           request.sourceRevision,
@@ -586,6 +601,83 @@ final _followerAfterSpeech = RegExp(
   unicode: true,
   caseSensitive: false,
 );
+
+final _firstPersonContinuation = RegExp(
+  r'^i\s+(want|need|hope)\b',
+  caseSensitive: false,
+);
+final _waitForBreath = RegExp(
+  r'(?:^|[.!?]\s+)([\p{L}\p{M}’-]+)\s+waited for [\p{L}\p{M}’ -]+ to take a breath\.\s*$',
+  unicode: true,
+  caseSensitive: false,
+);
+final _reportingVerb = RegExp(
+  r'\b(?:said|asked|replied|answered|whispered|shouted|murmured|called|added|continued)\b',
+  caseSensitive: false,
+);
+
+/// Join first-person continuations within a paragraph when the apparent
+/// speaker is the opening subject of the intervening action, and the next
+/// quote corroborates a named speaker waiting for the interruption to pass.
+(String, _Mention)? _resumedFirstPersonSpeaker(
+  String text,
+  (int, int) quote,
+  (int, int) nextQuote,
+  _Entity? apparentSpeaker,
+  Set<String?> nextSpeakerIds,
+  Map<String, _Entity> entities,
+) {
+  final (start, end) = quote;
+  final (nextStart, nextEnd) = nextQuote;
+  if (apparentSpeaker == null ||
+      nextSpeakerIds.length != 1 ||
+      nextStart < end ||
+      nextStart - end > 240) {
+    return null;
+  }
+  final nextSpeaker = entities[nextSpeakerIds.single];
+  if (nextSpeaker == null || nextSpeaker.id == apparentSpeaker.id) return null;
+  final firstContent = _quotationContentBounds(text, start, end);
+  final nextContent = _quotationContentBounds(text, nextStart, nextEnd);
+  if (firstContent == null || nextContent == null) return null;
+  final opening = _firstPersonContinuation.firstMatch(
+    text.substring(firstContent.$1, firstContent.$2),
+  );
+  if (opening == null ||
+      opening[1]!.toLowerCase() !=
+          _firstPersonContinuation
+              .firstMatch(text.substring(nextContent.$1, nextContent.$2))?[1]
+              ?.toLowerCase()) {
+    return null;
+  }
+  final bridge = text.substring(end, nextStart);
+  final action = _nonPunctuation.firstMatch(bridge);
+  if (RegExp(r'\n[ \t\r]*\n').hasMatch(bridge) ||
+      _reportingVerb.hasMatch(bridge) ||
+      action == null) {
+    return null;
+  }
+  if (!apparentSpeaker.mentions.any(
+    (mention) =>
+        mention.kind == CharacterObservationKind.nominal &&
+        mention.start == end + action.start,
+  )) {
+    return null;
+  }
+  final wait = _waitForBreath.firstMatch(bridge);
+  if (wait == null) return null;
+  final name = wait[1]!;
+  final nameStart = end + wait.start + wait[0]!.indexOf(name);
+  final namedMention = nextSpeaker.mentions
+      .where(
+        (mention) =>
+            mention.kind == CharacterObservationKind.proper &&
+            mention.start == nameStart &&
+            mention.end == nameStart + name.length,
+      )
+      .firstOrNull;
+  return namedMention == null ? null : (nextSpeaker.id, namedMention);
+}
 
 /// An invitation between an approach and a follow action belongs to the
 /// person approached. Require the same source-linked mover on both sides.

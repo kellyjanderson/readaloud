@@ -252,6 +252,13 @@ the narrator's regional English where known and uses US English as the default
 regional preference. Labeled British references remain available for explicit
 selection and when the installed voices offer no compatible alternative.
 
+A repeated first-person opening can link two quotations in the same paragraph
+when the intervening text identifies a named speaker waiting for an
+interruption to pass. The following quote must corroborate that speaker, and
+the apparent speaker of the first quote must be the nominal subject of the
+intervening action. The correction yields to reporting verbs or a paragraph
+break. See [chapter attribution #158](https://github.com/kellyjanderson/readaloud/issues/158).
+
 Once a chapter passes admission, Fish plans from the resulting ranges and
 mapped sentence and paragraph boundaries. The qualified bf16 path can group
 character, narrator and character turns in one native request. The 4-bit and

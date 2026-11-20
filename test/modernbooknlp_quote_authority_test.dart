@@ -18,6 +18,70 @@ import 'package:read_aloud/src/services/modernbooknlp_provider.dart';
 import 'package:read_aloud/src/services/modernbooknlp_window.dart';
 
 void main() {
+  for (final explicitSpeech in [false, true]) {
+    test(
+      'opening quote follows a named continuation unless explicitly tagged ($explicitSpeech)',
+      () {
+        final action = explicitSpeech
+            ? 'The nurse said softly, then stepped away.'
+            : 'The nurse steered the child away. His cry carried across the hall.';
+        final document = DocumentImportService().importPastedText(
+          '“I want a family.” $action '
+          'Iris waited for him to take a breath. “I want to do it well.”',
+        );
+        final window = ModernBookNlpWindow.at(document, wordIndex: 0)!;
+        final result = _result(
+          _request(window),
+          mentions: {
+            'nurse': [('The nurse', false)],
+            'iris': [('Iris', true)],
+          },
+          quotes: [
+            ('"I want a family."', 'nurse'),
+            ('"I want to do it well."', 'iris'),
+          ],
+        );
+        final the = window.text.indexOf('The nurse');
+        final irisStart = window.text.indexOf('Iris');
+        result['linguisticArtifacts'] = {
+          'schema': 1,
+          'pipeline': 'entity,quote,coref',
+          'coordinateSystem': 'python-codepoint',
+          'files': {
+            'tokens':
+                'token_ID_within_document\tbyte_onset\tbyte_offset\tword\n'
+                '0\t$the\t${the + 3}\tThe\n'
+                '1\t${the + 4}\t${the + 9}\tnurse\n'
+                '2\t$irisStart\t${irisStart + 4}\tIris\n',
+            'entities':
+                'COREF\tprop\tcat\tstart_token\tend_token\ttext\n'
+                'nurse\tNOM\tPER\t0\t1\tThe nurse\n'
+                'iris\tPROP\tPER\t2\t2\tIris\n',
+            'quotes': 'quote_start\tquote_end\tmention_start\tmention_end\n',
+            'book': '{"characters":[]}',
+          },
+        };
+        final delta = _project(document, window, result);
+        final quotes = delta.dialogues
+            .where((reference) => reference.quoteAuthority)
+            .toList();
+        final iris = delta.registry.characterEntries.singleWhere(
+          (entry) => entry.displayLabel == 'Iris',
+        );
+        expect(quotes, hasLength(2));
+        expect(quotes.last.castId, iris.castId);
+        if (explicitSpeech) {
+          final nurse = delta.registry.characterEntries.singleWhere(
+            (entry) => entry.displayLabel.toLowerCase() == 'the nurse',
+          );
+          expect(quotes.first.castId, nurse.castId);
+        } else {
+          expect(quotes.first.castId, iris.castId);
+        }
+      },
+    );
+  }
+
   test(
     'source identity and an approach followed by compliance repair the speaking voice',
     () {
