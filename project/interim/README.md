@@ -12,7 +12,8 @@ applied to [R12 character contract and consolidated delivery](r12/README.md).
 the character ownership and sequencing decisions it supersedes.
 
 [Native TTS bindings R1](native-tts-r1/README.md) is an unpublished follow-on
-proposal for the speech runtime.
+proposal for the speech runtime. [Canonical .radoc pipeline R1](radoc-pipeline-r1/README.md)
+covers the prepared-document handoff, linguistic boundaries and lossless audio placement.
 
 ## Authority and revision lifecycle
 

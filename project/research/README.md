@@ -5,6 +5,7 @@ Research documents capture accumulated project knowledge and evidence.
 ## Current Documents
 
 - [Native TTS runtime candidates on macOS](native-tts-runtimes.md)
+- [Lossless audio storage for .radoc](radoc-lossless-audio.md)
 
 - [ModernBookNLP capability and reuse assessment](modernbooknlp-capability-reuse.md) — pinned pipeline outputs, current omissions, Character evidence and expressiveness boundaries.
 

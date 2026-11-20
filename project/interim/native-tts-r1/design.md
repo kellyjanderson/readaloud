@@ -2,12 +2,14 @@
 
 ## Proposed architecture
 
+Read Aloud exposes native synthesis through a Flutter plugin or Dart package with a common typed Dart API. Evaluate an existing binding first, then build the thin binding to the compiled implementation if needed. The first macOS Swift/MLX backend is platform-specific. Other Flutter targets can bind suitable implementations behind the same capability-aware API. See the [repository directive](../../../AGENTS.md#flutterdart-platform-and-native-bindings).
+
 The deprecated Kokoro adapter illustrates the division between a Dart caller and a native model runtime. The Dart speech runtime submits a prepared request to a compiled model implementation. Use a maintained model SDK for the tokenizer, conditioning, model generation and codec. Add a thin generated Dart/Swift binding over stable Flutter platform channels for model lifecycle and render operations. The first transport should exchange small typed messages and references to app-owned staged audio. Measuring the existing streaming path will show whether the bridge needs a lower-level buffer interface. [Current worker interface](../../../lib/src/services/speech_worker_pipeline.dart), [Pigeon platform channels](https://docs.flutter.dev/interop/pigeon)
 
 ```text
 Dart reader and speech planning
     → speech admission and synthesis processor
-    → generated Dart/Swift binding
+    → Flutter plugin with generated Dart/Swift binding
     → Swift model host on a dedicated execution lane
     → native MLX model and codec
     → PCM packets or completed staged WAV

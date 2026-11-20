@@ -1,0 +1,21 @@
+# Lossless audio storage for .radoc
+
+Reviewed November 20, 2026 Pacific. Read Aloud v5 stores prepared range references, render/voice dependency provenance, scene word coverage and audio format, including frame count. Its decoder requires WAV members. Compression and timeline ownership can change independently. A streaming renderer can decode bounded ranges to PCM and position them using the book's sample-frame data. [Current manifest](../../lib/src/models/radoc_audio_manifest.dart#L68), [package validation](../../lib/src/services/radoc_audio_package.dart#L977)
+
+## Candidate comparison
+
+| Candidate | What it provides | Read Aloud implication |
+| --- | --- | --- |
+| **FLAC** | Standard lossless coding and native FLAC framing, optional seek tables, tags and application metadata blocks. | First candidate for portable in-book audio. Let the .radoc manifest own mandatory timing and provenance. Verify the chosen binding's seek/index behavior and actual package/platform support. [RFC 9639](https://www.rfc-editor.org/rfc/rfc9639) |
+| **ALAC in a standard container** | Apple's lossless codec. Test a specific CAF or MP4/M4A profile and its actual metadata/seek APIs. | Use Apple facilities where qualified and measure the maintained alternative for other platforms. The presence of an ALAC decoder does not establish the container and metadata support needed for interoperability. [Apple ALAC reference](https://github.com/macosforge/alac) |
+| **NARALAC v2.1** | Indexed ALAC packet archive with sample position, capture/clock provenance, integrity and skippable application `META` JSON. The v2.1 REAPER reader uses indexed reads and preserves declared sample formats. | Candidate when standalone audio needs to carry useful NAR-compatible metadata. Requires a verified, bounded Dart-facing library and a synthetic speech profile. The existing native REAPER reader is an integration reference and does not qualify a Flutter app or mobile build. [NARALAC v2.1 standard](https://github.com/kellyjanderson/nar/blob/d4126d07563d4989b855e3eea2b59225935778fb/docs/naralac/naralac-format-standard-v2.1.md), [native reader source commit](https://github.com/kellyjanderson/nar/commit/cd08a5c97f647e288b5862167f0a17166461e555) |
+
+Lossless means preservation of the input PCM. If the model produces float samples and the current adapter encodes PCM16, the new codec round trip can preserve PCM16 exactly. It cannot recover precision discarded by that conversion. Measure storage size and real startup/seek behavior on representative narration and multi-speaker scenes.
+
+## Metadata and time authority
+
+NARALAC v2.1 uses `FMDT` for file and recording-segment metadata, `PTIM` for packet accounting, `PIDX` for indexing, and `META` for optional application context. The format requires `META` to be skippable and usable without becoming an authority for decoding, alignment or source identity. Any proposed synthetic-speech profile must distinguish file creation time from media time and avoid inventing measured capture or clock observations for generated audio. Review which mandatory fields can be truthfully populated before adopting the format. The v2.2 heartbeat draft is outside this comparison. [NARALAC v2.1 metadata rules](https://github.com/kellyjanderson/nar/blob/d4126d07563d4989b855e3eea2b59225935778fb/docs/naralac/naralac-format-standard-v2.1.md#meta-extended-metadata)
+
+The .radoc book owns canonical source anchors and the rendition mapping. A standalone export may duplicate selected descriptive metadata such as work/rendition ID, source span, reference provenance when portable, and alignment quality. A disagreement with the book is resolved from the book's verified manifest and asset record. Keep local paths and raw prompts out of public default metadata. FLAC can also carry application metadata. Compare actual interchange needs and avoid depending on preservation by unrelated editors.
+
+Reuse common sample-frame fixtures and measure encoded seek, decoded continuity, retained metadata and portability before selecting a durable profile. A standalone storage spike can use already rendered PCM and does not need a new TTS backend. [Canonical .radoc migration plan](../interim/radoc-pipeline-r1/implementation-plan.md)
