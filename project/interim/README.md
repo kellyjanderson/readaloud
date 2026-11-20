@@ -15,6 +15,8 @@ the character ownership and sequencing decisions it supersedes.
 proposal for the speech runtime. [Canonical .radoc pipeline R1](radoc-pipeline-r1/README.md)
 covers the prepared-document handoff, linguistic boundaries and lossless audio placement.
 
+[Document-to-speakers R1](document-to-speakers-r1/README.md) brings these proposals together with the pre-alfa architecture and release work orders.
+
 ## Authority and revision lifecycle
 
 1. **Draft:** create `project/interim/<revision>/` with a README identifying its
