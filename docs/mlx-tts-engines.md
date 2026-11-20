@@ -8,7 +8,7 @@ Read Aloud offers Fish Audio Drama 3 (bf16, 8-bit and 4-bit), Qwen3-TTS
 1.7B Base/CustomVoice, Voxtral TTS 4B and MOSS-TTS v1.5. New installs choose the highest qualified Fish precision that fits measured
 headroom and the 100,000,000,000-byte process-tree ceiling. Exact checkpoint,
 runtime and device qualification is required; unknown devices use a disclosed
-Kokoro fallback. Existing explicit choices remain selected. On macOS choose **Read Aloud > Settings… > Text-to-speech engine**.
+[deprecated Kokoro fallback](speech-runtime-and-python.md#kokoro-deprecation). Existing explicit choices remain selected. On macOS choose **Read Aloud > Settings… > Text-to-speech engine**.
 Selecting an engine starts its download and loading immediately. A saved MLX
 selection does the same at launch. Settings shows measured progress, model-file totals and a fresh available-volume
 measurement with its timestamp. The total is not the remaining download size or
@@ -48,7 +48,7 @@ Those locations do not assert a new test run for this documentation change.
 | Qwen3-TTS Base / CustomVoice | Reference-conditioned Base and fixed-preset CustomVoice adapters implemented | Earlier bounded native smoke; current integrated candidate and perceptual variety unqualified | Unreleased; declared MLX runtime required |
 | Voxtral TTS 4B / optional in-memory 4-bit | Preset adapter and precision/cache identity implemented | Earlier bounded native smoke; local reference cloning unavailable; current candidate unqualified | Unreleased; noncommercial model license; declared MLX runtime required |
 | MOSS-TTS v1.5 | Reference-conditioned adapter implemented | Earlier bounded native smoke; current candidate and perceptual variety unqualified | Unreleased; declared MLX runtime/tokenizer required |
-| Kokoro | ONNX adapter and resource/voice routing implemented | Earlier P0–P4 bounded evidence; current candidate/human gates remain open | Local Kokoro-only builds possible; public release qualification open |
+| Kokoro (deprecated) | Compatibility path through the ONNX adapter | Earlier P0–P4 bounded evidence. Current candidate and human gates remain open. | Local Kokoro-only builds remain available for compatibility. Public release qualification remains open. |
 
 Fish qualification uses `mlx-audio-0.6.3-mlx-0.32.4-complete-v3` on
 Apple M5 Max with 137,438,953,472 bytes (128 GiB) RAM. The exact bundled checkpoint
@@ -167,7 +167,8 @@ the packaged interpreter explicitly when the override is accessible to the sandb
 This override has developer provenance and does not qualify a bundled runtime. An alternate local
 checkpoint directory can be supplied with `READALOUD_MLX_TTS_MODEL_PATH`; it
 must be readable from the app sandbox. If no recognized `READALOUD_TTS_ENGINE`
-is present, an explicit saved preference is used. With no explicit choice, the\nqualified-device/headroom policy above selects Fish or discloses the Kokoro fallback.
+is present, an explicit saved preference is used. With no explicit choice, the
+qualified-device/headroom policy above selects Fish or discloses the deprecated Kokoro fallback.
 
 ## Runtime boundary
 
@@ -175,7 +176,7 @@ is present, an explicit saved preference is used. With no explicit choice, the\n
 
 Install the arm64 MLX runtime with `sh tools/install_mlx_tts_runtime.sh` before
 building an MLX-capable candidate. The embed phase can succeed with a warning
-when that optional runtime is absent: the resulting build is Kokoro-only.
+when that optional runtime is absent. The resulting build supports only the deprecated Kokoro backend.
 A Flutter/Xcode build success therefore cannot establish Drama capability.
 For the full candidate, also follow the independent
 [ModernBookNLP packaging prerequisites](modernbooknlp-provider.md), including its
@@ -393,7 +394,7 @@ engine. Voice count is separate from acoustic quality, pronunciation and latency
 | MOSS-TTS v1.5 8B | The same 43 reference identities | Yes; acoustic qualification remains separate |
 | Qwen3-TTS 1.7B CustomVoice | All 9 fixed native speakers | No; retained separately as a limited configuration |
 | Voxtral 4B local MLX | All 20 native presets | No; the released local decoder/runtime lacks the reference encoder |
-| Kokoro | 54 catalog presets across languages (28 English) | Catalog count only; installed availability is shown in Voice Management |
+| Kokoro (deprecated) | 54 catalog presets across languages (28 English) | Catalog count only; installed availability is shown in Voice Management |
 
 Choose **Qwen3-TTS 1.7B Base** or **MOSS-TTS** in Settings,
 then open **Voice Management** to preview/select voices or

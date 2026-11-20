@@ -53,7 +53,7 @@ existing application version/signing configuration unless separately authorized.
 The build tool creates a unique QA bundle identifier and records its allowlisted
 environment and Xcode override; it does not authorize public signing or publication.
 
-Before staging an MLX-capable app, verify its declared [packaged runtimes](mlx-tts-engines.md#local-macos-release-packaging), exact manifests/native roots and model reuse. A build that omitted the optional MLX runtime is Kokoro-only; staging cannot turn it into a Drama-capable app. Full candidate setup also includes the independent [ModernBookNLP prerequisites](modernbooknlp-provider.md).
+Before staging an MLX-capable app, verify its declared [packaged runtimes](mlx-tts-engines.md#local-macos-release-packaging), exact manifests/native roots and model reuse. A build that omitted the optional MLX runtime supports only the deprecated Kokoro backend and is unsuitable as a Drama-capable candidate. Full candidate setup also includes the independent [ModernBookNLP prerequisites](modernbooknlp-provider.md).
 
 From a clean committed checkout with the verified SDK's `flutter` on `PATH`, use
 the tool's attested build and smoke protocol. The build app output, receipt and

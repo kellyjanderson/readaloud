@@ -5,6 +5,10 @@ A local-first Flutter reader for long-form text-to-speech. Import documents, lis
 For local Apple Silicon evaluation of Fish Audio Drama 3, Qwen3-TTS, Voxtral TTS, or MOSS-TTS,
 see [MLX TTS engine setup](docs/mlx-tts-engines.md).
 
+**Kokoro is deprecated.** Its model, voices, and synthesis paths remain available
+for compatibility, including the current fallback on devices without a qualified
+Fish configuration. See the [deprecation scope](docs/speech-runtime-and-python.md#kokoro-deprecation).
+
 ## Required reading experience
 
 These are product requirements, not claims that the current build meets them:
@@ -42,7 +46,7 @@ cd readaloud
 tools/flutter pub get
 ```
 
-For Kokoro, place a compatible model at `assets/kokoro/model/kokoro-v1.0.onnx`; see [model setup](assets/kokoro/model/README.md). For MLX engines, install the [arm64 runtime before building](docs/mlx-tts-engines.md#local-macos-release-packaging), then select the engine in Settings. A successful build that omitted this optional runtime supports Kokoro only; it is not a Drama-capable candidate. Model weights download separately and are not in Git. The app uses a [vendored ONNX plugin override](third_party/flutter_onnxruntime/pubspec.yaml).
+For MLX engines, install the [arm64 runtime before building](docs/mlx-tts-engines.md#local-macos-release-packaging), then select the engine in Settings. A build that omits the runtime supports only the deprecated Kokoro path. For a legacy Kokoro build, see [ONNX model setup](assets/kokoro/model/README.md). Model weights download separately and are excluded from Git.
 
 ```sh
 tools/flutter run -d macos

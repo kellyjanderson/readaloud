@@ -2,7 +2,7 @@
 
 ## Proposed architecture
 
-Use the same division that already works for Kokoro. The Dart speech runtime submits a prepared request to a compiled model implementation. Use a maintained model SDK for the tokenizer, conditioning, model generation and codec. Add a thin generated Dart/Swift binding over stable Flutter platform channels for model lifecycle and render operations. The first transport should exchange small typed messages and references to app-owned staged audio. Measuring the existing streaming path will show whether the bridge needs a lower-level buffer interface. [Current worker interface](../../../lib/src/services/speech_worker_pipeline.dart), [Pigeon platform channels](https://docs.flutter.dev/interop/pigeon)
+The deprecated Kokoro adapter illustrates the division between a Dart caller and a native model runtime. The Dart speech runtime submits a prepared request to a compiled model implementation. Use a maintained model SDK for the tokenizer, conditioning, model generation and codec. Add a thin generated Dart/Swift binding over stable Flutter platform channels for model lifecycle and render operations. The first transport should exchange small typed messages and references to app-owned staged audio. Measuring the existing streaming path will show whether the bridge needs a lower-level buffer interface. [Current worker interface](../../../lib/src/services/speech_worker_pipeline.dart), [Pigeon platform channels](https://docs.flutter.dev/interop/pigeon)
 
 ```text
 Dart reader and speech planning
@@ -44,7 +44,7 @@ Version raw audio identity with the actual backend, runtime/library revision, mo
 
 | Control | Proposed ownership |
 | --- | --- |
-| Synthesis speed | Remains a verified numeric model input for Kokoro. Advertise a native synthesis-rate capability only when the backend implements it and emitted tests confirm it. |
+| Synthesis speed | Advertise a numeric model-rate capability only when the backend implements it and emitted tests confirm it. The deprecated Kokoro implementation is a reference for how Dart currently passes a model-rate input. |
 | Listening and export speed | Keep listening rate at the player layer when using time-stretch. Define separately whether export follows that rate. Prefer an existing player or native DSP facility after duration and pitch measurements. A player-only change can reuse raw audio. |
 | Cadence | Dart owns segmentation, join policy and canonical break intent. The model determines timing within the render. Preserve any existing backend-specific controls and qualify their scope before exposing new ones. |
 | Pitch, emphasis and expression | Canonical document directions belong to Dart. Translate only the capability and context that qualify. Fish's current bf16 whisper/shout evidence is scoped to that Python runtime and model context. A native backend must earn its own cue and speaker-continuity evidence. |
@@ -52,7 +52,7 @@ Version raw audio identity with the actual backend, runtime/library revision, mo
 
 ## Open decisions
 
-- Scope of removal. Python-free speech, including acquisition for each supported native engine, is the recommended goal. Removing an optional NLP provider or retiring an engine is release scope and needs its own decision.
+- Scope of removal. Python-free speech, including acquisition for each supported native engine, is the recommended goal. Removing an optional NLP provider or retiring an engine is release scope and needs its own decision. Any Kokoro retirement needs a migration for saved engine and voice selections and a qualified route for devices that currently fall back to Kokoro.
 - macOS 14 compatibility. First test the best exact-checkpoint candidate and verify deployment floors. If its dependencies require macOS 15, gather evidence for a compatible candidate, separately deployable helper, or an explicitly approved platform floor change.
 - Process placement. Select in-process Swift or a compiled helper from the measured cancellation, crash containment and memory behavior. Document exactly how pause, replacement and Quit work for the chosen approach.
 - Capability parity. Decide whether any engine or precision is offered with fewer features only after recording the effect on the current workflow, cache and accepted scope.

@@ -4,6 +4,8 @@ Unpublished proposal, November 20, 2026 Pacific. Draft author and owner: Codex i
 
 The user prefers Dart bindings to native engines, including writing a thin bridge if necessary. The requested deliverables are education and planning. The first proposed target is an Apple Silicon Fish Drama 3 speech route that needs no Python interpreter at runtime. Whether to remove Python from the entire product, including optional ModernBookNLP analysis, is a separate decision. This draft proposes work after scope review by the coordinator. The issue and accepted release scope continue to govern active delivery.
 
+The user designated [all Kokoro-specific paths deprecated](../../../docs/speech-runtime-and-python.md#kokoro-deprecation). The native migration targets non-Kokoro synthesis.
+
 - [Current runtime walkthrough](../../../docs/speech-runtime-and-python.md)
 - [Native runtime research](../../research/native-tts-runtimes.md)
 - [Architecture draft](design.md)

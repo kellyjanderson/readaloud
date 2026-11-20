@@ -4,7 +4,7 @@ This draft proposes a sequence and acceptance gates for coordinator review. The 
 
 ## 1. Freeze the comparison
 
-Record the baseline app commit and runtime, hardware, Flutter/Xcode build, exact model and codec identity, voice digests, selected text and expected speaker sequence. Use non-private fixtures covering single-speaker prose, dialogue returning to a previous character, and exact final words. Include a saved-book fixture with existing audio and a first-load fixture that needs synthesis. Run the baseline through the real playback/export path and retain model startup, reference encoding, first PCM, complete render, first emitted audio, full output, memory, and child-process cleanup measurements. Use Kokoro as a Python-free control. Project receipts are evidence for their own binaries and fixtures.
+Record the baseline app commit and runtime, hardware, Flutter/Xcode build, exact model and codec identity, voice digests, selected text and expected speaker sequence. Use non-private fixtures covering single-speaker prose, dialogue returning to a previous character, and exact final words. Include a saved-book fixture with existing audio and a first-load fixture that needs synthesis. Run the baseline through the real playback/export path and retain model startup, reference encoding, first PCM, complete render, first emitted audio, full output, memory, and child-process cleanup measurements. Use existing deprecated-Kokoro evidence or probes only for a specific compatibility comparison. The native migration targets Fish and the other MLX backends. Project receipts are evidence for their own binaries and fixtures.
 
 ## 2. Prove the native model in isolation
 

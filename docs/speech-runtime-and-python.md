@@ -6,12 +6,25 @@ This describes the macOS integration source at `fd1df4c58c09870258a84e2975a7f6b5
 
 | Path | App-facing interface | Where the work runs |
 | --- | --- | --- |
-| Kokoro | Dart calls the vendored `flutter_onnxruntime` plugin | Dart handles pronunciation, token IDs and voice-vector selection. The macOS plugin calls native ONNX Runtime to execute the model with tokens, style and speed. The Dart speech worker owns the call and WAV artifact lifecycle. |
+| Kokoro (deprecated) | Dart calls the vendored `flutter_onnxruntime` plugin | Dart handles pronunciation, token IDs and voice-vector selection. The macOS plugin calls native ONNX Runtime to execute the model with tokens, style and speed. The Dart speech worker owns the call and WAV artifact lifecycle. |
 | Fish Audio Drama 3, Qwen3-TTS, Voxtral TTS and MOSS-TTS | Dart starts a dedicated Python child and exchanges JSON lines over its standard streams | The Python app adapter calls `mlx-audio` for model-specific generation. MLX's native runtime executes the numerical operations on Apple Silicon. Python owns model setup, orchestration and WAV/packet production. |
 | ModernBookNLP evaluation | Dart starts a separate Python child on opt-in analysis demand | The CPU-based Python pipeline returns linguistic annotations for bounded text windows. Dart validates and applies eligible results to future character routing. |
 | Playback and export | Dart speech runtime and native audio facilities | Dart owns playback intent, artifact acceptance, joining, cache identity and export. `just_audio` hands the audio to AVFoundation for macOS playback. |
 
 [Kokoro model runner](../lib/src/services/kokoro_model_runner.dart), [macOS ONNX plugin](../third_party/flutter_onnxruntime/macos/Classes/FlutterOnnxruntimePlugin.swift), [MLX process client](../lib/src/services/mlx_speech_worker_processor.dart), [ModernBookNLP provider](../lib/src/services/modernbooknlp_provider.dart), [audio player integration](../lib/src/services/kokoro_tts_engine.dart)
+
+## Kokoro deprecation
+
+All Kokoro-specific paths are deprecated. Their purpose is compatibility with existing settings and fixtures, and reproduction of prior evidence. Choose a non-Kokoro backend for new speech work. This designation has no removal date.
+
+| Entry point | Deprecated scope |
+| --- | --- |
+| Engine selection | Explicit Kokoro selection, saved Kokoro preferences, the automatic Kokoro fallback, and Kokoro-only builds. |
+| Reader and voice management | Kokoro inference for document playback, narrator and character routing, voice preview, and Kokoro model or voice installation. |
+| Export and regeneration | New synthesis through Kokoro for WAV export and for passages that need regenerated audio. |
+| Development and QA | Kokoro-specific model setup, ONNX and voice assets, phoneme and pronunciation adaptations, headless export and pronunciation/sentence probes when routed to Kokoro, and the Kokoro-native regression harnesses. |
+
+The shared runtime includes `KokoroTtsEngine`, which also hosts the MLX backends. Document preparation, casting, artifact handling, the player and model-free playback of saved audio are shared paths. See [engine selection and fallback](mlx-tts-engines.md), [legacy model setup](../assets/kokoro/model/README.md), and [retained regression tools](../tools/README.md#retained-native-qualification-probes).
 
 ## Exactly what the MLX child does
 
@@ -28,7 +41,7 @@ The child handles four commands in the integration checkout.
 
 ### What can change the speech
 
-- **Kokoro** receives numeric synthesis speed and an acoustic style vector. Its Dart-side pronunciation adaptations can change the phonemes sent to the native model. A native link to ONNX Runtime already exists. [Kokoro inference](../lib/src/services/kokoro_speech_worker_processor.dart), [model inputs](../lib/src/services/kokoro_model_runner.dart)
+- **Kokoro (deprecated)** receives numeric synthesis speed and an acoustic style vector. Its Dart-side pronunciation adaptations can change the phonemes sent to the native model. A native link to ONNX Runtime already exists. [Kokoro inference](../lib/src/services/kokoro_speech_worker_processor.dart), [model inputs](../lib/src/services/kokoro_model_runner.dart)
 - **Fish** receives reference audio and transcripts, speaker slots and model text. The integration source also has a model-scoped scene path and two explicit whole-segment delivery mappings, whisper and shout, for the qualified bf16 context. Those mappings belong to Dart's planning and translation. The Python side receives and renders the resulting turns. The earlier `ae8d8bd` checkout has reference-slot reuse and per-chunk renders. Its adapter does not send those directed scenes. A reference carries information about voice and accent. The model still determines much of the pitch contour, phrasing and emphasis. [Integrated delivery mapping](../lib/src/services/voice_session_realization_service.dart#L174), [speech adjustments](../lib/src/services/speech_adjustment_registry.dart), [earlier worker](https://github.com/kellyjanderson/readaloud/blob/ae8d8bd23da18fcd7c15afeea3ddf94d56ba8e14/assets/mlx_tts_worker.py#L353)
 - **Qwen CustomVoice and Voxtral** receive a named preset. **Qwen Base and MOSS** receive reference audio and its transcript. MOSS can also need a separate audio tokenizer on first load. The adapter exposes a subset of the upstream models' possible controls. [Backend dispatch](../assets/mlx_tts_worker.py#L906), [model setup](mlx-tts-engines.md)
 - **MLX rate** is present in the Dart request and cache identity. The JSON synthesis request contains no speed field. The Fish catalog describes post-processing as the rate strategy, but the current reader's rate setter stores the requested value and the playback code reads player speed for its timing calculations. The source path traced here does not apply the slider at the player. Model generation speed, audible playback rate, and rate baked into an export are three distinct controls. [Dart rate handling](../lib/src/services/kokoro_tts_engine.dart#L768), [MLX request fields](../lib/src/services/mlx_speech_worker_processor.dart#L1163), [Fish capability descriptors](../assets/fish_drama_models.json)
