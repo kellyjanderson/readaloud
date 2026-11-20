@@ -49,6 +49,10 @@ and index-based follow/recenter behavior; an ordinary ListView cannot reliably
 recenter an unmounted variable-height range. A trailing viewport cell requests the
 next range as the user scrolls, so display demand can advance preparation without
 Play. EOF has an explicit end-of-document marker and cumulative word count.
+The HTML reader uses one selection area across mounted prepared ranges, so
+the normal copy action can copy a selected passage across cell boundaries.
+Selecting text suspends automatic follow so playback cannot scroll the
+reader away from the selection.
 
 `readPreparedRange` coalesces identical requests and admits at most eight reads.
 It reuses resident publications or reads a committed immutable checkpoint on a
