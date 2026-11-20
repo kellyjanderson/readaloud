@@ -40,7 +40,7 @@ Ignored does not mean disposable.
 | `.readaloud-tools/` | Current launcher's writable Flutter SDK and package cache. Keep for reuse; other worktrees may symlink here. |
 | `.flutter-sdk/`, `.local/` | Legacy tooling and preserved local resources. Check editor settings, symlinks and historical probe dependencies before retiring individual contents. |
 | `.dart_tool/`, `build/`, platform `ephemeral/` and `Pods/` | Generated build state. Regenerable, but a particular build can also be an evidence artifact; check ownership first. |
-| `assets/kokoro/model/*.onnx` | Downloaded model weights. Keep to avoid repeated downloads. |
+| `assets/kokoro/model/*.onnx` | Downloaded weights for the deprecated Kokoro compatibility path. |
 | `tmp/`, `project/test-artifacts/` | Disposable scratch alongside locally retained receipts, fixtures, audio and test app copies. Classify individual entries before removal; preserve evidence referenced by issues. |
 | `.idea/`, `.vscode/` | Local editor configuration; preserve user settings. |
 | `kokoro-voice-sampler/` | Independent nested repository, not part of this application's tracked source. Check its own Git status and owner before moving or deleting. |

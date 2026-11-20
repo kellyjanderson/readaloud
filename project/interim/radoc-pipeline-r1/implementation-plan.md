@@ -1,0 +1,41 @@
+# Canonical .radoc migration and acceptance
+
+The first useful slice unifies the prepared-document handoff. ModernBookNLP cut selection, frame-exact composition and lossless persistence each need an independent comparison so failures can be attributed to the right stage. The [design](design.md) describes the proposed ownership. This draft is for review under [#110](https://github.com/kellyjanderson/readaloud/issues/110) and [#135](https://github.com/kellyjanderson/readaloud/issues/135).
+
+## 1. Unify intake without an EOF gate
+
+Adapt source imports, source checkpoint replay, v1–v4 JSON and v5 package reads to one canonical range consumer. Start from the existing prepared publication and package DTOs. Confirm that source, restore, open, drop/share/paste and headless export paths converge after intake. Keep captured speech, authored directions and Character selection/Reset precedence intact. Keep permanent source and stable book identity through partial stages, and publish updates only for the current generation.
+
+**Proof.** Compare a fresh source import with the same work reopened from compatible persisted ranges. Verify equal semantic anchors, text, voice choices and planning inputs. Exercise long EPUB/DOCX and progressive PDF, sparse/truncated packages, mid-import cancellation, changed source and a jump beyond the first prepared window. Confirm first speech from the required range before full conversion, bounded memory and truthful preparation/analysis/audio progress. Confirm that complete offline conversion and reopen work as an explicit path. Verify that legacy v1–v5 data remains readable and old audio can replay without model startup.
+
+## 2. Compare and adopt ModernBookNLP linguistic cuts
+
+Persist and map sentence, quote and proposed clause boundaries from already captured provider artifacts into the same coordinate system as the provisional Dart boundaries. Use one downstream plan consumer. Project source/display boundaries and check overlapping windows, missing/corrupt analysis, exact UTF-16 mapping, and stable identities. Score two separate features.
+
+- **Speaker attribution.** Record matched-turn detection, correct speaker, unknown, false assignment and disagreements. Reuse the existing labeled evaluation where appropriate. The recorded 50/63 baseline versus 63/63 provider result measures attribution on that fixture set. It establishes no segmentation score. [S2 comparison receipt](https://github.com/kellyjanderson/readaloud/issues/127#issuecomment-6673916468)
+- **Linguistic boundaries.** Label acceptable and forbidden cuts independently of either implementation. Compare exact span/cut agreement, missed useful breaks, false or disruptive cuts, window-edge errors and first-ready latency. Include abbreviation/decimal handling, interruption and multi-paragraph quotes, ambiguous dialogue, apostrophes and Unicode, long clauses, voice changes and explicit emphasis. Use the same text, voice, checkpoint and comparable render budget for listening to the resulting phrasing. Do not count matches found only on divergent spans as speakers resolved correctly.
+
+**Proof.** The provider can be promoted for the kinds of cuts it improves using saved or bounded demand-driven analysis. First speech remains possible on provisional cuts. Later evidence can update future uncommitted work. Retire overlapping deep heuristics only after equivalent coverage is established. The chosen planner still sets render budgets and selects among cut candidates.
+
+## 3. Qualify sample-frame playback and export
+
+Reuse the existing packet offsets and seek/transport ownership. Evaluate a maintained decoder/player scheduler or bounded PCM submission path before adding custom audio infrastructure. A prototype must place decoded ranges by explicit half-open frame intervals. Decoding stays ahead only within a credit limit. Cancel revokes publication immediately, wakes credit waiters, and drains the old generation before rebinding resources. Playback and export use the same resolved placement rules. Keep old WAV join corrections available for legacy rendered assets until equivalence or a compatible migration is shown.
+
+| Case | Fixture and required evidence |
+| --- | --- |
+| Storage split within a word | Split a single captured utterance inside a voiced or consonant transition at known frame indices. Compare decoded/assembled samples to the original, with exactly zero inserted, omitted or repeated frames. Repeat after save and reopen. Capture emitted playback through the actual platform path and verify the expected waveform around both sides of the join. |
+| Punctuation and authored pause | Split inside an already-rendered pause and across a known no-pause span. Preserve the first real pause's measured duration and introduce zero silence in the second. Exercise a separately authored numerical pause and verify it is accounted once. |
+| Independent generations | Use real utterances with matched context and an adversarial pair with mismatched phonetics or timing. Measure the valid join and listen for clicks, changed words, doubled consonants and voice discontinuity. The mismatch must retain unknown/refuse automatic overlap or retry a bounded context render, with a diagnostic. |
+| Delay, seek and mixed rates | Deliver a late or missing interval during playback, and exercise pause, seek and replacement with a stale completion in flight. Verify no duplicated frames, saved silence or obsolete playback. With 44.1 and 48 kHz assets, measure phase/position continuity and long-run timing; compare the capture at its actual output rate. |
+
+## 4. Qualify one lossless asset profile
+
+Compare matched decoded PCM at the same sample rate and depth for FLAC, standard ALAC and NARALAC if a supported binding or candidate adapter exists. Use the [codec comparison](../../research/radoc-lossless-audio.md). Start with FLAC in new candidate packages after a standalone seek/read proof. Measure native-rate encoding, streaming decode/seek latency, disk size, CPU/peak memory, app-bundle footprint and metadata retention. Test on macOS and compile/package representative iOS and Android bindings before committing the common format. Record the supported matrix for other Flutter targets. Pin exact dependencies and retain the old WAV reader. After in-book storage qualifies, evaluate adopting the same lossless profile for durable raw and corrected render caches and standalone exports. Keep transient PCM and codec-dependent decode staging under the audio owner. Preserve existing WAV artifacts and their provenance across migration.
+
+**Proof.** The decoded PCM is identical to the source samples after a lossless round trip. Duration and half-open frame intervals survive reopen, seek and export. Validate malformed files, index bounds, corrupt members, partial publication and unknown metadata. NARALAC promotion also requires a written generated-speech metadata profile with unambiguous time origin and optional `META` semantics. Keep one authoritative book timeline. Determine standalone export metadata behavior separately.
+
+## 5. Measure the normal reader and reconcile
+
+Record launch, normal startup complete, source-open, Play, ready range, first PCM and captured emitted speech. Verify the workspace’s two-second opening-to-speech requirement. Report the integrated baseline's R25 five-second reusable and ten-second first-load gates separately. Compare cold, warm and cached paths using matching fixtures. Check responsiveness and long reading with changing voices and attached metadata. Keep software-output capture, physical output, listening and release evidence distinct. Quit every test app normally and verify exit. [Product requirements](../../product-definition.md), [Flutter/Dart directive](../../../AGENTS.md#flutterdart-platform-and-native-bindings)
+
+Reconcile implemented ownership, formats and migration into current [document pipeline](../../architecture/document-speech-pipeline.md), [playback orchestration](../../architecture/playback-orchestration-and-synthesis-boundaries.md), [audio artifact identity](../../architecture/audio-artifact-identity-and-lifetime.md), and human docs. Review the version, scope and evidence in the owning GitHub issues before changing release commitments.

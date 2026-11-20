@@ -23,6 +23,14 @@ Apply the [product definition](project/product-definition.md) and [README readin
 
 Demonstrate these expectations in the running app with launch-to-audio timing, input responsiveness, emitted-audio continuity and appropriate human listening. Unit tests, codec round trips and internal readiness flags alone cannot establish conformance. Do not silently weaken requirements to fit the current implementation or expand an already accepted release scope without its coordinator's explicit reconciliation.
 
+## Flutter/Dart platform and native bindings
+
+Flutter and Dart are the application platform. Keep portable application contracts and policy in Dart. Reuse suitable maintained Flutter plugins or Dart packages for native features. When a native library lacks suitable Dart bindings, create a Flutter plugin or Dart module that binds directly to the compiled library or platform API. Use established platform channels or a supported FFI interface as appropriate.
+
+Do not introduce a Dart → Python → native relay for production application functionality. Existing Python-backed features are migration candidates. Python is available for offline research, conversion, tooling and reference comparisons that run outside the application's production dependency path.
+
+Evaluate implementation and packaging on the intended Flutter targets before selecting a native dependency. Record availability, platform/architecture and OS floors, licensing, capability gaps and verification by target. A platform-specific accelerator belongs behind the shared Dart API with explicit capability reporting. Keep the document and media contracts portable, and keep heavy native work off the UI thread.
+
 ## Ownership, authorization and completion
 
 GitHub Project Status owns lifecycle; issue current blocks own coordination and exact evidence pointers. Keep execution/progress out of local ledgers and mirrored issue bodies. Draft/fixed design revisions belong in `project/interim/` under its lifecycle; `tmp/` is disposable transport, never design storage. Update architecture with implementation without presenting proposals as current behavior. GitHub outages do not create another planning authority: preserve code work, report the blocker and resume publication when access returns.

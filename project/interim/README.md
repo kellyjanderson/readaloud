@@ -11,6 +11,12 @@ applied to [R12 character contract and consolidated delivery](r12/README.md).
 [R10](r10/README.md) retains the ten original ACD designs. R12 explicitly identifies
 the character ownership and sequencing decisions it supersedes.
 
+[Native TTS bindings R1](native-tts-r1/README.md) is an unpublished follow-on
+proposal for the speech runtime. [Canonical .radoc pipeline R1](radoc-pipeline-r1/README.md)
+covers the prepared-document handoff, linguistic boundaries and lossless audio placement.
+
+[Document-to-speakers R1](document-to-speakers-r1/README.md) brings these proposals together with the pre-alfa architecture and release work orders.
+
 ## Authority and revision lifecycle
 
 1. **Draft:** create `project/interim/<revision>/` with a README identifying its

@@ -2,6 +2,7 @@
 
 Current source structure, ownership and known limitations. Proposed changes belong in [GitHub design issues](../../docs/project-management.md); draft/fixed revisions follow [interim design storage](../interim/README.md). The [system overview](system-overview.md) and [engine support matrix](../../docs/mlx-tts-engines.md#support-and-evidence) describe current development integration with exact qualification limits. Individual component pages record their own source/evidence lineage. A source test, bounded native run and distributed release are different claims.
 
+- [From Open to audible speech](document-to-speakers.md)
 - [System Overview](system-overview.md)
 - [Document and Speech Pipeline](document-speech-pipeline.md)
 - [Normalized Content and Position Mapping](normalized-content-and-position-mapping.md)

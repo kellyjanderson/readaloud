@@ -19,9 +19,8 @@ or [MLX setup](../docs/mlx-tts-engines.md) for prerequisites and complete comman
 
 ## Retained native qualification probes
 
-The P0–P4 names identify prepared-document implementation stages, not alternative
-application entry points for daily use. They remain useful for reproducing linked
-evidence and targeted regressions:
+The P0–P4 names identify prepared-document implementation stages. The deprecated
+Kokoro probes are retained for linked evidence and compatibility regressions.
 
 - `run_native_baseline.rb`: isolated native export baseline.
 - `p2_native_probe.dart`, `run_p2_native_probe.rb`: resident session/tensor lifetime.

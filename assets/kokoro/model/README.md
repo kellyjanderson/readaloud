@@ -1,8 +1,10 @@
-# Kokoro Model Setup
+# Deprecated Kokoro Model Setup
+
+Use this setup for legacy Kokoro compatibility and regression reproduction. For new speech work, see [MLX engine setup](../../../docs/mlx-tts-engines.md).
 
 This directory is intentionally kept out of normal git history for the ONNX model file.
 
-The app expects this exact file path before build or run:
+A Kokoro build or run expects this exact file path:
 
 ```text
 assets/kokoro/model/kokoro-v1.0.onnx
