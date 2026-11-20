@@ -11,6 +11,9 @@ applied to [R12 character contract and consolidated delivery](r12/README.md).
 [R10](r10/README.md) retains the ten original ACD designs. R12 explicitly identifies
 the character ownership and sequencing decisions it supersedes.
 
+[Native TTS bindings R1](native-tts-r1/README.md) is an unpublished follow-on
+proposal for the speech runtime.
+
 ## Authority and revision lifecycle
 
 1. **Draft:** create `project/interim/<revision>/` with a README identifying its

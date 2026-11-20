@@ -4,6 +4,8 @@ Research documents capture accumulated project knowledge and evidence.
 
 ## Current Documents
 
+- [Native TTS runtime candidates on macOS](native-tts-runtimes.md)
+
 - [ModernBookNLP capability and reuse assessment](modernbooknlp-capability-reuse.md) — pinned pipeline outputs, current omissions, Character evidence and expressiveness boundaries.
 
 - [Dialogue Attribution, Character Casting, and Voice Library Metadata — 2026-04-03](architecture-questions/dialogue-attribution-character-casting-and-voice-library-metadata-2026-04-03.md)

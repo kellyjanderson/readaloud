@@ -342,8 +342,10 @@ These models currently receive the planned plain-text chunk and a supported
 preset or a selected synthetic audio reference. Engine-specific phoneme/IPA adaptation and acoustic quality have
 not been qualified. The integration is for side-by-side engine evaluation;
 it does not establish that any model improves pronunciation or meets the
-existing latency target. Speech-rate support is scoped by the engine capability profile; current Fish
-rate handling uses player-side post-processing rather than native model speed. Voxtral's noncommercial license must be observed.
+existing latency target. The Fish catalog identifies post-processing as the rate strategy. The
+current MLX synthesis request carries no rate, and the reader's Voice Speed path does
+not set the player rate. See [speech runtimes and Python](speech-runtime-and-python.md)
+for the relevant source paths. Voxtral's noncommercial license must be observed.
 
 Voxtral defaults to **Full precision**. Settings offers optional **Fast (4-bit)** inference;
 changing precision retires and reloads the model in the current session. The helper quantizes
