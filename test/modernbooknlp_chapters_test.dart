@@ -4,37 +4,157 @@ import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:read_aloud/src/controllers/reader_controller.dart';
 import 'package:read_aloud/src/models/chunk_plan.dart';
+import 'package:read_aloud/src/models/document_preparation.dart';
+import 'package:read_aloud/src/models/voice_profile.dart';
 import 'package:read_aloud/src/services/document_import_service.dart';
 import 'package:read_aloud/src/services/modernbooknlp_analysis.dart';
 import 'package:read_aloud/src/services/modernbooknlp_chapters.dart';
 import 'package:read_aloud/src/services/modernbooknlp_provider.dart';
 import 'package:read_aloud/src/services/reader_document_repository.dart';
+import 'package:read_aloud/src/services/reader_preferences_service.dart';
+import 'package:read_aloud/src/services/tts_engine.dart';
+import 'package:read_aloud/src/services/work_character_repository.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
   test(
-    'a replaced source rejects a delayed successful provider reply',
+    'Play publishes an immediately cancellable wait for the requested chapter',
+    () async {
+      final provider = _ControlledProvider();
+      final analysis = ModernBookNlpAnalysis(() async => provider);
+      final engine = _ChapterPlaybackEngine();
+      final controller = await _controller(analysis: analysis, engine: engine);
+      await controller.initialize();
+      analysis.enable();
+      final prose = File(
+        'test/fixtures/rc2_prose/text/rain.txt',
+      ).readAsStringSync();
+      final directory = await Directory.systemTemp.createTemp('chapter-play-');
+      addTearDown(() => directory.delete(recursive: true));
+      final input = await File('${directory.path}/rain.txt').writeAsString(
+        'Chapter One\n\n${prose.trim()}\n\n'
+        'Chapter Two\n\nBruno waited beside the door.',
+      );
+      final firstCall = provider.calls.stream.first;
+      await controller.importFilePaths([input.path], surfaceErrors: true);
+      final first = await firstCall.timeout(const Duration(seconds: 8));
+      await _until(
+        () =>
+            controller.preparationProgress[PreparationStage.analysis]?.state ==
+            PreparationWorkState.working,
+      );
+      await _until(() => controller.isPreparationComplete);
+      // Retry on the same held chapter, with source preparation already idle.
+      final initialPlay = controller.startPlayback();
+      await _until(() => controller.hasPendingPlaybackIntent);
+      await controller.togglePlayback();
+      await initialPlay.timeout(const Duration(seconds: 8));
+
+      var publishedPendingPlay = false;
+      controller.addListener(() {
+        if (controller.hasPendingPlaybackIntent) publishedPendingPlay = true;
+      });
+
+      final pendingPlay = controller.startPlayback();
+      await Future<void>.delayed(Duration.zero);
+      expect(controller.hasPendingPlaybackIntent, isTrue);
+      expect(engine.requests, isEmpty);
+      expect(
+        publishedPendingPlay,
+        isTrue,
+        reason: 'the transport needs a notification to expose Cancel',
+      );
+      final firstProgress =
+          controller.preparationProgress[PreparationStage.analysis]!;
+      expect(firstProgress.completed, 0);
+      expect(firstProgress.total, isNull);
+
+      await controller.togglePlayback();
+      await pendingPlay.timeout(const Duration(seconds: 8));
+      expect(controller.hasPendingPlaybackIntent, isFalse);
+      final secondCall = provider.calls.stream.first;
+      provider.finish(first);
+      final second = await secondCall.timeout(const Duration(seconds: 8));
+      expect(
+        engine.requests,
+        isEmpty,
+        reason: 'a late chapter cannot revive Cancel',
+      );
+      expect(
+        controller.preparationProgress[PreparationStage.analysis]?.completed,
+        1,
+      );
+
+      await controller.startPlayback().timeout(const Duration(seconds: 8));
+      final opening = engine.requests.single;
+      expect(opening.sourceWordOffset, 0);
+      expect(opening.chunkPlan?.chunks.first.startWordIndex, 0);
+      expect(opening.text, startsWith('Chapter One'));
+      expect(provider.requests, [first, second]);
+
+      final cancelled = Completer<void>();
+      final laterRange = opening.continuation!.next(
+        opening.rangeSequence,
+        cancelled.future,
+      );
+      var laterAdmitted = false;
+      unawaited(laterRange.then((_) => laterAdmitted = true));
+      await Future<void>.delayed(Duration.zero);
+      expect(laterAdmitted, isFalse);
+      provider.finish(second);
+      final later = await laterRange.timeout(const Duration(seconds: 8));
+      expect(later?.text, startsWith('Chapter Two'));
+      expect(later?.sourceWordOffset, opening.speechDocument?.totalWordCount);
+    },
+  );
+
+  test(
+    'replacement and seek reject the retired chapter and hold the new anchor',
     () async {
       final provider = _ControlledProvider()..deliverAfterCancellation = true;
       final analysis = ModernBookNlpAnalysis(() async => provider);
-      final controller = await _controller(analysis: analysis);
+      final engine = _ChapterPlaybackEngine();
+      final controller = await _controller(analysis: analysis, engine: engine);
+      await controller.initialize();
       analysis.enable();
 
       final oldCall = provider.calls.stream.first;
       await controller.importPastedText('Chapter One\n\nAda waited.');
       final retired = await oldCall.timeout(const Duration(seconds: 8));
+      final retiredPlay = controller.startPlayback();
+      await _until(() => controller.hasPendingPlaybackIntent);
       final replacement = provider.calls.stream.first;
-      await controller.importPastedText('Chapter One\n\nBruno arrived.');
+      await controller.importPastedText(
+        'Chapter One\n\nBruno arrived.\n\n'
+        'The front door stood open.\n\n'
+        'A stranger waited at the foot of the stairs.',
+      );
+      await retiredPlay.timeout(const Duration(seconds: 8));
       provider.finish(retired);
 
       final current = await replacement.timeout(const Duration(seconds: 8));
       expect(current.sourceRevision, isNot(retired.sourceRevision));
       expect(analysis.result, isNull);
       expect(analysis.completedWindows, 0);
+      expect(engine.requests, isEmpty);
+      await controller.jumpBySeconds(4);
+      final anchor = controller.currentWordIndex;
+      expect(anchor, greaterThan(0));
+      final currentPlay = controller.startPlayback();
+      await _until(() => controller.hasPendingPlaybackIntent);
+      expect(engine.requests, isEmpty);
       provider.finish(current);
-      await _until(() => analysis.completedWindows == 1);
+      await currentPlay.timeout(const Duration(seconds: 8));
+      expect(analysis.completedWindows, 1);
+      final admitted = engine.requests.single;
+      expect(admitted.isResumedPlayback, isTrue);
+      expect(admitted.chunkPlan?.chunks.first.startWordIndex, anchor);
+      expect(
+        admitted.documentId,
+        controller.document.displayDocument.documentId,
+      );
       expect(analysis.result?['requestId'], current.requestId);
     },
   );
@@ -234,11 +354,18 @@ void main() {
   );
 }
 
-Future<ReaderController> _controller({ModernBookNlpAnalysis? analysis}) async {
+Future<ReaderController> _controller({
+  ModernBookNlpAnalysis? analysis,
+  TtsEngine? engine,
+}) async {
   SharedPreferences.setMockInitialValues({});
   final directory = await Directory.systemTemp.createTemp('chapter-intake-');
   final controller = ReaderController(
     characterAnalysis: analysis,
+    ttsEngine: engine,
+    preferencesService: ReaderPreferencesService(
+      workRepository: WorkCharacterRepository('${directory.path}/works'),
+    ),
     documentRepository: ReaderDocumentRepository(directory.path),
     enablePlatformIntakeChannels: false,
   );
@@ -326,4 +453,52 @@ class _ControlledProvider extends ModernBookNlpProvider {
     await cancel();
     await calls.close();
   }
+}
+
+class _ChapterPlaybackEngine implements TtsEngine, TtsEngineIdentityCapable {
+  final requests = <TtsSpeakRequest>[];
+
+  @override
+  String get engineId => 'fish_drama3_8bit';
+  @override
+  String get engineVersion => 'controlled';
+  @override
+  Future<void> initialize() async {}
+  @override
+  Future<List<VoiceProfile>> loadVoices() async => [
+    const VoiceProfile(
+      id: 'narrator',
+      label: 'Narrator',
+      locale: 'en-US',
+      rawValue: {},
+    ),
+  ];
+  @override
+  Future<void> selectVoice(VoiceProfile voice) async {}
+  @override
+  Future<void> setSpeechRate(double multiplier) async {}
+  @override
+  Future<void> setVolume(double volume) async {}
+  @override
+  Future<void> speak(TtsSpeakRequest request) async => requests.add(request);
+  @override
+  Future<void> pause() async {}
+  @override
+  Future<void> stop() async {}
+  @override
+  void dispose() {}
+  @override
+  set onStart(void Function()? callback) {}
+  @override
+  set onStatus(void Function(String? message)? callback) {}
+  @override
+  set onProgress(void Function(TtsProgressUpdate update)? callback) {}
+  @override
+  set onComplete(void Function()? callback) {}
+  @override
+  set onError(void Function(String message)? callback) {}
+  @override
+  set onActivity(void Function(TtsPlaybackActivity activity)? callback) {}
+  @override
+  set onDebugTrace(void Function(TtsDebugTraceSnapshot trace)? callback) {}
 }

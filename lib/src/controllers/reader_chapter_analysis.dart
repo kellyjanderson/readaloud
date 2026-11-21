@@ -337,6 +337,7 @@ extension _ReaderChapterAnalysis on ReaderController {
     _startChapterAnalysis();
     final revision = _documentRevision;
     Future<void> waitForCoverage() async {
+      var announcedWait = false;
       while (current() &&
           revision == _documentRevision &&
           characterAnalysis.enabled) {
@@ -352,7 +353,13 @@ extension _ReaderChapterAnalysis on ReaderController {
             failure ?? 'Chapter analysis did not cover this prepared text.',
           );
         }
-        await _chapterAnalysisChanged.future;
+        final changed = _chapterAnalysisChanged.future;
+        if (!announcedWait) {
+          announcedWait = true;
+          // Expose pending Play even if analysis was already working and quiet.
+          _notifyChapterAnalysisChanged();
+        }
+        await changed;
       }
     }
 

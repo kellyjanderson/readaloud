@@ -202,9 +202,14 @@ context requires fresh inference. Portable audio book ranges retain their
 source locator and fragment join metadata. Legacy flat snapshots keep
 their compatible positional records for the legacy analysis path.
 
-Analysis, casting and Fish scene changes are tracked in
-[R1 #158](https://github.com/kellyjanderson/readaloud/issues/158).
-The startup policy decision remains open.
+With chapter analysis enabled, Fish source playback waits for committed analysis
+before speaking the requested chapter. This also applies to seek and to later
+prepared ranges. The transport exposes Cancel as soon as it waits. Cancelling
+playback invalidates that intent immediately while chapter analysis can finish
+for the current source. Verified saved audio retains its existing replay path.
+The 2 s launch requirement and post-startup load limits remain open on the
+measured source cases. [R1 #158](https://github.com/kellyjanderson/readaloud/issues/158)
+· [Opening policy decision](https://github.com/kellyjanderson/readaloud/issues/158#issuecomment-7057328816)
 
 The book owns semantic content anchors independently of a voice rendition. Shared
 continuous-period integration, explicit temporal referents, rendition alignment and
