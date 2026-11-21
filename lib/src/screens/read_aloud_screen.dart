@@ -242,15 +242,20 @@ class _ReadAloudScreenState extends State<ReadAloudScreen> {
     }
     if (widget.initialInputPaths.isNotEmpty) {
       await _controller.importFilePaths(widget.initialInputPaths);
+    } else {
+      await WidgetsBinding.instance.endOfFrame;
+      if (!mounted || _intakeIntent != 0) {
+        return;
+      }
+      await _controller.restoreLastOpenedDocument();
+    }
+    // The idle sample does not justify warming a synthesis model. Let Play
+    // demand it if the user chooses the sample before opening another file.
+    if (mounted &&
+        _intakeIntent == 0 &&
+        _controller.document.type != ReaderDocumentType.sample) {
       await _controller.completeInitialIntake();
-      return;
     }
-    await WidgetsBinding.instance.endOfFrame;
-    if (!mounted || _intakeIntent != 0) {
-      return;
-    }
-    await _controller.restoreLastOpenedDocument();
-    await _controller.completeInitialIntake();
   }
 
   bool _usesDesktopNativeMenus() {

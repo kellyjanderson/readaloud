@@ -54,6 +54,8 @@ extension ReaderAudioBookSupport on ReaderController {
   Future<void> completeInitialIntake() async {
     if (_disposed ||
         _modelPreparationCancelled ||
+        _isImporting ||
+        !isDocumentPrepared ||
         _audioBook != null ||
         _synthesisInitialized ||
         !deferInitialSynthesis) {
