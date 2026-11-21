@@ -29,6 +29,7 @@ import 'package:read_aloud/src/controllers/reader_controller.dart';
 import 'package:read_aloud/src/models/radoc_audio_manifest.dart';
 import 'package:read_aloud/src/services/audio_artifact_store.dart';
 import 'package:read_aloud/src/services/document_import_service.dart';
+import 'package:read_aloud/src/services/modernbooknlp_analysis.dart';
 import 'package:read_aloud/src/services/radoc_audio_package.dart';
 import 'package:read_aloud/src/services/reader_document_serialization_service.dart';
 import 'package:read_aloud/src/services/tts_engine.dart';
@@ -1131,6 +1132,7 @@ void main() {
     String preference = 'fish_drama3_8bit',
     TtsEngine Function(String, int)? engineFactory,
     bool deferInitialSynthesis = true,
+    ModernBookNlpAnalysis? characterAnalysis,
     DocumentPreparationSupervisor? preparationSupervisor,
     RenderedSceneRepository? renderedSceneRepository,
   }) async {
@@ -1138,6 +1140,7 @@ void main() {
     final c = ReaderController(
       ttsEngine: owner,
       engineFactory: engineFactory,
+      characterAnalysis: characterAnalysis,
       preparationSupervisor: preparationSupervisor,
       deferInitialSynthesis: deferInitialSynthesis,
       enablePlatformIntakeChannels: false,
@@ -1152,6 +1155,55 @@ void main() {
     await c.initialize();
     return c;
   }
+
+  test(
+    'verified book audio defers chapter analysis until a missing scene',
+    () async {
+      var providerCalls = 0;
+      final analysis = ModernBookNlpAnalysis(() async {
+        providerCalls++;
+        throw StateError('Offline playback opened the analysis provider');
+      });
+      final player = _ScopedOfflineEngine('fish_drama3_8bit');
+      final reader = await fishController(player, characterAnalysis: analysis);
+      analysis.enable();
+      await reader.importFilePaths([
+        (await fixture(publishedEngine: 'fish_drama3_8bit')).path,
+      ]);
+      await reader.startPlayback();
+      final first = player.requests.single;
+      final cancellation = Completer<void>();
+      final last = await first.continuation!.next(
+        first.rangeSequence,
+        cancellation.future,
+      );
+      expect(last?.startWordIndex, 2);
+      expect(
+        await last!.continuation!.next(last.rangeSequence, cancellation.future),
+        isNull,
+      );
+      expect(reader.preparationProgress[PreparationStage.analysis], isNull);
+      expect(providerCalls, 0);
+      expect(player.modelPreparations, 0);
+
+      player.renderAvailable = true;
+      await reader.importFilePaths([
+        (await fixture(
+          secondAudio: false,
+          publishedEngine: 'fish_drama3_8bit',
+        )).path,
+      ]);
+      await reader.startPlayback();
+      expect(providerCalls, 0);
+      final prefix = player.requests.last;
+      await expectLater(
+        prefix.continuation!.next(prefix.rangeSequence, cancellation.future),
+        throwsStateError,
+      );
+      expect(providerCalls, 1);
+      expect(player.modelPreparations, 1);
+    },
+  );
 
   Future<void> loadFreshExportSource(ReaderController c) async {
     // Only the public fixture's source text is imported: no saved audio or

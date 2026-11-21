@@ -15,6 +15,7 @@ class _ReaderAudioBook {
   String engineAtOpen;
   final DocumentAccessLease? sourceLease;
   bool current = true;
+  bool chapterAnalysisRequested = false;
   Future<_BookAudio>? boundaryWork;
   Completer<void>? renderCancellation;
   Future<void>? renderWork;
