@@ -234,10 +234,14 @@ the existing WorkCharacterStore without replacing newer local selections; an
 explicit republish also merges unread ranges before serializing their registry.
 Analysis records remain separately loadable through the existing analysis owner.
 
-Normal app startup defers synthesis until launch/open/restore intake is known.
-Complete rendered books enter the existing player's rendered-audio capability
-without model initialization, voice loading, binding preparation or inference.
-A missing or invalid scene demands the existing bounded export/synthesis path.
+Normal app startup keeps synthesis deferred while intake is unresolved or only
+the idle sample is visible. A Play request during import stays pending until
+the current document is prepared. Complete rendered books enter the existing
+player's rendered-audio capability without model initialization, voice loading,
+binding preparation or inference. The book also defers optional chapter analysis
+until an explicit synthesis path needs chapter evidence. Successfully opened source documents can
+still warm the engine at startup. A missing or invalid scene demands the
+existing bounded export/synthesis path. [R04 evidence](https://github.com/kellyjanderson/readaloud/issues/158)
 Validated incremental audio packets can enter playback before that scene's final
 publication; the controller awaits completion before returning to saved-scene
 resolution. Valid following scenes

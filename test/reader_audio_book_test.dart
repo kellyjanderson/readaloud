@@ -3,6 +3,8 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
 import 'package:crypto/crypto.dart';
+import 'package:flutter/foundation.dart'
+    show debugDefaultTargetPlatformOverride;
 import 'package:flutter/material.dart';
 import 'package:read_aloud/src/app.dart';
 import 'package:read_aloud/src/models/document_preparation.dart';
@@ -27,6 +29,7 @@ import 'package:read_aloud/src/controllers/reader_controller.dart';
 import 'package:read_aloud/src/models/radoc_audio_manifest.dart';
 import 'package:read_aloud/src/services/audio_artifact_store.dart';
 import 'package:read_aloud/src/services/document_import_service.dart';
+import 'package:read_aloud/src/services/modernbooknlp_analysis.dart';
 import 'package:read_aloud/src/services/radoc_audio_package.dart';
 import 'package:read_aloud/src/services/reader_document_serialization_service.dart';
 import 'package:read_aloud/src/services/tts_engine.dart';
@@ -245,6 +248,85 @@ void main() {
       expect(known.audioDuration, const Duration(seconds: 1));
     },
   );
+  testWidgets(
+    'idle app launch leaves model loading deferred when an offline book is opened',
+    (tester) async {
+      final book = (await tester.runAsync(fixture))!;
+      await tester.pumpWidget(ReadAloudApp(controller: controller));
+      await tester.pump();
+      await tester.pumpAndSettle();
+      expect(engine.modelCalls, 0);
+      expect(engine.modelPreparations, 0);
+      expect(controller.engineSession.phase.name, 'deferred');
+      expect(find.textContaining('Preparing speech'), findsNothing);
+
+      await tester.runAsync(() async {
+        await controller.importFilePaths([book.path], surfaceErrors: true);
+        await controller.startPlayback();
+        final first = engine.requests.single;
+        final cancellation = Completer<void>();
+        final last = await first.continuation!.next(
+          first.rangeSequence,
+          cancellation.future,
+        );
+        expect(last?.startWordIndex, 2);
+        expect(
+          await last!.continuation!.next(
+            last.rangeSequence,
+            cancellation.future,
+          ),
+          isNull,
+        );
+      });
+      await tester.pumpAndSettle();
+      expect(engine.modelCalls, 0);
+      expect(engine.modelPreparations, 0);
+      expect(controller.startupError, isNull);
+      expect(find.text('Retry speech'), findsNothing);
+      expect(find.textContaining('No installed model'), findsNothing);
+      await tester.pumpWidget(const SizedBox());
+    },
+  );
+
+  test('Play during offline book intake waits for verified audio', () async {
+    debugDefaultTargetPlatformOverride = TargetPlatform.macOS;
+    addTearDown(() => debugDefaultTargetPlatformOverride = null);
+    final book = await fixture();
+    final checking = Completer<void>();
+    final release = Completer<void>();
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(
+          const MethodChannel('read_aloud/document_access'),
+          (call) async {
+            if (call.method == 'createPersistentRestoreToken' &&
+                !checking.isCompleted) {
+              checking.complete();
+              await release.future;
+            }
+            throw MissingPluginException();
+          },
+        );
+    final opening = controller.importFilePaths([
+      book.path,
+    ], surfaceErrors: true);
+    try {
+      await checking.future.timeout(const Duration(seconds: 5));
+      await controller.startPlayback();
+      expect(engine.modelCalls, 0);
+      expect(engine.modelPreparations, 0);
+      expect(controller.hasPendingPlaybackIntent, isTrue);
+      expect(engine.requests, isEmpty);
+    } finally {
+      release.complete();
+      await opening;
+    }
+    await _until(() => engine.requests.isNotEmpty);
+    expect(engine.requests.single.startWordIndex, 0);
+    expect(engine.modelCalls, 0);
+    expect(engine.modelPreparations, 0);
+    expect(controller.startupError, isNull);
+  });
+
   test(
     'copied complete book opens, advances and republishes without models',
     () async {
@@ -585,10 +667,14 @@ void main() {
       await controller.importFilePaths([(await fixture(middleGap: true)).path]);
       await controller.startPlayback();
       final first = engine.requests.single;
+      expect(engine.modelCalls, 0);
+      expect(engine.modelPreparations, 0);
       final middle = await first.continuation!.next(
         0,
         Completer<void>().future,
       );
+      expect(engine.modelCalls, 1);
+      expect(engine.modelPreparations, 1);
       expect(engine.exports, hasLength(1));
       final chunk = engine.exports.single.chunkPlan!.chunks.single;
       expect(chunk.startWordIndex, 2);
@@ -1046,6 +1132,7 @@ void main() {
     String preference = 'fish_drama3_8bit',
     TtsEngine Function(String, int)? engineFactory,
     bool deferInitialSynthesis = true,
+    ModernBookNlpAnalysis? characterAnalysis,
     DocumentPreparationSupervisor? preparationSupervisor,
     RenderedSceneRepository? renderedSceneRepository,
   }) async {
@@ -1053,6 +1140,7 @@ void main() {
     final c = ReaderController(
       ttsEngine: owner,
       engineFactory: engineFactory,
+      characterAnalysis: characterAnalysis,
       preparationSupervisor: preparationSupervisor,
       deferInitialSynthesis: deferInitialSynthesis,
       enablePlatformIntakeChannels: false,
@@ -1067,6 +1155,55 @@ void main() {
     await c.initialize();
     return c;
   }
+
+  test(
+    'verified book audio defers chapter analysis until a missing scene',
+    () async {
+      var providerCalls = 0;
+      final analysis = ModernBookNlpAnalysis(() async {
+        providerCalls++;
+        throw StateError('Offline playback opened the analysis provider');
+      });
+      final player = _ScopedOfflineEngine('fish_drama3_8bit');
+      final reader = await fishController(player, characterAnalysis: analysis);
+      analysis.enable();
+      await reader.importFilePaths([
+        (await fixture(publishedEngine: 'fish_drama3_8bit')).path,
+      ]);
+      await reader.startPlayback();
+      final first = player.requests.single;
+      final cancellation = Completer<void>();
+      final last = await first.continuation!.next(
+        first.rangeSequence,
+        cancellation.future,
+      );
+      expect(last?.startWordIndex, 2);
+      expect(
+        await last!.continuation!.next(last.rangeSequence, cancellation.future),
+        isNull,
+      );
+      expect(reader.preparationProgress[PreparationStage.analysis], isNull);
+      expect(providerCalls, 0);
+      expect(player.modelPreparations, 0);
+
+      player.renderAvailable = true;
+      await reader.importFilePaths([
+        (await fixture(
+          secondAudio: false,
+          publishedEngine: 'fish_drama3_8bit',
+        )).path,
+      ]);
+      await reader.startPlayback();
+      expect(providerCalls, 0);
+      final prefix = player.requests.last;
+      await expectLater(
+        prefix.continuation!.next(prefix.rangeSequence, cancellation.future),
+        throwsStateError,
+      );
+      expect(providerCalls, 1);
+      expect(player.modelPreparations, 1);
+    },
+  );
 
   Future<void> loadFreshExportSource(ReaderController c) async {
     // Only the public fixture's source text is imported: no saved audio or
@@ -2346,8 +2483,13 @@ Future<void> _until(bool Function() ready) async {
 }
 
 class _OfflineEngine
-    implements TtsEngine, RenderedAudioPlaybackCapable, AudioExportCapable {
+    implements
+        TtsEngine,
+        RenderedAudioPlaybackCapable,
+        AudioExportCapable,
+        ModelPreparationCapable {
   int modelCalls = 0;
+  int modelPreparations = 0;
   bool renderAvailable = false;
   bool fishPublication = false;
   String fishEngineId = 'fish_drama3_8bit';
@@ -2374,6 +2516,9 @@ class _OfflineEngine
     modelCalls++;
     if (!renderAvailable) throw StateError('No installed model');
   }
+
+  @override
+  Future<void> prepareSelectedModel() async => modelPreparations++;
 
   @override
   Future<List<VoiceProfile>> loadVoices() async => [

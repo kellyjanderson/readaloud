@@ -1725,12 +1725,14 @@ class ReaderController extends ChangeNotifier {
     _lastOpenedDirectoryAccessToken =
         preferences.lastOpenedDirectoryAccessToken;
     if (!_preferencesReady.isCompleted) _preferencesReady.complete();
-    if (_modelPreparationCancelled) notifyListeners();
+    if (deferInitialSynthesis || _modelPreparationCancelled) {
+      _isInitializing = false;
+      notifyListeners();
+    }
 
     final startup = deferInitialSynthesis || _modelPreparationCancelled
         ? Future<void>.value()
         : retryInitialization();
-    if (deferInitialSynthesis) _isInitializing = false;
     if (_enablePlatformIntakeChannels) {
       await _initializeIntakeChannels();
     }
@@ -2487,7 +2489,12 @@ class ReaderController extends ChangeNotifier {
       await _drivePlaybackStarts();
       return;
     }
-    if (!_synthesisInitialized && !_isInitializing && _startupError == null) {
+    // Intake may still resolve to verified saved audio. Defer the synthesis
+    // decision until the current document can admit playback.
+    if (isDocumentPrepared &&
+        !_synthesisInitialized &&
+        !_isInitializing &&
+        _startupError == null) {
       _pendingPlayUntilReady = true;
       _resumeAfterPreparation = true;
       await retryInitialization();

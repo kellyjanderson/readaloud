@@ -15,6 +15,7 @@ class _ReaderAudioBook {
   String engineAtOpen;
   final DocumentAccessLease? sourceLease;
   bool current = true;
+  bool chapterAnalysisRequested = false;
   Future<_BookAudio>? boundaryWork;
   Completer<void>? renderCancellation;
   Future<void>? renderWork;
@@ -54,6 +55,8 @@ extension ReaderAudioBookSupport on ReaderController {
   Future<void> completeInitialIntake() async {
     if (_disposed ||
         _modelPreparationCancelled ||
+        _isImporting ||
+        !isDocumentPrepared ||
         _audioBook != null ||
         _synthesisInitialized ||
         !deferInitialSynthesis) {

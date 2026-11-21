@@ -50,6 +50,7 @@ extension _ReaderChapterAnalysis on ReaderController {
   void _startChapterAnalysis() {
     if (_disposed ||
         !characterAnalysis.enabled ||
+        _audioBook?.chapterAnalysisRequested == false ||
         _useLegacyPortableAnalysis ||
         characterAnalysis.error != null ||
         _chapterScanComplete ||
@@ -225,7 +226,7 @@ extension _ReaderChapterAnalysis on ReaderController {
   }
 
   void _offerLegacyPortableAnalysis() {
-    if (!_useLegacyPortableAnalysis) return;
+    if (!_useLegacyPortableAnalysis || _audioBook != null) return;
     final window = ModernBookNlpWindow.at(
       _document,
       wordIndex: _currentWordIndex,
@@ -334,6 +335,9 @@ extension _ReaderChapterAnalysis on ReaderController {
       _useLegacyPortableAnalysis = false;
       characterAnalysis.clearDemand();
     }
+    // A rendered book only enters chapter analysis when a synthesis path
+    // explicitly awaits it. The book session owns this demand.
+    if (_audioBook case final book?) book.chapterAnalysisRequested = true;
     _startChapterAnalysis();
     final revision = _documentRevision;
     Future<void> waitForCoverage() async {
