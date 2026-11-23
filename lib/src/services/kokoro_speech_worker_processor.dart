@@ -8,6 +8,7 @@ import 'package:kokoro_tts_flutter/kokoro_tts_flutter.dart';
 import '../models/prepared_voice_binding.dart';
 import 'kokoro_model_runner.dart';
 import 'model_content_snapshot.dart';
+import 'pcm_wav.dart';
 import 'audio_artifact_store.dart';
 import 'kokoro_audio_identity.dart';
 import 'kokoro_voice_repository.dart';
@@ -419,7 +420,7 @@ Future<void> _processResidentChunk(
     );
     final published = store.publish(
       identity: identity,
-      wav: _buildWavFile(_audioToPcm16(audio), sampleRate),
+      wav: encodeKokoroWav(audio, sampleRate),
       metadata: <String, dynamic>{
         'chunkId': request.chunkId,
         'cacheKey': request.cacheKey,
@@ -462,50 +463,22 @@ Future<void> _processResidentChunk(
   }
 }
 
-Int16List _audioToPcm16(List<num> audio) {
-  final pcm = Int16List(audio.length);
+/// Kokoro's existing clipped/rounded mono PCM16 realization. RIFF mechanics
+/// belong to the shared writer; quantization remains this provider's policy.
+Uint8List encodeKokoroWav(List<num> audio, int wavSampleRate) {
+  final header = encodePcmWavHeader(
+    PcmFormat(sampleRate: wavSampleRate, channelCount: 1, bitsPerSample: 16),
+    audio.length * Int16List.bytesPerElement,
+  );
+  final bytes = Uint8List(header.length + audio.length * 2)..setAll(0, header);
+  final data = ByteData.sublistView(bytes, header.length);
   for (var index = 0; index < audio.length; index += 1) {
     final sample = audio[index].toDouble().clamp(-1.0, 1.0);
-    pcm[index] = (sample * 32767).round().clamp(-32768, 32767);
+    data.setInt16(
+      index * 2,
+      (sample * 32767).round().clamp(-32768, 32767),
+      Endian.little,
+    );
   }
-  return pcm;
-}
-
-Uint8List _buildWavFile(Int16List pcm, int wavSampleRate) {
-  final dataLength = pcm.length * Int16List.bytesPerElement;
-  final totalLength = 44 + dataLength;
-  final bytes = BytesBuilder(copy: false);
-
-  void writeString(String value) {
-    bytes.add(value.codeUnits);
-  }
-
-  void writeInt(int value, int byteCount) {
-    final buffer = ByteData(byteCount);
-    if (byteCount == 2) {
-      buffer.setUint16(0, value, Endian.little);
-    } else if (byteCount == 4) {
-      buffer.setUint32(0, value, Endian.little);
-    } else {
-      throw ArgumentError('Unsupported byte count: $byteCount');
-    }
-    bytes.add(buffer.buffer.asUint8List());
-  }
-
-  writeString('RIFF');
-  writeInt(totalLength - 8, 4);
-  writeString('WAVE');
-  writeString('fmt ');
-  writeInt(16, 4);
-  writeInt(1, 2);
-  writeInt(1, 2);
-  writeInt(wavSampleRate, 4);
-  writeInt(wavSampleRate * Int16List.bytesPerElement, 4);
-  writeInt(Int16List.bytesPerElement, 2);
-  writeInt(16, 2);
-  writeString('data');
-  writeInt(dataLength, 4);
-  bytes.add(pcm.buffer.asUint8List());
-
-  return bytes.takeBytes();
+  return bytes;
 }

@@ -5,11 +5,10 @@ import 'dart:io';
 
 import 'package:path/path.dart' as p;
 
-import '../controllers/reader_controller.dart';
 import '../models/reader_document.dart';
 import 'app_launch_options.dart';
-import 'document_import_service.dart';
 import 'headless_session_result.dart';
+import 'headless_reader_session.dart';
 import 'project_test_artifact_store.dart';
 import 'tts_engine.dart';
 import 'wav_analysis_service.dart';
@@ -35,7 +34,9 @@ class SentenceProbeCase {
   final String text;
 }
 
-List<SentenceProbeCase> sentenceProbeCasesFromDocument(ReaderDocument document) {
+List<SentenceProbeCase> sentenceProbeCasesFromDocument(
+  ReaderDocument document,
+) {
   return document.speechDocument.segments
       .where((segment) => segment.normalizedText.trim().isNotEmpty)
       .map(
@@ -68,36 +69,18 @@ Future<HeadlessSessionResult> runSentenceProbeSession(
   print('Mode: sentence probe');
   print('Source: $inputPath');
 
-  final importer = DocumentImportService();
-  final controller = ReaderController(
-    importer: importer,
-    enablePlatformIntakeChannels: false,
-  );
+  final session = HeadlessReaderSession();
+  final importer = session.importer;
+  final controller = session.controller;
   final wavAnalysisService = const WavAnalysisService();
 
   var succeeded = 0;
   var failed = 0;
 
   try {
-    await controller.initialize();
-
-    if (options.voiceId != null) {
-      final requestedVoice = controller.voices
-          .where((voice) => voice.id == options.voiceId)
-          .firstOrNull;
-      if (requestedVoice == null) {
-        print('Voice not found: ${options.voiceId}');
-        return const HeadlessSessionResult(
-          exitCode: 1,
-          succeeded: 0,
-          failed: 1,
-        );
-      }
-      await controller.selectVoiceById(requestedVoice.id);
-    }
-
-    if (options.speed != null) {
-      await controller.setVoiceSpeed(options.speed!.clamp(0.7, 1.4).toDouble());
+    if (!await session.initialize(options)) {
+      print('Voice not found: ${options.voiceId}');
+      return const HeadlessSessionResult(exitCode: 1, succeeded: 0, failed: 1);
     }
 
     final imported = await importer.importBytes(
@@ -127,11 +110,15 @@ Future<HeadlessSessionResult> runSentenceProbeSession(
 
       try {
         print('Sentence ${index + 1}/${cases.length}: ${probeCase.text}');
-        await controller.loadDocument(importer.importPastedText(probeCase.text));
+        await controller.loadDocument(
+          importer.importPastedText(probeCase.text),
+        );
         final exportResult = await controller.exportAudioToPath(outputPath);
         if (exportResult == null) {
           failed += 1;
-          print('  FAIL ${controller.statusMessage ?? 'Unknown export failure.'}');
+          print(
+            '  FAIL ${controller.statusMessage ?? 'Unknown export failure.'}',
+          );
           continue;
         }
 
@@ -202,7 +189,7 @@ Future<HeadlessSessionResult> runSentenceProbeSession(
       failed: failed,
     );
   } finally {
-    controller.dispose();
+    session.close();
   }
 }
 
@@ -210,7 +197,8 @@ Future<Directory> _resolveSentenceProbeOutputDirectory(
   AppLaunchOptions options,
 ) async {
   final explicitOutputDirectory = options.outputDirectory;
-  if (explicitOutputDirectory != null && explicitOutputDirectory.trim().isNotEmpty) {
+  if (explicitOutputDirectory != null &&
+      explicitOutputDirectory.trim().isNotEmpty) {
     final requestedDirectory = Directory(explicitOutputDirectory.trim());
     try {
       await requestedDirectory.create(recursive: true);

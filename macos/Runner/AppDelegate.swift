@@ -10,6 +10,7 @@ class AppDelegate: FlutterAppDelegate {
   private var documentAccessChannel: FlutterMethodChannel?
   private var mlxLifecycleChannel: FlutterMethodChannel?
   private var bookNlpLifecycleChannel: FlutterMethodChannel?
+  private var nativeEditMenu: NativeEditMenu?
   // Main-thread owned; a request may end only its own activity.
   private var speechWorkActivities: [String: NSObjectProtocol] = [:]
   private var speechWorkStarted = 0
@@ -17,6 +18,9 @@ class AppDelegate: FlutterAppDelegate {
   private var speechWorkPeak = 0
   private var terminationCleanupStarted = false
   private var terminationReplySent = false
+  // Main-thread owned, one allocating/staged/publishing/cleaning export lane.
+  private var audioExportStage: AudioExportNativeStage?
+  private var finishTerminationAfterAudioExport: (() -> Void)?
   private static let memoryDiagnosticsLock = NSLock()
   private static var memoryDiagnosticsLogged = false
 
@@ -25,6 +29,9 @@ class AppDelegate: FlutterAppDelegate {
     signal(SIGPIPE, SIG_IGN)
     // FlutterAppDelegate implements will-finish-launching, but not this optional
     // NSApplicationDelegate callback. Dispatching it to super raises an exception.
+    let nativeEditMenu = NativeEditMenu()
+    nativeEditMenu.start()
+    self.nativeEditMenu = nativeEditMenu
     configureDocumentAccessChannel()
     if ProcessInfo.processInfo.environment["READALOUD_TRACE_STARTUP"] == "1" {
       NSLog("[read_aloud.startup] Did finish launching; document access channel configured: \(documentAccessChannel != nil)")
@@ -36,7 +43,8 @@ class AppDelegate: FlutterAppDelegate {
   }
 
   override func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
-    guard let mlxLifecycleChannel else { return .terminateNow }
+    nativeEditMenu?.stop()
+    guard mlxLifecycleChannel != nil || audioExportStage != nil else { return .terminateNow }
     guard !terminationCleanupStarted else { return .terminateLater }
     terminationCleanupStarted = true
 
@@ -53,12 +61,27 @@ class AppDelegate: FlutterAppDelegate {
       }
     }
     let cleanup = DispatchGroup()
+    if let owner = audioExportStage {
+      // Keep Flutter alive until its assembly worker exits and its finally
+      // releases this exact native stage. An admitted publisher may finish;
+      // later publication is rejected below and still follows the same drain.
+      cleanup.enter()
+      owner.onReleased = { cleanup.leave() }
+      owner.coordinationCancellation.cancelPending()
+    }
     for channel in [mlxLifecycleChannel, bookNlpLifecycleChannel].compactMap({ $0 }) {
       cleanup.enter()
       channel.invokeMethod("shutdown", arguments: nil) { _ in cleanup.leave() }
     }
     cleanup.notify(queue: .main) { finishTermination() }
-    DispatchQueue.main.asyncAfter(deadline: .now() + 12) {
+    DispatchQueue.main.asyncAfter(deadline: .now() + 12) { [weak self] in
+      if let self, let owner = self.audioExportStage {
+        // Never end Flutter while the export owner is rolling back or retaining
+        // recovery files. The safety fallback resumes after its exact release.
+        self.finishTerminationAfterAudioExport = finishTermination
+        NSLog("[read_aloud.audio_export] Termination deadline deferred owner=\(owner.id) stage=\(owner.directory?.path ?? "allocating")")
+        return
+      }
       finishTermination()
     }
     return .terminateLater
@@ -271,6 +294,12 @@ class AppDelegate: FlutterAppDelegate {
       }
 
       switch call.method {
+      case "createAudioExportStage":
+        self.handleCreateAudioExportStage(call: call, result: result)
+      case "publishAudioExportPair":
+        self.handlePublishAudioExportPair(call: call, result: result)
+      case "releaseAudioExportStage":
+        self.handleReleaseAudioExportStage(call: call, result: result)
       case "createRadocExportStage":
         self.handleCreateRadocExportStage(call: call, result: result)
       case "createPersistentRestoreToken":
@@ -495,6 +524,117 @@ class AppDelegate: FlutterAppDelegate {
         }
       }
     }
+  }
+
+  private func handleCreateAudioExportStage(call: FlutterMethodCall, result: @escaping FlutterResult) {
+    guard !terminationCleanupStarted, audioExportStage == nil,
+      let arguments = call.arguments as? [String: Any],
+      let path = arguments["path"] as? String, path.hasPrefix("/"), !path.hasSuffix("/"),
+      URL(fileURLWithPath: path).pathExtension.lowercased() == "wav"
+    else {
+      result(FlutterError(code: "audio_export_unavailable",
+        message: "Choose an available WAV destination before saving audio.", details: nil))
+      return
+    }
+    let owner = AudioExportNativeStage(destination: URL(fileURLWithPath: path).standardizedFileURL)
+    audioExportStage = owner
+    DispatchQueue.global(qos: .utility).async {
+      do {
+        // Same Foundation facility as .radoc export; no parent-directory write
+        // grant, direct-write fallback or cross-volume copy is required.
+        let stage = try FileManager.default.url(for: .itemReplacementDirectory,
+          in: .userDomainMask, appropriateFor: owner.destination, create: true)
+        DispatchQueue.main.async {
+          owner.directory = stage
+          NSLog("[read_aloud.audio_export] Allocated owner=\(owner.id) stage=\(stage.path)")
+          result(["ownerId": owner.id, "path": stage.path])
+        }
+      } catch {
+        DispatchQueue.main.async {
+          self.finishAudioExportOwner(owner)
+          result(FlutterError(code: "audio_export_stage_failed",
+            message: "Could not prepare audio at the selected location. Choose another location and try again.",
+            details: String(describing: error)))
+        }
+      }
+    }
+  }
+
+  private func audioExportOwner(_ call: FlutterMethodCall) -> AudioExportNativeStage? {
+    guard let arguments = call.arguments as? [String: Any],
+      let id = arguments["ownerId"] as? String,
+      let owner = audioExportStage, owner.id == id,
+      owner.directory != nil, !owner.busy else { return nil }
+    return owner
+  }
+
+  private func handlePublishAudioExportPair(call: FlutterMethodCall, result: @escaping FlutterResult) {
+    guard !terminationCleanupStarted,
+      let owner = audioExportOwner(call), let directory = owner.directory else {
+      result(FlutterError(code: "audio_export_stale_owner",
+        message: "Audio export is no longer available. Try saving again.", details: nil))
+      return
+    }
+    owner.busy = true
+    DispatchQueue.global(qos: .utility).async {
+      do {
+        try AudioExportPairPublication.coordinateAndPublish(stage: directory, output: owner.destination,
+          cancellation: owner.coordinationCancellation)
+        DispatchQueue.main.async {
+          owner.busy = false
+          NSLog("[read_aloud.audio_export] Published WAV/JSON owner=\(owner.id)")
+          result(nil)
+        }
+      } catch {
+        let preserve = (error as? AudioExportPairPublication.Failure)?.preservesStage == true
+        DispatchQueue.main.async {
+          owner.busy = false
+          owner.preserveRecovery = preserve
+          result(FlutterError(code: preserve ? "audio_export_rollback_failed" : "audio_export_publication_failed",
+            message: preserve
+              ? "Could not restore the previous export. Recovery files remain at \(directory.path)."
+              : "Could not save the audio and its metadata at this location. Choose another location and try again.",
+            details: String(describing: error)))
+        }
+      }
+    }
+  }
+
+  private func handleReleaseAudioExportStage(call: FlutterMethodCall, result: @escaping FlutterResult) {
+    guard let owner = audioExportOwner(call), let directory = owner.directory else {
+      result(FlutterError(code: "audio_export_stale_owner",
+        message: "Audio export cleanup no longer owns this stage.", details: nil))
+      return
+    }
+    owner.busy = true
+    let preserve = owner.preserveRecovery
+    DispatchQueue.global(qos: .utility).async {
+      do {
+        if !preserve { try FileManager.default.removeItem(at: directory) }
+        DispatchQueue.main.async {
+          NSLog("[read_aloud.audio_export] Released owner=\(owner.id) recoveryPreserved=\(preserve)")
+          self.finishAudioExportOwner(owner)
+          result(nil)
+        }
+      } catch {
+        DispatchQueue.main.async {
+          self.finishAudioExportOwner(owner)
+          result(FlutterError(code: "audio_export_cleanup_failed",
+            message: "Audio export recovery files remain at \(directory.path).",
+            details: String(describing: error)))
+        }
+      }
+    }
+  }
+
+  private func finishAudioExportOwner(_ owner: AudioExportNativeStage) {
+    guard audioExportStage === owner else { return }
+    audioExportStage = nil
+    owner.onReleased?()
+    owner.onReleased = nil
+    let deferred = finishTerminationAfterAudioExport
+    finishTerminationAfterAudioExport = nil
+    deferred?()
   }
 
   private func handleCreatePersistentRestoreToken(
@@ -757,5 +897,330 @@ class AppDelegate: FlutterAppDelegate {
     }
 
     result(nil)
+  }
+}
+
+@MainActor
+private final class NativeEditMenu {
+  private var observation: NSKeyValueObservation?
+  private var refreshPending = false
+
+  func start() {
+    let application = NSApplication.shared
+    // Flutter's menu plugin assigns a new main menu on the AppKit thread.
+    observation = application.observe(\.mainMenu) { [weak self] application, _ in
+      MainActor.assumeIsolated {
+        self?.scheduleRefresh(for: application)
+      }
+    }
+    install(in: application.mainMenu)
+  }
+
+  func stop() {
+    observation?.invalidate()
+    observation = nil
+  }
+
+  private func scheduleRefresh(for application: NSApplication) {
+    guard !refreshPending else { return }
+    refreshPending = true
+    // Wait until AppKit finishes the replacement. Rapid assignments share one
+    // refresh of the current menu, and stopping makes queued work a no-op.
+    DispatchQueue.main.async { [weak self] in
+      guard let self else { return }
+      self.refreshPending = false
+      guard self.observation != nil else { return }
+      self.install(in: application.mainMenu)
+    }
+  }
+
+  private func install(in menu: NSMenu?) {
+    guard let menu, menu.numberOfItems > 0, menu.item(withTitle: "Edit") == nil else { return }
+
+    let edit = NSMenu(title: "Edit")
+    edit.addItem(withTitle: "Undo", action: NSSelectorFromString("undo:"), keyEquivalent: "z")
+    let redo = edit.addItem(withTitle: "Redo", action: NSSelectorFromString("redo:"), keyEquivalent: "z")
+    redo.keyEquivalentModifierMask = [.command, .shift]
+    edit.addItem(.separator())
+    edit.addItem(withTitle: "Cut", action: #selector(NSText.cut(_:)), keyEquivalent: "x")
+    edit.addItem(withTitle: "Copy", action: #selector(NSText.copy(_:)), keyEquivalent: "c")
+    edit.addItem(withTitle: "Paste", action: #selector(NSText.paste(_:)), keyEquivalent: "v")
+    edit.addItem(withTitle: "Select All", action: #selector(NSText.selectAll(_:)), keyEquivalent: "a")
+
+    // Nil targets let AppKit choose and validate the focused editor's responder.
+    let item = NSMenuItem(title: edit.title, action: nil, keyEquivalent: "")
+    item.submenu = edit
+    let fileIndex = menu.indexOfItem(withTitle: "File")
+    menu.insertItem(item, at: fileIndex >= 0 ? fileIndex + 1 : 1)
+  }
+}
+
+private final class AudioExportNativeStage {
+  let id = UUID().uuidString
+  let destination: URL
+  var directory: URL?
+  var busy = false
+  var preserveRecovery = false
+  var onReleased: (() -> Void)?
+  let coordinationCancellation = AudioExportPairPublication.Cancellation()
+  init(destination: URL) { self.destination = destination }
+}
+
+// Foundation-only audio-pair transaction, also exercised by the local Swift
+// source test. No Flutter/app state is captured by a coordinated utility block.
+final class AudioExportPairPublication {
+  struct Failure: Error {
+    let publication: Error
+    let rollback: Error
+    var preservesStage: Bool { true }
+  }
+
+  private final class SidecarPresenter: NSObject, NSFilePresenter {
+    let primaryPresentedItemURL: URL?
+    let presentedItemURL: URL?
+    let presentedItemOperationQueue: OperationQueue = {
+      let queue = OperationQueue()
+      queue.maxConcurrentOperationCount = 1
+      queue.qualityOfService = .utility
+      return queue
+    }()
+    init(output: URL, sidecar: URL) {
+      primaryPresentedItemURL = output
+      presentedItemURL = sidecar
+    }
+  }
+
+  static func sidecar(for output: URL) throws -> URL {
+    guard output.isFileURL, !output.hasDirectoryPath, output.path.hasPrefix("/"),
+      output.pathExtension.lowercased() == "wav" else {
+      throw CocoaError(.fileWriteInvalidFileName)
+    }
+    return output.deletingPathExtension().appendingPathExtension("json")
+  }
+
+  static func validatePair(output: URL, sidecar: URL) throws {
+    guard try self.sidecar(for: output).standardizedFileURL == sidecar.standardizedFileURL else {
+      throw CocoaError(.fileWriteInvalidFileName)
+    }
+  }
+
+  static func coordinateAndPublish(stage: URL, output: URL,
+    move: @escaping (URL, URL) throws -> Void = AudioExportPairPublication.renameFile,
+    cancellation: Cancellation? = nil,
+    registerPresenter: (NSFilePresenter) throws -> Void = { NSFileCoordinator.addFilePresenter($0) }) throws {
+    let sidecar = try self.sidecar(for: output)
+    try cancellation?.requireCurrent()
+    let transaction = try Transaction(stage: stage, output: output, sidecar: sidecar, move: move)
+    func recover(_ publication: Error, inCurrentScope: Bool) throws {
+      do {
+        if inCurrentScope { try transaction.rollbackAudio() }
+        else { try writeScope(output, label: "primary-rollback") { try transaction.rollbackAudio() } }
+      } catch { throw Failure(publication: publication, rollback: error) }
+      throw publication
+    }
+    do {
+      try writeScope(output, cancellation: cancellation, label: "primary") {
+        do { try transaction.installAudio() }
+        catch { try recover(error, inCurrentScope: true) }
+      }
+    } catch {
+      if error is Failure { throw error }
+      if transaction.audioMutated { try recover(error, inCurrentScope: false) }
+      throw error
+    }
+    // Finish primary coordination before constructing/registering the related
+    // presenter. Registering inside the original future-file claim was denied
+    // for new SavePanel paths even after a complete WAV existed on disk.
+    do {
+      try cancellation?.requireCurrent()
+      let presenter = SidecarPresenter(output: URL(fileURLWithPath: output.path),
+        sidecar: URL(fileURLWithPath: sidecar.path))
+      try registerPresenter(presenter)
+      defer { NSFileCoordinator.removeFilePresenter(presenter) }
+      try writeScope(URL(fileURLWithPath: sidecar.path), presenter: presenter,
+        cancellation: cancellation, label: "related-json") {
+        try transaction.requireOwnedAudio()
+        try transaction.publishMetadata()
+      }
+    } catch {
+      // Foundation normally reports preparation errors before entering the
+      // accessor. If it reports one after the pair committed, retain backups;
+      // never undo only the WAV after related-file access has been relinquished.
+      if transaction.metadataCommitted {
+        throw Failure(publication: error, rollback: CocoaError(.fileWriteUnknown))
+      }
+      try recover(error, inCurrentScope: false)
+    }
+  }
+
+  private struct Identity: Equatable {
+    let device: Int64, inode: UInt64
+    static func read(_ url: URL) -> Identity? {
+      var value = stat()
+      guard url.path.withCString({ lstat($0, &value) }) == 0 else { return nil }
+      return Identity(device: Int64(value.st_dev), inode: UInt64(value.st_ino))
+    }
+  }
+
+  private final class Transaction {
+    let output: URL, sidecar: URL, audio: URL, json: URL, oldAudio: URL, oldJson: URL
+    let move: (URL, URL) throws -> Void
+    let fileManager = FileManager.default
+    var audioBackedUp = false, audioPublished = false, metadataCommitted = false
+    var installed: Identity?
+    var audioMutated: Bool { audioBackedUp || audioPublished }
+    init(stage: URL, output: URL, sidecar: URL, move: @escaping (URL, URL) throws -> Void) throws {
+      try validatePair(output: output, sidecar: sidecar)
+      guard stage.isFileURL, stage.standardizedFileURL != output.deletingLastPathComponent().standardizedFileURL else {
+        throw CocoaError(.fileWriteInvalidFileName)
+      }
+      self.output = output; self.sidecar = sidecar; self.move = move
+      audio = stage.appendingPathComponent("audio.wav"); json = stage.appendingPathComponent("metadata.json")
+      oldAudio = stage.appendingPathComponent("previous.wav"); oldJson = stage.appendingPathComponent("previous.json")
+      for url in [audio, json] {
+        let values = try url.resourceValues(forKeys: [.isRegularFileKey, .isSymbolicLinkKey])
+        guard values.isRegularFile == true, values.isSymbolicLink != true else {
+          throw CocoaError(.fileReadInvalidFileName)
+        }
+      }
+    }
+    func validateExisting(_ url: URL) throws {
+      guard fileManager.fileExists(atPath: url.path) else { return }
+      let values = try url.resourceValues(forKeys: [.isDirectoryKey, .isSymbolicLinkKey])
+      guard values.isDirectory != true, values.isSymbolicLink != true else { throw CocoaError(.fileWriteInvalidFileName) }
+    }
+    func installAudio() throws {
+      try validateExisting(output)
+      if fileManager.fileExists(atPath: output.path) {
+        try move(output, oldAudio); audioBackedUp = true
+      }
+      try move(audio, output); audioPublished = true
+      installed = Identity.read(output)
+      guard installed != nil else { throw CocoaError(.fileReadNoSuchFile) }
+    }
+    func requireOwnedAudio() throws {
+      guard installed != nil && installed == Identity.read(output) else { throw CocoaError(.fileWriteFileExists) }
+    }
+    func rollbackAudio() throws {
+      guard audioMutated else { return }
+      if audioPublished {
+        try requireOwnedAudio()
+        try fileManager.removeItem(at: output); audioPublished = false
+      } else if fileManager.fileExists(atPath: output.path) { throw CocoaError(.fileWriteFileExists) }
+      if audioBackedUp {
+        try move(oldAudio, output); audioBackedUp = false
+      }
+    }
+    func publishMetadata() throws {
+      var jsonBackedUp = false
+      do {
+        try validateExisting(sidecar)
+        if fileManager.fileExists(atPath: sidecar.path) {
+          try move(sidecar, oldJson); jsonBackedUp = true
+        }
+        try move(json, sidecar); metadataCommitted = true
+      } catch {
+        let publication = error
+        do { if jsonBackedUp { try move(oldJson, sidecar) } }
+        catch { throw Failure(publication: publication, rollback: error) }
+        throw publication
+      }
+    }
+  }
+
+  final class Cancellation {
+    private let lock = NSLock()
+    private var requested = false
+    private var pending: CoordinationWait?
+    func cancelPending() {
+      lock.lock(); requested = true; let wait = pending; lock.unlock()
+      wait?.cancelPending()
+    }
+    func requireCurrent() throws {
+      lock.lock(); let cancelled = requested; lock.unlock()
+      if cancelled { throw CocoaError(.userCancelled) }
+    }
+    fileprivate func track(_ wait: CoordinationWait) {
+      lock.lock(); pending = wait; let cancelled = requested; lock.unlock()
+      if cancelled { wait.cancelPending() }
+    }
+    fileprivate func untrack(_ wait: CoordinationWait) {
+      lock.lock(); if pending === wait { pending = nil }; lock.unlock()
+    }
+  }
+
+  fileprivate final class CoordinationWait {
+    let lock = NSLock()
+    var cancelled = false, admitted = false, finished = false
+    let timer: DispatchSourceTimer
+    let coordinator: NSFileCoordinator
+    let cancelWork = DispatchGroup()
+    init(_ coordinator: NSFileCoordinator, label: String) {
+      self.coordinator = coordinator
+      timer = DispatchSource.makeTimerSource(queue: .global(qos: .utility))
+      timer.schedule(deadline: .now() + 10)
+      timer.setEventHandler { [weak self] in
+        guard let self = self else { return }
+        if self.cancelPending() {
+          NSLog("[read_aloud.audio_export] Coordination wait cancelled scope=\(label)")
+        }
+      }
+      timer.resume()
+    }
+    @discardableResult func cancelPending() -> Bool {
+      lock.lock()
+      let stop = !admitted && !finished && !cancelled
+      if stop { cancelled = true; cancelWork.enter() }
+      lock.unlock()
+      if stop {
+        DispatchQueue.global(qos: .utility).async { [coordinator, cancelWork] in
+          coordinator.cancel(); cancelWork.leave()
+        }
+      }
+      return stop
+    }
+    func admit() throws {
+      lock.lock(); let stopped = cancelled
+      if !stopped { admitted = true }
+      lock.unlock(); timer.cancel()
+      if stopped { throw CocoaError(.userCancelled) }
+    }
+    func finish() -> Bool {
+      lock.lock(); finished = true; let value = cancelled; lock.unlock()
+      timer.cancel(); cancelWork.wait(); return value
+    }
+  }
+
+  private static func writeScope(_ url: URL, presenter: NSFilePresenter? = nil,
+    cancellation: Cancellation? = nil,
+    label: String, body: () throws -> Void) throws {
+    let coordinator = NSFileCoordinator(filePresenter: presenter)
+    let budget = CoordinationWait(coordinator, label: label)
+    cancellation?.track(budget)
+    defer { cancellation?.untrack(budget) }
+    var coordinationError: NSError?, actionError: Error?
+    var entered = false
+    coordinator.coordinate(writingItemAt: url, options: .forReplacing, error: &coordinationError) { _ in
+      do { try budget.admit(); entered = true; try body() }
+      catch { actionError = error }
+    }
+    let expired = budget.finish()
+    if let error = actionError { throw error }
+    if let error = coordinationError { throw error }
+    if expired || !entered { throw CocoaError(.userCancelled) }
+  }
+
+  static func renameFile(_ source: URL, _ destination: URL) throws {
+    // FileManager.moveItem may copy across volumes. POSIX rename either commits
+    // an atomic same-volume move or fails (including EXDEV), with no fallback.
+    let (status, code) = source.path.withCString { sourcePath in
+      destination.path.withCString { destinationPath in
+        (rename(sourcePath, destinationPath), errno)
+      }
+    }
+    if status != 0 {
+      throw NSError(domain: NSPOSIXErrorDomain, code: Int(code),
+        userInfo: [NSFilePathErrorKey: destination.path])
+    }
   }
 }

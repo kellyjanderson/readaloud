@@ -91,11 +91,13 @@ class KokoroTtsEngine
     required AudioArtifactPins artifactPins,
     required ExportedAudioAssembler exportAssembler,
     Future<void>? initialization,
+    String engineId = 'kokoro',
   }) {
     final engine = KokoroTtsEngine(
       player: player,
       artifactPins: artifactPins,
       exportAssembler: exportAssembler,
+      engineId: engineId,
     );
     engine._resourceProcessor = processor;
     engine._exportTokenizer = tokenizer;
@@ -533,6 +535,7 @@ class KokoroTtsEngine
         return;
       }
       if (state.processingState == ProcessingState.completed) {
+        _signalBuffer();
         _emitFinalProgress();
         final queueSnapshot = _playbackQueueSnapshot();
         if (kokoroShouldEnterUnderrunRecovery(queueSnapshot)) {
@@ -1102,7 +1105,11 @@ class KokoroTtsEngine
           break;
         }
         final following = await Future.any<TtsRenderedAudioRequest?>([
-          next.next(consumed.rangeSequence, _continuationCancelled.future),
+          next.demandNext(
+            consumed.rangeSequence,
+            _continuationCancelled.future,
+            awaitConsumed: () => _awaitRenderedConsumption(consumed, current),
+          ),
           _continuationCancelled.future.then((_) => null),
         ]);
         if (!current()) return;
@@ -1229,9 +1236,10 @@ class KokoroTtsEngine
       await _awaitPlaybackCredit(policy, current);
       if (!current()) return;
       final following = await Future.any([
-        continuation.next(
+        continuation.demandNext(
           previous.rangeSequence,
           _continuationCancelled.future,
+          awaitConsumed: () => _awaitRenderedConsumption(previous, current),
         ),
         _continuationCancelled.future.then<TtsRenderedAudioRequest?>(
           (_) => null,
@@ -1309,6 +1317,52 @@ class KokoroTtsEngine
         _onComplete?.call();
       }
     }
+  }
+
+  Future<void> _awaitRenderedConsumption(
+    TtsRenderedAudioRequest request,
+    bool Function() current,
+  ) async {
+    // Final publication and native playback consumption are separate receipts.
+    // Finish any packet publication before checking the final queued source.
+    await _awaitRenderedCompletion(request, current);
+    if (!current()) throw const PlanningCancelled();
+    if (_activePlaybackToken == null || _activeChunks.isEmpty) {
+      throw StateError(
+        'No native consumption evidence for this saved passage.',
+      );
+    }
+    final queuedMicros = _activeChunks.fold<int>(
+      0,
+      (sum, chunk) => sum + chunk.duration.inMicroseconds,
+    );
+    final speed = _player.speed > 0 ? _player.speed : 1.0;
+    final allowance =
+        Duration(microseconds: (queuedMicros / speed).ceil()) +
+        const Duration(seconds: 30);
+    Future<void> drain() async {
+      while (current()) {
+        final changed = _bufferChanged.future;
+        if (_player.processingState == ProcessingState.completed &&
+            _activeChunks.isNotEmpty &&
+            _currentChunkIndex == _activeChunks.length - 1 &&
+            _activeChunks.last.sourceSceneId == request.sceneId) {
+          return;
+        }
+        await Future.any([changed, _continuationCancelled.future]);
+      }
+      throw const PlanningCancelled();
+    }
+
+    await drain().timeout(
+      allowance,
+      onTimeout: () {
+        throw StateError(
+          'Timed out waiting for saved audio playback to drain.',
+        );
+      },
+    );
+    if (!current()) throw const PlanningCancelled();
   }
 
   @override
@@ -2812,6 +2866,40 @@ class KokoroTtsEngine
     required Future<void> cancelled,
     required bool Function() isCurrent,
   }) {
+    // Quantized Fish synthesizes separate turns, so its worker request must
+    // remain a single-voice request. Final publication still needs the actual
+    // canonical owner and binding: an empty native-scene envelope is not
+    // evidence that the resulting audio belongs to the narrator.
+    final publishedTurns = chunk.sceneTurns.isEmpty && isDramaEngine(_engineId)
+        ? <NativeSpeechTurn>[
+            NativeSpeechTurn(
+              voiceId: chunk.voiceId,
+              text: chunk.engineSpeakText,
+              segmentIds: chunk.segmentIds,
+              startWord: chunk.startWordIndex,
+              endWord: chunk.endWordIndex,
+              bindingFingerprint: chunk.expectedBinding.fingerprint,
+              bindingRevision: chunk.expectedBinding.bindingRevision,
+              castId: chunk.castId,
+              routeId: chunk.routeId,
+              dialogueSpanId: chunk.dialogueSpanId,
+              directions: [
+                for (final segment in chunk.ttsSegments)
+                  for (final intent in segment.performanceIntents)
+                    {
+                      'annotationId': intent.annotation.annotationId,
+                      'segmentId': intent.annotation.segmentId,
+                      'startWord': intent.annotation.startWord,
+                      'endWord': intent.annotation.endWord,
+                      'source': intent.annotation.source.name,
+                      'confidence': intent.annotation.confidence,
+                      'delivery': intent.annotation.deliveryIntent?.name,
+                      'control': intent.engineControl,
+                    },
+              ],
+            ),
+          ]
+        : chunk.sceneTurns;
     return TtsFinalizedAudioScene(
       documentId: chunk.documentId,
       generationId: generationId,
@@ -2821,7 +2909,7 @@ class KokoroTtsEngine
       startWordIndex: chunk.startWordIndex,
       endWordIndex: chunk.endWordIndex,
       startOffset: chunk.startOffset,
-      sceneTurns: chunk.sceneTurns,
+      sceneTurns: publishedTurns,
       preparedBindings: bindings
           .where(
             (binding) =>

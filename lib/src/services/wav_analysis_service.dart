@@ -1,8 +1,9 @@
-import 'dart:convert';
 import 'dart:math' as math;
 import 'dart:typed_data';
 
 import 'package:crypto/crypto.dart' as crypto;
+
+import 'pcm_wav.dart';
 
 class WavAnalysis {
   const WavAnalysis({
@@ -53,8 +54,7 @@ class WavAnalysis {
       duration: Duration(milliseconds: (map['durationMillis']! as num).toInt()),
       wavSha256: map['wavSha256']! as String,
       pcmSha256: map['pcmSha256']! as String,
-      peakAbsoluteAmplitude:
-          (map['peakAbsoluteAmplitude']! as num).toDouble(),
+      peakAbsoluteAmplitude: (map['peakAbsoluteAmplitude']! as num).toDouble(),
       rmsAmplitude: (map['rmsAmplitude']! as num).toDouble(),
       envelopeBins: (map['envelopeBins']! as List<Object?>)
           .map((value) => (value! as num).toDouble())
@@ -87,29 +87,17 @@ class WavAnalysisService {
   const WavAnalysisService();
 
   WavAnalysis analyzeBytes(Uint8List wavBytes, {int envelopeBinCount = 64}) {
-    if (wavBytes.length < 44) {
-      throw StateError('WAV analysis requires a valid RIFF/WAVE file.');
-    }
-
-    final riffHeader = ascii.decode(wavBytes.sublist(0, 4));
-    final waveHeader = ascii.decode(wavBytes.sublist(8, 12));
-    if (riffHeader != 'RIFF' || waveHeader != 'WAVE') {
-      throw StateError('WAV analysis requires a RIFF/WAVE file.');
-    }
-
-    final byteData = ByteData.sublistView(wavBytes);
-    final channelCount = byteData.getUint16(22, Endian.little);
-    final sampleRate = byteData.getUint32(24, Endian.little);
-    final bitsPerSample = byteData.getUint16(34, Endian.little);
+    final layout = decodePcmWav(wavBytes);
+    final channelCount = layout.format.channelCount;
+    final sampleRate = layout.format.sampleRate;
+    final bitsPerSample = layout.format.bitsPerSample;
     if (bitsPerSample != 16) {
       throw StateError('WAV analysis currently supports only 16-bit PCM.');
     }
-
-    final dataRange = _findDataChunk(byteData, wavBytes.length);
     final pcmBytes = Uint8List.sublistView(
       wavBytes,
-      dataRange.start,
-      dataRange.end,
+      layout.dataOffset,
+      layout.dataOffset + layout.dataLength,
     );
     final sampleCount = pcmBytes.length ~/ Int16List.bytesPerElement;
     final frameCount = channelCount == 0 ? 0 : sampleCount ~/ channelCount;
@@ -203,22 +191,4 @@ List<double> _buildEnvelope(Int16List samples, int envelopeBinCount) {
     }
   }
   return bins;
-}
-
-({int start, int end}) _findDataChunk(ByteData data, int totalLength) {
-  var offset = 12;
-  while (offset + 8 <= totalLength) {
-    final chunkId = ascii.decode(data.buffer.asUint8List(offset, 4));
-    final chunkLength = data.getUint32(offset + 4, Endian.little);
-    final chunkStart = offset + 8;
-    final chunkEnd = chunkStart + chunkLength;
-    if (chunkEnd > totalLength) {
-      break;
-    }
-    if (chunkId == 'data') {
-      return (start: chunkStart, end: chunkEnd);
-    }
-    offset = chunkEnd + (chunkLength.isOdd ? 1 : 0);
-  }
-  throw StateError('WAV analysis could not find a data chunk.');
 }

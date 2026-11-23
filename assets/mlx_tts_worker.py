@@ -1059,6 +1059,51 @@ def _synthesize(request: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def _metadata() -> dict[str, Any]:
+    """Data-only view of installed production adapters; never acquire weights.
+
+    Legacy adapters have no pinned catalog revision. Preserve that uncertainty
+    rather than manufacturing a revision from a local folder or repository name.
+    """
+    import importlib.metadata
+    root = Path(__file__).parent
+    voices = []
+    libraries = []
+    for name in ('voice_library/library.json', 'fish_voice_library.json'):
+        source = root / name
+        manifest = json.loads(source.read_text())
+        if manifest.get('schema') != 1:
+            raise ValueError(f'Unsupported voice library: {name}')
+        libraries.append({'asset': name, 'version': manifest['version'],
+                          'sha256': hashlib.sha256(source.read_bytes()).hexdigest()})
+        voices.extend({**voice, 'libraryVersion': manifest['version']}
+                      for voice in manifest['voices'])
+    if len({voice['id'] for voice in voices}) != len(voices):
+        raise ValueError('Duplicate reference voice identity')
+    models = {}
+    for model_id in sorted(MODEL_IDS):
+        spec = DRAMA_MODELS.get(model_id)
+        presets = QWEN_VOICES if model_id == 'qwen3_tts_1_7b' else (
+            VOXTRAL_VOICES if model_id == 'voxtral_4b' else None)
+        models[model_id] = {
+            'modelId': model_id, 'cacheDirectory': model_id,
+            'repo': spec['repo'] if spec else MODEL_REPOSITORIES[model_id],
+            'revision': spec['revision'] if spec else None,
+            'descriptor': spec,
+            'voiceKind': 'preset' if presets is not None else 'reference',
+            'voices': [{'id': value} for value in sorted(presets)] if presets is not None else voices,
+        }
+    packages = {}
+    for name in ('mlx', 'mlx-audio', 'numpy', 'soundfile'):
+        try:
+            packages[name] = importlib.metadata.version(name)
+        except importlib.metadata.PackageNotFoundError:
+            packages[name] = None
+    return {'schemaVersion': 1, 'models': models, 'voiceLibraries': libraries,
+            'runtime': {'python': sys.version, 'executable': sys.executable, 'packages': packages},
+            'workerSha256': hashlib.sha256(Path(__file__).read_bytes()).hexdigest()}
+
+
 def main() -> int:
     global _active_request_id
     for raw_line in sys.stdin:
@@ -1071,7 +1116,9 @@ def main() -> int:
             _active_request_id = request_id
             command = request.get("command")
             with contextlib.redirect_stdout(sys.stderr):
-                if command == "load":
+                if command == "metadata":
+                    response = _metadata()
+                elif command == "load":
                     response = _load(
                         str(request.get("modelId", "")),
                         str(request.get("modelPath", "")),

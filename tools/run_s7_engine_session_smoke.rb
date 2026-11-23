@@ -12,7 +12,7 @@ app = File.join(bundle, 'Contents/MacOS/read_aloud')
 abort 'Missing fixture/input or existing output' unless File.executable?(app) && File.directory?(model) && File.executable?(capture) && !File.exist?(output)
 abort 'Signature failure' unless system(RbConfig.ruby, File.join(__dir__, 'verify_macos_release_entitlements.rb'), bundle)
 identity = IO.popen(['/usr/libexec/PlistBuddy', '-c', 'Print :CFBundleIdentifier', File.join(bundle, 'Contents/Info.plist')], &:read).strip
-abort 'Requires isolated mlxPlaybackTest identity' unless identity == 'com.kellyjanderson.readAloud.mlxPlaybackTest'
+abort 'Requires isolated mlxPlaybackTest identity' unless identity.match?(/\Acom\.kellyjanderson\.readAloud\.mlxPlaybackTest(?:\.[A-Za-z0-9-]+)*\z/)
 alias_path = File.expand_path("~/Library/Containers/#{identity}/Data/Library/Application Support/#{identity}/read_aloud/mlx-tts/fish_drama3")
 abort 'Preserve preexisting QA alias/model' if File.exist?(alias_path) || File.symlink?(alias_path)
 model = File.realpath(model)

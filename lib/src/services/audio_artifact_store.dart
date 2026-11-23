@@ -4,6 +4,8 @@ import 'dart:typed_data';
 
 import 'package:crypto/crypto.dart';
 
+import 'pcm_wav.dart';
+
 /// Stable canonical serialization: object order is not an identity input.
 String artifactIdentity(Object? value) {
   Object? canonical(Object? v) {
@@ -161,28 +163,18 @@ class AudioArtifactStore {
   /// Canonical mono PCM16 WAV at its native sample rate. Rate is carried into
   /// artifact duration, boundary processing, playback and export.
   static WavFormat validateWav(Uint8List bytes) {
-    if (bytes.length <= 44 || (bytes.length - 44).isOdd) {
-      throw const FormatException('Incomplete PCM WAV.');
-    }
-    final b = ByteData.sublistView(bytes);
-    String tag(int start) => ascii.decode(bytes.sublist(start, start + 4));
-    final rate = b.getUint32(24, Endian.little);
-    if (tag(0) != 'RIFF' ||
-        tag(8) != 'WAVE' ||
-        tag(12) != 'fmt ' ||
-        tag(36) != 'data' ||
-        b.getUint32(4, Endian.little) != bytes.length - 8 ||
-        b.getUint32(16, Endian.little) != 16 ||
-        b.getUint16(20, Endian.little) != 1 ||
-        b.getUint16(22, Endian.little) != 1 ||
-        rate == 0 ||
-        b.getUint32(28, Endian.little) != rate * 2 ||
-        b.getUint16(32, Endian.little) != 2 ||
-        b.getUint16(34, Endian.little) != 16 ||
-        b.getUint32(40, Endian.little) != bytes.length - 44) {
+    final layout = decodePcmWav(bytes);
+    // Canonical artifact policy is narrower than structural WAV support:
+    // exactly fmt(16), data, nonempty mono PCM16 and no metadata/trailing chunks.
+    // Keep this restriction here, not in the shared scanner used by export.
+    if (layout.dataOffset != 44 ||
+        layout.dataLength == 0 ||
+        layout.dataOffset + layout.dataLength != bytes.length ||
+        layout.format.channelCount != 1 ||
+        layout.format.bitsPerSample != 16) {
       throw const FormatException('Invalid canonical PCM WAV.');
     }
-    return WavFormat((bytes.length - 44) ~/ 2, rate);
+    return WavFormat(layout.frameCount, layout.format.sampleRate);
   }
 }
 

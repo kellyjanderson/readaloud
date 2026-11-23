@@ -1,0 +1,1493 @@
+{
+  "formatId": "read-aloud-document",
+  "formatVersion": "radoc-v4",
+  "analysisRecords": [],
+  "title": "s3_dialogue.txt",
+  "documentType": "plainText",
+  "presentation": "html",
+  "pdfDataBase64": null,
+  "sourceDescription": "Incremental source range at 0",
+  "displayHtml": "<article><p data-block-id=\"r0_b_0\">The hallway was dark and quiet.</p><p data-block-id=\"r0_b_1\">Mara said, &quot;Stay close and keep your voice down.&quot;</p><p data-block-id=\"r0_b_2\">Mira said, &quot;I can hear footsteps behind that door!&quot;</p><p data-block-id=\"r0_b_3\">Mara said, &quot;Wait until they pass.&quot;</p><p data-block-id=\"r0_b_4\">The door closed softly. They waited together until the final bell rang.</p></article>",
+  "speakableText": "The hallway was dark and quiet.\n\nMara said, \"Stay close and keep your voice down.\"\n\nMira said, \"I can hear footsteps behind that door!\"\n\nMara said, \"Wait until they pass.\"\n\nThe door closed softly. They waited together until the final bell rang.",
+  "normalizedImportResult": {
+    "documentId": "doc_c716cf3946e8c182",
+    "sourceType": "plainText",
+    "bestAvailableTitle": "s3_dialogue.txt",
+    "sourceUri": null,
+    "sourceFingerprint": "src_e3dc7618f653773d8884d2ab",
+    "normalizationVersion": "read-aloud-normalization-v1",
+    "mappingVersion": "read-aloud-normalization-v1",
+    "diagnostics": [
+      {
+        "severity": "info",
+        "code": "fallback_paragraph_grouping",
+        "message": "Text paragraph grouping used lightweight line-wrap recovery heuristics.",
+        "relatedBlockId": null,
+        "sourceLocator": null
+      }
+    ]
+  },
+  "displayDocument": {
+    "documentId": "doc_c716cf3946e8c182",
+    "sourceType": "plainText",
+    "sourceUri": null,
+    "title": "s3_dialogue.txt",
+    "normalizationVersion": "read-aloud-normalization-v1",
+    "metadata": {
+      "sourceFingerprint": "src_e3dc7618f653773d8884d2ab"
+    },
+    "blocks": [
+      {
+        "blockId": "r0_b_0",
+        "kind": "paragraph",
+        "ordinal": 0,
+        "assetId": null,
+        "parentBlockId": null,
+        "attributes": {},
+        "inlines": [
+          {
+            "kind": "text",
+            "text": "The hallway was dark and quiet.",
+            "attributes": {}
+          }
+        ]
+      },
+      {
+        "blockId": "r0_b_1",
+        "kind": "paragraph",
+        "ordinal": 1,
+        "assetId": null,
+        "parentBlockId": null,
+        "attributes": {},
+        "inlines": [
+          {
+            "kind": "text",
+            "text": "Mara said, \"Stay close and keep your voice down.\"",
+            "attributes": {}
+          }
+        ]
+      },
+      {
+        "blockId": "r0_b_2",
+        "kind": "paragraph",
+        "ordinal": 2,
+        "assetId": null,
+        "parentBlockId": null,
+        "attributes": {},
+        "inlines": [
+          {
+            "kind": "text",
+            "text": "Mira said, \"I can hear footsteps behind that door!\"",
+            "attributes": {}
+          }
+        ]
+      },
+      {
+        "blockId": "r0_b_3",
+        "kind": "paragraph",
+        "ordinal": 3,
+        "assetId": null,
+        "parentBlockId": null,
+        "attributes": {},
+        "inlines": [
+          {
+            "kind": "text",
+            "text": "Mara said, \"Wait until they pass.\"",
+            "attributes": {}
+          }
+        ]
+      },
+      {
+        "blockId": "r0_b_4",
+        "kind": "paragraph",
+        "ordinal": 4,
+        "assetId": null,
+        "parentBlockId": null,
+        "attributes": {},
+        "inlines": [
+          {
+            "kind": "text",
+            "text": "The door closed softly. They waited together until the final bell rang.",
+            "attributes": {}
+          }
+        ]
+      }
+    ],
+    "assets": {}
+  },
+  "speechDocument": {
+    "documentId": "doc_c716cf3946e8c182",
+    "sourceType": "plainText",
+    "languageTag": "en-US",
+    "normalizationVersion": "read-aloud-normalization-v1",
+    "totalWordCount": 42,
+    "segmentIndexById": {
+      "r0_s_0": 0,
+      "r0_s_1": 1,
+      "r0_s_2": 2,
+      "r0_s_3": 3,
+      "r0_s_4": 4,
+      "r0_s_5": 5,
+      "r0_s_6": 6,
+      "r0_s_7": 7,
+      "r0_s_8": 8
+    },
+    "segments": [
+      {
+        "segmentId": "r0_s_0",
+        "blockId": "r0_b_0",
+        "ordinal": 0,
+        "paragraphIndex": 0,
+        "sentenceIndex": 0,
+        "normalizedText": "The hallway was dark and quiet.",
+        "wordCount": 6,
+        "sourceRange": null,
+        "displayAnchor": {
+          "blockId": "r0_b_0",
+          "startInlineOffset": 0,
+          "endInlineOffset": 31
+        },
+        "wordSpans": [
+          {
+            "wordIndexWithinSegment": 0,
+            "startUtf16": 0,
+            "endUtf16": 3,
+            "text": "The"
+          },
+          {
+            "wordIndexWithinSegment": 1,
+            "startUtf16": 4,
+            "endUtf16": 11,
+            "text": "hallway"
+          },
+          {
+            "wordIndexWithinSegment": 2,
+            "startUtf16": 12,
+            "endUtf16": 15,
+            "text": "was"
+          },
+          {
+            "wordIndexWithinSegment": 3,
+            "startUtf16": 16,
+            "endUtf16": 20,
+            "text": "dark"
+          },
+          {
+            "wordIndexWithinSegment": 4,
+            "startUtf16": 21,
+            "endUtf16": 24,
+            "text": "and"
+          },
+          {
+            "wordIndexWithinSegment": 5,
+            "startUtf16": 25,
+            "endUtf16": 31,
+            "text": "quiet."
+          }
+        ]
+      },
+      {
+        "segmentId": "r0_s_1",
+        "blockId": "r0_b_1",
+        "ordinal": 1,
+        "paragraphIndex": 1,
+        "sentenceIndex": 0,
+        "normalizedText": "Mara said,",
+        "wordCount": 2,
+        "sourceRange": null,
+        "displayAnchor": {
+          "blockId": "r0_b_1",
+          "startInlineOffset": 0,
+          "endInlineOffset": 10
+        },
+        "wordSpans": [
+          {
+            "wordIndexWithinSegment": 0,
+            "startUtf16": 0,
+            "endUtf16": 4,
+            "text": "Mara"
+          },
+          {
+            "wordIndexWithinSegment": 1,
+            "startUtf16": 5,
+            "endUtf16": 10,
+            "text": "said,"
+          }
+        ]
+      },
+      {
+        "segmentId": "r0_s_2",
+        "blockId": "r0_b_1",
+        "ordinal": 2,
+        "paragraphIndex": 1,
+        "sentenceIndex": 0,
+        "normalizedText": "\"Stay close and keep your voice down.\"",
+        "wordCount": 7,
+        "sourceRange": null,
+        "displayAnchor": {
+          "blockId": "r0_b_1",
+          "startInlineOffset": 11,
+          "endInlineOffset": 49
+        },
+        "wordSpans": [
+          {
+            "wordIndexWithinSegment": 0,
+            "startUtf16": 0,
+            "endUtf16": 5,
+            "text": "\"Stay"
+          },
+          {
+            "wordIndexWithinSegment": 1,
+            "startUtf16": 6,
+            "endUtf16": 11,
+            "text": "close"
+          },
+          {
+            "wordIndexWithinSegment": 2,
+            "startUtf16": 12,
+            "endUtf16": 15,
+            "text": "and"
+          },
+          {
+            "wordIndexWithinSegment": 3,
+            "startUtf16": 16,
+            "endUtf16": 20,
+            "text": "keep"
+          },
+          {
+            "wordIndexWithinSegment": 4,
+            "startUtf16": 21,
+            "endUtf16": 25,
+            "text": "your"
+          },
+          {
+            "wordIndexWithinSegment": 5,
+            "startUtf16": 26,
+            "endUtf16": 31,
+            "text": "voice"
+          },
+          {
+            "wordIndexWithinSegment": 6,
+            "startUtf16": 32,
+            "endUtf16": 38,
+            "text": "down.\""
+          }
+        ]
+      },
+      {
+        "segmentId": "r0_s_3",
+        "blockId": "r0_b_2",
+        "ordinal": 3,
+        "paragraphIndex": 2,
+        "sentenceIndex": 0,
+        "normalizedText": "Mira said,",
+        "wordCount": 2,
+        "sourceRange": null,
+        "displayAnchor": {
+          "blockId": "r0_b_2",
+          "startInlineOffset": 0,
+          "endInlineOffset": 10
+        },
+        "wordSpans": [
+          {
+            "wordIndexWithinSegment": 0,
+            "startUtf16": 0,
+            "endUtf16": 4,
+            "text": "Mira"
+          },
+          {
+            "wordIndexWithinSegment": 1,
+            "startUtf16": 5,
+            "endUtf16": 10,
+            "text": "said,"
+          }
+        ]
+      },
+      {
+        "segmentId": "r0_s_4",
+        "blockId": "r0_b_2",
+        "ordinal": 4,
+        "paragraphIndex": 2,
+        "sentenceIndex": 0,
+        "normalizedText": "\"I can hear footsteps behind that door!\"",
+        "wordCount": 7,
+        "sourceRange": null,
+        "displayAnchor": {
+          "blockId": "r0_b_2",
+          "startInlineOffset": 11,
+          "endInlineOffset": 51
+        },
+        "wordSpans": [
+          {
+            "wordIndexWithinSegment": 0,
+            "startUtf16": 0,
+            "endUtf16": 2,
+            "text": "\"I"
+          },
+          {
+            "wordIndexWithinSegment": 1,
+            "startUtf16": 3,
+            "endUtf16": 6,
+            "text": "can"
+          },
+          {
+            "wordIndexWithinSegment": 2,
+            "startUtf16": 7,
+            "endUtf16": 11,
+            "text": "hear"
+          },
+          {
+            "wordIndexWithinSegment": 3,
+            "startUtf16": 12,
+            "endUtf16": 21,
+            "text": "footsteps"
+          },
+          {
+            "wordIndexWithinSegment": 4,
+            "startUtf16": 22,
+            "endUtf16": 28,
+            "text": "behind"
+          },
+          {
+            "wordIndexWithinSegment": 5,
+            "startUtf16": 29,
+            "endUtf16": 33,
+            "text": "that"
+          },
+          {
+            "wordIndexWithinSegment": 6,
+            "startUtf16": 34,
+            "endUtf16": 40,
+            "text": "door!\""
+          }
+        ]
+      },
+      {
+        "segmentId": "r0_s_5",
+        "blockId": "r0_b_3",
+        "ordinal": 5,
+        "paragraphIndex": 3,
+        "sentenceIndex": 0,
+        "normalizedText": "Mara said,",
+        "wordCount": 2,
+        "sourceRange": null,
+        "displayAnchor": {
+          "blockId": "r0_b_3",
+          "startInlineOffset": 0,
+          "endInlineOffset": 10
+        },
+        "wordSpans": [
+          {
+            "wordIndexWithinSegment": 0,
+            "startUtf16": 0,
+            "endUtf16": 4,
+            "text": "Mara"
+          },
+          {
+            "wordIndexWithinSegment": 1,
+            "startUtf16": 5,
+            "endUtf16": 10,
+            "text": "said,"
+          }
+        ]
+      },
+      {
+        "segmentId": "r0_s_6",
+        "blockId": "r0_b_3",
+        "ordinal": 6,
+        "paragraphIndex": 3,
+        "sentenceIndex": 0,
+        "normalizedText": "\"Wait until they pass.\"",
+        "wordCount": 4,
+        "sourceRange": null,
+        "displayAnchor": {
+          "blockId": "r0_b_3",
+          "startInlineOffset": 11,
+          "endInlineOffset": 34
+        },
+        "wordSpans": [
+          {
+            "wordIndexWithinSegment": 0,
+            "startUtf16": 0,
+            "endUtf16": 5,
+            "text": "\"Wait"
+          },
+          {
+            "wordIndexWithinSegment": 1,
+            "startUtf16": 6,
+            "endUtf16": 11,
+            "text": "until"
+          },
+          {
+            "wordIndexWithinSegment": 2,
+            "startUtf16": 12,
+            "endUtf16": 16,
+            "text": "they"
+          },
+          {
+            "wordIndexWithinSegment": 3,
+            "startUtf16": 17,
+            "endUtf16": 23,
+            "text": "pass.\""
+          }
+        ]
+      },
+      {
+        "segmentId": "r0_s_7",
+        "blockId": "r0_b_4",
+        "ordinal": 7,
+        "paragraphIndex": 4,
+        "sentenceIndex": 0,
+        "normalizedText": "The door closed softly.",
+        "wordCount": 4,
+        "sourceRange": null,
+        "displayAnchor": {
+          "blockId": "r0_b_4",
+          "startInlineOffset": 0,
+          "endInlineOffset": 23
+        },
+        "wordSpans": [
+          {
+            "wordIndexWithinSegment": 0,
+            "startUtf16": 0,
+            "endUtf16": 3,
+            "text": "The"
+          },
+          {
+            "wordIndexWithinSegment": 1,
+            "startUtf16": 4,
+            "endUtf16": 8,
+            "text": "door"
+          },
+          {
+            "wordIndexWithinSegment": 2,
+            "startUtf16": 9,
+            "endUtf16": 15,
+            "text": "closed"
+          },
+          {
+            "wordIndexWithinSegment": 3,
+            "startUtf16": 16,
+            "endUtf16": 23,
+            "text": "softly."
+          }
+        ]
+      },
+      {
+        "segmentId": "r0_s_8",
+        "blockId": "r0_b_4",
+        "ordinal": 8,
+        "paragraphIndex": 4,
+        "sentenceIndex": 1,
+        "normalizedText": "They waited together until the final bell rang.",
+        "wordCount": 8,
+        "sourceRange": null,
+        "displayAnchor": {
+          "blockId": "r0_b_4",
+          "startInlineOffset": 24,
+          "endInlineOffset": 71
+        },
+        "wordSpans": [
+          {
+            "wordIndexWithinSegment": 0,
+            "startUtf16": 0,
+            "endUtf16": 4,
+            "text": "They"
+          },
+          {
+            "wordIndexWithinSegment": 1,
+            "startUtf16": 5,
+            "endUtf16": 11,
+            "text": "waited"
+          },
+          {
+            "wordIndexWithinSegment": 2,
+            "startUtf16": 12,
+            "endUtf16": 20,
+            "text": "together"
+          },
+          {
+            "wordIndexWithinSegment": 3,
+            "startUtf16": 21,
+            "endUtf16": 26,
+            "text": "until"
+          },
+          {
+            "wordIndexWithinSegment": 4,
+            "startUtf16": 27,
+            "endUtf16": 30,
+            "text": "the"
+          },
+          {
+            "wordIndexWithinSegment": 5,
+            "startUtf16": 31,
+            "endUtf16": 36,
+            "text": "final"
+          },
+          {
+            "wordIndexWithinSegment": 6,
+            "startUtf16": 37,
+            "endUtf16": 41,
+            "text": "bell"
+          },
+          {
+            "wordIndexWithinSegment": 7,
+            "startUtf16": 42,
+            "endUtf16": 47,
+            "text": "rang."
+          }
+        ]
+      }
+    ]
+  },
+  "positionMap": {
+    "documentId": "doc_c716cf3946e8c182",
+    "mappingVersion": "read-aloud-normalization-v1",
+    "entries": [
+      {
+        "entryId": "r0_pm_0",
+        "displayBlockId": "r0_b_0",
+        "speechSegmentId": "r0_s_0",
+        "displayStart": 0,
+        "displayEnd": 31,
+        "speechStartWord": 0,
+        "speechEndWord": 6,
+        "confidence": 0.95,
+        "recoveryAnchor": {
+          "exact": "The hallway was dark and quiet.",
+          "prefix": "The hallway was dark and",
+          "suffix": "lway was dark and quiet."
+        },
+        "sourceAnchor": null
+      },
+      {
+        "entryId": "r0_pm_1",
+        "displayBlockId": "r0_b_1",
+        "speechSegmentId": "r0_s_1",
+        "displayStart": 0,
+        "displayEnd": 10,
+        "speechStartWord": 0,
+        "speechEndWord": 2,
+        "confidence": 0.95,
+        "recoveryAnchor": {
+          "exact": "Mara said,",
+          "prefix": null,
+          "suffix": null
+        },
+        "sourceAnchor": null
+      },
+      {
+        "entryId": "r0_pm_2",
+        "displayBlockId": "r0_b_1",
+        "speechSegmentId": "r0_s_2",
+        "displayStart": 11,
+        "displayEnd": 49,
+        "speechStartWord": 0,
+        "speechEndWord": 7,
+        "confidence": 0.95,
+        "recoveryAnchor": {
+          "exact": "\"Stay close and keep your voice down.\"",
+          "prefix": "\"Stay close and keep you",
+          "suffix": "d keep your voice down.\""
+        },
+        "sourceAnchor": null
+      },
+      {
+        "entryId": "r0_pm_3",
+        "displayBlockId": "r0_b_2",
+        "speechSegmentId": "r0_s_3",
+        "displayStart": 0,
+        "displayEnd": 10,
+        "speechStartWord": 0,
+        "speechEndWord": 2,
+        "confidence": 0.95,
+        "recoveryAnchor": {
+          "exact": "Mira said,",
+          "prefix": null,
+          "suffix": null
+        },
+        "sourceAnchor": null
+      },
+      {
+        "entryId": "r0_pm_4",
+        "displayBlockId": "r0_b_2",
+        "speechSegmentId": "r0_s_4",
+        "displayStart": 11,
+        "displayEnd": 51,
+        "speechStartWord": 0,
+        "speechEndWord": 7,
+        "confidence": 0.95,
+        "recoveryAnchor": {
+          "exact": "\"I can hear footsteps behind that door!\"",
+          "prefix": "\"I can hear footsteps be",
+          "suffix": "steps behind that door!\""
+        },
+        "sourceAnchor": null
+      },
+      {
+        "entryId": "r0_pm_5",
+        "displayBlockId": "r0_b_3",
+        "speechSegmentId": "r0_s_5",
+        "displayStart": 0,
+        "displayEnd": 10,
+        "speechStartWord": 0,
+        "speechEndWord": 2,
+        "confidence": 0.95,
+        "recoveryAnchor": {
+          "exact": "Mara said,",
+          "prefix": null,
+          "suffix": null
+        },
+        "sourceAnchor": null
+      },
+      {
+        "entryId": "r0_pm_6",
+        "displayBlockId": "r0_b_3",
+        "speechSegmentId": "r0_s_6",
+        "displayStart": 11,
+        "displayEnd": 34,
+        "speechStartWord": 0,
+        "speechEndWord": 4,
+        "confidence": 0.95,
+        "recoveryAnchor": {
+          "exact": "\"Wait until they pass.\"",
+          "prefix": null,
+          "suffix": null
+        },
+        "sourceAnchor": null
+      },
+      {
+        "entryId": "r0_pm_7",
+        "displayBlockId": "r0_b_4",
+        "speechSegmentId": "r0_s_7",
+        "displayStart": 0,
+        "displayEnd": 23,
+        "speechStartWord": 0,
+        "speechEndWord": 4,
+        "confidence": 0.95,
+        "recoveryAnchor": {
+          "exact": "The door closed softly.",
+          "prefix": null,
+          "suffix": null
+        },
+        "sourceAnchor": null
+      },
+      {
+        "entryId": "r0_pm_8",
+        "displayBlockId": "r0_b_4",
+        "speechSegmentId": "r0_s_8",
+        "displayStart": 24,
+        "displayEnd": 71,
+        "speechStartWord": 0,
+        "speechEndWord": 8,
+        "confidence": 0.95,
+        "recoveryAnchor": {
+          "exact": "They waited together until the final bell rang.",
+          "prefix": "They waited together unt",
+          "suffix": "til the final bell rang."
+        },
+        "sourceAnchor": null
+      }
+    ]
+  },
+  "baseSpeechAnnotations": {
+    "documentId": "doc_c716cf3946e8c182",
+    "annotationVersion": "read-aloud-annotations-v2",
+    "annotations": [
+      {
+        "annotationId": "ann_0",
+        "segmentId": "r0_s_0",
+        "kind": "pauseCandidate",
+        "startWord": 6,
+        "endWord": 6,
+        "confidence": 0.9,
+        "source": "importerStructuralInference",
+        "breakClass": "paragraph",
+        "pronunciationCandidate": null,
+        "sayAsClass": null,
+        "discourseRole": null,
+        "dialogueSpanId": null,
+        "dialogueSpanClass": null
+      },
+      {
+        "annotationId": "ann_1",
+        "segmentId": "r0_s_0",
+        "kind": "discourseRole",
+        "startWord": 0,
+        "endWord": 6,
+        "confidence": 0.75,
+        "source": "ruleBasedLinguisticInference",
+        "breakClass": null,
+        "pronunciationCandidate": null,
+        "sayAsClass": null,
+        "discourseRole": "narration",
+        "dialogueSpanId": null,
+        "dialogueSpanClass": null
+      },
+      {
+        "annotationId": "ann_2",
+        "segmentId": "r0_s_1",
+        "kind": "phraseBoundary",
+        "startWord": 2,
+        "endWord": 2,
+        "confidence": 0.72,
+        "source": "ruleBasedLinguisticInference",
+        "breakClass": "weak",
+        "pronunciationCandidate": null,
+        "sayAsClass": null,
+        "discourseRole": null,
+        "dialogueSpanId": null,
+        "dialogueSpanClass": null
+      },
+      {
+        "annotationId": "ann_3",
+        "segmentId": "r0_s_1",
+        "kind": "pauseCandidate",
+        "startWord": 2,
+        "endWord": 2,
+        "confidence": 0.7,
+        "source": "ruleBasedLinguisticInference",
+        "breakClass": "weak",
+        "pronunciationCandidate": null,
+        "sayAsClass": null,
+        "discourseRole": null,
+        "dialogueSpanId": null,
+        "dialogueSpanClass": null
+      },
+      {
+        "annotationId": "ann_4",
+        "segmentId": "r0_s_1",
+        "kind": "pauseCandidate",
+        "startWord": 2,
+        "endWord": 2,
+        "confidence": 0.9,
+        "source": "importerStructuralInference",
+        "breakClass": "sentence",
+        "pronunciationCandidate": null,
+        "sayAsClass": null,
+        "discourseRole": null,
+        "dialogueSpanId": null,
+        "dialogueSpanClass": null
+      },
+      {
+        "annotationId": "ann_5",
+        "segmentId": "r0_s_1",
+        "kind": "discourseRole",
+        "startWord": 0,
+        "endWord": 2,
+        "confidence": 0.75,
+        "source": "ruleBasedLinguisticInference",
+        "breakClass": null,
+        "pronunciationCandidate": null,
+        "sayAsClass": null,
+        "discourseRole": "narration",
+        "dialogueSpanId": null,
+        "dialogueSpanClass": null
+      },
+      {
+        "annotationId": "ann_6",
+        "segmentId": "r0_s_2",
+        "kind": "pauseCandidate",
+        "startWord": 7,
+        "endWord": 7,
+        "confidence": 0.9,
+        "source": "importerStructuralInference",
+        "breakClass": "paragraph",
+        "pronunciationCandidate": null,
+        "sayAsClass": null,
+        "discourseRole": null,
+        "dialogueSpanId": null,
+        "dialogueSpanClass": null
+      },
+      {
+        "annotationId": "ann_7",
+        "segmentId": "r0_s_2",
+        "kind": "discourseRole",
+        "startWord": 0,
+        "endWord": 7,
+        "confidence": 0.75,
+        "source": "ruleBasedLinguisticInference",
+        "breakClass": null,
+        "pronunciationCandidate": null,
+        "sayAsClass": null,
+        "discourseRole": "dialogue",
+        "dialogueSpanId": null,
+        "dialogueSpanClass": null
+      },
+      {
+        "annotationId": "ann_8",
+        "segmentId": "r0_s_2",
+        "kind": "dialogueSpan",
+        "startWord": 0,
+        "endWord": 7,
+        "confidence": 0.84,
+        "source": "ruleBasedLinguisticInference",
+        "breakClass": null,
+        "pronunciationCandidate": null,
+        "sayAsClass": null,
+        "discourseRole": null,
+        "dialogueSpanId": "dlg_r0_s_2",
+        "dialogueSpanClass": "dialogue"
+      },
+      {
+        "annotationId": "ann_9",
+        "segmentId": "r0_s_3",
+        "kind": "phraseBoundary",
+        "startWord": 2,
+        "endWord": 2,
+        "confidence": 0.72,
+        "source": "ruleBasedLinguisticInference",
+        "breakClass": "weak",
+        "pronunciationCandidate": null,
+        "sayAsClass": null,
+        "discourseRole": null,
+        "dialogueSpanId": null,
+        "dialogueSpanClass": null
+      },
+      {
+        "annotationId": "ann_10",
+        "segmentId": "r0_s_3",
+        "kind": "pauseCandidate",
+        "startWord": 2,
+        "endWord": 2,
+        "confidence": 0.7,
+        "source": "ruleBasedLinguisticInference",
+        "breakClass": "weak",
+        "pronunciationCandidate": null,
+        "sayAsClass": null,
+        "discourseRole": null,
+        "dialogueSpanId": null,
+        "dialogueSpanClass": null
+      },
+      {
+        "annotationId": "ann_11",
+        "segmentId": "r0_s_3",
+        "kind": "pauseCandidate",
+        "startWord": 2,
+        "endWord": 2,
+        "confidence": 0.9,
+        "source": "importerStructuralInference",
+        "breakClass": "sentence",
+        "pronunciationCandidate": null,
+        "sayAsClass": null,
+        "discourseRole": null,
+        "dialogueSpanId": null,
+        "dialogueSpanClass": null
+      },
+      {
+        "annotationId": "ann_12",
+        "segmentId": "r0_s_3",
+        "kind": "discourseRole",
+        "startWord": 0,
+        "endWord": 2,
+        "confidence": 0.75,
+        "source": "ruleBasedLinguisticInference",
+        "breakClass": null,
+        "pronunciationCandidate": null,
+        "sayAsClass": null,
+        "discourseRole": "narration",
+        "dialogueSpanId": null,
+        "dialogueSpanClass": null
+      },
+      {
+        "annotationId": "ann_13",
+        "segmentId": "r0_s_4",
+        "kind": "emphasisCandidate",
+        "startWord": 0,
+        "endWord": 7,
+        "confidence": 0.68,
+        "source": "ruleBasedLinguisticInference",
+        "breakClass": null,
+        "pronunciationCandidate": null,
+        "sayAsClass": null,
+        "discourseRole": null,
+        "dialogueSpanId": null,
+        "dialogueSpanClass": null
+      },
+      {
+        "annotationId": "ann_14",
+        "segmentId": "r0_s_4",
+        "kind": "pauseCandidate",
+        "startWord": 7,
+        "endWord": 7,
+        "confidence": 0.9,
+        "source": "importerStructuralInference",
+        "breakClass": "paragraph",
+        "pronunciationCandidate": null,
+        "sayAsClass": null,
+        "discourseRole": null,
+        "dialogueSpanId": null,
+        "dialogueSpanClass": null
+      },
+      {
+        "annotationId": "ann_15",
+        "segmentId": "r0_s_4",
+        "kind": "discourseRole",
+        "startWord": 0,
+        "endWord": 7,
+        "confidence": 0.75,
+        "source": "ruleBasedLinguisticInference",
+        "breakClass": null,
+        "pronunciationCandidate": null,
+        "sayAsClass": null,
+        "discourseRole": "dialogue",
+        "dialogueSpanId": null,
+        "dialogueSpanClass": null
+      },
+      {
+        "annotationId": "ann_16",
+        "segmentId": "r0_s_4",
+        "kind": "dialogueSpan",
+        "startWord": 0,
+        "endWord": 7,
+        "confidence": 0.84,
+        "source": "ruleBasedLinguisticInference",
+        "breakClass": null,
+        "pronunciationCandidate": null,
+        "sayAsClass": null,
+        "discourseRole": null,
+        "dialogueSpanId": "dlg_r0_s_4",
+        "dialogueSpanClass": "dialogue"
+      },
+      {
+        "annotationId": "ann_17",
+        "segmentId": "r0_s_5",
+        "kind": "phraseBoundary",
+        "startWord": 2,
+        "endWord": 2,
+        "confidence": 0.72,
+        "source": "ruleBasedLinguisticInference",
+        "breakClass": "weak",
+        "pronunciationCandidate": null,
+        "sayAsClass": null,
+        "discourseRole": null,
+        "dialogueSpanId": null,
+        "dialogueSpanClass": null
+      },
+      {
+        "annotationId": "ann_18",
+        "segmentId": "r0_s_5",
+        "kind": "pauseCandidate",
+        "startWord": 2,
+        "endWord": 2,
+        "confidence": 0.7,
+        "source": "ruleBasedLinguisticInference",
+        "breakClass": "weak",
+        "pronunciationCandidate": null,
+        "sayAsClass": null,
+        "discourseRole": null,
+        "dialogueSpanId": null,
+        "dialogueSpanClass": null
+      },
+      {
+        "annotationId": "ann_19",
+        "segmentId": "r0_s_5",
+        "kind": "pauseCandidate",
+        "startWord": 2,
+        "endWord": 2,
+        "confidence": 0.9,
+        "source": "importerStructuralInference",
+        "breakClass": "sentence",
+        "pronunciationCandidate": null,
+        "sayAsClass": null,
+        "discourseRole": null,
+        "dialogueSpanId": null,
+        "dialogueSpanClass": null
+      },
+      {
+        "annotationId": "ann_20",
+        "segmentId": "r0_s_5",
+        "kind": "discourseRole",
+        "startWord": 0,
+        "endWord": 2,
+        "confidence": 0.75,
+        "source": "ruleBasedLinguisticInference",
+        "breakClass": null,
+        "pronunciationCandidate": null,
+        "sayAsClass": null,
+        "discourseRole": "narration",
+        "dialogueSpanId": null,
+        "dialogueSpanClass": null
+      },
+      {
+        "annotationId": "ann_21",
+        "segmentId": "r0_s_6",
+        "kind": "pauseCandidate",
+        "startWord": 4,
+        "endWord": 4,
+        "confidence": 0.9,
+        "source": "importerStructuralInference",
+        "breakClass": "paragraph",
+        "pronunciationCandidate": null,
+        "sayAsClass": null,
+        "discourseRole": null,
+        "dialogueSpanId": null,
+        "dialogueSpanClass": null
+      },
+      {
+        "annotationId": "ann_22",
+        "segmentId": "r0_s_6",
+        "kind": "discourseRole",
+        "startWord": 0,
+        "endWord": 4,
+        "confidence": 0.75,
+        "source": "ruleBasedLinguisticInference",
+        "breakClass": null,
+        "pronunciationCandidate": null,
+        "sayAsClass": null,
+        "discourseRole": "dialogue",
+        "dialogueSpanId": null,
+        "dialogueSpanClass": null
+      },
+      {
+        "annotationId": "ann_23",
+        "segmentId": "r0_s_6",
+        "kind": "dialogueSpan",
+        "startWord": 0,
+        "endWord": 4,
+        "confidence": 0.84,
+        "source": "ruleBasedLinguisticInference",
+        "breakClass": null,
+        "pronunciationCandidate": null,
+        "sayAsClass": null,
+        "discourseRole": null,
+        "dialogueSpanId": "dlg_r0_s_6",
+        "dialogueSpanClass": "dialogue"
+      },
+      {
+        "annotationId": "ann_24",
+        "segmentId": "r0_s_7",
+        "kind": "pauseCandidate",
+        "startWord": 4,
+        "endWord": 4,
+        "confidence": 0.9,
+        "source": "importerStructuralInference",
+        "breakClass": "sentence",
+        "pronunciationCandidate": null,
+        "sayAsClass": null,
+        "discourseRole": null,
+        "dialogueSpanId": null,
+        "dialogueSpanClass": null
+      },
+      {
+        "annotationId": "ann_25",
+        "segmentId": "r0_s_7",
+        "kind": "discourseRole",
+        "startWord": 0,
+        "endWord": 4,
+        "confidence": 0.75,
+        "source": "ruleBasedLinguisticInference",
+        "breakClass": null,
+        "pronunciationCandidate": null,
+        "sayAsClass": null,
+        "discourseRole": "narration",
+        "dialogueSpanId": null,
+        "dialogueSpanClass": null
+      },
+      {
+        "annotationId": "ann_26",
+        "segmentId": "r0_s_8",
+        "kind": "pauseCandidate",
+        "startWord": 8,
+        "endWord": 8,
+        "confidence": 0.9,
+        "source": "importerStructuralInference",
+        "breakClass": "paragraph",
+        "pronunciationCandidate": null,
+        "sayAsClass": null,
+        "discourseRole": null,
+        "dialogueSpanId": null,
+        "dialogueSpanClass": null
+      },
+      {
+        "annotationId": "ann_27",
+        "segmentId": "r0_s_8",
+        "kind": "discourseRole",
+        "startWord": 0,
+        "endWord": 8,
+        "confidence": 0.75,
+        "source": "ruleBasedLinguisticInference",
+        "breakClass": null,
+        "pronunciationCandidate": null,
+        "sayAsClass": null,
+        "discourseRole": "narration",
+        "dialogueSpanId": null,
+        "dialogueSpanClass": null
+      }
+    ]
+  },
+  "dialogueAttributions": {
+    "documentId": "doc_c716cf3946e8c182",
+    "attributionVersion": "read-aloud-speaker-attribution-v7",
+    "providerId": "heuristic_speaker_attribution",
+    "providerVersion": "v7",
+    "outcomes": [
+      {
+        "attributionId": "attr_dlg_r0_s_2",
+        "dialogueSpanId": "dlg_r0_s_2",
+        "resolution": "attributedSpeaker",
+        "confidence": 0.88,
+        "provenance": "heuristicInference",
+        "ruleUsed": "adjacentBefore",
+        "evidenceSpan": {
+          "segmentId": "r0_s_1",
+          "startUtf16": 0,
+          "endUtf16": 4,
+          "text": "Mara"
+        },
+        "speakerReference": {
+          "referenceId": "speaker_mara",
+          "displayLabel": "Mara",
+          "normalizedLabel": "mara"
+        }
+      },
+      {
+        "attributionId": "attr_dlg_r0_s_4",
+        "dialogueSpanId": "dlg_r0_s_4",
+        "resolution": "attributedSpeaker",
+        "confidence": 0.88,
+        "provenance": "heuristicInference",
+        "ruleUsed": "adjacentBefore",
+        "evidenceSpan": {
+          "segmentId": "r0_s_3",
+          "startUtf16": 0,
+          "endUtf16": 4,
+          "text": "Mira"
+        },
+        "speakerReference": {
+          "referenceId": "speaker_mira",
+          "displayLabel": "Mira",
+          "normalizedLabel": "mira"
+        }
+      },
+      {
+        "attributionId": "attr_dlg_r0_s_6",
+        "dialogueSpanId": "dlg_r0_s_6",
+        "resolution": "attributedSpeaker",
+        "confidence": 0.88,
+        "provenance": "heuristicInference",
+        "ruleUsed": "adjacentBefore",
+        "evidenceSpan": {
+          "segmentId": "r0_s_5",
+          "startUtf16": 0,
+          "endUtf16": 4,
+          "text": "Mara"
+        },
+        "speakerReference": {
+          "referenceId": "speaker_mara",
+          "displayLabel": "Mara",
+          "normalizedLabel": "mara"
+        }
+      }
+    ]
+  },
+  "characterCastRegistry": {
+    "documentId": "doc_c716cf3946e8c182",
+    "registryVersion": "work-character-v1",
+    "castIdRedirects": {},
+    "entries": [
+      {
+        "castId": "cast_narrator",
+        "roleKind": "narrator",
+        "displayLabel": "Narrator",
+        "confidence": 1.0,
+        "provenance": "syntheticNarrator",
+        "observedAliases": [],
+        "attributionIds": [],
+        "characterState": {
+          "schema": 1,
+          "workId": "doc_c716cf3946e8c182",
+          "revision": 5,
+          "selectedVoice": {
+            "mode": "automatic",
+            "voiceId": null,
+            "revision": 0,
+            "provenance": "automatic"
+          },
+          "explicitGender": {
+            "value": "unknown",
+            "conflict": false,
+            "observations": []
+          },
+          "implicitGender": {
+            "value": "unknown",
+            "conflict": false,
+            "observations": []
+          },
+          "presentedGender": [],
+          "directions": [],
+          "automaticVoices": {
+            "fish_drama3_4bit": "library_fishadrian",
+            "fish_drama3_8bit": "library_fishadrian"
+          },
+          "selectionConflicts": [],
+          "linguisticEvidence": [],
+          "linguisticRecordRefs": [],
+          "correctedGender": null,
+          "correctionRevision": 0,
+          "aliasCorrections": {}
+        },
+        "identityProfile": null,
+        "inferredGender": null,
+        "inferredGenderConfidence": null
+      },
+      {
+        "castId": "cast_character_mara",
+        "roleKind": "character",
+        "displayLabel": "Mara",
+        "confidence": 0.88,
+        "provenance": "attributedDialogueInference",
+        "observedAliases": [
+          "Mara"
+        ],
+        "attributionIds": [
+          "attr_dlg_r0_s_2",
+          "attr_dlg_r0_s_6"
+        ],
+        "characterState": {
+          "schema": 1,
+          "workId": "doc_c716cf3946e8c182",
+          "revision": 5,
+          "selectedVoice": {
+            "mode": "automatic",
+            "voiceId": null,
+            "revision": 0,
+            "provenance": "automatic"
+          },
+          "explicitGender": {
+            "value": "unknown",
+            "conflict": false,
+            "observations": []
+          },
+          "implicitGender": {
+            "value": "unknown",
+            "conflict": false,
+            "observations": []
+          },
+          "presentedGender": [],
+          "directions": [],
+          "automaticVoices": {
+            "fish_drama3_4bit": "library_fishfreya",
+            "fish_drama3_8bit": "library_fishfreya"
+          },
+          "selectionConflicts": [],
+          "linguisticEvidence": [],
+          "linguisticRecordRefs": [],
+          "correctedGender": null,
+          "correctionRevision": 0,
+          "aliasCorrections": {}
+        },
+        "identityProfile": {
+          "genderIdentityLabel": "unknown",
+          "genderConfidence": 0.0,
+          "genderSource": "unknown",
+          "pronounProfile": {
+            "counts": {}
+          },
+          "conflictFlag": false,
+          "countedSegmentIds": [],
+          "evidenceSpans": []
+        },
+        "inferredGender": null,
+        "inferredGenderConfidence": null
+      },
+      {
+        "castId": "cast_character_mira",
+        "roleKind": "character",
+        "displayLabel": "Mira",
+        "confidence": 0.88,
+        "provenance": "attributedDialogueInference",
+        "observedAliases": [
+          "Mira"
+        ],
+        "attributionIds": [
+          "attr_dlg_r0_s_4"
+        ],
+        "characterState": {
+          "schema": 1,
+          "workId": "doc_c716cf3946e8c182",
+          "revision": 5,
+          "selectedVoice": {
+            "mode": "automatic",
+            "voiceId": null,
+            "revision": 0,
+            "provenance": "automatic"
+          },
+          "explicitGender": {
+            "value": "unknown",
+            "conflict": false,
+            "observations": []
+          },
+          "implicitGender": {
+            "value": "unknown",
+            "conflict": false,
+            "observations": []
+          },
+          "presentedGender": [],
+          "directions": [],
+          "automaticVoices": {
+            "fish_drama3_4bit": "library_fishhannah",
+            "fish_drama3_8bit": "library_fishhannah"
+          },
+          "selectionConflicts": [],
+          "linguisticEvidence": [],
+          "linguisticRecordRefs": [],
+          "correctedGender": null,
+          "correctionRevision": 0,
+          "aliasCorrections": {}
+        },
+        "identityProfile": {
+          "genderIdentityLabel": "unknown",
+          "genderConfidence": 0.0,
+          "genderSource": "unknown",
+          "pronounProfile": {
+            "counts": {}
+          },
+          "conflictFlag": false,
+          "countedSegmentIds": [],
+          "evidenceSpans": []
+        },
+        "inferredGender": null,
+        "inferredGenderConfidence": null
+      }
+    ]
+  },
+  "documentVoiceAttribution": {
+    "documentId": "doc_c716cf3946e8c182",
+    "attributionVersion": "read-aloud-document-voice-attribution-v1",
+    "ranges": [
+      {
+        "rangeId": "attr_range_r0_s_0",
+        "segmentIds": [
+          "r0_s_0",
+          "r0_s_1"
+        ],
+        "startSegmentId": "r0_s_0",
+        "endSegmentId": "r0_s_1",
+        "startWordIndex": 0,
+        "endWordIndex": 8,
+        "castId": "cast_narrator",
+        "kind": "narration",
+        "dialogueSpanId": null
+      },
+      {
+        "rangeId": "attr_range_r0_s_2",
+        "segmentIds": [
+          "r0_s_2"
+        ],
+        "startSegmentId": "r0_s_2",
+        "endSegmentId": "r0_s_2",
+        "startWordIndex": 8,
+        "endWordIndex": 15,
+        "castId": "cast_character_mara",
+        "kind": "attributedDialogue",
+        "dialogueSpanId": "dlg_r0_s_2"
+      },
+      {
+        "rangeId": "attr_range_r0_s_3",
+        "segmentIds": [
+          "r0_s_3"
+        ],
+        "startSegmentId": "r0_s_3",
+        "endSegmentId": "r0_s_3",
+        "startWordIndex": 15,
+        "endWordIndex": 17,
+        "castId": "cast_narrator",
+        "kind": "narration",
+        "dialogueSpanId": null
+      },
+      {
+        "rangeId": "attr_range_r0_s_4",
+        "segmentIds": [
+          "r0_s_4"
+        ],
+        "startSegmentId": "r0_s_4",
+        "endSegmentId": "r0_s_4",
+        "startWordIndex": 17,
+        "endWordIndex": 24,
+        "castId": "cast_character_mira",
+        "kind": "attributedDialogue",
+        "dialogueSpanId": "dlg_r0_s_4"
+      },
+      {
+        "rangeId": "attr_range_r0_s_5",
+        "segmentIds": [
+          "r0_s_5"
+        ],
+        "startSegmentId": "r0_s_5",
+        "endSegmentId": "r0_s_5",
+        "startWordIndex": 24,
+        "endWordIndex": 26,
+        "castId": "cast_narrator",
+        "kind": "narration",
+        "dialogueSpanId": null
+      },
+      {
+        "rangeId": "attr_range_r0_s_6",
+        "segmentIds": [
+          "r0_s_6"
+        ],
+        "startSegmentId": "r0_s_6",
+        "endSegmentId": "r0_s_6",
+        "startWordIndex": 26,
+        "endWordIndex": 30,
+        "castId": "cast_character_mara",
+        "kind": "attributedDialogue",
+        "dialogueSpanId": "dlg_r0_s_6"
+      },
+      {
+        "rangeId": "attr_range_r0_s_7",
+        "segmentIds": [
+          "r0_s_7",
+          "r0_s_8"
+        ],
+        "startSegmentId": "r0_s_7",
+        "endSegmentId": "r0_s_8",
+        "startWordIndex": 30,
+        "endWordIndex": 42,
+        "castId": "cast_narrator",
+        "kind": "narration",
+        "dialogueSpanId": null
+      }
+    ]
+  },
+  "basePronunciationArtifacts": {
+    "documentId": "doc_c716cf3946e8c182",
+    "artifactVersion": "read-aloud-pronunciation-artifacts-v1",
+    "normalizationVersion": "read-aloud-normalization-v1",
+    "pronunciationProfileId": "en-us-core",
+    "artifacts": [
+      {
+        "artifactId": "pa_0",
+        "segmentId": "r0_s_7",
+        "startWord": 2,
+        "endWord": 3,
+        "surfaceText": "closed",
+        "normalizedSurfaceText": "closed",
+        "artifactClass": "unresolvedCase",
+        "source": "fallbackUnresolved",
+        "confidence": 0.35,
+        "diagnosticCodes": [
+          "pronunciation.unresolved.document_time"
+        ],
+        "representations": []
+      },
+      {
+        "artifactId": "pa_1",
+        "segmentId": "r0_s_8",
+        "startWord": 1,
+        "endWord": 2,
+        "surfaceText": "waited",
+        "normalizedSurfaceText": "waited",
+        "artifactClass": "unresolvedCase",
+        "source": "fallbackUnresolved",
+        "confidence": 0.35,
+        "diagnosticCodes": [
+          "pronunciation.unresolved.document_time"
+        ],
+        "representations": []
+      }
+    ]
+  },
+  "attachments": []
+}

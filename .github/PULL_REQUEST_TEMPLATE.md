@@ -4,11 +4,11 @@ Problem and resulting behavior:
 
 ## Authority and integration
 
-Refs parent design issue:
-Slice issue and accepted design revision:
+Owning issue and accepted design revision:
+Refs parent design issue (when present); slice issue if used:
 Release milestone and release issue (or explain a process-only change):
 Base branch/commit and intended integration target (release branch for slices; main for release PR):
-Orchestrator/worker ownership (if delegated):
+Directed owner; worker/model/worktree details only for agent execution/delegation:
 
 ## Validation
 

@@ -5,6 +5,12 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
 
+import 'package:flutter/foundation.dart'
+    show TargetPlatform, defaultTargetPlatform, kIsWeb;
+
+import 'pcm_wav.dart';
+import 'pcm_wav_io.dart';
+import 'radoc_export_staging.dart';
 import 'tts_engine.dart';
 
 class ExportedPronunciationArtifact {
@@ -143,7 +149,13 @@ class ExportedAudioAssembler {
   ExportedAudioAssembler({
     this.onProgress,
     this.timeout = const Duration(minutes: 5),
-  });
+    RadocExportStaging? platformStaging,
+  }) : _platformStaging =
+           platformStaging ??
+           (!kIsWeb && defaultTargetPlatform == TargetPlatform.macOS
+               ? const RadocExportStaging()
+               : null);
+  final RadocExportStaging? _platformStaging;
   final void Function(ExportAssemblyProgress progress)? onProgress;
   final Duration timeout;
   _AssemblyJob? _active;
@@ -186,6 +198,9 @@ class ExportedAudioAssembler {
     final port = ReceivePort();
     Object? error;
     TtsExportResult? result;
+    AudioExportStage? platformStage;
+    Future<void>? publication;
+    Object? publicationFailure;
     var terminal = false;
     final subscription = port.listen((message) {
       if (message == null) {
@@ -235,7 +250,22 @@ class ExportedAudioAssembler {
             job.commands!.send('cancel');
           } else {
             job.committing = true;
-            job.commands!.send('commit');
+            final nativeStage = platformStage;
+            if (nativeStage == null) {
+              job.commands!.send('commit');
+            } else {
+              // Admission is final at this staged/current-owner handshake.
+              // Join native coordination before releasing this request's lane.
+              publication = () async {
+                try {
+                  await _platformStaging!.publishAudioPair(nativeStage);
+                  job.commands!.send('published');
+                } catch (failure) {
+                  publicationFailure = failure;
+                  job.commands!.send(['publicationFailed', '$failure']);
+                }
+              }();
+            }
           }
         }
       }
@@ -251,22 +281,39 @@ class ExportedAudioAssembler {
       }
     });
     try {
+      platformStage = await _platformStaging?.createAudioStage(
+        File(request.outputPath),
+      );
+      if (job.cancelled) throw const ExportAssemblyCancelled();
       await Isolate.spawn(
         _assemblyWorker,
-        _AssemblyInput(job.id, request, port.sendPort),
+        _AssemblyInput(
+          job.id,
+          request,
+          port.sendPort,
+          platformStage?.directory.path,
+        ),
         onError: port.sendPort,
         onExit: port.sendPort,
         debugName: 'audio-export-${job.id}',
       );
       await job.exited.future;
-      if (error != null) throw error!;
+      await publication;
+      if (error != null) throw publicationFailure ?? error!;
       return result ?? (throw StateError('Audio assembly produced no result.'));
     } finally {
-      deadline.cancel();
-      await subscription.cancel();
-      port.close();
-      if (identical(_active, job)) _active = null;
-      job.drained.complete();
+      try {
+        await publication;
+        if (platformStage != null) {
+          await _platformStaging!.releaseAudioStage(platformStage);
+        }
+      } finally {
+        deadline.cancel();
+        await subscription.cancel();
+        port.close();
+        if (identical(_active, job)) _active = null;
+        job.drained.complete();
+      }
     }
   }
 }
@@ -282,21 +329,37 @@ class _AssemblyJob {
 }
 
 class _AssemblyInput {
-  const _AssemblyInput(this.id, this.request, this.reply);
+  const _AssemblyInput(
+    this.id,
+    this.request,
+    this.reply,
+    this.platformStagePath,
+  );
   final int id;
   final ExportedAudioAssemblyRequest request;
   final SendPort reply;
+  final String? platformStagePath;
 }
 
 Future<void> _assemblyWorker(_AssemblyInput input) async {
   final commands = ReceivePort();
   var cancelled = false;
+  var publishedExternally = false;
+  String? publicationError;
   final commit = Completer<void>();
   final subscription = commands.listen((message) {
     if (message == 'cancel') {
       cancelled = true;
       if (!commit.isCompleted) commit.complete();
     } else if (message == 'commit' && !commit.isCompleted) {
+      commit.complete();
+    } else if (message == 'published' && !commit.isCompleted) {
+      publishedExternally = true;
+      commit.complete();
+    } else if (message is List &&
+        message.first == 'publicationFailed' &&
+        !commit.isCompleted) {
+      publicationError = message[1] as String;
       commit.complete();
     }
   });
@@ -330,7 +393,9 @@ Future<void> _assemblyWorker(_AssemblyInput input) async {
     final sidecar = File(
       '${output.path.substring(0, output.path.length - 4)}.json',
     );
-    await output.parent.create(recursive: true);
+    if (input.platformStagePath == null) {
+      await output.parent.create(recursive: true);
+    }
     Future<String> canonicalPath(File file) async {
       if (await FileSystemEntity.type(file.path) !=
           FileSystemEntityType.notFound) {
@@ -351,11 +416,13 @@ Future<void> _assemblyWorker(_AssemblyInput input) async {
         throw ArgumentError('Audio export cannot replace an input chunk.');
       }
     }
-    staging = await output.parent.createTemp('.readaloud-export-');
+    staging = input.platformStagePath == null
+        ? await output.parent.createTemp('.readaloud-export-')
+        : Directory(input.platformStagePath!);
     final stagedAudio = File('${staging.path}/audio.wav');
     final stagedJson = File('${staging.path}/metadata.json');
     final writer = await stagedAudio.open(mode: FileMode.write);
-    final formats = <_WavInfo>[];
+    final formats = <PcmWavLayout>[];
     var totalBytes = 0;
     try {
       await writer.writeFrom(Uint8List(44));
@@ -363,19 +430,20 @@ Future<void> _assemblyWorker(_AssemblyInput input) async {
         checkCancelled();
         final reader = await File(chunk.audioPath).open();
         try {
-          final info = await _scanWav(reader);
-          if (formats.isNotEmpty && !info.sameFormat(formats.first)) {
+          final info = await scanPcmWavFile(reader, checkpoint: checkCancelled);
+          if (formats.isNotEmpty &&
+              !info.format.matches(formats.first.format)) {
             throw StateError(
               'Audio export requires matching chunk audio formats across the whole document.',
             );
           }
           formats.add(info);
-          totalBytes += info.length;
+          totalBytes += info.dataLength;
           if (totalBytes + 36 + totalBytes % 2 > 0xffffffff) {
             throw StateError('Audio export exceeds RIFF size limit.');
           }
-          await reader.setPosition(info.offset);
-          var remaining = info.length;
+          await reader.setPosition(info.dataOffset);
+          var remaining = info.dataLength;
           while (remaining > 0) {
             checkCancelled();
             final bytes = await reader.read(
@@ -393,13 +461,15 @@ Future<void> _assemblyWorker(_AssemblyInput input) async {
       }
       if (totalBytes.isOdd) await writer.writeByte(0);
       await writer.setPosition(0);
-      await writer.writeFrom(_wavHeader(formats.first, totalBytes));
+      await writer.writeFrom(
+        encodePcmWavHeader(formats.first.format, totalBytes),
+      );
       await writer.flush();
     } finally {
       await writer.close();
     }
     checkCancelled();
-    final format = formats.first;
+    final format = formats.first.format;
     final frames = totalBytes ~/ format.blockAlign;
     final duration = Duration(
       microseconds:
@@ -444,40 +514,43 @@ Future<void> _assemblyWorker(_AssemblyInput input) async {
     send('staged');
     await commit.future;
     checkCancelled();
-    // Synchronous, short publication transaction: no cancellation between renames.
-    // Each rename is atomic; two independent paths cannot be crash-atomic as a pair.
-    final oldAudio = File('${staging.path}/previous.wav');
-    final oldJson = File('${staging.path}/previous.json');
-    var audioBackedUp = false;
-    var jsonBackedUp = false;
-    var audioPublished = false;
-    var jsonPublished = false;
-    try {
-      if (output.existsSync()) {
-        output.renameSync(oldAudio.path);
-        audioBackedUp = true;
-      }
-      if (sidecar.existsSync()) {
-        sidecar.renameSync(oldJson.path);
-        jsonBackedUp = true;
-      }
-      stagedAudio.renameSync(output.path);
-      audioPublished = true;
-      stagedJson.renameSync(sidecar.path);
-      jsonPublished = true;
-    } catch (_) {
+    if (publicationError != null) throw StateError(publicationError!);
+    if (!publishedExternally) {
+      // Synchronous, short publication transaction: no cancellation between renames.
+      // Each rename is atomic; two independent paths cannot be crash-atomic as a pair.
+      final oldAudio = File('${staging.path}/previous.wav');
+      final oldJson = File('${staging.path}/previous.json');
+      var audioBackedUp = false;
+      var jsonBackedUp = false;
+      var audioPublished = false;
+      var jsonPublished = false;
       try {
-        if (jsonPublished) sidecar.deleteSync();
-        if (audioPublished) output.deleteSync();
-        if (audioBackedUp) oldAudio.renameSync(output.path);
-        if (jsonBackedUp) oldJson.renameSync(sidecar.path);
+        if (output.existsSync()) {
+          output.renameSync(oldAudio.path);
+          audioBackedUp = true;
+        }
+        if (sidecar.existsSync()) {
+          sidecar.renameSync(oldJson.path);
+          jsonBackedUp = true;
+        }
+        stagedAudio.renameSync(output.path);
+        audioPublished = true;
+        stagedJson.renameSync(sidecar.path);
+        jsonPublished = true;
       } catch (_) {
-        preserveStaging = true;
-        throw StateError(
-          'Export rollback failed; recovery files retained at ${staging.path}.',
-        );
+        try {
+          if (jsonPublished) sidecar.deleteSync();
+          if (audioPublished) output.deleteSync();
+          if (audioBackedUp) oldAudio.renameSync(output.path);
+          if (jsonBackedUp) oldJson.renameSync(sidecar.path);
+        } catch (_) {
+          preserveStaging = true;
+          throw StateError(
+            'Export rollback failed; recovery files retained at ${staging.path}.',
+          );
+        }
+        rethrow;
       }
-      rethrow;
     }
     result = TtsExportResult(
       outputPath: output.path,
@@ -492,7 +565,9 @@ Future<void> _assemblyWorker(_AssemblyInput input) async {
   } catch (error) {
     failure = error;
   } finally {
-    if (staging != null && !preserveStaging) {
+    if (staging != null &&
+        !preserveStaging &&
+        input.platformStagePath == null) {
       try {
         await staging.delete(recursive: true);
       } catch (error) {
@@ -513,143 +588,42 @@ Future<void> _assemblyWorker(_AssemblyInput input) async {
   Isolate.exit();
 }
 
-class _WavInfo {
-  const _WavInfo(
-    this.sampleRate,
-    this.channels,
-    this.bits,
-    this.offset,
-    this.length,
-  );
-  final int sampleRate, channels, bits, offset, length;
-  int get blockAlign => channels * (bits ~/ 8);
-  int get frames => length ~/ blockAlign;
-  bool sameFormat(_WavInfo other) =>
-      sampleRate == other.sampleRate &&
-      channels == other.channels &&
-      bits == other.bits;
-}
-
-Future<_WavInfo> _scanWav(RandomAccessFile file) async {
-  Future<ByteData> read(int length) async {
-    final bytes = await file.read(length);
-    if (bytes.length != length) {
-      throw const FormatException('Truncated WAV header.');
-    }
-    return ByteData.sublistView(bytes);
-  }
-
-  final size = await file.length();
-  final header = await read(12);
-  String tag(ByteData bytes, int offset) =>
-      ascii.decode(bytes.buffer.asUint8List(bytes.offsetInBytes + offset, 4));
-  if (tag(header, 0) != 'RIFF' ||
-      tag(header, 8) != 'WAVE' ||
-      header.getUint32(4, Endian.little) + 8 != size) {
-    throw const FormatException('Invalid RIFF/WAVE length or signature.');
-  }
-  int? rate, channels, bits, pcmOffset, pcmLength;
-  var offset = 12;
-  while (offset + 8 <= size) {
-    await file.setPosition(offset);
-    final section = await read(8);
-    final length = section.getUint32(4, Endian.little);
-    final end = offset + 8 + length;
-    if (end + length % 2 > size) {
-      throw const FormatException('Truncated WAV section.');
-    }
-    if (tag(section, 0) == 'fmt ') {
-      if (rate != null || length < 16) {
-        throw const FormatException('Invalid WAV format section.');
-      }
-      final format = await read(16);
-      channels = format.getUint16(2, Endian.little);
-      rate = format.getUint32(4, Endian.little);
-      bits = format.getUint16(14, Endian.little);
-      if (format.getUint16(0, Endian.little) != 1 ||
-          channels == 0 ||
-          rate == 0 ||
-          ![8, 16, 24, 32].contains(bits) ||
-          format.getUint16(12, Endian.little) != channels * bits ~/ 8 ||
-          format.getUint32(8, Endian.little) != rate * channels * bits ~/ 8) {
-        throw const FormatException('Unsupported or inconsistent PCM format.');
-      }
-    } else if (tag(section, 0) == 'data') {
-      if (pcmOffset != null) {
-        throw const FormatException('Multiple WAV data sections.');
-      }
-      pcmOffset = offset + 8;
-      pcmLength = length;
-    }
-    offset = end + length % 2;
-  }
-  if (offset != size ||
-      rate == null ||
-      channels == null ||
-      bits == null ||
-      pcmOffset == null ||
-      pcmLength == null ||
-      pcmLength % (channels * bits ~/ 8) != 0) {
-    throw const FormatException('Missing or unaligned PCM data.');
-  }
-  return _WavInfo(rate, channels, bits, pcmOffset, pcmLength);
-}
-
-Uint8List _wavHeader(_WavInfo format, int length) {
-  final bytes = Uint8List(44);
-  final data = ByteData.sublistView(bytes);
-  void text(int offset, String value) =>
-      bytes.setRange(offset, offset + value.length, ascii.encode(value));
-  text(0, 'RIFF');
-  data.setUint32(4, 36 + length + length % 2, Endian.little);
-  text(8, 'WAVE');
-  text(12, 'fmt ');
-  data.setUint32(16, 16, Endian.little);
-  data.setUint16(20, 1, Endian.little);
-  data.setUint16(22, format.channels, Endian.little);
-  data.setUint32(24, format.sampleRate, Endian.little);
-  data.setUint32(28, format.sampleRate * format.blockAlign, Endian.little);
-  data.setUint16(32, format.blockAlign, Endian.little);
-  data.setUint16(34, format.bits, Endian.little);
-  text(36, 'data');
-  data.setUint32(40, length, Endian.little);
-  return bytes;
-}
-
-Map<String, Object?> _chunkMetadata(ExportedAudioChunk chunk, _WavInfo info) =>
-    {
-      'chunkId': chunk.chunkId,
-      'cacheKey': chunk.cacheKey,
-      'audioPath': chunk.audioPath,
-      'durationMillis': (info.frames * 1000 / info.sampleRate).round(),
-      'frameCount': info.frames,
-      'segmentIds': chunk.segmentIds,
-      'startWordIndex': chunk.startWordIndex,
-      'endWordIndex': chunk.endWordIndex,
-      'voiceId': chunk.voiceId,
-      'routeId': chunk.routeId,
-      'sceneTurns': chunk.sceneTurns.map((t) => t.toMap()).toList(),
-      'castId': chunk.castId,
-      'dialogueSpanId': chunk.dialogueSpanId,
-      'capabilityProfileId': chunk.capabilityProfileId,
-      'missingFallbackWordCount': chunk.missingFallbackWordCount,
-      'boundaryMetadata': _boundaryMetadataToMap(chunk.boundaryMetadata),
-      'pronunciationArtifacts': [
-        for (final artifact in chunk.pronunciationArtifacts)
-          {
-            'artifactId': artifact.artifactId,
-            'segmentId': artifact.segmentId,
-            'startWord': artifact.startWord,
-            'endWord': artifact.endWord,
-            'resolutionClass': artifact.resolutionClass,
-            'translationIntent': artifact.translationIntent,
-            'translationOutcome': artifact.translationOutcome,
-            'representationType': artifact.representationType,
-            'representationValue': artifact.representationValue,
-            'diagnosticCodes': artifact.diagnosticCodes,
-          },
-      ],
-    };
+Map<String, Object?> _chunkMetadata(
+  ExportedAudioChunk chunk,
+  PcmWavLayout info,
+) => {
+  'chunkId': chunk.chunkId,
+  'cacheKey': chunk.cacheKey,
+  'audioPath': chunk.audioPath,
+  'durationMillis': (info.frameCount * 1000 / info.format.sampleRate).round(),
+  'frameCount': info.frameCount,
+  'segmentIds': chunk.segmentIds,
+  'startWordIndex': chunk.startWordIndex,
+  'endWordIndex': chunk.endWordIndex,
+  'voiceId': chunk.voiceId,
+  'routeId': chunk.routeId,
+  'sceneTurns': chunk.sceneTurns.map((t) => t.toMap()).toList(),
+  'castId': chunk.castId,
+  'dialogueSpanId': chunk.dialogueSpanId,
+  'capabilityProfileId': chunk.capabilityProfileId,
+  'missingFallbackWordCount': chunk.missingFallbackWordCount,
+  'boundaryMetadata': _boundaryMetadataToMap(chunk.boundaryMetadata),
+  'pronunciationArtifacts': [
+    for (final artifact in chunk.pronunciationArtifacts)
+      {
+        'artifactId': artifact.artifactId,
+        'segmentId': artifact.segmentId,
+        'startWord': artifact.startWord,
+        'endWord': artifact.endWord,
+        'resolutionClass': artifact.resolutionClass,
+        'translationIntent': artifact.translationIntent,
+        'translationOutcome': artifact.translationOutcome,
+        'representationType': artifact.representationType,
+        'representationValue': artifact.representationValue,
+        'diagnosticCodes': artifact.diagnosticCodes,
+      },
+  ],
+};
 Map<String, Object?>? _boundaryMetadataToMap(
   ExportedBoundaryMetadata? metadata,
 ) {

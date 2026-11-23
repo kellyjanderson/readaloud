@@ -1,10 +1,10 @@
 # Project map
 
-Read [AGENTS.md](../AGENTS.md) for the lightweight process. Current architecture describes source behavior; GitHub design issues describe proposed changes. A final legacy specification is not a completion record.
+Start with [AGENTS.md](../AGENTS.md) and [directed work](../docs/project-management.md#directed-work); detailed coordination is conditional. Current architecture describes source behavior; GitHub design issues describe proposed changes. A final legacy specification is not a completion record.
 
 - [Architecture](architecture/README.md): current components, source/tests and limitations.
 - [Versioned interim designs](interim/README.md): drafts and published design revisions with explicit reconciliation and retirement rules.
-- [Product expectations](product-definition.md): two-second startup goal, five-second reusable-book and ten-second first-load hard limits, responsive dynamic reading, honest progress and reusable voice-directed `.radoc`; requirements are distinct from current conformance.
+- [Product expectations](product-definition.md): two-second launch-to-speech goal including startup, five-second reusable-book and ten-second first-load hard limits excluding separately measured ordinary startup, responsive dynamic reading, honest progress and reusable voice-directed `.radoc`; requirements are distinct from current conformance.
 - [GitHub planning and orchestration](../docs/project-management.md): active designs, native sub-issues and dependency graph.
 - [Human documentation](../docs/README.md): development and maintenance.
 - [Legacy contracts](specifications/README.md): retained children with direct architecture ownership; no new spec-tree workflow.

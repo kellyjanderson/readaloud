@@ -1,6 +1,6 @@
 # Speech Runtime Messaging Boundary
 
-Reconciled: October 25, 2026; P4 production lineage 295677e
+Reconciled: November 17, 2026; deferred model startup status #152; retained P4 production lineage 295677e
 Status: Current source architecture; P2 resident-resource evidence recorded in issue #51
 
 ## Implemented structure and limitations
@@ -101,8 +101,14 @@ These legacy contracts describe intended behavior and acceptance; `final` denote
 
 ## MLX model preparation and replacement
 
-The controller prepares a selected MLX model at launch and immediately on a
-Settings selection, independently of document binding preparation. The engine's
+The controller prepares a selected MLX model after initial document intake and
+immediately on a Settings selection, independently of document binding
+preparation. Restoring an audio-only book deliberately defers model loading:
+the engine session publishes `deferred`, with no active identity or fictitious
+progress. Settings explains model-free saved playback and offers an explicit
+load action through the existing initialization owner. New speech still demands
+initialization; loading, validation, cancellation and failure retain their
+existing epoch-fenced paths. The engine's
 single admission owner serializes model preparation and synthesis. One current
 replacement loop reads the latest desired engine after old resources drain;
 rapid selection changes retire an obsolete preparation before the next model

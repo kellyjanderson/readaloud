@@ -1,6 +1,36 @@
 part of 'reader_controller.dart';
 
 extension ReaderAudioBookPersistence on ReaderController {
+  /// Playback and export each await one callback on their own producer tail:
+  /// one can publish while the other waits. Keep cancellable waiting outside
+  /// Lock's non-removable queue so retired callers detach without queued I/O.
+  Future<void> _admitRenderedScene(
+    TtsFinalizedAudioScene scene, {
+    required bool Function() isCurrent,
+    required Future<void> Function() publish,
+  }) async {
+    if (!isCurrent()) return;
+    while (_renderedScenePublicationLock.locked) {
+      final previous = _renderedScenePublication!;
+      final ready = await Future.any([
+        previous.then((_) => true),
+        scene.cancelled.then((_) => false),
+      ]);
+      if (!ready || !isCurrent()) return;
+    }
+    if (!isCurrent()) return;
+    final completed = Completer<void>();
+    _renderedScenePublication = completed.future;
+    try {
+      // No await separates the unlocked check from lock acquisition on the
+      // controller isolate. The maintained lock owns active work, never waits.
+      await _renderedScenePublicationLock.synchronized(publish);
+    } finally {
+      // Failure belongs to this producer; another caller waits only for drain.
+      completed.complete();
+    }
+  }
+
   Future<void> _ensureSceneRepository() async {
     if (_renderedScenes != null) return;
     try {
@@ -38,6 +68,9 @@ extension ReaderAudioBookPersistence on ReaderController {
   Future<void> Function(TtsFinalizedAudioScene) _renderedSceneWriter({
     ReaderDocument? document,
     int? sourceWordOffset,
+    Map<String, dynamic>? preservedIntent,
+    bool Function()? isCurrent,
+    void Function()? onPersisted,
   }) {
     final capturedDocument = document ?? _document;
     final capturedOffset =
@@ -45,101 +78,101 @@ extension ReaderAudioBookPersistence on ReaderController {
     final source =
         _activeSourceRevision ??
         _document.normalizedImportResult.sourceFingerprint;
-    final intent = _bookIntent();
+    final intent = Map<String, dynamic>.from(preservedIntent ?? _bookIntent());
     final revision = _documentRevision;
     final epoch = _engineEpoch;
-    return (scene) async {
-      if (_disposed ||
-          epoch != _engineEpoch ||
-          revision != _documentRevision ||
-          !scene.isCurrent()) {
-        return;
-      }
-      var repository = _renderedScenes;
-      if (repository == null) {
-        try {
-          final support = await getApplicationSupportDirectory();
-          if (_disposed ||
-              epoch != _engineEpoch ||
-              revision != _documentRevision ||
-              !scene.isCurrent()) {
-            return;
+    return (scene) {
+      bool current() =>
+          !_disposed &&
+          epoch == _engineEpoch &&
+          revision == _documentRevision &&
+          scene.isCurrent() &&
+          (isCurrent?.call() ?? true);
+      return _admitRenderedScene(
+        scene,
+        isCurrent: current,
+        publish: () async {
+          var repository = _renderedScenes;
+          if (repository == null) {
+            try {
+              final support = await getApplicationSupportDirectory();
+              if (!current()) {
+                return;
+              }
+              repository = _renderedScenes ??= RenderedSceneRepository(
+                Directory(p.join(support.path, 'rendered-scenes')),
+              );
+            } on MissingPluginException {
+              // Platform-free legacy fakes have no support directory. Native app
+              // persistence failures propagate through the engine's error boundary.
+              if (!kDebugMode) rethrow;
+              return;
+            }
           }
-          repository = _renderedScenes ??= RenderedSceneRepository(
-            Directory(p.join(support.path, 'rendered-scenes')),
+          final ticket = beginReadingStage(
+            PreparationStage.persistence,
+            producerId: 'rendered-scene-store',
+            scope: 'Saved scene output',
           );
-        } on MissingPluginException {
-          // Platform-free legacy fakes have no support directory. Native app
-          // persistence failures propagate through the engine's error boundary.
-          if (!kDebugMode) rethrow;
-          return;
-        }
-      }
-      final ticket = beginReadingStage(
-        PreparationStage.persistence,
-        producerId: 'rendered-scene-store',
-        scope: 'Saved scene output',
-      );
-      publishReadingStage(
-        ticket,
-        const PreparationProgress(
-          stage: PreparationStage.persistence,
-          state: PreparationWorkState.working,
-          completed: 0,
-          total: 1,
-          unit: 'scenes',
-        ),
-      );
-      try {
-        await repository.publish(
-          scene,
-          sourceId: source,
-          intent: {
-            ...intent,
-            'canonicalDirections': _canonicalSceneDirections(
-              capturedDocument,
-              capturedOffset,
-              scene.startWordIndex,
-              scene.endWordIndex,
+          publishReadingStage(
+            ticket,
+            const PreparationProgress(
+              stage: PreparationStage.persistence,
+              state: PreparationWorkState.working,
+              completed: 0,
+              total: 1,
+              unit: 'scenes',
             ),
-          },
-        );
-        if (_disposed ||
-            epoch != _engineEpoch ||
-            revision != _documentRevision ||
-            !scene.isCurrent()) {
-          return;
-        }
-        publishReadingStage(
-          ticket,
-          const PreparationProgress(
-            stage: PreparationStage.persistence,
-            state: PreparationWorkState.complete,
-            completed: 1,
-            total: 1,
-            unit: 'scenes',
-          ),
-        );
-      } catch (error) {
-        if (_disposed ||
-            epoch != _engineEpoch ||
-            revision != _documentRevision ||
-            !scene.isCurrent()) {
-          return;
-        }
-        publishReadingStage(
-          ticket,
-          PreparationProgress(
-            stage: PreparationStage.persistence,
-            state: PreparationWorkState.failed,
-            completed: 0,
-            total: 1,
-            unit: 'scenes',
-            error: '$error',
-          ),
-        );
-        rethrow;
-      }
+          );
+          try {
+            await repository.publish(
+              isCurrent == null
+                  ? scene
+                  : _sceneWithPublicationOwner(scene, current),
+              sourceId: source,
+              intent: {
+                ...intent,
+                'canonicalDirections': _canonicalSceneDirections(
+                  capturedDocument,
+                  capturedOffset,
+                  scene.startWordIndex,
+                  scene.endWordIndex,
+                ),
+              },
+            );
+            onPersisted?.call();
+            if (!current()) {
+              return;
+            }
+            publishReadingStage(
+              ticket,
+              const PreparationProgress(
+                stage: PreparationStage.persistence,
+                state: PreparationWorkState.complete,
+                completed: 1,
+                total: 1,
+                unit: 'scenes',
+              ),
+            );
+          } catch (error) {
+            if (!current()) {
+              return;
+            }
+            publishReadingStage(
+              ticket,
+              PreparationProgress(
+                stage: PreparationStage.persistence,
+                state: PreparationWorkState.failed,
+                completed: 0,
+                total: 1,
+                unit: 'scenes',
+                error: '$error',
+              ),
+            );
+            rethrow;
+          }
+        },
+      );
     };
   }
 
@@ -171,6 +204,10 @@ extension ReaderAudioBookPersistence on ReaderController {
         _activeSourceRevision ??
         _document.normalizedImportResult.sourceFingerprint;
     final imported = _audioBook;
+    // A cold plain-document session may already have committed scenes from an
+    // earlier run, without opening a v5 book or producing new audio this run.
+    await _ensureSceneRepository();
+    requireCurrent();
     var repository = _renderedScenes;
     // A separate read owner never competes with the serialized publication
     // callback. Both observe immutable, atomically committed generations.
@@ -287,7 +324,13 @@ extension ReaderAudioBookPersistence on ReaderController {
                 isCurrent: current,
               );
             }
-            scenes.add(scene);
+            scenes.add(
+              _bookSceneForPublication(
+                scene,
+                intent,
+                sourceBookIntent: importedHandle.manifest.intent,
+              ),
+            );
           }
         }
         for (final s in stored) {
@@ -298,24 +341,10 @@ extension ReaderAudioBookPersistence on ReaderController {
           members[audio] = File(s.audioPath);
           if (raw != null) members[raw] = File(s.rawAudioPath!);
           scenes.add(
-            RadocAudioScene(
-              sceneId: s.sceneId,
-              startWord: s.startWordIndex,
-              endWord: s.endWordIndex,
-              audioMember: audio,
-              rawAudioMember: raw,
-              dependencyDigest: s.dependencyDigest,
-              dependencies: s.dependencies,
-              provenance: {
-                ...s.provenance,
-                'intent': s.intent,
-                'text': s.text,
-                'startOffset': s.startOffset,
-                'sceneTurns': s.sceneTurns.map((t) => t.toMap()).toList(),
-              },
-              sampleRate: s.sampleRate,
-              channels: s.channels,
-              frameCount: s.frameCount,
+            _bookSceneForPublication(
+              _publishedScene(s),
+              intent,
+              sourceBookIntent: importedHandle?.manifest.intent,
             ),
           );
         }
@@ -373,9 +402,114 @@ extension ReaderAudioBookPersistence on ReaderController {
   }
 }
 
+RadocAudioScene _bookSceneForPublication(
+  RadocAudioScene scene,
+  Map<String, dynamic> bookIntent, {
+  Map<String, dynamic>? sourceBookIntent,
+}) {
+  final captured = _capturedBookSceneIntent(scene, sourceBookIntent);
+  if (captured == null) return scene;
+  // Published VoiceProfiles are read only from manifest.intent. Keep their
+  // identical descriptions once, rather than once per native scene. All
+  // scene-specific intent and exact raw model/capability/binding dependencies
+  // remain captured; a different engine or catalogue never shares this copy.
+  final intent = Map<String, dynamic>.from(captured);
+  if (_bookSceneSharesEngine(scene, captured, bookIntent) &&
+      captured['voices'] is List &&
+      bookIntent['voices'] is List &&
+      jsonEncode(captured['voices']) == jsonEncode(bookIntent['voices'])) {
+    intent.remove('voices');
+  }
+  if (jsonEncode(intent) == jsonEncode(scene.provenance['intent'])) {
+    return scene;
+  }
+  return RadocAudioScene(
+    sceneId: scene.sceneId,
+    startWord: scene.startWord,
+    endWord: scene.endWord,
+    audioMember: scene.audioMember,
+    rawAudioMember: scene.rawAudioMember,
+    dependencyDigest: scene.dependencyDigest,
+    dependencies: scene.dependencies,
+    provenance: {...scene.provenance, 'intent': intent},
+    sampleRate: scene.sampleRate,
+    channels: scene.channels,
+    frameCount: scene.frameCount,
+  );
+}
+
+// A compacted scene shares only its original root's descriptive catalogue.
+// Restore that copy before moving the scene to another root or committing a
+// new boundary derivative. Never borrow catalogue metadata across engines.
+Map<String, dynamic>? _capturedBookSceneIntent(
+  RadocAudioScene scene,
+  Map<String, dynamic>? bookIntent,
+) {
+  final captured = scene.provenance['intent'];
+  if (captured is! Map) return null;
+  final intent = Map<String, dynamic>.from(captured);
+  if (!intent.containsKey('voices') &&
+      bookIntent != null &&
+      bookIntent['voices'] is List &&
+      _bookSceneSharesEngine(scene, intent, bookIntent)) {
+    intent['voices'] = bookIntent['voices'];
+  }
+  return intent;
+}
+
+bool _bookSceneSharesEngine(
+  RadocAudioScene scene,
+  Map captured,
+  Map bookIntent,
+) {
+  final engine = captured['engineId'];
+  final raw = scene.dependencies['raw'];
+  return engine is String &&
+      engine.isNotEmpty &&
+      engine == bookIntent['engineId'] &&
+      raw is Map &&
+      raw['engineId'] == engine;
+}
+
 Future<void> _writeBookAnalysisFile(
   String path,
   DocumentAnalysisRecord record,
 ) => Isolate.run(
   () => File(path).writeAsStringSync(jsonEncode(record.toJson()), flush: true),
+);
+
+// Preserve the accepted engine evidence byte-for-byte while narrowing durable
+// admission independently of the already-captured WAV export's lifetime.
+TtsFinalizedAudioScene _sceneWithPublicationOwner(
+  TtsFinalizedAudioScene scene,
+  bool Function() isCurrent,
+) => TtsFinalizedAudioScene(
+  documentId: scene.documentId,
+  generationId: scene.generationId,
+  sceneId: scene.sceneId,
+  text: scene.text,
+  engineSpeakText: scene.engineSpeakText,
+  startWordIndex: scene.startWordIndex,
+  endWordIndex: scene.endWordIndex,
+  startOffset: scene.startOffset,
+  sceneTurns: scene.sceneTurns,
+  preparedBindings: scene.preparedBindings,
+  audioPath: scene.audioPath,
+  duration: scene.duration,
+  engineId: scene.engineId,
+  engineVersion: scene.engineVersion,
+  normalizationVersion: scene.normalizationVersion,
+  capabilityProfileId: scene.capabilityProfileId,
+  synthesisIdentity: scene.synthesisIdentity,
+  translationSignature: scene.translationSignature,
+  synthesisRate: scene.synthesisRate,
+  assignmentRevision: scene.assignmentRevision,
+  cancelled: scene.cancelled,
+  isCurrent: isCurrent,
+  rawAudioPath: scene.rawAudioPath,
+  rawArtifactIdentity: scene.rawArtifactIdentity,
+  predecessorRawArtifactIdentity: scene.predecessorRawArtifactIdentity,
+  boundaryPolicyVersion: scene.boundaryPolicyVersion,
+  boundaryClass: scene.boundaryClass,
+  trailingSilenceMicros: scene.trailingSilenceMicros,
 );

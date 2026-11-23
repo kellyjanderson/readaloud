@@ -14,6 +14,54 @@ import 'package:read_aloud/src/services/speech_audio_packet.dart';
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
+  for (final cancel in [false, true]) {
+    test(
+      'rendered handoff consumption barrier ${cancel ? 'cancels on Pause' : 'waits for native completion'}',
+      () async {
+        final player = _FakePlayer();
+        final engine = _NoModelEngine(player);
+        addTearDown(() => _close(engine));
+        final entered = Completer<void>();
+        var drained = false;
+        var legacyCalls = 0;
+        await engine.playRendered(
+          _scene(
+            sourceEnd: 4,
+            continuation: TtsRenderedAudioContinuation(
+              next: (_, _) async {
+                legacyCalls++;
+                return null;
+              },
+              nextWithConsumption: (_, _, awaitConsumed) async {
+                entered.complete();
+                await awaitConsumed();
+                drained = true;
+                return null;
+              },
+            ),
+          ),
+        );
+        await entered.future;
+        player.advance(const Duration(seconds: 1));
+        await Future<void>.delayed(Duration.zero);
+        expect(
+          drained,
+          false,
+          reason: 'Position/duration is not native consumption.',
+        );
+        expect(legacyCalls, 0);
+        if (cancel) {
+          await engine.pause().timeout(const Duration(seconds: 2));
+          expect(drained, false);
+        } else {
+          player.complete();
+          await _until(() => drained);
+        }
+        expect(engine.modelCalls, 0);
+      },
+    );
+  }
+
   for (final hasBoundaryEvidence in [false, true]) {
     test(
       'finalized callback preserves ${hasBoundaryEvidence ? 'exact boundary evidence' : 'unknown boundary evidence'}',

@@ -2,6 +2,7 @@
 
 require_relative 'release_notices'
 require_relative 'package_python_runtime'
+require_relative 'flutter_bootstrap'
 require 'fileutils'
 require 'open3'
 require 'find'
@@ -163,13 +164,18 @@ module MacosCandidate
   end
 
   def self.toolchain(root)
-    flutter = ENV.fetch('PATH').split(File::PATH_SEPARATOR).map { |dir| File.join(dir, 'flutter') }.find { |path| File.executable?(path) }
-    raise 'Flutter SDK executable missing from PATH' unless flutter
-    flutter = File.realpath(flutter)
+    FlutterBootstrap.new(root).with_sdk do |flutter, _pub, _lease|
+      return toolchain_identity(root, File.realpath(flutter))
+    end
+  end
+
+  def self.toolchain_identity(root, flutter)
+    launcher = File.realpath(File.join(root, 'tools/flutter'))
     dart = File.join(File.dirname(flutter), 'cache/dart-sdk/bin/dart')
     dart_architectures = capture('/usr/bin/lipo', '-archs', dart).split.sort
     raise 'Flutter SDK Dart binary lacks arm64' unless dart_architectures.include?('arm64')
     { 'flutter_path' => flutter, 'flutter_executable' => file_identity(flutter),
+      'launcher_path' => launcher, 'launcher_executable' => file_identity(launcher),
       'dart_executable' => file_identity(dart), 'dart_architectures' => dart_architectures,
       'flutter_version' => JSON.parse(capture(flutter, '--version', '--machine', chdir: root)),
       'xcode' => capture('/usr/bin/xcodebuild', '-version'),
@@ -180,12 +186,13 @@ module MacosCandidate
 
   def self.build_command(command, sdk)
     raise 'Only the recorded Flutter SDK build macos command can attest a build' unless command.is_a?(Array) && command[1, 2] == %w[build macos]
-    executable = command.first == 'flutter' ? sdk.fetch('flutter_path') : File.realpath(command.first)
-    raise 'Build command uses a different Flutter SDK' unless executable == sdk.fetch('flutter_path')
+    launcher = sdk.fetch('launcher_path', sdk.fetch('flutter_path'))
+    executable = command.first == 'flutter' ? launcher : File.realpath(command.first)
+    raise 'Build command uses a different Flutter SDK' unless [sdk.fetch('flutter_path'), launcher].include?(executable)
     # A target outside this snapshot would break source-to-build correspondence.
     raise 'Alternate target/project paths are not supported for candidate builds' if command.drop(3).any? { |arg| arg == '-t' || arg.start_with?('--target', '--project', '-t=') }
     raise 'Candidate build must use release mode' if command.drop(3).any? { |arg| arg != '--release' && arg.match?(/\A--(?:no-)?(?:debug|profile|release)(?:=|\z)/) }
-    [executable, 'build', 'macos', '--release', *command.drop(3).reject { |arg| arg == '--release' }]
+    [launcher, 'build', 'macos', '--release', *command.drop(3).reject { |arg| arg == '--release' }]
   end
 
   def self.build_environment(root, sdk, build_id, override, inherited: ENV.to_h)

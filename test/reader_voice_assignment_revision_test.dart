@@ -147,6 +147,11 @@ void main() {
       }
       final captured = engine.exports.single;
       await controller.selectVoiceById('af_heart');
+      expect(
+        captured.isCurrent!(),
+        true,
+        reason: 'The accepted WAV snapshot outlives later playback choices.',
+      );
       expect(await controller.exportAudioToPath('/tmp/pending.wav'), isNull);
       expect(engine.exports, hasLength(1));
       engine.exportBarrier!.complete(_result(captured));

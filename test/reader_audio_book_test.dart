@@ -1,6 +1,8 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
+import 'package:crypto/crypto.dart';
 import 'package:flutter/material.dart';
 import 'package:read_aloud/src/app.dart';
 import 'package:read_aloud/src/models/document_preparation.dart';
@@ -8,9 +10,19 @@ import 'package:read_aloud/src/models/character.dart';
 import 'package:read_aloud/src/models/reader_operation.dart';
 import 'package:read_aloud/src/models/character_cast_registry.dart';
 import 'package:read_aloud/src/models/voice_profile.dart';
+import 'package:read_aloud/src/models/native_speech_turn.dart';
+import 'package:read_aloud/src/models/prepared_voice_binding.dart';
+import 'package:read_aloud/src/models/chunk_plan.dart';
+import 'package:read_aloud/src/models/reader_document.dart';
+import 'package:read_aloud/src/models/speech_annotation.dart';
+import 'package:read_aloud/src/services/base_speech_annotation_inference_service.dart';
+import 'package:read_aloud/src/services/document_preparation_supervisor.dart';
+import 'package:read_aloud/src/services/reader_document_repository.dart';
+import 'package:read_aloud/src/services/playback_instrumentation_service.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:path_provider/path_provider.dart';
 import 'package:read_aloud/src/controllers/reader_controller.dart';
 import 'package:read_aloud/src/models/radoc_audio_manifest.dart';
 import 'package:read_aloud/src/services/audio_artifact_store.dart';
@@ -20,6 +32,8 @@ import 'package:read_aloud/src/services/reader_document_serialization_service.da
 import 'package:read_aloud/src/services/tts_engine.dart';
 import 'package:read_aloud/src/services/speech_audio_packet.dart';
 import 'package:read_aloud/src/services/rendered_scene_repository.dart';
+import 'package:read_aloud/src/services/synthesis_boundary_policy.dart';
+import 'package:read_aloud/src/services/speech_planning_supervisor.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -299,6 +313,49 @@ void main() {
       await controller.startPlayback();
       expect(engine.requests, hasLength(2), reason: controller.statusMessage);
       expect(engine.modelCalls, 0);
+    },
+  );
+  testWidgets(
+    'saved-book Settings names deferred loading and explicitly loads without Play',
+    (tester) async {
+      await tester.runAsync(() async {
+        await controller.importFilePaths([(await fixture()).path]);
+        await controller.completeInitialIntake();
+        // Finish the tiny fixture's real package read before fake-clock UI work.
+        await controller.readPreparedRange(2);
+      });
+      expect(controller.engineSession.phase.name, 'deferred');
+      expect(controller.isInitializing, isFalse);
+      expect(controller.engineSession.active, isNull);
+      expect(engine.modelCalls, 0);
+      engine.renderAvailable = true;
+      await tester.pumpWidget(ReadAloudApp(controller: controller));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('reader-overflow-menu')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Settings').last);
+      await tester.pumpAndSettle();
+      expect(
+        find.textContaining('Speech model is not loaded yet.'),
+        findsOneWidget,
+      );
+      expect(find.text('Cancel speech engine preparation'), findsNothing);
+      final load = find.text('Load selected speech engine');
+      expect(load, findsOneWidget);
+      await tester.ensureVisible(load);
+      await tester.tap(load);
+      await tester.pumpAndSettle();
+      expect(engine.modelCalls, 1);
+      expect(controller.engineSession.phase.name, 'active');
+      expect(controller.engineSession.active, isNotNull);
+      expect(controller.hasPublishedAudio, isTrue);
+      expect(controller.document.speakableText, 'Stay close.');
+      expect(engine.requests, isEmpty);
+      expect(engine.exports, isEmpty);
+      expect(find.text('Load selected speech engine'), findsNothing);
+      expect(tester.takeException(), isNull);
+      await tester.pumpWidget(const SizedBox());
+      await tester.runAsync(controller.shutdownPreparation);
     },
   );
   testWidgets(
@@ -914,12 +971,1386 @@ void main() {
     expect(engine.modelCalls, 1);
     expect(engine.requests, isEmpty);
   });
+
+  Future<File> legacyFishFixture({String? defect}) async {
+    const path = 'test/fixtures/s11_fish_legacy';
+    final json =
+        jsonDecode(await File('$path/manifest.json').readAsString())
+            as Map<String, dynamic>;
+    final members = <String, File>{
+      'prepared/1.json': File('$path/prepared.json'),
+    };
+    if (defect == 'attribution') {
+      final prepared =
+          jsonDecode(await members['prepared/1.json']!.readAsString()) as Map;
+      (prepared['documentVoiceAttribution'] as Map)['ranges'] = [];
+      members['prepared/1.json'] = await File(
+        '${temp.path}/no-attribution.json',
+      ).writeAsString(jsonEncode(prepared));
+    }
+    String? predecessor;
+    for (final (i, value) in (json['scenes'] as List).indexed) {
+      final scene = value as Map<String, dynamic>;
+      final bytes = _boundaryWav(sample: 1000 + i);
+      // Long leading silence and an audible plateau exercise actual boundary
+      // trimming after a changed predecessor, independently of speech quality.
+      (scene['format'] as Map)['sampleRate'] = 24000;
+      (scene['format'] as Map)['frameCount'] = (bytes.length - 44) ~/ 2;
+      final rawId = 'wav-sha256:${sha256.convert(bytes)}';
+      final provenance = scene['provenance'] as Map;
+      provenance['rawArtifactIdentity'] = rawId;
+      provenance['predecessorRawArtifactIdentity'] = predecessor;
+      provenance['trailingSilenceMicros'] = 100000;
+      (scene['dependencies'] as Map)['predecessorRawArtifactIdentity'] =
+          predecessor;
+      scene['dependencyDigest'] = artifactIdentity(scene['dependencies']);
+      predecessor = rawId;
+      final audio = await File(
+        '${temp.path}/legacy-$i.wav',
+      ).writeAsBytes(bytes);
+      members[scene['audioMember'] as String] = audio;
+      members[scene['rawAudioMember'] as String] = audio;
+      if (i == 0) {
+        final provenance = scene['provenance'] as Map;
+        if (defect == 'binding') provenance['bindings'] = [];
+        if (defect == 'precision') {
+          (provenance['intent'] as Map)['engineId'] = 'fish_drama3_4bit';
+        }
+        if (defect == 'catalogue') {
+          ((provenance['intent'] as Map)['voices'] as List).first['label'] =
+              'Historical published voice';
+        }
+        if (defect == 'raw-engine') {
+          ((scene['dependencies'] as Map)['raw'] as Map)['engineId'] =
+              'fish_drama3_4bit';
+          scene['dependencyDigest'] = artifactIdentity(scene['dependencies']);
+        }
+      }
+    }
+    final package = RadocAudioPackage();
+    try {
+      final output = File('${temp.path}/legacy-fish.radoc');
+      await package.export(
+        destination: output,
+        manifest: RadocAudioManifest.fromJson(json),
+        members: members,
+      );
+      return output;
+    } finally {
+      await package.dispose();
+    }
+  }
+
+  Future<ReaderController> fishController(
+    _OfflineEngine owner, {
+    String preference = 'fish_drama3_8bit',
+    TtsEngine Function(String, int)? engineFactory,
+    bool deferInitialSynthesis = true,
+    DocumentPreparationSupervisor? preparationSupervisor,
+    RenderedSceneRepository? renderedSceneRepository,
+  }) async {
+    SharedPreferences.setMockInitialValues({'reader.ttsEngineId': preference});
+    final c = ReaderController(
+      ttsEngine: owner,
+      engineFactory: engineFactory,
+      preparationSupervisor: preparationSupervisor,
+      deferInitialSynthesis: deferInitialSynthesis,
+      enablePlatformIntakeChannels: false,
+      renderedSceneRepository:
+          renderedSceneRepository ??
+          RenderedSceneRepository(Directory('${temp.path}/fish-scenes')),
+    );
+    addTearDown(() async {
+      await c.shutdownPreparation();
+      c.dispose();
+    });
+    await c.initialize();
+    return c;
+  }
+
+  Future<void> loadFreshExportSource(ReaderController c) async {
+    // Only the public fixture's source text is imported: no saved audio or
+    // prepared book metadata supplies the scenes under test.
+    final fixture =
+        jsonDecode(
+              await File(
+                'test/fixtures/s11_fish_legacy/prepared.json',
+              ).readAsString(),
+            )
+            as Map;
+    await c.loadDocument(
+      DocumentImportService().importPastedText(
+        fixture['speakableText'] as String,
+      ),
+    );
+  }
+
+  test(
+    '395-scene 6661-word book shares its 43-voice catalogue under 2 MiB and reopens offline',
+    () async {
+      final catalogue = <VoiceProfile>[];
+      for (final path in [
+        'assets/voice_library/library.json',
+        'assets/fish_voice_library.json',
+      ]) {
+        final json = jsonDecode(await File(path).readAsString()) as Map;
+        for (final value in json['voices'] as List) {
+          final voice = value as Map;
+          catalogue.add(
+            VoiceProfile(
+              id: voice['id'] as String,
+              label: voice['label'] as String,
+              locale: voice['locale'] as String,
+              gender: VoiceGender.values.byName(voice['gender'] as String),
+              rawValue: const {},
+            ),
+          );
+        }
+      }
+      expect(catalogue, hasLength(43));
+      final texts = [
+        for (var i = 0; i < 395; i++)
+          'The ${i < 54 ? '' : 'patient '}reader watched morning sunlight '
+              'cross the garden while a gentle breeze moved the old branches.',
+      ];
+      final owner = _ManifestScaleEngine(catalogue, texts);
+      final c = await fishController(owner, deferInitialSynthesis: false);
+      await c.loadDocument(
+        DocumentImportService().importPastedText(texts.join('\n\n')),
+      );
+      owner.document = c.document;
+      expect(c.document.wordCount, 6661);
+      final exported = await c.exportAudioToPath('${temp.path}/whole.wav');
+      expect(
+        exported,
+        isNotNull,
+        reason:
+            '${c.statusMessage} ${PlaybackInstrumentationService.instance.snapshot().where((m) => m.metric == 'audioExportFailed').lastOrNull?.value}',
+      );
+      final source = c.document.normalizedImportResult.sourceFingerprint;
+      final store = RenderedSceneRepository(
+        Directory('${temp.path}/fish-scenes'),
+      );
+      final stored = await store.scenesForSource(source);
+      await store.dispose();
+      expect(stored, hasLength(395));
+      final output = await c.exportDocumentToPath(
+        '${temp.path}/whole.radoc',
+        audioBook: true,
+      );
+      expect(
+        output,
+        isNotNull,
+        reason:
+            '${c.statusMessage} ${c.feedbackOperations.map((op) => op.error).whereType<String>().join('; ')}',
+      );
+      final package = RadocAudioPackage();
+      try {
+        final book = await package.open(output!);
+        final manifest = book.manifest;
+        expect(manifest.renderingComplete, true);
+        expect(manifest.scenes, hasLength(395));
+        expect(manifest.intent['voices'], hasLength(43));
+        final bytes = utf8.encode(jsonEncode(manifest.toJson())).length;
+        expect(
+          bytes,
+          lessThanOrEqualTo(const RadocPackageLimits().maxManifestBytes),
+        );
+        // Reconstruct the prior writer's representation. This fixture must
+        // actually trip the unchanged bound without catalogue deduplication.
+        final previous = manifest.toJson();
+        for (final value in previous['scenes'] as List) {
+          final scene = value as Map;
+          scene['provenance'] = {
+            ...scene['provenance'] as Map,
+            'intent': {
+              ...(scene['provenance'] as Map)['intent'] as Map,
+              'voices': manifest.intent['voices'],
+            },
+          };
+        }
+        expect(
+          utf8.encode(jsonEncode(previous)).length,
+          greaterThan(const RadocPackageLimits().maxManifestBytes),
+        );
+        for (final (i, scene) in manifest.scenes.indexed) {
+          final saved = stored[i];
+          expect(scene.dependencies, saved.dependencies);
+          expect(scene.dependencyDigest, saved.dependencyDigest);
+          expect(scene.provenance['bindings'], saved.provenance['bindings']);
+          final expectedIntent = Map<String, dynamic>.from(saved.intent)
+            ..remove('voices');
+          expect(scene.provenance['intent'], expectedIntent);
+          for (final member in [scene.audioMember, scene.rawAudioMember!]) {
+            expect(
+              manifest.members.singleWhere((m) => m.name == member).sha256,
+              sha256.convert(_wav(sample: i + 1)).toString(),
+            );
+            if (i == 0 || i == 394) {
+              final audio = await package.materializeMember(book, member);
+              expect(await audio.readAsBytes(), _wav(sample: i + 1));
+            }
+          }
+        }
+      } finally {
+        await package.dispose();
+      }
+      // A distinct repository and unavailable model force package-only replay.
+      final offline = _ScopedOfflineEngine('fish_drama3_8bit');
+      final reopened = await fishController(
+        offline,
+        renderedSceneRepository: RenderedSceneRepository(
+          Directory('${temp.path}/offline-scenes'),
+        ),
+      );
+      await reopened.importFilePaths([output.path]);
+      expect(reopened.voices.map((v) => v.id), catalogue.map((v) => v.id));
+      await reopened.startPlayback();
+      expect(offline.requests, hasLength(1), reason: reopened.statusMessage);
+      var playing = offline.requests.single;
+      var count = 1;
+      while (true) {
+        final next = await playing.continuation!.next(
+          count - 1,
+          Completer<void>().future,
+        );
+        if (next == null) break;
+        expect(next.startWordIndex, playing.endWordIndex);
+        playing = next;
+        count++;
+      }
+      expect(count, 395);
+      expect(playing.endWordIndex, 6661);
+      expect(offline.modelCalls, 0);
+      expect(offline.exports, isEmpty);
+      await reopened.pausePlayback();
+    },
+    timeout: const Timeout(Duration(minutes: 2)),
+  );
+
+  for (final difference in ['catalogue', 'precision', 'raw-engine']) {
+    test(
+      'republishing retains the scene catalogue for $difference mismatch',
+      () async {
+        final input = await legacyFishFixture(defect: difference);
+        final package = RadocAudioPackage();
+        try {
+          final original = await package.open(input);
+          final captured = original.manifest.scenes.first;
+          final c = await fishController(
+            _ScopedOfflineEngine('fish_drama3_8bit'),
+          );
+          await c.importFilePaths([input.path]);
+          final output = await c.exportDocumentToPath(
+            '${temp.path}/different-$difference.radoc',
+            audioBook: true,
+          );
+          expect(output, isNotNull, reason: c.statusMessage);
+          final book = await package.open(output!);
+          expect(book.manifest.scenes.first.toJson(), captured.toJson());
+          expect(
+            (book.manifest.scenes[1].provenance['intent'] as Map).containsKey(
+              'voices',
+            ),
+            false,
+            reason: 'Identical, exactly scoped imported catalogues are shared.',
+          );
+        } finally {
+          await package.dispose();
+        }
+      },
+    );
+  }
+
+  test(
+    'cold plain-document Save Book discovers previously committed scenes',
+    () async {
+      SharedPreferences.setMockInitialValues({
+        'reader.ttsEngineId': 'fish_drama3_8bit',
+      });
+      final owner = _WholeSourceExportEngine();
+      final support = await getApplicationSupportDirectory();
+      final first = ReaderController(
+        ttsEngine: owner,
+        enablePlatformIntakeChannels: false,
+        renderedSceneRepository: RenderedSceneRepository(
+          Directory('${support.path}/rendered-scenes'),
+        ),
+      );
+      late ReaderDocument document;
+      try {
+        await first.initialize();
+        await loadFreshExportSource(first);
+        document = first.document;
+        expect(
+          await first.exportAudioToPath('${temp.path}/before-restart.wav'),
+          isNotNull,
+        );
+      } finally {
+        await first.shutdownPreparation();
+        first.dispose();
+      }
+      final unavailable = _ScopedOfflineEngine('fish_drama3_8bit');
+      final cold = ReaderController(
+        ttsEngine: unavailable,
+        deferInitialSynthesis: true,
+        enablePlatformIntakeChannels: false,
+      );
+      addTearDown(() async {
+        await cold.shutdownPreparation();
+        cold.dispose();
+      });
+      await cold.initialize();
+      await cold.loadDocument(document);
+      final output = await cold.exportDocumentToPath(
+        '${temp.path}/after-restart.radoc',
+        audioBook: true,
+      );
+      expect(output, isNotNull, reason: cold.statusMessage);
+      final package = RadocAudioPackage();
+      try {
+        final book = await package.open(output!);
+        expect(book.manifest.renderingComplete, true);
+        expect(book.manifest.scenes, hasLength(owner.exports.length));
+        expect(book.manifest.scenes, isNotEmpty);
+        expect(book.manifest.totalWords, document.wordCount);
+        expect(unavailable.modelCalls, 0);
+        expect(unavailable.exports, isEmpty);
+        expect(unavailable.requests, isEmpty);
+      } finally {
+        await package.dispose();
+      }
+    },
+  );
+
+  for (final outcome in ['success', 'failure', 'cancel', 'shutdown']) {
+    test(
+      'playback and export share publication admission across $outcome',
+      () async {
+        final store = _HeldPublicationRepository(
+          Directory('${temp.path}/overlap-scenes'),
+        );
+        final owner = _WholeSourceExportEngine()..holdAfterFirst = true;
+        final c = await fishController(
+          owner,
+          deferInitialSynthesis: false,
+          renderedSceneRepository: store,
+        );
+        await loadFreshExportSource(c);
+        await c.startPlayback();
+        final exporting = c.exportAudioToPath('${temp.path}/overlap.wav');
+        await owner.held.future;
+        final playback = owner.synthesisRequests.single;
+        final export = owner.wholeRequests.single;
+        final rendered = owner.exports.first;
+        final chunk = rendered.chunkPlan!.chunks.single;
+        final cancellation = Completer<void>();
+        TtsFinalizedAudioScene scene(bool Function() current) =>
+            TtsFinalizedAudioScene(
+              documentId: export.documentId!,
+              generationId: 'overlap',
+              sceneId: 'overlap',
+              text: chunk.speakText,
+              engineSpeakText: chunk.speakText,
+              startWordIndex: chunk.startWordIndex,
+              endWordIndex: chunk.endWordIndex,
+              startOffset: 0,
+              sceneTurns: const [],
+              preparedBindings: const [],
+              audioPath: rendered.outputPath,
+              duration: const Duration(milliseconds: 10),
+              engineId: 'fish_drama3_8bit',
+              engineVersion: 'test',
+              normalizationVersion: export.normalizationVersion!,
+              capabilityProfileId: 'test',
+              synthesisIdentity: 'test',
+              translationSignature: 'test',
+              synthesisRate: 1,
+              assignmentRevision: export.assignmentRevision,
+              cancelled: cancellation.future,
+              isCurrent: current,
+            );
+        final barrier = _PublicationBarrier();
+        addTearDown(() {
+          if (!barrier.release.isCompleted) barrier.release.complete();
+          if (!owner.release.isCompleted) owner.release.complete();
+        });
+        store.next = barrier;
+        try {
+          final initialCalls = store.calls;
+          final first = playback.onRenderedScene!(scene(playback.isCurrent!));
+          final firstResult = expectLater(
+            first,
+            outcome == 'failure' ? throwsStateError : completes,
+          );
+          await barrier.entered.future;
+          var secondDone = false;
+          final second = export.onRenderedScene!(scene(export.isCurrent!))
+              .whenComplete(() => secondDone = true);
+          final secondResult = expectLater(
+            second,
+            outcome == 'shutdown'
+                ? throwsA(isA<PlanningCancelled>())
+                : completes,
+          );
+          await Future<void>.delayed(Duration.zero);
+          expect(secondDone, false);
+          expect(store.calls, initialCalls + 1);
+          expect(store.peakCalls, 1);
+          Future<void>? shuttingDown;
+          var shutdownDone = false;
+          if (['cancel', 'shutdown'].contains(outcome)) {
+            if (outcome == 'shutdown') {
+              shuttingDown = c.shutdownPreparation().whenComplete(
+                () => shutdownDone = true,
+              );
+            } else {
+              await c.selectVoiceById('other');
+            }
+            cancellation.complete();
+            await secondResult.timeout(const Duration(seconds: 2));
+            expect(
+              secondDone,
+              true,
+              reason:
+                  'Cancelled waiting work detaches before active disk work drains.',
+            );
+            expect(store.calls, initialCalls + 1);
+            if (outcome == 'shutdown') expect(shutdownDone, false);
+          }
+          if (outcome == 'failure') {
+            barrier.release.completeError(
+              StateError('first producer write failed'),
+            );
+          } else {
+            barrier.release.complete();
+          }
+          await firstResult;
+          await secondResult;
+          await shuttingDown;
+          if (outcome == 'shutdown') expect(shutdownDone, true);
+          expect(store.peakCalls, 1);
+          expect(
+            store.calls,
+            initialCalls + (['cancel', 'shutdown'].contains(outcome) ? 1 : 2),
+          );
+          owner.release.complete();
+          expect(await exporting, outcome == 'shutdown' ? isNull : isNotNull);
+          await c.pausePlayback();
+        } finally {
+          if (!barrier.release.isCompleted) barrier.release.complete();
+          if (!owner.release.isCompleted) owner.release.complete();
+          await exporting;
+        }
+      },
+    );
+  }
+
+  test(
+    'fresh whole-source export persists every window into a reusable book',
+    () async {
+      final owner = _WholeSourceExportEngine();
+      final c = await fishController(owner, deferInitialSynthesis: false);
+      await loadFreshExportSource(c);
+      final words = c.document.wordCount;
+      final result = await c.exportAudioToPath('${temp.path}/fresh.wav');
+      expect(result, isNotNull, reason: c.statusMessage);
+      expect(
+        owner.exports.length,
+        greaterThan(3),
+        reason: 'Exercise later planning windows.',
+      );
+      expect(owner.requests, isEmpty, reason: 'Saving must not start speech.');
+      expect(owner.synthesisRequests, isEmpty);
+      final request = owner.wholeRequests.single;
+      expect(request.sourceWordOffset, 0);
+      final output = await c.exportDocumentToPath(
+        '${temp.path}/fresh.radoc',
+        audioBook: true,
+      );
+      expect(output, isNotNull, reason: c.statusMessage);
+      final package = RadocAudioPackage();
+      try {
+        final book = await package.open(output!);
+        expect(book.manifest.renderingComplete, true);
+        expect(book.manifest.scenes, hasLength(owner.exports.length));
+        var end = 0;
+        for (final (i, scene) in book.manifest.scenes.indexed) {
+          final rendered = owner.exports[i];
+          final chunk = rendered.chunkPlan!.chunks.single;
+          expect(scene.startWord, end);
+          expect(scene.endWord, chunk.endWordIndex);
+          end = scene.endWord;
+          expect(scene.rawAudioMember, isNotNull);
+          final raw = await package.materializeMember(
+            book,
+            scene.rawAudioMember!,
+          );
+          final finalAudio = await package.materializeMember(
+            book,
+            scene.audioMember,
+          );
+          expect(
+            await raw.readAsBytes(),
+            await File('${rendered.outputPath}.raw.wav').readAsBytes(),
+          );
+          expect(
+            await finalAudio.readAsBytes(),
+            await File(rendered.outputPath).readAsBytes(),
+          );
+          expect(
+            (scene.dependencies['raw'] as Map)['engineId'],
+            'fish_drama3_8bit',
+          );
+          expect(
+            scene.provenance['rawArtifactIdentity'],
+            startsWith('wav-sha256:'),
+          );
+          expect(scene.provenance['bindings'], isNotEmpty);
+          expect(
+            (scene.provenance['intent'] as Map)['engineId'],
+            'fish_drama3_8bit',
+          );
+          expect(
+            (scene.provenance['sceneTurns'] as List).single['startWord'],
+            scene.startWord,
+          );
+        }
+        expect(end, words);
+      } finally {
+        await package.dispose();
+      }
+      final renderedCount = owner.exports.length;
+      expect(
+        request.assignmentRevision,
+        c.voiceAssignmentState.requestedRevision,
+      );
+      expect(
+        request.isCurrent!(),
+        false,
+        reason: 'A returned export has retired.',
+      );
+      await c.importFilePaths([output.path]);
+      await c.startPlayback();
+      var playing = owner.requests.last;
+      var sequence = 0;
+      while (true) {
+        final next = await playing.continuation!.next(
+          sequence++,
+          Completer<void>().future,
+        );
+        if (next == null) break;
+        playing = next;
+      }
+      expect(
+        owner.exports,
+        hasLength(renderedCount),
+        reason: 'Reopen reuses every export scene.',
+      );
+      await c.pausePlayback();
+      await c.assignVoiceToCast('cast_character_mara', 'other');
+      await c.startPlayback();
+      playing = owner.requests.last;
+      sequence = 0;
+      while (true) {
+        final next = await playing.continuation!.next(
+          sequence++,
+          Completer<void>().future,
+        );
+        if (next == null) break;
+        playing = next;
+      }
+      final regenerated = owner.exports.skip(renderedCount).toList();
+      expect(
+        regenerated.map(
+          (r) => (
+            r.chunkPlan!.chunks.single.startWordIndex,
+            r.chunkPlan!.chunks.single.endWordIndex,
+          ),
+        ),
+        [(8, 15), (26, 30)],
+        reason: 'Fresh export metadata retains exact Character ownership.',
+      );
+      expect(
+        regenerated.every((r) => r.chunkPlan!.chunks.single.voiceId == 'other'),
+        true,
+      );
+      await c.pausePlayback();
+      final edited = await c.exportDocumentToPath(
+        '${temp.path}/fresh-edited.radoc',
+        audioBook: true,
+      );
+      expect(edited, isNotNull, reason: c.statusMessage);
+      final afterEdit = owner.exports.length;
+      await c.importFilePaths([edited!.path]);
+      await c.startPlayback();
+      playing = owner.requests.last;
+      sequence = 0;
+      while (true) {
+        final next = await playing.continuation!.next(
+          sequence++,
+          Completer<void>().future,
+        );
+        if (next == null) break;
+        playing = next;
+      }
+      expect(
+        owner.exports,
+        hasLength(afterEdit),
+        reason: 'Edited export scenes also survive save/reopen.',
+      );
+      await c.pausePlayback();
+    },
+  );
+
+  test(
+    'whole-source export from a later range keeps complete canonical coordinates',
+    () async {
+      final failures = <Object?>[];
+      PlaybackInstrumentationService.instance.observer = (m) {
+        if (m.metric == 'audioExportFailed') failures.add(m.value);
+      };
+      addTearDown(
+        () => PlaybackInstrumentationService.instance.observer = null,
+      );
+      final owner = _WholeSourceExportEngine();
+      final source = _DirectedRangeSource(
+        ReaderDocumentRepository('${temp.path}/ranges'),
+      );
+      final c = await fishController(
+        owner,
+        preparationSupervisor: source,
+        deferInitialSynthesis: false,
+      );
+      await c.importPastedText('Stay close. Wait here.');
+      await c.startPlayback();
+      final first = owner.synthesisRequests.single;
+      final next = await first.continuation!.next(
+        first.rangeSequence,
+        Completer<void>().future,
+      );
+      next!.onRangeActive!();
+      await next.continuation!.next(
+        next.rangeSequence,
+        Completer<void>().future,
+      );
+      await _until(() => c.hasCompleteDocumentSnapshot);
+      expect(c.document.speakableText, 'Wait here.');
+      await c.pausePlayback();
+      expect(
+        await c.exportAudioToPath('${temp.path}/all-ranges.wav'),
+        isNotNull,
+        reason: '${c.statusMessage} $failures',
+      );
+      expect(owner.wholeRequests.single.text, contains('Stay close.'));
+      expect(owner.wholeRequests.single.text, contains('Wait here.'));
+      expect(owner.wholeRequests.single.sourceWordOffset, 0);
+      final reader = RenderedSceneRepository(
+        Directory('${temp.path}/fish-scenes'),
+      );
+      try {
+        final scenes = await reader.scenesForSource(
+          source.request.effectiveSourceRevision,
+        );
+        expect(scenes.first.startWordIndex, 0);
+        expect(scenes.last.endWordIndex, 4);
+        final directions = scenes
+            .expand(
+              (s) => (s.intent['canonicalDirections'] as List).cast<Map>(),
+            )
+            .toList();
+        expect(
+          directions.map((d) => (d['startWord'], d['endWord'], d['delivery'])),
+          [(0, 2, 'whispered'), (2, 4, 'shouted')],
+        );
+      } finally {
+        await reader.dispose();
+      }
+    },
+  );
+
+  for (final fail in [false, true]) {
+    test(
+      'export scene count stays active until final publication ${fail ? 'fails' : 'succeeds'}',
+      () async {
+        final publication = Completer<void>();
+        final owner = _WholeSourceExportEngine()
+          ..finalCommitWait = publication.future;
+        final c = await fishController(owner, deferInitialSynthesis: false);
+        await loadFreshExportSource(c);
+        final exporting = c.exportAudioToPath('${temp.path}/held-commit.wav');
+        await owner.finalCommitEntered.future;
+        final active = c.feedbackOperations.singleWhere(
+          (op) => op.scope == 'Save audio',
+        );
+        expect(active.state, OperationState.running);
+        expect(active.completedUnits, owner.exports.length);
+        expect(active.completedUnits, greaterThan(3));
+        expect(active.unit, 'scenes');
+        expect(active.totalUnits, isNull);
+        expect(active.fraction, isNull);
+        expect(c.isExporting, true);
+        if (fail) {
+          publication.completeError(StateError('final WAV/JSON commit failed'));
+        } else {
+          publication.complete();
+        }
+        expect(await exporting, fail ? isNull : isNotNull);
+        final terminal = c.feedbackOperations.singleWhere(
+          (op) => op.key == active.key,
+        );
+        expect(
+          terminal.state,
+          fail ? OperationState.failed : OperationState.succeeded,
+        );
+        expect(terminal.completedUnits, active.completedUnits);
+        expect(terminal.totalUnits, fail ? isNull : active.completedUnits);
+      },
+    );
+  }
+
+  test(
+    'retired export cancellation cannot settle a successor progress generation',
+    () async {
+      final owner = _WholeSourceExportEngine();
+      final c = await fishController(owner, deferInitialSynthesis: false);
+      await loadFreshExportSource(c);
+      expect(await c.exportAudioToPath('${temp.path}/first.wav'), isNotNull);
+      final old = c.feedbackOperations.singleWhere(
+        (op) => op.scope == 'Save audio',
+      );
+      final oldCancellation = owner.cancelled;
+      owner.cancelled = Completer<void>();
+      final commit = Completer<void>();
+      owner.finalCommitWait = commit.future;
+      final exporting = c.exportAudioToPath('${temp.path}/second.wav');
+      await owner.finalCommitEntered.future;
+      final active = c.feedbackOperations.singleWhere(
+        (op) => op.scope == 'Save audio' && !op.state.isTerminal,
+      );
+      expect(active.key, isNot(old.key));
+      oldCancellation.complete();
+      await Future<void>.delayed(Duration.zero);
+      expect(
+        c.feedbackOperations.singleWhere((op) => op.key == active.key).state,
+        OperationState.running,
+      );
+      commit.complete();
+      expect(await exporting, isNotNull);
+      expect(
+        c.feedbackOperations.singleWhere((op) => op.key == active.key).state,
+        OperationState.succeeded,
+      );
+    },
+  );
+
+  test(
+    'same-document export cancellation keeps saved scene count when late assembly fails',
+    () async {
+      final publication = Completer<void>();
+      final owner = _WholeSourceExportEngine()
+        ..finalCommitWait = publication.future;
+      final c = await fishController(owner, deferInitialSynthesis: false);
+      await loadFreshExportSource(c);
+      final exporting = c.exportAudioToPath(
+        '${temp.path}/cancelled-commit.wav',
+      );
+      await owner.finalCommitEntered.future;
+      final active = c.feedbackOperations.singleWhere(
+        (op) => op.scope == 'Save audio',
+      );
+      owner.cancelled.complete();
+      await Future<void>.delayed(Duration.zero);
+      expect(
+        c.feedbackOperations.singleWhere((op) => op.key == active.key).state,
+        OperationState.cancelled,
+      );
+      await c.selectVoiceById('other');
+      c.showStatusMessage('New voice owns status');
+      publication.completeError(StateError('obsolete final commit failed'));
+      expect(await exporting, isNull);
+      final terminal = c.feedbackOperations.singleWhere(
+        (op) => op.key == active.key,
+      );
+      expect(terminal.state, OperationState.cancelled);
+      expect(terminal.completedUnits, active.completedUnits);
+      expect(terminal.totalUnits, isNull);
+      expect(c.statusMessage, 'New voice owns status');
+    },
+  );
+
+  for (final terminal in ['document', 'voice', 'rate', 'cancel']) {
+    test(
+      'whole-source export rejects late $terminal scene and keeps committed prefix',
+      () async {
+        final owner = _WholeSourceExportEngine()..holdAfterFirst = true;
+        final c = await fishController(owner, deferInitialSynthesis: false);
+        await loadFreshExportSource(c);
+        final source = c.document.normalizedImportResult.sourceFingerprint;
+        final exporting = c.exportAudioToPath('${temp.path}/obsolete.wav');
+        await owner.held.future;
+        expect(owner.exports, hasLength(1));
+        final progress = c.feedbackOperations.singleWhere(
+          (op) => op.scope == 'Save audio',
+        );
+        expect(progress.state, OperationState.running);
+        expect(progress.completedUnits, 1);
+        expect(progress.totalUnits, isNull);
+        switch (terminal) {
+          case 'document':
+            await c.loadDocument(
+              DocumentImportService().importPastedText('New owner.'),
+            );
+          case 'voice':
+            await c.selectVoiceById('other');
+          case 'rate':
+            await c.setVoiceSpeed(1.2);
+          case 'cancel':
+            owner.cancelled.complete();
+        }
+        c.showStatusMessage('New owner status');
+        owner.release.complete();
+        final capturedWavContinues = ['voice', 'rate'].contains(terminal);
+        expect(await exporting, capturedWavContinues ? isNotNull : isNull);
+        expect(
+          c.feedbackOperations
+              .where((op) => op.scope == 'Save audio')
+              .last
+              .state,
+          capturedWavContinues
+              ? OperationState.succeeded
+              : OperationState.cancelled,
+        );
+        expect(
+          c.feedbackOperations
+              .where((op) => op.scope == 'Save audio')
+              .last
+              .completedUnits,
+          1,
+          reason: 'Skipped old-intent callbacks are not persisted scenes.',
+        );
+        if (terminal != 'cancel') expect(c.statusMessage, 'New owner status');
+        expect(owner.requests, isEmpty);
+        // The fake deliberately delivers an obsolete callback. The controller
+        // writer and repository must independently reject it before admission.
+        final reader = RenderedSceneRepository(
+          Directory('${temp.path}/fish-scenes'),
+        );
+        try {
+          final scenes = await reader.scenesForSource(source);
+          expect(scenes, hasLength(1));
+          expect(scenes.single.startWordIndex, 0);
+        } finally {
+          await reader.dispose();
+        }
+      },
+    );
+  }
+
+  test(
+    'legacy Fish character edit regenerates only Mara and survives save/reopen',
+    () async {
+      final owner = _ScopedOfflineEngine('fish_drama3_8bit')
+        ..renderAvailable = true;
+      final c = await fishController(
+        owner,
+        engineFactory: (id, _) =>
+            _ScopedOfflineEngine(id)..renderAvailable = true,
+      );
+      await c.importFilePaths([(await legacyFishFixture()).path]);
+      final compacted = await c.exportDocumentToPath(
+        '${temp.path}/compacted-fish.radoc',
+        audioBook: true,
+      );
+      expect(compacted, isNotNull, reason: c.statusMessage);
+      await c.importFilePaths([compacted!.path]);
+      await c.assignVoiceToCast('cast_character_mara', 'library_fishadrian');
+      await c.startPlayback();
+      expect(owner.requests, hasLength(1), reason: c.statusMessage);
+      var request = owner.requests.single;
+      var sequence = 0;
+      final admitted = <int>[];
+      while (true) {
+        admitted.add(request.startWordIndex);
+        final next = await request.continuation!.next(
+          sequence++,
+          Completer<void>().future,
+        );
+        if (next == null) break;
+        request = next;
+      }
+      expect(admitted, [0, 8, 15, 17, 24, 26, 30]);
+      expect(
+        owner.exports.map(
+          (r) => (
+            r.chunkPlan!.chunks.single.startWordIndex,
+            r.chunkPlan!.chunks.single.endWordIndex,
+          ),
+        ),
+        [(8, 15), (26, 30)],
+      );
+      expect(
+        owner.exports.every(
+          (r) => r.chunkPlan!.chunks.single.voiceId == 'library_fishadrian',
+        ),
+        true,
+      );
+      await c.pausePlayback();
+      final output = await c.exportDocumentToPath(
+        '${temp.path}/edited-fish.radoc',
+        audioBook: true,
+      );
+      expect(output, isNotNull, reason: c.statusMessage);
+      final package = RadocAudioPackage();
+      try {
+        final book = await package.open(output!);
+        expect(
+          (book.manifest.intent['characterSelections']
+              as Map)['cast_character_mara'],
+          'library_fishadrian',
+        );
+        expect(book.manifest.scenes, hasLength(7));
+        final original =
+            jsonDecode(
+                  await File(
+                    'test/fixtures/s11_fish_legacy/manifest.json',
+                  ).readAsString(),
+                )
+                as Map;
+        for (final (i, scene) in book.manifest.scenes.indexed) {
+          final file = await package.materializeMember(book, scene.audioMember);
+          final raw = await package.materializeMember(
+            book,
+            scene.rawAudioMember!,
+          );
+          final rawBytes = _boundaryWav(
+            sample: [1, 5].contains(i) ? 777 : 1000 + i,
+          );
+          expect(await raw.readAsBytes(), rawBytes);
+          if ([0, 3, 4].contains(i)) {
+            expect(await file.readAsBytes(), rawBytes);
+          } else {
+            expect(
+              (await file.length()),
+              lessThan(rawBytes.length),
+              reason:
+                  'Native boundary policy must trim the fixture\'s long onset.',
+            );
+          }
+          if ([2, 6].contains(i)) {
+            final historical = (original['scenes'] as List)[i] as Map;
+            expect(
+              scene.dependencies['raw'],
+              (historical['dependencies'] as Map)['raw'],
+            );
+            expect(
+              scene.provenance['bindings'],
+              (historical['provenance'] as Map)['bindings'],
+            );
+            expect(
+              scene.provenance['intent'],
+              (historical['provenance'] as Map)['intent'],
+            );
+            expect(
+              scene.provenance['predecessorRawArtifactIdentity'],
+              'wav-sha256:${sha256.convert(_boundaryWav(sample: 777))}',
+            );
+          }
+        }
+      } finally {
+        await package.dispose();
+      }
+      await c.importFilePaths([output.path]);
+      await c.startPlayback();
+      request = owner.requests.last;
+      sequence = 0;
+      while (true) {
+        final next = await request.continuation!.next(
+          sequence++,
+          Completer<void>().future,
+        );
+        if (next == null) break;
+        request = next;
+      }
+      expect(
+        owner.exports,
+        hasLength(2),
+        reason: 'Saved edited scenes must be reusable.',
+      );
+      final store = RenderedSceneRepository(
+        Directory('${temp.path}/fish-scenes'),
+      );
+      try {
+        final scenes = await store.scenesForSource('synthetic-s3-dialogue');
+        expect(
+          scenes.map((s) => s.startWordIndex),
+          [8, 15, 26, 30],
+          reason:
+              'Only two syntheses and their two immediate boundary dependents are republished.',
+        );
+        for (final scene in scenes.where(
+          (s) => [15, 30].contains(s.startWordIndex),
+        )) {
+          expect(
+            scene.intent['voices'],
+            hasLength(3),
+            reason:
+                'Boundary-only repair retains the original compacted catalogue.',
+          );
+        }
+        expect(
+          Directory('${temp.path}/fish-scenes/scenes')
+              .listSync(recursive: true)
+              .whereType<File>()
+              .where((f) => f.path.endsWith('.json')),
+          hasLength(4),
+          reason: 'Reopen must not publish another derivative or synthesis.',
+        );
+      } finally {
+        await store.dispose();
+      }
+      // Moving a compacted 8-bit scene under a new 4-bit root must preserve
+      // its original catalogue, exact bindings and dependency scope.
+      await c.setTtsEngineId('fish_drama3_4bit');
+      final moved = await c.exportDocumentToPath(
+        '${temp.path}/moved-fish.radoc',
+        audioBook: true,
+      );
+      expect(moved, isNotNull, reason: c.statusMessage);
+      final movedPackage = RadocAudioPackage();
+      try {
+        final before = await movedPackage.open(output);
+        final after = await movedPackage.open(moved!);
+        expect(after.manifest.intent['engineId'], 'fish_drama3_4bit');
+        expect(after.manifest.intent['voices'], hasLength(5));
+        for (final (i, scene) in after.manifest.scenes.indexed) {
+          final prior = before.manifest.scenes[i];
+          expect(scene.dependencies, prior.dependencies);
+          expect(scene.provenance['bindings'], prior.provenance['bindings']);
+          final captured = scene.provenance['intent'] as Map;
+          expect(captured['engineId'], 'fish_drama3_8bit');
+          expect(captured['voices'], hasLength([1, 5].contains(i) ? 5 : 3));
+        }
+        await c.importFilePaths([moved.path]);
+        final repeated = await c.exportDocumentToPath(
+          '${temp.path}/moved-again.radoc',
+          audioBook: true,
+        );
+        expect(repeated, isNotNull, reason: c.statusMessage);
+        final roundTrip = await movedPackage.open(repeated!);
+        expect(
+          roundTrip.manifest.scenes.map((s) => s.toJson()),
+          after.manifest.scenes.map((s) => s.toJson()),
+          reason: 'A subsequent save must not borrow the new root catalogue.',
+        );
+      } finally {
+        await movedPackage.dispose();
+      }
+    },
+  );
+
+  for (final defect in ['binding', 'precision', 'attribution']) {
+    test(
+      'legacy Fish refuses missing or mismatched $defect ownership evidence',
+      () async {
+        final owner = _ScopedOfflineEngine('fish_drama3_8bit')
+          ..renderAvailable = true;
+        final c = await fishController(owner);
+        await c.importFilePaths([
+          (await legacyFishFixture(defect: defect)).path,
+        ]);
+        await c.startPlayback();
+        expect(c.statusMessage, contains('lacks unambiguous voice ownership'));
+        expect(owner.exports, isEmpty);
+        expect(owner.requests, isEmpty);
+      },
+    );
+  }
+
+  for (final preference in ['kokoro', 'fish_drama3_4bit']) {
+    test(
+      'later legacy Fish demand hands $preference to published Fish8 with one Play',
+      () async {
+        final old = _ScopedOfflineEngine(preference)..renderAvailable = true;
+        final replacement = _ScopedOfflineEngine('fish_drama3_8bit')
+          ..renderAvailable = true;
+        final c = await fishController(
+          old,
+          preference: preference,
+          engineFactory: (id, _) {
+            expect(id, 'fish_drama3_8bit');
+            return replacement;
+          },
+        );
+        await c.importFilePaths([(await legacyFishFixture()).path]);
+        await c.assignVoiceToCast('cast_character_mara', 'library_fishadrian');
+        await c.startPlayback();
+        expect(old.requests.single.startWordIndex, 0);
+        expect(old.modelCalls, 0);
+        final consumerExited = Completer<void>();
+        final consumptionRequested = Completer<void>();
+        final consumed = Completer<void>();
+        old.consumerDrain = consumerExited.future;
+        // Real engine shutdown joins its owned continuation. A handoff that
+        // awaits replacement from inside that same continuation would deadlock.
+        final demand = old.requests.single.continuation!
+            .demandNext(
+              0,
+              Completer<void>().future,
+              awaitConsumed: () {
+                consumptionRequested.complete();
+                return consumed.future;
+              },
+            )
+            .whenComplete(() {
+              if (!consumerExited.isCompleted) consumerExited.complete();
+            });
+        try {
+          await consumptionRequested.future;
+          expect(replacement.modelCalls, 0);
+          expect(
+            old.requests.single.isCurrent!(),
+            isTrue,
+            reason: 'Prefetch must not retire an inaudible prefix.',
+          );
+          consumed.complete();
+          await expectLater(
+            demand.timeout(const Duration(seconds: 3)),
+            throwsA(isA<PlanningCancelled>()),
+          );
+        } finally {
+          if (!consumerExited.isCompleted) consumerExited.complete();
+        }
+        await _until(() => replacement.requests.isNotEmpty);
+        expect(replacement.requests.single.startWordIndex, 8);
+        var request = replacement.requests.single;
+        var sequence = 0;
+        while (true) {
+          final next = await request.continuation!.next(
+            sequence++,
+            Completer<void>().future,
+          );
+          if (next == null) break;
+          request = next;
+        }
+        expect(old.exports, isEmpty);
+        expect(
+          replacement.exports.map(
+            (r) => r.chunkPlan!.chunks.single.startWordIndex,
+          ),
+          [8, 26],
+        );
+        expect(
+          replacement.exports.first.predecessorRawArtifactIdentity,
+          'wav-sha256:${sha256.convert(_boundaryWav(sample: 1000))}',
+        );
+        expect(
+          replacement.exports.first.predecessorTrailingSilence,
+          const Duration(milliseconds: 100),
+        );
+        expect(c.runningTtsEngineId, 'fish_drama3_8bit');
+        await c.pausePlayback();
+        final output = await c.exportDocumentToPath(
+          '${temp.path}/handoff-edited.radoc',
+          audioBook: true,
+        );
+        expect(output, isNotNull, reason: c.statusMessage);
+        await c.importFilePaths([output!.path]);
+        await c.startPlayback();
+        request = replacement.requests.last;
+        sequence = 0;
+        while (true) {
+          final next = await request.continuation!.next(
+            sequence++,
+            Completer<void>().future,
+          );
+          if (next == null) break;
+          request = next;
+        }
+        expect(
+          replacement.exports,
+          hasLength(2),
+          reason: 'Handoff output must survive saving and reopening.',
+        );
+      },
+    );
+  }
+
+  test(
+    'explicit engine change after book open is not replaced by published engine',
+    () async {
+      final old = _ScopedOfflineEngine('kokoro');
+      final explicit = _ScopedOfflineEngine('fish_drama3_4bit')
+        ..renderAvailable = true;
+      final selected = <String>[];
+      final c = await fishController(
+        old,
+        preference: 'kokoro',
+        engineFactory: (id, _) {
+          selected.add(id);
+          return explicit;
+        },
+      );
+      await c.importFilePaths([(await legacyFishFixture()).path]);
+      await c.assignVoiceToCast('cast_character_mara', 'library_fishadrian');
+      await c.setTtsEngineId('fish_drama3_4bit');
+      await c.startPlayback();
+      expect(selected, ['fish_drama3_4bit']);
+      expect(
+        explicit.exports.single.chunkPlan!.chunks.single.startWordIndex,
+        0,
+      );
+      expect(c.runningTtsEngineId, 'fish_drama3_4bit');
+    },
+  );
+
+  for (final terminal in ['pause', 'document', 'selection']) {
+    test(
+      'prefetched handoff rejects $terminal before prefix consumption',
+      () async {
+        final old = _ScopedOfflineEngine('kokoro');
+        final target = _ScopedOfflineEngine('fish_drama3_8bit')
+          ..renderAvailable = true;
+        final explicit = _ScopedOfflineEngine('fish_drama3_4bit')
+          ..renderAvailable = true;
+        final selections = <String>[];
+        final c = await fishController(
+          old,
+          preference: 'kokoro',
+          engineFactory: (id, _) {
+            selections.add(id);
+            return id == 'fish_drama3_8bit' ? target : explicit;
+          },
+        );
+        await c.importFilePaths([(await legacyFishFixture()).path]);
+        await c.assignVoiceToCast('cast_character_mara', 'library_fishadrian');
+        await c.startPlayback();
+        final entered = Completer<void>();
+        final consumed = Completer<void>();
+        final cancelled = Completer<void>();
+        final demand = old.requests.single.continuation!.demandNext(
+          0,
+          cancelled.future,
+          awaitConsumed: () {
+            entered.complete();
+            return consumed.future;
+          },
+        );
+        final failure = expectLater(demand, throwsA(isA<PlanningCancelled>()));
+        await entered.future;
+        expect(selections, isEmpty);
+        switch (terminal) {
+          case 'pause':
+            await c.pausePlayback();
+          case 'document':
+            await c.importPastedText('Replacement document.');
+          case 'selection':
+            await c.setTtsEngineId('fish_drama3_4bit');
+        }
+        if (terminal == 'pause') {
+          cancelled.complete();
+        } else {
+          consumed.complete();
+        }
+        await failure;
+        expect(
+          selections,
+          terminal == 'selection' ? ['fish_drama3_4bit'] : isEmpty,
+        );
+        expect(target.requests, isEmpty);
+        expect(target.exports, isEmpty);
+        expect(explicit.requests, isEmpty);
+        expect(explicit.exports, isEmpty);
+      },
+    );
+
+    test(
+      'later published-engine handoff rejects $terminal during preparation',
+      () async {
+        final old = _ScopedOfflineEngine('kokoro');
+        final held = _HeldScopedBookEngine()..renderAvailable = true;
+        final last = _ScopedOfflineEngine('fish_drama3_4bit')
+          ..renderAvailable = true;
+        final c = await fishController(
+          old,
+          preference: 'kokoro',
+          engineFactory: (id, _) => id == 'fish_drama3_8bit' ? held : last,
+        );
+        await c.importFilePaths([(await legacyFishFixture()).path]);
+        await c.assignVoiceToCast('cast_character_mara', 'library_fishadrian');
+        await c.startPlayback();
+        await expectLater(
+          old.requests.single.continuation!.demandNext(
+            0,
+            Completer<void>().future,
+            awaitConsumed: () async {},
+          ),
+          throwsA(isA<PlanningCancelled>()),
+        );
+        await held.started.future;
+        final cancellation = switch (terminal) {
+          'pause' => c.pausePlayback(),
+          'document' => c.importPastedText('Replacement document.'),
+          _ => c.setTtsEngineId('fish_drama3_4bit'),
+        };
+        held.release.complete();
+        await cancellation;
+        await _until(() => !c.isInitializing && !c.hasPendingPlaybackIntent);
+        expect(held.exports, isEmpty);
+        expect(held.requests, isEmpty);
+        expect(last.exports, isEmpty);
+        expect(last.requests, isEmpty);
+      },
+    );
+  }
+
+  test(
+    'legacy two-argument consumer cannot hand off without playback evidence',
+    () async {
+      final old = _ScopedOfflineEngine('kokoro');
+      final target = _ScopedOfflineEngine('fish_drama3_8bit')
+        ..renderAvailable = true;
+      final c = await fishController(
+        old,
+        preference: 'kokoro',
+        engineFactory: (_, _) => target,
+      );
+      await c.importFilePaths([(await legacyFishFixture()).path]);
+      await c.assignVoiceToCast('cast_character_mara', 'library_fishadrian');
+      await c.startPlayback();
+      await expectLater(
+        old.requests.single.continuation!.next(0, Completer<void>().future),
+        throwsA(
+          isA<StateError>().having(
+            (e) => e.message,
+            'message',
+            contains('confirm consumed audio'),
+          ),
+        ),
+      );
+      expect(old.requests.single.isCurrent!(), true);
+      expect(target.exports, isEmpty);
+      expect(target.modelCalls, 0);
+    },
+  );
+}
+
+Future<void> _until(bool Function() ready) async {
+  final deadline = DateTime.now().add(const Duration(seconds: 5));
+  while (!ready()) {
+    if (DateTime.now().isAfter(deadline)) {
+      throw StateError('Timed out awaiting book owner');
+    }
+    await Future<void>.delayed(const Duration(milliseconds: 5));
+  }
 }
 
 class _OfflineEngine
     implements TtsEngine, RenderedAudioPlaybackCapable, AudioExportCapable {
   int modelCalls = 0;
   bool renderAvailable = false;
+  bool fishPublication = false;
+  String fishEngineId = 'fish_drama3_8bit';
   Completer<void>? packetGate;
   bool failAfterPacket = false;
   final exports = <TtsExportRequest>[];
@@ -946,7 +2377,13 @@ class _OfflineEngine
 
   @override
   Future<List<VoiceProfile>> loadVoices() async => [
-    for (final id in ['published', 'other'])
+    for (final id in [
+      'published',
+      'other',
+      'library_fishadrian',
+      'library_fishfreya',
+      'library_fishhannah',
+    ])
       VoiceProfile(id: id, label: id, locale: 'en-US', rawValue: const {}),
   ];
   @override
@@ -959,7 +2396,38 @@ class _OfflineEngine
   Future<TtsExportResult> exportAudio(TtsExportRequest request) async {
     exports.add(request);
     final chunk = request.chunkPlan!.chunks.single;
-    await File(request.outputPath).writeAsBytes(_wav());
+    final binding = PreparedVoiceBinding(
+      voiceId: chunk.voiceId,
+      voiceDigest: 'fixture-${chunk.voiceId}',
+      modelDigest: 'fixture-$fishEngineId-model',
+      engineVersion: _fishFixtureEngineVersion,
+      pronunciationProfileId: 'en-us-core',
+      bindingRevision: 1,
+      documentId: request.documentId!,
+    );
+    File? rawFile;
+    String? rawIdentity;
+    Duration duration = const Duration(milliseconds: 10);
+    if (fishPublication) {
+      final bytes = _boundaryWav(sample: 777);
+      rawFile = await File('${request.outputPath}.raw.wav').writeAsBytes(bytes);
+      rawIdentity = 'wav-sha256:${sha256.convert(bytes)}';
+      final correction = const SynthesisBoundaryPolicy().correctWavFileSync(
+        chunkId: chunk.chunkId,
+        wavFilePath: rawFile.path,
+        boundaryClass: chunk.boundaryClass,
+        isInitialChunk: request.predecessorRawArtifactIdentity == null,
+        isResumedChunk: false,
+        previousArtifactIdentity: request.predecessorRawArtifactIdentity,
+        previousTrailingSilence: request.predecessorTrailingSilence,
+      );
+      duration = correction.duration;
+      await File(request.outputPath).writeAsBytes(
+        await File(correction.audioPath ?? rawFile.path).readAsBytes(),
+      );
+    } else {
+      await File(request.outputPath).writeAsBytes(_wav());
+    }
     Completer<TtsRenderedSceneCompletion>? packetCompletion;
     if (packetGate != null) {
       packetCompletion = Completer<TtsRenderedSceneCompletion>();
@@ -997,7 +2465,7 @@ class _OfflineEngine
         throw error;
       }
     }
-    await request.onRenderedScene!(
+    await request.onRenderedScene?.call(
       TtsFinalizedAudioScene(
         documentId: request.documentId!,
         generationId: 'export-test',
@@ -1007,20 +2475,43 @@ class _OfflineEngine
         startWordIndex: request.sourceWordOffset + chunk.startWordIndex,
         endWordIndex: request.sourceWordOffset + chunk.endWordIndex,
         startOffset: 0,
-        sceneTurns: [],
-        preparedBindings: [],
+        sceneTurns: fishPublication
+            ? [
+                NativeSpeechTurn(
+                  voiceId: chunk.voiceId,
+                  text: chunk.speakText,
+                  segmentIds: chunk.segmentIds,
+                  startWord: request.sourceWordOffset + chunk.startWordIndex,
+                  endWord: request.sourceWordOffset + chunk.endWordIndex,
+                  bindingFingerprint: binding.fingerprint,
+                  bindingRevision: 1,
+                  castId: chunk.castId,
+                ),
+              ]
+            : [],
+        preparedBindings: fishPublication ? [binding] : [],
         audioPath: request.outputPath,
-        duration: const Duration(milliseconds: 10),
-        engineId: 'kokoro',
-        engineVersion: '2',
+        duration: duration,
+        engineId: fishPublication ? fishEngineId : 'kokoro',
+        engineVersion: fishPublication ? _fishFixtureEngineVersion : '2',
         normalizationVersion: request.normalizationVersion!,
-        capabilityProfileId: 'test',
+        capabilityProfileId: fishPublication
+            ? '$fishEngineId:macos:v1'
+            : 'test',
         synthesisIdentity: 'test',
         translationSignature: 'test',
         synthesisRate: 1,
         assignmentRevision: request.assignmentRevision,
         cancelled: request.cancelled!,
         isCurrent: request.isCurrent!,
+        rawAudioPath: rawFile?.path,
+        rawArtifactIdentity: rawIdentity,
+        predecessorRawArtifactIdentity: request.predecessorRawArtifactIdentity,
+        boundaryPolicyVersion: fishPublication
+            ? SynthesisBoundaryPolicy.version
+            : null,
+        boundaryClass: fishPublication ? chunk.boundaryClass.name : null,
+        trailingSilenceMicros: fishPublication ? 100000 : null,
       ),
     );
     packetCompletion?.complete(
@@ -1072,8 +2563,19 @@ class _OfflineEngine
   }
 }
 
-Uint8List _wav() {
-  final b = ByteData(44 + 480);
+const _fishFixtureEngineVersion =
+    'mlx-audio-0.6.3-mlx-0.32.4-complete-v3-q0-native-cast-v1';
+
+Uint8List _boundaryWav({required int sample}) =>
+    _wav(sample: sample, frames: 12000, leading: 7200, trailing: 2400);
+
+Uint8List _wav({
+  int sample = 0,
+  int frames = 240,
+  int leading = 0,
+  int trailing = 0,
+}) {
+  final b = ByteData(44 + frames * 2);
   void tag(int i, String s) {
     for (var k = 0; k < s.length; k++) {
       b.setUint8(i + k, s.codeUnitAt(k));
@@ -1092,7 +2594,15 @@ Uint8List _wav() {
   b.setUint16(32, 2, Endian.little);
   b.setUint16(34, 16, Endian.little);
   tag(36, 'data');
-  b.setUint32(40, 480, Endian.little);
+  b.setUint32(40, frames * 2, Endian.little);
+  for (var i = 44; i < b.lengthInBytes; i += 2) {
+    final frame = (i - 44) ~/ 2;
+    b.setInt16(
+      i,
+      frame >= leading && frame < frames - trailing ? sample : 0,
+      Endian.little,
+    );
+  }
   return b.buffer.asUint8List();
 }
 
@@ -1104,5 +2614,354 @@ class _HeldBookEngine extends _OfflineEngine {
     started.complete();
     await release.future;
     await super.initialize();
+  }
+}
+
+class _ScopedOfflineEngine extends _OfflineEngine
+    implements TtsEngineIdentityCapable {
+  _ScopedOfflineEngine(String id) {
+    fishEngineId = id;
+    fishPublication = id.startsWith('fish_drama3');
+  }
+  @override
+  String get engineId => fishEngineId;
+  @override
+  String get engineVersion => fishPublication ? _fishFixtureEngineVersion : '2';
+  Future<void>? consumerDrain;
+  @override
+  Future<void> stop() async => await consumerDrain;
+}
+
+class _HeldScopedBookEngine extends _ScopedOfflineEngine {
+  _HeldScopedBookEngine() : super('fish_drama3_8bit');
+  final started = Completer<void>();
+  final release = Completer<void>();
+  @override
+  Future<void> initialize() async {
+    started.complete();
+    await release.future;
+    await super.initialize();
+  }
+}
+
+// Controller/repository plumbing evidence, not acoustic or native inference
+// evidence. Reuse the existing per-scene WAV fixture and real bounded planner.
+class _WholeSourceExportEngine extends _ScopedOfflineEngine {
+  _WholeSourceExportEngine() : super('fish_drama3_8bit') {
+    renderAvailable = true;
+  }
+  final wholeRequests = <TtsExportRequest>[];
+  final synthesisRequests = <TtsSpeakRequest>[];
+  var cancelled = Completer<void>();
+  Future<void>? finalCommitWait;
+  final finalCommitEntered = Completer<void>();
+  final held = Completer<void>();
+  final release = Completer<void>();
+  bool holdAfterFirst = false;
+  @override
+  Future<void> speak(TtsSpeakRequest request) async {
+    synthesisRequests.add(request);
+    request.onPlaybackReady?.call(
+      TtsPlaybackAcknowledgment(
+        documentId: request.documentId!,
+        assignmentRevision: request.assignmentRevision,
+        generationId: 'controller-test',
+        bindingFingerprints: const {},
+      ),
+    );
+  }
+
+  @override
+  Future<TtsExportResult> exportAudio(TtsExportRequest request) async {
+    wholeRequests.add(request);
+    final cancellation = cancelled;
+    final planner = SpeechPlanningSupervisor();
+    var plan = request.chunkPlan!;
+    TtsExportResult? result;
+    try {
+      while (true) {
+        for (final chunk in plan.chunks) {
+          if (holdAfterFirst && exports.length == 1 && !held.isCompleted) {
+            held.complete();
+            await release.future;
+          }
+          result = await super.exportAudio(
+            TtsExportRequest(
+              text: chunk.speakText,
+              outputPath: '${request.outputPath}.${exports.length}.wav',
+              documentId: request.documentId,
+              sessionId: request.sessionId,
+              normalizationVersion: request.normalizationVersion,
+              chunkPlan: ChunkPlan(planId: plan.planId, chunks: [chunk]),
+              onRenderedScene: request.onRenderedScene,
+              assignmentRevision: request.assignmentRevision,
+              sourceWordOffset: request.sourceWordOffset,
+              cancelled: cancellation.future,
+              isCurrent: () =>
+                  !cancellation.isCompleted &&
+                  (request.isCurrent?.call() ?? true),
+            ),
+          );
+          if (cancellation.isCompleted || request.isCurrent?.call() == false) {
+            throw StateError('Export cancelled or superseded.');
+          }
+        }
+        final next = plan.nextSegmentId;
+        if (next == null) break;
+        plan = (await planner.plan(
+          request.planningContext!,
+          startSegmentId: next,
+        )).plan;
+      }
+      if (finalCommitWait case final wait?) {
+        if (!finalCommitEntered.isCompleted) finalCommitEntered.complete();
+        await wait;
+      }
+      return result!;
+    } finally {
+      await planner.shutdown();
+    }
+  }
+}
+
+// Scale the real publication/package path with small deterministic WAVs. This
+// tests full-book metadata bounds, not generation quality or emitted audio.
+class _ManifestScaleEngine extends _ScopedOfflineEngine {
+  _ManifestScaleEngine(this.catalogue, this.texts) : super('fish_drama3_8bit') {
+    renderAvailable = true;
+  }
+  final List<VoiceProfile> catalogue;
+  final List<String> texts;
+  late ReaderDocument document;
+  @override
+  Future<List<VoiceProfile>> loadVoices() async => catalogue;
+
+  @override
+  Future<TtsExportResult> exportAudio(TtsExportRequest request) async {
+    exports.add(request);
+    final voice = request.chunkPlan!.chunks.first.voiceId;
+    final binding = PreparedVoiceBinding(
+      voiceId: voice,
+      voiceDigest: artifactIdentity('voice-$voice'),
+      modelDigest: artifactIdentity('fish-8bit-model-content'),
+      engineVersion: engineVersion,
+      pronunciationProfileId: 'en-us-core',
+      bindingRevision: 1,
+      documentId: request.documentId!,
+    );
+    var word = 0;
+    String? predecessor;
+    for (final (i, text) in texts.indexed) {
+      final end = word + text.split(' ').length;
+      final bytes = _wav(sample: i + 1);
+      final audio = await File(
+        '${request.outputPath}.$i.wav',
+      ).writeAsBytes(bytes);
+      final rawIdentity = 'wav-sha256:${sha256.convert(bytes)}';
+      await request.onRenderedScene!(
+        TtsFinalizedAudioScene(
+          documentId: request.documentId!,
+          generationId: 'full-book-export',
+          sceneId: 'public-scene-$i',
+          text: text,
+          engineSpeakText: text,
+          startWordIndex: word,
+          endWordIndex: end,
+          startOffset: document.charOffsetForWord(word),
+          sceneTurns: [
+            NativeSpeechTurn(
+              voiceId: voice,
+              text: text,
+              segmentIds: [document.segmentForWordIndex(word)!.segmentId],
+              startWord: word,
+              endWord: end,
+              bindingFingerprint: binding.fingerprint,
+              bindingRevision: 1,
+              directions: const [
+                {'delivery': 'whispered'},
+              ],
+            ),
+          ],
+          preparedBindings: [binding],
+          audioPath: audio.path,
+          rawAudioPath: audio.path,
+          duration: const Duration(milliseconds: 10),
+          engineId: engineId,
+          engineVersion: engineVersion,
+          normalizationVersion: request.normalizationVersion!,
+          capabilityProfileId: '$engineId:macos:v1',
+          synthesisIdentity: artifactIdentity('full-book-synthesis-$i'),
+          translationSignature: artifactIdentity('canonical-translator-v1'),
+          synthesisRate: 1,
+          assignmentRevision: request.assignmentRevision,
+          cancelled: request.cancelled ?? Completer<void>().future,
+          isCurrent: request.isCurrent!,
+          rawArtifactIdentity: rawIdentity,
+          predecessorRawArtifactIdentity: predecessor,
+          boundaryPolicyVersion: SynthesisBoundaryPolicy.version,
+          boundaryClass: 'paragraph',
+          trailingSilenceMicros: 0,
+        ),
+      );
+      predecessor = rawIdentity;
+      word = end;
+    }
+    await File(request.outputPath).writeAsBytes(_wav());
+    return TtsExportResult(
+      outputPath: request.outputPath,
+      sidecarPath: '${request.outputPath}.json',
+      duration: Duration(milliseconds: 10 * texts.length),
+      chunkCount: texts.length,
+      voiceId: voice,
+      rate: 1,
+      engineId: engineId,
+      engineVersion: engineVersion,
+    );
+  }
+}
+
+class _PublicationBarrier {
+  final entered = Completer<void>();
+  final release = Completer<void>();
+}
+
+class _HeldPublicationRepository extends RenderedSceneRepository {
+  _HeldPublicationRepository(super.root);
+  _PublicationBarrier? next;
+  int calls = 0;
+  int activeCalls = 0;
+  int peakCalls = 0;
+  @override
+  Future<StoredRenderedScene> publish(
+    TtsFinalizedAudioScene scene, {
+    required String sourceId,
+    required Map<String, dynamic> intent,
+  }) async {
+    ++calls;
+    ++activeCalls;
+    if (activeCalls > peakCalls) peakCalls = activeCalls;
+    final barrier = next;
+    next = null;
+    try {
+      if (barrier != null) {
+        barrier.entered.complete();
+        await barrier.release.future;
+      }
+      return await super.publish(scene, sourceId: sourceId, intent: intent);
+    } finally {
+      --activeCalls;
+    }
+  }
+}
+
+// A two-range source seam with real immutable checkpoint commits. This keeps
+// the offset regression small while exercising the production complete merge.
+class _DirectedRangeSource extends DocumentPreparationSupervisor {
+  _DirectedRangeSource(ReaderDocumentRepository repository)
+    : super(repository: repository);
+  late DocumentPreparationRequest request;
+  @override
+  Future<DocumentPreparationResult> prepareRanges(
+    DocumentPreparationRequest request, {
+    Future<Uint8List> Function()? acquireBytes,
+    String? cacheKey,
+    Future<void> Function(DocumentIdentityMigration)? onIdentityMigration,
+    required Future<void> Function(DocumentPreparationPublication)
+    onPublication,
+    void Function(PreparationProgress)? onProgress,
+    void Function(CharacterDiscoveryPublication)? onCharacterDiscovery,
+    Future<void> Function()? acquireSource,
+    Future<void> Function()? onDrained,
+  }) async {
+    this.request = request.identityOnly;
+    final checkpoint = await repository!.begin(
+      sourceKey: cacheKey!,
+      request: request,
+    );
+    ReaderDocument? last;
+    var sourceOffset = 0;
+    for (final (i, text) in ['Stay close.', 'Wait here.'].indexed) {
+      final doc = DocumentImportService().importPastedText(text);
+      final segment = doc.speechDocument.segments.first;
+      last = ReaderDocument.fromNormalized(
+        title: doc.title,
+        type: doc.type,
+        normalizedImportResult: doc.normalizedImportResult,
+        dialogueAttributions: doc.dialogueAttributions,
+        characterCastRegistry: doc.characterCastRegistry,
+        documentVoiceAttribution: doc.documentVoiceAttribution,
+        basePronunciationArtifacts: doc.basePronunciationArtifacts,
+        baseSpeechAnnotations: const BaseSpeechAnnotationInferenceService()
+            .infer(
+              speechDocument: doc.speechDocument,
+              displayDocument: doc.displayDocument,
+              explicitIntents: [
+                SpeechAnnotation(
+                  annotationId: 'direction-$i',
+                  segmentId: segment.segmentId,
+                  kind: SpeechAnnotationKind.deliveryIntent,
+                  startWord: 0,
+                  endWord: 2,
+                  confidence: 1,
+                  source: SpeechAnnotationSource.userOverride,
+                  deliveryIntent: i == 0
+                      ? DeliveryIntent.whispered
+                      : DeliveryIntent.shouted,
+                ),
+              ],
+            ),
+      );
+      const codec = ReaderDocumentSerializationService();
+      var encoded = codec.serializeToJsonString(last);
+      for (final segment in last.speechDocument.segments) {
+        encoded = encoded.replaceAll(
+          '"${segment.segmentId}"',
+          '"range${i}_${segment.segmentId}"',
+        );
+      }
+      for (final block in last.displayDocument.blocks) {
+        encoded = encoded.replaceAll(
+          '"${block.blockId}"',
+          '"range${i}_${block.blockId}"',
+        );
+      }
+      for (final range in last.documentVoiceAttribution.ranges) {
+        encoded = encoded.replaceAll(
+          '"${range.rangeId}"',
+          '"range${i}_${range.rangeId}"',
+        );
+      }
+      last = codec.deserializeFromJsonString(encoded);
+      final publication = DocumentPreparationPublication(
+        request: request.identityOnly,
+        sequence: i + 1,
+        fragment: last,
+        range: PreparedDocumentRange(
+          sourceStart: sourceOffset,
+          sourceEnd: sourceOffset + text.length,
+          wordStart: i * 2,
+          wordEnd: i * 2 + 2,
+          segmentStart: i,
+          segmentEnd: i + 1,
+        ),
+        coverage: const {
+          PreparationStage.normalization,
+          PreparationStage.mapping,
+          PreparationStage.analysis,
+          PreparationStage.pronunciation,
+        },
+        progress: const [],
+        isLast: false,
+      );
+      sourceOffset += text.length;
+      await checkpoint.commit(publication);
+      await onPublication(publication);
+    }
+    await checkpoint.complete();
+    return DocumentPreparationResult(
+      request: request.identityOnly,
+      outcome: DocumentPreparationOutcome.ready,
+      document: last,
+    );
   }
 }

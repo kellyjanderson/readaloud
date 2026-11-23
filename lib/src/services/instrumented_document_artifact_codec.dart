@@ -37,17 +37,9 @@ class InstrumentedDocumentArtifactCodec {
     if (documentRevision < 0) {
       throw ArgumentError.value(documentRevision, 'documentRevision');
     }
-    final legacy =
-        jsonDecode(
-              const ReaderDocumentSerializationService().serializeToJsonString(
-                document,
-              ),
-            )
-            as Map<String, Object?>;
-    legacy.remove('pdfDataBase64');
-    // V1 stays unchanged; only V2 carries the extended intent vocabulary.
-    legacy['baseSpeechAnnotations'] = document.baseSpeechAnnotations.toJson(
-      includePerformanceIntents: true,
+    final prepared = const ReaderDocumentSerializationService().encodeEnvelope(
+      document,
+      includePdfData: false,
     );
     final documentId = document.normalizedImportResult.documentId;
     if (castVoiceAssignments.documentId != documentId) {
@@ -58,7 +50,7 @@ class InstrumentedDocumentArtifactCodec {
       'formatVersion': formatVersion,
       'documentId': documentId,
       'documentRevision': documentRevision,
-      'preparedDocument': legacy,
+      'preparedDocument': prepared,
       'castVoiceAssignments': <String, Object?>{
         'documentId': castVoiceAssignments.documentId,
         'assignmentVersion': castVoiceAssignments.assignmentVersion,

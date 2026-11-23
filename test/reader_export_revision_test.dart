@@ -1,10 +1,13 @@
 import 'dart:async';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:flutter/services.dart';
 import 'package:read_aloud/src/controllers/reader_controller.dart';
 import 'package:read_aloud/src/models/prepared_voice_binding.dart';
+import 'package:read_aloud/src/models/reader_operation.dart';
 import 'package:read_aloud/src/models/voice_profile.dart';
 import 'package:read_aloud/src/services/document_import_service.dart';
+import 'package:read_aloud/src/services/playback_instrumentation_service.dart';
 import 'package:read_aloud/src/services/tts_engine.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -12,6 +15,107 @@ import 'package:shared_preferences/shared_preferences.dart';
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
   setUp(() => SharedPreferences.setMockInitialValues(<String, Object>{}));
+
+  test('current export failure retains its stage and original stack', () async {
+    final engine = _ExportEngine();
+    final controller = ReaderController(
+      ttsEngine: engine,
+      enablePlatformIntakeChannels: false,
+    );
+    addTearDown(controller.dispose);
+    final metrics = <PlaybackMetricRecord>[];
+    PlaybackInstrumentationService.instance.observer = metrics.add;
+    addTearDown(() => PlaybackInstrumentationService.instance.observer = null);
+    await controller.initialize();
+    await controller.loadDocument(
+      DocumentImportService().importPastedText('Amber document.'),
+    );
+    final barrier = _Barrier();
+    engine.nextExport = barrier;
+    final exporting = controller.exportAudioToPath('/tmp/failure.wav');
+    await barrier.started.future;
+    barrier.release.completeError(
+      StateError('original export failure'),
+      StackTrace.fromString('original export stack'),
+    );
+    expect(await exporting, isNull);
+    final failure = metrics.singleWhere((m) => m.metric == 'audioExportFailed');
+    expect(failure.documentId, controller.document.displayDocument.documentId);
+    expect(failure.voiceId, _ExportEngine.voice.id);
+    expect(failure.value, {
+      'stage': 'rendering-and-assembly',
+      'error': 'Bad state: original export failure',
+      'stack': 'original export stack',
+    });
+    expect(
+      controller.statusMessage,
+      'Could not save audio right now. Try again.',
+    );
+    expect(controller.isExporting, isFalse);
+  });
+
+  test('native destination failure exposes its recovery action', () async {
+    final engine = _ExportEngine();
+    final controller = ReaderController(
+      ttsEngine: engine,
+      enablePlatformIntakeChannels: false,
+    );
+    addTearDown(controller.dispose);
+    await controller.initialize();
+    await controller.loadDocument(
+      DocumentImportService().importPastedText('Amber document.'),
+    );
+    final barrier = _Barrier();
+    engine.nextExport = barrier;
+    final exporting = controller.exportAudioToPath('/tmp/failure.wav');
+    await barrier.started.future;
+    barrier.release.completeError(
+      PlatformException(
+        code: 'audio_export_publication_failed',
+        message: 'Choose another location and try again.',
+        details: 'private native diagnosis',
+      ),
+    );
+    expect(await exporting, isNull);
+    expect(controller.statusMessage, 'Choose another location and try again.');
+    expect(
+      controller.statusMessage,
+      isNot(contains('private native diagnosis')),
+    );
+  });
+
+  test(
+    'preview resource replacement cancels export progress before its first scene',
+    () async {
+      final engine = _ExportEngine();
+      final controller = ReaderController(
+        ttsEngine: engine,
+        enablePlatformIntakeChannels: false,
+      );
+      addTearDown(controller.dispose);
+      await controller.initialize();
+      await controller.loadDocument(
+        DocumentImportService().importPastedText('Amber document.'),
+      );
+      final barrier = _Barrier();
+      engine.nextExport = barrier;
+      final exporting = controller.exportAudioToPath('/tmp/preview-cancel.wav');
+      await barrier.started.future;
+      await controller.previewVoice(_ExportEngine.voice.id);
+      controller.showStatusMessage('Preview owns status');
+      barrier.release.completeError(
+        StateError('Export cancelled or superseded.'),
+      );
+      expect(await exporting, isNull);
+      expect(controller.statusMessage, 'Preview owns status');
+      final progress = controller.feedbackOperations.singleWhere(
+        (op) => op.scope == 'Save audio',
+      );
+      expect(progress.state, OperationState.cancelled);
+      expect(progress.completedUnits, 0);
+      expect(progress.totalUnits, isNull);
+    },
+  );
 
   for (final fail in [false, true]) {
     test(

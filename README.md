@@ -19,16 +19,18 @@ The [product definition](project/product-definition.md) defines these standing e
 
 ## Project status
 
-macOS on Apple Silicon is the current functional target. Other Flutter platform folders are retained but are not qualified. The cleanup baseline consolidates the RC2 reader, local MLX engines, full-document display and the visual acceptance runner. It is a development checkpoint, not a claim that all reading-experience requirements pass.
+macOS on Apple Silicon is the current functional target; other Flutter platform folders are retained but unqualified. This development branch includes the reader, local speech engines, audio-only `.radoc` books and model switching. It is integrated work toward [release #122](https://github.com/kellyjanderson/readaloud/issues/122), not a published or fully qualified release.
 
-Speaker attribution is heuristic. Current architecture records implementation and evidence limits. Sustained audio continuity, launch timing and human acceptance remain tracked in [RC2 qualification](https://github.com/kellyjanderson/readaloud/issues/91). [Drama 3 integration](https://github.com/kellyjanderson/readaloud/issues/111) adds application-owned model downloads, native-rate audio, 43 reference voice choices and live engine replacement after the cleanup tag. Bounded native scene playback and export now have running-app evidence and human listening acceptance; sustained continuity, broader voice identity and startup requirements remain open in that issue. The cleanup tag contains the preserved earlier baseline.
+The [engine support matrix](docs/mlx-tts-engines.md#support-and-evidence) distinguishes Settings choices, source coverage, bounded native results and distribution. Fish bf16/8-bit/4-bit have M5 Max/128 GiB software-output and lifecycle evidence; physical M3 qualification and current human listening/usability remain open. Earlier bounded Drama scene listening does not certify this candidate or all voices. Attribution preserves uncertainty and manual Character choices; optional ModernBookNLP analysis has its own evidence limits.
+
+The [S7/S8 evidence receipt](https://github.com/kellyjanderson/readaloud/issues/112#issuecomment-6816503511) records first/reusable document loads of 2,099.705/525.851 ms after separately measured startup, passing the ten-/five-second load limits on that fixture. First launch to emitted speech was 6,317.906 ms, so the two-second launch goal remains unmet. These observations do not establish arbitrary-document, physical-output or release acceptance; [remaining integrated acceptance](https://github.com/kellyjanderson/readaloud/issues/91) stays explicit.
 
 ## Features
 
 - Import plain text, Markdown, HTML, EPUB, PDF, DOCX and RTF.
 - Use local speech generation with narrator/character casting and manual voice assignments.
 - Follow spoken text, navigate playback, and restore file-backed reading position.
-- Export WAV audio and run headless pronunciation/sentence probes.
+- Save audio-only `.radoc` books and export WAV audio; run headless pronunciation/sentence probes.
 
 ## Development quick start
 
@@ -40,7 +42,7 @@ cd readaloud
 tools/flutter pub get
 ```
 
-For Kokoro, place a compatible model at `assets/kokoro/model/kokoro-v1.0.onnx`; see [model setup](assets/kokoro/model/README.md). For MLX engines, install the [arm64 runtime](docs/mlx-tts-engines.md) and select the engine in Settings. Model weights download separately and are not in Git. The app uses a [vendored ONNX plugin override](third_party/flutter_onnxruntime/pubspec.yaml).
+For Kokoro, place a compatible model at `assets/kokoro/model/kokoro-v1.0.onnx`; see [model setup](assets/kokoro/model/README.md). For MLX engines, install the [arm64 runtime before building](docs/mlx-tts-engines.md#local-macos-release-packaging), then select the engine in Settings. A successful build that omitted this optional runtime supports Kokoro only; it is not a Drama-capable candidate. Model weights download separately and are not in Git. The app uses a [vendored ONNX plugin override](third_party/flutter_onnxruntime/pubspec.yaml).
 
 ```sh
 tools/flutter run -d macos

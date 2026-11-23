@@ -1,0 +1,63 @@
+{
+  "bookSha256": "f4d0a5f693a6c349935ca068d83aa241acb2f2066e15c90f0199b36b826a5edb",
+  "words": 42,
+  "rows": [
+    {
+      "start": 0,
+      "end": 8,
+      "turns": 1,
+      "bindings": 1,
+      "engine": "fish_drama3_8bit",
+      "voice": "library_fishadrian"
+    },
+    {
+      "start": 8,
+      "end": 15,
+      "turns": 1,
+      "bindings": 1,
+      "engine": "fish_drama3_8bit",
+      "voice": "library_fishfreya"
+    },
+    {
+      "start": 15,
+      "end": 17,
+      "turns": 1,
+      "bindings": 1,
+      "engine": "fish_drama3_8bit",
+      "voice": "library_fishadrian"
+    },
+    {
+      "start": 17,
+      "end": 24,
+      "turns": 1,
+      "bindings": 1,
+      "engine": "fish_drama3_8bit",
+      "voice": "library_fishhannah"
+    },
+    {
+      "start": 24,
+      "end": 26,
+      "turns": 1,
+      "bindings": 1,
+      "engine": "fish_drama3_8bit",
+      "voice": "library_fishadrian"
+    },
+    {
+      "start": 26,
+      "end": 30,
+      "turns": 1,
+      "bindings": 1,
+      "engine": "fish_drama3_8bit",
+      "voice": "library_fishfreya"
+    },
+    {
+      "start": 30,
+      "end": 42,
+      "turns": 1,
+      "bindings": 1,
+      "engine": "fish_drama3_8bit",
+      "voice": "library_fishadrian"
+    }
+  ],
+  "passed": true
+}

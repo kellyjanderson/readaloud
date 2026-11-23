@@ -725,6 +725,20 @@ class _ReadAloudScreenState extends State<ReadAloudScreen> {
                                     '${_controller.startupError ?? progress?.message ?? ''}'
                                     '${_controller.engineSession.active == null && _controller.engineSession.lastWorking != null ? ' Last working: ${_ttsEngineLabel(_controller.engineSession.lastWorking!.engineId)} (reload required).' : ''}',
                                   ),
+                                  if (_controller.engineSession.phase ==
+                                      EngineSessionPhase.deferred) ...[
+                                    const Text(
+                                      'Speech model is not loaded yet. '
+                                      'Saved audio can play without it.',
+                                    ),
+                                    TextButton(
+                                      onPressed:
+                                          _controller.retryInitialization,
+                                      child: const Text(
+                                        'Load selected speech engine',
+                                      ),
+                                    ),
+                                  ],
                                   if (progress != null &&
                                       _controller.startupError == null)
                                     MeasuredProgress(

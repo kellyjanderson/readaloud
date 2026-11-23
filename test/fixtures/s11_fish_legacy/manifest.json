@@ -1,0 +1,689 @@
+{
+  "schema": "read-aloud-audio-book",
+  "version": "radoc-v5",
+  "documentId": "doc_c716cf3946e8c182",
+  "sourceId": "synthetic-s3-dialogue",
+  "preparationComplete": true,
+  "totalWords": 42,
+  "preparedRanges": [
+    {
+      "member": "prepared/1.json",
+      "startWord": 0,
+      "endWord": 42
+    }
+  ],
+  "analysisMembers": [],
+  "scenes": [
+    {
+      "sceneId": "710a7365e502e1ab65d96e82df27a003af5beefcfdd9db4c837aef19e95e8ec7",
+      "startWord": 0,
+      "endWord": 8,
+      "audioMember": "audio/710a7365e502e1ab65d96e82df27a003af5beefcfdd9db4c837aef19e95e8ec7-479b7559ecdc7c453b20d19195bac83608588c172d7930043acb4cbe2df83fe9.wav",
+      "rawAudioMember": "raw/cd5fea9d5619078db605d9cff0c247826a5f2de399b43cf67f78b5571d9cb7ca.wav",
+      "dependencyDigest": "479b7559ecdc7c453b20d19195bac83608588c172d7930043acb4cbe2df83fe9",
+      "dependencies": {
+        "raw": {
+          "canonicalDirections": [],
+          "text": "The hallway was dark and quiet. Mara said,",
+          "engineSpeakText": "The hallway was dark and quiet. Mara said,",
+          "engineId": "fish_drama3_8bit",
+          "engineVersion": "mlx-audio-0.6.3-mlx-0.32.4-complete-v3-q0-native-cast-v1",
+          "normalizationVersion": "read-aloud-normalization-v1",
+          "capabilityProfileId": "fish_drama3_8bit:macos:v1",
+          "synthesisIdentity": "b80ec68886b2b601ac68a5df504ccebaab28df4552f2acf207fcefb0b539f56d",
+          "translationSignature": "bb10146f871fe3f196cd8e995f4687af219b95e1f0067d7c80904d68d89ca0d6",
+          "synthesisRate": 1.0,
+          "turns": [],
+          "bindings": []
+        },
+        "predecessorRawArtifactIdentity": null,
+        "boundaryPolicyVersion": "boundary-native-rate-v3"
+      },
+      "provenance": {
+        "rawArtifactIdentity": "wav-sha256:b7567cc42883cbdbbe64ecfc3a31279bd2be81463bdb8d685ec46687913e2ae6",
+        "predecessorRawArtifactIdentity": null,
+        "boundaryPolicyVersion": "boundary-native-rate-v3",
+        "boundaryClass": "none",
+        "trailingSilenceMicros": 149000,
+        "bindings": [
+          {
+            "voiceId": "library_fishadrian",
+            "voiceDigest": "868f5f8b645db1e339d6cef8c17217a9290018cb1269aae3d60f06ac62430995",
+            "modelDigest": "05e2c0e6f73047f370066ab174b938843b46455e8b76432b83c9a71c2d187757",
+            "engineVersion": "mlx-audio-0.6.3-mlx-0.32.4-complete-v3-q0-native-cast-v1",
+            "pronunciationProfileId": "en-us-core",
+            "bindingRevision": 3,
+            "documentId": "doc_c716cf3946e8c182"
+          }
+        ],
+        "intent": {
+          "defaultVoiceId": "library_fishadrian",
+          "multiVoice": true,
+          "rate": 1.0,
+          "engineId": "fish_drama3_8bit",
+          "voices": [
+            {
+              "id": "library_fishadrian",
+              "label": "Adrian (Fish)",
+              "locale": "en",
+              "gender": "male"
+            },
+            {
+              "id": "library_fishhannah",
+              "label": "Hannah (Fish)",
+              "locale": "en",
+              "gender": "female"
+            },
+            {
+              "id": "library_fishfreya",
+              "label": "Freya (Fish)",
+              "locale": "en",
+              "gender": "female"
+            }
+          ],
+          "characterSelections": {},
+          "canonicalDirections": []
+        },
+        "text": "The hallway was dark and quiet. Mara said,",
+        "startOffset": 0,
+        "sceneTurns": []
+      },
+      "format": {
+        "container": "wav",
+        "sampleRate": 44100,
+        "channels": 1,
+        "frameCount": 139264
+      }
+    },
+    {
+      "sceneId": "2f41cabcecbf0cd577946e220e384430a811c504aac0420858c7bb861ea54d2d",
+      "startWord": 8,
+      "endWord": 15,
+      "audioMember": "audio/2f41cabcecbf0cd577946e220e384430a811c504aac0420858c7bb861ea54d2d-20114c2c4ff83df1a748fca2ec39442db8ead0fe760bdca9c9df0bb4160484ed.wav",
+      "rawAudioMember": "raw/d9e00641bd8991f51a06cc702144a7675e92e692c8f3da413759d583c9a0d35c.wav",
+      "dependencyDigest": "20114c2c4ff83df1a748fca2ec39442db8ead0fe760bdca9c9df0bb4160484ed",
+      "dependencies": {
+        "raw": {
+          "canonicalDirections": [],
+          "text": "\"Stay close and keep your voice down.\"",
+          "engineSpeakText": "\"Stay close and keep your voice down.\"",
+          "engineId": "fish_drama3_8bit",
+          "engineVersion": "mlx-audio-0.6.3-mlx-0.32.4-complete-v3-q0-native-cast-v1",
+          "normalizationVersion": "read-aloud-normalization-v1",
+          "capabilityProfileId": "fish_drama3_8bit:macos:v1",
+          "synthesisIdentity": "b80ec68886b2b601ac68a5df504ccebaab28df4552f2acf207fcefb0b539f56d",
+          "translationSignature": "3517c099b3106fb8effb79b645120e19049750bd7d4ebfa04be14d73108cd08d",
+          "synthesisRate": 1.0,
+          "turns": [],
+          "bindings": []
+        },
+        "predecessorRawArtifactIdentity": "wav-sha256:b7567cc42883cbdbbe64ecfc3a31279bd2be81463bdb8d685ec46687913e2ae6",
+        "boundaryPolicyVersion": "boundary-native-rate-v3"
+      },
+      "provenance": {
+        "rawArtifactIdentity": "wav-sha256:8fd085621110093a2764c3603fc6d9c1f834f39ead70ca10762655931329d50c",
+        "predecessorRawArtifactIdentity": "wav-sha256:b7567cc42883cbdbbe64ecfc3a31279bd2be81463bdb8d685ec46687913e2ae6",
+        "boundaryPolicyVersion": "boundary-native-rate-v3",
+        "boundaryClass": "sentence",
+        "trailingSilenceMicros": 76000,
+        "bindings": [
+          {
+            "voiceId": "library_fishfreya",
+            "voiceDigest": "5133c2362b1ff19b09f7414d385e5443c59ca33a1925f9d6fca6b794031725f2",
+            "modelDigest": "05e2c0e6f73047f370066ab174b938843b46455e8b76432b83c9a71c2d187757",
+            "engineVersion": "mlx-audio-0.6.3-mlx-0.32.4-complete-v3-q0-native-cast-v1",
+            "pronunciationProfileId": "en-us-core",
+            "bindingRevision": 3,
+            "documentId": "doc_c716cf3946e8c182"
+          }
+        ],
+        "intent": {
+          "defaultVoiceId": "library_fishadrian",
+          "multiVoice": true,
+          "rate": 1.0,
+          "engineId": "fish_drama3_8bit",
+          "voices": [
+            {
+              "id": "library_fishadrian",
+              "label": "Adrian (Fish)",
+              "locale": "en",
+              "gender": "male"
+            },
+            {
+              "id": "library_fishhannah",
+              "label": "Hannah (Fish)",
+              "locale": "en",
+              "gender": "female"
+            },
+            {
+              "id": "library_fishfreya",
+              "label": "Freya (Fish)",
+              "locale": "en",
+              "gender": "female"
+            }
+          ],
+          "characterSelections": {},
+          "canonicalDirections": []
+        },
+        "text": "\"Stay close and keep your voice down.\"",
+        "startOffset": 44,
+        "sceneTurns": []
+      },
+      "format": {
+        "container": "wav",
+        "sampleRate": 44100,
+        "channels": 1,
+        "frameCount": 77824
+      }
+    },
+    {
+      "sceneId": "11c190a93c44a214f75eb060f03b3070a50758b1981f9e3553d59828d6e445e7",
+      "startWord": 15,
+      "endWord": 17,
+      "audioMember": "audio/11c190a93c44a214f75eb060f03b3070a50758b1981f9e3553d59828d6e445e7-a7e2202f9edf0cff09e1749271d7e9fc6c913b79c20cc5acf0f058070def023c.wav",
+      "rawAudioMember": "raw/056e2612d59f72a6a38d3f01919cade0b87bcc9c1311de7c1772492440e464b6.wav",
+      "dependencyDigest": "a7e2202f9edf0cff09e1749271d7e9fc6c913b79c20cc5acf0f058070def023c",
+      "dependencies": {
+        "raw": {
+          "canonicalDirections": [],
+          "text": "Mira said,",
+          "engineSpeakText": "Mira said,",
+          "engineId": "fish_drama3_8bit",
+          "engineVersion": "mlx-audio-0.6.3-mlx-0.32.4-complete-v3-q0-native-cast-v1",
+          "normalizationVersion": "read-aloud-normalization-v1",
+          "capabilityProfileId": "fish_drama3_8bit:macos:v1",
+          "synthesisIdentity": "b80ec68886b2b601ac68a5df504ccebaab28df4552f2acf207fcefb0b539f56d",
+          "translationSignature": "a7703d4b89f7c2c094e864756775606f3147bdd5cb8b93b1d5eea00e36a1bf26",
+          "synthesisRate": 1.0,
+          "turns": [],
+          "bindings": []
+        },
+        "predecessorRawArtifactIdentity": "wav-sha256:8fd085621110093a2764c3603fc6d9c1f834f39ead70ca10762655931329d50c",
+        "boundaryPolicyVersion": "boundary-native-rate-v3"
+      },
+      "provenance": {
+        "rawArtifactIdentity": "wav-sha256:f3001b809aa4db39896e645ca1889bc22abb723ed403f9c0901af8a178dbfc79",
+        "predecessorRawArtifactIdentity": "wav-sha256:8fd085621110093a2764c3603fc6d9c1f834f39ead70ca10762655931329d50c",
+        "boundaryPolicyVersion": "boundary-native-rate-v3",
+        "boundaryClass": "paragraph",
+        "trailingSilenceMicros": 116000,
+        "bindings": [
+          {
+            "voiceId": "library_fishadrian",
+            "voiceDigest": "868f5f8b645db1e339d6cef8c17217a9290018cb1269aae3d60f06ac62430995",
+            "modelDigest": "05e2c0e6f73047f370066ab174b938843b46455e8b76432b83c9a71c2d187757",
+            "engineVersion": "mlx-audio-0.6.3-mlx-0.32.4-complete-v3-q0-native-cast-v1",
+            "pronunciationProfileId": "en-us-core",
+            "bindingRevision": 3,
+            "documentId": "doc_c716cf3946e8c182"
+          }
+        ],
+        "intent": {
+          "defaultVoiceId": "library_fishadrian",
+          "multiVoice": true,
+          "rate": 1.0,
+          "engineId": "fish_drama3_8bit",
+          "voices": [
+            {
+              "id": "library_fishadrian",
+              "label": "Adrian (Fish)",
+              "locale": "en",
+              "gender": "male"
+            },
+            {
+              "id": "library_fishhannah",
+              "label": "Hannah (Fish)",
+              "locale": "en",
+              "gender": "female"
+            },
+            {
+              "id": "library_fishfreya",
+              "label": "Freya (Fish)",
+              "locale": "en",
+              "gender": "female"
+            }
+          ],
+          "characterSelections": {},
+          "canonicalDirections": []
+        },
+        "text": "Mira said,",
+        "startOffset": 84,
+        "sceneTurns": []
+      },
+      "format": {
+        "container": "wav",
+        "sampleRate": 44100,
+        "channels": 1,
+        "frameCount": 34816
+      }
+    },
+    {
+      "sceneId": "dac57cd41b82a6a4ff4002650e2c1b224170fc4f70db07ebdf96274d38165c59",
+      "startWord": 17,
+      "endWord": 24,
+      "audioMember": "audio/dac57cd41b82a6a4ff4002650e2c1b224170fc4f70db07ebdf96274d38165c59-246e47fe12e33f6fff13fb19248305aa5df341e7d67b0b055d224e74ee605e23.wav",
+      "rawAudioMember": "raw/cadd19c71782cafb36baca700afe480149bc31c522b9fc9c1c3641a478161623.wav",
+      "dependencyDigest": "246e47fe12e33f6fff13fb19248305aa5df341e7d67b0b055d224e74ee605e23",
+      "dependencies": {
+        "raw": {
+          "canonicalDirections": [],
+          "text": "\"I can hear footsteps behind that door!\"",
+          "engineSpeakText": "\"I can hear footsteps behind that door!\"",
+          "engineId": "fish_drama3_8bit",
+          "engineVersion": "mlx-audio-0.6.3-mlx-0.32.4-complete-v3-q0-native-cast-v1",
+          "normalizationVersion": "read-aloud-normalization-v1",
+          "capabilityProfileId": "fish_drama3_8bit:macos:v1",
+          "synthesisIdentity": "b80ec68886b2b601ac68a5df504ccebaab28df4552f2acf207fcefb0b539f56d",
+          "translationSignature": "7a698ae3d7375d6d1aecfaf534ba63115a04089edf4924ad9732c96f61dc0cf9",
+          "synthesisRate": 1.0,
+          "turns": [],
+          "bindings": []
+        },
+        "predecessorRawArtifactIdentity": "wav-sha256:f3001b809aa4db39896e645ca1889bc22abb723ed403f9c0901af8a178dbfc79",
+        "boundaryPolicyVersion": "boundary-native-rate-v3"
+      },
+      "provenance": {
+        "rawArtifactIdentity": "wav-sha256:5bf9d43180702824efed208de80e1a38d249c60cf8e9476ff4bf030bfcab1437",
+        "predecessorRawArtifactIdentity": "wav-sha256:f3001b809aa4db39896e645ca1889bc22abb723ed403f9c0901af8a178dbfc79",
+        "boundaryPolicyVersion": "boundary-native-rate-v3",
+        "boundaryClass": "none",
+        "trailingSilenceMicros": 56000,
+        "bindings": [
+          {
+            "voiceId": "library_fishhannah",
+            "voiceDigest": "ba1a3753e7885043857d5f99d2802ccc2520cb0d375b3e20d19071f2ca8b44aa",
+            "modelDigest": "05e2c0e6f73047f370066ab174b938843b46455e8b76432b83c9a71c2d187757",
+            "engineVersion": "mlx-audio-0.6.3-mlx-0.32.4-complete-v3-q0-native-cast-v1",
+            "pronunciationProfileId": "en-us-core",
+            "bindingRevision": 3,
+            "documentId": "doc_c716cf3946e8c182"
+          }
+        ],
+        "intent": {
+          "defaultVoiceId": "library_fishadrian",
+          "multiVoice": true,
+          "rate": 1.0,
+          "engineId": "fish_drama3_8bit",
+          "voices": [
+            {
+              "id": "library_fishadrian",
+              "label": "Adrian (Fish)",
+              "locale": "en",
+              "gender": "male"
+            },
+            {
+              "id": "library_fishhannah",
+              "label": "Hannah (Fish)",
+              "locale": "en",
+              "gender": "female"
+            },
+            {
+              "id": "library_fishfreya",
+              "label": "Freya (Fish)",
+              "locale": "en",
+              "gender": "female"
+            }
+          ],
+          "characterSelections": {},
+          "canonicalDirections": []
+        },
+        "text": "\"I can hear footsteps behind that door!\"",
+        "startOffset": 95,
+        "sceneTurns": []
+      },
+      "format": {
+        "container": "wav",
+        "sampleRate": 44100,
+        "channels": 1,
+        "frameCount": 100942
+      }
+    },
+    {
+      "sceneId": "d2eb46d9bc1df44560073bb207c2b170376df1f7df9e8ed49f9c057166bb73de",
+      "startWord": 24,
+      "endWord": 26,
+      "audioMember": "audio/d2eb46d9bc1df44560073bb207c2b170376df1f7df9e8ed49f9c057166bb73de-e2f01e86151cfd5b06a1b3b826f320f6dd0fe3377053f35ef0fc1bef42cc9520.wav",
+      "rawAudioMember": "raw/47e83e82f1bf358be4420cc94400bfc28c62b7b293f78098f266728b9d771c9f.wav",
+      "dependencyDigest": "e2f01e86151cfd5b06a1b3b826f320f6dd0fe3377053f35ef0fc1bef42cc9520",
+      "dependencies": {
+        "raw": {
+          "canonicalDirections": [],
+          "text": "Mara said,",
+          "engineSpeakText": "Mara said,",
+          "engineId": "fish_drama3_8bit",
+          "engineVersion": "mlx-audio-0.6.3-mlx-0.32.4-complete-v3-q0-native-cast-v1",
+          "normalizationVersion": "read-aloud-normalization-v1",
+          "capabilityProfileId": "fish_drama3_8bit:macos:v1",
+          "synthesisIdentity": "b80ec68886b2b601ac68a5df504ccebaab28df4552f2acf207fcefb0b539f56d",
+          "translationSignature": "84a53ed6a544b5b630990032e59ea88f51036126a4850331f34a11302cbc52e5",
+          "synthesisRate": 1.0,
+          "turns": [],
+          "bindings": []
+        },
+        "predecessorRawArtifactIdentity": "wav-sha256:5bf9d43180702824efed208de80e1a38d249c60cf8e9476ff4bf030bfcab1437",
+        "boundaryPolicyVersion": "boundary-native-rate-v3"
+      },
+      "provenance": {
+        "rawArtifactIdentity": "wav-sha256:424bf43a47913a059f80df1a2e491bdb5e2607ed5600e7d686b40027277f91d9",
+        "predecessorRawArtifactIdentity": "wav-sha256:5bf9d43180702824efed208de80e1a38d249c60cf8e9476ff4bf030bfcab1437",
+        "boundaryPolicyVersion": "boundary-native-rate-v3",
+        "boundaryClass": "paragraph",
+        "trailingSilenceMicros": 55000,
+        "bindings": [
+          {
+            "voiceId": "library_fishadrian",
+            "voiceDigest": "868f5f8b645db1e339d6cef8c17217a9290018cb1269aae3d60f06ac62430995",
+            "modelDigest": "05e2c0e6f73047f370066ab174b938843b46455e8b76432b83c9a71c2d187757",
+            "engineVersion": "mlx-audio-0.6.3-mlx-0.32.4-complete-v3-q0-native-cast-v1",
+            "pronunciationProfileId": "en-us-core",
+            "bindingRevision": 3,
+            "documentId": "doc_c716cf3946e8c182"
+          }
+        ],
+        "intent": {
+          "defaultVoiceId": "library_fishadrian",
+          "multiVoice": true,
+          "rate": 1.0,
+          "engineId": "fish_drama3_8bit",
+          "voices": [
+            {
+              "id": "library_fishadrian",
+              "label": "Adrian (Fish)",
+              "locale": "en",
+              "gender": "male"
+            },
+            {
+              "id": "library_fishhannah",
+              "label": "Hannah (Fish)",
+              "locale": "en",
+              "gender": "female"
+            },
+            {
+              "id": "library_fishfreya",
+              "label": "Freya (Fish)",
+              "locale": "en",
+              "gender": "female"
+            }
+          ],
+          "characterSelections": {},
+          "canonicalDirections": []
+        },
+        "text": "Mara said,",
+        "startOffset": 137,
+        "sceneTurns": []
+      },
+      "format": {
+        "container": "wav",
+        "sampleRate": 44100,
+        "channels": 1,
+        "frameCount": 34816
+      }
+    },
+    {
+      "sceneId": "3b8382739b9e9082de6a7a22f2d33febfa6a03facbe7815f16efac26f2094612",
+      "startWord": 26,
+      "endWord": 30,
+      "audioMember": "audio/3b8382739b9e9082de6a7a22f2d33febfa6a03facbe7815f16efac26f2094612-18530b284b584fc2c804ce5b910ffbdfb4ead1583a7fe07a1471725f533a464c.wav",
+      "rawAudioMember": "raw/983da034b0e1eb02a0e9bb68556e4c361474bf2e43b450e9df363ef4e5a96a8c.wav",
+      "dependencyDigest": "18530b284b584fc2c804ce5b910ffbdfb4ead1583a7fe07a1471725f533a464c",
+      "dependencies": {
+        "raw": {
+          "canonicalDirections": [],
+          "text": "\"Wait until they pass.\"",
+          "engineSpeakText": "\"Wait until they pass.\"",
+          "engineId": "fish_drama3_8bit",
+          "engineVersion": "mlx-audio-0.6.3-mlx-0.32.4-complete-v3-q0-native-cast-v1",
+          "normalizationVersion": "read-aloud-normalization-v1",
+          "capabilityProfileId": "fish_drama3_8bit:macos:v1",
+          "synthesisIdentity": "b80ec68886b2b601ac68a5df504ccebaab28df4552f2acf207fcefb0b539f56d",
+          "translationSignature": "827fb96a23b45697905d2302e3c9de230bd23bee13b571ce12904623e01e8963",
+          "synthesisRate": 1.0,
+          "turns": [],
+          "bindings": []
+        },
+        "predecessorRawArtifactIdentity": "wav-sha256:424bf43a47913a059f80df1a2e491bdb5e2607ed5600e7d686b40027277f91d9",
+        "boundaryPolicyVersion": "boundary-native-rate-v3"
+      },
+      "provenance": {
+        "rawArtifactIdentity": "wav-sha256:63354c2d540f4209d2366add47c4924f1796838164bae91938a9681caf7803f7",
+        "predecessorRawArtifactIdentity": "wav-sha256:424bf43a47913a059f80df1a2e491bdb5e2607ed5600e7d686b40027277f91d9",
+        "boundaryPolicyVersion": "boundary-native-rate-v3",
+        "boundaryClass": "sentence",
+        "trailingSilenceMicros": 50000,
+        "bindings": [
+          {
+            "voiceId": "library_fishfreya",
+            "voiceDigest": "5133c2362b1ff19b09f7414d385e5443c59ca33a1925f9d6fca6b794031725f2",
+            "modelDigest": "05e2c0e6f73047f370066ab174b938843b46455e8b76432b83c9a71c2d187757",
+            "engineVersion": "mlx-audio-0.6.3-mlx-0.32.4-complete-v3-q0-native-cast-v1",
+            "pronunciationProfileId": "en-us-core",
+            "bindingRevision": 3,
+            "documentId": "doc_c716cf3946e8c182"
+          }
+        ],
+        "intent": {
+          "defaultVoiceId": "library_fishadrian",
+          "multiVoice": true,
+          "rate": 1.0,
+          "engineId": "fish_drama3_8bit",
+          "voices": [
+            {
+              "id": "library_fishadrian",
+              "label": "Adrian (Fish)",
+              "locale": "en",
+              "gender": "male"
+            },
+            {
+              "id": "library_fishhannah",
+              "label": "Hannah (Fish)",
+              "locale": "en",
+              "gender": "female"
+            },
+            {
+              "id": "library_fishfreya",
+              "label": "Freya (Fish)",
+              "locale": "en",
+              "gender": "female"
+            }
+          ],
+          "characterSelections": {},
+          "canonicalDirections": []
+        },
+        "text": "\"Wait until they pass.\"",
+        "startOffset": 148,
+        "sceneTurns": []
+      },
+      "format": {
+        "container": "wav",
+        "sampleRate": 44100,
+        "channels": 1,
+        "frameCount": 53248
+      }
+    },
+    {
+      "sceneId": "08ddd1daaad17e10fec36285c7f265e624c7b6af41d3f1bcf688bf8b3ae64731",
+      "startWord": 30,
+      "endWord": 42,
+      "audioMember": "audio/08ddd1daaad17e10fec36285c7f265e624c7b6af41d3f1bcf688bf8b3ae64731-555e141bb4bd23dd474cb39ea46c6ec65d03505243c3f90cc4cec86d587abf51.wav",
+      "rawAudioMember": "raw/17a151285a7a49c90701005b57eea066bb34646d60e89301059200ab8a23be93.wav",
+      "dependencyDigest": "555e141bb4bd23dd474cb39ea46c6ec65d03505243c3f90cc4cec86d587abf51",
+      "dependencies": {
+        "raw": {
+          "canonicalDirections": [],
+          "text": "The door closed softly. They waited together until the final bell rang.",
+          "engineSpeakText": "The door closed softly. They waited together until the final bell rang.",
+          "engineId": "fish_drama3_8bit",
+          "engineVersion": "mlx-audio-0.6.3-mlx-0.32.4-complete-v3-q0-native-cast-v1",
+          "normalizationVersion": "read-aloud-normalization-v1",
+          "capabilityProfileId": "fish_drama3_8bit:macos:v1",
+          "synthesisIdentity": "b80ec68886b2b601ac68a5df504ccebaab28df4552f2acf207fcefb0b539f56d",
+          "translationSignature": "efb4ac3f38ad59a56452b6f95d7b96d51d143ca5978af465f9e418625c3a138a",
+          "synthesisRate": 1.0,
+          "turns": [],
+          "bindings": []
+        },
+        "predecessorRawArtifactIdentity": "wav-sha256:63354c2d540f4209d2366add47c4924f1796838164bae91938a9681caf7803f7",
+        "boundaryPolicyVersion": "boundary-native-rate-v3"
+      },
+      "provenance": {
+        "rawArtifactIdentity": "wav-sha256:c21b481c5a2fd9f4a2e9ab87d040399435464846f37bfca5b65fe87b24cc2062",
+        "predecessorRawArtifactIdentity": "wav-sha256:63354c2d540f4209d2366add47c4924f1796838164bae91938a9681caf7803f7",
+        "boundaryPolicyVersion": "boundary-native-rate-v3",
+        "boundaryClass": "none",
+        "trailingSilenceMicros": 98000,
+        "bindings": [
+          {
+            "voiceId": "library_fishadrian",
+            "voiceDigest": "868f5f8b645db1e339d6cef8c17217a9290018cb1269aae3d60f06ac62430995",
+            "modelDigest": "05e2c0e6f73047f370066ab174b938843b46455e8b76432b83c9a71c2d187757",
+            "engineVersion": "mlx-audio-0.6.3-mlx-0.32.4-complete-v3-q0-native-cast-v1",
+            "pronunciationProfileId": "en-us-core",
+            "bindingRevision": 3,
+            "documentId": "doc_c716cf3946e8c182"
+          }
+        ],
+        "intent": {
+          "defaultVoiceId": "library_fishadrian",
+          "multiVoice": true,
+          "rate": 1.0,
+          "engineId": "fish_drama3_8bit",
+          "voices": [
+            {
+              "id": "library_fishadrian",
+              "label": "Adrian (Fish)",
+              "locale": "en",
+              "gender": "male"
+            },
+            {
+              "id": "library_fishhannah",
+              "label": "Hannah (Fish)",
+              "locale": "en",
+              "gender": "female"
+            },
+            {
+              "id": "library_fishfreya",
+              "label": "Freya (Fish)",
+              "locale": "en",
+              "gender": "female"
+            }
+          ],
+          "characterSelections": {},
+          "canonicalDirections": []
+        },
+        "text": "The door closed softly. They waited together until the final bell rang.",
+        "startOffset": 173,
+        "sceneTurns": []
+      },
+      "format": {
+        "container": "wav",
+        "sampleRate": 44100,
+        "channels": 1,
+        "frameCount": 197201
+      }
+    }
+  ],
+  "intent": {
+    "defaultVoiceId": "library_fishadrian",
+    "multiVoice": true,
+    "rate": 1.0,
+    "engineId": "fish_drama3_8bit",
+    "voices": [
+      {
+        "id": "library_fishadrian",
+        "label": "Adrian (Fish)",
+        "locale": "en",
+        "gender": "male"
+      },
+      {
+        "id": "library_fishhannah",
+        "label": "Hannah (Fish)",
+        "locale": "en",
+        "gender": "female"
+      },
+      {
+        "id": "library_fishfreya",
+        "label": "Freya (Fish)",
+        "locale": "en",
+        "gender": "female"
+      }
+    ],
+    "characterSelections": {}
+  },
+  "members": [
+    {
+      "name": "prepared/1.json",
+      "sizeBytes": 41712,
+      "sha256": "b209ec1973ae21d18cb11a1932bc4bd7f92c0f6494d25c3209d187313d901246"
+    },
+    {
+      "name": "audio/710a7365e502e1ab65d96e82df27a003af5beefcfdd9db4c837aef19e95e8ec7-479b7559ecdc7c453b20d19195bac83608588c172d7930043acb4cbe2df83fe9.wav",
+      "sizeBytes": 278572,
+      "sha256": "b7567cc42883cbdbbe64ecfc3a31279bd2be81463bdb8d685ec46687913e2ae6"
+    },
+    {
+      "name": "raw/cd5fea9d5619078db605d9cff0c247826a5f2de399b43cf67f78b5571d9cb7ca.wav",
+      "sizeBytes": 278572,
+      "sha256": "b7567cc42883cbdbbe64ecfc3a31279bd2be81463bdb8d685ec46687913e2ae6"
+    },
+    {
+      "name": "audio/2f41cabcecbf0cd577946e220e384430a811c504aac0420858c7bb861ea54d2d-20114c2c4ff83df1a748fca2ec39442db8ead0fe760bdca9c9df0bb4160484ed.wav",
+      "sizeBytes": 155692,
+      "sha256": "8fd085621110093a2764c3603fc6d9c1f834f39ead70ca10762655931329d50c"
+    },
+    {
+      "name": "raw/d9e00641bd8991f51a06cc702144a7675e92e692c8f3da413759d583c9a0d35c.wav",
+      "sizeBytes": 155692,
+      "sha256": "8fd085621110093a2764c3603fc6d9c1f834f39ead70ca10762655931329d50c"
+    },
+    {
+      "name": "audio/11c190a93c44a214f75eb060f03b3070a50758b1981f9e3553d59828d6e445e7-a7e2202f9edf0cff09e1749271d7e9fc6c913b79c20cc5acf0f058070def023c.wav",
+      "sizeBytes": 69676,
+      "sha256": "f3001b809aa4db39896e645ca1889bc22abb723ed403f9c0901af8a178dbfc79"
+    },
+    {
+      "name": "raw/056e2612d59f72a6a38d3f01919cade0b87bcc9c1311de7c1772492440e464b6.wav",
+      "sizeBytes": 69676,
+      "sha256": "f3001b809aa4db39896e645ca1889bc22abb723ed403f9c0901af8a178dbfc79"
+    },
+    {
+      "name": "audio/dac57cd41b82a6a4ff4002650e2c1b224170fc4f70db07ebdf96274d38165c59-246e47fe12e33f6fff13fb19248305aa5df341e7d67b0b055d224e74ee605e23.wav",
+      "sizeBytes": 201928,
+      "sha256": "ed2e63000740fa029e8f0036326e09751ba688dcd2ed5c159f044cfcc96db0a7"
+    },
+    {
+      "name": "raw/cadd19c71782cafb36baca700afe480149bc31c522b9fc9c1c3641a478161623.wav",
+      "sizeBytes": 208940,
+      "sha256": "5bf9d43180702824efed208de80e1a38d249c60cf8e9476ff4bf030bfcab1437"
+    },
+    {
+      "name": "audio/d2eb46d9bc1df44560073bb207c2b170376df1f7df9e8ed49f9c057166bb73de-e2f01e86151cfd5b06a1b3b826f320f6dd0fe3377053f35ef0fc1bef42cc9520.wav",
+      "sizeBytes": 69676,
+      "sha256": "424bf43a47913a059f80df1a2e491bdb5e2607ed5600e7d686b40027277f91d9"
+    },
+    {
+      "name": "raw/47e83e82f1bf358be4420cc94400bfc28c62b7b293f78098f266728b9d771c9f.wav",
+      "sizeBytes": 69676,
+      "sha256": "424bf43a47913a059f80df1a2e491bdb5e2607ed5600e7d686b40027277f91d9"
+    },
+    {
+      "name": "audio/3b8382739b9e9082de6a7a22f2d33febfa6a03facbe7815f16efac26f2094612-18530b284b584fc2c804ce5b910ffbdfb4ead1583a7fe07a1471725f533a464c.wav",
+      "sizeBytes": 106540,
+      "sha256": "63354c2d540f4209d2366add47c4924f1796838164bae91938a9681caf7803f7"
+    },
+    {
+      "name": "raw/983da034b0e1eb02a0e9bb68556e4c361474bf2e43b450e9df363ef4e5a96a8c.wav",
+      "sizeBytes": 106540,
+      "sha256": "63354c2d540f4209d2366add47c4924f1796838164bae91938a9681caf7803f7"
+    },
+    {
+      "name": "audio/08ddd1daaad17e10fec36285c7f265e624c7b6af41d3f1bcf688bf8b3ae64731-555e141bb4bd23dd474cb39ea46c6ec65d03505243c3f90cc4cec86d587abf51.wav",
+      "sizeBytes": 394446,
+      "sha256": "df7ca070b9dc7a34192154df4e5fba783f20e4d92647334d800a59ec2337574d"
+    },
+    {
+      "name": "raw/17a151285a7a49c90701005b57eea066bb34646d60e89301059200ab8a23be93.wav",
+      "sizeBytes": 397356,
+      "sha256": "c21b481c5a2fd9f4a2e9ab87d040399435464846f37bfca5b65fe87b24cc2062"
+    }
+  ]
+}
