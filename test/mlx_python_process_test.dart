@@ -127,14 +127,17 @@ end
         .setMockMethodCallHandler(activityChannel, null);
     await root.delete(recursive: true);
   });
-  Future<void> load({int sizingEstimateBytes = 80000000000}) async {
+  Future<void> load({
+    int sizingEstimateBytes = 80000000000,
+    void Function(Map<String, Object?>)? onProgress,
+  }) async {
     await worker.loadModel(
       modelId: 'fish_drama3',
       modelPath: '',
       quantizationBits: 0,
       privateCachePath: root.path,
       sizingEstimateBytes: sizingEstimateBytes,
-      onProgress: (_) {},
+      onProgress: onProgress ?? (_) {},
     );
   }
 
@@ -567,6 +570,7 @@ end
   Future<void> useNativeSampler(
     Future<RuntimeMemorySnapshot> Function() sampler, {
     Iterable<QualifiedModelMemoryRecord> records = const [],
+    Future<void>? Function()? runtimeInstallationDrain,
   }) async {
     await worker.shutdown();
     worker = MlxTtsPythonProcess(
@@ -575,6 +579,7 @@ end
       privateCacheDirectory: Directory('${root.path}/cache'),
       runtimeMemorySampler: sampler,
       deviceIdentitySampler: () async => 'fixture-mac',
+      runtimeInstallationDrain: runtimeInstallationDrain,
       qualificationRecords: records,
     );
   }
@@ -713,6 +718,84 @@ end
       await load();
       expect(samples, 3);
       expect(await File('${root.path}/cache/load.pid').exists(), isTrue);
+    },
+  );
+
+  test(
+    'Fish waits for runtime setup, then measures and can safely retry',
+    () async {
+      final installing = Completer<void>();
+      final waiting = Completer<void>();
+      var samples = 0;
+      var available = 20000000000;
+      await useNativeSampler(
+        () async {
+          samples++;
+          return memorySnapshot(available: available);
+        },
+        runtimeInstallationDrain: () =>
+            installing.isCompleted ? null : installing.future,
+      );
+      final first = expectLater(
+        load(
+          onProgress: (event) {
+            if (event['stage'] == 'memoryAdmissionWait') waiting.complete();
+          },
+        ),
+        throwsA(
+          isA<StateError>().having(
+            (e) => e.message,
+            'reason',
+            contains('headroom'),
+          ),
+        ),
+      );
+      await waiting.future;
+      expect(samples, 0);
+      final loadReceipt = File('${root.path}/cache/load.pid');
+      expect(await loadReceipt.exists(), isFalse);
+      installing.complete();
+      await first;
+      expect(samples, 1);
+      expect(await loadReceipt.exists(), isFalse);
+      available = 110000000000;
+      await load();
+      expect(await loadReceipt.exists(), isTrue);
+    },
+  );
+
+  test(
+    'cancelling Fish leaves the shared install alive and starts no model',
+    () async {
+      final installing = Completer<void>();
+      final waiting = Completer<void>();
+      var samples = 0;
+      await useNativeSampler(
+        () async {
+          samples++;
+          return memorySnapshot();
+        },
+        runtimeInstallationDrain: () =>
+            installing.isCompleted ? null : installing.future,
+      );
+      final cancelled = expectLater(
+        load(
+          onProgress: (event) {
+            if (event['stage'] == 'memoryAdmissionWait') waiting.complete();
+          },
+        ),
+        throwsA(isA<MlxTtsRequestCancelled>()),
+      );
+      await waiting.future;
+      worker.cancelActiveRequest();
+      await cancelled.timeout(const Duration(seconds: 1));
+      expect(installing.isCompleted, isFalse);
+      expect(samples, 0);
+      final loadReceipt = File('${root.path}/cache/load.pid');
+      expect(await loadReceipt.exists(), isFalse);
+      installing.complete();
+      await load();
+      expect(await loadReceipt.exists(), isTrue);
     },
   );
 
