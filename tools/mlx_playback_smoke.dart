@@ -40,6 +40,8 @@ Future<void> main(List<String> args) async {
     player: player,
     engineId: args[0],
     mlxQuantizationBits: bits,
+    mlxModelPath: Platform.environment['READALOUD_MLX_TTS_MODEL_PATH'],
+    mlxPythonPath: Platform.environment['READALOUD_MLX_PYTHON'],
   );
   final controller = SmokeController(engine);
   final paths = <String>{};
@@ -71,6 +73,10 @@ Future<void> main(List<String> args) async {
   try {
     await controller.initialize();
     receipt['startupError'] = controller.startupError;
+    final multiVoice =
+        Platform.environment['READALOUD_SMOKE_MULTI_VOICE'] == '1';
+    if (multiVoice) await controller.setMultiVoiceEnabled(true);
+    receipt['multiVoice'] = multiVoice;
     final selectedVoice = Platform.environment['READALOUD_SMOKE_VOICE_ID'];
     if (selectedVoice != null) {
       if (!controller.voices.any((voice) => voice.id == selectedVoice)) {
@@ -106,6 +112,16 @@ Future<void> main(List<String> args) async {
     receipt['characters'] = controller.document.characterCastRegistry.entries
         .map((entry) => entry.castId)
         .toList();
+    final initialCast = {
+      for (final entry in controller.characterCastRegistry.characterEntries)
+        entry.castId: {
+          'gender': entry.inferredGender?.name,
+          'voice': controller.castVoiceAssignments
+              ?.forCastId(entry.castId)
+              ?.effectiveVoiceId,
+        },
+    };
+    receipt['initialCast'] = initialCast;
     unawaited(controller.startPlayback());
     final deadline = DateTime.now().add(const Duration(minutes: 5));
     var advanced = false;
@@ -166,6 +182,58 @@ Future<void> main(List<String> args) async {
       }
     }
     receipt['soakSeconds'] = soakSeconds;
+    receipt['playbackState'] = controller.playbackState.name;
+    receipt['cast'] = controller.characterCastRegistry.characterEntries.map((
+      entry,
+    ) {
+      final assignment = controller.castVoiceAssignments?.forCastId(
+        entry.castId,
+      );
+      final voice = controller.voices
+          .where((voice) => voice.id == assignment?.effectiveVoiceId)
+          .firstOrNull;
+      return {
+        'castId': entry.castId,
+        'genderEvidence': entry.inferredGender?.name,
+        'voiceId': voice?.id,
+        'voiceGender': voice?.gender?.name,
+        'decision': assignment?.decisionKind.name,
+      };
+    }).toList();
+    receipt['spokenChunks'] = controller.spokenChunkRecords
+        .map(
+          (chunk) => {
+            'castId': chunk.castId,
+            'voiceId': chunk.voiceId,
+            'startWord': chunk.startWordIndex,
+            'endWord': chunk.endWordIndex,
+            'completed': chunk.completed,
+            'audioDurationMs': chunk.audioDuration.inMilliseconds,
+          },
+        )
+        .toList();
+    if (multiVoice) {
+      final mismatches = (receipt['cast']! as List).where(
+        (entry) =>
+            entry['genderEvidence'] != null &&
+            entry['genderEvidence'] != 'neutral' &&
+            entry['genderEvidence'] != entry['voiceGender'],
+      );
+      if (mismatches.isNotEmpty) {
+        throw StateError('Automatic voice gender mismatch: $mismatches');
+      }
+      for (final entry in (receipt['cast']! as List)) {
+        final before = initialCast[entry['castId']];
+        if (before != null &&
+            before['gender'] != null &&
+            before['gender'] == entry['genderEvidence'] &&
+            before['voice'] != entry['voiceId']) {
+          throw StateError(
+            'Unchanged character evidence reassigned its voice: ${entry['castId']}',
+          );
+        }
+      }
+    }
     receipt['preparationCompleteMs'] = preparationCompleteMs;
     receipt['preparationStages'] = controller.preparationProgress.map(
       (stage, value) => MapEntry(stage.name, {
@@ -190,9 +258,6 @@ Future<void> main(List<String> args) async {
       );
     }
     receipt['maxNativeStallMs'] = maxStallMs;
-    if (soakSeconds > 0 && maxStallMs > 1000) {
-      throw StateError('Native playback stalled for $maxStallMs ms');
-    }
     if (paths.isEmpty) throw StateError('No native audio source');
     // just_audio consumes the canonical PCM16 WAV emitted by the pipeline.
     var peak = 0;
@@ -231,10 +296,15 @@ Future<void> main(List<String> args) async {
     if (args[0].startsWith('fish_drama3') && !sampleRates.contains(44100)) {
       throw StateError('Drama did not reach playback at native 44.1 kHz.');
     }
+    if (soakSeconds > 0 && maxStallMs > 1000) {
+      throw StateError('Native playback stalled for $maxStallMs ms');
+    }
     passed = true;
   } catch (error, stack) {
     receipt.addAll({'passed': false, 'error': '$error', 'stack': '$stack'});
   } finally {
+    receipt['audioPaths'] = paths.toList();
+    receipt['tracePath'] = controller.ttsDebugTraceLogPath;
     await controller.pausePlayback();
     await engine.shutdownResources();
     await controller.shutdownPreparation();

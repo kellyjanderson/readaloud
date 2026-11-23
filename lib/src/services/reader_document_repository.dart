@@ -18,7 +18,7 @@ class ReaderDocumentRepository {
   ReaderDocumentRepository(this.rootPath);
   final String rootPath;
   static const schemaVersion = 1;
-  static const dependencyVersion = 'rc2-prepared-ranges-v1';
+  static const dependencyVersion = 'rc2-prepared-ranges-character-discovery-v3';
   final Map<String, Object> _writers = {};
   int _generation = 0;
   final Map<String, Future<void>> _manifestRenames = {};

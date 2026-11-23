@@ -7,9 +7,9 @@ import 'character_cast_registry_service.dart';
 class SpeakerAttributionService {
   const SpeakerAttributionService();
 
-  static const attributionVersion = 'read-aloud-speaker-attribution-v6';
+  static const attributionVersion = 'read-aloud-speaker-attribution-v7';
   static const providerId = 'heuristic_speaker_attribution';
-  static const providerVersion = 'v6';
+  static const providerVersion = 'v7';
   static const _minimumAttributionConfidence = 0.75;
 
   static const _speechVerbPattern =
@@ -51,13 +51,44 @@ class SpeakerAttributionService {
     'They',
     'We',
     'You',
+    'Now',
   };
+
+  /// Cheap discovery shares the existing explicit-tag recognizer. It does not
+  /// resolve quotes, alternate speakers or wait for the deeper attribution pass.
+  List<SpeakerReference> discoverSpeakers(SpeechDocument document) {
+    final found = <String, SpeakerReference>{};
+    for (final segment in document.segments) {
+      for (final (pattern, group) in [
+        (_exactSpeakerBeforeVerbPattern, 1),
+        (_exactVerbBeforeSpeakerPattern, 2),
+      ]) {
+        for (final match in pattern.allMatches(
+          _withoutQuotedText(segment.normalizedText),
+        )) {
+          final label = _cleanSpeakerLabel(match.group(group)?.trim());
+          if (!_isLikelySpeakerLabel(label)) continue;
+          final key = _normalizeSpeakerLabel(label!);
+          found.putIfAbsent(
+            key,
+            () => SpeakerReference(
+              referenceId: _speakerReferenceIdForLabel(key),
+              displayLabel: label,
+              normalizedLabel: key,
+            ),
+          );
+        }
+      }
+    }
+    return List.unmodifiable(found.values);
+  }
 
   DialogueAttributionSet attribute({
     required SpeechDocument speechDocument,
     required BaseSpeechAnnotationSet baseAnnotations,
     List<SpeechSegment> contextSegments = const [],
     List<SpeechSegment> followingContextSegments = const [],
+    List<SpeechAnnotation> contextAnnotations = const [],
   }) {
     if (contextSegments.length > 12 || followingContextSegments.length > 12) {
       throw ArgumentError(
@@ -68,7 +99,7 @@ class SpeakerAttributionService {
         .map((segment) => segment.segmentId)
         .toSet();
     final evidenceOnlyIds = <String>{};
-    final segments = <SpeechSegment>[
+    final rawSegments = <SpeechSegment>[
       for (final segment in contextSegments)
         if (!currentIds.contains(segment.segmentId) &&
             evidenceOnlyIds.add(segment.segmentId))
@@ -79,6 +110,28 @@ class SpeakerAttributionService {
             evidenceOnlyIds.add(segment.segmentId))
           segment,
     ];
+    // Paragraph ordinals are range-local. Rebase only the analysis view using
+    // stable block identity; leave source IDs, spans and saved text untouched.
+    final paragraphs = <String, int>{};
+    final segments = rawSegments
+        .map(
+          (s) => SpeechSegment(
+            segmentId: s.segmentId,
+            blockId: s.blockId,
+            ordinal: s.ordinal,
+            paragraphIndex: paragraphs.putIfAbsent(
+              '${s.blockId}:${s.paragraphIndex}',
+              () => paragraphs.length,
+            ),
+            sentenceIndex: s.sentenceIndex,
+            normalizedText: s.normalizedText,
+            wordCount: s.wordCount,
+            sourceRange: s.sourceRange,
+            displayAnchor: s.displayAnchor,
+            wordSpans: s.wordSpans,
+          ),
+        )
+        .toList();
     speechDocument = SpeechDocument(
       documentId: speechDocument.documentId,
       sourceType: speechDocument.sourceType,
@@ -101,7 +154,11 @@ class SpeakerAttributionService {
     final orderedSpanIds = <String>[];
     final annotationsBySpanId = <String, List<SpeechAnnotation>>{};
 
-    for (final annotation in baseAnnotations.annotations) {
+    for (final annotation in [
+      ...contextAnnotations,
+      ...baseAnnotations.annotations,
+    ]) {
+      if (!segmentById.containsKey(annotation.segmentId)) continue;
       if (annotation.kind != SpeechAnnotationKind.dialogueSpan ||
           annotation.dialogueSpanId == null) {
         continue;
@@ -137,7 +194,7 @@ class SpeakerAttributionService {
         priorResolvedSpans: resolvedSpans,
         evidenceOnlyIds: evidenceOnlyIds,
       );
-      outcomes.add(outcome);
+      if (span.segmentIds.any(currentIds.contains)) outcomes.add(outcome);
       resolvedSpans.add(_ResolvedDialogueSpan(span: span, outcome: outcome));
     }
 
@@ -248,6 +305,22 @@ class SpeakerAttributionService {
     }
 
     final segment = speechDocument.segments[segmentIndex];
+    if (allSpans.any(
+      (other) =>
+          other.dialogueSpanId != span.dialogueSpanId &&
+          other.segmentIds.contains(segment.segmentId),
+    )) {
+      return null;
+    }
+    if (evidenceOnlyIds.contains(segment.segmentId) &&
+        allSpans.any(
+          (other) =>
+              other.dialogueSpanId != span.dialogueSpanId &&
+              other.blockId == segment.blockId &&
+              other.paragraphIndex == segment.paragraphIndex,
+        )) {
+      return null;
+    }
     if (!_isLocalEvidenceSegment(span: span, segment: segment) &&
         !evidenceOnlyIds.contains(segment.segmentId)) {
       return null;
@@ -307,6 +380,16 @@ class SpeakerAttributionService {
     'Beyond',
     'Below',
     'Above',
+    'Now',
+    'Then',
+    'Later',
+    'Monday',
+    'Tuesday',
+    'Wednesday',
+    'Thursday',
+    'Friday',
+    'Saturday',
+    'Sunday',
   };
 
   _AttributionDecision? _narrativePronounDecision({
@@ -686,6 +769,7 @@ class SpeakerAttributionService {
     required DialogueAttributionRule ruleUsed,
     required DialogueEvidenceSpan evidenceSpan,
   }) {
+    label = _cleanSpeakerLabel(label)!;
     final normalizedLabel = _normalizeSpeakerLabel(label);
     return DialogueAttributionOutcome(
       attributionId: 'attr_$dialogueSpanId',
@@ -846,6 +930,9 @@ class SpeakerAttributionService {
     }
     return !_excludedSpeakerLabels.contains(value);
   }
+
+  String? _cleanSpeakerLabel(String? value) =>
+      value?.replaceFirst(RegExp(r'^(?:Now|Then|Later)\s+(?=[A-Z])'), '');
 
   String _normalizeSpeakerLabel(String value) {
     return value.trim().toLowerCase().replaceAll(RegExp(r'\s+'), ' ');

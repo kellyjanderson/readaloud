@@ -146,9 +146,18 @@ assuming Kokoro's 24 kHz. Boundary derivative identity was versioned to prevent
 reuse of derivatives computed with the old timing assumption.
 
 Drama has bf16/8-/4-bit pinned repository entries and 43 selectable reference
-voices including 13 cached Fish Official designed references. Native multi-voice
-scene packing/timing is still open; implemented fiction routing is per-character
-chunk synthesis. Source regressions establish ownership, emitted-sample retention
+voices including 13 cached Fish Official designed references. For Drama, the Dart
+worker derives a sorted reference set from the current document/revision's
+prepared bindings, partitions casts larger than sixteen into bounded groups,
+and sends the selected voice plus that group's audio/transcripts. The Python
+adapter assigns native `<|speaker:N|>` slots and calls MLX Audio's existing
+multi-reference generator. Slot ownership never escapes into persistent character
+identity. MLX Audio owns encoding and prefill reuse through its existing
+content-keyed voice cache; Read Aloud adds no tensor/history cache. Ordered
+reference digests participate in raw artifact identity, and only Drama's engine
+version changes for this binding protocol. Non-Drama adapters retain their prior
+identity and behavior. Native multi-turn scene packing/timing remains open;
+implemented fiction routing still synthesizes bounded per-character chunks. Source regressions establish ownership, emitted-sample retention
 and format behavior. They do not establish real Drama acoustic quality, sustained
 memory, M3 performance or uninterrupted chapter playback; native evidence is
 recorded in #111.

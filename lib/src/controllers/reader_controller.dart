@@ -375,8 +375,8 @@ class ReaderController extends ChangeNotifier {
   List<CastEntry> get discoveredCastEntries =>
       List.unmodifiable(_discoveredCast.values);
 
-  /// Session-wide discoveries for casting UI. Playback keeps its range-local
-  /// document and bindings; opening the dialog must not change audible intent.
+  /// Session-wide evidence shared by casting UI and newly admitted speech.
+  /// Already captured playback contexts and bindings remain immutable.
   CharacterCastRegistry get characterCastRegistry => _discoveredCast.isEmpty
       ? _document.characterCastRegistry
       : CharacterCastRegistry(
@@ -854,6 +854,24 @@ class ReaderController extends ChangeNotifier {
         _documentLoadStageProgress = progress.fraction;
         notifyListeners();
       },
+      onCharacterDiscovery: (publication) {
+        if (!current() ||
+            publication.request.ownerId != _preparationOwner ||
+            publication.request.revision != revision ||
+            publication.request.effectiveSourceRevision !=
+                request.effectiveSourceRevision ||
+            publication.request.watchSession != watchSession ||
+            publication.sequence != _publicationSequence + 1) {
+          return;
+        }
+        if (_publicationSequence == 0) {
+          _sessionDocumentId = publication.registry.documentId;
+        }
+        _mergeDiscoveredCast(publication.registry);
+        _documentLoadStageLabel =
+            'Discovered ${discoveredCastEntries.length - 1} characters; refining dialogue';
+        notifyListeners();
+      },
       onPublication: (publication) async {
         if (!current() ||
             publication.request.ownerId != _preparationOwner ||
@@ -877,19 +895,7 @@ class ReaderController extends ChangeNotifier {
         _preparedRanges.add(publication);
         _signalRanges();
         final registry = publication.fragment.characterCastRegistry;
-        for (final entry in registry.entries) {
-          _discoveredCast[entry.castId] = entry;
-        }
-        for (final redirect in registry.castIdRedirects.entries) {
-          _castRedirects[redirect.key] = redirect.value;
-          _discoveredCast.remove(redirect.key);
-          // Preserve both explicit choices when they conflict. Future binding
-          // follows the surviving identity; current speech remains unchanged.
-          final priorChoice = _castVoiceOverrides[redirect.key];
-          if (priorChoice != null) {
-            _castVoiceOverrides.putIfAbsent(redirect.value, () => priorChoice);
-          }
-        }
+        _mergeDiscoveredCast(registry);
         for (final progress in publication.progress) {
           if (publication.coverage.contains(progress.stage) ||
               progress.scope == 'cache' ||
@@ -4120,7 +4126,7 @@ class ReaderController extends ChangeNotifier {
         (multiVoice ?? _isMultiVoiceEnabled) && _voices.isNotEmpty
         ? _castVoiceAssignmentService.resolve(
             CastVoiceAssignmentInput(
-              characterCastRegistry: document.characterCastRegistry,
+              characterCastRegistry: _castingRegistryFor(document),
               availableVoices: _voices,
               fallbackVoiceId: voiceId,
               preferredNarratorVoiceId: voiceId,
@@ -4312,8 +4318,9 @@ class ReaderController extends ChangeNotifier {
 
     return _castVoiceAssignmentService.resolve(
       CastVoiceAssignmentInput(
-        characterCastRegistry:
-            document?.characterCastRegistry ?? characterCastRegistry,
+        characterCastRegistry: document == null
+            ? characterCastRegistry
+            : _castingRegistryFor(document),
         availableVoices: _voices,
         fallbackVoiceId: preferredNarratorVoiceId,
         preferredNarratorVoiceId: preferredNarratorVoiceId,
@@ -4327,6 +4334,40 @@ class ReaderController extends ChangeNotifier {
     return Map<String, String>.unmodifiable(
       _storedDocumentCastVoiceAssignments[_voicePreferenceDocumentId] ??
           const <String, String>{},
+    );
+  }
+
+  void _mergeDiscoveredCast(CharacterCastRegistry registry) {
+    for (final entry in registry.entries) {
+      _discoveredCast[entry.castId] = entry;
+    }
+    for (final redirect in registry.castIdRedirects.entries) {
+      _castRedirects[redirect.key] = redirect.value;
+      _discoveredCast.remove(redirect.key);
+      final choice = _castVoiceOverrides[redirect.key];
+      if (choice != null) {
+        _castVoiceOverrides.putIfAbsent(redirect.value, () => choice);
+      }
+    }
+  }
+
+  CharacterCastRegistry _castingRegistryFor(ReaderDocument document) {
+    if (_discoveredCast.isEmpty) return document.characterCastRegistry;
+    return CharacterCastRegistry(
+      documentId: document.characterCastRegistry.documentId,
+      registryVersion: document.characterCastRegistry.registryVersion,
+      entries:
+          {
+                for (final entry in document.characterCastRegistry.entries)
+                  entry.castId: entry,
+                ..._discoveredCast,
+              }.values
+              .where((entry) => !_castRedirects.containsKey(entry.castId))
+              .toList(),
+      castIdRedirects: {
+        ...document.characterCastRegistry.castIdRedirects,
+        ..._castRedirects,
+      },
     );
   }
 

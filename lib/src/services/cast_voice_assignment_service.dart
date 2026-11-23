@@ -23,7 +23,7 @@ class CastVoiceAssignmentInput {
 class CastVoiceAssignmentService {
   const CastVoiceAssignmentService();
 
-  static const assignmentVersion = 'read-aloud-cast-voice-assignments-v2';
+  static const assignmentVersion = 'read-aloud-cast-voice-assignments-v3';
 
   CastVoiceAssignmentSet resolve(CastVoiceAssignmentInput input) {
     final sortedVoices = List<VoiceProfile>.from(input.availableVoices)
@@ -43,9 +43,10 @@ class CastVoiceAssignmentService {
           narratorAutomaticVoiceId,
     };
 
+    // The registry preserves first encounter across incremental publications.
+    // Alphabetical insertion would reassign every later character's voice.
     final sortedCharacters =
-        input.characterCastRegistry.characterEntries.toList(growable: false)
-          ..sort((left, right) => left.castId.compareTo(right.castId));
+        input.characterCastRegistry.characterEntries.toList(growable: false);
     final usedCharacterVoiceIds = <String>{};
 
     for (var index = 0; index < sortedCharacters.length; index += 1) {
@@ -157,9 +158,18 @@ class CastVoiceAssignmentService {
     }
 
     final gender = character.inferredGender;
-    final matching = preferredVoices
+    final matchingCharacters = preferredVoices
         .where((voice) => voice.gender == gender)
         .toList();
+    final matching = matchingCharacters.isNotEmpty
+        ? matchingCharacters
+        : [
+            // Reusing the narrator is preferable to contradicting reliable evidence
+            // when it is the only compatible voice in a small installed catalog.
+            ...voices.where(
+              (voice) => voice.id == narratorVoiceId && voice.gender == gender,
+            ),
+          ];
     final pool =
         gender != null && gender != VoiceGender.neutral && matching.isNotEmpty
         ? matching
@@ -195,6 +205,10 @@ class CastVoiceAssignmentService {
         final rightMatches = right.gender == preferredGender;
         if (leftMatches != rightMatches) return leftMatches ? -1 : 1;
       }
+      final priority = right.automaticSelectionPriority.compareTo(
+        left.automaticSelectionPriority,
+      );
+      if (priority != 0) return priority;
       final scoreComparison =
           _characterVoiceScore(
             right,
@@ -274,6 +288,10 @@ class CastVoiceAssignmentService {
   }
 
   int _compareVoices(VoiceProfile left, VoiceProfile right) {
+    final priority = right.automaticSelectionPriority.compareTo(
+      left.automaticSelectionPriority,
+    );
+    if (priority != 0) return priority;
     final qualityComparison =
         (_qualityScore(right.qualityGrade) + _usEnglishPreferenceBonus(right))
             .compareTo(

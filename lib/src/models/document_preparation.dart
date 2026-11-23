@@ -1,7 +1,20 @@
 import 'dart:typed_data';
-
+import 'character_cast_registry.dart';
 import 'reader_document.dart';
 import 'document_import_exception.dart';
+
+/// Provisional discovery precedes the refined range with the same sequence.
+/// The supervisor rejects old operations and discoveries after range commit.
+class CharacterDiscoveryPublication {
+  const CharacterDiscoveryPublication({
+    required this.request,
+    required this.sequence,
+    required this.registry,
+  });
+  final DocumentPreparationRequest request;
+  final int sequence;
+  final CharacterCastRegistry registry;
+}
 
 enum DocumentPreparationKind { bytes, pastedText, sharedText, sample }
 

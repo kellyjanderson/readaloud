@@ -58,6 +58,7 @@ class DocumentPreparationSupervisor {
     required Future<void> Function(DocumentPreparationPublication)
     onPublication,
     void Function(PreparationProgress)? onProgress,
+    void Function(CharacterDiscoveryPublication)? onCharacterDiscovery,
     Future<void> Function()? acquireSource,
     Future<void> Function()? onDrained,
   }) {
@@ -71,6 +72,7 @@ class DocumentPreparationSupervisor {
       onIdentityMigration: onIdentityMigration,
       onPublication: onPublication,
       onProgress: onProgress,
+      onCharacterDiscovery: onCharacterDiscovery,
       acquireSource: acquireSource,
       onDrained: onDrained,
     );
@@ -83,6 +85,7 @@ class DocumentPreparationSupervisor {
     Future<void> Function(DocumentIdentityMigration)? onIdentityMigration,
     Future<void> Function(DocumentPreparationPublication)? onPublication,
     void Function(PreparationProgress)? onProgress,
+    void Function(CharacterDiscoveryPublication)? onCharacterDiscovery,
     Future<void> Function()? acquireSource,
     Future<void> Function()? onDrained,
   }) {
@@ -95,6 +98,7 @@ class DocumentPreparationSupervisor {
       onDrained,
       cacheKey,
       onIdentityMigration,
+      onCharacterDiscovery,
     );
     if (_closed) {
       job.finish(DocumentPreparationOutcome.cancelled);
@@ -286,6 +290,7 @@ class DocumentPreparationSupervisor {
       final response = Completer<Object?>();
       final exited = Completer<void>();
       var sequence = 0;
+      var discoverySequence = 0;
       SendPort? credit;
       final subscription = port.listen((message) {
         if (message is SendPort) {
@@ -313,6 +318,21 @@ class DocumentPreparationSupervisor {
           if (!job.result.isCompleted &&
               _sameReceipt(message.receipt, request)) {
             acquisitionProof = message;
+          }
+          return;
+        }
+        if (message is CharacterDiscoveryPublication) {
+          if (!job.result.isCompleted &&
+              _sameRequest(message.request, request) &&
+              message.sequence == sequence + 1 &&
+              message.sequence > discoverySequence) {
+            discoverySequence = message.sequence;
+            try {
+              job.onCharacterDiscovery?.call(message);
+            } catch (error) {
+              job.finish(DocumentPreparationOutcome.failed, error: '$error');
+              job.abort?.call();
+            }
           }
           return;
         }
@@ -499,6 +519,7 @@ class _PreparationJob {
     this.onDrained,
     this.cacheKey,
     this.onIdentityMigration,
+    this.onCharacterDiscovery,
   );
   final Future<void> Function(DocumentIdentityMigration)? onIdentityMigration;
   final String? cacheKey;
@@ -506,6 +527,7 @@ class _PreparationJob {
   final Future<void> Function()? onDrained;
   final Future<void> Function(DocumentPreparationPublication)? onPublication;
   final void Function(PreparationProgress)? onProgress;
+  final void Function(CharacterDiscoveryPublication)? onCharacterDiscovery;
   final Future<Uint8List> Function()? acquireBytes;
   final DocumentPreparationRequest request;
   final result = Completer<DocumentPreparationResult>();
@@ -748,6 +770,13 @@ Future<void> _publishTextRanges(
                   : 'Pasted Text'),
           sessionId: request.operationId,
           sourceStart: sourceStart,
+          onCharacterDiscovery: (registry) => input.reply.send(
+            CharacterDiscoveryPublication(
+              request: request.identityOnly,
+              sequence: sequence + 1,
+              registry: registry,
+            ),
+          ),
           unit: unit,
           followingUnit: context.following,
           completeSourceFingerprint: completeSourceFingerprint,

@@ -21,6 +21,50 @@ spec.loader.exec_module(worker)
 
 
 class GeneratorAdapterTest(unittest.TestCase):
+    def test_drama_turns_share_reference_set_and_use_selected_native_slot(self):
+        with tempfile.TemporaryDirectory() as root:
+            paths = [Path(root) / name for name in ('a.wav', 'b.wav')]
+            for path in paths:
+                path.write_bytes(b'validated by model loader, not this input test')
+            refs = [dict(voice=f'library_{name}', referenceAudioPath=str(path),
+                         referenceText=f'Reference {name}.')
+                    for name, path in zip(('alice', 'beth'), paths)]
+            results = [worker._drama_reference_inputs(
+                dict(voice=f'library_{name}', references=refs), 'Hello.')
+                for name in ('alice', 'beth', 'alice')]
+            self.assertEqual([r[0] for r in results], [
+                '<|speaker:0|> Hello.', '<|speaker:1|> Hello.', '<|speaker:0|> Hello.'])
+            self.assertEqual(results[0][1:], results[1][1:])
+            self.assertEqual(results[0][2], [
+                '<|speaker:0|> Reference alice.', '<|speaker:1|> Reference beth.'])
+            for invalid in ([], refs * 9, [refs[0], refs[0]]):
+                with self.assertRaises(ValueError):
+                    worker._drama_reference_inputs(dict(voice='library_alice', references=invalid), 'Hello.')
+            with self.assertRaises(ValueError):
+                worker._drama_reference_inputs(dict(voice='library_missing', references=refs), 'Hello.')
+
+    def test_drama_native_generator_receives_cast_and_preserves_delivery_cues(self):
+        calls = []
+        class Model:
+            def generate(self, **kwargs):
+                calls.append(kwargs)
+                yield SimpleNamespace(sample_rate=44100, audio=mx.array([.2, -.2]))
+        with tempfile.TemporaryDirectory() as root, \
+                patch.object(worker, '_model', Model()), \
+                patch.object(worker, '_model_id', 'fish_drama3'):
+            ref = Path(root) / 'reference.wav'
+            ref.write_bytes(b'input only, native encoder replaced by test model')
+            references = [dict(voice=f'library_{name}', referenceAudioPath=str(ref),
+                               referenceText=f'Reference {name}.') for name in ('alice', 'beth')]
+            worker._synthesize(dict(modelId='fish_drama3', voice='library_beth',
+                                    references=references, text='[whispering] Stay here.',
+                                    outputPath=str(Path(root) / 'speech.wav')))
+            self.assertEqual(calls[0]['text'], '<|speaker:1|> [whispering] Stay here.')
+            self.assertEqual(calls[0]['ref_audio'], [str(ref), str(ref)])
+            self.assertEqual(calls[0]['ref_text'], [
+                '<|speaker:0|> Reference alice.', '<|speaker:1|> Reference beth.'])
+            self.assertTrue(calls[0]['stream'])
+
     def test_installed_drama_generator_exact_boundary_writes_complete_wav(self):
         """Use the installed producer's real framing, with bounded codec input.
 
