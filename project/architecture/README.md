@@ -16,6 +16,7 @@ Current source structure, ownership and known limitations. Proposed changes belo
 - [Spoken Text Highlighting and Reading Focus](spoken-text-highlighting-and-reading-focus.md)
 - [Audio Export and Headless Execution](audio-export-and-headless-execution.md)
 - [Reader Interface and Session State](reader-interface-and-session-state.md)
+- [Native User-testing Session](native-user-testing.md)
 
 The [legacy contract index](../specifications/README.md) links retained children directly to their owning architecture. Historical design prose is in [the archive](../archive/README.md).
 

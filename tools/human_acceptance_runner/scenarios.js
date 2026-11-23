@@ -10,13 +10,23 @@ window.HUMAN_ACCEPTANCE_SCENARIOS = [
     expected: 'The control responds promptly, no cancelled speech starts later, and a fresh Play still works.'
   },
   {
-    id: 'installed-model-switch',
-    issue: 112,
-    title: 'Switch between prepared speech models',
-    fixtureId: 'model-workflow',
-    question: 'Can you follow the selected and active model states, switch between the supplied installed models, and start a fresh reading without unexpected speech?',
-    steps: ['Open the supplied candidate using the isolated test profile described in the fixture. Use only the two already installed model choices named there.', 'Open Settings and switch to the other model. Watch the status, then close and reopen Settings to confirm the selected and active choice.', 'Return to the supplied short document and press Play. Listen briefly, stop, and switch back. If the fixture says a model is not installed or needs a download, skip and record that mismatch.'],
-    expected: 'Settings stays responsive and shows the actual selected and active choices. Switching starts no speech by itself. A fresh Play uses the chosen prepared model.'
+    "id": "installed-model-switch",
+    "issue": 112,
+    "title": "Switch between the two supplied speech models",
+    "fixtureId": "model-workflow",
+    "question": "Is it clear which speech model is ready to read? Can you change models and then start reading?",
+    "steps": [
+      "With Read Aloud closed, click Start this test, then open the test app in Finder using the instructions below.",
+      "In Read Aloud, choose File → Open Document and open the short sample listed under Test fixture provided below. You can leave the recovery files alone for this test.",
+      "Open the app’s Settings. Choose Fish Audio Drama 3 · 8-bit. If you see Load selected speech engine, click it. Wait until the status says Active. “Selected” means the model you asked for; “Active” means it is loaded and ready to read.",
+      "Close Settings, press Play and listen briefly. Pause the reading before continuing.",
+      "Reopen Settings and choose Fish Audio Drama 3 · 4-bit. If a Load selected speech engine button appears, click it. Watch the status while it loads. Changing models should not start speech by itself.",
+      "When 4-bit says Active, close and reopen Settings. Check that 4-bit is still selected and active. Close Settings, press Play and listen briefly, then pause.",
+      "Return to Settings, choose Fish Audio Drama 3 · 8-bit and wait for Active, using Load selected speech engine if shown. This leaves the app ready for later tests.",
+      "Record whether the choices and status were clear, whether the controls responded, and whether speech started only when you pressed Play. If a model asks for a download, shows an error or never becomes ready, record what you see; do not download or repair anything for this test.",
+      "Quit Read Aloud with ⌘Q, then record your result below and check Read Aloud is closed."
+    ],
+    "expected": "Both supplied models can become Active and read the sample when you press Play. The status makes it clear which model is ready. Settings remains usable, and switching models does not start speech automatically. You do not need to judge which model sounds better."
   },
   {
     id: 'preparation-recovery-keyboard',
