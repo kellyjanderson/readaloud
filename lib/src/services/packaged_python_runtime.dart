@@ -47,6 +47,15 @@ class PackagedPythonRuntimeOwner {
   final Map<String, _Attempt> _active = {};
   bool _closed = false;
 
+  /// Wait for the attempts that currently own runtime installation helpers.
+  /// Callers own their wait and can leave without cancelling those attempts.
+  Future<void>? currentInstallationDrain() {
+    final drains = _active.values
+        .map((attempt) => attempt.drained.future)
+        .toList();
+    return drains.isEmpty ? null : Future.wait(drains);
+  }
+
   PackagedRuntimeLease acquire({
     required String runtimeId,
     required Directory resources,

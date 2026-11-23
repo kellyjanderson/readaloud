@@ -705,11 +705,12 @@ class MlxSpeechWorkerChunkProcessor
         completed: completed,
         total: total,
         unit: unit,
-        state:
-            completed != null &&
-                total != null &&
-                total > 0 &&
-                completed == total
+        state: stage == 'memoryAdmissionWait'
+            ? OperationState.waiting
+            : completed != null &&
+                  total != null &&
+                  total > 0 &&
+                  completed == total
             ? OperationState.finalizing
             : OperationState.running,
       ),
@@ -1077,6 +1078,7 @@ class MlxTtsPythonProcess {
     this.memorySampler,
     this.runtimeMemorySampler,
     this.deviceIdentitySampler,
+    this.runtimeInstallationDrain,
     this.qualificationRecords = qualifiedModelMemoryRecords,
   });
   final String pythonPath;
@@ -1089,6 +1091,7 @@ class MlxTtsPythonProcess {
   /// above is retained for legacy process tests only, and denotes a total.
   final Future<RuntimeMemorySnapshot> Function()? runtimeMemorySampler;
   final Future<String> Function()? deviceIdentitySampler;
+  final Future<void>? Function()? runtimeInstallationDrain;
   final Iterable<QualifiedModelMemoryRecord> qualificationRecords;
   static int observedPeakRuntimeBytes = 0;
   static RuntimeMemorySnapshot? observedLastMemorySnapshot;
@@ -1109,6 +1112,7 @@ class MlxTtsPythonProcess {
   bool _disposed = false;
   int _sequence = 0;
   int _cancelEpoch = 0;
+  Completer<void>? _requestCancellation;
   Timer? _memoryTimer;
   bool _samplingMemory = false;
   Object? _memoryToken;
@@ -1213,6 +1217,7 @@ class MlxTtsPythonProcess {
     }
     _busy = true; // Reserve before the first await, including process start.
     final epoch = _cancelEpoch;
+    final cancelled = _requestCancellation = Completer<void>();
     NativeSpeechWorkActivity? activity;
     try {
       activity = await NativeSpeechWorkActivity.begin();
@@ -1221,7 +1226,7 @@ class MlxTtsPythonProcess {
       final load = body['command'] == 'load'
           ? body
           : (needsLoad ? _loadSpec : null);
-      if (load != null) await _admitModelMemory(load, progress);
+      if (load != null) await _admitModelMemory(load, progress, cancelled);
       if (_disposed || epoch != _cancelEpoch) {
         throw const MlxTtsRequestCancelled();
       }
@@ -1263,6 +1268,7 @@ class MlxTtsPythonProcess {
       try {
         await activity?.release();
       } finally {
+        _requestCancellation = null;
         _busy = false;
       }
     }
@@ -1566,11 +1572,39 @@ class MlxTtsPythonProcess {
   Future<void> _admitModelMemory(
     Map<String, Object?> load,
     void Function(Map<String, Object?>)? progress,
+    Completer<void> cancelled,
   ) async {
     // Legacy process stubs intentionally replace all memory accounting.
     if (memorySampler != null) return;
-    final snapshot = await _settledLoadMemorySnapshot();
+    if (cancelled.isCompleted) throw const MlxTtsRequestCancelled();
     final modelId = load['modelId'] as String;
+    if (isDramaEngine(modelId)) {
+      // The sandbox can enumerate the installer's ditto/file/codesign children
+      // but cannot measure them. Join existing installs before sampling so a
+      // cold attribution install cannot race Fish admission.
+      final drain =
+          (runtimeInstallationDrain ??
+          PackagedPythonRuntimeOwner.shared.currentInstallationDrain)();
+      if (drain != null) {
+        progress?.call({
+          'type': 'progress',
+          'stage': 'memoryAdmissionWait',
+          'message': 'Waiting for bundled runtime setup before checking memory',
+        });
+        try {
+          await Future.any<void>([
+            drain,
+            cancelled.future,
+          ]).timeout(const Duration(seconds: 30));
+        } on TimeoutException {
+          throw StateError(
+            'Bundled runtime setup is still running. Retry speech after setup finishes.',
+          );
+        }
+        if (cancelled.isCompleted) throw const MlxTtsRequestCancelled();
+      }
+    }
+    final snapshot = await _settledLoadMemorySnapshot();
     RuntimeMemoryDecision decision;
     var measuredEnvelope = false;
     if (isDramaEngine(modelId)) {
@@ -1632,8 +1666,16 @@ class MlxTtsPythonProcess {
   void cancelActiveRequest() {
     if (!_busy) return;
     ++_cancelEpoch;
+    _signalRequestCancellation();
     _fail(const MlxTtsRequestCancelled());
     _child?.kill(ProcessSignal.sigterm);
+  }
+
+  void _signalRequestCancellation() {
+    final cancellation = _requestCancellation;
+    if (cancellation != null && !cancellation.isCompleted) {
+      cancellation.complete();
+    }
   }
 
   Future<void> reapCancelledProcess() => _retire();
@@ -1667,6 +1709,7 @@ class MlxTtsPythonProcess {
   Future<void> _close() async {
     _disposed = true;
     ++_cancelEpoch;
+    _signalRequestCancellation();
     _fail(const MlxTtsRequestCancelled());
     _child?.kill(ProcessSignal.sigterm);
     await _starting;

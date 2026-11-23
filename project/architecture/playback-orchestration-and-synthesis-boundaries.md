@@ -49,10 +49,17 @@ signal, while the document revision owns analysis. Cancelling Play releases
 the transport wait and leaves the analysis pass eligible to continue. Source
 replacement revokes publication for both owners.
 
-Before a model load and at its readiness check, MLX can resample an incomplete
-process tree for up to 2.5 seconds while a starting child reports its first
-footprint. The existing policy still requires a complete, fresh snapshot.
-Active-runtime monitoring continues to use the immediate sample.
+Before Fish model admission, the inference request can wait up to 30 seconds
+for the packaged runtime install attempts already in flight. An attempt owns
+its extractor and signature-check subprocesses until they exit. The sandbox
+can enumerate these subprocesses even when their physical footprint is
+unavailable. The request reports the setup wait, and cancellation releases its
+wait without changing ownership of the installs. After they drain, admission
+samples the current tree. Before load and at its readiness check, MLX can
+resample an incomplete tree for up to 2.5 seconds while a starting child
+reports its first footprint. Admission still requires complete, fresh
+accounting and the existing headroom and model envelope. Active-runtime
+monitoring uses the immediate sample.
 
 The planner uses one admitted quote and boundary projection for ordinary
 playback and WAV export. It keeps chapter and prepared-range edges hard so
