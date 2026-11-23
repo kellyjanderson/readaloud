@@ -72,7 +72,7 @@ class _ReadAloudScreenState extends State<ReadAloudScreen> {
       call,
     ) async {
       if (call.method == 'shutdown') {
-        await _controller.characterAnalysis.shutdown();
+        await _controller.shutdownChapterAnalysis();
       }
     });
     super.initState();
@@ -705,6 +705,7 @@ class _ReadAloudScreenState extends State<ReadAloudScreen> {
                       const SizedBox(height: 16),
                       ModernBookNlpSettings(
                         analysis: _controller.characterAnalysis,
+                        setEnabled: _controller.setChapterAnalysisEnabled,
                       ),
                       const SizedBox(height: 12),
                       SizedBox(
@@ -1359,8 +1360,8 @@ class _ReadAloudScreenState extends State<ReadAloudScreen> {
               isCharacterModeEnabled: _controller.isMultiVoiceEnabled,
               voiceLibrary: _controller.voiceLibrary,
               availableVoices: _controller.voices,
-              characterCastRegistry: _controller.characterCastRegistry,
-              isCastDiscoveryComplete: _controller.isPreparationComplete,
+              characterCastRegistry: _controller.voiceCastRegistry,
+              isCastDiscoveryComplete: _controller.isVoiceCastComplete,
               castVoiceAssignments: _controller.castVoiceAssignments,
               selectedVoiceId: _controller.selectedVoice?.id,
               assignmentState: _controller.voiceAssignmentState,

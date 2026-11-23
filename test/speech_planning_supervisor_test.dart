@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:isolate';
 import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:read_aloud/src/models/chunk_plan.dart';
 import 'package:read_aloud/src/models/speech_annotation.dart';
 import 'package:read_aloud/src/services/document_import_service.dart';
 import 'package:read_aloud/src/services/base_speech_annotation_inference_service.dart';
@@ -12,6 +13,49 @@ import 'package:read_aloud/src/models/voice_session_realization.dart';
 import 'package:read_aloud/src/services/speech_planning_supervisor.dart';
 
 void main() {
+  test(
+    'resident planner honors chapter edges on planning and refill',
+    () async {
+      final doc = DocumentImportService().importPastedText(
+        'One begins. One ends. Two begins. Two ends.',
+      );
+      final speech = doc.speechDocument;
+      final boundary = speech.segments[2].segmentId;
+      final owner = SpeechPlanningSupervisor();
+      addTearDown(owner.shutdown);
+      final context = SpeechPlanningContext(
+        engineVersion: mlxTtsVersionFor(0, engineId: 'fish_drama3'),
+        fishSceneBoundaries: {boundary: FishSceneBoundary.chapter},
+        realization: VoiceSessionRealizationInput(
+          speechDocument: speech,
+          baseAnnotations: doc.baseSpeechAnnotations,
+          basePronunciationArtifacts: doc.basePronunciationArtifacts,
+          startSegmentId: speech.segments.first.segmentId,
+          voiceId: 'library_fishsarah',
+          engineId: 'fish_drama3',
+          rate: 1,
+          narrationState: NarrationState.initial(),
+        ),
+      );
+
+      final initial = await owner.plan(context, maxChunks: 1);
+      expect(initial.plan.chunks.single.speakText, 'One begins. One ends.');
+      expect(initial.plan.nextSegmentId, boundary);
+      final next = await owner.plan(
+        context,
+        startSegmentId: boundary,
+        maxChunks: 1,
+      );
+      expect(next.plan.chunks.single.speakText, 'Two begins. Two ends.');
+      expect(
+        next.plan.chunks.single.startWordIndex,
+        initial.plan.chunks.single.endWordIndex,
+      );
+      expect(next.plan.nextSegmentId, isNull);
+      expect(owner.workerStarts, 1);
+    },
+  );
+
   test(
     'scene repacking never admits directions beyond realized horizon',
     () async {

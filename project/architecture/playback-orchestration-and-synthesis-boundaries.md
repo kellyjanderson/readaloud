@@ -41,6 +41,30 @@ Ordinary no-edit Play rebuilds the saved-word tail: the controller captures the 
 
 The [assignment295 prefix](https://github.com/kellyjanderson/readaloud/issues/53#issuecomment-6395976458) observed unchanged current source/hash after editing, first replacement playback at word 8 before acknowledgment, latest-only initial A/B/C success and pause-retained/stop-cleared pins. Its later listening timeout failed the overall run, with final resource cleanup recorded separately. The [e18c81d supplement](https://github.com/kellyjanderson/readaloud/issues/53#issuecomment-6396165816) passed paused pending Play at anchor 292, injected pre-ack failure retaining effective Heart and pending Bella followed by successful retry, and obsolete startup failure leaving latest C effective. Held-export cancellation drained before replacement playback; final sessions/tensors/sources/pins/tasks were zero. These bounded automated cases do not establish human listening, sample continuity or input during active export; the latter had zero actual UI actions.
 
+## Chapter admission for Fish synthesis
+
+With chapter analysis enabled, new Fish synthesis awaits the chapter coverage
+for its prepared source range. The reader owns the pending Play cancellation
+signal, while the document revision owns analysis. Cancelling Play releases
+the transport wait and leaves the analysis pass eligible to continue. Source
+replacement revokes publication for both owners.
+
+Before a model load and at its readiness check, MLX can resample an incomplete
+process tree for up to 2.5 seconds while a starting child reports its first
+footprint. The existing policy still requires a complete, fresh snapshot.
+Active-runtime monitoring continues to use the immediate sample.
+
+The planner uses one admitted quote and boundary projection for ordinary
+playback and WAV export. It keeps chapter and prepared-range edges hard so
+export does not combine requests across boundaries the range reader cannot
+cross in one request. Qualified native bf16 requests can retain multiple
+ordered voices within a scene. Quantized Fish sends separate exact-range turns.
+Compatible portable audio still uses the audio-book player's existing replay
+path. New or missing speech enters the planner.
+
+The startup conflict, emitted audio and listening acceptance remain tracked in
+[R1 #158](https://github.com/kellyjanderson/readaloud/issues/158).
+
 ## Packet traversal and native pruning
 
 Incremental Drama playback gives each immutable packet a native queue identity

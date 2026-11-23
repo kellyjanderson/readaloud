@@ -25,12 +25,16 @@ class ModernBookNlpWindow {
     this.targetSegmentIds,
     this.turns,
     this.protectedSpanIds,
+    this.authoredWords,
+    this.authoredSpeakers,
   );
   final String text;
   final List<ModernBookNlpSourceSlice> slices;
   final Set<String> targetSegmentIds;
   final List<ModernBookNlpTurnBinding> turns;
   final Set<String> protectedSpanIds;
+  final Map<String, List<(int, int)>> authoredWords;
+  final Set<String> authoredSpeakers;
   String get identity =>
       slices.map((s) => '${s.segment.segmentId}:${s.start}:${s.end}').join('/');
 
@@ -142,87 +146,140 @@ class ModernBookNlpWindow {
       previousSegment = s.$1;
     }
     if (buffer.isEmpty || buffer.length > 16384) return null;
+    return _bind(buffer.toString(), slices, targetIds, [document]);
+  }
+
+  /// Assemble chapter evidence across independently prepared source ranges.
+  static ModernBookNlpWindow chapter(
+    String text,
+    List<ModernBookNlpSourceSlice> slices,
+    Set<String> targetIds,
+    Iterable<ReaderDocument> documents,
+  ) => _bind(text, slices, targetIds, documents);
+
+  static ModernBookNlpWindow _bind(
+    String text,
+    List<ModernBookNlpSourceSlice> slices,
+    Set<String> targetIds,
+    Iterable<ReaderDocument> documents,
+  ) {
     final bySegment = {for (final s in slices) s.segment.segmentId: s};
     final bindings = <ModernBookNlpTurnBinding>[];
-    // The immutable annotation/attribution sets build indexes during their
-    // existing construction/validation, off-isolate on import and restoration.
-    // Visit only spans touching this bounded target, never every book dialogue.
-    final spans = <String>{
-      for (final id in targetIds)
-        for (final a in document.baseSpeechAnnotations.forSegment(id))
-          if (a.kind == SpeechAnnotationKind.dialogueSpan &&
-              a.dialogueSpanId != null)
-            a.dialogueSpanId!,
-    };
     final protected = <String>{};
-    for (final span in spans) {
-      final outcome = document.dialogueAttributions.forDialogueSpan(span);
-      if (outcome == null) continue;
-      if (outcome.provenance ==
-          DialogueAttributionProvenance.explicitSourceMetadata) {
-        protected.add(span);
-      }
-      final annotations = document.baseSpeechAnnotations
-          .forDialogueSpan(span)
-          .where((a) => a.kind == SpeechAnnotationKind.dialogueSpan)
-          // A span extending beyond the window stays on its fallback route.
-          .take(slices.length + 1)
-          .toList();
-      if (annotations.isEmpty ||
-          annotations.length > slices.length ||
-          !annotations.any((a) => targetIds.contains(a.segmentId)) ||
-          annotations.any((a) => !bySegment.containsKey(a.segmentId))) {
-        continue;
-      }
-      final refs = <CharacterDialogueReference>[];
-      int? start, end;
-      var complete = true;
-      for (final a in annotations) {
-        final slice = bySegment[a.segmentId]!;
-        final words = slice.segment.wordSpans;
-        if (a.startWord < 0 ||
-            a.endWord > words.length ||
-            a.endWord <= a.startWord) {
-          complete = false;
-          break;
+    final authoredWords = <String, List<(int, int)>>{};
+    final authoredSpeakers = <String>{};
+    for (final document in documents) {
+      final authoredAttributions = <String>{};
+      // Visit only spans touching this chapter window.
+      final spans = <String>{
+        for (final id in targetIds)
+          for (final a in document.baseSpeechAnnotations.forSegment(id))
+            if (a.kind == SpeechAnnotationKind.dialogueSpan &&
+                a.dialogueSpanId != null)
+              a.dialogueSpanId!,
+      };
+      for (final span in spans) {
+        final outcome = document.dialogueAttributions.forDialogueSpan(span);
+        if (outcome == null) continue;
+        if (outcome.provenance ==
+                DialogueAttributionProvenance.explicitSourceMetadata ||
+            document.baseSpeechAnnotations
+                .forDialogueSpan(span)
+                .any(
+                  (a) =>
+                      a.source == SpeechAnnotationSource.userOverride ||
+                      a.source == SpeechAnnotationSource.explicitSourceMetadata,
+                )) {
+          protected.add(span);
+          authoredAttributions.add(outcome.attributionId);
+          for (final annotation
+              in document.baseSpeechAnnotations.forDialogueSpan(span)) {
+            if (annotation.kind == SpeechAnnotationKind.dialogueSpan &&
+                targetIds.contains(annotation.segmentId)) {
+              (authoredWords[annotation.segmentId] ??= []).add((
+                annotation.startWord,
+                annotation.endWord,
+              ));
+            }
+          }
         }
-        final from = words[a.startWord].startUtf16;
-        final to = words[a.endWord - 1].endUtf16;
-        if (from < slice.start || to > slice.end) {
-          complete = false;
-          break;
+        final annotations = document.baseSpeechAnnotations
+            .forDialogueSpan(span)
+            .where((a) => a.kind == SpeechAnnotationKind.dialogueSpan)
+            // A span extending beyond the window stays on its fallback route.
+            .take(slices.length + 1)
+            .toList();
+        if (annotations.isEmpty ||
+            annotations.length > slices.length ||
+            !annotations.any((a) => targetIds.contains(a.segmentId)) ||
+            annotations.any((a) => !bySegment.containsKey(a.segmentId))) {
+          continue;
         }
-        final left = slice.offset + from - slice.start;
-        final right = slice.offset + to - slice.start;
-        start = start == null || left < start ? left : start;
-        end = end == null || right > end ? right : end;
-        refs.add(
-          CharacterDialogueReference(
-            attributionId: outcome.attributionId,
-            dialogueSpanId: outcome.dialogueSpanId,
-            segmentId: a.segmentId,
-            startWord: a.startWord,
-            endWord: a.endWord,
-          ),
-        );
+        final refs = <CharacterDialogueReference>[];
+        int? start, end;
+        var complete = true;
+        for (final a in annotations) {
+          final slice = bySegment[a.segmentId]!;
+          final words = slice.segment.wordSpans;
+          if (a.startWord < 0 ||
+              a.endWord > words.length ||
+              a.endWord <= a.startWord) {
+            complete = false;
+            break;
+          }
+          final from = words[a.startWord].startUtf16;
+          final to = words[a.endWord - 1].endUtf16;
+          if (from < slice.start || to > slice.end) {
+            complete = false;
+            break;
+          }
+          final left = slice.offset + from - slice.start;
+          final right = slice.offset + to - slice.start;
+          start = start == null || left < start ? left : start;
+          end = end == null || right > end ? right : end;
+          refs.add(
+            CharacterDialogueReference(
+              attributionId: outcome.attributionId,
+              dialogueSpanId: outcome.dialogueSpanId,
+              segmentId: a.segmentId,
+              startWord: a.startWord,
+              endWord: a.endWord,
+            ),
+          );
+        }
+        if (!complete) continue;
+        for (final ref in refs) {
+          bindings.add(
+            ModernBookNlpTurnBinding(
+              startUtf16: start!,
+              endUtf16: end!,
+              dialogue: ref,
+            ),
+          );
+        }
       }
-      if (!complete) continue;
-      for (final ref in refs) {
-        bindings.add(
-          ModernBookNlpTurnBinding(
-            startUtf16: start!,
-            endUtf16: end!,
-            dialogue: ref,
-          ),
+      if (authoredAttributions.isNotEmpty) {
+        authoredSpeakers.addAll(
+          document.characterCastRegistry.characterEntries
+              .where(
+                (entry) =>
+                    entry.attributionIds.any(authoredAttributions.contains),
+              )
+              .map((entry) => entry.castId),
         );
       }
     }
     return ModernBookNlpWindow._(
-      buffer.toString(),
+      text,
       List.unmodifiable(slices),
       Set.unmodifiable(targetIds),
       List.unmodifiable(bindings),
       Set.unmodifiable(protected),
+      Map.unmodifiable({
+        for (final entry in authoredWords.entries)
+          entry.key: List<(int, int)>.unmodifiable(entry.value),
+      }),
+      Set.unmodifiable(authoredSpeakers),
     );
   }
 }

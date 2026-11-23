@@ -304,6 +304,7 @@ class DocumentImportService {
     required String fileName,
     String? sourcePath,
     Uint8List? bytes,
+    bool alignChapterBoundaries = false,
     void Function(List<int>)? onAcquiredBytes,
     void Function()? onAcquiredEof,
   }) async* {
@@ -341,13 +342,19 @@ class DocumentImportService {
         yield decoder.add('', isLast: true);
       }
 
-      await for (final part in boundedProseUnits(text())) {
+      await for (final part in boundedProseUnits(
+        text(),
+        alignChapterBoundaries: alignChapterBoundaries,
+      )) {
         yield DocumentImportUnit(text: part, locator: fileName);
       }
       return;
     }
     if (extension != 'docx' && extension != 'epub') {
-      await for (final part in boundedProseUnits(decoded())) {
+      await for (final part in boundedProseUnits(
+        decoded(),
+        alignChapterBoundaries: alignChapterBoundaries,
+      )) {
         yield _plainTextUnit(part, locator: fileName);
       }
       return;
@@ -2028,13 +2035,13 @@ _RecoveredTextDocument _recoverPlainTextStructure(String text) {
     }
 
     final headingMatch = RegExp(r'^(#{1,6})\s+(.+)$').firstMatch(line);
-    if (headingMatch != null) {
+    if (headingMatch != null || _sourceChapterLine.hasMatch(line)) {
       flushParagraph();
       flushList();
       blocks.add(
         _RecoveredTextBlock.heading(
-          text: headingMatch.group(2)!.trim(),
-          headingLevel: headingMatch.group(1)!.length,
+          text: headingMatch?.group(2)?.trim() ?? line,
+          headingLevel: headingMatch?.group(1)?.length ?? 1,
         ),
       );
       continue;
@@ -2525,11 +2532,39 @@ Stream<String> _archiveText(ArchiveFile entry) async* {
 
 /// Application range policy on top of the platform decoder. Prefer a complete
 /// paragraph/sentence, carry one bounded halo when no boundary has arrived.
-Stream<String> boundedProseUnits(Stream<String> source) async* {
+final _sourceChapterLine = RegExp(
+  r'^[ \t]*(?:#{1,6}[ \t]+)?(?:chapter|part|book)[ \t]+(?:\d+|[a-z-]+)(?:[ \t]*[:–—-][ \t]*[^\r\n.!?]+)?[ \t]*\r?$',
+  caseSensitive: false,
+  multiLine: true,
+);
+
+Stream<String> boundedProseUnits(
+  Stream<String> source, {
+  bool alignChapterBoundaries = false,
+}) async* {
   var pending = '';
   await for (final chunk in source) {
     pending += chunk;
-    while (pending.length >= 4096) {
+    while (pending.isNotEmpty) {
+      final prefix = pending.substring(0, math.min(pending.length, 8192));
+      final chapterSearch = prefix.substring(0, math.min(prefix.length, 4096));
+      final chapter = !alignChapterBoundaries
+          ? null
+          : _sourceChapterLine
+                .allMatches(chapterSearch)
+                .where(
+                  (match) =>
+                      match.start > 0 &&
+                      match.end < chapterSearch.length &&
+                      prefix.substring(0, match.start).trim().isNotEmpty,
+                )
+                .firstOrNull;
+      if (chapter != null) {
+        yield pending.substring(0, chapter.start);
+        pending = pending.substring(chapter.start);
+        continue;
+      }
+      if (pending.length < 4096) break;
       var end = pending.lastIndexOf('\n\n', 4096);
       if (end > 0) {
         end += 2;
@@ -2541,7 +2576,8 @@ Stream<String> boundedProseUnits(Stream<String> source) async* {
       }
       if (end <= 0 && pending.length < 8192) break;
       if (end <= 0) {
-        end = 8192;
+        final gap = RegExp(r'\s+').allMatches(prefix).lastOrNull;
+        end = gap == null || gap.end < 4096 ? 8192 : gap.end;
         final code = pending.codeUnitAt(end - 1);
         if (code >= 0xd800 && code <= 0xdbff) end--;
       }

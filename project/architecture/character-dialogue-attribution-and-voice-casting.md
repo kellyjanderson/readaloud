@@ -206,10 +206,12 @@ follow-up, not superseded by controller tests.
 `ModernBookNlpProvider` is an opt-in CPU boundary for pinned ModernBookNLP joint
 scoring. It runs outside MLX, validates owner/work/source/revision and model
 identity, limits input/output, and terminates/reaps on cancellation or deadline.
-Normal initialization neither constructs nor awaits it. `ModernBookNlpAnalysis`
-retains one active plus one latest pending demand. Obsolete success/failure cannot
-publish over the successor; projection is awaited within that same lifetime.
-Native Quit drains both NLP and MLX. The [provider guide](../../docs/modernbooknlp-provider.md)
+With chapter analysis enabled, source open schedules the resident CPU analyzer.
+One active chapter advances at a time. A seek whose chapter anchor is in the
+available range supplies the next priority, and saved coverage remains valid
+across transport cancellation. The supervisor awaits persistence and projection.
+Source replacement invalidates their publication authority, and native Quit
+drains both NLP and MLX. The [provider guide](../../docs/modernbooknlp-provider.md)
 records exact runtime and evidence limits.
 
 S2 connects upstream typed people, aliases/coreference, linked pronouns, syntax
@@ -229,25 +231,40 @@ not explicit or presented gender. The distributions retain their model provenanc
 but historic name priors do not drive voice hints. Ordinary casting uses the same
 aggregate and preserves compatible automatic voices and all explicit choices.
 
-`ModernBookNlpWindow` preserves paragraph boundaries while binding immutable
-speech segments, without changing their dialogue boundaries. It selects bounded
-positional windows in both incremental fragments and complete portable books,
-with up to 4,096 preceding UTF-16 units and 12,288 target units. The upstream
-4,096-token limit still applies. `paragraph-context-v2` cache identity prevents
-S1's different paragraph layout from being mistaken for compatible analysis.
-Valid legacy records remain portable candidate evidence.
-The immutable annotation and attribution sets build segment/span indexes during
-their existing validation. Window binding queries only target segment/span keys;
-VS40 rejects access to whole-book collections during selection. An oversized
-quotation spanning more segments than the window retains its fallback route.
+R1 chapter requests bind validated quotation spans and speaker mentions to
+source words across prepared ranges. Exact quote evidence can add dialogue
+inside a heuristic narration range or trim reporting words out of a heuristic
+turn. Authored speaker metadata is protected. Unresolved speakers use the
+unknown-dialogue route. Entity mentions help reconcile Characters. The
+performing voice follows the quote route and the existing casting selections.
+Chapter mode requires a complete quotation in the mapped source before adding
+a model-directed voice. Outside accepted speech and authored turns, analyzed
+words use the narrator. Only admitted speakers appear in the chapter-mode
+voice list and receive automatic assignments. The character store retains the
+other mentions and any saved user choices.
 
-Only source-matched complete quotation bindings enter a bounded future-route
-projection (128 dialogue spans). Unmatched boundaries preserve fallback routes;
-matched unresolved speakers stay unknown. Source metadata is protected. Existing
-heuristic rules and prepared turn objects remain unchanged. Captured active
-planning contexts and speech are immutable; the next ordinary planning boundary,
-range, jump or Play can use refinement. This does not hot-swap already captured
-single-book planning contexts or solve the retained Fish switching stall.
+Direct narrative identity statements and appositions linked to a named
+mention take precedence over model-linked pronouns for automatic casting.
+An isolated invitation can transfer attribution when exact character
+mentions identify who was approached and who then followed. An ordinary
+reporting clause retains its own speaker evidence. Automatic casting prefers
+the narrator's regional English where known and uses US English as the default
+regional preference. Labeled British references remain available for explicit
+selection and when the installed voices offer no compatible alternative.
+
+A repeated first-person opening can link two quotations in the same paragraph
+when the intervening text identifies a named speaker waiting for an
+interruption to pass. The following quote must corroborate that speaker, and
+the apparent speaker of the first quote must be the nominal subject of the
+intervening action. The correction yields to reporting verbs or a paragraph
+break. See [chapter attribution #158](https://github.com/kellyjanderson/readaloud/issues/158).
+
+Once a chapter passes admission, Fish plans from the resulting ranges and
+mapped sentence and paragraph boundaries. The qualified bf16 path can group
+character, narrator and character turns in one native request. The 4-bit and
+8-bit paths retain those exact ranges in separate turns. Captured playback
+and export contexts remain immutable. See [R1 #158](https://github.com/kellyjanderson/readaloud/issues/158)
+for runtime, timing and listening acceptance.
 
 Local tests include typed singleton/place distinctions, alias ambiguity, changed
 cluster IDs, correction/Reset versus stale results, Fish catalog choice stability,

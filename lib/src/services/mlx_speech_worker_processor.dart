@@ -1307,7 +1307,7 @@ class MlxTtsPythonProcess {
         );
       }
       if (body['command'] == 'load' && memorySampler == null) {
-        final snapshot = await _memorySnapshot();
+        final snapshot = await _settledLoadMemorySnapshot();
         if (!identical(_child, child)) throw const MlxTtsRequestCancelled();
         _recordMemory(snapshot);
         final decision = _memoryPolicy.monitor(snapshot, DateTime.now());
@@ -1531,6 +1531,30 @@ class MlxTtsPythonProcess {
     return RuntimeMemoryRegistry.shared.reconcile(map);
   }
 
+  /// A newly starting analysis child can appear in the native process tree
+  /// before its first self-telemetry sample is available. Hold model admission
+  /// for one bounded telemetry period and require a complete fresh snapshot.
+  Future<RuntimeMemorySnapshot> _settledLoadMemorySnapshot() async {
+    final epoch = _cancelEpoch;
+    final elapsed = Stopwatch()..start();
+    const budget = Duration(milliseconds: 2500);
+    var snapshot = await _memorySnapshot();
+    while (!snapshot.complete && elapsed.elapsed < budget) {
+      if (_disposed || epoch != _cancelEpoch) {
+        throw const MlxTtsRequestCancelled();
+      }
+      await Future<void>.delayed(const Duration(milliseconds: 150));
+      final remaining = budget - elapsed.elapsed;
+      if (remaining <= Duration.zero) break;
+      try {
+        snapshot = await _memorySnapshot().timeout(remaining);
+      } on TimeoutException {
+        break;
+      }
+    }
+    return snapshot;
+  }
+
   void _recordMemory(RuntimeMemorySnapshot snapshot) {
     observedLastMemorySnapshot = snapshot;
     if (!snapshot.complete) return; // A partial sum is not a measured peak.
@@ -1545,7 +1569,7 @@ class MlxTtsPythonProcess {
   ) async {
     // Legacy process stubs intentionally replace all memory accounting.
     if (memorySampler != null) return;
-    final snapshot = await _memorySnapshot();
+    final snapshot = await _settledLoadMemorySnapshot();
     final modelId = load['modelId'] as String;
     RuntimeMemoryDecision decision;
     var measuredEnvelope = false;

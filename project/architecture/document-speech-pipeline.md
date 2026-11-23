@@ -49,6 +49,10 @@ and index-based follow/recenter behavior; an ordinary ListView cannot reliably
 recenter an unmounted variable-height range. A trailing viewport cell requests the
 next range as the user scrolls, so display demand can advance preparation without
 Play. EOF has an explicit end-of-document marker and cumulative word count.
+The HTML reader uses one selection area across mounted prepared ranges, so
+the normal copy action can copy a selected passage across cell boundaries.
+Selecting text suspends automatic follow so playback cannot scroll the
+reader away from the selection.
 
 `readPreparedRange` coalesces identical requests and admits at most eight reads.
 It reuses resident publications or reads a committed immutable checkpoint on a
@@ -180,14 +184,27 @@ the current source and merges embedded records, and rejects duplicate or nonmatc
 window text on import. A copied artifact can restore a saved window without model
 assets or a provider runtime. Whole portable decoding/export still materializes the
 book graph on a worker; it is not a paged container or portable rendered audio.
-S2 selects analysis windows at the playback position in imported books, including
-forward/backward jumps. Both legacy newline and paragraph-context-v2 records are
-validated against their corresponding source layout and retained on re-export;
-different policy/text does not reuse an incompatible result. The same supervisor
-awaits isolate-owned Character projection after persistence, then current-owner
-admission can refine future routes through the existing Character aggregate.
-See [character integration](character-dialogue-attribution-and-voice-casting.md#experimental-local-neural-provider)
-for scope, precedence and evidence limits.
+With Chapter Analysis enabled, the reader starts an ordered chapter pass on source
+open. The cursor pulls committed text ranges through the same bounded demand
+interface as playback and the viewport. It joins source-normalized segments at
+their mapped paragraph breaks, recognizes chapter labels and EPUB spine changes,
+and carries quotation state over fragments. A chapter input that fits the
+provider limit stays intact. Larger chapters use complete sentence or paragraph
+partitions with bounded neighboring context when it fits. An indivisible source
+unit that exceeds admission reports an analysis failure. The reader publishes
+chapter coverage after the final partition is saved and projected.
+
+The `chapter-context-v1` policy keeps older window evidence distinct. A valid
+source record restores before provider creation. After an edit, the repository
+can attach an unchanged exact input and its pinned model evidence to the new
+revision, then project the result through the new source anchors. Changed
+context requires fresh inference. Portable audio book ranges retain their
+source locator and fragment join metadata. Legacy flat snapshots keep
+their compatible positional records for the legacy analysis path.
+
+Analysis, casting and Fish scene changes are tracked in
+[R1 #158](https://github.com/kellyjanderson/readaloud/issues/158).
+The startup policy decision remains open.
 
 The book owns semantic content anchors independently of a voice rendition. Shared
 continuous-period integration, explicit temporal referents, rendition alignment and

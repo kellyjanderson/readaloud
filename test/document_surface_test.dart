@@ -1,11 +1,71 @@
+import 'dart:ui' show PointerDeviceKind;
+
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_html/flutter_html.dart';
 import 'package:read_aloud/src/models/reader_document.dart';
+import 'package:read_aloud/src/services/document_import_service.dart';
 import 'package:read_aloud/src/theme/read_aloud_theme.dart';
 import 'package:read_aloud/src/widgets/document_surface.dart';
 
 void main() {
+  testWidgets(
+    'drag and copy selected passage from an inline reader range',
+    (tester) async {
+      const passage = 'Select this passage for a report.';
+      String? copied;
+      String? selected;
+      final messenger =
+          TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
+      messenger.setMockMethodCallHandler(SystemChannels.platform, (call) async {
+        if (call.method == 'Clipboard.setData') {
+          copied = (call.arguments as Map)['text'] as String;
+        }
+        return null;
+      });
+      addTearDown(
+        () => messenger.setMockMethodCallHandler(SystemChannels.platform, null),
+      );
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: ThemeData(platform: TargetPlatform.macOS),
+          home: Scaffold(
+            body: SelectionArea(
+              onSelectionChanged: (selection) =>
+                  selected = selection?.plainText,
+              child: DocumentSurface(
+                document: DocumentImportService().importPastedText(passage),
+                fontFamily: 'serif',
+                fontScale: 1,
+                inline: true,
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      final paragraph = find.text(passage, findRichText: true).last;
+      final start = tester.getTopLeft(paragraph) + const Offset(5, 18);
+      final gesture = await tester.startGesture(
+        start,
+        kind: PointerDeviceKind.mouse,
+      );
+      await tester.pumpAndSettle();
+      await gesture.moveBy(const Offset(20, 0));
+      await tester.pump();
+      await gesture.moveBy(const Offset(235, 0));
+      await gesture.up();
+      await tester.pumpAndSettle();
+      expect(selected, contains('Select this'));
+      await tester.sendKeyDownEvent(LogicalKeyboardKey.metaLeft);
+      await tester.sendKeyEvent(LogicalKeyboardKey.keyC);
+      await tester.sendKeyUpEvent(LogicalKeyboardKey.metaLeft);
+      expect(copied, selected);
+    },
+    variant: const TargetPlatformVariant({TargetPlatform.macOS}),
+  );
+
   testWidgets('auto-follow scrolls toward the focused block', (
     WidgetTester tester,
   ) async {

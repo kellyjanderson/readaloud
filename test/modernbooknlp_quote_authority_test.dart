@@ -1,0 +1,605 @@
+import 'dart:convert';
+import 'dart:io';
+
+import 'package:flutter_test/flutter_test.dart';
+import 'package:read_aloud/src/models/cast_voice_assignment.dart';
+import 'package:read_aloud/src/models/character.dart';
+import 'package:read_aloud/src/models/character_cast_registry.dart';
+import 'package:read_aloud/src/models/character_linguistic_evidence.dart';
+import 'package:read_aloud/src/models/document_voice_attribution.dart';
+import 'package:read_aloud/src/models/reader_document.dart';
+import 'package:read_aloud/src/models/voice_profile.dart';
+import 'package:read_aloud/src/services/cast_aware_speech_route_service.dart';
+import 'package:read_aloud/src/services/character_route_refinement.dart';
+import 'package:read_aloud/src/services/document_analysis_record.dart';
+import 'package:read_aloud/src/services/document_import_service.dart';
+import 'package:read_aloud/src/services/modernbooknlp_character_adapter.dart';
+import 'package:read_aloud/src/services/modernbooknlp_provider.dart';
+import 'package:read_aloud/src/services/modernbooknlp_window.dart';
+
+void main() {
+  for (final explicitSpeech in [false, true]) {
+    test(
+      'opening quote follows a named continuation unless explicitly tagged ($explicitSpeech)',
+      () {
+        final action = explicitSpeech
+            ? 'The nurse said softly, then stepped away.'
+            : 'The nurse steered the child away. His cry carried across the hall.';
+        final document = DocumentImportService().importPastedText(
+          '“I want a family.” $action '
+          'Iris waited for him to take a breath. “I want to do it well.”',
+        );
+        final window = ModernBookNlpWindow.at(document, wordIndex: 0)!;
+        final result = _result(
+          _request(window),
+          mentions: {
+            'nurse': [('The nurse', false)],
+            'iris': [('Iris', true)],
+          },
+          quotes: [
+            ('"I want a family."', 'nurse'),
+            ('"I want to do it well."', 'iris'),
+          ],
+        );
+        final the = window.text.indexOf('The nurse');
+        final irisStart = window.text.indexOf('Iris');
+        result['linguisticArtifacts'] = {
+          'schema': 1,
+          'pipeline': 'entity,quote,coref',
+          'coordinateSystem': 'python-codepoint',
+          'files': {
+            'tokens':
+                'token_ID_within_document\tbyte_onset\tbyte_offset\tword\n'
+                '0\t$the\t${the + 3}\tThe\n'
+                '1\t${the + 4}\t${the + 9}\tnurse\n'
+                '2\t$irisStart\t${irisStart + 4}\tIris\n',
+            'entities':
+                'COREF\tprop\tcat\tstart_token\tend_token\ttext\n'
+                'nurse\tNOM\tPER\t0\t1\tThe nurse\n'
+                'iris\tPROP\tPER\t2\t2\tIris\n',
+            'quotes': 'quote_start\tquote_end\tmention_start\tmention_end\n',
+            'book': '{"characters":[]}',
+          },
+        };
+        final delta = _project(document, window, result);
+        final quotes = delta.dialogues
+            .where((reference) => reference.quoteAuthority)
+            .toList();
+        final iris = delta.registry.characterEntries.singleWhere(
+          (entry) => entry.displayLabel == 'Iris',
+        );
+        expect(quotes, hasLength(2));
+        expect(quotes.last.castId, iris.castId);
+        if (explicitSpeech) {
+          final nurse = delta.registry.characterEntries.singleWhere(
+            (entry) => entry.displayLabel.toLowerCase() == 'the nurse',
+          );
+          expect(quotes.first.castId, nurse.castId);
+        } else {
+          expect(quotes.first.castId, iris.castId);
+        }
+      },
+    );
+  }
+
+  test(
+    'source identity and an approach followed by compliance repair the speaking voice',
+    () {
+      final document = DocumentImportService().importPastedText(
+        'Rowan, an elderly woman in a dark coat, waited by the steps. '
+        'He waved.\n\nShe put her bag down and went down to Rowan.\n\n'
+        '“Come with me.”\n\nThe arch was dark. Darcy followed up the lane.',
+      );
+      final window = ModernBookNlpWindow.at(document, wordIndex: 0)!;
+      final result = _result(
+        _request(window),
+        mentions: {
+          'rowan': [('Rowan', true), ('He', false), ('Rowan', true)],
+          'darcy': [('She', false), ('Darcy', true)],
+        },
+        quotes: [('"Come with me."', 'darcy')],
+      );
+      final delta = _project(document, window, result);
+      final rowan = delta.registry.characterEntries.singleWhere(
+        (entry) => entry.displayLabel == 'Rowan',
+      );
+      expect(rowan.implicitGender.value, CharacterGenderIdentityLabel.male);
+      expect(rowan.inferredGender, VoiceGender.female);
+      expect(
+        delta.dialogues
+            .where((reference) => reference.quoteAuthority)
+            .single
+            .castId,
+        rowan.castId,
+      );
+    },
+  );
+
+  test('missed dialogue routes exact words to the reported speaker', () async {
+    final document = DocumentImportService().importPastedText(
+      'Mara watched Lee. She said, ‘Tell Lee,’ then waved.',
+    );
+    final window = ModernBookNlpWindow.at(document, wordIndex: 0)!;
+    expect(
+      document.documentVoiceAttribution.ranges.map((r) => r.kind),
+      everyElement(DocumentVoiceAttributionKind.narration),
+    );
+    final request = _request(window);
+    final result = _result(
+      request,
+      mentions: {
+        'mara': [('Mara', true), ('She', false)],
+        'lee': [('Lee', true)],
+      },
+      quotes: [("'Tell Lee,'", 'mara')],
+    );
+
+    final delta = await projectModernBookNlpCharacters(
+      request,
+      result,
+      document.characterCastRegistry,
+      window,
+      authoritativeQuotes: true,
+    );
+    final mara = delta.registry.characterEntries.singleWhere(
+      (entry) => entry.displayLabel == 'Mara',
+    );
+    final ranges = _refine(document, delta.dialogues);
+    _expectExactCover(document, ranges);
+    expect(
+      ranges.map(
+        (range) => (range.startWordIndex, range.endWordIndex, range.castId),
+      ),
+      [(0, 5, 'cast_narrator'), (5, 7, mara.castId), (7, 9, 'cast_narrator')],
+    );
+    final routed = const CastAwareSpeechRouteService().build(
+      CastAwareSpeechRouteInput(
+        documentVoiceAttribution: DocumentVoiceAttributionSet(
+          documentId: document.speechDocument.documentId,
+          attributionVersion: 'test',
+          ranges: ranges,
+        ),
+        castVoiceAssignments: CastVoiceAssignmentSet(
+          documentId: document.speechDocument.documentId,
+          assignmentVersion: 'test',
+          assignments: [
+            CastVoiceAssignment(
+              castId: 'cast_narrator',
+              effectiveVoiceId: 'narrator',
+              decisionKind: VoiceAssignmentDecisionKind.automatic,
+            ),
+            CastVoiceAssignment(
+              castId: mara.castId,
+              effectiveVoiceId: 'mara',
+              decisionKind: VoiceAssignmentDecisionKind.automatic,
+            ),
+          ],
+        ),
+      ),
+    );
+    expect(routed.ranges.map((r) => r.voiceId), [
+      'narrator',
+      'mara',
+      'narrator',
+    ]);
+    expect(routed.ranges.map((r) => r.routeId).toSet(), hasLength(3));
+  });
+
+  test(
+    'speaker list and reading track reject narration labeled as a quote',
+    () async {
+      final document = DocumentImportService().importPastedText(
+        'Mara watched Lee. She said, ‘Tell Lee,’ then waved at Jules.',
+      );
+      final original = ModernBookNlpWindow.at(document, wordIndex: 0)!;
+      final window = ModernBookNlpWindow.chapter(
+        original.text,
+        original.slices,
+        original.targetSegmentIds,
+        [document],
+      );
+      final request = _request(window);
+      final (delta, speakers) = await projectChapterCharacters(
+        request,
+        _result(
+          request,
+          mentions: {
+            'mara': [('Mara', true), ('She', false)],
+            'lee': [('Lee', true)],
+            'jules': [('Jules', true)],
+          },
+          quotes: [
+            ('Mara watched Lee', 'lee'),
+            ('She said', 'mara'),
+            ("'Tell Lee,'", 'mara'),
+            ('Jules', 'jules'),
+          ],
+        ),
+        document.characterCastRegistry,
+        window,
+      );
+      final speaker = delta.registry
+          .forSpeakingCast(speakers)
+          .characterEntries
+          .single;
+      expect(speaker.displayLabel, 'Mara');
+      expect(
+        delta.registry.characterEntries.map((entry) => entry.displayLabel),
+        containsAll(['Mara', 'Lee', 'Jules']),
+      );
+      final ranges = refineCharacterRoutes(
+        document.documentVoiceAttribution,
+        delta.dialogues,
+        speechDocument: document.speechDocument,
+        checkedSegmentIds: window.targetSegmentIds,
+      ).ranges;
+      _expectExactCover(document, ranges);
+      expect(ranges.map((r) => (r.startWordIndex, r.endWordIndex, r.castId)), [
+        (0, 5, 'cast_narrator'),
+        (5, 7, speaker.castId),
+        (7, 11, 'cast_narrator'),
+      ]);
+      final segments = document.speechDocument.segments
+          .map((segment) => segment.segmentId)
+          .toList();
+      final lee = delta.registry.characterEntries.singleWhere(
+        (entry) => entry.displayLabel == 'Lee',
+      );
+      final staleHeuristic = DocumentVoiceAttributionSet(
+        documentId: document.speechDocument.documentId,
+        attributionVersion: 'test',
+        ranges: [
+          DocumentVoiceAttributionRange(
+            rangeId: 'stale',
+            segmentIds: segments,
+            startSegmentId: segments.first,
+            endSegmentId: segments.last,
+            startWordIndex: 0,
+            endWordIndex: document.wordCount,
+            castId: lee.castId,
+            kind: DocumentVoiceAttributionKind.attributedDialogue,
+            dialogueSpanId: 'stale-quote',
+          ),
+        ],
+      );
+      final corrected = refineCharacterRoutes(
+        staleHeuristic,
+        delta.dialogues,
+        speechDocument: document.speechDocument,
+        checkedSegmentIds: window.targetSegmentIds,
+      ).ranges;
+      expect(
+        corrected.map((r) => (r.startWordIndex, r.endWordIndex, r.castId)),
+        ranges.map((r) => (r.startWordIndex, r.endWordIndex, r.castId)),
+      );
+    },
+  );
+
+  test(
+    'authored routes survive even a provider quote crossing their boundary',
+    () {
+      final document = DocumentImportService().importPastedText(
+        '"Wait," Ada said. "Ready," Bruno replied.',
+      );
+      final window = ModernBookNlpWindow.at(document, wordIndex: 0)!;
+      final original = document.documentVoiceAttribution.ranges;
+      final firstDialogue = original.firstWhere(
+        (r) => r.dialogueSpanId != null,
+      );
+      final request = _request(window);
+      final result = _result(
+        request,
+        mentions: {
+          'ada': [('Ada', true)],
+          'bruno': [('Bruno', true)],
+        },
+        quotes: [
+          (
+            window.text.substring(
+              0,
+              window.text.indexOf('said') + 'said'.length,
+            ),
+            'bruno',
+          ),
+          ('"Ready,"', 'bruno'),
+        ],
+      );
+      final delta = _project(document, window, result);
+      final ranges = _refine(
+        document,
+        delta.dialogues,
+        protected: {firstDialogue.dialogueSpanId!},
+      );
+      _expectExactCover(document, ranges);
+      expect(ranges.first, same(firstDialogue));
+      expect(
+        ranges.where(
+          (r) => r.dialogueSpanId?.startsWith('nlp_quote_') ?? false,
+        ),
+        hasLength(1),
+      );
+    },
+  );
+
+  test(
+    'split-word evidence leaves narration intact and ambiguous speakers stay unknown',
+    () {
+      final document = DocumentImportService().importPastedText(
+        'Mara and Lee listened. She said, ‘Hold steady,’ and turned.',
+      );
+      final window = ModernBookNlpWindow.at(document, wordIndex: 0)!;
+      final request = _request(window);
+      final mentions = {
+        'mara': [('Mara', true)],
+        'lee': [('Lee', true)],
+        'she': [('She', false)],
+      };
+      for (final quotes in [
+        [('old steady', 'mara')],
+        [('Hold steady', 'mara'), ('Hold steady', 'lee')],
+        [('Hold steady', 'she')],
+      ]) {
+        final delta = _project(
+          document,
+          window,
+          _result(request, mentions: mentions, quotes: quotes),
+        );
+        final ranges = _refine(document, delta.dialogues);
+        _expectExactCover(document, ranges);
+        final dialogue = ranges
+            .where(
+              (range) => range.kind != DocumentVoiceAttributionKind.narration,
+            )
+            .toList();
+        if (quotes.first.$1 == 'old steady') {
+          expect(dialogue, isEmpty);
+        } else {
+          expect(
+            dialogue.single.kind,
+            DocumentVoiceAttributionKind.unattributedDialogue,
+          );
+        }
+      }
+    },
+  );
+
+  test(
+    'a complete quote can cross source slices but cannot publish contextual slices',
+    () {
+      final document = DocumentImportService().importPastedText(
+        'Ada waited.\n\n“First sentence\n\nsecond sentence.”\n\nThen narration resumed.',
+      );
+      final window = ModernBookNlpWindow.at(document, wordIndex: 0)!;
+      final request = _request(window);
+      final quote = window.text.substring(
+        window.text.indexOf('"'),
+        window.text.lastIndexOf('"') + 1,
+      );
+      final result = _result(
+        request,
+        mentions: {
+          'ada': [('Ada', true)],
+        },
+        quotes: [(quote, 'ada')],
+      );
+      final projected = _project(document, window, result);
+      final authority = projected.dialogues
+          .where((r) => r.quoteAuthority)
+          .toList();
+      expect(authority.map((r) => r.segmentId).toSet().length, greaterThan(1));
+      expect(authority.map((r) => r.dialogueSpanId).toSet(), hasLength(1));
+      final ranges = _refine(document, projected.dialogues);
+      _expectExactCover(document, ranges);
+      expect(
+        ranges
+            .singleWhere(
+              (r) => r.dialogueSpanId == authority.first.dialogueSpanId,
+            )
+            .segmentIds,
+        authority.map((r) => r.segmentId),
+      );
+      final onlyOneSlice = modernBookNlpCharacterDelta(
+        request: request,
+        result: result,
+        registry: document.characterCastRegistry,
+        turns: window.turns,
+        sourceSlices: window.slices,
+        targetSegmentIds: {authority.first.segmentId},
+        authoritativeQuotes: true,
+      );
+      expect(onlyOneSlice.dialogues.where((r) => r.quoteAuthority), isEmpty);
+    },
+  );
+
+  test('retained raw provider evidence keeps the speaker mention separate', () {
+    final document = DocumentImportService().importPastedText(
+      File('test/fixtures/rc2_prose/text/rain.txt').readAsStringSync(),
+    );
+    final window = ModernBookNlpWindow.at(document, wordIndex: 0)!;
+    final record = DocumentAnalysisRecord.fromJson(
+      jsonDecode(
+        File('test/fixtures/modernbooknlp/rain-record.json').readAsStringSync(),
+      ),
+    );
+    final result = record.forRequest(
+      _request(window, sourceRevision: record.sourceRevision),
+    );
+    final delta = _project(document, window, result);
+    final authority = delta.dialogues.where((r) => r.quoteAuthority).toList();
+    expect(authority.map((r) => r.dialogueSpanId).toSet(), hasLength(11));
+    expect(
+      authority.where((r) => r.speakerMention?.text == 'Leon'),
+      isNotEmpty,
+    );
+    expect(
+      authority.where(
+        (r) => r.speakerMention?.kind == CharacterObservationKind.proper,
+      ),
+      isNotEmpty,
+    );
+    _expectExactCover(document, _refine(document, delta.dialogues));
+
+    // Moving a normalized speaker link to a different real entity leaves the
+    // source quote intact and makes its speaker unresolved.
+    final quotes = result['quotes'] as List;
+    expect(authority.first.castId, isNotNull);
+    quotes.first['entityId'] = quotes[1]['entityId'];
+    final disagreement = _project(document, window, result);
+    final firstQuote = disagreement.dialogues.firstWhere(
+      (r) => r.quoteAuthority,
+    );
+    expect(firstQuote.dialogueSpanId, authority.first.dialogueSpanId);
+    expect(firstQuote.castId, isNull);
+  });
+
+  test(
+    'quote boundaries correct a bound heuristic turn and restore reporting words to narration',
+    () {
+      final document = DocumentImportService().importPastedText(
+        'Mara said, “Go now, Lee!”',
+      );
+      final window = ModernBookNlpWindow.at(document, wordIndex: 0)!;
+      final request = _request(window);
+      final delta = _project(
+        document,
+        window,
+        _result(
+          request,
+          mentions: {
+            'mara': [('Mara', true)],
+            'lee': [('Lee', true)],
+          },
+          quotes: [('"Go now, Lee!"', 'mara')],
+        ),
+      );
+      final segments = document.speechDocument.segments;
+      final segmentIds = segments.map((segment) => segment.segmentId).toList();
+      final heuristic = DocumentVoiceAttributionSet(
+        documentId: document.speechDocument.documentId,
+        attributionVersion: 'test',
+        ranges: [
+          DocumentVoiceAttributionRange(
+            rangeId: 'heuristic',
+            segmentIds: segmentIds,
+            startSegmentId: segmentIds.first,
+            endSegmentId: segmentIds.last,
+            startWordIndex: 0,
+            endWordIndex: document.wordCount,
+            castId: 'wrong_cast',
+            kind: DocumentVoiceAttributionKind.attributedDialogue,
+            dialogueSpanId: 'old_quote',
+          ),
+        ],
+      );
+      final routes = refineCharacterRoutes(heuristic, [
+        ...delta.dialogues,
+        for (final segment in segments)
+          CharacterDialogueReference(
+            attributionId: 'old',
+            dialogueSpanId: 'old_quote',
+            segmentId: segment.segmentId,
+            startWord: 0,
+            endWord: segment.wordCount,
+            sourceMatched: false,
+          ),
+      ], speechDocument: document.speechDocument).ranges;
+      final mara = delta.registry.characterEntries.singleWhere(
+        (entry) => entry.displayLabel == 'Mara',
+      );
+      _expectExactCover(document, routes);
+      expect(routes.map((r) => r.castId), ['cast_narrator', mara.castId]);
+      expect(routes.first.endWordIndex, 2);
+    },
+  );
+}
+
+CharacterAnalysisDelta _project(
+  ReaderDocument document,
+  ModernBookNlpWindow window,
+  Map<String, dynamic> result,
+) => modernBookNlpCharacterDelta(
+  request: _request(window, sourceRevision: result['sourceRevision'] as String),
+  result: result,
+  registry: document.characterCastRegistry,
+  turns: window.turns,
+  sourceSlices: window.slices,
+  authoritativeQuotes: true,
+);
+
+ModernBookNlpRequest _request(
+  ModernBookNlpWindow window, {
+  String sourceRevision = 'source',
+}) => ModernBookNlpRequest(
+  requestId: 'request',
+  ownerId: 'owner',
+  workId: 'work',
+  sourceRevision: sourceRevision,
+  analysisRevision: 1,
+  sequence: 1,
+  text: window.text,
+  windowPolicy: 'paragraph-context-v2',
+);
+
+Map<String, dynamic> _result(
+  ModernBookNlpRequest request, {
+  required Map<String, List<(String, bool)>> mentions,
+  required List<(String, String?)> quotes,
+}) {
+  Map<String, int> bounds(String value, [int from = 0]) {
+    final start = request.text.indexOf(value, from);
+    expect(start, greaterThanOrEqualTo(0));
+    return {'startUtf16': start, 'endUtf16': start + value.length};
+  }
+
+  List<Map<String, Object>> typedMentions(List<(String, bool)> mentions) {
+    final next = <String, int>{};
+    return [
+      for (final (name, proper) in mentions)
+        (() {
+          final location = bounds(name, next[name] ?? 0);
+          next[name] = location['endUtf16']!;
+          return {...location, 'text': name, 'proper': proper};
+        })(),
+    ];
+  }
+
+  return {
+    ...request.toJson(),
+    'providerId': 'modernbooknlp-joint',
+    'providerVersion': modernBookNlpRevision,
+    'modelIdentity': modernBookNlpModelIdentity,
+    'adapterVersion': modernBookNlpAdapterVersion,
+    'entities': [
+      for (final entry in mentions.entries)
+        {'entityId': entry.key, 'mentions': typedMentions(entry.value)},
+    ],
+    'quotes': [
+      for (final (text, entity) in quotes)
+        {...bounds(text), 'entityId': entity, 'confidence': null},
+    ],
+  };
+}
+
+List<DocumentVoiceAttributionRange> _refine(
+  ReaderDocument document,
+  Iterable<CharacterDialogueReference> evidence, {
+  Set<String> protected = const {},
+}) => refineCharacterRoutes(
+  document.documentVoiceAttribution,
+  evidence,
+  speechDocument: document.speechDocument,
+  protectedSpanIds: protected,
+).ranges;
+
+void _expectExactCover(
+  ReaderDocument document,
+  List<DocumentVoiceAttributionRange> ranges,
+) {
+  var word = 0;
+  for (final range in ranges) {
+    expect(range.startWordIndex, word);
+    expect(range.endWordIndex, greaterThan(word));
+    word = range.endWordIndex;
+  }
+  expect(word, document.wordCount);
+}

@@ -22,14 +22,13 @@ Narrator and character choices are remembered when you reopen the same unchanged
 
 Open **Character Voices** to manage narrator/cast assignments, or **Voice options** in single-voice mode. Assignment fields show requested choices. The footer keeps **Current** playback choices separate from **Pending** intent and reports preparing, applying or failure. Automatic speaker routing follows the prepared cast; it is separate from editing a voice assignment. Fast attribution is heuristic, and selecting a voice does not correct a mistaken speaker attribution. The current selector may expose only one available choice for a character; the user-reported limitation is tracked for a future release in [issue #78](https://github.com/kellyjanderson/readaloud/issues/78).
 
-Settings → **ModernBookNLP evaluation → Prepare and evaluate** enables experimental
-local character refinement. It can discover additional people, retain aliases and
-pronoun evidence, and improve future speaker routes. Explicit voice choices remain
-yours; already captured speech does not change. New evidence takes effect at the
-next ordinary planning boundary, range, jump or Play. Completed windows are saved
-with the book and reused when compatible. **Stop** stops further analysis without
-erasing saved evidence. This remains opt-in; it does not resolve the known native
-Fish switching stall or guarantee literary accuracy. See the [provider guide](modernbooknlp-provider.md).
+In Settings, use **Chapter analysis with ModernBookNLP** to enable local
+chapter analysis. Read Aloud remembers this choice and begins on document open.
+Fish waits for the relevant chapter before generating new speech. Later chapters
+can continue analyzing while the reader plays, and **Cancel pending Play**
+cancels the playback request. **Stop** in the ModernBookNLP settings stops the
+analysis pass and keeps completed evidence for reuse. Explicit voice choices
+and authored speaker assignments retain priority. See the [provider guide](modernbooknlp-provider.md).
 
 Choosing a narrator or character voice applies it automatically. During playback, the app stops, prepares and buffers the latest choice, then replays from the current audible chunk’s start. Some words may repeat. There is no Apply button; replacement still takes time and is not guaranteed to be seamless.
 

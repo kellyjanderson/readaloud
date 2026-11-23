@@ -28,6 +28,35 @@ class DocumentAnalysisRepository {
     });
   }
 
+  /// An unchanged chapter and its exact overlap can survive a source edit.
+  /// Resolve at most one pointer, then validate the complete captured result.
+  Future<DocumentAnalysisRecord?> readReusableContext(
+    ModernBookNlpRequest request,
+  ) {
+    final root = rootPath;
+    return Isolate.run(() async {
+      final key = DocumentAnalysisRecord.contextKey(request);
+      final pointer = File('$root/contexts/$key');
+      try {
+        if (await pointer.length() != 129) return null;
+        final target = await pointer.readAsString();
+        if (!RegExp(r'^[a-f0-9]{64}/[a-f0-9]{64}$').hasMatch(target)) {
+          return null;
+        }
+        final record = await _read('$root/$target.json');
+        return record.reusable &&
+                record.windowPolicy == request.windowPolicy &&
+                record.text == request.text
+            ? record
+            : null;
+      } on FileSystemException {
+        return null;
+      } on FormatException {
+        return null;
+      }
+    });
+  }
+
   Future<DocumentAnalysisRecord> save(
     ModernBookNlpRequest request,
     Map<String, dynamic> output, {
@@ -54,6 +83,24 @@ class DocumentAnalysisRepository {
       if (!isCurrent()) throw const ModernBookNlpCancelled();
       // Only the supervisor's current window can admit this short atomic commit.
       await File(stage).rename(path);
+      if (request.windowPolicy == 'chapter-context-v1' && isCurrent()) {
+        final root = rootPath;
+        await Isolate.run(() async {
+          try {
+            final key = DocumentAnalysisRecord.contextKey(request);
+            final source = DocumentAnalysisRecord.digest(
+              request.sourceRevision,
+            );
+            await Directory('$root/contexts').create(recursive: true);
+            await atomicWriteText(
+              '$root/contexts/$key',
+              '$source/${record.key}',
+            );
+          } on FileSystemException {
+            // The canonical source record is already durable.
+          }
+        });
+      }
       return record;
     } finally {
       try {
