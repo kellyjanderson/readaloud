@@ -22,6 +22,7 @@ class _RangeDocumentSurfaceState extends State<RangeDocumentSurface> {
   final _scroll = ScrollController();
   final _list = ListController();
   final _keys = <int, GlobalKey>{};
+  final _mountedSelections = <int, _RangeSelectionDelegate>{};
   int? _lastActive;
   int _lastFollowTick = -1;
 
@@ -130,6 +131,7 @@ class _RangeDocumentSurfaceState extends State<RangeDocumentSurface> {
                 key: _keys.putIfAbsent(sequence, GlobalKey.new),
                 sequence: sequence,
                 reader: reader,
+                mountedSelections: _mountedSelections,
                 onFocus: (fraction) => _follow(sequence, fraction),
               );
             },
@@ -145,10 +147,12 @@ class _RangeCell extends StatefulWidget {
     super.key,
     required this.sequence,
     required this.reader,
+    required this.mountedSelections,
     required this.onFocus,
   });
   final int sequence;
   final ReaderController reader;
+  final Map<int, _RangeSelectionDelegate> mountedSelections;
   final ValueChanged<double> onFocus;
   @override
   State<_RangeCell> createState() => _RangeCellState();
@@ -157,9 +161,14 @@ class _RangeCell extends StatefulWidget {
 class _RangeCellState extends State<_RangeCell> {
   final _cancelled = Completer<void>();
   late Future<DocumentPreparationPublication?> _range;
+  late final _RangeSelectionDelegate _selection;
   @override
   void initState() {
     super.initState();
+    _selection = _RangeSelectionDelegate(
+      previous: () => widget.mountedSelections[widget.sequence - 1],
+    );
+    widget.mountedSelections[widget.sequence] = _selection;
     _range = _load();
   }
 
@@ -168,6 +177,8 @@ class _RangeCellState extends State<_RangeCell> {
   @override
   void dispose() {
     _cancelled.complete();
+    widget.mountedSelections.remove(widget.sequence);
+    _selection.dispose();
     super.dispose();
   }
 
@@ -198,25 +209,60 @@ class _RangeCellState extends State<_RangeCell> {
           }
           final reader = widget.reader;
           final active = widget.sequence == reader.activePreparedRangeSequence;
-          return DocumentSurface(
-            key: ValueKey('display-range-${widget.sequence}'),
-            document: range.fragment,
-            inline: true,
-            fontFamily: reader.fontFamily,
-            fontScale: reader.fontScale,
-            spokenSelection: active
-                ? reader.spokenSelection
-                : const SpokenSelection.none(),
-            focusedDisplayBlockId: active
-                ? reader.readingFocusState.activeDisplayBlockId
-                : null,
-            autoFollowActive:
-                active && reader.readingFocusState.shouldAutoFollow,
-            followRequestTick: active
-                ? reader.readingFocusState.recenterRequestTick
-                : 0,
-            onInlineFocus: widget.onFocus,
+          _selection.range = range.range;
+          return SelectionContainer(
+            delegate: _selection,
+            child: DocumentSurface(
+              key: ValueKey('display-range-${widget.sequence}'),
+              document: range.fragment,
+              inline: true,
+              fontFamily: reader.fontFamily,
+              fontScale: reader.fontScale,
+              spokenSelection: active
+                  ? reader.spokenSelection
+                  : const SpokenSelection.none(),
+              focusedDisplayBlockId: active
+                  ? reader.readingFocusState.activeDisplayBlockId
+                  : null,
+              autoFollowActive:
+                  active && reader.readingFocusState.shouldAutoFollow,
+              followRequestTick: active
+                  ? reader.readingFocusState.recenterRequestTick
+                  : 0,
+              onInlineFocus: widget.onFocus,
+            ),
           );
         },
       );
+}
+
+/// Flutter concatenates selected children. Restore the display boundary only
+/// when the drag also selected text in the immediately preceding mounted cell.
+class _RangeSelectionDelegate extends StaticSelectionContainerDelegate {
+  _RangeSelectionDelegate({required this.previous});
+
+  final _RangeSelectionDelegate? Function() previous;
+  late PreparedDocumentRange range;
+
+  SelectedContent? get _unjoinedContent => super.getSelectedContent();
+
+  @override
+  SelectedContent? getSelectedContent() {
+    final content = _unjoinedContent;
+    if (content == null || content.plainText.isEmpty || range.continuesWord) {
+      return content;
+    }
+    final preceding = previous()?._unjoinedContent?.plainText;
+    if (preceding == null || preceding.isEmpty) return content;
+
+    final text = content.plainText;
+    final separator = range.continuesParagraph ? ' ' : '\n';
+    final hasSeparator = range.continuesParagraph
+        ? preceding.trimRight().length != preceding.length ||
+              text.trimLeft().length != text.length
+        : preceding.endsWith('\n') || text.startsWith('\n');
+    return hasSeparator
+        ? content
+        : SelectedContent(plainText: '$separator$text');
+  }
 }
