@@ -1,6 +1,9 @@
 import 'dart:io';
+import 'dart:ui' show PointerDeviceKind;
 
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_html/flutter_html.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -47,6 +50,105 @@ class _SilentEngine implements TtsEngine {
 }
 
 void main() {
+  testWidgets(
+    'dragging across mounted ranges copies the paragraph break and Unicode',
+    (tester) async {
+      await tester.binding.setSurfaceSize(const Size(1000, 900));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      SharedPreferences.setMockInitialValues({});
+      const before = 'BEGIN "Café", naïve—e\u0301cho 🐈 END.';
+      const after = 'NEXT «cœur», piñata—東京 🧭 STOP.';
+      late Directory root;
+      late _Reader reader;
+      await tester.runAsync(() async {
+        root = await Directory.systemTemp.createTemp('range-selection-');
+        reader = _Reader('${root.path}/prepared');
+        final source = await File('${root.path}/seam.html').writeAsString(
+          '<html><body><p>$before</p><p>$after</p></body></html>',
+        );
+        await reader.initialize();
+        await reader.importFilePaths([source.path]);
+      });
+      addTearDown(() async {
+        await reader.shutdownPreparation();
+        reader.dispose();
+        await root.delete(recursive: true);
+      });
+
+      String? copied;
+      final messenger =
+          TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
+      messenger.setMockMethodCallHandler(SystemChannels.platform, (call) async {
+        if (call.method == 'Clipboard.setData') {
+          copied = (call.arguments as Map)['text'] as String;
+        }
+        return null;
+      });
+      addTearDown(
+        () => messenger.setMockMethodCallHandler(SystemChannels.platform, null),
+      );
+
+      await tester.pumpWidget(ReadAloudApp(controller: reader));
+      Finder paragraphInRange(int sequence, String text) => find.descendant(
+        of: find.byKey(ValueKey('display-range-$sequence')),
+        matching: find.byWidgetPredicate(
+          (widget) => widget is RichText && widget.text.toPlainText() == text,
+        ),
+      );
+      final first = paragraphInRange(1, before);
+      final second = paragraphInRange(2, after);
+      for (var step = 0; step < 100; step++) {
+        await tester.pump(const Duration(milliseconds: 20));
+        if (first.evaluate().isNotEmpty && second.evaluate().isNotEmpty) break;
+        await tester.runAsync(
+          () => Future<void>.delayed(const Duration(milliseconds: 10)),
+        );
+      }
+      expect(reader.preparedRangeCount, 2);
+      expect(first, findsOneWidget);
+      expect(second, findsOneWidget);
+
+      Offset edge(Finder finder, String text, {required bool start}) {
+        final paragraph = tester.renderObject<RenderParagraph>(finder);
+        final boxes = paragraph.getBoxesForSelection(
+          TextSelection(baseOffset: 0, extentOffset: text.length),
+        );
+        final box = start ? boxes.first : boxes.last;
+        return paragraph.localToGlobal(
+          Offset(start ? box.left + 3 : box.right - 3, box.toRect().center.dy),
+        );
+      }
+
+      await tester.pumpAndSettle();
+      Future<void> dragAndCopy(Offset start, Offset end) async {
+        final gesture = await tester.startGesture(
+          start,
+          kind: PointerDeviceKind.mouse,
+        );
+        for (final step in [0.08, 0.16, 0.8, 1.0]) {
+          await gesture.moveTo(Offset.lerp(start, end, step)!);
+          await tester.pump();
+        }
+        await gesture.up();
+        await tester.pumpAndSettle();
+        copied = null;
+        await tester.sendKeyDownEvent(LogicalKeyboardKey.metaLeft);
+        await tester.sendKeyEvent(LogicalKeyboardKey.keyC);
+        await tester.sendKeyUpEvent(LogicalKeyboardKey.metaLeft);
+      }
+
+      final start = edge(first, before, start: true);
+      final end = edge(second, after, start: false);
+      await dragAndCopy(start, end);
+      expect(copied, '$before\n$after');
+
+      await dragAndCopy(edge(second, after, start: true), end);
+      expect(copied, after);
+      await tester.pumpWidget(const SizedBox());
+    },
+    variant: const TargetPlatformVariant({TargetPlatform.macOS}),
+  );
+
   testWidgets(
     'reader displays the last range of a novel and revisits the first',
     (tester) async {
