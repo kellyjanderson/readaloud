@@ -15,10 +15,9 @@ window.HUMAN_ACCEPTANCE_SCENARIOS = [
     "title": "Switch between the two supplied speech models",
     "fixtureId": "model-workflow",
     "question": "Is it clear which speech model is ready to read? Can you change models and then start reading?",
-    "fixtureInstructions": "Everything needed is already supplied. The test app automatically uses its own separate settings and storage. That is what earlier instructions called an “isolated test profile”; you do not need to create a profile, sign in, or configure anything. Use the app path and Finder instructions above. This case uses only workshop.txt, the short sample document. You do not need the large document or any recovery files.",
     "steps": [
       "With Read Aloud closed, click Start this test, then open the test app in Finder using the instructions below.",
-      "In Read Aloud, choose File → Open Document. In the file chooser, press ⌘⇧G, paste /Users/k/Documents/Projects/readaloud/tmp/final-user-tests-2026-11-17/fixtures/imports, and press Return. Select workshop.txt and click Open. This is the short sample document for this test.",
+      "In Read Aloud, choose File → Open Document and open the short sample listed under Test fixture provided below. You can leave the recovery files alone for this test.",
       "Open the app’s Settings. Choose Fish Audio Drama 3 · 8-bit. If you see Load selected speech engine, click it. Wait until the status says Active. “Selected” means the model you asked for; “Active” means it is loaded and ready to read.",
       "Close Settings, press Play and listen briefly. Pause the reading before continuing.",
       "Reopen Settings and choose Fish Audio Drama 3 · 4-bit. If a Load selected speech engine button appears, click it. Watch the status while it loads. Changing models should not start speech by itself.",
