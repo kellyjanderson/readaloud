@@ -1,6 +1,7 @@
 import 'dart:io';
 import 'dart:ui' show PointerDeviceKind;
 
+import 'package:flutter/gestures.dart' show kSecondaryMouseButton;
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
@@ -50,6 +51,85 @@ class _SilentEngine implements TtsEngine {
 }
 
 void main() {
+  testWidgets(
+    'right click jumps to the clicked occurrence in another range',
+    (tester) async {
+      await tester.binding.setSurfaceSize(const Size(1000, 900));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      SharedPreferences.setMockInitialValues({});
+      late Directory root;
+      late _Reader reader;
+      await tester.runAsync(() async {
+        root = await Directory.systemTemp.createTemp('range-context-menu-');
+        reader = _Reader('${root.path}/prepared');
+        final source = await File('${root.path}/seek.html').writeAsString(
+          '<html><body><p>Start with the first range.</p>'
+          '<p>Echo one, then <strong>echo</strong> again.</p></body></html>',
+        );
+        await reader.initialize();
+        await reader.importFilePaths([source.path]);
+      });
+      addTearDown(() async {
+        await reader.shutdownPreparation();
+        reader.dispose();
+        await root.delete(recursive: true);
+      });
+
+      await tester.pumpWidget(ReadAloudApp(controller: reader));
+      const line = 'Echo one, then echo again.';
+      final finder = find.descendant(
+        of: find.byKey(const ValueKey('display-range-2')),
+        matching: find.byWidgetPredicate(
+          (widget) => widget is RichText && widget.text.toPlainText() == line,
+        ),
+      );
+      for (var step = 0; step < 100 && finder.evaluate().isEmpty; step++) {
+        await tester.pump(const Duration(milliseconds: 20));
+        await tester.runAsync(
+          () => Future<void>.delayed(const Duration(milliseconds: 10)),
+        );
+      }
+      expect(finder, findsOneWidget);
+      expect(reader.activePreparedRangeSequence, 1);
+      await tester.pumpAndSettle();
+      final paragraph = tester.renderObject<RenderParagraph>(finder);
+      final start = line.lastIndexOf('echo');
+      final wordBox = paragraph
+          .getBoxesForSelection(
+            TextSelection(baseOffset: start, extentOffset: start + 4),
+          )
+          .single;
+      final point = paragraph.localToGlobal(wordBox.toRect().center);
+      final click = await tester.startGesture(
+        point,
+        kind: PointerDeviceKind.mouse,
+        buttons: kSecondaryMouseButton,
+      );
+      await click.up();
+      await tester.pumpAndSettle();
+      expect(
+        find.descendant(
+          of: find.byType(AdaptiveTextSelectionToolbar),
+          matching: find.text('Copy'),
+        ),
+        findsOneWidget,
+      );
+      final jump = find.text('Jump to this position');
+      expect(jump, findsOneWidget);
+      expect(reader.activePreparedRangeSequence, 1);
+      await tester.tap(jump);
+      await tester.pumpAndSettle();
+      expect(jump, findsNothing);
+      expect(reader.activePreparedRangeSequence, 2);
+      expect(reader.currentWordIndex, 3);
+      expect(reader.isPlaying, isFalse);
+      expect(reader.spokenSelection.speechStartWordIndex, 3);
+      await tester.pumpWidget(const SizedBox());
+      await tester.pump(const Duration(milliseconds: 401));
+    },
+    variant: const TargetPlatformVariant({TargetPlatform.macOS}),
+  );
+
   testWidgets(
     'dragging across mounted ranges copies the paragraph break and Unicode',
     (tester) async {

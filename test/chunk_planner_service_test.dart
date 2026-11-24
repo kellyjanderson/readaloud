@@ -112,6 +112,31 @@ $opening $reporting $continuation
       expect(fallback.chunks.single.sceneTurns, isEmpty);
     });
 
+    test('seeks into a Fish turn and keeps following speaker ownership', () {
+      final document = DocumentImportService().importPastedText(
+        "'Wait,' she said, 'just there!'",
+      );
+      final plan = _fishPlan(
+        document,
+        startWordIndex: 2,
+        routes: [
+          _range(document, 0, 0, 1, 'speaker'),
+          _range(document, 0, 1, 3, 'narrator'),
+          _range(document, 0, 3, 5, 'speaker'),
+        ],
+      );
+      final scene = plan.chunks.single;
+      expect(scene.startWordIndex, 2);
+      expect(scene.sceneTurns.map((turn) => turn.speakText), [
+        'said,',
+        "'just there!'",
+      ]);
+      expect(scene.sceneTurns.map((turn) => turn.voiceId), [
+        'narrator',
+        'speaker',
+      ]);
+    });
+
     test('resumes in source order after reaching the native turn cap', () {
       final document = DocumentImportService().importPastedText(
         List.generate(18, (index) => 'Turn $index.').join(' '),
@@ -486,6 +511,7 @@ ChunkPlan _fishPlan(
   List<CastAwareSpeechRange> routes = const [],
   Map<String, FishSceneBoundary> boundaries = const {},
   String? startSegmentId,
+  int? startWordIndex,
   int? maxChunks,
   int bits = 0,
   String? engineId,
@@ -508,6 +534,7 @@ ChunkPlan _fishPlan(
         segments: const [],
       ),
       startSegmentId: start,
+      startWordIndex: startWordIndex,
       voiceId: 'narrator',
       rate: 1,
       engineId: engine,

@@ -8,6 +8,7 @@ import '../controllers/reader_controller.dart';
 import '../models/document_preparation.dart';
 import '../models/spoken_selection.dart';
 import 'document_surface.dart';
+import 'reader_text_context_menu.dart';
 
 /// A novel is a lazy list of immutable display ranges, not the active audio
 /// fragment. Cells own their pending reads and release them on disposal.
@@ -101,6 +102,7 @@ class _RangeDocumentSurfaceState extends State<RangeDocumentSurface> {
         return false;
       },
       child: SelectionArea(
+        contextMenuBuilder: buildReaderTextContextMenu,
         onSelectionChanged: (selection) {
           if (selection != null && reader.readingFocusState.shouldAutoFollow) {
             reader.suspendReaderFollow();
@@ -230,6 +232,9 @@ class _RangeCellState extends State<_RangeCell> {
                   ? reader.readingFocusState.recenterRequestTick
                   : 0,
               onInlineFocus: widget.onFocus,
+              onSeek: (word) => unawaited(
+                reader.seekToWord(word, document: range.fragment, range: range),
+              ),
             ),
           );
         },

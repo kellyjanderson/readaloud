@@ -1251,6 +1251,7 @@ class _ReadAloudScreenState extends State<ReadAloudScreen> {
 
   Widget _buildReader(BuildContext context) {
     final tokens = readAloudThemeTokens(context);
+    final document = _controller.document;
     return DecoratedBox(
       key: const Key('reader-surface-shell'),
       decoration: BoxDecoration(
@@ -1278,7 +1279,10 @@ class _ReadAloudScreenState extends State<ReadAloudScreen> {
                       controller: _controller,
                     )
                   : DocumentSurface(
-                      document: _controller.document,
+                      document: document,
+                      onSeek: (word) => unawaited(
+                        _controller.seekToWord(word, document: document),
+                      ),
                       fontFamily: _controller.fontFamily,
                       fontScale: _controller.fontScale,
                       spokenSelection: _controller.spokenSelection,

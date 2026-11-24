@@ -12,11 +12,13 @@ class SpeechPlanningContext {
   const SpeechPlanningContext({
     required this.realization,
     required this.engineVersion,
+    this.startWordIndex,
     this.routes,
     this.fishSceneBoundaries = const {},
   });
   final VoiceSessionRealizationInput realization;
   final String engineVersion;
+  final int? startWordIndex;
   final CastAwareSpeechRouteInput? routes;
   final Map<String, FishSceneBoundary> fishSceneBoundaries;
 }
@@ -284,6 +286,7 @@ SpeechPlanningWindow _planWindow(
   ChunkPlannerGraph graph,
 ) {
   final source = context.realization;
+  final startWordIndex = start == null ? context.startWordIndex : null;
   final input = VoiceSessionRealizationInput(
     speechDocument: source.speechDocument,
     baseAnnotations: source.baseAnnotations,
@@ -309,6 +312,7 @@ SpeechPlanningWindow _planWindow(
       rate: input.rate,
       engineId: input.engineId,
       engineVersion: context.engineVersion,
+      startWordIndex: startWordIndex,
       fishSceneBoundaries: context.fishSceneBoundaries,
       maxChunks: maximum,
     ),
@@ -342,6 +346,7 @@ SpeechPlanningWindow _planWindow(
         rate: input.rate,
         engineId: input.engineId,
         engineVersion: context.engineVersion,
+        startWordIndex: startWordIndex,
         fishSceneBoundaries: context.fishSceneBoundaries,
         maxChunks: maximum,
       ),

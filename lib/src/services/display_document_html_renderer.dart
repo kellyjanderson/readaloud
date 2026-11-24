@@ -3,9 +3,12 @@ import 'dart:convert';
 import '../models/display_document.dart';
 import '../models/spoken_selection.dart';
 
+const readingPositionAttribute = 'data-reading-position';
+
 String renderDisplayDocumentToHtml(
   DisplayDocument document, {
   SpokenSelection spokenSelection = const SpokenSelection.none(),
+  bool includeReadingPositions = false,
 }) {
   final orderedBlocks = [...document.blocks]
     ..sort((left, right) => left.ordinal.compareTo(right.ordinal));
@@ -32,6 +35,7 @@ String renderDisplayDocumentToHtml(
       spokenSelection: spokenSelection,
       childrenByParent: childrenByParent,
       renderedIds: renderedIds,
+      includeReadingPositions: includeReadingPositions,
     );
   }
 
@@ -46,6 +50,7 @@ String renderDisplayDocumentToHtml(
       spokenSelection: spokenSelection,
       childrenByParent: childrenByParent,
       renderedIds: renderedIds,
+      includeReadingPositions: includeReadingPositions,
     );
   }
 
@@ -60,6 +65,7 @@ void _renderBlock({
   required SpokenSelection spokenSelection,
   required Map<String, List<DisplayBlock>> childrenByParent,
   required Set<String> renderedIds,
+  required bool includeReadingPositions,
 }) {
   if (!renderedIds.add(block.blockId)) {
     return;
@@ -69,19 +75,21 @@ void _renderBlock({
       spokenSelection.hasSelection &&
       spokenSelection.displayBlockId == block.blockId;
   final highlightClass = _highlightClassForSelection(spokenSelection);
-  final highlightStart = isActiveBlock &&
+  final highlightStart =
+      isActiveBlock &&
           spokenSelection.precision != SpokenSelectionPrecision.block
       ? spokenSelection.displayStart
       : null;
-  final highlightEnd = isActiveBlock &&
+  final highlightEnd =
+      isActiveBlock &&
           spokenSelection.precision != SpokenSelectionPrecision.block
       ? spokenSelection.displayEnd
       : null;
   final blockClass = switch (spokenSelection.precision) {
     SpokenSelectionPrecision.block when isActiveBlock =>
       'active-reading-block spoken-block',
-    SpokenSelectionPrecision.word ||
-    SpokenSelectionPrecision.segment when isActiveBlock =>
+    SpokenSelectionPrecision.word || SpokenSelectionPrecision.segment
+        when isActiveBlock =>
       'active-reading-block',
     _ => null,
   };
@@ -89,6 +97,17 @@ void _renderBlock({
     blockId: block.blockId,
     className: blockClass,
   );
+  String renderInlines() {
+    final text = _renderInlines(
+      block.inlines,
+      highlightStart: highlightStart,
+      highlightEnd: highlightEnd,
+      highlightClass: highlightClass,
+    );
+    if (!includeReadingPositions || text.isEmpty) return text;
+    final id = const HtmlEscape().convert(block.blockId);
+    return '<span $readingPositionAttribute="$id">$text</span>';
+  }
 
   switch (block.kind) {
     case DisplayBlockKind.heading:
@@ -102,23 +121,19 @@ void _renderBlock({
         '6' => 'h6',
         _ => 'h2',
       };
-      buffer.write(
-        '<$tag$blockAttributes>${_renderInlines(block.inlines, highlightStart: highlightStart, highlightEnd: highlightEnd, highlightClass: highlightClass)}</$tag>',
-      );
+      buffer.write('<$tag$blockAttributes>${renderInlines()}</$tag>');
       return;
     case DisplayBlockKind.paragraph:
-      buffer.write(
-        '<p$blockAttributes>${_renderInlines(block.inlines, highlightStart: highlightStart, highlightEnd: highlightEnd, highlightClass: highlightClass)}</p>',
-      );
+      buffer.write('<p$blockAttributes>${renderInlines()}</p>');
       return;
     case DisplayBlockKind.blockquote:
       buffer.write(
-        '<blockquote$blockAttributes><p>${_renderInlines(block.inlines, highlightStart: highlightStart, highlightEnd: highlightEnd, highlightClass: highlightClass)}</p></blockquote>',
+        '<blockquote$blockAttributes><p>${renderInlines()}</p></blockquote>',
       );
       return;
     case DisplayBlockKind.codeBlock:
       buffer.write(
-        '<pre$blockAttributes><code>${_renderInlines(block.inlines, highlightStart: highlightStart, highlightEnd: highlightEnd, highlightClass: highlightClass)}</code></pre>',
+        '<pre$blockAttributes><code>${renderInlines()}</code></pre>',
       );
       return;
     case DisplayBlockKind.orderedList:
@@ -135,14 +150,13 @@ void _renderBlock({
           spokenSelection: spokenSelection,
           childrenByParent: childrenByParent,
           renderedIds: renderedIds,
+          includeReadingPositions: includeReadingPositions,
         );
       }
       buffer.write('</$tag>');
       return;
     case DisplayBlockKind.listItem:
-      buffer.write(
-        '<li$blockAttributes>${_renderInlines(block.inlines, highlightStart: highlightStart, highlightEnd: highlightEnd, highlightClass: highlightClass)}</li>',
-      );
+      buffer.write('<li$blockAttributes>${renderInlines()}</li>');
       return;
     case DisplayBlockKind.image:
       final asset = block.assetId == null
@@ -184,7 +198,7 @@ void _renderBlock({
       return;
     case DisplayBlockKind.table:
       buffer.write(
-        '<div${_blockAttributes(blockId: block.blockId, className: _mergeClasses(blockClass, 'table-block'))}>${_renderInlines(block.inlines, highlightStart: highlightStart, highlightEnd: highlightEnd, highlightClass: highlightClass)}</div>',
+        '<div${_blockAttributes(blockId: block.blockId, className: _mergeClasses(blockClass, 'table-block'))}>${renderInlines()}</div>',
       );
       return;
     case DisplayBlockKind.pageBreak:
@@ -203,12 +217,7 @@ void _renderBlock({
       final tag = block.attributes['tag'] ?? 'unknown';
       final content = block.inlines.isEmpty
           ? const HtmlEscape().convert(block.attributes['label'] ?? '')
-          : _renderInlines(
-              block.inlines,
-              highlightStart: highlightStart,
-              highlightEnd: highlightEnd,
-              highlightClass: highlightClass,
-            );
+          : renderInlines();
       buffer.write(
         '<div${_blockAttributes(blockId: block.blockId, className: _mergeClasses(blockClass, 'unsupported-block'))} data-source-tag="${const HtmlEscape().convert(tag)}">$content</div>',
       );
