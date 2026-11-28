@@ -16,7 +16,9 @@ class EnglishSuffixAllomorphModule extends PronunciationRuleModule {
   bool get supportsSessionTime => false;
 
   @override
-  PronunciationRuleModuleDecision apply(PronunciationRuleModuleContext context) {
+  PronunciationRuleModuleDecision apply(
+    PronunciationRuleModuleContext context,
+  ) {
     final realization = englishSClassRealizationForToken(context.surfaceText);
     if (realization == null) {
       return const PronunciationRuleModuleDecision.noDecision();
@@ -29,6 +31,9 @@ class EnglishSuffixAllomorphModule extends PronunciationRuleModule {
     final representations = <PronunciationRepresentation>[];
     representations.add(
       PronunciationRepresentation(
+        context: SpeechAdjustmentContext.content(
+          'english-suffix-allomorph:canonical-ipa:v1',
+        ),
         representationId:
             '${moduleId}_${context.selectedProfile.profileId}_${context.normalizedSurfaceText}_suffix',
         representationType: 'explicit_suffix_phoneme',
@@ -39,6 +44,7 @@ class EnglishSuffixAllomorphModule extends PronunciationRuleModule {
     );
     representations.add(
       PronunciationRepresentation(
+        context: SpeechAdjustmentContext.unresolved(),
         representationId:
             '${moduleId}_${context.selectedProfile.profileId}_${context.normalizedSurfaceText}',
         representationType: 'normalized_spoken_text',
@@ -102,9 +108,7 @@ EnglishSClassRealization? englishSClassRealizationForToken(String surfaceText) {
     return null;
   }
 
-  final match = RegExp(
-    r"^([A-Za-z][A-Za-z-]*)(['’]s)$",
-  ).firstMatch(core);
+  final match = RegExp(r"^([A-Za-z][A-Za-z-]*)(['’]s)$").firstMatch(core);
   if (match == null) {
     return null;
   }

@@ -22,6 +22,9 @@ void main() {
         'qwen3_tts_base_1_7b',
         'voxtral_4b',
         'moss_tts_8b',
+        'fish_drama3',
+        'fish_drama3_8bit',
+        'fish_drama3_4bit',
       ]) {
         expect(
           SpeechRuntimeCapabilities.detectForCurrentPlatform(
@@ -63,21 +66,35 @@ void main() {
       await MlxVoiceLibrary.load();
       final root = await Directory.systemTemp.createTemp('reference-voices-');
       addTearDown(() => root.delete(recursive: true));
-      for (final engine in ['qwen3_tts_base_1_7b', 'moss_tts_8b']) {
+      for (final engine in [
+        'qwen3_tts_base_1_7b',
+        'moss_tts_8b',
+        'fish_drama3',
+      ]) {
         final voices = mlxVoicesFor(engine);
         expect(voices.length, greaterThanOrEqualTo(30));
-        expect(voices.where((v) => v.locale.startsWith('en')).length, 30);
+        expect(
+          voices.where((v) => v.locale.startsWith('en')).length,
+          greaterThanOrEqualTo(30),
+        );
         expect(
           voices.where((v) => v.rawValue['gender'] == 'female').length,
-          15,
+          greaterThanOrEqualTo(15),
         );
-        expect(voices.where((v) => v.rawValue['gender'] == 'male').length, 15);
+        expect(
+          voices.where((v) => v.rawValue['gender'] == 'male').length,
+          greaterThanOrEqualTo(15),
+        );
         expect(voices.map((v) => v.id).toSet().length, voices.length);
         expect(
           voices.map((v) => v.rawValue['sha256']).toSet().length,
           voices.length,
         );
-        for (final voice in voices) {
+        expect(
+          voices.where((v) => v.rawValue['provider'] == 'Fish Official').length,
+          greaterThanOrEqualTo(5),
+        );
+        for (final voice in voices.where((v) => v.rawValue['asset'] != null)) {
           final data = await rootBundle.load(voice.rawValue['asset'] as String);
           final bytes = data.buffer.asUint8List(
             data.offsetInBytes,

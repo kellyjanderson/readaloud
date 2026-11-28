@@ -181,8 +181,6 @@ class _OpenSourceNoticesScreenState extends State<OpenSourceNoticesScreen> {
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        const CircularProgressIndicator(),
-                        const SizedBox(height: 16),
                         Text(
                           _takingLonger
                               ? 'Loading is taking longer than expected. You can return to the reader while it finishes.'

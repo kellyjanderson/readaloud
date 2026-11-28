@@ -100,6 +100,9 @@ void main() {
 
     test('applies normalized spoken text replacements as approximations', () {
       final result = service.translate(
+        capabilityProfile: const EngineCapabilityRegistry().lookup(
+          engineId: 'kokoro',
+        ),
         chunkId: 'chunk-1',
         segments: <TtsArtifactSegment>[
           TtsArtifactSegment(
@@ -114,6 +117,9 @@ void main() {
                 resolutionClass: 'direct_resolved',
                 translationIntent: 'normalized_spoken_text',
                 selectedRepresentation: PronunciationRepresentation(
+                  context: SpeechAdjustmentContext.content(
+                    'test:explicit-content-intent',
+                  ),
                   representationId: 'rep-1',
                   representationType: 'normalized_spoken_text',
                   representationValue: 'Ellie-ot',
@@ -158,6 +164,9 @@ void main() {
                   resolutionClass: 'direct_resolved',
                   translationIntent: 'phoneme_string',
                   selectedRepresentation: PronunciationRepresentation(
+                    context: SpeechAdjustmentContext.content(
+                      'test:explicit-content-intent',
+                    ),
                     representationId: 'rep-phoneme',
                     representationType: 'phoneme_string',
                     representationValue: 'ˈɛliət',
@@ -211,58 +220,64 @@ void main() {
       },
     );
 
-    test('uses engine-level allomorph payloads for possessive s-class endings', () {
-      final capabilityProfile = const EngineCapabilityRegistry().lookup(
-        engineId: 'kokoro',
-        platformFamily: 'macos',
-      );
-      final result = service.translate(
-        chunkId: 'chunk-3',
-        capabilityProfile: capabilityProfile,
-        segments: <TtsArtifactSegment>[
-          TtsArtifactSegment(
-            segmentId: 'segment-3',
-            speakText: "John's idea",
-            pronunciationArtifacts: const <RealizedPronunciationArtifact>[
-              RealizedPronunciationArtifact(
-                artifactId: 'artifact-possessive',
-                segmentId: 'segment-3',
-                startWord: 0,
-                endWord: 1,
-                resolutionClass: 'direct_resolved',
-                translationIntent: 'normalized_spoken_text',
-                selectedRepresentation: PronunciationRepresentation(
-                  representationId: 'rep-possessive',
-                  representationType: 'normalized_spoken_text',
-                  representationValue: 'Johnz',
-                  priority: 1,
+    test(
+      'uses engine-level allomorph payloads for possessive s-class endings',
+      () {
+        final capabilityProfile = const EngineCapabilityRegistry().lookup(
+          engineId: 'kokoro',
+          platformFamily: 'macos',
+        );
+        final result = service.translate(
+          chunkId: 'chunk-3',
+          capabilityProfile: capabilityProfile,
+          segments: <TtsArtifactSegment>[
+            TtsArtifactSegment(
+              segmentId: 'segment-3',
+              speakText: "John's idea",
+              pronunciationArtifacts: const <RealizedPronunciationArtifact>[
+                RealizedPronunciationArtifact(
+                  artifactId: 'artifact-possessive',
+                  segmentId: 'segment-3',
+                  startWord: 0,
+                  endWord: 1,
+                  resolutionClass: 'direct_resolved',
+                  translationIntent: 'normalized_spoken_text',
+                  selectedRepresentation: PronunciationRepresentation(
+                    context: SpeechAdjustmentContext.content(
+                      'test:explicit-content-intent',
+                    ),
+                    representationId: 'rep-possessive',
+                    representationType: 'normalized_spoken_text',
+                    representationValue: 'Johnz',
+                    priority: 1,
+                  ),
+                  diagnosticCodes: <String>[
+                    'pronunciation.resolved.possessive_allomorph',
+                  ],
                 ),
-                diagnosticCodes: <String>[
-                  'pronunciation.resolved.possessive_allomorph',
-                ],
-              ),
-            ],
-          ),
-        ],
-      );
+              ],
+            ),
+          ],
+        );
 
-      expect(
-        result.pronunciationArtifacts.single.translationOutcome,
-        KokoroPronunciationTranslationOutcome.direct,
-      );
-      expect(
-        result.payloadUnits,
-        contains(
-          isA<KokoroEnginePayloadUnit>()
-              .having(
-                (unit) => unit.kind,
-                'kind',
-                KokoroEnginePayloadUnitKind.englishSClassAllomorph,
-              )
-              .having((unit) => unit.value, 'value', "John's"),
-        ),
-      );
-    });
+        expect(
+          result.pronunciationArtifacts.single.translationOutcome,
+          KokoroPronunciationTranslationOutcome.direct,
+        );
+        expect(
+          result.payloadUnits,
+          contains(
+            isA<KokoroEnginePayloadUnit>()
+                .having(
+                  (unit) => unit.kind,
+                  'kind',
+                  KokoroEnginePayloadUnitKind.englishSClassAllomorph,
+                )
+                .having((unit) => unit.value, 'value', "John's"),
+          ),
+        );
+      },
+    );
 
     test(
       'prefers explicit suffix payloads for possessives when that representation is selected',
@@ -287,6 +302,9 @@ void main() {
                   resolutionClass: 'context_resolved',
                   translationIntent: 'explicit_suffix_phoneme',
                   selectedRepresentation: PronunciationRepresentation(
+                    context: SpeechAdjustmentContext.content(
+                      'test:explicit-content-intent',
+                    ),
                     representationId: 'rep-possessive-suffix',
                     representationType: 'explicit_suffix_phoneme',
                     representationValue: 'z',
@@ -350,6 +368,9 @@ void main() {
                 resolutionClass: 'direct_resolved',
                 translationIntent: 'explicit_suffix_phoneme',
                 selectedRepresentation: PronunciationRepresentation(
+                  context: SpeechAdjustmentContext.content(
+                    'test:explicit-content-intent',
+                  ),
                   representationId: 'rep-explicit-suffix',
                   representationType: 'explicit_suffix_phoneme',
                   representationValue: 'z',
@@ -395,11 +416,7 @@ void main() {
       'uses CMUdict backstop for irregular lexical forms and contractions',
       () {
         EnglishPronunciationDictionaryService.instance.replaceEntriesForTesting(
-          <String, String>{
-            "can't": 'kˈænt',
-            "it's": 'ˈɪts',
-            "they're": 'ðˈɛɹ',
-          },
+          <String, String>{"can't": 'kˈænt', "it's": 'ˈɪts', "they're": 'ðˈɛɹ'},
         );
 
         final capabilityProfile = const EngineCapabilityRegistry().lookup(
@@ -447,11 +464,7 @@ void main() {
       'still dictionary-backstops for while leaving the remaining function-word skip list intact',
       () {
         EnglishPronunciationDictionaryService.instance.replaceEntriesForTesting(
-          <String, String>{
-            'for': 'fɔɹ',
-            'the': 'ðə',
-            'to': 'tu',
-          },
+          <String, String>{'for': 'fɔɹ', 'the': 'ðə', 'to': 'tu'},
         );
 
         final capabilityProfile = const EngineCapabilityRegistry().lookup(
@@ -514,6 +527,7 @@ RealizedPronunciationArtifact _replacement(
     resolutionClass: 'direct_resolved',
     translationIntent: type,
     selectedRepresentation: PronunciationRepresentation(
+      context: SpeechAdjustmentContext.content('test:explicit-content-intent'),
       representationId: 'explicit',
       representationType: type,
       representationValue: value,

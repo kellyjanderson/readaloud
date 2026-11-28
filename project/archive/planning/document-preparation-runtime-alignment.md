@@ -7,7 +7,7 @@ Status: Accepted architecture direction; implementation not started in this docu
 
 The user clarified that all document semantics are prepared before playback: stable character data, supported presented-gender evidence, voice bindings, speaker tags, pronunciation, inflection and delivery intent. Character voice resources are initialized for the document and retained through ordinary speaker changes. The synthesis runtime fills an audio buffer ahead of playback; a character boundary is never a transport restart.
 
-The [execution-context architecture](../../acd/prepared-document-runtime.acd) records these decisions and the thread-placement review. It distinguishes full-document semantic preparation from bounded waveform generation. Model choice and numerical buffer thresholds remain open pending evaluation. No neural migration is authorized by these documents alone.
+The [execution-context architecture](https://github.com/kellyjanderson/readaloud/issues/48) records these decisions and the thread-placement review. It distinguishes full-document semantic preparation from bounded waveform generation. Model choice and numerical buffer thresholds remain open pending evaluation. No neural migration is authorized by these documents alone.
 
 ## Review of Architectural Guidance
 
@@ -37,4 +37,4 @@ These are local planning records, not claims that external issues have been file
 
 ## Verification and Open Choices
 
-[Prepared Document and Buffered Playback](../../test-specifications/prepared-document-and-buffered-playback.md) defines required integrated scenarios. No code or audio tests were run for this documentation change. Buffer targets must be selected from supported-device measurements; backend support for safe future-queue replacement must be demonstrated before promising immediate assignment application. Character analysis quality remains an evaluation task even when all analysis happens ahead of playback.
+[Prepared Document and Buffered Playback](https://github.com/kellyjanderson/readaloud/issues/54) defines required integrated scenarios. No code or audio tests were run for this documentation change. Buffer targets must be selected from supported-device measurements; backend support for safe future-queue replacement must be demonstrated before promising immediate assignment application. Character analysis quality remains an evaluation task even when all analysis happens ahead of playback.

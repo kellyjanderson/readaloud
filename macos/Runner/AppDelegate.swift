@@ -77,6 +77,35 @@ class AppDelegate: FlutterAppDelegate {
       name: mlxLifecycleChannelName,
       binaryMessenger: resolvedFlutterViewController.engine.binaryMessenger
     )
+    // Each process samples itself: sandbox policy denies cross-process libproc
+    // queries. Dart combines this value with its current child's telemetry.
+    mlxLifecycleChannel?.setMethodCallHandler { call, result in
+      guard call.method == "runtimeFootprint" else {
+        result(FlutterMethodNotImplemented)
+        return
+      }
+      let owner = getpid()
+      DispatchQueue.global(qos: .utility).async {
+        func footprint(_ pid: pid_t) -> UInt64? {
+          var info = rusage_info_v2()
+          let status = withUnsafeMutablePointer(to: &info) { pointer in
+            pointer.withMemoryRebound(to: rusage_info_t?.self, capacity: 1) {
+              proc_pid_rusage(pid, RUSAGE_INFO_V2, $0)
+            }
+          }
+          return status == 0 ? info.ri_phys_footprint : nil
+        }
+        let appBytes = footprint(owner)
+        DispatchQueue.main.async {
+          guard let appBytes else {
+            result(FlutterError(code: "memory_sample_unavailable",
+              message: "Could not sample the application footprint.", details: nil))
+            return
+          }
+          result(appBytes)
+        }
+      }
+    }
     documentAccessChannel = channel
     NSLog("[read_aloud.document_access] Document access channel registered.")
 

@@ -12,7 +12,7 @@ require 'securerandom'
 #
 # Protocol, run from the exact clean build checkout:
 #   ruby tools/package_macos_candidate.rb preflight
-#   ruby tools/package_macos_candidate.rb build APP BUILD.json -- flutter build macos ...
+#   ruby tools/package_macos_candidate.rb build APP BUILD.json -- tools/flutter build macos ...
 #   ruby tools/package_macos_candidate.rb smoke-template APP BUILD.json > SMOKE.json
 #   ruby tools/package_macos_candidate.rb profile-preflight APP BUILD.json > EMPTY.json
 # Run profile-preflight BEFORE launch. After the OS creates the QA container,

@@ -51,10 +51,39 @@ class MlxVoiceLibrary {
                 : VoiceGender.female,
             description:
                 'Synthetic reference. Designed: ${item['description']}',
-          metadataSource: VoiceMetadataSource.appDerived,
+            metadataSource: VoiceMetadataSource.appDerived,
             rawValue: Map<String, Object?>.unmodifiable({
               ...item,
               'libraryVersion': manifest['version'],
+            }),
+          ),
+        );
+      }
+      final fish =
+          jsonDecode(
+                await rootBundle.loadString('assets/fish_voice_library.json'),
+              )
+              as Map<String, dynamic>;
+      for (final item
+          in (fish['voices'] as List).cast<Map<String, dynamic>>()) {
+        final id = item['id'] as String;
+        if (!ids.add(id) || !RegExp(r'^library_fish[a-z]+$').hasMatch(id)) {
+          throw StateError('Invalid Fish reference voice: $id');
+        }
+        voices.add(
+          VoiceProfile(
+            id: id,
+            label: item['label'] as String,
+            locale: item['locale'] as String,
+            gender: item['gender'] == 'male'
+                ? VoiceGender.male
+                : VoiceGender.female,
+            description:
+                'Fish Official designed reference. ${item['description']}',
+            metadataSource: VoiceMetadataSource.engineCatalog,
+            rawValue: Map<String, Object?>.unmodifiable({
+              ...item,
+              'libraryVersion': fish['version'],
             }),
           ),
         );
@@ -72,27 +101,68 @@ class MlxVoiceLibrary {
   );
 
   /// Materialize only requested voices, in content-addressed immutable files.
-  static Future<File> prepare(String id, Directory root) async {
+  static Future<File> prepare(
+    String id,
+    Directory root, {
+    Future<void>? cancelled,
+  }) async {
     await load();
     final profile = voice(id);
     final digest = profile.rawValue['sha256'] as String;
-    final target = File('${root.path}/voice-library/$digest.wav');
+    final remote = profile.rawValue['url'] as String?;
+    final extension = remote == null ? 'wav' : 'mp3';
+    final target = File('${root.path}/voice-library/$digest.$extension');
     if (await target.exists() &&
         sha256.convert(await target.readAsBytes()).toString() == digest) {
       return target;
     }
-    final data = await rootBundle.load(profile.rawValue['asset'] as String);
-    final bytes = data.buffer.asUint8List(
-      data.offsetInBytes,
-      data.lengthInBytes,
-    );
+    final List<int> bytes;
+    if (remote != null) {
+      final uri = Uri.parse(remote);
+      if (uri.scheme != 'https' || uri.host != 'platform.r2.fish.audio') {
+        throw StateError('Unexpected Fish reference host.');
+      }
+      final client = HttpClient()
+        ..connectionTimeout = const Duration(seconds: 20);
+      if (cancelled != null) {
+        cancelled.then((_) => client.close(force: true));
+      }
+      try {
+        final response = await (await client.getUrl(
+          uri,
+        )).close().timeout(const Duration(seconds: 30));
+        if (response.statusCode != 200) {
+          throw HttpException('Voice download failed: ${response.statusCode}');
+        }
+        final buffer = <int>[];
+        await for (final chunk in response.timeout(
+          const Duration(seconds: 30),
+        )) {
+          buffer.addAll(chunk);
+          if (buffer.length > 10 * 1024 * 1024) {
+            throw StateError('Reference download too large');
+          }
+        }
+        bytes = buffer;
+      } finally {
+        client.close(force: true);
+      }
+    } else {
+      final data = await rootBundle.load(profile.rawValue['asset'] as String);
+      bytes = data.buffer.asUint8List(data.offsetInBytes, data.lengthInBytes);
+    }
     if (sha256.convert(bytes).toString() != digest) {
       throw StateError('Reference voice integrity check failed: $id');
     }
     await target.parent.create(recursive: true);
-    final staged = File('${target.path}.stage');
+    final stage = await target.parent.createTemp('.voice-');
+    final staged = File('${stage.path}/reference.$extension');
     await staged.writeAsBytes(bytes, flush: true);
-    await staged.rename(target.path);
+    try {
+      await staged.rename(target.path);
+    } finally {
+      await stage.delete(recursive: true);
+    }
     return target;
   }
 }

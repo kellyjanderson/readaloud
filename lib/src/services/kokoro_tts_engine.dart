@@ -1,3 +1,5 @@
+import '../models/speech_engine_catalog.dart';
+import '../models/engine_capability.dart';
 import 'kokoro_tokenization_worker.dart';
 import 'speech_planning_supervisor.dart';
 import 'synthesis_admission_owner.dart';
@@ -40,6 +42,7 @@ class KokoroTtsEngine
         VoiceLibraryCapable,
         AudioExportCapable,
         ResourcePreparationCapable,
+        ModelPreparationCapable,
         SpeechRateNormalizationCapable,
         VoiceAssignmentPlaybackCapable,
         TtsEngineIdentityCapable,
@@ -103,11 +106,7 @@ class KokoroTtsEngine
   String _languageTagForVoice(String voiceId) =>
       _usesMlx ? 'en-us' : KokoroVoiceCatalog.languageTagForVoice(voiceId);
 
-  bool get _usesMlx =>
-      _engineId == 'qwen3_tts_base_1_7b' ||
-      _engineId == 'qwen3_tts_1_7b' ||
-      _engineId == 'voxtral_4b' ||
-      _engineId == 'moss_tts_8b';
+  bool get _usesMlx => isMlxEngine(_engineId);
   static const String _fallbackNormalizationVersion =
       'read-aloud-normalization-v1';
   static const int _targetChunkWordCount = 18;
@@ -295,6 +294,18 @@ class KokoroTtsEngine
   }
 
   @override
+  Future<void> prepareSelectedModel() async {
+    await initialize();
+    if (_resourceShutdown != null) {
+      throw StateError('Speech engine is closing.');
+    }
+    final processor = _resourceProcessor;
+    if (processor is MlxSpeechWorkerChunkProcessor) {
+      await _admission!.exclusive(processor.prepareModel);
+    }
+  }
+
+  @override
   Future<void> shutdownResources() =>
       _resourceShutdown ??= _shutdownResources();
   Future<void> _shutdownResources() async {
@@ -302,6 +313,9 @@ class KokoroTtsEngine
     await _initializationFuture?.catchError((Object _) {});
     ++_resourceRequest;
     _resourcesReady = false;
+    if (_resourceProcessor is MlxSpeechWorkerChunkProcessor) {
+      await _resourceProcessor!.dispose();
+    }
     await Future.wait([_cancelExport(), stop()]);
     await _exportAssembler.shutdown();
     await _resourceTransition;
@@ -522,6 +536,9 @@ class KokoroTtsEngine
         silverJson: tokenizerSources[3],
       );
       _playbackTokenizer = KokoroTokenizationWorker(
+        capabilityProfile: const EngineCapabilityRegistry().lookup(
+          engineId: _engineId,
+        ),
         assets: tokenizerAssets,
         rawDictionary: tokenizerSources[4],
         ownerId: 'playback-tokenizer',
@@ -532,6 +549,9 @@ class KokoroTtsEngine
       );
       _requireInitializationOwner();
       _exportTokenizer = KokoroTokenizationWorker(
+        capabilityProfile: const EngineCapabilityRegistry().lookup(
+          engineId: _engineId,
+        ),
         assets: tokenizerAssets,
         rawDictionary: tokenizerSources[4],
         ownerId: 'export-tokenizer',
@@ -2029,14 +2049,17 @@ class KokoroTtsEngine
     // chunks would silently truncate that suffix, so fail this session honestly.
     if (_remainingPlannedChunkCount > 0) {
       final error = StateError(
-        'Synthesis failed before the remaining passage was prepared. Restart playback to retry.',
+        'Synthesis failed before the remaining passage was prepared. '
+        '${failureMessage == null ? '' : '$failureMessage '}Restart playback to retry.',
       );
       final first = _firstChunkCompleter;
       if (first != null && !first.isCompleted) first.completeError(error);
       _requestToken += 1;
       _refillPlanner.cancel();
       _playbackTokenizer?.cancel();
-      await speechRuntime.cancelGeneration(generationId);
+      // End the session's continuation and admission waits as well as its
+      // synthesis. Otherwise the next speak() can hang draining old work.
+      await _cancelActiveGeneration();
       await _resetPlaybackState();
       _onError?.call(error.message);
       return;

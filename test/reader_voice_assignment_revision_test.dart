@@ -354,6 +354,7 @@ class _SnapshotPreferences extends ReaderPreferencesService {
     required Map<String, double> voiceSpeeds,
     required Map<String, Map<String, String>>
     storedDocumentCastVoiceAssignments,
+    Map<String, String> sourceVoiceDocumentIds = const {},
     ReaderResumeState? resumeState,
     String? selectedVoiceId,
     String? lastOpenedDocumentPath,
@@ -371,6 +372,7 @@ class _SnapshotPreferences extends ReaderPreferencesService {
         multiVoiceEnabled: multiVoiceEnabled,
         voiceSpeeds: voiceSpeeds,
         storedDocumentCastVoiceAssignments: storedDocumentCastVoiceAssignments,
+        sourceVoiceDocumentIds: sourceVoiceDocumentIds,
         selectedVoiceId: selectedVoiceId,
       ),
     );

@@ -1,0 +1,131 @@
+import 'dart:io';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:read_aloud/src/services/mlx_speech_worker_processor.dart';
+
+// Real child processes with a tiny protocol stub: no MLX weights or network.
+void main() {
+  late Directory root;
+  late MlxTtsPythonProcess worker;
+  var sampledBytes = 0;
+  setUp(() async {
+    sampledBytes = 0;
+    root = await Directory.systemTemp.createTemp('mlx-process-test-');
+    final helper = File('${root.path}/worker.rb');
+    await helper.writeAsString(r'''
+require 'json'
+$stdout.sync=true
+loaded=false
+STDIN.each_line do |line|
+  r=JSON.parse(line)
+  if r['command']=='load'
+    loaded=true
+    puts JSON.generate(id:r['id'],ok:true,modelIdentity:'pinned-model')
+  else
+    abort 'missing model' unless loaded
+    if r['text']=='block'
+      File.write(r['outputPath'],'started')
+      sleep 30
+    elsif r['text']=='memory-limit'
+      puts JSON.generate(id:'',type:'memory',footprintBytes:1000)
+      sleep 30
+    elsif r['text']=='malformed'
+      puts 'not json'
+      next
+    end
+    puts JSON.generate(id:r['id'],ok:true,audioPath:r['outputPath'])
+  end
+end
+''');
+    // The wrapper accepts the Python argv contract while executing Ruby.
+    final executable = File('${root.path}/python');
+    await executable.writeAsString(
+      '#!/bin/sh\nshift\nshift\nexec /usr/bin/ruby "\$@"\n',
+    );
+    await Process.run('/bin/chmod', ['+x', executable.path]);
+    worker = MlxTtsPythonProcess(
+      memorySampler: (_) async => sampledBytes,
+      pythonPath: executable.path,
+      helperPath: helper.path,
+      privateCacheDirectory: Directory('${root.path}/cache'),
+    );
+  });
+  tearDown(() async {
+    await worker.shutdown();
+    await root.delete(recursive: true);
+  });
+  Future<void> load() async {
+    await worker.loadModel(
+      modelId: 'fish_drama3',
+      modelPath: '',
+      quantizationBits: 0,
+      privateCachePath: root.path,
+      onProgress: (_) {},
+    );
+  }
+
+  Future<Map<String, Object?>> synth(String text) => worker.synthesize(
+    requestId: text,
+    modelId: 'fish_drama3',
+    sessionId: 's',
+    generationId: 'g',
+    chunkId: text,
+    bindingFingerprint: 'b',
+    bindingRevision: 1,
+    text: text,
+    voice: 'library_ava',
+    language: 'English',
+    outputPath: '${root.path}/$text',
+  );
+  test(
+    'cancel reaps child and reloads exact model for next generation',
+    () async {
+      await load();
+      final active = synth('block');
+      final cancelled = expectLater(
+        active,
+        throwsA(isA<MlxTtsRequestCancelled>()),
+      );
+      while (!await File('${root.path}/block').exists()) {
+        await Future<void>.delayed(const Duration(milliseconds: 10));
+      }
+      worker.cancelActiveRequest();
+      await cancelled.timeout(const Duration(seconds: 8));
+      expect((await synth('next'))['ok'], true);
+    },
+  );
+  test('malformed response retires child before reuse', () async {
+    await load();
+    await expectLater(synth('malformed'), throwsStateError);
+    expect((await synth('recovered'))['ok'], true);
+  });
+  test('child memory telemetry retires an over-budget runtime', () async {
+    await load();
+    sampledBytes = 99000000000;
+    await expectLater(
+      synth('memory-limit'),
+      throwsA(
+        isA<StateError>().having(
+          (error) => error.message,
+          'message',
+          contains('100 GB memory ceiling'),
+        ),
+      ),
+    ).timeout(const Duration(seconds: 8));
+    sampledBytes = 0;
+    expect((await synth('recovered'))['ok'], true);
+  });
+  test(
+    'admission is reserved before process start and shutdown joins it',
+    () async {
+      final loading = load();
+      final stopped = expectLater(
+        loading,
+        throwsA(anyOf(isA<MlxTtsRequestCancelled>(), isA<StateError>())),
+      );
+      await expectLater(load(), throwsStateError);
+      await Future.wait([worker.shutdown(), worker.shutdown()]);
+      await stopped;
+      await expectLater(synth('late'), throwsStateError);
+    },
+  );
+}

@@ -24,6 +24,91 @@ void main() {
     FilePicker.platform = _UiFilePicker();
   });
 
+  testWidgets('voice dialog includes later ranges and retains their choices', (
+    tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(1000, 1100));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    final controller = ReaderController(
+      ttsEngine: _UiEngine(),
+      enablePlatformIntakeChannels: false,
+    );
+    addTearDown(controller.dispose);
+    await tester.pumpWidget(
+      MaterialApp(home: ReadAloudScreen(controller: controller)),
+    );
+    await _pumpUntil(tester, () => !controller.isInitializing);
+    await _paste(
+      tester,
+      '“Wait here,” Mara said. “All right,” Mira replied.\n\n'
+      '${'The road continued through the quiet valley.\n\n' * 240}'
+      '“The gate is open,” Beatrice said. “I see it,” Carlos replied.',
+    );
+    await _pumpUntil(tester, () => controller.isPreparationComplete);
+    expect(controller.preparedRanges.length, greaterThan(1));
+    expect(
+      controller.document.characterCastRegistry.characterEntries.length,
+      lessThan(4),
+      reason: 'The active fragment alone cannot represent the full cast.',
+    );
+    await tester.tap(find.byKey(const Key('character-voices-entry')));
+    await _pumpUi(tester);
+    final dialog = tester.widget<VoiceManagementDialog>(
+      find.byType(VoiceManagementDialog),
+    );
+    expect(
+      dialog.characterCastRegistry.characterEntries.map((e) => e.displayLabel),
+      containsAll(['Mara', 'Mira', 'Beatrice', 'Carlos']),
+    );
+    final laterId = dialog.characterCastRegistry.characterEntries
+        .firstWhere((e) => e.displayLabel == 'Carlos')
+        .castId;
+    await controller.assignVoiceToCast(laterId, 'af_bella');
+    await _pumpUi(tester);
+    expect(
+      controller.castVoiceAssignments!.forCastId(laterId)!.effectiveVoiceId,
+      'af_bella',
+    );
+    final card = find.byKey(const Key('voice-assignment-card-Carlos'));
+    await tester.scrollUntilVisible(
+      card,
+      200,
+      scrollable: find
+          .descendant(
+            of: find.byType(VoiceManagementDialog),
+            matching: find.byType(Scrollable),
+          )
+          .first,
+    );
+    await _pumpUi(tester);
+    expect(
+      tester
+          .widget<DropdownButton<String>>(
+            find.descendant(
+              of: card,
+              matching: find.byType(DropdownButton<String>),
+            ),
+          )
+          .value,
+      'af_bella',
+    );
+    await tester.tap(find.byTooltip('Close voice management'));
+    await _pumpUi(tester);
+    await _paste(tester, 'A different document with no dialogue.');
+    await _pumpUntil(tester, () => controller.isPreparationComplete);
+    await tester.tap(find.byKey(const Key('character-voices-entry')));
+    await _pumpUi(tester);
+    expect(
+      tester
+          .widget<VoiceManagementDialog>(find.byType(VoiceManagementDialog))
+          .characterCastRegistry
+          .characterEntries,
+      isEmpty,
+    );
+    expect(tester.takeException(), isNull);
+    await _finish(tester, controller);
+  });
+
   testWidgets(
     'Open Document imports actual radoc bytes without source analysis',
     (tester) async {

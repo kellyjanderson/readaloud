@@ -1,3 +1,6 @@
+import 'speech_adjustment_context.dart';
+export 'speech_adjustment_context.dart';
+
 enum PronunciationArtifactClass {
   resolvedLexicalCase,
   contextSensitiveCase,
@@ -68,6 +71,7 @@ class PronunciationRepresentation {
     required this.representationValue,
     required this.priority,
     this.accentFamily,
+    this.context = const SpeechAdjustmentContext.unresolved(),
   });
 
   final String representationId;
@@ -75,4 +79,5 @@ class PronunciationRepresentation {
   final String representationValue;
   final String? accentFamily;
   final int priority;
+  final SpeechAdjustmentContext context;
 }

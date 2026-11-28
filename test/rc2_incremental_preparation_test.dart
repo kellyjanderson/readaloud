@@ -101,6 +101,21 @@ void main() {
               'Prepared reading window is full; continues as you read',
         )) {
           fullWindows++;
+          for (final stage in [
+            PreparationStage.acquisition,
+            PreparationStage.parsing,
+            PreparationStage.normalization,
+            PreparationStage.mapping,
+            PreparationStage.analysis,
+            PreparationStage.pronunciation,
+          ]) {
+            expect(
+              controller.preparationProgress[stage]?.state,
+              PreparationWorkState.waiting,
+              reason:
+                  '$stage must not appear to be working while its producer waits',
+            );
+          }
           controller.releasePreparedRange(ranges.last.sequence - 1);
         }
       });

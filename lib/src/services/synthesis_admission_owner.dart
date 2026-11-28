@@ -204,11 +204,15 @@ class _Admission {
   final void Function() cancel;
 }
 
-class _Lease implements CancellableSynthesisLease {
+class _Lease
+    implements
+        CancellableSynthesisLease,
+        CancellableSpeechWorkerChunkProcessor {
   _Lease(this.owner, this.export);
   final SynthesisAdmissionOwner owner;
   final bool export;
   final Set<Future<void>> _jobs = {};
+  String? _activeGeneration;
   int _epoch = 0;
   bool _closed = false;
   Future<void>? _shutdown;
@@ -245,32 +249,37 @@ class _Lease implements CancellableSynthesisLease {
         Object? completionFailure;
         StackTrace? completionFailureStack;
         var completionObserved = false;
-        await owner.processor.process(request, (event) {
-          if (!current() ||
-              event.sessionId != request.sessionId ||
-              event.generationId != request.generationId ||
-              event.chunkId != request.chunkId ||
-              completionFailure != null) {
-            return;
-          }
-          if (event.type == SpeechWorkerEventType.completed) {
-            if (completionObserved) return;
-            completionObserved = true;
-            if (!export) {
-              try {
-                owner.onPlaybackCompleted?.call(event);
-              } catch (error, stack) {
-                // An event listener is not necessarily inside the processor's
-                // Future error route. Retain the callback failure, let native
-                // work drain, and fail this owned process Future afterwards.
-                completionFailure = error;
-                completionFailureStack = stack;
-                return;
+        _activeGeneration = request.generationId;
+        try {
+          await owner.processor.process(request, (event) {
+            if (!current() ||
+                event.sessionId != request.sessionId ||
+                event.generationId != request.generationId ||
+                event.chunkId != request.chunkId ||
+                completionFailure != null) {
+              return;
+            }
+            if (event.type == SpeechWorkerEventType.completed) {
+              if (completionObserved) return;
+              completionObserved = true;
+              if (!export) {
+                try {
+                  owner.onPlaybackCompleted?.call(event);
+                } catch (error, stack) {
+                  // An event listener is not necessarily inside the processor's
+                  // Future error route. Retain the callback failure, let native
+                  // work drain, and fail this owned process Future afterwards.
+                  completionFailure = error;
+                  completionFailureStack = stack;
+                  return;
+                }
               }
             }
-          }
-          emit(event);
-        });
+            emit(event);
+          });
+        } finally {
+          _activeGeneration = null;
+        }
         if (completionFailure != null) {
           Error.throwWithStackTrace(
             completionFailure!,
@@ -298,7 +307,18 @@ class _Lease implements CancellableSynthesisLease {
   }
 
   @override
+  void cancelGeneration(String generationId) {
+    if (_activeGeneration == generationId &&
+        owner.processor is CancellableSpeechWorkerChunkProcessor) {
+      (owner.processor as CancellableSpeechWorkerChunkProcessor)
+          .cancelGeneration(generationId);
+    }
+  }
+
+  @override
   void cancelPending() {
+    final active = _activeGeneration;
+    if (active != null) cancelGeneration(active);
     ++_epoch;
     owner._cancelQueued((job) => identical(job.lease, this));
     owner.signal();

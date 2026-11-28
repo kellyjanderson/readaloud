@@ -4,8 +4,8 @@
 
 The existing checked items below do not verify the revised preparation/runtime contract.
 
-- [ ] [Prepared Document and Buffered Playback](../../specifications/prepared-document-and-buffered-playback.md) implementation
-- [ ] [Prepared Document and Buffered Playback verification](../../test-specifications/prepared-document-and-buffered-playback.md), including amended character, worker, lifecycle and cache contracts
+- [ ] [Prepared Document and Buffered Playback](https://github.com/kellyjanderson/readaloud/issues/48) implementation
+- [ ] [Prepared Document and Buffered Playback verification](https://github.com/kellyjanderson/readaloud/issues/54), including amended character, worker, lifecycle and cache contracts
 
 See [alignment plan](document-preparation-runtime-alignment.md).
 

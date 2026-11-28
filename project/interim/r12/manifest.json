@@ -1,0 +1,22 @@
+{
+  "schema_version": 1,
+  "package_revision": "R12",
+  "publication": "https://github.com/kellyjanderson/readaloud/issues/110#issuecomment-6650868925",
+  "implementation_baseline": "00e437dc33b28c24326ad1537f4872d2d063ae6f",
+  "documents": [
+    {
+      "path": "character-contract.md",
+      "revision": "R2",
+      "source": "https://github.com/kellyjanderson/readaloud/issues/124#character-contract-r2",
+      "source_section_sha256": "26163e2aa5dd625ffb96a9850d29636b482287656edab2ef254d3ab66cff36c2",
+      "sha256": "26163e2aa5dd625ffb96a9850d29636b482287656edab2ef254d3ab66cff36c2"
+    },
+    {
+      "path": "implementation-plan.md",
+      "revision": "R12",
+      "source": "https://github.com/kellyjanderson/readaloud/issues/110#implementation-plan-r12",
+      "source_section_sha256": "2c89cbb6bb98ad2719bd33c1cf04b0b3d663b8377c9802a7c865fb766b2955ef",
+      "sha256": "2c89cbb6bb98ad2719bd33c1cf04b0b3d663b8377c9802a7c865fb766b2955ef"
+    }
+  ]
+}

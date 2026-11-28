@@ -2,6 +2,13 @@
 
 Working design and planning live in [GitHub Issues](https://github.com/kellyjanderson/readaloud/issues) and the [Read Aloud Project](https://github.com/users/kellyjanderson/projects/1). Final architecture remains in [the repository](../project/architecture/README.md), reviewed alongside code. [AGENTS.md](../AGENTS.md) is authoritative.
 
+Substantial design drafts and fixed published revisions are also preserved in
+Git-tracked [project/interim](../project/interim/README.md), following its
+draft → publish → reconcile → retire lifecycle. This supersedes the earlier ban
+on repository design drafts. GitHub remains the execution/status authority;
+interim files are versioned design artifacts, not synchronized issue bodies or
+local progress trackers. Never use `tmp/` as design-document storage.
+
 ## Current entry points
 
 - [Product-first review and integration](https://github.com/kellyjanderson/readaloud/issues/110); [repository cleanup](https://github.com/kellyjanderson/readaloud/issues/115).

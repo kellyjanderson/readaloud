@@ -243,6 +243,11 @@ void main() {
         expect(realized.engineTreatment, 'unsupported');
         expect(realized.fallback, 'engine_default');
         expect(realized.annotation.confidence, .65);
+        expect(realized.context.scope.name, 'content');
+        expect(
+          realized.context.reference,
+          contains(realized.annotation.annotationId),
+        );
       }
       expect(
         result.ttsArtifactSet.segments.first.speakText,

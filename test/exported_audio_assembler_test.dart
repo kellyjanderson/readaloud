@@ -8,6 +8,46 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:read_aloud/src/services/exported_audio_assembler.dart';
 
 void main() {
+  test('44.1 kHz export preserves source PCM without resampling', () async {
+    final root = await Directory.systemTemp.createTemp('native-export-');
+    addTearDown(() => root.delete(recursive: true));
+    final samples = List<int>.generate(44100, (i) => i % 3000 - 1500);
+    final source = _buildWav(samples, sampleRate: 44100);
+    final input = File('${root.path}/source.wav');
+    await input.writeAsBytes(source);
+    final assembler = ExportedAudioAssembler();
+    addTearDown(assembler.shutdown);
+    final result = await assembler.assemble(
+      ExportedAudioAssemblyRequest(
+        outputPath: '${root.path}/export.wav',
+        engineId: 'fish_drama3',
+        engineVersion: 'test',
+        documentId: 'd',
+        documentTitle: 'Native rate',
+        sourceDescription: 'test',
+        voiceId: 'v',
+        rate: 1,
+        normalizationVersion: '1',
+        chunks: [
+          ExportedAudioChunk(
+            chunkId: 'c',
+            cacheKey: 'c',
+            voiceId: 'v',
+            audioPath: input.path,
+            duration: const Duration(seconds: 1),
+            segmentIds: const [],
+            startWordIndex: 0,
+            endWordIndex: 3,
+          ),
+        ],
+      ),
+    );
+    final output = await File(result.outputPath).readAsBytes();
+    expect(ByteData.sublistView(output).getUint32(24, Endian.little), 44100);
+    expect(output.sublist(44), source.sublist(44));
+    expect(result.duration, const Duration(seconds: 1));
+  });
+
   test(
     'assembles ordered chunk wav files into one export with sidecar',
     () async {
@@ -394,7 +434,7 @@ void main() {
   });
 }
 
-Uint8List _buildWav(List<int> samples) {
+Uint8List _buildWav(List<int> samples, {int sampleRate = 24000}) {
   final pcm = Int16List.fromList(samples);
   final output = BytesBuilder(copy: false);
 
@@ -416,8 +456,8 @@ Uint8List _buildWav(List<int> samples) {
   writeUint32(16);
   writeUint16(1);
   writeUint16(1);
-  writeUint32(24000);
-  writeUint32(24000 * 2);
+  writeUint32(sampleRate);
+  writeUint32(sampleRate * 2);
   writeUint16(2);
   writeUint16(16);
   writeAscii('data');

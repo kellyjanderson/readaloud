@@ -28,6 +28,67 @@ import 'package:read_aloud/src/services/tts_engine.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
+  test(
+    'launch prepares selected model and settings can cancel model preparation',
+    () async {
+      SharedPreferences.setMockInitialValues({});
+      final initial = _ModelPreparationEngine();
+      final loading = _ModelPreparationEngine()..hold = true;
+      final finalEngine = _ModelPreparationEngine();
+      final controller = ReaderController(
+        ttsEngine: initial,
+        engineFactory: (id, _) => id == 'fish_drama3' ? loading : finalEngine,
+        enablePlatformIntakeChannels: false,
+      );
+      addTearDown(controller.dispose);
+      await controller.initialize();
+      expect(initial.preparations, 1);
+      final first = controller.setTtsEngineId('fish_drama3');
+      await loading.started.future;
+      final second = controller.setTtsEngineId('fish_drama3_4bit');
+      await Future.wait([first, second]).timeout(const Duration(seconds: 2));
+      expect(loading.closed, true);
+      expect(finalEngine.preparations, 1);
+      expect(controller.runningTtsEngineId, 'fish_drama3_4bit');
+      expect(controller.startupError, isNull);
+    },
+  );
+
+  test(
+    'rapid engine changes drain once, select latest, and reject old callbacks',
+    () async {
+      SharedPreferences.setMockInitialValues({});
+      final old = _BarrierStopTtsEngine();
+      final replacements = <String>[];
+      final controller = ReaderController(
+        ttsEngine: old,
+        engineFactory: (id, bits) {
+          replacements.add(id);
+          return _FakeTtsEngine();
+        },
+        enablePlatformIntakeChannels: false,
+      );
+      addTearDown(controller.dispose);
+      await controller.initialize();
+      await controller.importPastedText('The city kept its secrets.');
+      final document = controller.document;
+      old.holdNext = true;
+      final stale = old._onStatus;
+      final first = controller.setTtsEngineId('fish_drama3');
+      await Future<void>.delayed(Duration.zero);
+      final second = controller.setTtsEngineId('fish_drama3_4bit');
+      await Future<void>.delayed(Duration.zero);
+      old.release.complete();
+      await Future.wait([first, second]);
+      stale?.call('stale failure');
+      expect(controller.statusMessage, isNot('stale failure'));
+      expect(controller.runningTtsEngineId, 'fish_drama3_4bit');
+      expect(controller.ttsEngineRestartRequired, isFalse);
+      expect(controller.document, same(document));
+      expect(replacements, ['fish_drama3_4bit']);
+    },
+  );
+
   TestWidgetsFlutterBinding.ensureInitialized();
 
   setUp(() async {
@@ -36,6 +97,245 @@ void main() {
   });
 
   group('ReaderController playback', () {
+    for (final fileBacked in [false, true]) {
+      for (final legacy in [false, true]) {
+        test(
+          'unfinished book retains voice choices (file=$fileBacked, legacy=$legacy)',
+          () async {
+            final directory = await Directory.systemTemp.createTemp(
+              'voice-memory-partial-',
+            );
+            addTearDown(() => directory.delete(recursive: true));
+            final repository = ReaderDocumentRepository(
+              '${directory.path}/cache',
+            );
+            final text = '"Hello there," Jennifer said.\n\n${_cacheProse()}';
+            final canonical =
+                'doc_acquired_${sha256.convert(utf8.encode(text))}';
+            // Older completed-book choices must not replace a newer selection
+            // or resurrect a role explicitly reset in the unfinished session.
+            SharedPreferences.setMockInitialValues({
+              'reader.storedDocumentCastVoiceAssignments': jsonEncode({
+                canonical: {
+                  'cast_narrator': 'af_heart',
+                  'cast_character_jennifer': 'am_michael',
+                },
+              }),
+            });
+            final file = File('${directory.path}/unfinished-book.txt');
+            await file.writeAsString(text);
+            Future<void> open(ReaderController controller) => fileBacked
+                ? controller.importFilePaths([file.path])
+                : controller.importPastedText(text);
+            final engines = <ReaderController, _FakeTtsEngine>{};
+            ReaderController create() {
+              final engine = _FakeTtsEngine(voices: _multiVoiceTestVoices);
+              final controller = ReaderController(
+                documentRepository: repository,
+                ttsEngine: engine,
+                enablePlatformIntakeChannels: false,
+              );
+              addTearDown(controller.dispose);
+              engines[controller] = engine;
+              return controller;
+            }
+
+            final first = create();
+            await first.initialize();
+            await open(first);
+            expect(first.isPreparationComplete, isFalse);
+            await first.selectVoiceById('af_heart');
+            await first.assignVoiceToCast('cast_narrator', 'am_michael');
+            await first.assignVoiceToCast(
+              'cast_character_jennifer',
+              'af_bella',
+            );
+            final oldId = first.sessionDocumentId;
+            await first.shutdownPreparation();
+            if (legacy) {
+              await (await SharedPreferences.getInstance()).remove(
+                'reader.sourceVoiceDocumentIds',
+              );
+            } else {
+              await Directory(repository.rootPath).delete(recursive: true);
+            }
+            final second = create();
+            await second.initialize();
+            await open(second);
+            expect(second.isPreparationComplete, isFalse);
+            expect(second.sessionDocumentId, isNot(oldId));
+            expect(second.selectedVoice!.id, 'af_heart');
+            expect(
+              second.castVoiceAssignments!
+                  .forCastId('cast_narrator')!
+                  .effectiveVoiceId,
+              'am_michael',
+            );
+            expect(
+              second.castVoiceAssignments!
+                  .forCastId('cast_character_jennifer')!
+                  .effectiveVoiceId,
+              'af_bella',
+            );
+            await second.clearCastVoiceOverride('cast_character_jennifer');
+            await second.shutdownPreparation();
+            final third = create();
+            await third.initialize();
+            await open(third);
+            expect(
+              third.castVoiceAssignments!
+                  .forCastId('cast_character_jennifer')!
+                  .decisionKind,
+              VoiceAssignmentDecisionKind.automatic,
+            );
+            expect(
+              third.castVoiceAssignments!
+                  .forCastId('cast_narrator')!
+                  .effectiveVoiceId,
+              'am_michael',
+            );
+            await _consumeRanges(third, engines[third]!);
+            expect(third.isPreparationComplete, isTrue);
+            expect(
+              third.castVoiceAssignments!
+                  .forCastId('cast_narrator')!
+                  .effectiveVoiceId,
+              'am_michael',
+            );
+            expect(
+              third.castVoiceAssignments!
+                  .forCastId('cast_character_jennifer')!
+                  .decisionKind,
+              VoiceAssignmentDecisionKind.automatic,
+            );
+            await third.shutdownPreparation();
+            final completeReplay = create();
+            await completeReplay.initialize();
+            await open(completeReplay);
+            expect(
+              completeReplay.castVoiceAssignments!
+                  .forCastId('cast_narrator')!
+                  .effectiveVoiceId,
+              'am_michael',
+            );
+            expect(
+              completeReplay.castVoiceAssignments!
+                  .forCastId('cast_character_jennifer')!
+                  .decisionKind,
+              VoiceAssignmentDecisionKind.automatic,
+            );
+            await completeReplay.shutdownPreparation();
+            final changed = create();
+            await changed.initialize();
+            if (fileBacked) {
+              await file.writeAsString('$text\nA changed ending.');
+              await changed.importFilePaths([file.path]);
+            } else {
+              await changed.importPastedText('$text\nA changed ending.');
+            }
+            expect(
+              changed.castVoiceAssignments!
+                  .forCastId('cast_narrator')!
+                  .decisionKind,
+              VoiceAssignmentDecisionKind.automatic,
+            );
+            await changed.shutdownPreparation();
+          },
+        );
+      }
+    }
+
+    test(
+      'explicitly choosing the automatic voice remembers the choice',
+      () async {
+        final first = ReaderController(
+          ttsEngine: _FakeTtsEngine(voices: _multiVoiceTestVoices),
+        );
+        addTearDown(first.dispose);
+        await first.initialize();
+        await first.importPastedText('"Hello there," Jennifer said.');
+        final chosen = first.castVoiceAssignments!
+            .forCastId('cast_narrator')!
+            .effectiveVoiceId;
+        await first.assignVoiceToCast('cast_narrator', chosen);
+        await first.selectVoiceById('am_michael');
+        expect(
+          first.castVoiceAssignments!
+              .forCastId('cast_narrator')!
+              .effectiveVoiceId,
+          chosen,
+        );
+        final second = ReaderController(
+          ttsEngine: _FakeTtsEngine(voices: _multiVoiceTestVoices),
+        );
+        addTearDown(second.dispose);
+        await second.initialize();
+        await second.importPastedText('"Hello there," Jennifer said.');
+        expect(
+          second.castVoiceAssignments!
+              .forCastId('cast_narrator')!
+              .effectiveVoiceId,
+          chosen,
+        );
+        expect(
+          second.castVoiceAssignments!.forCastId('cast_narrator')!.decisionKind,
+          VoiceAssignmentDecisionKind.storedDocumentChoice,
+        );
+      },
+    );
+
+    for (final started in [false, true]) {
+      test(
+        'first Play retries a failed ${started ? 'playing' : 'buffering'} attempt',
+        () async {
+          final engine = _FakeTtsEngine();
+          final controller = ReaderController(ttsEngine: engine);
+          addTearDown(controller.dispose);
+          await controller.initialize();
+          await controller.importPastedText('Alpha beta. Gamma delta.');
+          await controller.startPlayback();
+          final failedRequest = engine.lastSpeakRequest!;
+          if (started) {
+            engine.emitStart();
+            engine.emitProgress(
+              TtsProgressUpdate(
+                startOffset: 6,
+                endOffset: 10,
+                word: 'beta',
+                documentId: controller.document.displayDocument.documentId,
+                chunkId: 'before-failure',
+                segmentId:
+                    controller.document.speechDocument.segments.first.segmentId,
+                wordStartIndex: 1,
+                wordEndIndex: 2,
+                elapsedInChunk: const Duration(seconds: 1),
+                chunkAudioDuration: const Duration(seconds: 2),
+                voiceId: controller.selectedVoice!.id,
+                rate: controller.currentSpeed,
+              ),
+            );
+          }
+          final word = controller.currentWordIndex;
+          engine.emitError('Malformed audio; retry playback.');
+          expect(controller.playbackState, ReaderPlaybackPrimaryState.failed);
+          expect(controller.isPlaying, isFalse);
+          expect(failedRequest.isCurrent!(), isFalse);
+          engine
+              .emitStart(); // Late success from the failed attempt cannot play.
+          expect(controller.isPlaying, isFalse);
+          await controller.togglePlayback();
+          expect(engine.speakCallCount, 2);
+          expect(engine.pauseCallCount, 0);
+          expect(controller.currentWordIndex, word);
+          expect(engine.lastSpeakRequest!.isCurrent!(), isTrue);
+          expect(controller.statusMessage, isNull);
+          engine.emitStart();
+          expect(controller.isPlaying, isTrue);
+          expect(controller.playbackState, ReaderPlaybackPrimaryState.playing);
+        },
+      );
+    }
+
     test('opens .radoc directly without source importer analysis', () async {
       final importer = _ControlledPreparationImporter();
       final controller = ReaderController(importer: importer);
@@ -4003,5 +4303,37 @@ class _ResourceBarrierEngine extends _FakeTtsEngine
   @override
   Future<void> shutdownResources() async {
     ready = false;
+  }
+}
+
+class _ModelPreparationEngine extends _FakeTtsEngine
+    implements ModelPreparationCapable, ResourcePreparationCapable {
+  bool hold = false, closed = false;
+  int preparations = 0;
+  final started = Completer<void>();
+  final released = Completer<void>();
+  @override
+  Future<void> prepareSelectedModel() async {
+    preparations++;
+    if (!started.isCompleted) started.complete();
+    if (hold) await released.future;
+    if (closed) throw StateError('model preparation cancelled');
+  }
+
+  @override
+  bool get resourcesReady => !closed;
+  @override
+  Future<List<PreparedVoiceBinding>> prepareDocumentResources({
+    required String documentId,
+    required int revision,
+    required Set<String> voiceIds,
+    required String pronunciationProfileId,
+  }) async => [];
+  @override
+  Future<void> releaseDocumentResources() async {}
+  @override
+  Future<void> shutdownResources() async {
+    closed = true;
+    if (!released.isCompleted) released.complete();
   }
 }

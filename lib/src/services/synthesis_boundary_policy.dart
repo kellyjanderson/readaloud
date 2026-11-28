@@ -2,7 +2,6 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
 
-import 'package:kokoro_tts_flutter/kokoro_tts_flutter.dart';
 import 'package:crypto/crypto.dart';
 
 import '../models/speech_annotation.dart';
@@ -106,7 +105,7 @@ class SynthesisBoundaryPolicy {
           )
         : <String, dynamic>{};
     final identity = artifactIdentity({
-      'kind': 'boundary-v1',
+      'kind': 'boundary-native-rate-v2',
       'rawPcm': sha256.convert(bytes).toString(),
       'rawIdentity': rawMetadata['artifactIdentity'],
       'policy': {
@@ -225,10 +224,17 @@ class SynthesisBoundaryPolicy {
       );
     }
 
+    final sampleRate = AudioArtifactStore.validateWav(wavBytes).sampleRate;
     final header = Uint8List.fromList(wavBytes.sublist(0, 44));
     final pcm = Int16List.sublistView(wavBytes, 44);
-    final leadingBefore = _silenceDuration(_leadingSilentSamples(pcm));
-    final trailingBefore = _silenceDuration(_trailingSilentSamples(pcm));
+    final leadingBefore = _silenceDuration(
+      _leadingSilentSamples(pcm),
+      sampleRate,
+    );
+    final trailingBefore = _silenceDuration(
+      _trailingSilentSamples(pcm),
+      sampleRate,
+    );
     final candidate = BoundaryCandidateMetadata(
       chunkId: chunkId,
       boundaryClass: boundaryClass,
@@ -254,6 +260,7 @@ class SynthesisBoundaryPolicy {
     if (applied) {
       final samplesToTrim = _durationToSamples(
         leadingBefore - targetLeading,
+        sampleRate,
       ).clamp(0, pcm.length);
       final trimmedPcm = Int16List.fromList(pcm.sublist(samplesToTrim));
       retainedSampleCount = trimmedPcm.length;
@@ -280,7 +287,7 @@ class SynthesisBoundaryPolicy {
       trailingSilenceAfter: trailingAfter,
       joinSilenceBefore: joinBefore,
       joinSilenceAfter: joinAfter,
-      duration: _silenceDuration(retainedSampleCount),
+      duration: _silenceDuration(retainedSampleCount, sampleRate),
     );
     _updateSidecarSync(
       wavFile,
@@ -360,11 +367,11 @@ class SynthesisBoundaryPolicy {
     return sample.abs() / 32767.0 <= _silenceAmplitudeThreshold;
   }
 
-  Duration _silenceDuration(int sampleCount) {
+  Duration _silenceDuration(int sampleCount, int sampleRate) {
     return Duration(milliseconds: (sampleCount / sampleRate * 1000).round());
   }
 
-  int _durationToSamples(Duration duration) {
+  int _durationToSamples(Duration duration, int sampleRate) {
     return (duration.inMilliseconds / 1000 * sampleRate).round();
   }
 

@@ -1,6 +1,8 @@
 import 'dart:convert';
 
 import '../models/engine_capability.dart';
+import '../models/speech_adjustment_context.dart';
+import 'speech_adjustment_registry.dart';
 import '../models/tts_artifact.dart';
 import 'english_pronunciation_dictionary_service.dart';
 import 'english_speech_preprocessor.dart';
@@ -48,6 +50,7 @@ class KokoroTranslatedPronunciationArtifact {
     this.representationType,
     this.representationValue,
     this.diagnosticCodes = const <String>[],
+    this.adjustmentDecision,
   });
 
   final String artifactId;
@@ -60,6 +63,7 @@ class KokoroTranslatedPronunciationArtifact {
   final String? representationType;
   final String? representationValue;
   final List<String> diagnosticCodes;
+  final Map<String, Object?>? adjustmentDecision;
 
   Map<String, Object?> toMap() {
     return <String, Object?>{
@@ -73,6 +77,7 @@ class KokoroTranslatedPronunciationArtifact {
       'representationType': representationType,
       'representationValue': representationValue,
       'diagnosticCodes': diagnosticCodes,
+      if (adjustmentDecision != null) 'adjustmentDecision': adjustmentDecision,
     };
   }
 
@@ -91,6 +96,9 @@ class KokoroTranslatedPronunciationArtifact {
       ),
       representationType: map['representationType'] as String?,
       representationValue: map['representationValue'] as String?,
+      adjustmentDecision: map['adjustmentDecision'] == null
+          ? null
+          : Map<String, Object?>.from(map['adjustmentDecision']! as Map),
       diagnosticCodes: List<String>.from(
         map['diagnosticCodes'] as List<Object?>? ?? const <Object?>[],
       ),
@@ -117,20 +125,14 @@ class KokoroTranslatedChunk {
 }
 
 class KokoroPronunciationTranslationService {
-  const KokoroPronunciationTranslationService({
-    EngineCapabilityRegistry capabilityRegistry =
-        const EngineCapabilityRegistry(),
-  }) : _capabilityRegistry = capabilityRegistry;
-
-  final EngineCapabilityRegistry _capabilityRegistry;
+  const KokoroPronunciationTranslationService();
 
   KokoroTranslatedChunk translate({
     required String chunkId,
     required List<TtsArtifactSegment> segments,
-    EngineCapabilityProfile? capabilityProfile,
+    required EngineCapabilityProfile capabilityProfile,
   }) {
-    final activeCapability =
-        capabilityProfile ?? _capabilityRegistry.lookup(engineId: 'kokoro');
+    final activeCapability = capabilityProfile;
     if (segments.isEmpty) {
       return KokoroTranslatedChunk(
         chunkId: chunkId,
@@ -247,8 +249,27 @@ _TranslatedSegment _translateSegment(
     }
 
     final selectedRepresentation = artifact.selectedRepresentation;
+    final adjustmentDecision = selectedRepresentation == null
+        ? null
+        : const SpeechAdjustmentRegistry().resolve(
+            context: selectedRepresentation.context,
+            target: capabilityProfile.modelContext,
+            domain: SpeechAdjustmentDomain.pronunciation,
+            payloadType: selectedRepresentation.representationType,
+            payloadValue: selectedRepresentation.representationValue,
+          );
+    // Canonical content metadata is persisted in the document. Its unchanged
+    // engine payload does not need a new cache identity solely for bookkeeping.
+    final traceAdjustment =
+        selectedRepresentation != null &&
+        selectedRepresentation.context.scope != SpeechAdjustmentScope.content;
     KokoroPronunciationTranslationOutcome translationOutcome;
-    if (_isEnglishSClassAllomorphArtifact(artifact) &&
+    if (adjustmentDecision?.allowed == false) {
+      translationOutcome = KokoroPronunciationTranslationOutcome.deferred;
+    } else if (capabilityProfile.supportsDirectRepresentation(
+          'explicit_suffix_phoneme',
+        ) &&
+        _isEnglishSClassAllomorphArtifact(artifact) &&
         selectedRepresentation?.representationType != 'phoneme_string' &&
         selectedRepresentation?.representationType !=
             'explicit_suffix_phoneme') {
@@ -368,12 +389,22 @@ _TranslatedSegment _translateSegment(
         translationOutcome: translationOutcome,
         representationType: selectedRepresentation?.representationType,
         representationValue: selectedRepresentation?.representationValue,
-        diagnosticCodes: artifact.diagnosticCodes,
+        diagnosticCodes: <String>[
+          ...artifact.diagnosticCodes,
+          if (traceAdjustment && adjustmentDecision != null)
+            'speech_adjustment.${adjustmentDecision.reason}',
+        ],
+        adjustmentDecision: traceAdjustment
+            ? adjustmentDecision?.toMap()
+            : null,
       ),
     );
   }
 
   for (var index = tokenMatches.length - 1; index >= 0; index -= 1) {
+    if (!capabilityProfile.supportsDirectRepresentation('phoneme_string')) {
+      continue;
+    }
     if (coveredWordIndexes.contains(index)) {
       continue;
     }
@@ -732,9 +763,7 @@ _DictionaryBackstop? _dictionaryBackstopForUnit(String unit) {
   }
 
   final normalizedToken = normalizeEnglishSpeechText(
-    token
-      .replaceAll(RegExp(r"^[^A-Za-z0-9']+|[^A-Za-z0-9']+$"), '')
-      .trim(),
+    token.replaceAll(RegExp(r"^[^A-Za-z0-9']+|[^A-Za-z0-9']+$"), '').trim(),
   ).toLowerCase();
   if (normalizedToken.isEmpty) {
     return null;

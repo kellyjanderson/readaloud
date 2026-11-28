@@ -1,12 +1,12 @@
 # Read Aloud repository workflow
 
-This is the authoritative process. Current architecture stays in Git; active design, planning, assignments and evidence records live in GitHub. Local skills are procedures, not competing authorities.
+This is the authoritative process. Current architecture and versioned interim design documents stay in Git; published design decisions, active execution, assignments and evidence records live in GitHub. Local skills are procedures, not competing authorities.
 
 ## Non-negotiable product expectations
 
 Apply the [product definition](project/product-definition.md) and [README reading expectations](README.md) to every design, implementation and acceptance decision. They are requirements, not assertions of current conformance; [issue #83](https://github.com/kellyjanderson/readaloud/issues/83) records the present gaps.
 
-- With a document available and Play requested promptly, opening the app to smooth audible speech must take at most two seconds, regardless of document size. Do not hide initialization/preparation time by moving the measurement start.
+- With a document available and Play requested promptly, aim for smooth audible speech within two seconds of opening the app. Report normal app startup separately. Measure the hard limits from the document-load request after startup: five seconds for a reusable `.radoc` and ten seconds for a first load requiring preparation or synthesis, regardless of document size. Include all work triggered by that load through captured speech.
 - All reading work is dynamic and incremental, including acquisition, parsing, normalization, mapping, analysis, planning, resource binding, synthesis and persistence. Character discovery is only an example. Do not require whole-document completion before first speech; maintain bounded work ahead of playback and explicit revision/cancellation ownership.
 - Keep the interface responsive throughout. Pending playback must be cancellable without waiting for background work to drain; obsolete completion must not trigger speech.
 - Work exceeding one or two seconds requires a dynamic progress bar with real completed-work accounting, truthful stage/total/wait states and actionable failure. No pretend progress or premature 100%.
@@ -23,11 +23,12 @@ Read README.md, project/README.md and docs/project-management.md. Start issue re
 
 - `project/architecture/`: implemented structure, intent, invariants, durable rationale and honest evidence limits. Update with implementation; never promote a proposal to current fact.
 - GitHub design issue: working ACD, scope, alternatives, decisions, acceptance and architecture targets.
+- `project/interim/`: Git-tracked design drafts and immutable published revision snapshots, with source issue/revision, lifecycle and reconciliation links. Follow its README; never rely on volatile `tmp/` for design documents. GitHub current blocks and Project Status still own execution; do not mirror live issue bodies or progress here.
 - Native sub-issues/dependencies: implementation slices and readiness. Small fixes may use a single issue.
 - GitHub Project: authoritative status and priority. Marked issue-body blocks: current coordination/work orders and exact evidence pointers. Issue comments: durable decision, handoff and evidence receipts; historical claims do not supersede a reconciled current block without new evidence.
 - GitHub milestone: release scope, tentative version, intended outcomes and exclusions. One release issue owns release-wide readiness and publication; link feature evidence instead of copying plans.
-- `docs/`: durable setup, usage and process guidance. `project/ui/`, legacy specifications/test specifications and research are retained references; new working drafts belong in issues.
-- `project/archive/` and historical journals: preserved history, not active instructions. Do not create local ACDs, plans, progress journals, task checklists or mirrored issue bodies. Ignored `tmp/` may hold disposable tool payloads, never the sole authority.
+- `docs/`: durable setup, usage and process guidance. `project/ui/`, legacy specifications/test specifications and research are retained references; new substantial design drafts use `project/interim/` and publish to their owning issues.
+- `project/archive/` and historical journals: preserved history, not active instructions. Design drafts and fixed plan snapshots belong only in `project/interim/`; do not create local progress journals, task checklists, release-status ledgers or mirrored issue bodies. Ignored `tmp/` may hold disposable transport payloads, never design-document storage. After implementation, reconcile accepted design into current architecture and record evidence in GitHub before retiring interim files through a reviewed Git change; history preserves the revision.
 
 ## Orchestrator and workers
 

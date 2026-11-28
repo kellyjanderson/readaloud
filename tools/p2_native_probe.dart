@@ -1,5 +1,5 @@
 // Native lifetime probe, not live playback or acoustic-quality acceptance.
-// Build: flutter build macos --debug -t tools/p2_native_probe.dart
+// Build: tools/flutter build macos --debug -t tools/p2_native_probe.dart
 // Launch only through run_p2_native_probe.rb in the isolated p2 bundle.
 import 'dart:convert';
 import 'dart:io';

@@ -1,0 +1,22 @@
+{
+  "schema_version": 1,
+  "package_revision": "R13",
+  "publication": "https://github.com/kellyjanderson/readaloud/issues/110#issuecomment-6651075561",
+  "implementation_baseline": "b3d16b9a1da6812d9360a92b74f03da6df16705f",
+  "documents": [
+    {
+      "path": "progressive-analysis-and-casting.md",
+      "revision": "R13",
+      "source": "https://github.com/kellyjanderson/readaloud/issues/124#progressive-analysis-and-automatic-casting-r13",
+      "source_section_sha256": "b8534a0d643162bf7fb2ca279c3628876baef3b711e77e6ffa75bac30a215ac1",
+      "sha256": "b8534a0d643162bf7fb2ca279c3628876baef3b711e77e6ffa75bac30a215ac1"
+    },
+    {
+      "path": "fish-feature-review.md",
+      "revision": "R13",
+      "source": "https://github.com/kellyjanderson/readaloud/issues/111#read-aloud-and-drama-3-feature-review-r13",
+      "source_section_sha256": "e2a8dda42786f231eda8a25def22158e4712cfe55db6021a4d673789081c438a",
+      "sha256": "e2a8dda42786f231eda8a25def22158e4712cfe55db6021a4d673789081c438a"
+    }
+  ]
+}

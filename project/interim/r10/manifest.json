@@ -1,0 +1,85 @@
+{
+  "schema_version": 1,
+  "package_revision": "R10",
+  "publication": "https://github.com/kellyjanderson/readaloud/issues/110#issuecomment-6649302103",
+  "implementation_baseline": "1f605cfa74bc4374ffc278cb9ccb67218efe6cc4",
+  "documents": [
+    {
+      "path": "implementation-plan.md",
+      "revision": "R10",
+      "source": "https://github.com/kellyjanderson/readaloud/issues/110#implementation-plan-r10",
+      "source_section_sha256": "8636de779b67a972cd5a3f13bcff9a5157a13bb95b4d0fd26216d0a791d204c4",
+      "sha256": "a30b3aeaf99bad6bd8eb467de2d202ee7bb48aa1eb32fd0828f0216af0c241eb"
+    },
+    {
+      "path": "ACD-S1.md",
+      "revision": "R1",
+      "source": "https://github.com/kellyjanderson/readaloud/issues/111#acd-s1--portable-speech-scenes-with-native-fish-realization",
+      "source_section_sha256": "e75a3b063f76b6df9dec1ddb8bb7bd50062e02341b4077ab458a017d010c98e4",
+      "sha256": "5eb9bbe3d31c5043bbd2fcd712ae07a7b3916863b564d6cbce28b564d657790e"
+    },
+    {
+      "path": "ACD-M1.md",
+      "revision": "R1",
+      "source": "https://github.com/kellyjanderson/readaloud/issues/112#acd-m1--verified-model-assets-and-live-engine-sessions",
+      "source_section_sha256": "bf39b92560f8b5619a8a2264b70417a3e7a38494e9f12910c0cdc1584aa20f83",
+      "sha256": "bb2f037bb4814b56388131905547c1e493f9db71f217ae39660aba98af9a6cfe"
+    },
+    {
+      "path": "ACD-R1.md",
+      "revision": "R1",
+      "source": "https://github.com/kellyjanderson/readaloud/issues/113#acd-r1--bounded-reading-and-single-owner-runtime-lifecycle",
+      "source_section_sha256": "3838e9988af1016e523370e4c23acb7e3145f47bcc1b86545bf18c4eb3ba72b8",
+      "sha256": "d84fe9377ebd46362ee0a8ecc4d765be578665a349376c4ddc27ab7d64755e98"
+    },
+    {
+      "path": "ACD-D1.md",
+      "revision": "R1",
+      "source": "https://github.com/kellyjanderson/readaloud/issues/114#acd-d1--consolidation-through-narrow-shared-contracts",
+      "source_section_sha256": "957d875151c158005affc858420b67a6cd520dce72c49a0c5d9c8eb8a388afd7",
+      "sha256": "c0ec0b122379fd2de0c2bbc8175dfdb1a37761efd6826d212e1be78dc7cbb4c8"
+    },
+    {
+      "path": "ACD-P1.md",
+      "revision": "R1",
+      "source": "https://github.com/kellyjanderson/readaloud/issues/115#acd-p1--one-maintained-repository-and-distribution-entry-path",
+      "source_section_sha256": "6dcf83c5b40ec0e22d8ccc5a1884fa5e545239a09e23775773515892c4995aa4",
+      "sha256": "686de8bd54e5b5a15d99ac69cd76cdc42ce8d397b1c69bce7491b5a8067bd390"
+    },
+    {
+      "path": "ACD-G1.md",
+      "revision": "R1",
+      "source": "https://github.com/kellyjanderson/readaloud/issues/116#acd-g1--directed-agent-entry-and-conditional-orchestration",
+      "source_section_sha256": "c268c925afa219237423395a420cfbdc59d6db09c1a6685e10b2903c47f368f9",
+      "sha256": "56496322075ac1dd210fce0674e8818e621db1c21a0d114400e27cf2c66f0f92"
+    },
+    {
+      "path": "ACD-F1.md",
+      "revision": "R1",
+      "source": "https://github.com/kellyjanderson/readaloud/issues/119#acd-f1--truthful-operation-state-and-quiet-reader-feedback",
+      "source_section_sha256": "0aa9493d54ed77a339a36c28d332a1dac35305c8e30fb1a4fdc66c39f0498ac4",
+      "sha256": "debcf403343ecfaccc07a526a540c6b3c90201d05b620629eebe921cd924b755"
+    },
+    {
+      "path": "ACD-A1.md",
+      "revision": "R1",
+      "source": "https://github.com/kellyjanderson/readaloud/issues/124#acd-a1--revision-owned-incremental-attribution",
+      "source_section_sha256": "b4445b16714fb48270572a033dd93add2fbd784075d168cb80b9a843473403ab",
+      "sha256": "edf7dd89a9ea72037bde08899620c11944516d8c2ccc2e4c4e1f13bbf01ee4a9"
+    },
+    {
+      "path": "ACD-C1.md",
+      "revision": "R1",
+      "source": "https://github.com/kellyjanderson/readaloud/issues/124#acd-c1--persistent-work-characters-and-voice-intent",
+      "source_section_sha256": "94243a2f8e3104b1c214caab721d96deb571d2ed19dafd6abae56daca1c1a1c9",
+      "sha256": "dd7680fe6e0e8c7299d3d3b4aafef524181369f6d5ae1a8314f7314d4157d5d3"
+    },
+    {
+      "path": "ACD-A2.md",
+      "revision": "R1",
+      "source": "https://github.com/kellyjanderson/readaloud/issues/124#acd-a2--local-attribution-provider-boundary-and-modernbooknlp-gate",
+      "source_section_sha256": "f6d3586f6281d06fd8c3da049fe5fac93212141a277e1abaa32064295b9e88a4",
+      "sha256": "b22945d9252ad5accfa0be48ddeac37a83d3d3d77e0822474915134b2097f774"
+    }
+  ]
+}

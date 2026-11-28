@@ -7,17 +7,23 @@ This child owns one loaded model and one in-flight inference at a time.
 from __future__ import annotations
 
 import contextlib
+import ctypes
 import gc
+import hashlib
 import json
 import os
 import sys
+import tempfile
+import threading
 import time
 import traceback
+import wave
 from pathlib import Path
 from typing import Any
 
 
-MODEL_IDS = {"qwen3_tts_1_7b", "qwen3_tts_base_1_7b", "voxtral_4b", "moss_tts_8b"}
+DRAMA_MODELS = json.loads(Path(__file__).with_name("fish_drama_models.json").read_text())
+MODEL_IDS = set(DRAMA_MODELS) | {"qwen3_tts_1_7b", "qwen3_tts_base_1_7b", "voxtral_4b", "moss_tts_8b"}
 MODEL_REPOSITORIES = {
     "qwen3_tts_1_7b": "mlx-community/Qwen3-TTS-12Hz-1.7B-CustomVoice-bf16",
     "qwen3_tts_base_1_7b": "mlx-community/Qwen3-TTS-12Hz-1.7B-Base-bf16",
@@ -42,11 +48,41 @@ _model_path: str | None = None
 _model_bits = 0
 _protocol_stdout = sys.stdout
 _active_request_id = ""
+_output_lock = threading.Lock()
 
 
 def _reply(request_id: str, **payload: Any) -> None:
-    _protocol_stdout.write(json.dumps({"id": request_id, **payload}, separators=(",", ":")) + "\n")
-    _protocol_stdout.flush()
+    # Download progress and the memory sampler can publish from other threads.
+    with _output_lock:
+        _protocol_stdout.write(json.dumps({"id": request_id, **payload}, separators=(",", ":")) + "\n")
+        _protocol_stdout.flush()
+
+
+def _physical_footprint() -> int:
+    # The sandbox permits self-inspection but forbids the GUI from inspecting
+    # its child. Match Darwin's rusage_info_v2 ABI, including its UUID prefix.
+    class RusageInfoV2(ctypes.Structure):
+        _fields_ = [("uuid", ctypes.c_uint8 * 16),
+                    ("counters", ctypes.c_uint64 * 18)]
+
+    libproc = ctypes.CDLL("/usr/lib/libproc.dylib", use_errno=True)
+    libproc.proc_pid_rusage.argtypes = [ctypes.c_int, ctypes.c_int, ctypes.c_void_p]
+    libproc.proc_pid_rusage.restype = ctypes.c_int
+    info = RusageInfoV2()
+    if libproc.proc_pid_rusage(os.getpid(), 2, ctypes.byref(info)) != 0:
+        raise OSError(ctypes.get_errno(), "Could not sample inference memory")
+    return int(info.counters[7])  # ri_phys_footprint
+
+
+def _report_memory(stop: threading.Event) -> None:
+    # One daemon per child, no job queue. Process retirement owns cancellation.
+    while not stop.is_set():
+        try:
+            _reply("", type="memory", footprintBytes=_physical_footprint())
+        except Exception as error:
+            _reply("", type="memory", error=str(error))
+            return
+        stop.wait(2)
 
 
 def _unload() -> None:
@@ -67,54 +103,31 @@ def _progress(message: str, *, stage: str, completed: int | None = None,
               total: int | None = None, unit: str = "bytes") -> None:
     if not _active_request_id:
         return
-    _protocol_stdout.write(json.dumps({
-        "id": _active_request_id,
-        "type": "progress",
-        "stage": stage,
-        "message": message,
-        "completed": completed,
-        "total": total,
-        "unit": unit,
-    }, separators=(",", ":")) + "\n")
-    _protocol_stdout.flush()
+    _reply(_active_request_id, type="progress", stage=stage, message=message,
+           completed=completed, total=total, unit=unit)
 
 
-def _download_progress_class():
+def _download_progress_class(total_bytes: int | None, cached_bytes: int):
     from tqdm import tqdm
 
     class ProgressTqdm(tqdm):
-        _active: dict[int, tuple[int, int | None]] = {}
-        _finished_bytes = 0
-        _finished_total = 0
         _last_report = 0.0
 
         def _emit_progress(self):
-            if not hasattr(self, 'desc') or not hasattr(self, 'n'):
+            # HF owns aggregate reconstruction accounting, including resumed
+            # bytes. Its separate transfer bar starts at zero on every retry
+            # and must not be presented as whole-model completion.
+            if not getattr(self, 'desc', '').startswith('Reconstructing'):
                 return
-            if self.desc and "download" not in self.desc.lower():
-                return
-            key = id(self)
-            self.__class__._active[key] = (
-                int(self.n), int(self.total) if self.total is not None else None
-            )
             now = time.monotonic()
-            if now - self._last_report >= 0.4 or (self.total and self.n >= self.total):
-                self._last_report = now
-                completed = self.__class__._finished_bytes + sum(
-                    item[0] for item in self.__class__._active.values()
-                )
-                known_totals = [item[1] for item in self.__class__._active.values()]
-                total = self.__class__._finished_total + sum(
-                    item for item in known_totals if item is not None
-                )
-                if any(item is None for item in known_totals):
-                    total = None
-                _progress(
-                    "Downloading speech model files…",
-                    stage="modelDownload",
-                    completed=completed,
-                    total=total,
-                )
+            if now - self._last_report < 0.4:
+                return
+            self._last_report = now
+            completed = cached_bytes + int(self.n)
+            _progress('Downloading remaining speech model files…',
+                      stage='modelDownload',
+                      completed=min(total_bytes, completed) if total_bytes is not None else completed,
+                      total=total_bytes)
 
         def update(self, n=1):
             result = super().update(n)
@@ -126,77 +139,79 @@ def _download_progress_class():
             self._emit_progress()
             return result
 
-        def close(self):
-            key = id(self)
-            current = self.__class__._active.pop(key, None)
-            if current is not None:
-                self.__class__._finished_bytes += current[0]
-                if current[1] is not None:
-                    self.__class__._finished_total += current[1]
-            super().close()
-
     return ProgressTqdm
+
+
+def _complete_snapshot(directory: Path, model_id: str) -> bool:
+    required = DRAMA_MODELS.get(model_id, {}).get('requiredFiles')
+    if required is None:
+        required = ['config.json']
+        # A config alone is a partial download, not an installed model.
+        weights = list(directory.glob('*.safetensors'))
+        if not weights:
+            return False
+        required += [weight.name for weight in weights]
+        for index in directory.glob('*.safetensors.index.json'):
+            try:
+                required += list(set(json.loads(index.read_text())['weight_map'].values()))
+            except (OSError, ValueError, KeyError):
+                return False
+    try:
+        return all((directory / name).is_file() and (directory / name).stat().st_size > 0
+                   for name in required)
+    except OSError:
+        return False
 
 
 def _download_model(model_id: str, private_cache_path: str) -> Path:
     from huggingface_hub import snapshot_download
     from huggingface_hub import constants as hf_constants
 
-    repo_id = MODEL_REPOSITORIES[model_id]
-    # Prefer the normal Hugging Face cache. In a sandboxed release this may not
-    # be readable; then keep a reusable copy in this app's support directory.
-    configured_cache = (
-        os.environ.get("HF_HUB_CACHE")
-        or os.environ.get("HUGGINGFACE_HUB_CACHE")
-        or str(hf_constants.HF_HUB_CACHE)
-    )
+    spec = DRAMA_MODELS.get(model_id)
+    repo_id = spec['repo'] if spec else MODEL_REPOSITORIES[model_id]
+    revision = spec['revision'] if spec else None
     private_cache = Path(private_cache_path).expanduser()
-    candidates = [Path(configured_cache).expanduser()]
-    if private_cache not in candidates:
-        candidates.append(private_cache)
-
-    try:
-        cached = snapshot_download(
-            repo_id=repo_id,
-            cache_dir=str(candidates[0]),
-            local_files_only=True,
-        )
-        if (Path(cached) / "config.json").is_file():
-            _configure_hf_cache(candidates[0], hf_constants)
-            return Path(cached)
-    except Exception:
-        pass
-
-    last_error = None
-    for index, cache_dir in enumerate(candidates):
+    configured_cache = Path(os.environ.get('HF_HUB_CACHE') or
+                            os.environ.get('HUGGINGFACE_HUB_CACHE') or
+                            str(hf_constants.HF_HUB_CACHE)).expanduser()
+    candidates = list(dict.fromkeys([private_cache, configured_cache]))
+    # Check every accessible cache before any network request. No build number,
+    # executable path or debug/release mode is part of this persistent identity.
+    for cache_dir in candidates:
         try:
-            cache_dir.mkdir(parents=True, exist_ok=True)
-            _progress(
-                f"Downloading {model_id.replace('_', ' ')} model files…",
-                stage="modelDownload",
-            )
-            snapshot = snapshot_download(
-                repo_id=repo_id,
-                cache_dir=str(cache_dir),
-                tqdm_class=_download_progress_class(),
-            )
-            resolved = Path(snapshot)
-            if not (resolved / "config.json").is_file():
-                raise FileNotFoundError(f"Downloaded model has no config.json: {resolved}")
-            _configure_hf_cache(cache_dir, hf_constants)
-            return resolved
-        except Exception as error:
-            last_error = error
-            # Fall back only if the global cache was rejected (for example by
-            # App Sandbox file access); download/network errors are retried in
-            # the private cache as a straightforward recovery path.
-            if index == 0 and len(candidates) > 1:
-                continue
-            break
-    raise RuntimeError(
-        f"Could not download {repo_id} to the shared Hugging Face cache or "
-        f"the app cache ({private_cache}): {last_error}"
+            cached = Path(snapshot_download(repo_id=repo_id, revision=revision,
+                          cache_dir=str(cache_dir), local_files_only=True))
+            if _complete_snapshot(cached, model_id):
+                _configure_hf_cache(cache_dir, hf_constants)
+                _progress('Using downloaded speech model files', stage='modelCached')
+                return cached
+        except (OSError, ValueError):
+            pass
+
+    # One destination per attempt: retries resume the same blobs. A network
+    # failure must never start a second copy in a different cache.
+    private_cache.mkdir(parents=True, exist_ok=True)
+    _progress('Checking saved files and remaining download size…', stage='modelCache')
+    plan = snapshot_download(repo_id=repo_id, revision=revision,
+                             cache_dir=str(private_cache), dry_run=True,
+                             allow_patterns=spec['requiredFiles'] if spec else None)
+    total = (sum(item.file_size for item in plan)
+             if all(item.file_size is not None for item in plan) else None)
+    cached_bytes = sum(item.file_size or 0 for item in plan if not item.will_download)
+    _progress('Reusing saved files; downloading only missing model data…',
+              stage='modelDownload', completed=cached_bytes, total=total)
+    # Freeze the metadata revision even for models whose catalog uses main.
+    resolved_revision = revision or (plan[0].commit_hash if plan else None)
+    snapshot = snapshot_download(
+        repo_id=repo_id, revision=resolved_revision, cache_dir=str(private_cache),
+        allow_patterns=spec['requiredFiles'] if spec else None,
+        tqdm_class=_download_progress_class(total, cached_bytes),
     )
+    resolved = Path(snapshot)
+    if not _complete_snapshot(resolved, model_id):
+        raise FileNotFoundError(f'Model download is incomplete: {resolved}')
+    _configure_hf_cache(private_cache, hf_constants)
+    return resolved
 
 
 def _configure_hf_cache(cache_dir: Path, hf_constants: Any) -> None:
@@ -212,18 +227,28 @@ def _load(model_id: str, model_path: str, private_cache_path: str, quantization_
         raise ValueError('Supported inference precision: full or 4-bit')
     if model_id not in MODEL_IDS:
         raise ValueError(f"Unknown model ID: {model_id}")
+    if model_id in DRAMA_MODELS:
+        import subprocess
+        physical = int(subprocess.check_output(['/usr/sbin/sysctl', '-n', 'hw.memsize']))
+        estimated = DRAMA_MODELS[model_id]['estimatedPeakBytes']
+        if estimated > min(100_000_000_000, physical * .85):
+            raise MemoryError('This Drama variant needs more memory than this Mac can safely provide. Select a smaller variant.')
     directory = Path(model_path).expanduser().resolve() if model_path else _download_model(model_id, private_cache_path).resolve()
     if not (directory / "config.json").is_file():
         raise FileNotFoundError(f"Model config is missing: {directory / 'config.json'}")
     if _model is not None and _model_id == model_id and _model_path == str(directory) and _model_bits == quantization_bits:
-        return {"modelId": model_id, "loaded": True}
+        return {"modelId": model_id, "loaded": True, "modelIdentity": _model_identity(directory, model_id, quantization_bits)}
 
     _unload()
+    import mlx.core as mx
+    # Reserve headroom for Flutter, Python, codec and allocator overhead.
+    mx.set_memory_limit(85_000_000_000)
+    mx.set_cache_limit(1_000_000_000)
     from mlx_audio.tts import load
 
     _progress("Loading speech model weights into memory…", stage="modelLoad")
     _model = load(str(directory), lazy=False)
-    if quantization_bits:
+    if quantization_bits and model_id not in DRAMA_MODELS:
         _progress('Preparing faster 4-bit inference…', stage='modelQuantization')
         from mlx_audio.lm.convert import quantize_model
         import mlx.core as mx
@@ -233,7 +258,7 @@ def _load(model_id: str, model_path: str, private_cache_path: str, quantization_
     _model_bits = quantization_bits
     _model_id = model_id
     _model_path = str(directory)
-    return {"modelId": model_id, "loaded": True}
+    return {"modelId": model_id, "loaded": True, "modelIdentity": _model_identity(directory, model_id, quantization_bits)}
 
 
 def _qwen_language(language: str) -> str:
@@ -254,8 +279,64 @@ def _qwen_language(language: str) -> str:
     return names.get(code, "English")
 
 
-def _first_result(results: Any) -> Any:
-    return next(iter(results))
+def _model_identity(directory: Path, model_id: str, bits: int) -> str:
+    # Snapshot revisions are immutable. Explicit folders are fingerprinted from
+    # their config and weight file identities, so they cannot share old caches.
+    files = [(f.name, f.stat().st_size, f.stat().st_mtime_ns)
+             for f in sorted(directory.glob("*.safetensors"))]
+    value = [str(directory), DRAMA_MODELS.get(model_id), bits, files,
+             hashlib.sha256((directory / "config.json").read_bytes()).hexdigest()]
+    return hashlib.sha256(json.dumps(value, sort_keys=True).encode()).hexdigest()
+
+
+def _complete_audio(results: Any, *, on_piece=None):
+    import numpy as np
+    pieces = []
+    sample_rate = None
+    frames = 0
+    ended = False
+    try:
+        for result in results:
+            if ended:
+                raise ValueError("Audio packet received after the final stream marker")
+            rate = int(result.sample_rate)
+            audio = np.asarray(result.audio, dtype=np.float32)
+            if audio.ndim > 1:
+                audio = audio.squeeze()
+                if audio.ndim == 0:
+                    audio = audio.reshape(1)
+            if audio.ndim != 1:
+                raise ValueError(f"Expected mono audio; received shape {audio.shape}")
+            if sample_rate is not None and rate != sample_rate:
+                raise ValueError("Sample rate changed within one generation")
+            if rate <= 0:
+                raise ValueError("Invalid model sample rate")
+            if not audio.size:
+                # MLX Audio Drama 3 emits an empty final streaming packet when
+                # the last codec frame landed exactly on a streaming boundary.
+                # It is an end marker, not missing speech. Keep consuming the
+                # iterator so late producer failures cannot become success.
+                if (getattr(result, 'is_streaming_chunk', False) is True and
+                        getattr(result, 'is_final_chunk', False) is True):
+                    ended = True
+                    continue
+                raise ValueError("Empty audio without a final streaming marker")
+            if not np.isfinite(audio).all():
+                raise ValueError("Model audio contains non-finite samples")
+            sample_rate = rate
+            frames += audio.size
+            if frames > rate * 600:
+                raise ValueError("Generated chunk exceeded ten minute bound")
+            if on_piece is not None:
+                on_piece(audio, rate)
+            pieces.append(audio)
+    finally:
+        close = getattr(results, 'close', None)
+        if close: close()
+    if not pieces:
+        raise ValueError("The model generated no audio")
+    audio = np.concatenate(pieces)
+    return audio, sample_rate, len(pieces)
 
 
 def _reference_inputs(request: dict[str, Any]) -> tuple[str, str]:
@@ -289,7 +370,7 @@ def _synthesize(request: dict[str, Any]) -> dict[str, Any]:
     if _model_id == "qwen3_tts_1_7b":
         if voice not in QWEN_VOICES:
             raise ValueError(f'Unknown Qwen CustomVoice speaker: {voice}')
-        result = _first_result(
+        results = (
             _model.generate(
                 text=text,
                 voice=voice,
@@ -300,40 +381,77 @@ def _synthesize(request: dict[str, Any]) -> dict[str, Any]:
         )
     elif _model_id == "qwen3_tts_base_1_7b":
         reference, transcript = _reference_inputs(request)
-        result = _first_result(_model.generate(
+        results = (_model.generate(
             text=text, ref_audio=reference, ref_text=transcript,
             lang_code=_qwen_language(language), stream=False, verbose=False,
         ))
     elif _model_id == "voxtral_4b":
         if voice not in VOXTRAL_VOICES:
             raise ValueError(f'Unknown Voxtral preset: {voice}')
-        result = _first_result(
+        results = (
             _model.generate(text=text, voice=voice, stream=False, verbose=False)
         )
+    elif _model_id in DRAMA_MODELS:
+        reference, transcript = _reference_inputs(request)
+        results = _model.generate(text=text, ref_audio=reference, ref_text=transcript,
+                                  stream=True, first_chunk_frames=4)
     else:
         reference, transcript = _reference_inputs(request)
-        result = _first_result(
+        results = (
             _model.generate(text=text, ref_audio=reference, ref_text=transcript,
                             language=language, max_tokens=512, stream=False)
         )
 
-    sample_rate = int(result.sample_rate)
-    if sample_rate != 24000:
-        raise ValueError(f"Expected 24000 Hz model output; received {sample_rate} Hz.")
-
-    import mlx.core as mx
-    from mlx_audio.audio_io import write as write_audio
-
-    audio = mx.array(result.audio).squeeze()
-    if audio.ndim != 1 or audio.size == 0:
-        raise ValueError(f"Expected non-empty mono audio; received shape {audio.shape}.")
     destination = Path(output_path).expanduser().resolve()
     destination.parent.mkdir(parents=True, exist_ok=True)
-    write_audio(str(destination), audio, sample_rate)
-    if not destination.is_file() or destination.stat().st_size <= 44:
-        raise RuntimeError("MLX Audio did not write a complete WAV file.")
+    partial = None
+    raw = None
+    wav = None
+
+    def preserve_piece(audio, rate):
+        nonlocal partial, raw, wav
+        import numpy as np
+        if wav is None:
+            raw = tempfile.NamedTemporaryFile(
+                mode='xb', prefix='rendered-', suffix='.partial.wav',
+                dir=destination.parent, delete=False,
+            )
+            partial = Path(raw.name)
+            wav = wave.open(raw, 'wb')
+            wav.setnchannels(1)
+            wav.setsampwidth(2)
+            wav.setframerate(rate)
+        # Match mlx_audio.audio_io.write's PCM16 encoding. Each write updates
+        # the WAV header; flush it so child failure/cancellation retains a
+        # readable prefix, without claiming the passage is complete.
+        pcm = (np.clip(audio, -1.0, 1.0) * 32767).astype('<i2')
+        wav.writeframes(pcm.tobytes())
+        raw.flush()
+
+    try:
+        try:
+            _, sample_rate, piece_count = _complete_audio(
+                results, on_piece=preserve_piece)
+        finally:
+            if wav is not None:
+                wav.close()
+            if raw is not None:
+                raw.close()
+        # Atomic, no-clobber publication: an existing render is never replaced.
+        os.link(partial, destination)
+    except Exception as error:
+        if partial is not None and partial.is_file():
+            raise RuntimeError(
+                f'{error}. Rendered audio retained at {partial} '
+                '(incomplete passage; not used as a completed cache entry).'
+            ) from error
+        raise
+    # This removes only a duplicate link after the same bytes were published.
+    partial.unlink()
     return {
         "audioPath": str(destination),
+        "nativeSampleRate": sample_rate,
+        "generatedPieces": piece_count,
         "sampleRate": sample_rate,
         "synthesisIdentity": request.get("synthesisIdentity"),
         "sessionId": request.get("sessionId"),
@@ -383,4 +501,12 @@ def main() -> int:
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    stop_memory = threading.Event()
+    memory_thread = threading.Thread(target=_report_memory, args=(stop_memory,),
+                                     name="speech-memory", daemon=True)
+    memory_thread.start()
+    try:
+        raise SystemExit(main())
+    finally:
+        stop_memory.set()
+        memory_thread.join(timeout=1)

@@ -1132,6 +1132,16 @@
       "sha256": "81917843c7f44ce2b094ac63873c2c7a4cf802040792c455ba3ca406891c3d22"
     },
     {
+      "path": "assets/fish_drama_models.json",
+      "size": 2451,
+      "sha256": "1a3430aa5c1d79a09e7659ce38e7916b2504a220cedf1953f546a96ec0efe2e4"
+    },
+    {
+      "path": "assets/fish_voice_library.json",
+      "size": 9784,
+      "sha256": "420dd05bbcb24a937cb1ae64aa93463ac230aab32a73e3f3d9a22196f543c14a"
+    },
+    {
       "path": "assets/fonts/IBMPlexMono-Medium.ttf",
       "size": 136704,
       "sha256": "a9b4c49bb299e05b5f6c481e7fb5e78943d2793249a0c8874ab574a2d1ea6755",
@@ -1230,8 +1240,8 @@
     },
     {
       "path": "assets/mlx_tts_worker.py",
-      "size": 14498,
-      "sha256": "f55b2dd5b15ca9c4522e79388aeca88520ba1beacd8bc18d5e192ad498b7c990"
+      "size": 17370,
+      "sha256": "65f24b217d4f4fc907f8acefe2cf64e62596d3256cc18f29a900897530c9a589"
     },
     {
       "path": "assets/tokenizer_vocab.json",

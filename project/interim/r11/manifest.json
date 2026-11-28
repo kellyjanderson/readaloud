@@ -1,0 +1,29 @@
+{
+  "schema_version": 1,
+  "package_revision": "R11",
+  "publication": "https://github.com/kellyjanderson/readaloud/issues/110#issuecomment-6650015025",
+  "implementation_baseline": "a2fdb4cfda9044bbaedea508e27a622931c5bc07",
+  "documents": [
+    {
+      "path": "implementation-plan.md",
+      "revision": "R11",
+      "source": "https://github.com/kellyjanderson/readaloud/issues/110#implementation-plan-r11",
+      "source_section_sha256": "101ab65b87813babaf8a89afa7b0b46c95e6a327180177f90e00378e326e772b",
+      "sha256": "101ab65b87813babaf8a89afa7b0b46c95e6a327180177f90e00378e326e772b"
+    },
+    {
+      "path": "review-coverage.md",
+      "revision": "R11",
+      "source": "https://github.com/kellyjanderson/readaloud/issues/110#review-coverage-r11",
+      "source_section_sha256": "406689a8ddb31136f5bfd7acab67f1780ffb2db1b6910ee503071b6977c25b34",
+      "sha256": "406689a8ddb31136f5bfd7acab67f1780ffb2db1b6910ee503071b6977c25b34"
+    },
+    {
+      "path": "acceptance-supplement.md",
+      "revision": "R11",
+      "source": "https://github.com/kellyjanderson/readaloud/issues/110#review-acceptance-supplement-r11",
+      "source_section_sha256": "4959f8ed7d300a9466eb54c1c85813a0e81565b9fde35713e6001a77e21e856e",
+      "sha256": "4959f8ed7d300a9466eb54c1c85813a0e81565b9fde35713e6001a77e21e856e"
+    }
+  ]
+}

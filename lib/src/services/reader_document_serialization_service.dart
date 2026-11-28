@@ -597,6 +597,7 @@ class ReaderDocumentSerializationService {
                       'representationValue': representation.representationValue,
                       'accentFamily': representation.accentFamily,
                       'priority': representation.priority,
+                      'context': representation.context.toMap(),
                     },
                   )
                   .toList(growable: false),

@@ -28,7 +28,7 @@ This document defines the major system layers and responsibility boundaries for 
 
 ## Governing Execution Contract
 
-[Document Preparation and Execution Contexts](../../../acd/prepared-document-runtime.acd) governs whole-document preparation, resident character voices, buffer lead and task placement. Semantic analysis completes before speech starts; bounded waveform generation continues ahead of playback. Ordinary character changes never restart transport.
+[Document Preparation and Execution Contexts](https://github.com/kellyjanderson/readaloud/issues/48) governs whole-document preparation, resident character voices, buffer lead and task placement. Semantic analysis completes before speech starts; bounded waveform generation continues ahead of playback. Ordinary character changes never restart transport.
 
 ## Major Layers
 
