@@ -190,9 +190,9 @@ and the existing 64-chunk cap. Voxtral warms the startup buffer before playback;
 Qwen and MOSS start with their first validated chunk. At the five-second MLX
 warmup deadline, already validated audio can start rather than failing solely
 because the target lead was not reached. Cancellation and stale-result checks
-continue to apply. Measure launch-to-speech against the two-second goal and
-measure document loads separately against the post-startup limits in the
-[product definition](../project/product-definition.md).
+continue to apply. Measure document loads after app startup against the limits
+in the [product definition](../project/product-definition.md). App-startup
+performance is scheduled after the native speech rewrite in [#207](https://github.com/kellyjanderson/readaloud/issues/207).
 
 For a sustained native check, set `READALOUD_SMOKE_DOCUMENT_PATH` to a local text
 file, `READALOUD_SMOKE_PLAY_SECONDS=45`, and

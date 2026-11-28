@@ -4,7 +4,7 @@ Read [AGENTS.md](../AGENTS.md) for the lightweight process. Current architecture
 
 - [Architecture](architecture/README.md): current components, source/tests and limitations.
 - [Versioned interim designs](interim/README.md): drafts and published design revisions with explicit reconciliation and retirement rules.
-- [Product expectations](product-definition.md) cover the two-second launch-to-speech goal, separate post-startup load limits, responsive dynamic reading, honest progress and reusable voice-directed `.radoc`.
+- [Product expectations](product-definition.md) cover post-startup document-load limits, responsive dynamic reading, honest progress and reusable voice-directed `.radoc`.
 - [GitHub planning and orchestration](../docs/project-management.md): active designs, native sub-issues and dependency graph.
 - [Human documentation](../docs/README.md): development and maintenance.
 - [Legacy contracts](specifications/README.md): retained children with direct architecture ownership; no new spec-tree workflow.
