@@ -1,13 +1,13 @@
 # Read Aloud Product Definition
 
-Last updated: October 25, 2026
+Last updated: November 27, 2026
 Status: Standing product requirements; current implementation does not yet meet all requirements
 
 ## Mandatory Reading Experience
 
-With the intended document available and Play requested promptly, the launch-to-speech **goal is two seconds** from opening the app to smooth, uninterrupted speech. Report normal app startup separately. The post-startup hard limits are **five seconds for a reusable `.radoc` load** and **ten seconds for a first load requiring preparation or synthesis**, regardless of document size. A `.radoc` that requires new preparation or synthesis before first speech uses the first-load limit. [R25 timing decision](https://github.com/kellyjanderson/readaloud/issues/110#issuecomment-6791030471)
+The post-startup hard limits are **five seconds for a reusable `.radoc` load** and **ten seconds for a first load requiring preparation or synthesis**, regardless of document size. A `.radoc` that requires new preparation or synthesis before first speech uses the first-load limit. [R25 timing decision](https://github.com/kellyjanderson/readaloud/issues/110#issuecomment-6791030471)
 
-Record app launch, startup completion, document Open, Play and emitted speech independently. Measure load acceptance from an explicit Open after normal startup through captured speech, including all acquisition, preparation, resource setup and synthesis triggered by that load. Classify document reuse separately from cold or warm app process state. Request Play promptly after the first target content is available. Preserve launch-to-speech as a separate diagnostic, and report user delay, missing assets and access failures with the measured result.
+Record normal startup completion, document Open, Play and emitted speech independently for load acceptance. Measure from the explicit Open through captured speech, including all acquisition, preparation, resource setup and synthesis triggered by that load. Classify document reuse separately from cold or warm app process state. Request Play promptly after the first target content is available and report user delay, missing assets and access failures. Startup timing and its acceptance criteria belong to [the follow-up after the native rewrite](https://github.com/kellyjanderson/readaloud/issues/207). [Release-scope decision](https://github.com/kellyjanderson/readaloud/issues/122#issuecomment-7234797323)
 
 The interface must always feel responsive: scrolling, menus, voice selection, pause/cancel and document replacement must remain usable during preparation, inference, persistence and export. A pending Play must be visible and cancellable immediately at the intent level even if native work takes longer to drain. Old requests must never start unexpected speech. Smooth speech means sustained playback without starvation, missing or duplicated words, or unintended replay; authored pauses are preserved.
 

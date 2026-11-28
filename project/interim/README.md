@@ -11,6 +11,9 @@ applied to [R12 character contract and consolidated delivery](r12/README.md).
 [R10](r10/README.md) retains the ten original ACD designs. R12 explicitly identifies
 the character ownership and sequencing decisions it supersedes.
 
+[Document-to-speakers R2](document-to-speakers-r2/README.md) supersedes the
+startup-timing and physical M3 requirements in the release work orders.
+
 ## Authority and revision lifecycle
 
 1. **Draft:** create `project/interim/<revision>/` with a README identifying its

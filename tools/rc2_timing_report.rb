@@ -2,7 +2,10 @@
 # Refs #83, #86. Offline evidence validation; never launches or changes the app.
 # Input is a JSON object with candidate and cases. Each case has id, condition
 # (fresh/warm/radoc), scenario (launch/document-open; defaults to launch),
-# fixture_sha256 and trials. Each trial has id, valid (bool),
+# fixture_sha256 and trials. A document-open case can specify load_class
+# (first-load/reusable). Older receipts use reusable for condition=radoc and
+# first-load otherwise. Explicitly mark partial books needing work as first-load.
+# Launch samples are diagnostic. Each trial has id, valid (bool),
 # monotonic microsecond events, input_ack_us, max_main_stall_us and output_evidence
 # {path, sha256, route, basis: "recorded-output"}. Events are launch_us,
 # first_interactive_us, play_us, first_pcm_us, audible_us. For intake after launch,
@@ -16,7 +19,7 @@ require 'json'
 
 module Rc2TimingReport
   EVENTS = %w[launch_us first_interactive_us play_us first_pcm_us audible_us].freeze
-  LIMIT_US = 2_000_000
+  LOAD_LIMIT_US = {'first-load' => 10_000_000, 'reusable' => 5_000_000}.freeze
   UI_LIMIT_US = 100_000
   SHA256 = /\A[0-9a-f]{64}\z/
 
@@ -49,6 +52,9 @@ module Rc2TimingReport
       case_errors << 'condition must be fresh/warm/radoc' unless %w[fresh warm radoc].include?(record['condition'])
       scenario = record.fetch('scenario', 'launch')
       case_errors << 'scenario must be launch/document-open' unless %w[launch document-open].include?(scenario)
+      load_class = record.fetch('load_class') { record['condition'] == 'radoc' ? 'reusable' : 'first-load' }
+      load_limit = LOAD_LIMIT_US[load_class]
+      case_errors << 'load_class must be first-load/reusable' if scenario == 'document-open' && load_limit.nil?
       case_errors << 'fixture_sha256 invalid' unless SHA256.match?(record['fixture_sha256'].to_s)
       trials = record.fetch('trials', [])
       case_errors << 'at least ten valid trials required' if trials.count { |t| t['valid'] == true } < 10
@@ -73,17 +79,18 @@ module Rc2TimingReport
           ordered = trial.values_at('launch_us', 'first_interactive_us', 'play_us', 'audible_us')
           problems << 'events out of order' unless ordered.each_cons(2).all? { |a, b| a <= b } &&
             trial['first_pcm_us'].between?(trial['launch_us'], trial['audible_us'])
-          latency = trial['audible_us'] - trial['launch_us']
-          samples << latency
-          problems << 'launch-to-audible exceeds 2000 ms' if scenario == 'launch' && latency > LIMIT_US
+          samples << trial['audible_us'] - trial['launch_us']
           problems << 'document-open trial is missing document_open_us' if scenario == 'document-open' && !trial.key?('document_open_us')
           if trial.key?('document_open_us')
             opened = trial['document_open_us']
-            if !opened.is_a?(Numeric) || !opened.finite? || opened < trial['launch_us'] || opened > trial['play_us']
+            earliest_open = scenario == 'document-open' ? trial['first_interactive_us'] : trial['launch_us']
+            if !opened.is_a?(Numeric) || !opened.finite? || opened < earliest_open || opened > trial['play_us']
               problems << 'document_open_us invalid'
             else
               open_samples << trial['audible_us'] - opened
-              problems << 'document-open-to-audible exceeds 2000 ms' if open_samples.last > LIMIT_US
+              if scenario == 'document-open' && load_limit && open_samples.last > load_limit
+                problems << "document-open-to-audible exceeds #{load_limit / 1000} ms for #{load_class}"
+              end
             end
           end
         end
@@ -106,13 +113,15 @@ module Rc2TimingReport
       case_errors << 'one or more trials failed or are incomplete' if trial_results.any? { |r| %w[fail incomplete].include?(r[:verdict]) }
       {id: record['id'], condition: record['condition'], scenario: scenario, fixture_sha256: record['fixture_sha256'],
        verdict: case_errors.empty? ? 'pass' : 'fail', errors: case_errors,
+       load_class: scenario == 'document-open' ? load_class : nil,
        launch_to_audible: percentiles(samples), document_open_to_audible: percentiles(open_samples),
        trials: trial_results}
     end
     errors << 'one or more cases failed' if results.any? { |c| c[:verdict] != 'pass' }
     {schema: 'readaloud-rc2-timing-report-v1', verdict: errors.empty? ? 'pass' : 'fail',
      errors: errors, candidate: candidate, cases: results,
-     limits: ['Receipt validation does not prove acoustic onset or capture accuracy.',
+     limits: ['Launch-to-audible duration is reported without a timing threshold.',
+              'Receipt validation does not prove acoustic onset or capture accuracy.',
               'A passing supplied case set does not prove the full #83 fixture/condition matrix.',
               'Continuity, progress, cancel/stale work and UI interactions need separate evidence.']}
   end

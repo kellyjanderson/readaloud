@@ -1,0 +1,22 @@
+{
+  "schema_version": 1,
+  "package_revision": "R2",
+  "publication": "https://github.com/kellyjanderson/readaloud/issues/122#issuecomment-7234797323",
+  "implementation_baseline": "9a7584d7c043b82badc5161bcb2739c9d1ac25c2",
+  "documents": [
+    {
+      "path": "README.md",
+      "revision": "R2",
+      "source": "https://github.com/kellyjanderson/readaloud/issues/122#issuecomment-7234797323",
+      "source_section_sha256": "4d8bc1090e34d63b51012075a56ade9807450728e807c163ab0472fb83d5a817",
+      "sha256": "10cdb0750d09b52f4eb6f61c32d300ad3981299eb0938e342406bcc0901bcccc"
+    },
+    {
+      "path": "slices.md",
+      "revision": "R2",
+      "source": "https://github.com/kellyjanderson/readaloud/issues/122#issuecomment-7234797323",
+      "source_section_sha256": "4d8bc1090e34d63b51012075a56ade9807450728e807c163ab0472fb83d5a817",
+      "sha256": "8876fd12842c4414ea92b38db4bc4769ce127d7a7ab65be6d98cb0eaba41c7c5"
+    }
+  ]
+}

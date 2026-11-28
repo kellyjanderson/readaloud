@@ -14,7 +14,7 @@ or [MLX setup](../docs/mlx-tts-engines.md) for prerequisites and complete comman
 | Check MLX worker behavior or benchmark synthesis | `mlx_tts_worker_test.py`, `mlx_tts_benchmark.py` |
 | Maintain bundled reference voices | `build_voice_library.py`, `analyze_voice_library.py`, `qualify_voice_library.py` |
 | Build, inspect and package macOS candidates | `build_macos_release.sh`, `package_macos_candidate.rb`, `verify_macos_release_entitlements.rb`, `release_notices.rb` |
-| Summarize startup timing | `rc2_timing_report.rb` |
+| Summarize launch observations and verify post-startup document-load timing | `rc2_timing_report.rb` |
 | Guide human acceptance and export observations | [human acceptance runner](human_acceptance_runner/README.md) |
 
 ## Retained native qualification probes
