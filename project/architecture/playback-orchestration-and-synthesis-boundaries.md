@@ -41,6 +41,21 @@ Ordinary no-edit Play rebuilds the saved-word tail: the controller captures the 
 
 The [assignment295 prefix](https://github.com/kellyjanderson/readaloud/issues/53#issuecomment-6395976458) observed unchanged current source/hash after editing, first replacement playback at word 8 before acknowledgment, latest-only initial A/B/C success and pause-retained/stop-cleared pins. Its later listening timeout failed the overall run, with final resource cleanup recorded separately. The [e18c81d supplement](https://github.com/kellyjanderson/readaloud/issues/53#issuecomment-6396165816) passed paused pending Play at anchor 292, injected pre-ack failure retaining effective Heart and pending Bella followed by successful retry, and obsolete startup failure leaving latest C effective. Held-export cancellation drained before replacement playback; final sessions/tensors/sources/pins/tasks were zero. These bounded automated cases do not establish human listening, sample continuity or input during active export; the latter had zero actual UI actions.
 
+## Seek from reading text
+
+The reading text context menu uses the rendered glyph position, the display
+block and the prepared speech map to resolve a word occurrence. The viewport
+passes its current immutable range to the main-isolate reader controller, which
+checks the document owner and revision before adopting the reading position.
+This path uses the existing playback intent and shared stop operation. A later
+text seek, Cancel, or document replacement can supersede the pending restart. A
+paused seek updates the saved position without starting synthesis. For new
+synthesis, the initial worker plan clips the first partial segment at the
+explicit word anchor and keeps the original coordinates and voice routes. Later
+planning windows retain their segment cursors. Saved book playback uses its
+containing scene. The separate PDF viewer has no text seek mapping through this
+menu.
+
 ## Chapter admission for Fish synthesis
 
 With chapter analysis enabled, new Fish synthesis awaits the chapter coverage

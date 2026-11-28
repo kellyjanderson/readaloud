@@ -68,6 +68,23 @@ class ChunkPlannerGraph {
     final useChapterBoundaries =
         isDramaEngine(input.engineId) &&
         (input.fishSceneBoundaries.isNotEmpty || _hasPartialRoutes);
+    if (input.startWordIndex case final word?) {
+      final segment = speechDocument.segments[startSegmentIndex];
+      final segmentStart = globalWordOffsets[startSegmentIndex];
+      final segmentEnd = segmentStart + segment.wordCount;
+      RangeError.checkValueInInterval(word, segmentStart, segmentEnd - 1);
+      if (!useChapterBoundaries && word > segmentStart && cursor < horizon) {
+        final route =
+            routingContextBySegmentId[segment.segmentId] ??
+            _ChunkRoutingContext(voiceId: input.voiceId);
+        chunks.add(
+          _finalizeRangedChunk(input, [
+            _FishPart(segment, segmentStart, word, segmentEnd, route, false),
+          ], ordinal: 0),
+        );
+        cursor++;
+      }
+    }
     if (useChapterBoundaries) {
       chunks = _planFishChapters(input, cursor, horizon, nativeScenes: scenes);
       if (chunks.isNotEmpty) cursor = chunks.last.endSegmentIndex + 1;
@@ -163,7 +180,7 @@ class ChunkPlannerGraph {
           continue;
         }
         turns.add(
-          _finalizeFishTurn(
+          _finalizeRangedChunk(
             input,
             parts.sublist(first, i),
             ordinal: chunks.length + turns.length,
@@ -210,6 +227,9 @@ class ChunkPlannerGraph {
         if (boundary != FishSceneBoundary.continuation) safeCut = parts.length;
       }
       final additions = _fishParts(input, segment, _offsets[i]);
+      if (additions.isEmpty) continue;
+      final candidateWords =
+          wordCount + additions.last.endWord - additions.first.startWord;
       var candidateTurns = turnCount;
       _FishPart? previous = parts.lastOrNull;
       for (final part in additions) {
@@ -218,8 +238,7 @@ class ChunkPlannerGraph {
         }
         previous = part;
       }
-      if (wordCount + segment.wordCount >
-              ChunkPlannerService._hardChunkWordCap ||
+      if (candidateWords > ChunkPlannerService._hardChunkWordCap ||
           candidateTurns > _fishTurnCap) {
         if (parts.isEmpty) {
           if (!firstChunk) break;
@@ -239,7 +258,7 @@ class ChunkPlannerGraph {
         break;
       }
       parts.addAll(additions);
-      wordCount += segment.wordCount;
+      wordCount = candidateWords;
       turnCount = candidateTurns;
     }
     return parts;
@@ -252,6 +271,7 @@ class ChunkPlannerGraph {
   ) {
     final ranges = _wordRoutes[segment.segmentId] ?? const [];
     final end = start + segment.wordCount;
+    final firstWord = (input.startWordIndex ?? start).clamp(start, end);
     final parts = <_FishPart>[];
     // Count authored performance boundaries identically before and after
     // realization. A later pass may lower model controls for this segment.
@@ -259,10 +279,10 @@ class ChunkPlannerGraph {
         .forSegment(segment.segmentId)
         .any((annotation) => annotation.isPerformanceIntent);
     final fallback = _ChunkRoutingContext(voiceId: input.voiceId);
-    var cursor = start;
+    var cursor = firstWord;
     for (final range in ranges) {
-      final left = range.startWordIndex.clamp(start, end);
-      final right = range.endWordIndex.clamp(start, end);
+      final left = range.startWordIndex.clamp(firstWord, end);
+      final right = range.endWordIndex.clamp(firstWord, end);
       if (left == right) continue;
       if (left < cursor) {
         throw StateError(
@@ -291,14 +311,16 @@ class ChunkPlannerGraph {
     return parts;
   }
 
-  ChunkSpec _finalizeFishTurn(
+  ChunkSpec _finalizeRangedChunk(
     ChunkPlannerInput input,
     List<_FishPart> parts, {
     required int ordinal,
   }) {
     final first = parts.first;
     final last = parts.last;
-    final artifacts = parts.map((part) => _fishArtifact(part, input)).toList();
+    final artifacts = parts
+        .map((part) => _rangedArtifact(part, input))
+        .toList();
     final continuesSentence =
         first.startWord > first.segmentStartWord ||
         (first.segment.ordinal > 0 &&
@@ -380,7 +402,7 @@ bool _canShareFishTurn(_FishPart left, _FishPart right) =>
     !right.isolatesTurn &&
     _canShareChunkRoute(left.route, right.route);
 
-TtsArtifactSegment _fishArtifact(_FishPart part, ChunkPlannerInput input) {
+TtsArtifactSegment _rangedArtifact(_FishPart part, ChunkPlannerInput input) {
   final artifact = _ttsSegmentFor(
     speechSegment: part.segment,
     ttsArtifactSet: input.ttsArtifactSet,

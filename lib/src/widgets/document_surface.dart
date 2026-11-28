@@ -8,6 +8,7 @@ import '../models/reader_document.dart';
 import '../models/spoken_selection.dart';
 import '../services/display_document_html_renderer.dart';
 import '../theme/read_aloud_theme.dart';
+import 'reader_text_context_menu.dart';
 
 class DocumentSurface extends StatefulWidget {
   const DocumentSurface({
@@ -23,6 +24,7 @@ class DocumentSurface extends StatefulWidget {
     this.followRequestTick = 0,
     this.inline = false,
     this.onInlineFocus,
+    this.onSeek,
   });
 
   final ReaderDocument document;
@@ -36,6 +38,7 @@ class DocumentSurface extends StatefulWidget {
   final int followRequestTick;
   final bool inline;
   final ValueChanged<double>? onInlineFocus;
+  final ValueChanged<int>? onSeek;
 
   @override
   State<DocumentSurface> createState() => _DocumentSurfaceState();
@@ -110,6 +113,7 @@ class _DocumentSurfaceState extends State<DocumentSurface> {
     final renderedHtml = renderDisplayDocumentToHtml(
       widget.document.displayDocument,
       spokenSelection: widget.spokenSelection,
+      includeReadingPositions: widget.onSeek != null,
     );
 
     return NotificationListener<UserScrollNotification>(
@@ -133,6 +137,8 @@ class _DocumentSurfaceState extends State<DocumentSurface> {
               data: renderedHtml,
               shrinkWrap: true,
               extensions: [
+                if (widget.onSeek case final onSeek?)
+                  readerTextPositions(widget.document, onSeek),
                 TagExtension(
                   tagsToExtend: const {'audio'},
                   builder: (context) {
@@ -254,6 +260,7 @@ class _DocumentSurfaceState extends State<DocumentSurface> {
     if (widget.inline) return child;
     return SelectionArea(
       key: ValueKey(widget.document.displayDocument.documentId),
+      contextMenuBuilder: buildReaderTextContextMenu,
       onSelectionChanged: (selection) {
         if (selection != null && widget.autoFollowActive) {
           widget.onManualScrollWhileFollowing?.call();

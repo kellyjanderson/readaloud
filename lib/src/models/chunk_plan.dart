@@ -22,6 +22,7 @@ class ChunkPlannerInput {
     required this.rate,
     required this.engineId,
     required this.engineVersion,
+    this.startWordIndex,
     this.castAwareSpeechRoutes,
     this.fishSceneBoundaries = const {},
     this.maxChunks,
@@ -35,6 +36,7 @@ class ChunkPlannerInput {
   final double rate;
   final String engineId;
   final String engineVersion;
+  final int? startWordIndex;
   final CastAwareSpeechRouteSet? castAwareSpeechRoutes;
   final Map<String, FishSceneBoundary> fishSceneBoundaries;
   final int? maxChunks;

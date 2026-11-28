@@ -14,6 +14,14 @@ After a synthesis failure, press **Play** to retry from the retained reading pos
 
 Downloaded models remain in Application Support and are reused by normal development and release builds. A rebuild does not clear them. Interrupted downloads reuse completed files and resume remaining work; loading a saved model into memory is a separate step. Intentionally isolated test apps with a different bundle identifier have separate macOS storage.
 
+## Jump to text
+
+Right-click a word in the reading text and choose **Jump to this position**.
+While paused, the next **Play** uses the new position. During playback, the
+reader buffers and resumes from the new position. Saved audio in a `.radoc`
+restarts at the beginning of the scene containing the word. The action appears
+where the reader can map the displayed text to speech.
+
 ## Current and Pending voices
 
 The character list includes speakers discovered across all prepared sections, even when the reader is still showing an earlier section. It updates as preparation advances and retains explicit assignments. The discovery summary distinguishes partial preparation from completed analysis. More characters can appear as you listen or scroll; heuristic detection can still miss or misidentify speakers, so completed analysis is not a guarantee of a complete cast.

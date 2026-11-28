@@ -34,6 +34,56 @@ import 'package:read_aloud/src/services/tts_engine.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
+  for (final cancel in [false, true]) {
+    test(
+      'newest text seek owns restart after a held stop (cancel=$cancel)',
+      () async {
+        SharedPreferences.setMockInitialValues({});
+        final engine = _BarrierStopTtsEngine();
+        final controller = ReaderController(
+          ttsEngine: engine,
+          enablePlatformIntakeChannels: false,
+        );
+        addTearDown(controller.dispose);
+        await controller.initialize();
+        await controller.importPastedText('First echo and then echo again.');
+        await controller.startPlayback();
+        engine.emitStart();
+        expect(controller.isPlaying, isTrue);
+        final sequence = controller.activePreparedRangeSequence;
+        final range = sequence == null
+            ? null
+            : await controller.readPreparedRange(sequence);
+        final document = controller.document;
+        engine.holdNext = true;
+        final first = controller.seekToWord(
+          1,
+          document: range?.fragment ?? document,
+          range: range,
+        );
+        await engine.stopped.future;
+        final latest = controller.seekToWord(
+          4,
+          document: range?.fragment ?? document,
+          range: range,
+        );
+        expect(controller.currentWordIndex, 4);
+        expect(controller.hasPendingPlaybackIntent, isTrue);
+        if (cancel) await controller.pausePlayback();
+        engine.release.complete();
+        await Future.wait([first, latest]);
+        expect(engine.speakCallCount, cancel ? 1 : 2);
+        if (!cancel) {
+          final request = engine.lastSpeakRequest!;
+          expect(request.text, 'echo again.');
+          final first = request.chunkPlan!.chunks.first;
+          expect(first.startWordIndex, 4);
+          expect(first.speakText, 'echo again.');
+        }
+      },
+    );
+  }
+
   test(
     'early retry joins held default selection without loading old default',
     () async {

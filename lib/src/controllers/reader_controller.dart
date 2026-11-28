@@ -582,7 +582,8 @@ class ReaderController extends ChangeNotifier {
       _resumeAfterPreparation &&
       (_pendingPlayUntilReady ||
           _playbackStartPending ||
-          _playbackStartDriver != null);
+          _playbackStartDriver != null ||
+          _startupStop != null);
   List<CastEntry> get discoveredCastEntries =>
       List.unmodifiable(_discoveredCast.values);
 
@@ -1482,6 +1483,7 @@ class ReaderController extends ChangeNotifier {
   DateTime? _lastFollowerProgressAppliedAt;
 
   int _currentWordIndex = 0;
+  ({int revision, int? rangeSequence, int word})? _explicitTextSeek;
   double _wordsPerSecond = 2.8;
 
   int _utteranceStartOffset = 0;
@@ -1758,6 +1760,7 @@ class ReaderController extends ChangeNotifier {
         return;
       }
       _isPlaying = true;
+      _explicitTextSeek = null;
       _playbackState = ReaderPlaybackPrimaryState.playing;
       _readingFocusState = _readingFocusState.copyWith(playbackActive: true);
       _recordFirstAudioLatency();
@@ -2867,7 +2870,7 @@ class ReaderController extends ChangeNotifier {
         _pausedVoiceReplayAnchor = anchor;
       }
     }
-    _advancePlaybackIntent();
+    final intent = _advancePlaybackIntent();
     _planning.cancel();
     _playbackStartPending = false;
     _resumeAfterPreparation = false;
@@ -2879,7 +2882,9 @@ class ReaderController extends ChangeNotifier {
     _readingFocusState = _readingFocusState.copyWith(playbackActive: false);
     notifyListeners(); // Intent cancellation must not wait for native drain.
     await _ttsEngine.pause();
+    if (_disposed || intent != _playbackIntent) return;
     await _flushResumePersistence();
+    if (_disposed || intent != _playbackIntent) return;
     _finalizeActiveSpokenChunk();
     _activePlaybackDocumentId = null;
     _isPlaying = false;
@@ -2890,16 +2895,108 @@ class ReaderController extends ChangeNotifier {
 
   Future<void> jumpBySeconds(int seconds) async {
     if (_document.wordCount == 0 || _playbackActivity.isBuffering) return;
-    _pausedVoiceReplayAnchor = null;
-    _assignmentReplayWord = null;
-    _explicitVoiceRebuffer = false;
     final deltaWords = (seconds * _wordsPerSecond).round();
     final targetWord = (_currentWordIndex + deltaWords).clamp(
       0,
       math.max(_document.wordCount - 1, 0),
     );
-    final snappedTarget = _snapWordIndexToSegmentStart(targetWord.toInt());
-    _currentWordIndex = snappedTarget;
+    _setPlaybackWord(_snapWordIndexToSegmentStart(targetWord.toInt()));
+    _statusMessage =
+        'Jumped ${seconds.abs()} seconds ${seconds < 0 ? 'back' : 'forward'}.';
+    if (_isPlaying) {
+      await _ttsEngine.stop();
+      _isPlaying = false;
+      await startPlayback();
+      return;
+    }
+    _playbackState = ReaderPlaybackPrimaryState.paused;
+    notifyListeners();
+  }
+
+  /// Seeks using the immutable publication already displayed by the viewport.
+  Future<void> seekToWord(
+    int word, {
+    required ReaderDocument document,
+    DocumentPreparationPublication? range,
+  }) async {
+    if (_disposed ||
+        !isDocumentPrepared ||
+        word < 0 ||
+        word >= document.wordCount) {
+      return;
+    }
+    if (range == null) {
+      if (hasRangeDocument || !identical(document, _document)) return;
+    } else if (!hasRangeDocument ||
+        range.request.ownerId != _preparationOwner ||
+        range.request.revision != _documentRevision ||
+        !identical(range.fragment, document) ||
+        !range.isPreparationReady) {
+      return;
+    }
+
+    final resume =
+        _isPlaying || hasPendingPlaybackIntent || _playbackActivity.isBuffering;
+    final intent = _advancePlaybackIntent();
+    _planning.cancel();
+    _audioBook?.cancelRender();
+    _audioGapWord = null;
+    _pendingPlayUntilReady = false;
+    _playbackStartPending = false;
+    _resumeAfterPreparation = resume;
+    _isPlaying = false;
+    _playbackActivity = const TtsPlaybackActivity.idle();
+    _playbackState = ReaderPlaybackPrimaryState.paused;
+    _finalizeActiveSpokenChunk();
+    _document = document;
+    _activePreparedRange = range;
+    _setPlaybackWord(word);
+    _explicitTextSeek = (
+      revision: _documentRevision,
+      rangeSequence: range?.sequence,
+      word: word,
+    );
+    final span = document.wordSpans[word];
+    _spokenSelection = _spokenSelectionMapperService.map(
+      SpokenSelectionMapperInput(
+        displayDocument: document.displayDocument,
+        speechDocument: document.speechDocument,
+        positionMap: document.positionMap,
+        progress: TtsProgressUpdate(
+          startOffset: span.start,
+          endOffset: span.end,
+          word: document.speakableText.substring(span.start, span.end),
+          wordStartIndex: word,
+          wordEndIndex: word + 1,
+        ),
+      ),
+    );
+    _readingFocusState = _readingFocusState.copyWith(
+      activeDisplayBlockId: _spokenSelection.displayBlockId,
+    );
+    _statusMessage = 'Moved playback to the selected text.';
+    _scheduleResumePersistence();
+    final stop = resume ? _stopSupersededStartup() : null;
+    notifyListeners();
+    if (stop == null) return;
+    try {
+      await stop;
+      if (!_disposed && intent == _playbackIntent) await startPlayback();
+    } catch (error) {
+      if (_disposed || intent != _playbackIntent) return;
+      _resumeAfterPreparation = false;
+      _playbackState = ReaderPlaybackPrimaryState.failed;
+      _statusMessage = 'Could not jump during playback: $error';
+      notifyListeners();
+    }
+  }
+
+  void _setPlaybackWord(int word) {
+    _currentWordIndex = word;
+    _explicitTextSeek = null;
+    _pausedVoiceReplayAnchor = null;
+    _assignmentReplayWord = null;
+    _explicitVoiceRebuffer = false;
     _offerLegacyPortableAnalysis();
     _prioritizeChapterAtCurrentPosition();
     _playbackEndedAtDocumentEnd = false;
@@ -2915,20 +3012,7 @@ class ReaderController extends ChangeNotifier {
         );
     _currentRealization = null;
     _currentChunkPlan = null;
-    _statusMessage =
-        'Jumped ${seconds.abs()} seconds ${seconds < 0 ? 'back' : 'forward'}.';
     _activePlaybackDocumentId = null;
-
-    if (_isPlaying) {
-      await _ttsEngine.stop();
-      _isPlaying = false;
-      await startPlayback();
-      return;
-    }
-
-    _playbackState = ReaderPlaybackPrimaryState.paused;
-
-    notifyListeners();
   }
 
   void suspendReaderFollow() {
@@ -5034,6 +5118,7 @@ class ReaderController extends ChangeNotifier {
 
   SpeechPlanningContext? _planningContext({
     bool fromStart = false,
+    int? startWordIndex,
     ReaderDocument? document,
     String? voiceId,
     double? rate,
@@ -5081,6 +5166,7 @@ class ReaderController extends ChangeNotifier {
         mergedPronunciationResources: _mergedPronunciationResources(profile),
       ),
       engineVersion: _engineVersion(),
+      startWordIndex: startWordIndex,
       fishSceneBoundaries: {
         if (useChapterAnalysis)
           for (final segment in document.speechDocument.segments)
@@ -5096,7 +5182,15 @@ class ReaderController extends ChangeNotifier {
   }
 
   Future<void> _primePlaybackPreparation() async {
-    final context = _planningContext();
+    final seek = _explicitTextSeek;
+    final startWordIndex =
+        seek != null &&
+            seek.revision == _documentRevision &&
+            seek.rangeSequence == _activePreparedRange?.sequence &&
+            seek.word == _currentWordIndex
+        ? seek.word
+        : null;
+    final context = _planningContext(startWordIndex: startWordIndex);
     if (context == null) {
       _currentRealization = null;
       _currentChunkPlan = null;
