@@ -66,9 +66,11 @@ is explicitly an unverified local review candidate.
   archives. The local `lexicon.json` differs semantically from that Kokoro
   package (40 versus 35 top-level entries); document its modifications and
   source. Do not infer upstream data permission solely from a wrapper's MIT label.
-- Obtain the complete notices for code compiled into the pinned PDFium
-  `v144.0.7520.0-20251111-190355` XCFramework. Its root BSD grant and the plugin's
-  MIT grant alone do not cover all Chromium/PDFium transitive components.
+- The inventory retains the PDFium root grant and every transitive notice
+  supplied in the upstream macOS `chromium/7520` binary archive. The archive,
+  pinned XCFramework and retained R07c QA app have matching arm64 section
+  contents. Reconcile the compiled dependency list and verify the same notices
+  are available in the final staged app and distribution.
 - Flutter 3.41.5 engine notices are collected from the coordinator-verified arm64
   SDK, including its full `sky_engine` license bundle. Reconcile the actual
   candidate's SDK/engine and linked runtime versions with these notices and locks.
