@@ -1240,8 +1240,8 @@
     },
     {
       "path": "assets/mlx_tts_worker.py",
-      "size": 17370,
-      "sha256": "65f24b217d4f4fc907f8acefe2cf64e62596d3256cc18f29a900897530c9a589"
+      "size": 21374,
+      "sha256": "a38c4b361f9d3b1ea80dca0f18183e7aaadd7acd13d43aa3c3f826dd5c068b6c"
     },
     {
       "path": "assets/tokenizer_vocab.json",
