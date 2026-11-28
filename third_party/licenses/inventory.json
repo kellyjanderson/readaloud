@@ -1054,9 +1054,100 @@
       "notice": "native/pdfium-7520/LICENSE",
       "sha256": "1fe9dea718fbd75cf149adaf4d8a22a4335604d964ddb76d1b45383dec8668c9",
       "source": "https://pdfium.googlesource.com/pdfium/+/refs/heads/chromium/7520/LICENSE?format=TEXT",
-      "qualification": "Root PDFium grant only; transitive build notices unresolved",
+      "qualification": "Root grant byte-matches the upstream macOS archive. Upstream transitive notice files follow.",
       "archive_url": "https://github.com/espresso3389/pdfium-xcframework/releases/download/v144.0.7520.0-20251111-190355/PDFium-chromium-7520-20251111-190355.xcframework.zip",
       "archive_sha256": "bd2a9542f13c78b06698c7907936091ceee2713285234cbda2e16bc03c64810b"
+    },
+    {
+      "id": "native:pdfium:abseil.txt",
+      "notice": "native/pdfium-7520/licenses/abseil.txt",
+      "sha256": "c79a7fea0e3cac04cd43f20e7b648e5a0ff8fa5344e644b0ee09ca1162b62747",
+      "source": "https://github.com/bblanchon/pdfium-binaries/releases/download/chromium/7520/pdfium-mac-univ.tgz (licenses/abseil.txt)",
+      "archive_sha256": "44df3a3d39bfedbfc163c8fbece1f4affeb7588750f98c1a72a7f69d6205a6f9"
+    },
+    {
+      "id": "native:pdfium:agg23.txt",
+      "notice": "native/pdfium-7520/licenses/agg23.txt",
+      "sha256": "c110d3ea2ad77467ce0dcff7d3337e6c8be8049a5103f4b9bd5fd911a77972e5",
+      "source": "https://github.com/bblanchon/pdfium-binaries/releases/download/chromium/7520/pdfium-mac-univ.tgz (licenses/agg23.txt)",
+      "archive_sha256": "44df3a3d39bfedbfc163c8fbece1f4affeb7588750f98c1a72a7f69d6205a6f9"
+    },
+    {
+      "id": "native:pdfium:fast_float.txt",
+      "notice": "native/pdfium-7520/licenses/fast_float.txt",
+      "sha256": "e562f3f974ced7e69dd1db77b820b36bcf8f30377f1aa105723fba449c53c4e6",
+      "source": "https://github.com/bblanchon/pdfium-binaries/releases/download/chromium/7520/pdfium-mac-univ.tgz (licenses/fast_float.txt)",
+      "archive_sha256": "44df3a3d39bfedbfc163c8fbece1f4affeb7588750f98c1a72a7f69d6205a6f9"
+    },
+    {
+      "id": "native:pdfium:freetype.txt",
+      "notice": "native/pdfium-7520/licenses/freetype.txt",
+      "sha256": "f4b133e25df1f86ad3ffea453aa0e613f0474f34778dbbb3e437e7b2724937d8",
+      "source": "https://github.com/bblanchon/pdfium-binaries/releases/download/chromium/7520/pdfium-mac-univ.tgz (licenses/freetype.txt)",
+      "archive_sha256": "44df3a3d39bfedbfc163c8fbece1f4affeb7588750f98c1a72a7f69d6205a6f9"
+    },
+    {
+      "id": "native:pdfium:icu.txt",
+      "notice": "native/pdfium-7520/licenses/icu.txt",
+      "sha256": "451167c55c0fa447cc2d5632714f5e3c567fe4f1e1badefab2c1333852198aca",
+      "source": "https://github.com/bblanchon/pdfium-binaries/releases/download/chromium/7520/pdfium-mac-univ.tgz (licenses/icu.txt)",
+      "archive_sha256": "44df3a3d39bfedbfc163c8fbece1f4affeb7588750f98c1a72a7f69d6205a6f9"
+    },
+    {
+      "id": "native:pdfium:lcms.txt",
+      "notice": "native/pdfium-7520/licenses/lcms.txt",
+      "sha256": "5132b7530ae5acab7058634da86470d3d38bb01d70c2b67ba10c96bc62ced1af",
+      "source": "https://github.com/bblanchon/pdfium-binaries/releases/download/chromium/7520/pdfium-mac-univ.tgz (licenses/lcms.txt)",
+      "archive_sha256": "44df3a3d39bfedbfc163c8fbece1f4affeb7588750f98c1a72a7f69d6205a6f9"
+    },
+    {
+      "id": "native:pdfium:libjpeg_turbo.ijg",
+      "notice": "native/pdfium-7520/licenses/libjpeg_turbo.ijg",
+      "sha256": "75815e3bf6484201a3c3d17a1bbf10f2e8e3237f84df10a2357ea896db2a81d6",
+      "source": "https://github.com/bblanchon/pdfium-binaries/releases/download/chromium/7520/pdfium-mac-univ.tgz (licenses/libjpeg_turbo.ijg)",
+      "archive_sha256": "44df3a3d39bfedbfc163c8fbece1f4affeb7588750f98c1a72a7f69d6205a6f9"
+    },
+    {
+      "id": "native:pdfium:libjpeg_turbo.md",
+      "notice": "native/pdfium-7520/licenses/libjpeg_turbo.md",
+      "sha256": "96f5b328adbb78eeaaec6980d73fd558cb1e4d62560ed615646bc3cf5e532430",
+      "source": "https://github.com/bblanchon/pdfium-binaries/releases/download/chromium/7520/pdfium-mac-univ.tgz (licenses/libjpeg_turbo.md)",
+      "archive_sha256": "44df3a3d39bfedbfc163c8fbece1f4affeb7588750f98c1a72a7f69d6205a6f9"
+    },
+    {
+      "id": "native:pdfium:libopenjpeg.txt",
+      "notice": "native/pdfium-7520/licenses/libopenjpeg.txt",
+      "sha256": "c5ab0890a737c2dfa7ba675036554f6d17741d98629b0c2a145354d00617e6b2",
+      "source": "https://github.com/bblanchon/pdfium-binaries/releases/download/chromium/7520/pdfium-mac-univ.tgz (licenses/libopenjpeg.txt)",
+      "archive_sha256": "44df3a3d39bfedbfc163c8fbece1f4affeb7588750f98c1a72a7f69d6205a6f9"
+    },
+    {
+      "id": "native:pdfium:libpng.txt",
+      "notice": "native/pdfium-7520/licenses/libpng.txt",
+      "sha256": "bf5e22b9dce8464064ae17a48ea1133c3369ac9e1d80ef9e320e5219aa14ea9b",
+      "source": "https://github.com/bblanchon/pdfium-binaries/releases/download/chromium/7520/pdfium-mac-univ.tgz (licenses/libpng.txt)",
+      "archive_sha256": "44df3a3d39bfedbfc163c8fbece1f4affeb7588750f98c1a72a7f69d6205a6f9"
+    },
+    {
+      "id": "native:pdfium:libtiff.txt",
+      "notice": "native/pdfium-7520/licenses/libtiff.txt",
+      "sha256": "92b72ba97e6c2749c2a94bc0ef646b47080217f1e772a482b33cf5a5f98a6506",
+      "source": "https://github.com/bblanchon/pdfium-binaries/releases/download/chromium/7520/pdfium-mac-univ.tgz (licenses/libtiff.txt)",
+      "archive_sha256": "44df3a3d39bfedbfc163c8fbece1f4affeb7588750f98c1a72a7f69d6205a6f9"
+    },
+    {
+      "id": "native:pdfium:llvm-libc.txt",
+      "notice": "native/pdfium-7520/licenses/llvm-libc.txt",
+      "sha256": "ebcd9bbf783a73d05c53ba4d586b8d5813dcdf3bbec50265860ccc885e606f47",
+      "source": "https://github.com/bblanchon/pdfium-binaries/releases/download/chromium/7520/pdfium-mac-univ.tgz (licenses/llvm-libc.txt)",
+      "archive_sha256": "44df3a3d39bfedbfc163c8fbece1f4affeb7588750f98c1a72a7f69d6205a6f9"
+    },
+    {
+      "id": "native:pdfium:zlib.txt",
+      "notice": "native/pdfium-7520/licenses/zlib.txt",
+      "sha256": "02421fcfbfb1d656ef0b6ff4cd3c39f2946f08c3219fa42db482add7ce1f53ea",
+      "source": "https://github.com/bblanchon/pdfium-binaries/releases/download/chromium/7520/pdfium-mac-univ.tgz (licenses/zlib.txt)",
+      "archive_sha256": "44df3a3d39bfedbfc163c8fbece1f4affeb7588750f98c1a72a7f69d6205a6f9"
     },
     {
       "id": "reference:apache-2.0",
@@ -1442,7 +1533,7 @@
     },
     {
       "id": "pdfium-transitive",
-      "detail": "Pinned PDFium chromium-7520 root license collected; full notices for transitive code compiled into upstream XCFramework remain unverified."
+      "detail": "Collected all notice files supplied with the matching chromium/7520 macOS upstream binary. Verified ARM64 section parity from the upstream archive through the pinned XCFramework and retained QA app. Reconcile the compiled dependency list and verify these notices in the final staged app and distribution."
     },
     {
       "id": "candidate-sdk",
